@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'aisoc-core-api'
+    static_configs:
+      - targets: ['core-api:8000']
+    metrics_path: /metrics
+
+  - job_name: 'aisoc-ingest'
+    static_configs:
+      - targets: ['ingest-worker:9090']
+    metrics_path: /metrics
+
+  - job_name: 'aisoc-enrichment'
+    static_configs:
+      - targets: ['enrichment:8080']
+    metrics_path: /metrics
+
+  - job_name: 'aisoc-agents'
+    static_configs:
+      - targets: ['agents:8001']
+    metrics_path: /metrics
+
+  - job_name: 'aisoc-actions'
+    static_configs:
+      - targets: ['actions:8002']
+    metrics_path: /metrics

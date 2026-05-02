@@ -1,0 +1,407 @@
+###############################################################################
+# AiSOC - AI Security Operations Center
+# Docker Compose - Full Development Stack
+# Open-source by Cyble under MIT License
+###############################################################################
+
+version: '3.8'
+
+networks:
+  aisoc:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  clickhouse_data:
+  opensearch_data:
+  qdrant_data:
+
+services:
+
+  # ─── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aisoc-postgres
+    environment:
+      POSTGRES_DB: aisoc
+      POSTGRES_USER: aisoc
+      POSTGRES_PASSWORD: aisoc_dev_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/core-api/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aisoc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aisoc-redis
+    command: redis-server --appendonly yes --requirepass redis_dev_secret
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_secret", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: aisoc-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: aisoc-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    networks:
+      - aisoc
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: aisoc-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - aisoc
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: aisoc-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./services/core-api/clickhouse:/docker-entrypoint-initdb.d:ro
+    environment:
+      CLICKHOUSE_DB: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: clickhouse_dev_secret
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    networks:
+      - aisoc
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: aisoc-opensearch
+    environment:
+      - cluster.name=aisoc-cluster
+      - node.name=aisoc-node-1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - aisoc
+
+  qdrant:
+    image: qdrant/qdrant:v1.7.0
+    container_name: aisoc-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - aisoc
+
+  # ─── Application Services ────────────────────────────────────────────────────
+
+  core-api:
+    build:
+      context: ./services/core-api
+      dockerfile: Dockerfile
+    container_name: aisoc-core-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
+      OPENSEARCH_URL: http://opensearch:9200
+      QDRANT_URL: http://qdrant:6333
+      SECRET_KEY: dev_secret_key_change_in_production
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ingest-worker:
+    build:
+      context: ./services/ingest
+      dockerfile: Dockerfile
+    container_name: aisoc-ingest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/1
+      LOG_LEVEL: info
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  enrichment:
+    build:
+      context: ./services/enrichment
+      dockerfile: Dockerfile
+    container_name: aisoc-enrichment
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/2
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  alert-fusion:
+    build:
+      context: ./services/alert-fusion
+      dockerfile: Dockerfile
+    container_name: aisoc-alert-fusion
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/3
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  agents:
+    build:
+      context: ./services/agents
+      dockerfile: Dockerfile
+    container_name: aisoc-agents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/4
+      CORE_API_URL: http://core-api:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: gpt-4-turbo-preview
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  actions:
+    build:
+      context: ./services/actions
+      dockerfile: Dockerfile
+    container_name: aisoc-actions
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8002:8002"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/5
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      CORE_API_URL: http://core-api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  realtime:
+    build:
+      context: ./services/realtime
+      dockerfile: Dockerfile
+    container_name: aisoc-realtime
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379
+      REDIS_PASSWORD: redis_dev_secret
+      PORT: 4000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: aisoc-web
+    depends_on:
+      - core-api
+      - realtime
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:4000
+      NODE_ENV: production
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ─── Connectors ──────────────────────────────────────────────────────────────
+
+  connector-crowdstrike:
+    build:
+      context: ./connectors/crowdstrike
+      dockerfile: Dockerfile
+    container_name: aisoc-connector-crowdstrike
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
+      CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
+      POLL_INTERVAL: 60
+    networks:
+      - aisoc
+    restart: unless-stopped
+    profiles:
+      - connectors
+
+  connector-aws:
+    build:
+      context: ./connectors/aws
+      dockerfile: Dockerfile
+    container_name: aisoc-connector-aws
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+    profiles:
+      - connectors
+
+  # ─── Observability ────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: aisoc-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./infra/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: aisoc-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/docker/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - aisoc
+    profiles:
+      - monitoring

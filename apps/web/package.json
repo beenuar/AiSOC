@@ -1,0 +1,39 @@
+{
+  "name": "@aisoc/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AiSOC SOC Console - Next.js 14 Frontend",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aisoc/types": "workspace:*",
+    "@aisoc/ui": "workspace:*",
+    "next": "14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "swr": "^2.2.4",
+    "zustand": "^4.4.7",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.312.0",
+    "recharts": "^2.10.3",
+    "date-fns": "^3.3.1",
+    "react-hot-toast": "^2.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3"
+  }
+}

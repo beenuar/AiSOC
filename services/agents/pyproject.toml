@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "aisoc-agents"
+version = "0.1.0"
+description = "AiSOC AI Agent Orchestrator - LangGraph-based autonomous investigation and response"
+authors = ["Cyble <opensource@cyble.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+langchain = "^0.1.0"
+langchain-core = "^0.1.0"
+langchain-openai = "^0.0.5"
+langgraph = "^0.0.30"
+langchain-community = "^0.0.20"
+openai = "^1.12.0"
+redis = {extras = ["hiredis"], version = "^5.0.1"}
+httpx = "^0.26.0"
+structlog = "^24.1.0"
+prometheus-client = "^0.19.0"
+python-dateutil = "^2.8.2"
+aiokafka = "^0.10.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.23.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

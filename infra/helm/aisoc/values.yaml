@@ -1,0 +1,191 @@
+# AiSOC Helm Chart Values
+# Default values for production deployment
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  environment: production
+
+# ─── Core API ──────────────────────────────────────────────────────────────────
+
+coreApi:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-core-api
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    LOG_LEVEL: info
+    ENVIRONMENT: production
+  envFrom:
+    - secretRef:
+        name: aisoc-core-api-secrets
+
+# ─── Ingest Worker ────────────────────────────────────────────────────────────
+
+ingest:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: ghcr.io/cyble/aisoc-ingest
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+
+# ─── Enrichment ───────────────────────────────────────────────────────────────
+
+enrichment:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-enrichment
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 800m
+      memory: 1Gi
+
+# ─── Alert Fusion ─────────────────────────────────────────────────────────────
+
+alertFusion:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-alert-fusion
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+# ─── AI Agents ────────────────────────────────────────────────────────────────
+
+agents:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-agents
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# ─── Actions ──────────────────────────────────────────────────────────────────
+
+actions:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-actions
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 800m
+      memory: 1Gi
+
+# ─── Realtime Service ─────────────────────────────────────────────────────────
+
+realtime:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-realtime
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 4000
+
+# ─── Web Frontend ─────────────────────────────────────────────────────────────
+
+web:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/cyble/aisoc-web
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    hosts:
+      - host: aisoc.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: aisoc-tls
+        hosts:
+          - aisoc.example.com
+
+# ─── Bundled Infrastructure (for non-production) ──────────────────────────────
+
+postgresql:
+  enabled: false  # Use managed RDS in production
+  auth:
+    database: aisoc
+    username: aisoc
+    existingSecret: aisoc-postgres-secret
+  primary:
+    persistence:
+      size: 100Gi
+
+redis:
+  enabled: false  # Use managed ElastiCache in production
+  auth:
+    existingSecret: aisoc-redis-secret
+  master:
+    persistence:
+      size: 20Gi

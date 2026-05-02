@@ -1,0 +1,37 @@
+{
+  "name": "@aisoc/ui",
+  "version": "0.1.0",
+  "description": "AiSOC shared React UI component library",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "tsc && cp src/styles.css dist/styles.css 2>/dev/null || true",
+    "dev": "tsc --watch",
+    "lint": "eslint src/**/*.tsx",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.312.0"
+  }
+}
