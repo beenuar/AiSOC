@@ -233,11 +233,16 @@ services:
       kafka:
         condition: service_healthy
     ports:
+      - "8081:8080"
       - "9090:9090"
     environment:
+      ENV: development
+      HTTP_PORT: 8080
+      METRICS_PORT: 9090
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/1
       LOG_LEVEL: info
+      JWT_SECRET: dev_secret_key_change_in_production
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
     networks:
       - aisoc
@@ -254,7 +259,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "8080:8082"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/2
@@ -297,7 +302,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8001:8001"
+      - "8001:8084"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
@@ -325,7 +330,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8002:8002"
+      - "8002:8085"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/5
@@ -404,7 +409,7 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "4000:4000"
+      - "8086:4000"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379
@@ -416,8 +421,8 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: aisoc-web
     depends_on:
       - api

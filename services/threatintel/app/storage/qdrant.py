@@ -5,7 +5,7 @@ Cyble Open-Source AI Security Operations Center — MIT License
 """
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from qdrant_client import AsyncQdrantClient
@@ -15,7 +15,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _IOC_COLLECTION = "threatintel_iocs"
 _ACTOR_COLLECTION = "threatintel_actors"

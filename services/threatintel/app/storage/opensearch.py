@@ -6,13 +6,13 @@ Cyble Open-Source AI Security Operations Center — MIT License
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
 from opensearchpy import AsyncOpenSearch, helpers
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _IOC_INDEX = "threatintel-iocs"
 _ACTOR_INDEX = "threatintel-actors"

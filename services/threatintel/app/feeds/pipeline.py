@@ -13,7 +13,7 @@ Cyble Open-Source AI Security Operations Center — MIT License
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -22,7 +22,7 @@ from app.storage.opensearch import OpenSearchStore
 from app.storage.qdrant import QdrantStore
 from app.storage.neo4j import Neo4jStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ThreatIntelPipeline:

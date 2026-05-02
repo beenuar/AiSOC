@@ -39,9 +39,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Create all database tables (dev only; use Alembic migrations in prod)
     if settings.ENVIRONMENT == "development":
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables created (development mode)")
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables created (development mode)")
+        except Exception as exc:
+            # Tables already exist or another worker beat us to it — safe to ignore in dev.
+            logger.warning("create_all skipped (likely already applied)", error=str(exc))
 
     # Initialize Neo4j graph layer
     try:

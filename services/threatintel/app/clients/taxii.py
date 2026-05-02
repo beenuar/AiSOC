@@ -6,12 +6,12 @@ Cyble Open-Source AI Security Operations Center — MIT License
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from typing import Any, Iterator
 
 import httpx
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TaxiiClient:
@@ -26,14 +26,12 @@ class TaxiiClient:
 
     def __init__(
         self,
-        url: str,
-        collection_id: str,
+        base_url: str,
         username: str = "",
         password: str = "",
         verify_ssl: bool = True,
     ) -> None:
-        self._base_url = url.rstrip("/")
-        self._collection_id = collection_id
+        self._base_url = base_url.rstrip("/") if base_url else ""
         self._auth = (username, password) if username else None
         self._verify_ssl = verify_ssl
         self._headers = {
@@ -43,6 +41,8 @@ class TaxiiClient:
 
     async def get_objects(
         self,
+        api_root: str,
+        collection_id: str,
         added_after: str | None = None,
         limit: int = 1000,
     ) -> list[dict[str, Any]]:
@@ -74,8 +74,10 @@ class TaxiiClient:
                 if next_cursor:
                     params["next"] = next_cursor
 
+                root = api_root.strip("/") if api_root else ""
+                root_segment = f"/{root}" if root else ""
                 url = (
-                    f"{self._base_url}/collections/{self._collection_id}/objects/"
+                    f"{self._base_url}{root_segment}/collections/{collection_id}/objects/"
                 )
                 try:
                     resp = await client.get(url, params=params)
@@ -105,7 +107,7 @@ class TaxiiClient:
 
         logger.info(
             "TAXII collection fetched",
-            collection=self._collection_id,
+            collection=collection_id,
             total_objects=len(objects),
         )
         return objects

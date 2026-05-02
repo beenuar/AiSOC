@@ -206,11 +206,18 @@ docker compose logs -f agents
 | Web Console | http://localhost:3000 | Next.js frontend |
 | API Swagger | http://localhost:8000/docs | Interactive API explorer |
 | Agents API | http://localhost:8001/docs | LangGraph agent runner |
+| Actions API | http://localhost:8002/docs | SOAR playbooks |
 | Fusion API | http://localhost:8003/docs | ML status + feedback endpoints |
 | Threat Intel | http://localhost:8005/docs | IOC search + feed status |
+| Enrichment | http://localhost:8080/health | Shodan + KEV CVE correlation |
+| Ingest | http://localhost:8081/health | Go ingest worker |
+| Realtime WS | ws://localhost:8086/ws | Live alert stream |
 | Neo4j Browser | http://localhost:7474 | `neo4j` / `neo4j_dev_secret` |
-| Grafana | http://localhost:3001 | `admin` / `admin` |
-| Jaeger | http://localhost:16686 | Distributed traces |
+| OpenSearch | http://localhost:9200 | Full-text search |
+| Qdrant | http://localhost:6333 | Vector DB (RAG) |
+| ClickHouse | http://localhost:8123 | Analytics warehouse |
+| Grafana | http://localhost:3001 | `admin` / `admin` (monitoring profile) |
+| Jaeger | http://localhost:16686 | Distributed traces (monitoring profile) |
 
 Default API credentials: `admin@aisoc.local` / `changeme`
 

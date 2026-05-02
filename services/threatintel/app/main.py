@@ -9,7 +9,7 @@ Cyble Open-Source AI Security Operations Center — MIT License
 """
 from __future__ import annotations
 
-import logging
+import structlog
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import AsyncGenerator
@@ -40,8 +40,21 @@ from app.storage.neo4j import Neo4jStore
 from app.storage.opensearch import OpenSearchStore
 from app.storage.qdrant import QdrantStore
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer(),
+    ],
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+logger = structlog.get_logger(__name__)
 
 # ─── Prometheus metrics ───────────────────────────────────────────────────────
 iocs_ingested = Counter("threatintel_iocs_ingested_total", "Total IOCs ingested", ["source"])

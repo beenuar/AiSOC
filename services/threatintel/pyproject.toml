@@ -16,7 +16,7 @@ redis = {extras = ["hiredis"], version = "^5.0.1"}
 taxii2-client = "^2.3.0"
 stix2 = "^3.0.1"
 apscheduler = "^3.10.4"
-opensearch-py = "^2.4.2"
+opensearch-py = {extras = ["async"], version = "^2.7.0"}
 qdrant-client = {extras = ["fastembed"], version = "^1.9.0"}
 neo4j = "^5.19.0"
 structlog = "^24.1.0"

@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS aisoc.raw_events (
 ) ENGINE = MergeTree()
 PARTITION BY (toYYYYMM(event_time), tenant_id)
 ORDER BY (tenant_id, event_time, class_uid)
-TTL event_time + INTERVAL 90 DAY
+TTL toDateTime(event_time) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -71,4 +71,4 @@ CREATE TABLE IF NOT EXISTS aisoc.ioc_enrichments (
     enriched_at     DateTime64(3, 'UTC') DEFAULT now64()
 ) ENGINE = ReplacingMergeTree(enriched_at)
 ORDER BY (ioc_value, ioc_type, tenant_id)
-TTL enriched_at + INTERVAL 30 DAY;
+TTL toDateTime(enriched_at) + INTERVAL 30 DAY;

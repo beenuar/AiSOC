@@ -19,17 +19,18 @@ const SEVERITY_CONFIG = {
 
 const STATUS_CONFIG = {
   new: { label: 'New', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-  in_progress: { label: 'In Progress', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  triaged: { label: 'Triaged', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  investigating: { label: 'Investigating', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   resolved: { label: 'Resolved', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
   false_positive: { label: 'False Positive', color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' },
 };
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
-const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i) => {
+const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
   const sev = (['critical', 'high', 'high', 'medium', 'medium', 'medium', 'low', 'info'] as const)[i % 8];
   const src = ['CrowdStrike', 'Splunk', 'AWS Security Hub', 'Okta', 'Microsoft Sentinel'][i % 5];
-  const status = (['new', 'in_progress', 'new', 'resolved', 'false_positive'] as const)[i % 5];
+  const status = (['new', 'investigating', 'new', 'resolved', 'false_positive'] as const)[i % 5];
   return {
     id: `ALT-${String(1000 + i).padStart(4, '0')}`,
     title: [
@@ -48,14 +49,13 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i) => {
     severity: sev,
     status,
     source: src,
-    category: 'endpoint',
-    timestamp: new Date(Date.now() - i * 1800000).toISOString(),
+    createdAt: new Date(Date.now() - i * 1800000).toISOString(),
     updatedAt: new Date(Date.now() - i * 900000).toISOString(),
     tenantId: 'default',
     assignee: i % 3 === 0 ? 'analyst@cyble.com' : undefined,
     tags: i % 2 === 0 ? ['mitre:T1059', 'endpoint'] : ['network'],
     iocs: [],
-    mitreAttacks: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'T1059.001' }] : [],
+    mitreAttack: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' }] : [],
     riskScore: Math.floor(Math.random() * 100),
   };
 });
@@ -95,7 +95,7 @@ function FiltersBar({
   total: number;
 }) {
   const severities = ['all', 'critical', 'high', 'medium', 'low', 'info'] as const;
-  const statuses = ['all', 'new', 'in_progress', 'resolved', 'false_positive'] as const;
+  const statuses = ['all', 'new', 'investigating', 'resolved', 'false_positive'] as const;
 
   return (
     <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-gray-900/40 border border-gray-800/60 rounded-xl">
@@ -149,9 +149,9 @@ function AlertRow({ alert }: { alert: Alert }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm text-gray-200 truncate hover:text-white">{alert.title}</p>
-          {alert.mitreAttacks && alert.mitreAttacks.length > 0 && (
+          {alert.mitreAttack && alert.mitreAttack.length > 0 && (
             <span className="text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded shrink-0">
-              {alert.mitreAttacks[0].technique}
+              {alert.mitreAttack[0].techniqueId}
             </span>
           )}
         </div>
@@ -170,7 +170,7 @@ function AlertRow({ alert }: { alert: Alert }) {
         <SeverityBadge severity={alert.severity} />
         <StatusBadge status={alert.status} />
         <span className="text-xs text-gray-600 w-24 text-right">
-          {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+          {formatDistanceToNow(new Date(alert.createdAt), { addSuffix: true })}
         </span>
       </div>
     </Link>

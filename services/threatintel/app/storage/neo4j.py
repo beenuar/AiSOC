@@ -8,12 +8,12 @@ Cyble Open-Source AI Security Operations Center — MIT License
 """
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from neo4j import AsyncDriver
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class Neo4jStore:

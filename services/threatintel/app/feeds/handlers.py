@@ -9,7 +9,7 @@ Cyble Open-Source AI Security Operations Center — MIT License
 """
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from app.clients.taxii import TaxiiClient
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from app.feeds.pipeline import ThreatIntelPipeline
     from app.config import Settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ─── TAXII Feed Handler ───────────────────────────────────────────────────────

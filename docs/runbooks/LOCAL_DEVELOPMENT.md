@@ -77,13 +77,16 @@ docker compose logs -f threatintel
 | Actions | `curl http://localhost:8002/health` |
 | Fusion | `curl http://localhost:8003/health` |
 | Threat Intel | `curl http://localhost:8005/health` |
-| Realtime | `curl http://localhost:4000/health` |
+| Enrichment | `curl http://localhost:8080/health` |
+| Ingest | `curl http://localhost:8081/health` |
+| Realtime | `curl http://localhost:8086/health` |
 | Web Console | `curl -I http://localhost:3000` |
 | Postgres | `docker exec aisoc-postgres pg_isready -U aisoc` |
 | Redis | `docker exec aisoc-redis redis-cli -a redis_dev_secret ping` |
 | Kafka | `docker exec aisoc-kafka kafka-broker-api-versions --bootstrap-server localhost:9092` |
 | OpenSearch | `curl http://localhost:9200` |
 | Qdrant | `curl http://localhost:6333/healthz` |
+| ClickHouse | `curl http://localhost:8123/ping` |
 | Neo4j | open `http://localhost:7474` (login `neo4j` / `neo4j_dev_secret`) |
 
 A first-time success of every endpoint is the gate before you proceed.
@@ -179,7 +182,7 @@ pnpm install
 pnpm dev
 ```
 
-WebSocket endpoint: `ws://localhost:4000/ws`.
+WebSocket endpoint exposed inside compose at `ws://localhost:8086/ws` (host) / `4000` (container).
 
 ### 4.8 Web console (`apps/web`)
 
@@ -187,7 +190,7 @@ WebSocket endpoint: `ws://localhost:4000/ws`.
 cd apps/web
 pnpm install
 NEXT_PUBLIC_API_URL=http://localhost:8000 \
-NEXT_PUBLIC_WS_URL=ws://localhost:4000 \
+NEXT_PUBLIC_WS_URL=ws://localhost:8086 \
 pnpm dev
 ```
 

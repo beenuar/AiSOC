@@ -8,7 +8,7 @@ Cyble Open-Source AI Security Operations Center — MIT License
 """
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,7 +17,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 if TYPE_CHECKING:
     from app.feeds.pipeline import ThreatIntelPipeline
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FeedScheduler:

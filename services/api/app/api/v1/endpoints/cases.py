@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -82,12 +82,12 @@ class TimelineEventResponse(BaseModel):
     case_id: uuid.UUID
     event_type: str
     content: str
-    metadata: dict
+    metadata: dict = Field(default_factory=dict, validation_alias="event_metadata")
     user_id: uuid.UUID | None
     is_automated: bool
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 def _generate_case_number(tenant_id: uuid.UUID) -> str:
@@ -224,7 +224,7 @@ async def update_case(
             event_type="case_updated",
             content=f"Case updated by {current_user.email}: {', '.join(updates.keys())}",
             user_id=current_user.user_id,
-            metadata={"changed_fields": list(updates.keys())},
+            event_metadata={"changed_fields": list(updates.keys())},
         ))
         await db.commit()
         await db.refresh(case)
@@ -252,7 +252,7 @@ async def add_timeline_event(
         tenant_id=current_user.tenant_id,
         event_type=request.event_type,
         content=request.content,
-        metadata=request.metadata,
+        event_metadata=request.metadata,
         user_id=current_user.user_id,
     )
     db.add(event)

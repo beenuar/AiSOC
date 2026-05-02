@@ -1,8 +1,12 @@
 # AiSOC Build Progress
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
-## ✅ ALL TASKS COMPLETE — v2 Enterprise Platform shipped
+## ✅ ALL TASKS COMPLETE — v2 Enterprise Platform shipped + verified locally
+
+> Local stack last verified: 2026-05-02. All 17 docker-compose services
+> reachable, every HTTP health endpoint returning `200`. See
+> `docs/runbooks/LOCAL_DEVELOPMENT.md` for the full health matrix.
 
 | Phase | Description | Status |
 |-------|-------------|--------|
