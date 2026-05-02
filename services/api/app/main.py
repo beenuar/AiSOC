@@ -13,6 +13,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.database import engine
+from app.db.neo4j import init_neo4j, close_neo4j
 from app.models import Base
 
 logger = structlog.get_logger(__name__)
@@ -42,10 +43,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created (development mode)")
 
+    # Initialize Neo4j graph layer
+    try:
+        await init_neo4j()
+    except Exception as exc:
+        logger.warning("Neo4j unavailable at startup – graph features disabled", error=str(exc))
+
     yield
 
     logger.info("AiSOC API shutting down")
     await engine.dispose()
+    await close_neo4j()
 
 
 def create_application() -> FastAPI:

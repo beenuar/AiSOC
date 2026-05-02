@@ -21,6 +21,16 @@ type Config struct {
 	TenantHeaderKey string
 	JWTSecret       string
 	MetricsPort     int
+
+	// Shodan enrichment
+	ShodanAPIKey          string
+	ShodanEnrichEnabled   bool
+	ShodanCacheExpirySecs int
+
+	// CVE / vulnerability correlation
+	VulnCorrelEnabled   bool
+	VulnKafkaTopic      string // topic for VULNERABILITY_MATCH events
+	NvdAPIKey           string // optional NVD API key for higher rate limits
 }
 
 // Load reads configuration from environment variables
@@ -38,6 +48,16 @@ func Load() (*Config, error) {
 		TenantHeaderKey: getEnv("TENANT_HEADER_KEY", "X-Tenant-ID"),
 		JWTSecret:       getEnv("JWT_SECRET", ""),
 		MetricsPort:     mustGetEnvInt("METRICS_PORT", 9090),
+
+		// Shodan
+		ShodanAPIKey:          getEnv("SHODAN_API_KEY", ""),
+		ShodanEnrichEnabled:   getEnv("SHODAN_ENRICH_ENABLED", "false") == "true",
+		ShodanCacheExpirySecs: mustGetEnvInt("SHODAN_CACHE_EXPIRY_SECS", 3600),
+
+		// CVE correlation
+		VulnCorrelEnabled: getEnv("VULN_CORREL_ENABLED", "true") == "true",
+		VulnKafkaTopic:    getEnv("VULN_KAFKA_TOPIC", "aisoc.vulnerability_matches"),
+		NvdAPIKey:         getEnv("NVD_API_KEY", ""),
 	}
 
 	if cfg.JWTSecret == "" && os.Getenv("ENV") != "development" {

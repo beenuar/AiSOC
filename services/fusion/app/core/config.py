@@ -5,7 +5,7 @@ from pydantic import Field
 class Settings(BaseSettings):
     # Service
     service_name: str = "aisoc-fusion"
-    http_port: int = Field(default=8083, alias="HTTP_PORT")
+    http_port: int = Field(default=8003, alias="HTTP_PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     environment: str = Field(default="development", alias="ENVIRONMENT")
 

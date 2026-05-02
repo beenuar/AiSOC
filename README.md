@@ -39,12 +39,44 @@ Built and open-sourced by **Cyble** under the MIT License.
 - Okta Identity
 - Microsoft Sentinel
 
+### 🧠 Knowledge Graph (Neo4j)
+- **Entity Graph** — Hosts, Users, Alerts, IOCs, Techniques, Cases connected as a property graph
+- **Attack Path Reconstruction** — `/v1/graph/attack-path/{case_id}` returns the full kill-chain
+- **Blast Radius Analysis** — Multi-hop traversal feeds the action executor's gating logic
+- **MITRE Coverage** — Automatic mapping of telemetry to ATT&CK technique nodes
+
+### 🎯 Detection Engineering
+- **Sigma Rule Execution** — `pySigma` runner with OpenSearch/ClickHouse backends
+- **YARA Scanning** — `yara-python` runner for file/memory artifact analysis
+- **Multi-language Support** — KQL, EQL, Lucene, Regex query types
+- **On-demand Hunts** — `POST /v1/rules/hunt` for ad-hoc threat hunting
+
+### 🌐 Threat Intelligence Platform
+- **TAXII 2.1 Feed Poller** — Ingests STIX 2.1 bundles from MITRE, Mandiant, ISAC feeds
+- **MISP Integration** — Pulls events and IOCs from any MISP instance
+- **AlienVault OTX** — Subscribed pulse consumption
+- **CISA KEV Catalog** — Auto-correlates known-exploited CVEs against asset telemetry
+- **Bloom-filter Dedup** — Redis-backed; handles 10M+ IOCs with ~0.1% false-positive rate
+- **Triple Storage** — OpenSearch (search), Qdrant (semantic RAG), Neo4j (actor↔TTP graph)
+
+### 🤖 ML-Augmented Fusion
+- **Isolation Forest** — Unsupervised anomaly score per alert (auto-trained at 50+ samples)
+- **LightGBM Ranker** — Priority score trained on analyst feedback (LambdaRank objective)
+- **Feedback Loop** — `POST /ml/feedback` continuously improves the ranker
+- **Heuristic Fallback** — Always-on scoring even before models are trained
+
+### 🛰️ Vulnerability Correlation
+- **Shodan Enrichment** — Open ports, banners, ASN, CVEs per public IP (Go enrichment service)
+- **CISA KEV Cross-correlation** — Emits `VULNERABILITY_MATCH` Kafka events for KEV-listed CVEs
+- **Asset Context** — Links exposure data to Host nodes in the knowledge graph
+
 ### 📊 SOC Console
 - **Real-time Dashboard** — Live metrics, trend charts, and threat feeds
 - **Alert Management** — Triage, investigate, and respond from a single pane
 - **Case Management** — Full incident lifecycle management
 - **Threat Intelligence** — IOC lookup, threat feed correlation
 - **Threat Hunting** — KQL, Sigma, and YARA query execution
+- **Attack Graph View** — Visual kill-chain reconstruction from Neo4j
 
 ### 🛡️ Enterprise Ready
 - **Multi-tenant** — Complete tenant isolation with RBAC
@@ -94,14 +126,27 @@ Built and open-sourced by **Cyble** under the MIT License.
 
 | Service | Language | Port | Description |
 |---------|----------|------|-------------|
-| `core-api` | Python/FastAPI | 8000 | REST API — alerts, cases, tenants, RBAC |
-| `ingest` | Go | 9090 | High-throughput event ingestion + OCSF normalization |
-| `enrichment` | Go | 8080 | IOC enrichment via VirusTotal, AbuseIPDB, GreyNoise |
-| `alert-fusion` | Python | — | Alert deduplication, correlation, incident grouping |
-| `agents` | Python/LangGraph | 8001 | AI investigation, threat hunting, remediation agents |
+| `api` | Python/FastAPI | 8000 | Core REST API — alerts, cases, tenants, RBAC, graph, rules |
+| `ingest` | Go | 9090 | High-throughput event ingestion, OCSF normalization, Shodan + CVE correlation |
+| `enrichment` | Go | 8080 | IOC enrichment via VirusTotal, AbuseIPDB, GreyNoise, Shodan |
+| `fusion` | Python | 8003 | Alert dedup, correlation, ML anomaly + priority scoring |
+| `agents` | Python/LangGraph | 8001 | AI investigation agents with full MITRE ATT&CK + Qdrant RAG |
 | `actions` | Python | 8002 | SOAR action execution with blast-radius gating |
+| `threatintel` | Python | 8005 | TAXII 2.1 / MISP / OTX / CISA KEV feed poller and IOC store |
 | `realtime` | Node.js | 4000 | WebSocket/SSE real-time event delivery |
 | `web` | Next.js 14 | 3000 | SOC console frontend |
+
+### Data Layer
+
+| Store | Purpose |
+|-------|---------|
+| **PostgreSQL** | App config, tenants, users, cases, detection rules, RLS-isolated |
+| **ClickHouse** | High-cardinality event analytics, alert metrics, IOC enrichment cache |
+| **OpenSearch** | Full-text IOC, actor, and threat report search; Sigma backend |
+| **Qdrant** | Vector RAG for AI agents, semantic IOC and ATT&CK technique search |
+| **Neo4j** | Knowledge graph: entity relationships, attack paths, blast radius |
+| **Redis** | Cache, pub/sub, IOC bloom filter, enrichment TTL cache |
+| **Kafka** | Event streaming bus (raw events, fused alerts, vulnerability matches) |
 
 ---
 
@@ -117,21 +162,26 @@ Built and open-sourced by **Cyble** under the MIT License.
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/cyble/aisoc.git
-cd aisoc
-cp .env.example .env
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC
+cp .env.example .env  # if .env.example is missing, see Configuration below
 ```
 
 Edit `.env` with your configuration:
 
 ```env
-# Required for AI agents
+# Required for AI agents (use Anthropic OR OpenAI)
+ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
 # Optional: threat intelligence enrichment
 VIRUSTOTAL_API_KEY=...
 ABUSEIPDB_API_KEY=...
 GREYNOISE_API_KEY=...
+SHODAN_API_KEY=...
+
+# Optional: TAXII 2.1 feeds (comma-separated URL,collection,user,pass tuples)
+TAXII_FEEDS=https://cti-taxii.mitre.org/taxii/,enterprise-attack,,
 ```
 
 ### 2. Start the Stack
@@ -140,18 +190,29 @@ GREYNOISE_API_KEY=...
 # Start core infrastructure + all services
 docker compose up -d
 
-# Wait for services to be ready
+# Wait for services to be ready (~60s for first start)
 docker compose ps
 
-# View logs
-docker compose logs -f core-api
+# View logs from a specific service
+docker compose logs -f api
+docker compose logs -f fusion
+docker compose logs -f agents
 ```
 
 ### 3. Access the Console
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+| Surface | URL | Notes |
+|---------|-----|-------|
+| Web Console | http://localhost:3000 | Next.js frontend |
+| API Swagger | http://localhost:8000/docs | Interactive API explorer |
+| Agents API | http://localhost:8001/docs | LangGraph agent runner |
+| Fusion API | http://localhost:8003/docs | ML status + feedback endpoints |
+| Threat Intel | http://localhost:8005/docs | IOC search + feed status |
+| Neo4j Browser | http://localhost:7474 | `neo4j` / `neo4j_dev_secret` |
+| Grafana | http://localhost:3001 | `admin` / `admin` |
+| Jaeger | http://localhost:16686 | Distributed traces |
 
-Default credentials: `admin@aisoc.local` / `changeme`
+Default API credentials: `admin@aisoc.local` / `changeme`
 
 ### 4. Run with Connectors
 
@@ -174,19 +235,15 @@ aisoc/
 ├── apps/
 │   └── web/              # Next.js 14 SOC console
 ├── services/
-│   ├── core-api/         # Python FastAPI — core REST API
-│   ├── ingest/           # Go — high-throughput event ingestion
+│   ├── api/              # Python FastAPI — core REST API + Neo4j graph + rule engine
+│   ├── ingest/           # Go — event ingestion, OCSF, Shodan + CVE correlation
 │   ├── enrichment/       # Go — IOC enrichment
-│   ├── alert-fusion/     # Python — alert dedup + correlation
-│   ├── agents/           # Python LangGraph — AI agents
+│   ├── fusion/           # Python — alert dedup, correlation, ML scoring
+│   ├── agents/           # Python LangGraph — AI agents w/ full ATT&CK + Qdrant RAG
 │   ├── actions/          # Python — SOAR action execution
+│   ├── threatintel/      # Python — TAXII/MISP/OTX/KEV feed poller
 │   └── realtime/         # Node.js — WebSocket/SSE
-├── connectors/
-│   ├── crowdstrike/      # CrowdStrike Falcon connector
-│   ├── splunk/           # Splunk Enterprise/Cloud connector
-│   ├── aws/              # AWS Security Hub connector
-│   ├── okta/             # Okta Identity connector
-│   └── sentinel/         # Microsoft Sentinel connector
+├── integrations/         # Connector implementations (CrowdStrike, Splunk, AWS, Okta, Sentinel, ...)
 ├── packages/
 │   ├── types/            # Shared TypeScript types
 │   ├── ui/               # Shared React components
@@ -194,6 +251,10 @@ aisoc/
 ├── infra/
 │   ├── terraform/        # AWS infrastructure (VPC, EKS, RDS)
 │   └── helm/             # Kubernetes Helm chart
+├── docs/
+│   ├── architecture/     # System design, data flows
+│   ├── api/              # API reference
+│   └── runbooks/         # Operations guides
 └── docker-compose.yml
 ```
 
@@ -209,16 +270,26 @@ pnpm dev
 
 ```bash
 # Start infrastructure only
-docker compose up -d postgres redis kafka clickhouse opensearch qdrant
+docker compose up -d postgres redis kafka clickhouse opensearch qdrant neo4j
 
 # Run core API
-cd services/core-api
+cd services/api
 poetry install
 poetry run uvicorn app.main:app --reload --port 8000
 
+# Run fusion worker (with ML scoring)
+cd services/fusion
+poetry install
+poetry run uvicorn app.main:app --reload --port 8003
+
 # Run ingest worker
 cd services/ingest
-go run cmd/worker/main.go
+go run main.go
+
+# Run threat intel feed poller
+cd services/threatintel
+poetry install
+poetry run uvicorn app.main:app --reload --port 8005
 ```
 
 ### Running Tests
@@ -228,7 +299,7 @@ go run cmd/worker/main.go
 cd apps/web && pnpm test
 
 # Core API
-cd services/core-api && poetry run pytest
+cd services/api && poetry run pytest
 
 # Go services
 cd services/ingest && go test ./...
@@ -286,6 +357,11 @@ Once running, API docs are available at:
 - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 - ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - OpenAPI JSON: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+
+For detailed API references, system design, and runbooks see:
+- [API Reference](docs/api/API_REFERENCE.md)
+- [System Design](docs/architecture/SYSTEM_DESIGN.md)
+- [Local Development Runbook](docs/runbooks/LOCAL_DEVELOPMENT.md)
 
 ---
 

@@ -2,12 +2,15 @@
 package normalizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/cyble/aisoc/services/ingest/internal/attck"
 	"github.com/cyble/aisoc/services/ingest/internal/config"
+	"github.com/cyble/aisoc/services/ingest/internal/enrichment"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
@@ -70,8 +73,14 @@ type NormalizedEvent struct {
 
 // Normalizer converts raw events to OCSF
 type Normalizer struct {
-	cfg     *config.Config
-	version string
+	cfg        *config.Config
+	version    string
+	shodan     *enrichment.ShodanEnricher
+	vulnCorrel *enrichment.VulnCorrelator
+
+	// VulnMatches is a channel where VULNERABILITY_MATCH events are published.
+	// Nil if vuln correlation is disabled.
+	VulnMatches chan enrichment.VulnMatch
 }
 
 // connectorProfile defines normalization rules for a connector type
@@ -156,12 +165,45 @@ var connectorProfiles = map[string]connectorProfile{
 	},
 }
 
-// New creates a new Normalizer instance
+// New creates a new Normalizer instance and loads the ATT&CK corpus.
 func New(cfg *config.Config) (*Normalizer, error) {
-	return &Normalizer{
+	// Best-effort ATT&CK corpus load — normalizer works without it
+	if err := attck.Load(cfg.AttckDataPath); err != nil {
+		log.Warn().Err(err).Msg("ATT&CK corpus unavailable; technique enrichment disabled")
+	}
+
+	n := &Normalizer{
 		cfg:     cfg,
 		version: "1.1.0",
-	}, nil
+	}
+
+	// Set up Shodan enrichment if configured
+	if cfg.ShodanEnrichEnabled && cfg.ShodanAPIKey != "" {
+		n.shodan = enrichment.NewShodanEnricher(
+			cfg.ShodanAPIKey,
+			time.Duration(cfg.ShodanCacheExpirySecs)*time.Second,
+		)
+		log.Info().Msg("Shodan enrichment enabled")
+	}
+
+	// Set up vulnerability correlation
+	if cfg.VulnCorrelEnabled {
+		n.vulnCorrel = enrichment.NewVulnCorrelator()
+		n.VulnMatches = make(chan enrichment.VulnMatch, 256)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := n.vulnCorrel.LoadKEV(ctx); err != nil {
+			log.Warn().Err(err).Msg("CISA KEV load failed; vulnerability correlation disabled")
+			n.vulnCorrel = nil
+			close(n.VulnMatches)
+			n.VulnMatches = nil
+		} else {
+			log.Info().Int("entries", n.vulnCorrel.Size()).Msg("CISA KEV catalogue loaded")
+		}
+	}
+
+	return n, nil
 }
 
 // Normalize converts a raw event to a NormalizedEvent
@@ -237,6 +279,58 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		ocsf["raw_data"] = string(rawBytes)
 	}
 
+	// ATT&CK technique enrichment
+	if attck.Loaded() {
+		if techIDs := extractTechniqueIDs(raw.Payload); len(techIDs) > 0 {
+			var enriched []map[string]interface{}
+			for _, tid := range techIDs {
+				if tech := attck.Lookup(tid); tech != nil {
+					enriched = append(enriched, map[string]interface{}{
+						"technique_id":   tech.ID,
+						"technique_name": tech.Name,
+						"tactic_ids":     tech.TacticIDs,
+						"tactic_names":   tech.TacticNames,
+						"url":            tech.URL,
+					})
+				}
+			}
+			if len(enriched) > 0 {
+				ocsf["mitre_attck"] = enriched
+			}
+		}
+	}
+
+	// Shodan enrichment (non-blocking; best-effort)
+	var shodanCVEs []string
+	if n.shodan != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ocsf = n.shodan.Enrich(ctx, ocsf)
+		cancel()
+
+		// Collect CVEs from Shodan result for vuln correlation
+		if shodanBlock, ok := ocsf["shodan"].(map[string]interface{}); ok {
+			if cves, ok := shodanBlock["cves"].([]string); ok {
+				shodanCVEs = cves
+			}
+		}
+	}
+
+	// Vulnerability correlation — emit to VulnMatches channel
+	if n.vulnCorrel != nil {
+		matches := n.vulnCorrel.Correlate(ocsf, shodanCVEs)
+		for _, m := range matches {
+			select {
+			case n.VulnMatches <- m:
+			default:
+				// Channel full — drop to avoid blocking ingest pipeline
+				log.Warn().Str("cve", m.CVE).Msg("VulnMatches channel full; dropping match")
+			}
+		}
+		if len(matches) > 0 {
+			ocsf["vulnerability_matches"] = matches
+		}
+	}
+
 	eventID := uuid.New().String()
 
 	return &NormalizedEvent{
@@ -247,6 +341,57 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		NormalizationVersion: n.version,
 		NormalizationWarnings: warnings,
 	}, nil
+}
+
+// extractTechniqueIDs scans common fields in a raw payload for ATT&CK technique IDs.
+func extractTechniqueIDs(payload map[string]interface{}) []string {
+	seen := map[string]struct{}{}
+	var results []string
+
+	candidateKeys := []string{
+		"technique_id", "mitre_technique", "attck_technique", "tactic_id",
+		"mitre_techniques", "attack_technique",
+	}
+	for _, key := range candidateKeys {
+		val, ok := payload[key]
+		if !ok {
+			continue
+		}
+		switch v := val.(type) {
+		case string:
+			if tid := normalizeTechniqueID(v); tid != "" {
+				if _, dup := seen[tid]; !dup {
+					seen[tid] = struct{}{}
+					results = append(results, tid)
+				}
+			}
+		case []interface{}:
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					if tid := normalizeTechniqueID(s); tid != "" {
+						if _, dup := seen[tid]; !dup {
+							seen[tid] = struct{}{}
+							results = append(results, tid)
+						}
+					}
+				}
+			}
+		}
+	}
+	return results
+}
+
+// normalizeTechniqueID extracts a clean ATT&CK technique ID from a string.
+func normalizeTechniqueID(s string) string {
+	s = strings.TrimSpace(strings.ToUpper(s))
+	// Accept T1234 or T1234.001
+	if len(s) >= 5 && s[0] == 'T' {
+		parts := strings.SplitN(s, ".", 2)
+		if len(parts[0]) >= 5 && len(parts[0]) <= 7 {
+			return s
+		}
+	}
+	return ""
 }
 
 // normalizeTime attempts to parse and re-format a timestamp as RFC3339

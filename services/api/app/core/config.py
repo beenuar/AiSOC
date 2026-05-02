@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "AiSOC API"
     APP_VERSION: str = "0.1.0"
     ENV: str = "development"
+    ENVIRONMENT: str = "development"  # alias for ENV
+    VERSION: str = "0.1.0"           # alias for APP_VERSION
     DEBUG: bool = False
     API_PREFIX: str = "/api/v1"
 

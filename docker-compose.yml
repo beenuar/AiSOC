@@ -17,6 +17,8 @@ volumes:
   clickhouse_data:
   opensearch_data:
   qdrant_data:
+  neo4j_data:
+  neo4j_logs:
 
 services:
 
@@ -33,7 +35,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./services/core-api/migrations:/docker-entrypoint-initdb.d:ro
+      - ./services/api/migrations:/docker-entrypoint-initdb.d:ro
     networks:
       - aisoc
     healthcheck:
@@ -121,7 +123,7 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
-      - ./services/core-api/clickhouse:/docker-entrypoint-initdb.d:ro
+      - ./services/api/clickhouse:/docker-entrypoint-initdb.d:ro
     environment:
       CLICKHOUSE_DB: aisoc
       CLICKHOUSE_USER: aisoc
@@ -166,13 +168,36 @@ services:
     networks:
       - aisoc
 
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: aisoc-neo4j
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_dev_secret
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_memory_heap_initial__size: 256m
+      NEO4J_dbms_memory_heap_max__size: 512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
   # ─── Application Services ────────────────────────────────────────────────────
 
-  core-api:
+  api:
     build:
-      context: ./services/core-api
+      context: ./services/api
       dockerfile: Dockerfile
-    container_name: aisoc-core-api
+    container_name: aisoc-api
     depends_on:
       postgres:
         condition: service_healthy
@@ -189,6 +214,9 @@ services:
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
       OPENSEARCH_URL: http://opensearch:9200
       QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
       SECRET_KEY: dev_secret_key_change_in_production
       ENVIRONMENT: development
       LOG_LEVEL: info
@@ -210,6 +238,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/1
       LOG_LEVEL: info
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
     networks:
       - aisoc
     restart: unless-stopped
@@ -232,20 +261,23 @@ services:
       VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
       ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
       GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      SHODAN_API_KEY: ${SHODAN_API_KEY:-}
     networks:
       - aisoc
     restart: unless-stopped
 
-  alert-fusion:
+  fusion:
     build:
-      context: ./services/alert-fusion
+      context: ./services/fusion
       dockerfile: Dockerfile
-    container_name: aisoc-alert-fusion
+    container_name: aisoc-fusion
     depends_on:
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    ports:
+      - "8003:8003"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/3
@@ -269,9 +301,15 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: http://api:8000
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: gpt-4-turbo-preview
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
     networks:
       - aisoc
     restart: unless-stopped
@@ -292,7 +330,65 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/5
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
-      CORE_API_URL: http://core-api:8000
+      CORE_API_URL: http://api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  connectors:
+    build:
+      context: ./services/connectors
+      dockerfile: Dockerfile
+    container_name: aisoc-connectors
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8006:8003"
+    profiles:
+      - connectors
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/6
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+      CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
+      CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  threatintel:
+    build:
+      context: ./services/threatintel
+      dockerfile: Dockerfile
+    container_name: aisoc-threatintel
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8005:8005"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/7
+      OPENSEARCH_URL: http://opensearch:9200
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j_dev_secret
+      MISP_URL: ${MISP_URL:-}
+      MISP_API_KEY: ${MISP_API_KEY:-}
+      OTX_API_KEY: ${OTX_API_KEY:-}
+      TAXII_URL: ${TAXII_URL:-}
+      TAXII_USERNAME: ${TAXII_USERNAME:-}
+      TAXII_PASSWORD: ${TAXII_PASSWORD:-}
     networks:
       - aisoc
     restart: unless-stopped
@@ -324,7 +420,7 @@ services:
       dockerfile: Dockerfile
     container_name: aisoc-web
     depends_on:
-      - core-api
+      - api
       - realtime
     ports:
       - "3000:3000"
@@ -335,46 +431,6 @@ services:
     networks:
       - aisoc
     restart: unless-stopped
-
-  # ─── Connectors ──────────────────────────────────────────────────────────────
-
-  connector-crowdstrike:
-    build:
-      context: ./connectors/crowdstrike
-      dockerfile: Dockerfile
-    container_name: aisoc-connector-crowdstrike
-    depends_on:
-      kafka:
-        condition: service_healthy
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
-      CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
-      POLL_INTERVAL: 60
-    networks:
-      - aisoc
-    restart: unless-stopped
-    profiles:
-      - connectors
-
-  connector-aws:
-    build:
-      context: ./connectors/aws
-      dockerfile: Dockerfile
-    container_name: aisoc-connector-aws
-    depends_on:
-      kafka:
-        condition: service_healthy
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-    networks:
-      - aisoc
-    restart: unless-stopped
-    profiles:
-      - connectors
 
   # ─── Observability ────────────────────────────────────────────────────────────
 

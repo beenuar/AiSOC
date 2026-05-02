@@ -33,6 +33,10 @@ class FusionWorker:
         self._producer: AIOKafkaProducer | None = None
         self._running = False
 
+    @property
+    def engine(self) -> FusionEngine:
+        return self._engine
+
     async def start(self) -> None:
         self._consumer = AIOKafkaConsumer(
             settings.kafka_topic_alerts_raw,

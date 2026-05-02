@@ -55,6 +55,19 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Drain VulnMatches → Kafka in a background goroutine
+	if norm.VulnMatches != nil {
+		go func() {
+			for match := range norm.VulnMatches {
+				pubCtx, pubCancel := context.WithTimeout(ctx, 5*time.Second)
+				if err := pub.PublishVulnMatch(pubCtx, match); err != nil {
+					log.Warn().Err(err).Str("cve", match.CVE).Msg("Failed to publish VulnMatch")
+				}
+				pubCancel()
+			}
+		}()
+	}
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 

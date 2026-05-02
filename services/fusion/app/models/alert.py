@@ -107,7 +107,23 @@ class FusedAlert(BaseModel):
     # Enrichment data (populated by enrichment service)
     enrichments: dict[str, Any] = Field(default_factory=dict)
 
+    # ML scores — populated by MLScorer
+    anomaly_score: float = 0.0   # 0.0 = normal, 1.0 = highly anomalous (Isolation Forest)
+    priority_score: float = 0.0  # 0.0–1.0 priority rank (LightGBM ranker)
+
     fused_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AnalystFeedback(BaseModel):
+    """Analyst feedback on a fused alert, used to re-train the ML ranker."""
+
+    alert_id: UUID
+    tenant_id: UUID
+    analyst_id: str
+    is_true_positive: bool
+    assigned_priority: int = Field(ge=1, le=5, description="Analyst-assigned priority 1 (critical) to 5 (low)")
+    notes: str = ""
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class IncidentSummary(BaseModel):

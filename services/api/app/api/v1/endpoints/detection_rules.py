@@ -1,15 +1,16 @@
 """Detection rule management endpoints."""
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.detection_rule import DetectionRule
+from app.services.rule_engine import execute_rule, run_hunt
 
 router = APIRouter(prefix="/rules", tags=["detection_rules"])
 
@@ -199,3 +200,180 @@ async def delete_rule(
         )
     await db.delete(rule)
     await db.commit()
+
+
+# ─── Rule Execution Endpoint ──────────────────────────────────────────────────
+
+class ExecuteRuleRequest(BaseModel):
+    """Payload for ad-hoc rule execution."""
+    events: list[dict[str, Any]] = Field(
+        ..., description="Events to test the rule against", max_length=1000
+    )
+
+
+class ExecuteRuleResponse(BaseModel):
+    rule_id: str
+    rule_name: str
+    rule_language: str
+    severity: str
+    matched: bool
+    match_count: int
+    matched_events: list[dict[str, Any]]
+    score: float
+    error: str | None
+    execution_time_ms: float
+
+
+@router.post(
+    "/{rule_id}/execute",
+    response_model=ExecuteRuleResponse,
+    summary="Execute a detection rule against provided events",
+)
+async def execute_detection_rule(
+    rule_id: uuid.UUID,
+    request: ExecuteRuleRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
+    db: DBSession,
+) -> ExecuteRuleResponse:
+    """
+    Execute a single detection rule against a set of events and return matches.
+    Useful for testing rules in the detection IDE before enabling them.
+    """
+    result = await db.execute(
+        select(DetectionRule).where(
+            DetectionRule.id == rule_id,
+            or_(
+                DetectionRule.tenant_id == current_user.tenant_id,
+                DetectionRule.tenant_id.is_(None),
+            ),
+        )
+    )
+    rule = result.scalar_one_or_none()
+    if rule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
+
+    match = execute_rule(
+        rule_id=str(rule.id),
+        rule_name=rule.name,
+        rule_language=rule.rule_language,
+        rule_body=rule.rule_body,
+        severity=rule.severity,
+        events=request.events,
+    )
+
+    # Update hit stats if matched
+    if match.matched:
+        await db.execute(
+            update(DetectionRule)
+            .where(DetectionRule.id == rule_id)
+            .values(
+                total_hits=DetectionRule.total_hits + len(match.match_details.get("matched_events", [])),
+                last_triggered=datetime.now(UTC),
+            )
+        )
+        await db.commit()
+
+    matched_events = match.match_details.get("matched_events", [])
+    return ExecuteRuleResponse(
+        rule_id=str(rule.id),
+        rule_name=rule.name,
+        rule_language=rule.rule_language,
+        severity=rule.severity,
+        matched=match.matched,
+        match_count=len(matched_events),
+        matched_events=matched_events,
+        score=match.score,
+        error=match.error,
+        execution_time_ms=match.execution_time_ms,
+    )
+
+
+# ─── Hunt Endpoint ────────────────────────────────────────────────────────────
+
+class HuntRequest(BaseModel):
+    """Payload for threat hunting across events."""
+    rule_ids: list[uuid.UUID] | None = Field(
+        None, description="Specific rule IDs to hunt with; omit to use all active rules"
+    )
+    rule_language: str | None = Field(
+        None, description="Filter rules by language (sigma, yara, kql, eql)"
+    )
+    events: list[dict[str, Any]] = Field(
+        ..., description="Events to hunt through", max_length=5000
+    )
+
+
+class HuntResponse(BaseModel):
+    hunt_id: str
+    rules_evaluated: int
+    rules_matched: int
+    total_events_scanned: int
+    matched_events: list[dict[str, Any]]
+    match_summary: list[dict[str, Any]]
+    execution_time_ms: float
+    errors: list[str]
+
+
+@router.post(
+    "/hunt",
+    response_model=HuntResponse,
+    summary="Threat hunt: run detection rules against a set of events",
+)
+async def hunt(
+    request: HuntRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
+    db: DBSession,
+) -> HuntResponse:
+    """
+    Run multiple detection rules against provided events (threat hunting).
+    If rule_ids is omitted, all active tenant rules are used.
+    """
+    # Build filter
+    filters = [
+        or_(
+            DetectionRule.tenant_id == current_user.tenant_id,
+            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin == True),
+        ),
+        DetectionRule.status == "active",
+    ]
+    if request.rule_ids:
+        filters.append(DetectionRule.id.in_(request.rule_ids))
+    if request.rule_language:
+        filters.append(DetectionRule.rule_language == request.rule_language)
+
+    result = await db.execute(select(DetectionRule).where(and_(*filters)))
+    rules = result.scalars().all()
+
+    if not rules:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active detection rules found matching the criteria",
+        )
+
+    rule_dicts = [
+        {
+            "id": str(r.id),
+            "name": r.name,
+            "rule_language": r.rule_language,
+            "rule_body": r.rule_body,
+            "severity": r.severity,
+        }
+        for r in rules
+    ]
+
+    hunt_result = await run_hunt(
+        tenant_id=str(current_user.tenant_id),
+        rules=rule_dicts,
+        events=request.events,
+    )
+
+    return HuntResponse(
+        hunt_id=hunt_result.hunt_id,
+        rules_evaluated=hunt_result.rules_evaluated,
+        rules_matched=hunt_result.rules_matched,
+        total_events_scanned=hunt_result.total_events_scanned,
+        matched_events=hunt_result.matched_events,
+        match_summary=hunt_result.match_summary,
+        execution_time_ms=hunt_result.execution_time_ms,
+        errors=hunt_result.errors,
+    )

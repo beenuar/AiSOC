@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/cyble/aisoc/services/ingest/internal/config"
+	"github.com/cyble/aisoc/services/ingest/internal/enrichment"
 	"github.com/cyble/aisoc/services/ingest/internal/normalizer"
 	"github.com/rs/zerolog/log"
 	kafka "github.com/segmentio/kafka-go"
@@ -14,8 +15,9 @@ import (
 
 // Publisher sends normalized events to Kafka
 type Publisher struct {
-	writer *kafka.Writer
-	cfg    *config.Config
+	writer      *kafka.Writer
+	vulnWriter  *kafka.Writer // dedicated writer for VULNERABILITY_MATCH topic
+	cfg         *config.Config
 }
 
 // New creates a new Kafka publisher
@@ -30,10 +32,46 @@ func New(cfg *config.Config) (*Publisher, error) {
 		AllowAutoTopicCreation: true,
 	}
 
+	var vulnWriter *kafka.Writer
+	if cfg.VulnCorrelEnabled && cfg.VulnKafkaTopic != "" {
+		vulnWriter = &kafka.Writer{
+			Addr:                   kafka.TCP(cfg.KafkaBrokers),
+			Topic:                  cfg.VulnKafkaTopic,
+			Balancer:               &kafka.Hash{},
+			MaxAttempts:            3,
+			AllowAutoTopicCreation: true,
+		}
+	}
+
 	return &Publisher{
-		writer: w,
-		cfg:    cfg,
+		writer:     w,
+		vulnWriter: vulnWriter,
+		cfg:        cfg,
 	}, nil
+}
+
+// PublishVulnMatch sends a VULNERABILITY_MATCH event to the dedicated Kafka topic.
+func (p *Publisher) PublishVulnMatch(ctx context.Context, match enrichment.VulnMatch) error {
+	if p.vulnWriter == nil {
+		return nil
+	}
+	data, err := json.Marshal(match)
+	if err != nil {
+		return err
+	}
+	msg := kafka.Message{
+		Key:   []byte(match.CVE + ":" + match.TenantID),
+		Value: data,
+		Headers: []kafka.Header{
+			{Key: "event_type", Value: []byte("VULNERABILITY_MATCH")},
+			{Key: "tenant_id", Value: []byte(match.TenantID)},
+		},
+	}
+	if err := p.vulnWriter.WriteMessages(ctx, msg); err != nil {
+		log.Warn().Err(err).Str("cve", match.CVE).Msg("Failed to publish vuln match")
+		return err
+	}
+	return nil
 }
 
 // Publish sends a single normalized event to Kafka
@@ -104,9 +142,14 @@ func (p *Publisher) PublishBatch(ctx context.Context, events []*normalizer.Norma
 	return nil
 }
 
-// Close shuts down the Kafka writer
+// Close shuts down the Kafka writers
 func (p *Publisher) Close() {
 	if err := p.writer.Close(); err != nil {
 		log.Error().Err(err).Msg("Error closing Kafka writer")
+	}
+	if p.vulnWriter != nil {
+		if err := p.vulnWriter.Close(); err != nil {
+			log.Error().Err(err).Msg("Error closing vuln Kafka writer")
+		}
 	}
 }
