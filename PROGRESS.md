@@ -2,7 +2,7 @@
 
 Last updated: 2024-01-01
 
-## Tasks
+## ✅ ALL TASKS COMPLETE
 
 | ID | Task | Status |
 |----|------|--------|
@@ -19,35 +19,40 @@ Last updated: 2024-01-01
 | build-frontend | Build Next.js 14 frontend: SOC console, case mgmt, attack graph, NL search | ✅ COMPLETED |
 | build-infra | Build Terraform infrastructure + Helm charts + Docker configs | ✅ COMPLETED |
 | build-docs | Create README, architecture docs, API docs, migration guides | ✅ COMPLETED |
-| setup-github | Create GitHub repository and push initial commit | 🔄 IN_PROGRESS |
-| github-push | Push complete codebase to GitHub | 🔄 IN_PROGRESS |
+| setup-github | Create GitHub repository and push initial commit | ✅ COMPLETED |
+| github-push | Push complete codebase to GitHub | ✅ COMPLETED |
+
+## GitHub Repository
+
+**https://github.com/beenuar/AiSOC**
 
 ## Services Built
 
 ### Backend Services
-- `services/core-api` — Python FastAPI REST API
-- `services/ingest` — Go high-throughput event ingest worker
+- `services/api` — Python FastAPI REST API (alerts, cases, RBAC, tenants)
+- `services/ingest` — Go high-throughput event ingest + OCSF normalization
 - `services/enrichment` — Go IOC enrichment with Redis caching
-- `services/alert-fusion` — Python alert deduplication + correlation
+- `services/fusion` — Python alert deduplication + correlation
 - `services/agents` — Python LangGraph AI agent orchestrator
 - `services/actions` — Python SOAR action execution service
 - `services/realtime` — Node.js WebSocket/SSE real-time service
+- `services/connectors` — Python multi-connector service
 
 ### Frontend
 - `apps/web` — Next.js 14 SOC console
   - Dashboard with live metrics and charts
-  - Alert management with filtering and detail view
+  - Alert management with filtering and AI investigation
   - Case management
   - Threat intelligence with IOC lookup
   - Connector management
   - Threat hunting (KQL, Sigma, YARA)
 
-### Connectors
-- `connectors/crowdstrike` — CrowdStrike Falcon
-- `connectors/splunk` — Splunk Enterprise/Cloud
-- `connectors/aws` — AWS Security Hub
-- `connectors/okta` — Okta Identity
-- `connectors/sentinel` — Microsoft Sentinel
+### Connectors (Phase 1)
+- CrowdStrike Falcon
+- Splunk Enterprise/Cloud
+- AWS Security Hub
+- Okta Identity
+- Microsoft Sentinel
 
 ### Shared Packages
 - `packages/types` — TypeScript type definitions
@@ -58,3 +63,9 @@ Last updated: 2024-01-01
 - `infra/terraform` — AWS infrastructure (VPC, EKS, RDS, ElastiCache, MSK)
 - `infra/helm/aisoc` — Kubernetes Helm chart
 - `docker-compose.yml` — Full development stack
+
+### Documentation
+- `README.md` — Project overview, quick start, architecture diagram
+- `CONTRIBUTING.md` — Contribution guidelines
+- `LICENSE` — MIT License
+- `.env.example` — Environment variable reference
