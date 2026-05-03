@@ -7,6 +7,8 @@ from fastapi import FastAPI
 
 from app.api.router import router
 from app.api.investigate import router as investigate_router
+from app.api.playbooks import router as playbook_router
+from app.playbook import PlaybookStore
 from app.tools.mitre_full import load_attck_corpus, embed_techniques_into_qdrant
 
 logger = structlog.get_logger()
@@ -15,6 +17,15 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Load resources on startup."""
+    # Seed playbook store with default templates
+    try:
+        store = PlaybookStore.default()
+        n = store.seed_defaults()
+        if n:
+            logger.info("playbook_store.seeded", count=n)
+    except Exception as exc:
+        logger.warning("Playbook store seed failed", error=str(exc))
+
     # Load full MITRE ATT&CK corpus
     try:
         await load_attck_corpus()
@@ -45,6 +56,7 @@ app = FastAPI(
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
+app.include_router(playbook_router)     # prefix: /api/v1/playbooks
 
 
 @app.get("/health")

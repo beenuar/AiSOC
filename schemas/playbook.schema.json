@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/cyble-dev/aisoc/schemas/playbook.schema.json",
+  "title": "AiSOC Playbook",
+  "description": "Schema for AiSOC v4 Pillar-2 playbook definitions.",
+  "type": "object",
+  "required": ["name", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique playbook identifier (UUID or slug)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Human-readable playbook name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version string, e.g. '1.0.0'."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["on"],
+      "properties": {
+        "on": {
+          "type": "string",
+          "enum": ["alert", "case", "manual", "schedule"],
+          "description": "Event type that fires this playbook."
+        },
+        "severity": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["info", "low", "medium", "high", "critical"]
+          },
+          "description": "Optional severity filter."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Alert/case must carry at least one of these tags."
+        },
+        "cron": {
+          "type": "string",
+          "description": "Cron expression for schedule trigger."
+        }
+      },
+      "additionalProperties": true
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/PlaybookStep" }
+    },
+    "author": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "definitions": {
+    "StepCondition": {
+      "type": "object",
+      "required": ["field", "operator"],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Dot-path into run context, e.g. 'alert.severity'."
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["eq", "ne", "gt", "lt", "contains", "exists"]
+        },
+        "value": {
+          "description": "Expected value (not required for 'exists' operator)."
+        }
+      }
+    },
+    "PlaybookStep": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Short unique identifier within the playbook (used for branching)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "enrich",
+            "investigate",
+            "notify",
+            "block_ip",
+            "isolate_host",
+            "create_ticket",
+            "close_case",
+            "http",
+            "condition"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "description": "Step-specific parameters. Keys depend on the step type.",
+          "additionalProperties": true
+        },
+        "condition": {
+          "$ref": "#/definitions/StepCondition"
+        },
+        "on_failure": {
+          "type": "string",
+          "enum": ["abort", "continue", "retry"],
+          "default": "abort"
+        },
+        "retry_max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 0
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600,
+          "default": 30
+        },
+        "next_true": {
+          "type": "string",
+          "description": "Step ID to jump to when condition is true (branching)."
+        },
+        "next_false": {
+          "type": "string",
+          "description": "Step ID to jump to when condition is false (branching)."
+        }
+      }
+    }
+  }
+}

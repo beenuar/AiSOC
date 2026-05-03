@@ -1,0 +1,63 @@
+{
+  "id": "phishing-triage-v1",
+  "name": "Phishing Triage",
+  "description": "Automated phishing alert triage: enrich sender/URL, notify SOC, and close low-confidence cases.",
+  "version": "1.0.0",
+  "tags": ["phishing", "email", "triage"],
+  "trigger": {
+    "on": "alert",
+    "severity": ["medium", "high", "critical"],
+    "tags": ["phishing"]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "steps": [
+    {
+      "id": "enrich-sender",
+      "name": "Enrich sender IP/domain",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.source_ip"
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "investigate",
+      "name": "Run AI Investigator",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id"
+      },
+      "on_failure": "abort",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "notify-soc",
+      "name": "Notify SOC channel",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "webhook_env": "SLACK_SOC_WEBHOOK",
+        "message_template": "Phishing alert {{alert.id}} investigated. Verdict: {{verdict}}"
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 10
+    },
+    {
+      "id": "close-if-fp",
+      "name": "Close if false-positive",
+      "type": "close_case",
+      "condition": {
+        "field": "verdict",
+        "operator": "eq",
+        "value": "false_positive"
+      },
+      "params": {
+        "resolution": "false_positive"
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 10
+    }
+  ]
+}

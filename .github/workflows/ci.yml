@@ -157,6 +157,23 @@ jobs:
           path: eval_report.json
 
   # ──────────────────────────────────────────────
+  # Pillar-2: Playbook JSON Schema lint
+  # Validates all playbook JSON files against schemas/playbook.schema.json
+  # ──────────────────────────────────────────────
+  p2-playbook-schema-lint:
+    name: P2 — Playbook Schema Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install jsonschema
+        run: pip install jsonschema
+      - name: Lint playbook files
+        run: python3 scripts/lint_playbooks.py
+
+  # ──────────────────────────────────────────────
   # Docker Compose smoke test
   # ──────────────────────────────────────────────
   docker-compose-check:
