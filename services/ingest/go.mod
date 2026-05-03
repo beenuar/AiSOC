@@ -1,8 +1,6 @@
 module github.com/beenuar/aisoc/services/ingest
 
-go 1.21
-
-toolchain go1.21.1
+go 1.23
 
 require (
 	github.com/go-chi/chi/v5 v5.0.12
@@ -10,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/rs/zerolog v1.32.0
-	github.com/segmentio/kafka-go v0.4.47
+	github.com/segmentio/kafka-go v0.4.51
 )
 
 require (
