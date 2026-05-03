@@ -29,35 +29,82 @@ function HomepageHeader() {
   );
 }
 
+const FEATURES = [
+  {
+    title: '🔍 AI Investigation',
+    description:
+      'LangGraph multi-agent workflows for automated root-cause analysis, triage, and case enrichment.',
+  },
+  {
+    title: '📋 Playbook Engine',
+    description:
+      'Visual React Flow editor with 12+ starter templates for automated, auditable response actions.',
+  },
+  {
+    title: '🧠 UEBA',
+    description:
+      'Per-user Welford online baselines, Z-score anomaly scoring, and Kafka-integrated anomaly publishing.',
+  },
+  {
+    title: '🍯 Honeytokens',
+    description:
+      'HMAC-SHA256 signed deceptive credentials (URL, file, AWS key, email) with first-touch webhook alerting.',
+  },
+  {
+    title: '🟣 Purple Team',
+    description:
+      'Atomic Red Team YAML parser + Caldera executor, ATT&CK coverage heatmap, and tabletop sessions.',
+  },
+  {
+    title: '⚡ Real-time Fusion',
+    description:
+      'Kafka spine with sub-second alert ingestion, Bloom-filter dedup on 10M+ IOCs, ML scoring (LightGBM + Isolation Forest).',
+  },
+  {
+    title: '🕸️ Attack Graph',
+    description:
+      'Neo4j entity graph with attack-path reconstruction and blast-radius gating on automated actions.',
+  },
+  {
+    title: '🛡️ Detection Engineering',
+    description:
+      'Sigma over OpenSearch + ClickHouse, YARA, KQL/EQL — community catalog with one-click install.',
+  },
+  {
+    title: '🏛️ Enterprise Governance',
+    description:
+      'SAML 2.0 + OIDC SSO, multi-tenant Postgres RLS, granular RBAC, and immutable audit log.',
+  },
+  {
+    title: '📊 Compliance Dashboards',
+    description:
+      'SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA evidence with MTTD/MTTR/MTTC SLA tracking.',
+  },
+  {
+    title: '🔌 Plugin Ecosystem',
+    description:
+      'Python and TypeScript SDKs, Ed25519-signed publishing, and a community marketplace.',
+  },
+  {
+    title: '🚀 Cloud-Native',
+    description:
+      'Helm charts, Docker Compose, OpenTelemetry traces/metrics/logs, and PostgreSQL backup with KMS encryption.',
+  },
+];
+
 export default function Home(): React.JSX.Element {
   const { siteConfig } = useDocusaurusContext();
   return (
     <Layout
       title={siteConfig.title}
-      description="Open-source AI Security Operations Center">
+      description="Open-source AI SOC — autonomous detection, investigation, and response with UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance.">
       <HomepageHeader />
       <main>
         <div className="container margin-vert--xl">
           <div className="row">
-            {[
-              {
-                title: '🔍 AI Investigation',
-                description:
-                  'LangGraph-powered multi-agent workflows for automated root-cause analysis and triage.',
-              },
-              {
-                title: '📋 Playbook Engine',
-                description:
-                  'Visual React Flow editor with 12+ starter templates for automated response.',
-              },
-              {
-                title: '🔌 Plugin SDK',
-                description:
-                  'Build custom enrichers, actions, and connectors in Python or Go.',
-              },
-            ].map(({ title, description }) => (
-              <div key={title} className="col col--4">
-                <div className="text--center padding-horiz--md margin-bottom--lg">
+            {FEATURES.map(({ title, description }) => (
+              <div key={title} className="col col--4 margin-bottom--lg">
+                <div className="padding-horiz--md">
                   <h3>{title}</h3>
                   <p>{description}</p>
                 </div>
