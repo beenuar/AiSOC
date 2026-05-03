@@ -15,6 +15,7 @@
     "@aisoc/types": "workspace:*",
     "@aisoc/ui": "workspace:*",
     "@monaco-editor/react": "^4.6.0",
+    "@xyflow/react": "^12.10.2",
     "clsx": "^2.1.0",
     "cmdk": "^0.2.1",
     "cytoscape": "^3.28.1",
