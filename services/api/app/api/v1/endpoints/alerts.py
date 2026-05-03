@@ -9,6 +9,7 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.db.rls import TenantDBSession
 from app.models.alert import Alert
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -70,7 +71,7 @@ class AlertStatsResponse(BaseModel):
 @router.get("", response_model=AlertListResponse)
 async def list_alerts(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
-    db: DBSession,
+    db: TenantDBSession,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     severity: str | None = Query(default=None),

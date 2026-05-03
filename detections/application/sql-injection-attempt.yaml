@@ -1,0 +1,40 @@
+id: det-app-001
+name: SQL Injection Attempt via Web Application
+description: >
+  Detects SQL injection attempts in HTTP request parameters by matching
+  known SQLi payloads and patterns in query strings, POST bodies, or
+  HTTP headers. Covers UNION-based, error-based, time-based blind, and
+  boolean-based injection patterns.
+version: "1.0.0"
+severity: high
+tags:
+  - mitre.attack.t1190
+  - tlp.white
+category: application
+log_source:
+  product: waf
+  service: access-logs
+detection:
+  keywords:
+    - "' OR 1=1"
+    - "' OR '1'='1"
+    - "UNION SELECT"
+    - "'; DROP TABLE"
+    - "' AND SLEEP("
+    - "' AND BENCHMARK("
+    - "xp_cmdshell"
+    - "INFORMATION_SCHEMA"
+    - "'; WAITFOR DELAY"
+  condition: keywords
+  filters:
+    - src_ip: pentest-ip-ranges
+    - http_status: "400"
+false_positives:
+  - Penetration testing and bug-bounty activity
+  - Web Application Firewall testing
+  - Search queries containing SQL keywords (documentation sites)
+playbook: tpl-web-attack-response
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

@@ -1,0 +1,40 @@
+id: det-cloud-002
+name: AWS S3 Bucket Made Public
+description: >
+  Detects when an S3 bucket ACL or bucket policy is modified to allow public
+  read or public read-write access, which can lead to data exposure or
+  unauthorised data exfiltration.
+version: "1.0.0"
+severity: high
+tags:
+  - mitre.attack.t1530
+  - tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    event_name IN [
+      "PutBucketAcl",
+      "PutBucketPolicy",
+      "PutPublicAccessBlock"
+    ]
+    AND (
+      request_parameters CONTAINS "public-read"
+      OR request_parameters CONTAINS "public-read-write"
+      OR request_parameters CONTAINS '"AllUsers"'
+      OR request_parameters CONTAINS '"AuthenticatedUsers"'
+      OR (
+        event_name == "PutPublicAccessBlock"
+        AND request_parameters CONTAINS '"BlockPublicAcls":false'
+      )
+    )
+false_positives:
+  - Public website asset buckets (pre-approved, tagged)
+  - Open-data repositories (must be listed in allowlist)
+playbook: tpl-data-exposure-response
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

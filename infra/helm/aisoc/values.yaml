@@ -1,179 +1,278 @@
 # AiSOC Helm Chart Values
-# Default values for production deployment
+# Default values for production HA deployment
+
+nameOverride: ""
+fullnameOverride: ""
 
 global:
   imageRegistry: ""
   imagePullSecrets: []
   storageClass: ""
   environment: production
+  logLevel: info
+  otelEndpoint: ""
+  extraConfig: {}
 
-# ─── Core API ──────────────────────────────────────────────────────────────────
+# ─── Service Account ──────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountToken: false
 
-coreApi:
+# ─── Services map (drives deployment.yaml, hpa.yaml, pdb.yaml, service.yaml) ─
+services:
+  api:
+    image:
+      repository: ghcr.io/beenuar/aisoc-core-api
+      tag: ""  # defaults to Chart.AppVersion
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8000
+    metricsPort: 9090
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  ingest:
+    image:
+      repository: ghcr.io/beenuar/aisoc-ingest
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 3
+    containerPort: 8001
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 20
+      cpuTargetUtilization: 60
+      memTargetUtilization: 75
+    pdb:
+      enabled: true
+      minAvailable: 2
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  enrichment:
+    image:
+      repository: ghcr.io/beenuar/aisoc-enrichment
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8002
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 800m
+        memory: 1Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  alert-fusion:
+    image:
+      repository: ghcr.io/beenuar/aisoc-alert-fusion
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8003
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      cpuTargetUtilization: 65
+      memTargetUtilization: 75
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  agents:
+    image:
+      repository: ghcr.io/beenuar/aisoc-agents
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8004
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      cpuTargetUtilization: 60
+      memTargetUtilization: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  web:
+    image:
+      repository: ghcr.io/beenuar/aisoc-web
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 3000
+    healthCheckPath: /api/health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  realtime:
+    image:
+      repository: ghcr.io/beenuar/aisoc-realtime
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 4000
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+# ─── Ingress ──────────────────────────────────────────────────────────────────
+ingress:
   enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-core-api
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 8000
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-  env:
-    LOG_LEVEL: info
-    ENVIRONMENT: production
-  envFrom:
-    - secretRef:
-        name: aisoc-core-api-secrets
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+  hosts:
+    - host: aisoc.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+          port: 80
+        - path: /ws
+          pathType: Prefix
+          service: realtime
+          port: 80
+        - path: /
+          pathType: Prefix
+          service: web
+          port: 80
+  tls:
+    - secretName: aisoc-tls
+      hosts:
+        - aisoc.example.com
 
-# ─── Ingest Worker ────────────────────────────────────────────────────────────
-
-ingest:
-  enabled: true
-  replicaCount: 3
-  image:
-    repository: ghcr.io/beenuar/aisoc-ingest
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 20
-    targetCPUUtilizationPercentage: 60
-
-# ─── Enrichment ───────────────────────────────────────────────────────────────
-
-enrichment:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-enrichment
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
-    limits:
-      cpu: 800m
-      memory: 1Gi
-
-# ─── Alert Fusion ─────────────────────────────────────────────────────────────
-
-alertFusion:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-alert-fusion
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-
-# ─── AI Agents ────────────────────────────────────────────────────────────────
-
-agents:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-agents
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      cpu: 2000m
-      memory: 4Gi
-
-# ─── Actions ──────────────────────────────────────────────────────────────────
-
-actions:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-actions
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
-    limits:
-      cpu: 800m
-      memory: 1Gi
-
-# ─── Realtime Service ─────────────────────────────────────────────────────────
-
-realtime:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-realtime
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 4000
-
-# ─── Web Frontend ─────────────────────────────────────────────────────────────
-
-web:
-  enabled: true
-  replicaCount: 2
-  image:
-    repository: ghcr.io/beenuar/aisoc-web
-    tag: "latest"
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 3000
-  ingress:
-    enabled: true
-    className: nginx
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    hosts:
-      - host: aisoc.example.com
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - secretName: aisoc-tls
-        hosts:
-          - aisoc.example.com
-
-# ─── Bundled Infrastructure (for non-production) ──────────────────────────────
-
+# ─── Bundled Infrastructure (disable in production; use managed services) ─────
 postgresql:
-  enabled: false  # Use managed RDS in production
+  enabled: false
   auth:
     database: aisoc
     username: aisoc
@@ -183,9 +282,21 @@ postgresql:
       size: 100Gi
 
 redis:
-  enabled: false  # Use managed ElastiCache in production
+  enabled: false
   auth:
     existingSecret: aisoc-redis-secret
   master:
     persistence:
       size: 20Gi
+
+# ─── Legacy top-level keys (kept for backward compat with core-api-deployment.yaml) ─
+coreApi:
+  enabled: false  # Replaced by services.api above
+
+# ─── Network Policies ─────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: false
+
+# ─── Pod Security ─────────────────────────────────────────────────────────────
+podSecurityPolicy:
+  enabled: false

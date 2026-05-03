@@ -23,7 +23,10 @@
     "docker:down": "docker compose -f docker-compose.dev.yml down",
     "seed:demo": "docker compose -f docker-compose.dev.yml exec api python -m app.scripts.seed_demo",
     "demo:produce": "go run ./services/demo-producer",
-    "demo:produce:fast": "go run ./services/demo-producer --rate 8 --batch 10"
+    "demo:produce:fast": "go run ./services/demo-producer --rate 8 --batch 10",
+    "detections:validate": "python3 scripts/validate_detections.py",
+    "marketplace:sync": "cp marketplace/index.json apps/web/public/marketplace/index.json && echo 'marketplace/index.json synced to apps/web/public/'",
+    "aisoc:lab": "bash scripts/lab.sh"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

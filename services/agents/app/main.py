@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.api.router import router
 from app.api.investigate import router as investigate_router
 from app.api.playbooks import router as playbook_router
+from app.core.telemetry import instrument_app
 from app.playbook import PlaybookStore
 from app.tools.mitre_full import load_attck_corpus, embed_techniques_into_qdrant
 
@@ -53,6 +54,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# OpenTelemetry auto-instrumentation (FastAPI + httpx)
+instrument_app(app)
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py

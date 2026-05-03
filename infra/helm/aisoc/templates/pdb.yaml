@@ -1,0 +1,23 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aisoc.fullname" $ }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  {{- if $svc.pdb.minAvailable }}
+  minAvailable: {{ $svc.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ $svc.pdb.maxUnavailable | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $name }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,120 @@
+{{- if .Values.honeytokens.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aisoc.fullname" . }}-honeytokens
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: honeytokens
+spec:
+  replicas: {{ .Values.honeytokens.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: honeytokens
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: honeytokens
+    spec:
+      containers:
+        - name: honeytokens
+          image: "{{ .Values.honeytokens.image.repository }}:{{ .Values.honeytokens.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.honeytokens.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8005
+              protocol: TCP
+          env:
+            - name: HONEYTOKEN_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aisoc.fullname" . }}-secrets
+                  key: honeytoken-database-url
+            - name: HONEYTOKEN_ALERT_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aisoc.fullname" . }}-secrets
+                  key: honeytoken-alert-webhook-url
+                  optional: true
+            - name: HONEYTOKEN_ALERT_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aisoc.fullname" . }}-secrets
+                  key: honeytoken-alert-webhook-secret
+                  optional: true
+            - name: HONEYTOKEN_OTEL_ENDPOINT
+              value: {{ .Values.honeytokens.otelEndpoint | default "http://otel-collector:4317" | quote }}
+            - name: HONEYTOKEN_SERVICE_NAME
+              value: "aisoc-honeytokens"
+            - name: HONEYTOKEN_TOKEN_TTL_DAYS
+              value: {{ .Values.honeytokens.tokenTtlDays | default 365 | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml (.Values.honeytokens.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "512Mi"))) | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-honeytokens
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: honeytokens
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8005
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: honeytokens
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "aisoc.fullname" . }}-honeytokens
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "aisoc.fullname" . }}-honeytokens
+  minReplicas: {{ .Values.honeytokens.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.honeytokens.autoscaling.maxReplicas | default 6 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.honeytokens.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aisoc.fullname" . }}-honeytokens
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: honeytokens
+{{- end }}

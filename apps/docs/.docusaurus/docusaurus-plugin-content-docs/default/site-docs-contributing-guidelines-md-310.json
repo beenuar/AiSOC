@@ -1,0 +1,23 @@
+{
+  "id": "contributing/guidelines",
+  "title": "Contribution Guidelines",
+  "description": "Thank you for contributing to AiSOC! Please read these guidelines before opening a PR.",
+  "source": "@site/docs/contributing/guidelines.md",
+  "sourceDirName": "contributing",
+  "slug": "/contributing/guidelines",
+  "permalink": "/aisoc/docs/contributing/guidelines",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/contributing/guidelines.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Development Setup",
+    "permalink": "/aisoc/docs/contributing/dev-setup"
+  }
+}

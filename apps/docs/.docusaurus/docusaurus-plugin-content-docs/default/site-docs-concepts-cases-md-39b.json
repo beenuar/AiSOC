@@ -1,0 +1,27 @@
+{
+  "id": "concepts/cases",
+  "title": "Cases",
+  "description": "A Case is the central unit of work in AiSOC. Every security incident, alert,",
+  "source": "@site/docs/concepts/cases.md",
+  "sourceDirName": "concepts",
+  "slug": "/concepts/cases",
+  "permalink": "/aisoc/docs/concepts/cases",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/concepts/cases.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Architecture",
+    "permalink": "/aisoc/docs/architecture"
+  },
+  "next": {
+    "title": "Playbooks",
+    "permalink": "/aisoc/docs/concepts/playbooks"
+  }
+}

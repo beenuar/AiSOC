@@ -33,6 +33,7 @@ pysigma = "^0.11.0"
 pysigma-backend-opensearch = "^1.0.0"
 yara-python = "^4.5.0"
 pyyaml = "^6.0.1"
+strawberry-graphql = { version = "^0.236.0", extras = ["fastapi"] }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.0"

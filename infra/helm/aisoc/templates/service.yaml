@@ -1,0 +1,27 @@
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" $ }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  type: {{ $svc.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ $svc.service.port | default 80 }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    {{- if $svc.metricsPort }}
+    - port: {{ $svc.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    {{- end }}
+  selector:
+    {{- include "aisoc.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+{{- end }}

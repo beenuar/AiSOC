@@ -1,0 +1,284 @@
+{
+  "$schema": "https://aisoc.dev/schemas/marketplace/v1.json",
+  "version": "1.0.0",
+  "generated": "2025-01-15T00:00:00Z",
+  "categories": [
+    {
+      "id": "playbooks",
+      "label": "Response Playbooks",
+      "description": "Automated incident-response workflows triggered by alerts or manual invocation."
+    },
+    {
+      "id": "detections",
+      "label": "Detection Rules",
+      "description": "Sigma-inspired YAML rules for identifying malicious or suspicious activity."
+    }
+  ],
+  "items": [
+    {
+      "id": "tpl-malware-triage",
+      "type": "playbook",
+      "name": "Malware Triage",
+      "description": "Automated triage workflow for potential malware incidents. Enriches indicators, isolates affected endpoints, and creates a detailed investigation report.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["malware", "endpoint", "triage"],
+      "severity": "high",
+      "trigger": "alert",
+      "steps": 7
+    },
+    {
+      "id": "tpl-phishing-response",
+      "type": "playbook",
+      "name": "Phishing Email Response",
+      "description": "Handles phishing email reports end-to-end: header analysis, link reputation checks, mailbox purge, and user notification.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["phishing", "email", "identity"],
+      "severity": "medium",
+      "trigger": "manual",
+      "steps": 8
+    },
+    {
+      "id": "tpl-ransomware-response",
+      "type": "playbook",
+      "name": "Ransomware Response",
+      "description": "Critical-severity ransomware containment: immediate network isolation, shadow copy status, backup verification, and executive notification.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["ransomware", "endpoint", "containment"],
+      "severity": "critical",
+      "trigger": "alert",
+      "steps": 10
+    },
+    {
+      "id": "tpl-brute-force-lockout",
+      "type": "playbook",
+      "name": "Brute Force Account Lockout",
+      "description": "Responds to brute-force login attempts: account lockout, source IP block, MFA enforcement check, and affected-user notification.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["brute-force", "identity", "authentication"],
+      "severity": "high",
+      "trigger": "alert",
+      "steps": 6
+    },
+    {
+      "id": "tpl-data-exposure-response",
+      "type": "playbook",
+      "name": "Data Exposure Response",
+      "description": "Handles suspected data-exposure incidents: asset identification, access log review, external notification assessment, and remediation tracking.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["data-loss", "cloud", "compliance"],
+      "severity": "high",
+      "trigger": "manual",
+      "steps": 8
+    },
+    {
+      "id": "tpl-privilege-escalation",
+      "type": "playbook",
+      "name": "Privilege Escalation Response",
+      "description": "Investigates privilege-escalation events: session review, lateral movement tracing, account suspension, and privilege audit.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["privilege-escalation", "identity", "cloud"],
+      "severity": "critical",
+      "trigger": "alert",
+      "steps": 7
+    },
+    {
+      "id": "tpl-web-attack-response",
+      "type": "playbook",
+      "name": "Web Application Attack Response",
+      "description": "Automated response to web-application attacks (SQLi, XSS, RCE): WAF rule creation, log collection, vulnerability triage, and patch-management ticket creation.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["web", "application", "waf"],
+      "severity": "high",
+      "trigger": "alert",
+      "steps": 9
+    },
+    {
+      "id": "tpl-insider-threat",
+      "type": "playbook",
+      "name": "Insider Threat Investigation",
+      "description": "Structured investigation for insider-threat cases: activity baseline, DLP alert correlation, HR notification workflow, and evidence preservation.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["insider-threat", "dlp", "investigation"],
+      "severity": "high",
+      "trigger": "manual",
+      "steps": 9
+    },
+    {
+      "id": "tpl-cloud-misconfig",
+      "type": "playbook",
+      "name": "Cloud Misconfiguration Remediation",
+      "description": "Remediates cloud misconfigurations: resource identification, exposure window calculation, automated remediation script, and CSPM alert closure.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["cloud", "misconfiguration", "cspm"],
+      "severity": "medium",
+      "trigger": "alert",
+      "steps": 7
+    },
+    {
+      "id": "tpl-account-compromise",
+      "type": "playbook",
+      "name": "Account Compromise Response",
+      "description": "Responds to compromised account indicators: forced password reset, session revocation, MFA re-enrollment, and activity timeline generation.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["account-compromise", "identity", "authentication"],
+      "severity": "high",
+      "trigger": "alert",
+      "steps": 8
+    },
+    {
+      "id": "tpl-endpoint-isolation",
+      "type": "playbook",
+      "name": "Endpoint Isolation & Forensics",
+      "description": "Isolates a compromised endpoint via EDR API, captures memory and disk artefacts for forensic analysis, and triggers downstream investigation.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["endpoint", "forensics", "isolation"],
+      "severity": "critical",
+      "trigger": "alert",
+      "steps": 8
+    },
+    {
+      "id": "tpl-credential-compromise",
+      "type": "playbook",
+      "name": "Credential Compromise Response",
+      "description": "Handles credential-dumping events: process termination, memory capture, SIEM correlation, and credential-reset orchestration across linked accounts.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["credentials", "endpoint", "identity"],
+      "severity": "critical",
+      "trigger": "alert",
+      "steps": 9
+    },
+    {
+      "id": "det-net-001",
+      "type": "detection",
+      "name": "C2 Beacon High-Frequency Periodic Connections",
+      "description": "Detects C2 beaconing based on high-frequency periodic network connections.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["c2", "network", "mitre.attack.t1071"],
+      "severity": "high",
+      "category": "network"
+    },
+    {
+      "id": "det-net-002",
+      "type": "detection",
+      "name": "DNS Data Exfiltration via Tunnelling",
+      "description": "Detects DNS tunnelling activity used for data exfiltration.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["dns", "exfiltration", "mitre.attack.t1048.003"],
+      "severity": "high",
+      "category": "network"
+    },
+    {
+      "id": "det-net-003",
+      "type": "detection",
+      "name": "Internal Network Port Scan",
+      "description": "Identifies internal network port scanning activity.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["port-scan", "reconnaissance", "mitre.attack.t1046"],
+      "severity": "medium",
+      "category": "network"
+    },
+    {
+      "id": "det-ep-001",
+      "type": "detection",
+      "name": "Ransomware - Mass File Extension Modification",
+      "description": "Detects rapid mass file rename operations with known ransomware extension patterns.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["ransomware", "endpoint", "mitre.attack.t1486"],
+      "severity": "critical",
+      "category": "endpoint"
+    },
+    {
+      "id": "det-ep-002",
+      "type": "detection",
+      "name": "Living-off-the-Land Binary Abuse (LOLBAS)",
+      "description": "Detects abuse of legitimate Windows binaries to execute malicious payloads.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["lolbas", "endpoint", "mitre.attack.t1218"],
+      "severity": "high",
+      "category": "endpoint"
+    },
+    {
+      "id": "det-ep-003",
+      "type": "detection",
+      "name": "Credential Dumping - LSASS Memory Access",
+      "description": "Detects memory access attempts against lsass.exe with credential-dumping access masks.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["credentials", "endpoint", "mitre.attack.t1003.001"],
+      "severity": "critical",
+      "category": "endpoint"
+    },
+    {
+      "id": "det-cloud-001",
+      "type": "detection",
+      "name": "AWS Root Account Console Login",
+      "description": "Detects any console sign-in using the AWS root account.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["aws", "cloud", "mitre.attack.t1078.004"],
+      "severity": "critical",
+      "category": "cloud"
+    },
+    {
+      "id": "det-cloud-002",
+      "type": "detection",
+      "name": "AWS S3 Bucket Made Public",
+      "description": "Detects when an S3 bucket ACL or policy is modified to allow public access.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["aws", "s3", "data-exposure", "mitre.attack.t1530"],
+      "severity": "high",
+      "category": "cloud"
+    },
+    {
+      "id": "det-id-001",
+      "type": "detection",
+      "name": "Brute Force - Multiple Failed Authentication Attempts",
+      "description": "Detects brute-force or password-spray attacks with >10 failures in 5 minutes.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["brute-force", "identity", "mitre.attack.t1110"],
+      "severity": "high",
+      "category": "identity"
+    },
+    {
+      "id": "det-id-002",
+      "type": "detection",
+      "name": "Impossible Travel - Authentication from Two Distant Geolocations",
+      "description": "Detects geographically impossible login sequences indicating credential compromise.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["impossible-travel", "identity", "mitre.attack.t1078"],
+      "severity": "high",
+      "category": "identity"
+    },
+    {
+      "id": "det-app-001",
+      "type": "detection",
+      "name": "SQL Injection Attempt via Web Application",
+      "description": "Detects SQL injection payloads in HTTP request parameters.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": ["sqli", "application", "mitre.attack.t1190"],
+      "severity": "high",
+      "category": "application"
+    }
+  ]
+}

@@ -1,0 +1,276 @@
+'use client';
+
+import { useState } from 'react';
+import useSWR, { mutate } from 'swr';
+
+interface Permission {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+}
+
+interface Role {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  permissions: Permission[];
+}
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+const CATEGORY_COLORS: Record<string, string> = {
+  cases: 'bg-blue-100 text-blue-800',
+  alerts: 'bg-red-100 text-red-800',
+  playbooks: 'bg-purple-100 text-purple-800',
+  detections: 'bg-orange-100 text-orange-800',
+  connectors: 'bg-teal-100 text-teal-800',
+  api_keys: 'bg-yellow-100 text-yellow-800',
+  audit: 'bg-gray-100 text-gray-800',
+  compliance: 'bg-green-100 text-green-800',
+  admin: 'bg-pink-100 text-pink-800',
+};
+
+function PermissionBadge({ perm }: { perm: Permission }) {
+  const cls = CATEGORY_COLORS[perm.category ?? ''] ?? 'bg-gray-100 text-gray-700';
+  return (
+    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${cls}`} title={perm.description ?? ''}>
+      {perm.name}
+    </span>
+  );
+}
+
+function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: (r: Role) => void; onDelete: (r: Role) => void }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-base font-semibold text-gray-900">{role.name}</span>
+            {role.is_system && (
+              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                system
+              </span>
+            )}
+          </div>
+          {role.description && <p className="mt-0.5 text-sm text-gray-500">{role.description}</p>}
+        </div>
+        {!role.is_system && (
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={() => onEdit(role)}
+              className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => onDelete(role)}
+              className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {role.permissions.length === 0 ? (
+          <span className="text-xs text-gray-400 italic">No permissions assigned</span>
+        ) : (
+          role.permissions.map((p) => <PermissionBadge key={p.id} perm={p} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface RoleFormProps {
+  allPermissions: Permission[];
+  initial?: Role;
+  onClose: () => void;
+}
+
+function RoleForm({ allPermissions, initial, onClose }: RoleFormProps) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    new Set(initial?.permissions.map((p) => p.id) ?? [])
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const categories = Array.from(new Set(allPermissions.map((p) => p.category ?? 'other'))).sort();
+
+  const toggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const save = async () => {
+    if (!name.trim()) { setError('Name is required'); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const url = initial ? `/api/v1/rbac/roles/${initial.id}` : '/api/v1/rbac/roles';
+      const method = initial ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: description || null, permission_ids: Array.from(selectedIds) }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail ?? 'Save failed');
+      }
+      await mutate('/api/v1/rbac/roles');
+      onClose();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h2 className="text-lg font-semibold">{initial ? 'Edit Role' : 'Create Role'}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <div className="space-y-4 px-6 py-4">
+          {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="e.g. threat-hunter"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Optional description"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Permissions ({selectedIds.size} selected)
+            </label>
+            <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border p-3">
+              {categories.map((cat) => (
+                <div key={cat}>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">{cat}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {allPermissions
+                      .filter((p) => (p.category ?? 'other') === cat)
+                      .map((perm) => (
+                        <label key={perm.id} className="flex cursor-pointer items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(perm.id)}
+                            onChange={() => toggle(perm.id)}
+                            className="rounded border-gray-300 text-indigo-600"
+                          />
+                          <span className="text-xs text-gray-700">{perm.name}</span>
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 border-t px-6 py-4">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : initial ? 'Update' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function RBACView() {
+  const { data: roles, error: rolesError } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher);
+  const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', fetcher);
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+
+  const handleDelete = async (role: Role) => {
+    if (!confirm(`Delete role "${role.name}"?`)) return;
+    await fetch(`/api/v1/rbac/roles/${role.id}`, { method: 'DELETE' });
+    mutate('/api/v1/rbac/roles');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Roles & Permissions</h2>
+          <p className="mt-0.5 text-sm text-gray-500">Manage access control for your organization.</p>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          + New Role
+        </button>
+      </div>
+
+      {rolesError && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">Failed to load roles.</div>
+      )}
+
+      {!roles && !rolesError && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-gray-100" />
+          ))}
+        </div>
+      )}
+
+      {roles && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {roles.map((role) => (
+            <RoleCard
+              key={role.id}
+              role={role}
+              onEdit={(r) => setEditingRole(r)}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      {(showCreate || editingRole) && permissions && (
+        <RoleForm
+          allPermissions={permissions}
+          initial={editingRole ?? undefined}
+          onClose={() => {
+            setShowCreate(false);
+            setEditingRole(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}

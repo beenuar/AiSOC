@@ -1,6 +1,8 @@
 """
-Security utilities: JWT tokens, password hashing, RBAC
+Security utilities: JWT tokens, password hashing, RBAC, API key generation
 """
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -90,6 +92,42 @@ def create_refresh_token(data: dict[str, Any]) -> str:
 
 def decode_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Generate a new scoped API key.
+
+    Returns:
+        (raw_key, prefix, hashed_key)
+        - raw_key   – the full secret shown once to the user  (e.g. ``aisoc_<48 hex chars>``)
+        - prefix    – first 12 chars for display / lookup     (e.g. ``aisoc_abc123``)
+        - hashed_key – SHA-256 hex digest stored in the DB
+    """
+    token = secrets.token_hex(24)          # 48 hex chars = 192 bits entropy
+    raw_key = f"aisoc_{token}"
+    prefix = raw_key[:12]                  # "aisoc_" + first 6 hex chars
+    hashed_key = hashlib.sha256(raw_key.encode()).hexdigest()
+    return raw_key, prefix, hashed_key
+
+
+def hash_api_key(raw_key: str) -> str:
+    """Return the SHA-256 hex digest of a raw API key."""
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+def verify_ed25519_signature(public_key_bytes: bytes, message: bytes, signature: bytes) -> None:
+    """Verify an Ed25519 signature. Raises ValueError on failure."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+        from cryptography.exceptions import InvalidSignature
+
+        pub_key = load_pem_public_key(public_key_bytes)
+        if not isinstance(pub_key, Ed25519PublicKey):
+            raise ValueError("Key is not an Ed25519 public key")
+        pub_key.verify(signature, message)
+    except InvalidSignature as exc:
+        raise ValueError("Invalid signature") from exc
 
 
 def has_permission(role: str, permission: str) -> bool:

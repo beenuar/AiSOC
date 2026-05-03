@@ -1,0 +1,27 @@
+{
+  "id": "architecture",
+  "title": "Architecture",
+  "description": "Monorepo Layout",
+  "source": "@site/docs/architecture.md",
+  "sourceDirName": ".",
+  "slug": "/architecture",
+  "permalink": "/aisoc/docs/architecture",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/architecture.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Quick Start",
+    "permalink": "/aisoc/docs/quickstart"
+  },
+  "next": {
+    "title": "Cases",
+    "permalink": "/aisoc/docs/concepts/cases"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "intro",
+  "title": "Introduction",
+  "description": "AiSOC is an open-source, production-ready AI Security Operations Center.",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/intro",
+  "permalink": "/aisoc/docs/intro",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/intro.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docsSidebar",
+  "next": {
+    "title": "Quick Start",
+    "permalink": "/aisoc/docs/quickstart"
+  }
+}

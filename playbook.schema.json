@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/beenuar/aisoc/blob/main/playbook.schema.json",
+  "title": "AiSOC Playbook",
+  "description": "JSON Schema 2020-12 for AiSOC playbook definitions (Pillar 2, v4.0). Portable across file format (YAML / JSON) and CI-lintable.",
+  "type": "object",
+  "required": ["id", "name", "version", "trigger", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,62}$",
+      "description": "Stable, globally-unique kebab-case identifier."
+    },
+    "name": { "type": "string", "minLength": 3, "maxLength": 120 },
+    "description": { "type": "string", "maxLength": 1000 },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version string."
+    },
+    "author": { "type": "string" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+      "uniqueItems": true
+    },
+    "enabled": { "type": "boolean", "default": true },
+    "trigger": {
+      "type": "object",
+      "required": ["on"],
+      "additionalProperties": false,
+      "properties": {
+        "on": {
+          "type": "string",
+          "enum": ["alert", "case", "schedule", "manual", "webhook"]
+        },
+        "severity": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] }
+        },
+        "alert_types": { "type": "array", "items": { "type": "string" } },
+        "cron": {
+          "type": "string",
+          "description": "Cron expression; only valid when on=schedule."
+        },
+        "filters": {
+          "type": "object",
+          "description": "Key/value filters applied to the trigger event.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "on_failure": { "$ref": "#/$defs/failure_policy" },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400,
+      "default": 3600
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary key/value metadata; not processed by the engine.",
+      "additionalProperties": true
+    }
+  },
+
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["id", "name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "type": {
+          "type": "string",
+          "enum": [
+            "trigger",
+            "condition",
+            "action",
+            "loop",
+            "parallel",
+            "human_approval",
+            "wait",
+            "notify",
+            "enrich",
+            "isolate",
+            "block",
+            "close_case",
+            "create_case",
+            "run_playbook",
+            "script"
+          ]
+        },
+        "description": { "type": "string" },
+        "params": {
+          "type": "object",
+          "description": "Step-type-specific parameters; validated at runtime.",
+          "additionalProperties": true
+        },
+        "condition": { "$ref": "#/$defs/condition_expr" },
+        "on_failure": { "$ref": "#/$defs/failure_policy" },
+        "retry": { "$ref": "#/$defs/retry_policy" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Step IDs that must complete before this step starts (DAG edges)."
+        },
+        "blast_radius": {
+          "type": "string",
+          "enum": ["dry_run", "reversible", "destructive"],
+          "default": "dry_run",
+          "description": "Declared impact level; engine enforces analyst approval for destructive steps."
+        },
+        "output_key": {
+          "type": "string",
+          "description": "Variable name under which this step's output is stored in the run context."
+        }
+      }
+    },
+
+    "condition_expr": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["field", "op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "field": { "type": "string" },
+            "op": {
+              "type": "string",
+              "enum": ["eq", "ne", "lt", "lte", "gt", "gte", "contains", "startswith", "endswith", "in", "not_in", "exists", "not_exists"]
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["and"],
+          "additionalProperties": false,
+          "properties": {
+            "and": { "type": "array", "items": { "$ref": "#/$defs/condition_expr" }, "minItems": 2 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["or"],
+          "additionalProperties": false,
+          "properties": {
+            "or": { "type": "array", "items": { "$ref": "#/$defs/condition_expr" }, "minItems": 2 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["not"],
+          "additionalProperties": false,
+          "properties": {
+            "not": { "$ref": "#/$defs/condition_expr" }
+          }
+        }
+      ]
+    },
+
+    "retry_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10, "default": 3 },
+        "backoff_seconds": { "type": "number", "minimum": 0, "default": 2 },
+        "backoff_multiplier": { "type": "number", "minimum": 1, "default": 2 },
+        "retry_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Exception class names that trigger a retry; empty = retry on any error."
+        }
+      }
+    },
+
+    "failure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["abort", "continue", "fallback"],
+          "default": "abort"
+        },
+        "fallback_step": {
+          "type": "string",
+          "description": "Step ID to jump to when action=fallback."
+        },
+        "notify": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "channel": { "type": "string" },
+            "message": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "id": "phishing-triage-v1",
+      "name": "Phishing Email Triage",
+      "description": "Enrich sender, notify SOC, auto-close low-risk.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": ["phishing", "email", "triage"],
+      "trigger": { "on": "alert", "severity": ["low", "medium"] },
+      "steps": [
+        {
+          "id": "enrich-ip",
+          "name": "Enrich sender IP",
+          "type": "enrich",
+          "params": { "ioc_type": "ip", "providers": ["virustotal", "greynoise"] },
+          "blast_radius": "dry_run"
+        },
+        {
+          "id": "notify-soc",
+          "name": "Notify SOC channel",
+          "type": "notify",
+          "params": { "channel": "webhook", "template": "alert_summary" },
+          "depends_on": ["enrich-ip"]
+        },
+        {
+          "id": "close-if-clean",
+          "name": "Auto-close clean alerts",
+          "type": "close_case",
+          "condition": { "field": "enrich-ip.malicious_score", "op": "lte", "value": 20 },
+          "depends_on": ["notify-soc"],
+          "blast_radius": "reversible"
+        }
+      ]
+    }
+  ]
+}

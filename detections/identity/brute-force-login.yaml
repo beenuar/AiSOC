@@ -1,0 +1,33 @@
+id: det-id-001
+name: Brute Force - Multiple Failed Authentication Attempts
+description: >
+  Detects brute-force or password-spray attacks by identifying a single source
+  IP (or user agent) generating more than 10 failed authentication attempts
+  within a 5-minute window against one or more accounts.
+version: "1.0.0"
+severity: high
+tags:
+  - mitre.attack.t1110
+  - mitre.attack.t1110.001
+  - mitre.attack.t1110.003
+  - tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND outcome == "FAILURE"
+    AND failed_count_per_src_ip_per_5min >= 10
+  filters:
+    - src_ip: "10.0.0.0/8"
+false_positives:
+  - Misconfigured service accounts with stale passwords
+  - Password manager autofill issues
+  - Load balancer health checks with invalid credentials
+playbook: tpl-brute-force-lockout
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

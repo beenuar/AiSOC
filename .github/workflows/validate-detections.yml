@@ -1,0 +1,58 @@
+name: Validate Detection Rules
+
+on:
+  push:
+    paths:
+      - "detections/**"
+      - "scripts/validate_detections.py"
+      - ".github/workflows/validate-detections.yml"
+  pull_request:
+    paths:
+      - "detections/**"
+      - "scripts/validate_detections.py"
+
+jobs:
+  validate:
+    name: Validate & summarise detection rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Run detection rule validator
+        run: python3 scripts/validate_detections.py
+
+      - name: Count rules by severity
+        if: always()
+        run: |
+          echo "### Detection Rule Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          for sev in critical high medium low; do
+            count=$(grep -rl "^severity: $sev$" detections/ 2>/dev/null | wc -l | tr -d ' ')
+            echo "| $sev | $count |" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          total=$(find detections/ -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
+          echo "**Total rules: $total**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Count rules by category
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          for cat in network endpoint cloud identity application; do
+            count=$(find detections/$cat/ -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
+            echo "| $cat | $count |" >> $GITHUB_STEP_SUMMARY
+          done

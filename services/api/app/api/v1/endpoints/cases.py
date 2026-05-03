@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.db.rls import TenantDBSession
 from app.models.case import Case, CaseTask, CaseTimeline
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
@@ -104,7 +105,7 @@ def _generate_case_number(tenant_id: uuid.UUID) -> str:
 @router.get("", response_model=CaseListResponse)
 async def list_cases(
     current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-    db: DBSession,
+    db: TenantDBSession,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     status: str | None = None,

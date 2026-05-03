@@ -1,0 +1,46 @@
+name: Sync Marketplace Index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "marketplace/index.json"
+  pull_request:
+    paths:
+      - "marketplace/index.json"
+      - "apps/web/public/marketplace/index.json"
+
+jobs:
+  sync:
+    name: Validate & sync marketplace/index.json
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON syntax
+        run: python3 -c "import json, sys; json.load(open('marketplace/index.json')); print('marketplace/index.json is valid JSON')"
+
+      - name: Check public copy is in sync
+        run: |
+          if ! diff -q marketplace/index.json apps/web/public/marketplace/index.json > /dev/null 2>&1; then
+            echo "::error::apps/web/public/marketplace/index.json is out of sync with marketplace/index.json"
+            echo "Run: pnpm marketplace:sync"
+            exit 1
+          fi
+          echo "Public copy is in sync ✓"
+
+      - name: Summarise items
+        if: always()
+        run: |
+          echo "### Marketplace Index Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          total=$(python3 -c "import json; d=json.load(open('marketplace/index.json')); print(len(d['items']))")
+          playbooks=$(python3 -c "import json; d=json.load(open('marketplace/index.json')); print(sum(1 for i in d['items'] if i['type']=='playbook'))")
+          detections=$(python3 -c "import json; d=json.load(open('marketplace/index.json')); print(sum(1 for i in d['items'] if i['type']=='detection'))")
+          echo "| Category   | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total      | $total |" >> $GITHUB_STEP_SUMMARY
+          echo "| Playbooks  | $playbooks |" >> $GITHUB_STEP_SUMMARY
+          echo "| Detections | $detections |" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,129 @@
+{{- if .Values.purpleTeam.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aisoc.fullname" . }}-purple-team
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: purple-team
+spec:
+  replicas: {{ .Values.purpleTeam.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: purple-team
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: purple-team
+    spec:
+      containers:
+        - name: purple-team
+          image: "{{ .Values.purpleTeam.image.repository }}:{{ .Values.purpleTeam.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.purpleTeam.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8006
+              protocol: TCP
+          env:
+            - name: PURPLE_TEAM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aisoc.fullname" . }}-secrets
+                  key: purple-team-database-url
+            - name: PURPLE_TEAM_CALDERA_URL
+              value: {{ .Values.purpleTeam.calderaUrl | default "http://caldera:8888" | quote }}
+            - name: PURPLE_TEAM_CALDERA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aisoc.fullname" . }}-secrets
+                  key: purple-team-caldera-api-key
+                  optional: true
+            - name: PURPLE_TEAM_ART_ATOMICS_PATH
+              value: {{ .Values.purpleTeam.artAtomicsPath | default "/opt/atomic-red-team/atomics" | quote }}
+            - name: PURPLE_TEAM_OTEL_ENDPOINT
+              value: {{ .Values.purpleTeam.otelEndpoint | default "http://otel-collector:4317" | quote }}
+            - name: PURPLE_TEAM_SERVICE_NAME
+              value: "aisoc-purple-team"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml (.Values.purpleTeam.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "512Mi"))) | nindent 12 }}
+          {{- if .Values.purpleTeam.artAtomicsPath }}
+          volumeMounts:
+            - name: art-atomics
+              mountPath: {{ .Values.purpleTeam.artAtomicsPath | default "/opt/atomic-red-team/atomics" }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.purpleTeam.artAtomicsPath }}
+      volumes:
+        - name: art-atomics
+          hostPath:
+            path: {{ .Values.purpleTeam.artAtomicsPath | default "/opt/atomic-red-team/atomics" }}
+            type: DirectoryOrCreate
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-purple-team
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: purple-team
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8006
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: purple-team
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "aisoc.fullname" . }}-purple-team
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "aisoc.fullname" . }}-purple-team
+  minReplicas: {{ .Values.purpleTeam.autoscaling.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.purpleTeam.autoscaling.maxReplicas | default 6 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.purpleTeam.autoscaling.targetCPUUtilizationPercentage | default 70 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aisoc.fullname" . }}-purple-team
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: purple-team
+{{- end }}

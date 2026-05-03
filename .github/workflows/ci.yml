@@ -79,22 +79,34 @@ jobs:
     name: Python — Tests
     runs-on: ubuntu-latest
     needs: python-lint
+    env:
+      API_DEPS: >-
+        fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+        structlog "python-jose[cryptography]" "passlib[bcrypt]" tenacity pyyaml
+        prometheus-client "opentelemetry-sdk" "opentelemetry-api"
+        "opentelemetry-exporter-otlp-proto-grpc"
+        "opentelemetry-instrumentation-fastapi"
+        "strawberry-graphql[fastapi]"
+        neo4j redis celery httpx aiofiles email-validator
+        pytest pytest-asyncio
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install dependencies (api)
-        run: |
-          cd services/api
-          pip install -r requirements.txt pytest pytest-asyncio httpx || true
-      - name: Run api tests
-        run: |
-          cd services/api
-          pytest tests/ -v --tb=short || true
+          cache: pip
+      - name: Install API dependencies
+        run: pip install --quiet ${{ env.API_DEPS }}
+      - name: Run API tests (unit + GraphQL schema)
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: pytest tests/ -v --tb=short
       - name: Run agents unit tests (MITRE accuracy)
         run: |
-          pip install pytest pytest-asyncio
+          pip install --quiet pytest pytest-asyncio
           cd services/agents
           python3 -m pytest tests/test_mitre_accuracy.py -v --tb=short
 

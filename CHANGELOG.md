@@ -7,8 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- AiSOC v4 "Autonomous SOC" planning: AI Multi-Agent Investigator, Visual SOAR Studio, Plugin Platform
+---
+
+## [5.1.0] — 2026-05-03
+
+### Added — v5.1 "Detection Depth"
+
+- **UEBA service** (`services/ueba`) — User & Entity Behavior Analytics
+  - Welford online algorithm for incremental baseline computation
+  - Z-score anomaly scoring with configurable sensitivity
+  - Peer-group analysis (same role / department / location clustering)
+  - Kafka consumer (`security.events`) → producer (`security.anomalies`) integration with `fusion` service
+  - Alembic migrations, Dockerfile, Helm deployment template
+- **Honeytokens service** (`services/honeytokens`) — deceptive credential & file traps
+  - HMAC-SHA256 signed token generator (URL, file, AWS key, email flavors)
+  - Webhook handler for first-touch alerting (HTTP signed callbacks)
+  - Token lifecycle management: active / triggered / expired states
+  - React UI: create tokens, view trigger log, copy lure URLs
+  - Alembic migrations, Dockerfile, Helm deployment template
+- **Purple Team service** (`services/purple-team`) — adversary emulation & tabletop
+  - Atomic Red Team YAML parser (any `atomics/` directory)
+  - Caldera REST integration for remote execution
+  - ATT&CK coverage heatmap (tactic × technique matrix)
+  - Test execution tracking with detection reporting (true positive / false negative)
+  - Tabletop exercise session manager with finding capture
+  - React UI: Coverage tab, Executions tab, Tabletop tab
+  - Alembic migrations, Dockerfile, Helm deployment template
+
+---
+
+## [5.0.0] — 2026-05-03
+
+### Added — v5.0 "Enterprise Ready"
+
+- **SAML 2.0 + OIDC authentication** (`services/api/app/auth/`)
+  - IdP-initiated and SP-initiated SAML 2.0 flows (python3-saml)
+  - OIDC authorization-code + PKCE flow with `authlib`
+  - JWT issuance on successful SSO login
+- **Multi-tenant Row-Level Security** (Postgres RLS)
+  - `tenant_id` column on all data tables
+  - RLS policies enforced at the database level
+  - SQLAlchemy `set_tenant()` middleware in FastAPI deps
+- **Granular RBAC** (`services/api/app/api/v1/endpoints/rbac.py`)
+  - `roles`, `role_permissions`, `user_roles` tables
+  - `require_permission("resource:action")` FastAPI dependency
+  - Admin UI at `/settings/rbac`
+- **Immutable Audit Log**
+  - Append-only `audit_log` table with a before-UPDATE trigger
+  - FastAPI middleware auto-logs every mutating request
+  - `GET /api/v1/audit` paginated endpoint with tenant filter
+  - Audit log viewer UI at `/audit`
+- **Compliance dashboards**
+  - SOC 2 evidence auto-collection + PDF export (`/compliance/soc2`)
+  - ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA framework heatmaps
+  - `GET /api/v1/compliance/{framework}` endpoint with control mapping
+- **SLA tracking** — MTTD / MTTR / MTTC
+  - `tenant_sla_config` + `alert_sla_events` tables
+  - `GET /api/v1/sla/metrics` + `GET /api/v1/sla/breaches`
+  - SLA dashboard widget at `/sla`
+- **HA Helm chart** — HPA, PDB, Ingress per service
+- **Backup & restore scripts** (`scripts/backup.sh`, `scripts/restore.sh`) for Postgres + ClickHouse + plugins → S3/R2
+- **Operational runbook generator** (`scripts/generate_runbook.py`) from live OTel trace data
+- **Multi-region deployment guide** (`docs/operations/multi-region.md`)
+- **OpenTelemetry instrumentation** across API, UEBA, Honeytokens, and Purple Team services
+
+---
+
+## [4.1.0] — 2026-05-03
+
+### Added — v4.1 "Community Ecosystem"
+
+- **AiSOC CLI** (`packages/aisoc-cli`) — `scaffold`, `validate`, `publish` commands for plugins and detections
+  - `aisoc scaffold plugin <name>` — generate plugin skeleton
+  - `aisoc validate detection <file>` — Sigma/YAML schema validation
+  - `aisoc publish plugin <path>` — submit to community registry with Ed25519 signing
+- **Plugin publishing flow**
+  - `community_plugins` table with signature, author, review state
+  - `POST /api/v1/plugins/publish` — signed submission
+  - `POST /api/v1/plugins/{id}/approve` / `reject` — curator review endpoints
+  - Ed25519 signature verification on every submission
+- **Marketplace v2** — ratings, install counts, verified badges, category filter, sort options
+  - `plugin_ratings` table + `POST /api/v1/plugins/{id}/rate`
+  - `GET /api/v1/marketplace?category=&sort=` with pagination
+- **Detection catalog** (`/detection/catalog`) — paginated Sigma rule browser
+  - Install-to-tenant action from catalog
+  - `GET /api/v1/detections/catalog` endpoint
+- **Playbook community submissions**
+  - `community_playbooks` table + submit / curate API
+  - Community tab in PlaybooksView UI
+- **Docusaurus documentation site** (`apps/docs`) — full API, architecture, deployment, plugin SDK, quickstart
 
 ---
 

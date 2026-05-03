@@ -1,0 +1,3912 @@
+openapi: 3.1.0
+info:
+  title: AiSOC Platform API
+  description: |
+    Open-source AI Security Operations Center by Cyble (v5.1.0).
+
+    Autonomous threat detection, investigation, and response — with UEBA behavioral
+    analytics, honeytoken deception, purple-team adversary emulation, enterprise RBAC,
+    immutable audit logging, and SOC 2 / ISO 27001 / NIST CSF compliance dashboards.
+
+    ## Authentication
+    Most endpoints require a JWT Bearer token obtained from `POST /api/v1/auth/login`.
+    Service-to-service calls may use an API key via `X-API-Key` header.
+
+    ## Multi-tenancy
+    All data is isolated via PostgreSQL Row-Level Security. The `tenant_id` is derived
+    from the authenticated token and cannot be overridden by the caller.
+
+    ## Rate limiting
+    Default: 1000 req/min per API key; 100 req/min per user token.
+    Limits are surfaced via `X-RateLimit-*` response headers.
+  version: 5.1.0
+  contact:
+    name: AiSOC Community
+    url: https://github.com/beenuar/AiSOC
+    email: security@cyble.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+x-tagGroups:
+  - name: Identity & Access
+    tags: [auth, api-keys, rbac]
+  - name: Detection & Hunting
+    tags: [alerts, rules, detections]
+  - name: Cases & Response
+    tags: [cases, playbooks, actions]
+  - name: Threat Intelligence
+    tags: [intel, enrichment]
+  - name: Advanced Detection
+    tags: [ueba, honeytokens, purple-team]
+  - name: Plugins & Marketplace
+    tags: [plugins, marketplace]
+  - name: Governance
+    tags: [compliance, audit, sla]
+  - name: Graph
+    tags: [graph]
+paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth
+      summary: Login
+      description: Authenticate with email/password, return JWT tokens.
+      operationId: login_api_v1_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - auth
+      summary: Refresh Token
+      description: Refresh access token using a valid refresh token.
+      operationId: refresh_token_api_v1_auth_refresh_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - auth
+      summary: Get Me
+      description: Get current authenticated user info.
+      operationId: get_me_api_v1_auth_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMeResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/api-keys:
+    post:
+      tags:
+      - api-keys
+      summary: Create Api Key
+      description: 'Create a new scoped API key for the current tenant.
+
+
+        The raw key value is returned **only once** in this response.'
+      operationId: create_api_key_api_v1_api_keys_post
+      parameters:
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApiKeyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - api-keys
+      summary: List Api Keys
+      description: List all API keys for the current tenant (raw keys are never returned).
+      operationId: list_api_keys_api_v1_api_keys_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKeyOut'
+                title: Response List Api Keys Api V1 Api Keys Get
+  /api/v1/api-keys/{key_id}:
+    get:
+      tags:
+      - api-keys
+      summary: Get Api Key
+      description: Get metadata for a specific API key.
+      operationId: get_api_key_api_v1_api_keys__key_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Key Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - api-keys
+      summary: Update Api Key
+      description: Update an API key's name, scopes, or expiry.
+      operationId: update_api_key_api_v1_api_keys__key_id__patch
+      parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Key Id
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApiKeyRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - api-keys
+      summary: Revoke Api Key
+      description: Revoke (deactivate) an API key. The key can no longer be used for
+        authentication.
+      operationId: revoke_api_key_api_v1_api_keys__key_id__delete
+      parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Key Id
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts:
+    get:
+      tags:
+      - alerts
+      summary: List Alerts
+      description: List alerts for the current tenant with filtering and pagination.
+      operationId: list_alerts_api_v1_alerts_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 25
+          title: Page Size
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: assigned_to_me
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Assigned To Me
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/stats:
+    get:
+      tags:
+      - alerts
+      summary: Get Alert Stats
+      description: Get alert statistics for the dashboard.
+      operationId: get_alert_stats_api_v1_alerts_stats_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertStatsResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/alerts/{alert_id}:
+    get:
+      tags:
+      - alerts
+      summary: Get Alert
+      description: Get a single alert by ID.
+      operationId: get_alert_api_v1_alerts__alert_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - alerts
+      summary: Update Alert
+      description: Update alert status, priority, tags, assignment, or case link.
+      operationId: update_alert_api_v1_alerts__alert_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/escalate:
+    post:
+      tags:
+      - alerts
+      summary: Escalate Alert
+      description: Escalate an alert (raises severity by one level).
+      operationId: escalate_alert_api_v1_alerts__alert_id__escalate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases:
+    get:
+      tags:
+      - cases
+      summary: List Cases
+      description: List cases with filtering.
+      operationId: list_cases_api_v1_cases_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Page Size
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: priority
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Priority
+      - name: assigned_to_me
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Assigned To Me
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - cases
+      summary: Create Case
+      description: Create a new security case.
+      operationId: create_case_api_v1_cases_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCaseRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}:
+    get:
+      tags:
+      - cases
+      summary: Get Case
+      description: Get a case by ID.
+      operationId: get_case_api_v1_cases__case_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - cases
+      summary: Update Case
+      description: Update a case.
+      operationId: update_case_api_v1_cases__case_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCaseRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/timeline:
+    post:
+      tags:
+      - cases
+      summary: Add Timeline Event
+      description: Add a comment or event to the case timeline.
+      operationId: add_timeline_event_api_v1_cases__case_id__timeline_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTimelineEventRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineEventResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - cases
+      summary: Get Timeline
+      description: Get the full timeline for a case.
+      operationId: get_timeline_api_v1_cases__case_id__timeline_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TimelineEventResponse'
+                title: Response Get Timeline Api V1 Cases  Case Id  Timeline Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/investigate:
+    post:
+      tags:
+      - cases
+      summary: Investigate Case
+      description: 'Trigger an autonomous AI investigation for this case.
+
+        Proxies to the agents service Pillar-1 orchestrator.'
+      operationId: investigate_case_api_v1_cases__case_id__investigate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigateRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/investigations/{run_id}:
+    get:
+      tags:
+      - cases
+      summary: Get Case Investigation
+      description: 'Proxy: poll investigation run status from the agents service.'
+      operationId: get_case_investigation_api_v1_cases__case_id__investigations__run_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Case Investigation Api V1 Cases  Case Id  Investigations  Run
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/investigations/{run_id}/report.md:
+    get:
+      tags:
+      - cases
+      summary: Get Case Report Md
+      description: 'Proxy: download Markdown incident report from the agents service.'
+      operationId: get_case_report_md_api_v1_cases__case_id__investigations__run_id__report_md_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Get Case Report Md Api V1 Cases  Case Id  Investigations  Run
+                  Id  Report Md Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/investigations/{run_id}/report.html:
+    get:
+      tags:
+      - cases
+      summary: Get Case Report Html
+      description: 'Proxy: download HTML incident report from the agents service.'
+      operationId: get_case_report_html_api_v1_cases__case_id__investigations__run_id__report_html_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Get Case Report Html Api V1 Cases  Case Id  Investigations  Run
+                  Id  Report Html Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/investigations/{run_id}/report.pdf:
+    get:
+      tags:
+      - cases
+      summary: Get Case Report Pdf
+      description: 'Proxy: download PDF incident report (rendered by weasyprint in
+        agents service).'
+      operationId: get_case_report_pdf_api_v1_cases__case_id__investigations__run_id__report_pdf_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Get Case Report Pdf Api V1 Cases  Case Id  Investigations  Run
+                  Id  Report Pdf Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/connectors:
+    get:
+      tags:
+      - connectors
+      summary: List Connectors
+      description: List all connectors for the tenant.
+      operationId: list_connectors_api_v1_connectors_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ConnectorResponse'
+                type: array
+                title: Response List Connectors Api V1 Connectors Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - connectors
+      summary: Create Connector
+      description: Create a new connector.
+      operationId: create_connector_api_v1_connectors_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConnectorRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/connectors/{connector_id}:
+    get:
+      tags:
+      - connectors
+      summary: Get Connector
+      description: Get a connector by ID.
+      operationId: get_connector_api_v1_connectors__connector_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: connector_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Connector Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - connectors
+      summary: Update Connector
+      description: Update a connector's configuration or state.
+      operationId: update_connector_api_v1_connectors__connector_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: connector_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Connector Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConnectorRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - connectors
+      summary: Delete Connector
+      description: Delete a connector.
+      operationId: delete_connector_api_v1_connectors__connector_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: connector_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Connector Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/connectors/{connector_id}/test:
+    post:
+      tags:
+      - connectors
+      summary: Test Connector
+      description: Test connectivity for a connector (stub - to be implemented per
+        connector type).
+      operationId: test_connector_api_v1_connectors__connector_id__test_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: connector_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Connector Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Test Connector Api V1 Connectors  Connector Id  Test
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenants/me:
+    get:
+      tags:
+      - tenants
+      summary: Get My Tenant
+      description: Get the current user's tenant details.
+      operationId: get_my_tenant_api_v1_tenants_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/tenants/me/settings:
+    patch:
+      tags:
+      - tenants
+      summary: Update Tenant Settings
+      description: Update tenant settings.
+      operationId: update_tenant_settings_api_v1_tenants_me_settings_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTenantSettingsRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/tenants/me/users:
+    get:
+      tags:
+      - tenants
+      summary: List Users
+      description: List all users in the current tenant.
+      operationId: list_users_api_v1_tenants_me_users_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+                type: array
+                title: Response List Users Api V1 Tenants Me Users Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - tenants
+      summary: Create User
+      description: Create a new user in the current tenant.
+      operationId: create_user_api_v1_tenants_me_users_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/tenants/me/users/{user_id}:
+    patch:
+      tags:
+      - tenants
+      summary: Update User
+      description: Update a user.
+      operationId: update_user_api_v1_tenants_me_users__user_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/rules:
+    get:
+      tags:
+      - detection_rules
+      summary: List Rules
+      description: List detection rules for the tenant (includes built-in platform
+        rules).
+      operationId: list_rules_api_v1_rules_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: rule_language
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Language
+      - name: include_builtin
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Include Builtin
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DetectionRuleResponse'
+                title: Response List Rules Api V1 Rules Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - detection_rules
+      summary: Create Rule
+      description: Create a new detection rule.
+      operationId: create_rule_api_v1_rules_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRuleRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionRuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/rules/{rule_id}:
+    get:
+      tags:
+      - detection_rules
+      summary: Get Rule
+      description: Get a detection rule by ID.
+      operationId: get_rule_api_v1_rules__rule_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionRuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - detection_rules
+      summary: Update Rule
+      description: Update a detection rule (only tenant-owned rules).
+      operationId: update_rule_api_v1_rules__rule_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRuleRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionRuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - detection_rules
+      summary: Delete Rule
+      description: Delete a tenant-owned detection rule.
+      operationId: delete_rule_api_v1_rules__rule_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/rules/{rule_id}/execute:
+    post:
+      tags:
+      - detection_rules
+      summary: Execute a detection rule against provided events
+      description: 'Execute a single detection rule against a set of events and return
+        matches.
+
+        Useful for testing rules in the detection IDE before enabling them.'
+      operationId: execute_detection_rule_api_v1_rules__rule_id__execute_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteRuleRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecuteRuleResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/rules/hunt:
+    post:
+      tags:
+      - detection_rules
+      summary: 'Threat hunt: run detection rules against a set of events'
+      description: 'Run multiple detection rules against provided events (threat hunting).
+
+        If rule_ids is omitted, all active tenant rules are used.'
+      operationId: hunt_api_v1_rules_hunt_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HuntRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HuntResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/attack-path/{case_id}:
+    get:
+      tags:
+      - graph
+      summary: Get attack path graph for a case
+      description: 'Traverse the knowledge graph from a Case node to reconstruct the
+        full
+
+        attack path: Case → Alerts → Hosts/Users → IOCs → MITRE Techniques.'
+      operationId: get_attack_path_api_v1_graph_attack_path__case_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      - name: max_depth
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 10
+          minimum: 1
+          default: 6
+          title: Max Depth
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackPathResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/blast-radius/{entity_type}/{entity_id}:
+    get:
+      tags:
+      - graph
+      summary: Compute blast radius from an entity
+      description: 'Compute the blast radius starting from a Host, User, or IOC node.
+
+        Returns all entities reachable within `hops` and a severity score.'
+      operationId: get_blast_radius_api_v1_graph_blast_radius__entity_type___entity_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: entity_type
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Entity Type
+      - name: entity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Entity Id
+      - name: hops
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 6
+          minimum: 1
+          default: 3
+          title: Hops
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlastRadiusResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/neighbors/{entity_type}/{entity_id}:
+    get:
+      tags:
+      - graph
+      summary: Get immediate graph neighbors of an entity
+      description: Return all nodes directly connected (depth 1) to the specified
+        entity.
+      operationId: get_entity_neighbors_api_v1_graph_neighbors__entity_type___entity_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: entity_type
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Entity Type
+      - name: entity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Entity Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityNeighborsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/mitre-coverage:
+    get:
+      tags:
+      - graph
+      summary: MITRE ATT&CK technique coverage for tenant
+      description: Return MITRE ATT&CK technique coverage aggregated from all tenant
+        alerts.
+      operationId: get_mitre_coverage_api_v1_graph_mitre_coverage_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MitreCoverageItem'
+                type: array
+                title: Response Get Mitre Coverage Api V1 Graph Mitre Coverage Get
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/entities/host:
+    post:
+      tags:
+      - graph
+      summary: Upsert a Host node in the graph
+      description: Create or update a Host node in the knowledge graph.
+      operationId: upsert_host_api_v1_graph_entities_host_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertHostRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Upsert Host Api V1 Graph Entities Host Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/entities/user:
+    post:
+      tags:
+      - graph
+      summary: Upsert a User node in the graph
+      description: Create or update a User node in the knowledge graph.
+      operationId: upsert_user_api_v1_graph_entities_user_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertUserRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Upsert User Api V1 Graph Entities User Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/entities/alert:
+    post:
+      tags:
+      - graph
+      summary: Upsert an Alert node and its relationships in the graph
+      description: 'Create or update an Alert node and link it to Host, User, IOC,
+        and Technique nodes.
+
+        Called automatically after alert creation to keep the graph in sync.'
+      operationId: upsert_alert_graph_api_v1_graph_entities_alert_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertAlertGraphRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Upsert Alert Graph Api V1 Graph Entities Alert Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/entities/case:
+    post:
+      tags:
+      - graph
+      summary: Upsert a Case node and link to alerts in the graph
+      description: Create or update a Case node and link it to Alert nodes.
+      operationId: upsert_case_graph_api_v1_graph_entities_case_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertCaseGraphRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Upsert Case Graph Api V1 Graph Entities Case Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/playbooks:
+    get:
+      tags:
+      - playbooks
+      summary: List playbooks
+      operationId: list_playbooks_api_v1_playbooks_get
+      parameters:
+      - name: enabled_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Enabled Only
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - playbooks
+      summary: Create playbook
+      operationId: create_playbook_api_v1_playbooks_post
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/playbooks/runs:
+    get:
+      tags:
+      - playbooks
+      summary: List playbook runs
+      operationId: list_runs_api_v1_playbooks_runs_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playbooks/runs/{run_id}:
+    get:
+      tags:
+      - playbooks
+      summary: Get a playbook run
+      operationId: get_run_api_v1_playbooks_runs__run_id__get
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playbooks/{playbook_id}:
+    get:
+      tags:
+      - playbooks
+      summary: Get a playbook
+      operationId: get_playbook_api_v1_playbooks__playbook_id__get
+      parameters:
+      - name: playbook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playbook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - playbooks
+      summary: Update a playbook
+      operationId: update_playbook_api_v1_playbooks__playbook_id__put
+      parameters:
+      - name: playbook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playbook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - playbooks
+      summary: Delete a playbook
+      operationId: delete_playbook_api_v1_playbooks__playbook_id__delete
+      parameters:
+      - name: playbook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playbook Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playbooks/{playbook_id}/run:
+    post:
+      tags:
+      - playbooks
+      summary: Execute a playbook
+      operationId: run_playbook_api_v1_playbooks__playbook_id__run_post
+      parameters:
+      - name: playbook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Playbook Id
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plugins:
+    get:
+      tags:
+      - plugins
+      summary: List Plugins
+      description: List all currently loaded plugins, optionally filtered by type.
+      operationId: list_plugins_api_v1_plugins_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Plugin Type
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PluginOut'
+                title: Response List Plugins Api V1 Plugins Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plugins/discover:
+    post:
+      tags:
+      - plugins
+      summary: Discover Plugins
+      description: Re-scan the plugins directory and load any new plugins found.
+      operationId: discover_plugins_api_v1_plugins_discover_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/plugins/{plugin_id}:
+    get:
+      tags:
+      - plugins
+      summary: Get Plugin
+      description: Get details for a specific plugin.
+      operationId: get_plugin_api_v1_plugins__plugin_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plugin Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - plugins
+      summary: Unload Plugin
+      description: Unload a plugin from memory (does not remove files from disk).
+      operationId: unload_plugin_api_v1_plugins__plugin_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plugin Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plugins/{plugin_id}/enable:
+    post:
+      tags:
+      - plugins
+      summary: Enable Plugin
+      description: Enable a loaded plugin.
+      operationId: enable_plugin_api_v1_plugins__plugin_id__enable_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plugin Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plugins/{plugin_id}/disable:
+    post:
+      tags:
+      - plugins
+      summary: Disable Plugin
+      description: Disable a loaded plugin (keeps it in memory but blocks invocations).
+      operationId: disable_plugin_api_v1_plugins__plugin_id__disable_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plugin Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plugins/{plugin_id}/reload:
+    post:
+      tags:
+      - plugins
+      summary: Reload Plugin
+      description: Unload and re-import a plugin from disk (hot-reload).
+      operationId: reload_plugin_api_v1_plugins__plugin_id__reload_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plugin Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/plugins/{plugin_id}/run:
+    post:
+      tags:
+      - plugins
+      summary: Run Plugin
+      description: 'Directly invoke a plugin.
+
+        Supports enrichers, actions, and connectors.'
+      operationId: run_plugin_api_v1_plugins__plugin_id__run_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: plugin_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Plugin Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /graphql:
+    get:
+      tags:
+      - graphql
+      summary: Handle Http Get
+      operationId: handle_http_get_graphql_get
+      responses:
+        '200':
+          description: The GraphiQL integrated development environment.
+          content:
+            application/json:
+              schema: {}
+        '404':
+          description: Not found if GraphiQL or query via GET are not enabled.
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - graphql
+      summary: Handle Http Post
+      operationId: handle_http_post_graphql_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /health:
+    get:
+      tags:
+      - system
+      summary: Health Check
+      description: Health check endpoint.
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Check Health Get
+  /metrics:
+    get:
+      tags:
+      - system
+      summary: Metrics
+      description: Prometheus metrics endpoint.
+      operationId: metrics_metrics_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    AddTimelineEventRequest:
+      properties:
+        content:
+          type: string
+          title: Content
+        event_type:
+          type: string
+          title: Event Type
+          default: comment
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+          default: {}
+      type: object
+      required:
+      - content
+      title: AddTimelineEventRequest
+    AlertListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AlertResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        pages:
+          type: integer
+          title: Pages
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - page_size
+      - pages
+      title: AlertListResponse
+    AlertResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        priority:
+          type: integer
+          title: Priority
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        mitre_tactics:
+          items: {}
+          type: array
+          title: Mitre Tactics
+        mitre_techniques:
+          items: {}
+          type: array
+          title: Mitre Techniques
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        ai_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ai Score
+        ai_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ai Summary
+        ai_recommendations:
+          items: {}
+          type: array
+          title: Ai Recommendations
+        affected_ips:
+          items: {}
+          type: array
+          title: Affected Ips
+        affected_hosts:
+          items: {}
+          type: array
+          title: Affected Hosts
+        affected_users:
+          items: {}
+          type: array
+          title: Affected Users
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        tags:
+          items: {}
+          type: array
+          title: Tags
+        event_time:
+          type: string
+          format: date-time
+          title: Event Time
+        first_seen:
+          type: string
+          format: date-time
+          title: First Seen
+        last_seen:
+          type: string
+          format: date-time
+          title: Last Seen
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - title
+      - description
+      - severity
+      - status
+      - priority
+      - category
+      - mitre_tactics
+      - mitre_techniques
+      - connector_type
+      - ai_score
+      - ai_summary
+      - ai_recommendations
+      - affected_ips
+      - affected_hosts
+      - affected_users
+      - case_id
+      - tags
+      - event_time
+      - first_seen
+      - last_seen
+      - created_at
+      - updated_at
+      title: AlertResponse
+    AlertStatsResponse:
+      properties:
+        total:
+          type: integer
+          title: Total
+        by_severity:
+          additionalProperties:
+            type: integer
+          type: object
+          title: By Severity
+        by_status:
+          additionalProperties:
+            type: integer
+          type: object
+          title: By Status
+        new_last_24h:
+          type: integer
+          title: New Last 24H
+        critical_open:
+          type: integer
+          title: Critical Open
+      type: object
+      required:
+      - total
+      - by_severity
+      - by_status
+      - new_last_24h
+      - critical_open
+      title: AlertStatsResponse
+    AlertUpdateRequest:
+      properties:
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        priority:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Priority
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+        assigned_to_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Assigned To Id
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+      type: object
+      title: AlertUpdateRequest
+    ApiKeyOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        prefix:
+          type: string
+          title: Prefix
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+        is_active:
+          type: boolean
+          title: Is Active
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+        last_used_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Used At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - prefix
+      - scopes
+      - is_active
+      - expires_at
+      - last_used_at
+      - created_at
+      title: ApiKeyOut
+    AttackPathResponse:
+      properties:
+        case_id:
+          type: string
+          title: Case Id
+        nodes:
+          items:
+            $ref: '#/components/schemas/GraphNode'
+          type: array
+          title: Nodes
+        edges:
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+          type: array
+          title: Edges
+        node_count:
+          type: integer
+          title: Node Count
+        edge_count:
+          type: integer
+          title: Edge Count
+      type: object
+      required:
+      - case_id
+      - nodes
+      - edges
+      - node_count
+      - edge_count
+      title: AttackPathResponse
+    BlastRadiusResponse:
+      properties:
+        entity_id:
+          type: string
+          title: Entity Id
+        entity_type:
+          type: string
+          title: Entity Type
+        hops:
+          type: integer
+          title: Hops
+        affected_nodes:
+          items:
+            $ref: '#/components/schemas/GraphNode'
+          type: array
+          title: Affected Nodes
+        total_affected:
+          type: integer
+          title: Total Affected
+        type_breakdown:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Type Breakdown
+        blast_radius_score:
+          type: number
+          title: Blast Radius Score
+      type: object
+      required:
+      - entity_id
+      - entity_type
+      - hops
+      - affected_nodes
+      - total_affected
+      - type_breakdown
+      - blast_radius_score
+      title: BlastRadiusResponse
+    CaseListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/CaseResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        pages:
+          type: integer
+          title: Pages
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - page_size
+      - pages
+      title: CaseListResponse
+    CaseResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        case_number:
+          type: string
+          title: Case Number
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        status:
+          type: string
+          title: Status
+        priority:
+          type: string
+          title: Priority
+        severity:
+          type: string
+          title: Severity
+        case_type:
+          type: string
+          title: Case Type
+        mitre_tactics:
+          items: {}
+          type: array
+          title: Mitre Tactics
+        mitre_techniques:
+          items: {}
+          type: array
+          title: Mitre Techniques
+        assigned_to_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Assigned To Id
+        sla_deadline:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Sla Deadline
+        sla_breached:
+          type: boolean
+          title: Sla Breached
+        alert_ids:
+          items: {}
+          type: array
+          title: Alert Ids
+        tags:
+          items: {}
+          type: array
+          title: Tags
+        ticket_refs:
+          items: {}
+          type: array
+          title: Ticket Refs
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+        resolution:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolution
+        closed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Closed At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - case_number
+      - title
+      - description
+      - status
+      - priority
+      - severity
+      - case_type
+      - mitre_tactics
+      - mitre_techniques
+      - assigned_to_id
+      - sla_deadline
+      - sla_breached
+      - alert_ids
+      - tags
+      - ticket_refs
+      - summary
+      - resolution
+      - closed_at
+      - created_at
+      - updated_at
+      title: CaseResponse
+    ConnectorResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        name:
+          type: string
+          title: Name
+        connector_type:
+          type: string
+          title: Connector Type
+        category:
+          type: string
+          title: Category
+        is_enabled:
+          type: boolean
+          title: Is Enabled
+        health_status:
+          type: string
+          title: Health Status
+        last_health_check:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Health Check
+        last_sync:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Sync
+        events_ingested:
+          type: integer
+          title: Events Ingested
+        error_count:
+          type: integer
+          title: Error Count
+        tags:
+          items: {}
+          type: array
+          title: Tags
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - name
+      - connector_type
+      - category
+      - is_enabled
+      - health_status
+      - last_health_check
+      - last_sync
+      - events_ingested
+      - error_count
+      - tags
+      - created_at
+      - updated_at
+      title: ConnectorResponse
+    CreateApiKeyRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Name
+          description: Human-readable name
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+          description: Permission scopes granted to this key
+        expires_in_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Expires In Days
+          description: TTL in days; None = never expires
+      type: object
+      required:
+      - name
+      title: CreateApiKeyRequest
+    CreateApiKeyResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        key:
+          type: string
+          title: Key
+          description: Raw API key — shown ONCE, store securely
+        prefix:
+          type: string
+          title: Prefix
+        scopes:
+          items:
+            type: string
+          type: array
+          title: Scopes
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - key
+      - prefix
+      - scopes
+      - expires_at
+      - created_at
+      title: CreateApiKeyResponse
+    CreateCaseRequest:
+      properties:
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        priority:
+          type: string
+          title: Priority
+          default: medium
+        severity:
+          type: string
+          title: Severity
+          default: medium
+        case_type:
+          type: string
+          title: Case Type
+          default: security_incident
+        alert_ids:
+          items:
+            type: string
+            format: uuid
+          type: array
+          title: Alert Ids
+          default: []
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          default: []
+      type: object
+      required:
+      - title
+      title: CreateCaseRequest
+    CreateConnectorRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        connector_type:
+          type: string
+          title: Connector Type
+        category:
+          type: string
+          title: Category
+        auth_config:
+          additionalProperties: true
+          type: object
+          title: Auth Config
+          default: {}
+        connector_config:
+          additionalProperties: true
+          type: object
+          title: Connector Config
+          default: {}
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          default: []
+      type: object
+      required:
+      - name
+      - connector_type
+      - category
+      title: CreateConnectorRequest
+    CreateRuleRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        rule_language:
+          type: string
+          title: Rule Language
+        rule_body:
+          type: string
+          title: Rule Body
+        category:
+          type: string
+          title: Category
+        severity:
+          type: string
+          title: Severity
+          default: medium
+        confidence:
+          type: integer
+          title: Confidence
+          default: 50
+        mitre_tactics:
+          items:
+            type: string
+          type: array
+          title: Mitre Tactics
+          default: []
+        mitre_techniques:
+          items:
+            type: string
+          type: array
+          title: Mitre Techniques
+          default: []
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          default: []
+      type: object
+      required:
+      - name
+      - rule_language
+      - rule_body
+      - category
+      title: CreateRuleRequest
+    CreateUserRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        username:
+          type: string
+          title: Username
+        password:
+          type: string
+          title: Password
+        role:
+          type: string
+          title: Role
+          default: soc_analyst
+      type: object
+      required:
+      - email
+      - username
+      - password
+      title: CreateUserRequest
+    DetectionRuleResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Tenant Id
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        rule_language:
+          type: string
+          title: Rule Language
+        rule_body:
+          type: string
+          title: Rule Body
+        category:
+          type: string
+          title: Category
+        status:
+          type: string
+          title: Status
+        severity:
+          type: string
+          title: Severity
+        confidence:
+          type: integer
+          title: Confidence
+        mitre_tactics:
+          items: {}
+          type: array
+          title: Mitre Tactics
+        mitre_techniques:
+          items: {}
+          type: array
+          title: Mitre Techniques
+        fp_rate:
+          type: number
+          title: Fp Rate
+        total_hits:
+          type: integer
+          title: Total Hits
+        last_triggered:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Triggered
+        tags:
+          items: {}
+          type: array
+          title: Tags
+        is_builtin:
+          type: boolean
+          title: Is Builtin
+        version:
+          type: integer
+          title: Version
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - name
+      - description
+      - rule_language
+      - rule_body
+      - category
+      - status
+      - severity
+      - confidence
+      - mitre_tactics
+      - mitre_techniques
+      - fp_rate
+      - total_hits
+      - last_triggered
+      - tags
+      - is_builtin
+      - version
+      - created_at
+      - updated_at
+      title: DetectionRuleResponse
+    DiscoverResponse:
+      properties:
+        discovered:
+          items:
+            type: string
+          type: array
+          title: Discovered
+      type: object
+      required:
+      - discovered
+      title: DiscoverResponse
+    EntityNeighborsResponse:
+      properties:
+        entity_id:
+          type: string
+          title: Entity Id
+        entity_type:
+          type: string
+          title: Entity Type
+        source:
+          anyOf:
+          - $ref: '#/components/schemas/GraphNode'
+          - type: 'null'
+        neighbors:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Neighbors
+        neighbor_count:
+          type: integer
+          title: Neighbor Count
+          default: 0
+      type: object
+      required:
+      - entity_id
+      - entity_type
+      - source
+      - neighbors
+      title: EntityNeighborsResponse
+    ExecuteRuleRequest:
+      properties:
+        events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 1000
+          title: Events
+          description: Events to test the rule against
+      type: object
+      required:
+      - events
+      title: ExecuteRuleRequest
+      description: Payload for ad-hoc rule execution.
+    ExecuteRuleResponse:
+      properties:
+        rule_id:
+          type: string
+          title: Rule Id
+        rule_name:
+          type: string
+          title: Rule Name
+        rule_language:
+          type: string
+          title: Rule Language
+        severity:
+          type: string
+          title: Severity
+        matched:
+          type: boolean
+          title: Matched
+        match_count:
+          type: integer
+          title: Match Count
+        matched_events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Matched Events
+        score:
+          type: number
+          title: Score
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        execution_time_ms:
+          type: number
+          title: Execution Time Ms
+      type: object
+      required:
+      - rule_id
+      - rule_name
+      - rule_language
+      - severity
+      - matched
+      - match_count
+      - matched_events
+      - score
+      - error
+      - execution_time_ms
+      title: ExecuteRuleResponse
+    GraphEdge:
+      properties:
+        source:
+          type: string
+          title: Source
+        target:
+          type: string
+          title: Target
+        type:
+          type: string
+          title: Type
+      type: object
+      required:
+      - source
+      - target
+      - type
+      title: GraphEdge
+    GraphNode:
+      properties:
+        id:
+          type: string
+          title: Id
+        label:
+          type: string
+          title: Label
+        properties:
+          additionalProperties: true
+          type: object
+          title: Properties
+      type: object
+      required:
+      - id
+      - label
+      title: GraphNode
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HuntRequest:
+      properties:
+        rule_ids:
+          anyOf:
+          - items:
+              type: string
+              format: uuid
+            type: array
+          - type: 'null'
+          title: Rule Ids
+          description: Specific rule IDs to hunt with; omit to use all active rules
+        rule_language:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Language
+          description: Filter rules by language (sigma, yara, kql, eql)
+        events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 5000
+          title: Events
+          description: Events to hunt through
+      type: object
+      required:
+      - events
+      title: HuntRequest
+      description: Payload for threat hunting across events.
+    HuntResponse:
+      properties:
+        hunt_id:
+          type: string
+          title: Hunt Id
+        rules_evaluated:
+          type: integer
+          title: Rules Evaluated
+        rules_matched:
+          type: integer
+          title: Rules Matched
+        total_events_scanned:
+          type: integer
+          title: Total Events Scanned
+        matched_events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Matched Events
+        match_summary:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Match Summary
+        execution_time_ms:
+          type: number
+          title: Execution Time Ms
+        errors:
+          items:
+            type: string
+          type: array
+          title: Errors
+      type: object
+      required:
+      - hunt_id
+      - rules_evaluated
+      - rules_matched
+      - total_events_scanned
+      - matched_events
+      - match_summary
+      - execution_time_ms
+      - errors
+      title: HuntResponse
+    InvestigateRequest:
+      properties:
+        alert_summary:
+          type: string
+          title: Alert Summary
+          default: ''
+        raw_alert:
+          additionalProperties: true
+          type: object
+          title: Raw Alert
+          default: {}
+      type: object
+      title: InvestigateRequest
+    InvestigateResponse:
+      properties:
+        run_id:
+          type: string
+          title: Run Id
+        case_id:
+          type: string
+          title: Case Id
+        status:
+          type: string
+          title: Status
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - run_id
+      - case_id
+      - status
+      - message
+      title: InvestigateResponse
+    LoginRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: LoginRequest
+    MitreCoverageItem:
+      properties:
+        technique_id:
+          type: string
+          title: Technique Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        tactic:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tactic
+        alert_count:
+          type: integer
+          title: Alert Count
+      type: object
+      required:
+      - technique_id
+      - name
+      - tactic
+      - alert_count
+      title: MitreCoverageItem
+    PluginManifestOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        version:
+          type: string
+          title: Version
+        plugin_type:
+          type: string
+          title: Plugin Type
+        description:
+          type: string
+          title: Description
+        author:
+          type: string
+          title: Author
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        config_schema:
+          additionalProperties: true
+          type: object
+          title: Config Schema
+      type: object
+      required:
+      - id
+      - name
+      - version
+      - plugin_type
+      - description
+      - author
+      - tags
+      - config_schema
+      title: PluginManifestOut
+    PluginOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        manifest:
+          $ref: '#/components/schemas/PluginManifestOut'
+        enabled:
+          type: boolean
+          title: Enabled
+        loaded_at:
+          type: number
+          title: Loaded At
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - id
+      - manifest
+      - enabled
+      - loaded_at
+      - error
+      title: PluginOut
+    RefreshRequest:
+      properties:
+        refresh_token:
+          type: string
+          title: Refresh Token
+      type: object
+      required:
+      - refresh_token
+      title: RefreshRequest
+    RunRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+          default: {}
+        context:
+          additionalProperties: true
+          type: object
+          title: Context
+          default: {}
+      type: object
+      title: RunRequest
+    RunResponse:
+      properties:
+        plugin_id:
+          type: string
+          title: Plugin Id
+        result:
+          additionalProperties: true
+          type: object
+          title: Result
+      type: object
+      required:
+      - plugin_id
+      - result
+      title: RunResponse
+    TenantResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        slug:
+          type: string
+          title: Slug
+        plan:
+          type: string
+          title: Plan
+        is_active:
+          type: boolean
+          title: Is Active
+        settings:
+          additionalProperties: true
+          type: object
+          title: Settings
+        limits:
+          additionalProperties: true
+          type: object
+          title: Limits
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - slug
+      - plan
+      - is_active
+      - settings
+      - limits
+      - created_at
+      title: TenantResponse
+    TimelineEventResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        case_id:
+          type: string
+          format: uuid
+          title: Case Id
+        event_type:
+          type: string
+          title: Event Type
+        content:
+          type: string
+          title: Content
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        user_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: User Id
+        is_automated:
+          type: boolean
+          title: Is Automated
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - case_id
+      - event_type
+      - content
+      - user_id
+      - is_automated
+      - created_at
+      title: TimelineEventResponse
+    TokenResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        refresh_token:
+          type: string
+          title: Refresh Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+          default: 1800
+      type: object
+      required:
+      - access_token
+      - refresh_token
+      title: TokenResponse
+    UpdateApiKeyRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 255
+            minLength: 1
+          - type: 'null'
+          title: Name
+        scopes:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Scopes
+        expires_in_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Expires In Days
+          description: Reset TTL from now; 0 = never
+      type: object
+      title: UpdateApiKeyRequest
+    UpdateCaseRequest:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        priority:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Priority
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        assigned_to_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Assigned To Id
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+        resolution:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolution
+        lessons_learned:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lessons Learned
+      type: object
+      title: UpdateCaseRequest
+    UpdateConnectorRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        is_enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Enabled
+        auth_config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Auth Config
+        connector_config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Connector Config
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+      type: object
+      title: UpdateConnectorRequest
+    UpdateRuleRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        rule_body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Body
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        confidence:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Confidence
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+      type: object
+      title: UpdateRuleRequest
+    UpdateTenantSettingsRequest:
+      properties:
+        settings:
+          additionalProperties: true
+          type: object
+          title: Settings
+          default: {}
+      type: object
+      title: UpdateTenantSettingsRequest
+    UpdateUserRequest:
+      properties:
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        is_active:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Active
+      type: object
+      title: UpdateUserRequest
+    UpsertAlertGraphRequest:
+      properties:
+        alert_id:
+          type: string
+          title: Alert Id
+        title:
+          type: string
+          title: Title
+        severity:
+          type: string
+          title: Severity
+        mitre_techniques:
+          items:
+            type: string
+          type: array
+          title: Mitre Techniques
+        host_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Host Id
+        user_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: User Id
+        ioc_values:
+          items:
+            type: string
+          type: array
+          title: Ioc Values
+      type: object
+      required:
+      - alert_id
+      - title
+      - severity
+      title: UpsertAlertGraphRequest
+    UpsertCaseGraphRequest:
+      properties:
+        case_id:
+          type: string
+          title: Case Id
+        title:
+          type: string
+          title: Title
+        severity:
+          type: string
+          title: Severity
+        alert_ids:
+          items:
+            type: string
+          type: array
+          title: Alert Ids
+      type: object
+      required:
+      - case_id
+      - title
+      - severity
+      title: UpsertCaseGraphRequest
+    UpsertHostRequest:
+      properties:
+        host_id:
+          type: string
+          title: Host Id
+        hostname:
+          type: string
+          title: Hostname
+        ip_address:
+          type: string
+          title: Ip Address
+          default: ''
+        os:
+          type: string
+          title: Os
+          default: ''
+        criticality:
+          type: string
+          title: Criticality
+          default: medium
+      type: object
+      required:
+      - host_id
+      - hostname
+      title: UpsertHostRequest
+    UpsertUserRequest:
+      properties:
+        user_id:
+          type: string
+          title: User Id
+        username:
+          type: string
+          title: Username
+        email:
+          type: string
+          title: Email
+          default: ''
+        department:
+          type: string
+          title: Department
+          default: ''
+        risk_score:
+          type: number
+          title: Risk Score
+          default: 0.0
+      type: object
+      required:
+      - user_id
+      - username
+      title: UpsertUserRequest
+    UserMeResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        email:
+          type: string
+          title: Email
+        username:
+          type: string
+          title: Username
+        role:
+          type: string
+          title: Role
+        is_active:
+          type: boolean
+          title: Is Active
+      type: object
+      required:
+      - id
+      - tenant_id
+      - email
+      - username
+      - role
+      - is_active
+      title: UserMeResponse
+    UserResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        email:
+          type: string
+          title: Email
+        username:
+          type: string
+          title: Username
+        role:
+          type: string
+          title: Role
+        is_active:
+          type: boolean
+          title: Is Active
+        last_login:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Login
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - email
+      - username
+      - role
+      - is_active
+      - last_login
+      - created_at
+      title: UserResponse
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer

@@ -1,0 +1,33 @@
+id: det-net-002
+name: DNS-Based Data Exfiltration
+description: >
+  Detects unusually large DNS query volumes or queries with abnormally long
+  subdomain labels, which are characteristic of DNS tunnelling tools such as
+  iodine, DNScat, or custom malware exfiltrating data via DNS TXT/A records.
+version: "1.0.0"
+severity: high
+tags:
+  - mitre.attack.t1048.003
+  - mitre.attack.t1071.004
+  - tlp.white
+category: network
+log_source:
+  product: dns-server
+  service: dns-logs
+detection:
+  condition: |
+    (query_length > 50 AND query_count_per_host_per_hour > 100)
+    OR (record_type IN ["TXT", "NULL"] AND query_count_per_host_per_hour > 50)
+  filters:
+    - query_domain: "*.windows.com"
+    - query_domain: "*.microsoft.com"
+    - query_domain: "*.google.com"
+false_positives:
+  - Dynamic DNS clients with long hostnames
+  - ACME / Let's Encrypt domain validation challenges
+  - Kubernetes service discovery DNS
+playbook: tpl-network-isolation
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

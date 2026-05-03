@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # App
@@ -74,6 +75,9 @@ class Settings(BaseSettings):
     # Multi-tenancy
     MAX_TENANTS: int = 1000
     DEFAULT_TENANT_PLAN: str = "starter"
+
+    # Plugin system
+    AISOC_PLUGINS_DIR: str = "/opt/aisoc/plugins"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

@@ -1,0 +1,28 @@
+id: det-cloud-001
+name: AWS Root Account Console Login
+description: >
+  Detects any console sign-in event using the AWS root account. Root account
+  usage outside of initial setup or emergency break-glass scenarios should
+  trigger immediate investigation. Best practice requires MFA on the root account.
+version: "1.0.0"
+severity: critical
+tags:
+  - mitre.attack.t1078.004
+  - tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    event_name == "ConsoleLogin"
+    AND user_type == "Root"
+    AND error_code IS NULL
+false_positives:
+  - Break-glass emergency access (must be documented)
+  - Initial account setup (one-time)
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

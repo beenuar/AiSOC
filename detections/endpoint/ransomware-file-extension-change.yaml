@@ -1,0 +1,37 @@
+id: det-ep-001
+name: Ransomware - Mass File Extension Modification
+description: >
+  Detects rapid mass file rename or write operations that change file extensions
+  to known ransomware patterns or unknown extensions, which is a strong indicator
+  of encryption-based ransomware activity on an endpoint.
+version: "1.0.0"
+severity: critical
+tags:
+  - mitre.attack.t1486
+  - tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: file-events
+detection:
+  condition: |
+    event_type IN ["file_rename", "file_write"]
+    AND unique_extension_changes_per_process_per_minute > 50
+    AND (
+      new_extension IN [
+        ".locked", ".encrypted", ".enc", ".crypt", ".crypted",
+        ".cryp", ".cryt", ".crinf", ".r5a", ".XRNT", ".XTBL",
+        ".RDM", ".RRK", ".xcrypt", ".p5tkjw", ".wncry", ".wncryt"
+      ]
+      OR new_extension_length > 8
+    )
+  filters:
+    - process_name: "backup-agent.exe"
+false_positives:
+  - Backup software performing file version archival
+  - Legitimate encryption tools (7-Zip, VeraCrypt)
+playbook: tpl-ransomware-response
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

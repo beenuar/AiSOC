@@ -47,3 +47,14 @@ Selector labels
 app.kubernetes.io/name: {{ include "aisoc.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Service account name
+*/}}
+{{- define "aisoc.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "aisoc.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}

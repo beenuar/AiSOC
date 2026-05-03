@@ -10,11 +10,17 @@ from fastapi.middleware.gzip import GZipMiddleware
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 from app.api.v1.router import api_router
+from app.auth.oidc import router as oidc_router
+from app.auth.saml import router as saml_router
 from app.core.config import settings
+from app.middleware.audit_middleware import AuditMiddleware
 from app.core.logging import configure_logging
+from app.core.telemetry import instrument_app
 from app.db.database import engine
 from app.db.neo4j import init_neo4j, close_neo4j
+from app.graphql.schema import graphql_router
 from app.models import Base
+from app.services.plugin_manager import get_plugin_manager
 
 logger = structlog.get_logger(__name__)
 
@@ -53,6 +59,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("Neo4j unavailable at startup – graph features disabled", error=str(exc))
 
+    # Auto-discover plugins from AISOC_PLUGINS_DIR
+    try:
+        plugin_mgr = get_plugin_manager()
+        loaded = await plugin_mgr.discover()
+        logger.info("plugin discovery complete", count=len(loaded), plugins=loaded)
+    except Exception as exc:
+        logger.warning("plugin discovery failed – continuing without plugins", error=str(exc))
+
     yield
 
     logger.info("AiSOC API shutting down")
@@ -75,7 +89,11 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # OpenTelemetry auto-instrumentation (FastAPI + SQLAlchemy + httpx)
+    instrument_app(app)
+
     # Middleware
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(
         CORSMiddleware,
@@ -87,11 +105,32 @@ def create_application() -> FastAPI:
 
     # Routers
     app.include_router(api_router)
+    app.include_router(saml_router)
+    app.include_router(oidc_router)
+    app.include_router(graphql_router, prefix="/graphql", tags=["graphql"])
 
     return app
 
 
 app = create_application()
+
+
+@app.middleware("http")
+async def api_version_middleware(request: Request, call_next) -> Response:
+    """Add API version metadata headers to every response.
+
+    X-API-Version   – the stable version of the current route prefix
+    X-API-Stability – 'stable' for /api/v1, 'preview' for anything else
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/v1/"):
+        response.headers["X-API-Version"] = "v1"
+        response.headers["X-API-Stability"] = "stable"
+    elif path.startswith("/api/"):
+        response.headers["X-API-Version"] = "preview"
+        response.headers["X-API-Stability"] = "preview"
+    return response
 
 
 @app.middleware("http")

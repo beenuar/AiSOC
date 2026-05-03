@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const REALTIME_HOST = process.env.REALTIME_URL || 'http://localhost:8086';
+const API_HOST = process.env.API_URL || 'http://localhost:8000';
+const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8001';
 
 const nextConfig = {
   reactStrictMode: true,
@@ -30,6 +32,7 @@ const nextConfig = {
   // In production, nginx (or your reverse proxy) handles this routing.
   async rewrites() {
     return [
+      // WebSocket / SSE (realtime service)
       {
         source: '/ws/:path*',
         destination: `${REALTIME_HOST}/ws/:path*`,
@@ -37,6 +40,11 @@ const nextConfig = {
       {
         source: '/sse',
         destination: `${REALTIME_HOST}/sse`,
+      },
+      // REST API — proxy to api service (port 8000)
+      {
+        source: '/api/v1/:path*',
+        destination: `${API_HOST}/api/v1/:path*`,
       },
     ];
   },

@@ -1,0 +1,27 @@
+{
+  "id": "plugins/overview",
+  "title": "Plugin Overview",
+  "description": "AiSOC is designed to be extended through plugins. Plugins are first-class citizens",
+  "source": "@site/docs/plugins/overview.md",
+  "sourceDirName": "plugins",
+  "slug": "/plugins/overview",
+  "permalink": "/aisoc/docs/plugins/overview",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/plugins/overview.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Detection Rules",
+    "permalink": "/aisoc/docs/concepts/detections"
+  },
+  "next": {
+    "title": "Python Plugin SDK",
+    "permalink": "/aisoc/docs/plugins/python-sdk"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "deployment/kubernetes",
+  "title": "Kubernetes Deployment",
+  "description": "Helm Chart",
+  "source": "@site/docs/deployment/kubernetes.md",
+  "sourceDirName": "deployment",
+  "slug": "/deployment/kubernetes",
+  "permalink": "/aisoc/docs/deployment/kubernetes",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/deployment/kubernetes.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Docker Deployment",
+    "permalink": "/aisoc/docs/deployment/docker"
+  },
+  "next": {
+    "title": "Environment Variables",
+    "permalink": "/aisoc/docs/deployment/env-vars"
+  }
+}

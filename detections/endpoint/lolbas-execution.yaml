@@ -1,0 +1,43 @@
+id: det-ep-002
+name: Living-off-the-Land Binary Abuse (LOLBAS)
+description: >
+  Detects abuse of legitimate Windows binaries (LOLBAS) to execute malicious
+  payloads, download remote content, or bypass application control. Covers
+  certutil, mshta, regsvr32, rundll32, wmic, msiexec, and bitsadmin.
+version: "1.0.0"
+severity: high
+tags:
+  - mitre.attack.t1218
+  - mitre.attack.t1105
+  - tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: security-event-log
+detection:
+  condition: |
+    process_name IN [
+      "certutil.exe", "mshta.exe", "regsvr32.exe",
+      "rundll32.exe", "msiexec.exe", "bitsadmin.exe",
+      "wmic.exe", "installutil.exe", "csc.exe"
+    ]
+    AND (
+      command_line CONTAINS "http://"
+      OR command_line CONTAINS "https://"
+      OR command_line CONTAINS "ftp://"
+      OR command_line CONTAINS "-urlcache"
+      OR command_line CONTAINS "scrobj.dll"
+      OR command_line CONTAINS "javascript:"
+    )
+  filters:
+    - parent_process_name: "sccm-agent.exe"
+    - parent_process_name: "ccmexec.exe"
+false_positives:
+  - SCCM / Intune software deployment
+  - Legitimate system administration scripts
+  - Developer tooling builds
+playbook: tpl-endpoint-isolation
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

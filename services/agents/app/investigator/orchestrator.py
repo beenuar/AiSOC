@@ -16,6 +16,7 @@ from typing import Any, AsyncIterator
 
 import structlog
 from langgraph.graph import END, START, StateGraph
+from opentelemetry import trace
 
 from .forensic_agent import run_forensic
 from .recon_agent import run_recon
@@ -25,27 +26,43 @@ from .state import InvestigatorState, StepKind
 
 logger = structlog.get_logger()
 
+try:
+    from app.core.telemetry import get_tracer as _get_tracer
+    _tracer = _get_tracer("aisoc.investigator")
+except Exception:
+    _tracer = trace.get_tracer("aisoc.investigator")
+
 
 # ---------------------------------------------------------------------------
 # Error-wrapper: catches exceptions in any node and marks state as failed
 # ---------------------------------------------------------------------------
 
 def _safe_node(fn):
-    """Wrap an async node so exceptions are captured in state instead of crashing the graph."""
+    """Wrap an async node so exceptions are captured in state instead of crashing the graph.
+    Also emits an OpenTelemetry span per node execution."""
     import functools
 
     @functools.wraps(fn)
     async def wrapper(state_dict: dict[str, Any]) -> dict[str, Any]:
-        try:
-            return await fn(state_dict)
-        except Exception as exc:  # noqa: BLE001
-            state = InvestigatorState.from_dict(state_dict)
-            state.status = "failed"
-            state.error = str(exc)
-            state.completed_at = datetime.utcnow()
-            state.log(StepKind.ERROR, fn.__name__, f"Node failed: {exc}")
-            logger.error(f"{fn.__name__} failed", case_id=state.case_id, error=str(exc))
-            return state.to_dict()
+        span_name = f"investigator.{fn.__name__}"
+        with _tracer.start_as_current_span(span_name) as span:
+            case_id = state_dict.get("case_id", "unknown")
+            span.set_attribute("case.id", case_id)
+            span.set_attribute("agent.name", fn.__name__)
+            try:
+                result = await fn(state_dict)
+                span.set_attribute("agent.status", result.get("status", "unknown"))
+                return result
+            except Exception as exc:  # noqa: BLE001
+                span.record_exception(exc)
+                span.set_status(trace.StatusCode.ERROR, str(exc))
+                state = InvestigatorState.from_dict(state_dict)
+                state.status = "failed"
+                state.error = str(exc)
+                state.completed_at = datetime.utcnow()
+                state.log(StepKind.ERROR, fn.__name__, f"Node failed: {exc}")
+                logger.error(f"{fn.__name__} failed", case_id=state.case_id, error=str(exc))
+                return state.to_dict()
 
     return wrapper
 
@@ -114,22 +131,27 @@ class InvestigatorOrchestrator:
         tenant_id: str = "default",
     ) -> InvestigatorState:
         """Execute the full investigation pipeline and return the final state."""
-        initial = InvestigatorState(
-            case_id=case_id,
-            alert_summary=alert_summary,
-            raw_alert=raw_alert or {},
-            tenant_id=tenant_id,
-        )
-        logger.info("investigation.start", case_id=case_id)
-        result = await self._graph.ainvoke(initial.to_dict())
-        final = InvestigatorState.from_dict(result)
-        logger.info(
-            "investigation.end",
-            case_id=case_id,
-            status=final.status,
-            iterations=final.iteration,
-        )
-        return final
+        with _tracer.start_as_current_span("investigator.run") as span:
+            span.set_attribute("case.id", case_id)
+            span.set_attribute("tenant.id", tenant_id)
+            initial = InvestigatorState(
+                case_id=case_id,
+                alert_summary=alert_summary,
+                raw_alert=raw_alert or {},
+                tenant_id=tenant_id,
+            )
+            logger.info("investigation.start", case_id=case_id)
+            result = await self._graph.ainvoke(initial.to_dict())
+            final = InvestigatorState.from_dict(result)
+            span.set_attribute("investigation.status", final.status)
+            span.set_attribute("investigation.iterations", final.iteration)
+            logger.info(
+                "investigation.end",
+                case_id=case_id,
+                status=final.status,
+                iterations=final.iteration,
+            )
+            return final
 
     async def stream(
         self,

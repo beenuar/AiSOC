@@ -1,0 +1,27 @@
+{
+  "id": "plugins/python-sdk",
+  "title": "Python Plugin SDK",
+  "description": "Installation",
+  "source": "@site/docs/plugins/python-sdk.md",
+  "sourceDirName": "plugins",
+  "slug": "/plugins/python-sdk",
+  "permalink": "/aisoc/docs/plugins/python-sdk",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/plugins/python-sdk.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Plugin Overview",
+    "permalink": "/aisoc/docs/plugins/overview"
+  },
+  "next": {
+    "title": "Go Plugin SDK",
+    "permalink": "/aisoc/docs/plugins/go-sdk"
+  }
+}

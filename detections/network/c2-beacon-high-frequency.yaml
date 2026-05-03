@@ -1,0 +1,36 @@
+id: det-net-001
+name: C2 Beacon - High Frequency Periodic Connections
+description: >
+  Detects potential Command & Control (C2) beaconing behaviour based on
+  high-frequency periodic outbound connections to the same external IP or
+  domain over a short time window. Malware beacons are typically evenly
+  spaced with low jitter.
+version: "1.0.0"
+severity: high
+tags:
+  - mitre.attack.t1071.001
+  - mitre.attack.t1571
+  - tlp.white
+category: network
+log_source:
+  product: network-firewall
+  service: flow-logs
+detection:
+  condition: |
+    connection_count > 20
+    AND dest_port IN [80, 443, 8080, 8443]
+    AND jitter_seconds < 5
+    AND time_window_minutes <= 30
+  filters:
+    - dest_ip: "10.0.0.0/8"
+    - dest_ip: "172.16.0.0/12"
+    - dest_ip: "192.168.0.0/16"
+false_positives:
+  - Monitoring agents and health-checkers with fixed polling intervals
+  - CDN keep-alive connections
+  - NTP synchronization traffic
+playbook: tpl-c2-containment
+enabled: true
+author: AiSOC
+created: "2025-01-15"
+modified: "2025-01-15"

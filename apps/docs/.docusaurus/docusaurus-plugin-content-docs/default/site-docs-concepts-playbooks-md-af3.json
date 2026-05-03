@@ -1,0 +1,27 @@
+{
+  "id": "concepts/playbooks",
+  "title": "Playbooks",
+  "description": "Playbooks are visual, reusable automation workflows that orchestrate investigation",
+  "source": "@site/docs/concepts/playbooks.md",
+  "sourceDirName": "concepts",
+  "slug": "/concepts/playbooks",
+  "permalink": "/aisoc/docs/concepts/playbooks",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/beenuar/aisoc/tree/main/apps/docs/docs/concepts/playbooks.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Cases",
+    "permalink": "/aisoc/docs/concepts/cases"
+  },
+  "next": {
+    "title": "Detection Rules",
+    "permalink": "/aisoc/docs/concepts/detections"
+  }
+}

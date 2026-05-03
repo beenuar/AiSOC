@@ -1,0 +1,86 @@
+name: Check OpenAPI schema
+
+on:
+  pull_request:
+    paths:
+      - "services/api/**"
+      - "docs/openapi.yaml"
+      - "scripts/export_openapi.py"
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+
+# Shared install step extracted as a composite action would be cleaner, but for
+# simplicity we duplicate the pip install across both jobs.  The dep list mirrors
+# pyproject.toml so it stays in sync manually; a future improvement would be to
+# generate requirements.txt via `poetry export`.
+env:
+  OPENAPI_DEPS: >-
+    fastapi uvicorn pydantic "pydantic[email]" pydantic-settings
+    "sqlalchemy[asyncio]" asyncpg structlog
+    "python-jose[cryptography]" "passlib[bcrypt]"
+    tenacity pyyaml prometheus-client
+    neo4j redis celery aiofiles aiokafka
+    boto3 clickhouse-driver
+    opentelemetry-sdk opentelemetry-api
+    opentelemetry-exporter-otlp-proto-grpc
+    "opentelemetry-instrumentation-fastapi"
+    "strawberry-graphql[fastapi]"
+
+jobs:
+  openapi-check:
+    name: Verify docs/openapi.yaml is up to date
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install API dependencies
+        run: pip install --quiet ${{ env.OPENAPI_DEPS }}
+
+      - name: Export and check OpenAPI schema
+        run: python scripts/export_openapi.py --check
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+
+  openapi-export:
+    name: Auto-export OpenAPI on merge to main
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: openapi-check
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install API dependencies
+        run: pip install --quiet ${{ env.OPENAPI_DEPS }}
+
+      - name: Regenerate and commit openapi.yaml
+        run: |
+          python scripts/export_openapi.py
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/openapi.yaml
+          git diff --staged --quiet || git commit -m "chore: regenerate docs/openapi.yaml [skip ci]"
+          git push
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
