@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>AiSOC</title>
+  <defs>
+    <linearGradient id="aisocFavBg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="aisocFavMark" x1="32" y1="14" x2="32" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#bfdbfe"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#aisocFavBg)"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+  <!-- Hexagonal shield -->
+  <path d="M32 12 L48 21 L48 39 L32 50 L16 39 L16 21 Z"
+        fill="none"
+        stroke="url(#aisocFavMark)"
+        stroke-width="2.5"
+        stroke-linejoin="round"
+        opacity="0.85"/>
+  <!-- "A" silhouette -->
+  <path d="M22 42 L32 18 L42 42 M26 35 L38 35"
+        fill="none"
+        stroke="url(#aisocFavMark)"
+        stroke-width="3.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+  <!-- AI spark -->
+  <circle cx="44" cy="20" r="3.4" fill="#fbbf24"/>
+  <circle cx="44" cy="20" r="3.4" fill="none" stroke="rgba(251,191,36,0.55)" stroke-width="2.4"/>
+</svg>

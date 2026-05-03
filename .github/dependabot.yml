@@ -1,0 +1,73 @@
+version: 2
+
+updates:
+  # ── pnpm (web + root workspace) ──────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    groups:
+      next-ecosystem:
+        patterns: ["next", "react", "react-dom", "@types/react*"]
+      radix-ui:
+        patterns: ["@radix-ui/*"]
+      dev-tooling:
+        patterns: ["typescript", "eslint*", "@typescript-eslint/*", "tailwindcss*", "postcss*"]
+
+  # ── pip (api) ────────────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /services/api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── pip (actions) ────────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /services/actions
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── pip (agents) ────────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /services/agents
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── Go (enrichment) ──────────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/enrichment
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── Go (ingest) ──────────────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/ingest
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── Go (demo-producer) ───────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/demo-producer
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── GitHub Actions ───────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"

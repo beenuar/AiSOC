@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cyble/aisoc/enrichment/internal/enricher"
+	"github.com/beenuar/aisoc/enrichment/internal/enricher"
 	"github.com/rs/zerolog/log"
 )
 

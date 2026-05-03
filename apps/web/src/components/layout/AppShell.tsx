@@ -2,6 +2,8 @@
 
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { CommandPalette } from './CommandPalette';
+import { CopilotDock } from '@/components/copilot/CopilotDock';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -17,6 +19,10 @@ export function AppShell({ children }: AppShellProps) {
           <div className="p-6">{children}</div>
         </main>
       </div>
+      {/* Floating Copilot launcher (hidden on /copilot itself) */}
+      <CopilotDock />
+      {/* Global command palette (⌘K) */}
+      <CommandPalette />
     </div>
   );
 }

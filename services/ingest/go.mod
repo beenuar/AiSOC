@@ -1,4 +1,4 @@
-module github.com/cyble/aisoc/services/ingest
+module github.com/beenuar/aisoc/services/ingest
 
 go 1.21
 

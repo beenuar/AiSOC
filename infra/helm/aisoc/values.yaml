@@ -13,7 +13,7 @@ coreApi:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-core-api
+    repository: ghcr.io/beenuar/aisoc-core-api
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
@@ -44,7 +44,7 @@ ingest:
   enabled: true
   replicaCount: 3
   image:
-    repository: ghcr.io/cyble/aisoc-ingest
+    repository: ghcr.io/beenuar/aisoc-ingest
     tag: "latest"
     pullPolicy: IfNotPresent
   resources:
@@ -66,7 +66,7 @@ enrichment:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-enrichment
+    repository: ghcr.io/beenuar/aisoc-enrichment
     tag: "latest"
     pullPolicy: IfNotPresent
   resources:
@@ -83,7 +83,7 @@ alertFusion:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-alert-fusion
+    repository: ghcr.io/beenuar/aisoc-alert-fusion
     tag: "latest"
     pullPolicy: IfNotPresent
   resources:
@@ -100,7 +100,7 @@ agents:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-agents
+    repository: ghcr.io/beenuar/aisoc-agents
     tag: "latest"
     pullPolicy: IfNotPresent
   resources:
@@ -117,7 +117,7 @@ actions:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-actions
+    repository: ghcr.io/beenuar/aisoc-actions
     tag: "latest"
     pullPolicy: IfNotPresent
   resources:
@@ -134,7 +134,7 @@ realtime:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-realtime
+    repository: ghcr.io/beenuar/aisoc-realtime
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
@@ -147,7 +147,7 @@ web:
   enabled: true
   replicaCount: 2
   image:
-    repository: ghcr.io/cyble/aisoc-web
+    repository: ghcr.io/beenuar/aisoc-web
     tag: "latest"
     pullPolicy: IfNotPresent
   service:

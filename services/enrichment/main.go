@@ -8,11 +8,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cyble/aisoc/enrichment/internal/cache"
-	"github.com/cyble/aisoc/enrichment/internal/config"
-	"github.com/cyble/aisoc/enrichment/internal/enricher"
-	"github.com/cyble/aisoc/enrichment/internal/handler"
-	"github.com/cyble/aisoc/enrichment/internal/server"
+	"github.com/beenuar/aisoc/enrichment/internal/cache"
+	"github.com/beenuar/aisoc/enrichment/internal/config"
+	"github.com/beenuar/aisoc/enrichment/internal/enricher"
+	"github.com/beenuar/aisoc/enrichment/internal/handler"
+	"github.com/beenuar/aisoc/enrichment/internal/server"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -46,11 +46,46 @@ func main() {
 
 	// Initialize enricher
 	e := enricher.New(enricher.Config{
-		Cache:            redisCache,
-		VirusTotalAPIKey: cfg.VirusTotalAPIKey,
-		AbuseIPDBAPIKey:  cfg.AbuseIPDBAPIKey,
-		GreyNoiseAPIKey:  cfg.GreyNoiseAPIKey,
+		Cache:                  redisCache,
+		VirusTotalAPIKey:       cfg.VirusTotalAPIKey,
+		AbuseIPDBAPIKey:        cfg.AbuseIPDBAPIKey,
+		GreyNoiseAPIKey:        cfg.GreyNoiseAPIKey,
+		CybleAPIKey:            cfg.CybleAPIKey,
+		CybleBaseURL:           cfg.CybleBaseURL,
+		RecordedFutureAPIKey:   cfg.RecordedFutureAPIKey,
+		MandiantAPIKey:         cfg.MandiantAPIKey,
+		MandiantAPISecret:      cfg.MandiantAPISecret,
+		AnomaliUsername:        cfg.AnomaliUsername,
+		AnomaliAPIKey:          cfg.AnomaliAPIKey,
+		AnomaliBaseURL:         cfg.AnomaliBaseURL,
+		XForceAPIKey:           cfg.XForceAPIKey,
+		XForceAPIPassword:      cfg.XForceAPIPassword,
+		FlashpointAPIKey:       cfg.FlashpointAPIKey,
+		Intel471Username:       cfg.Intel471Username,
+		Intel471APIKey:         cfg.Intel471APIKey,
+		DomainToolsUsername:    cfg.DomainToolsUsername,
+		DomainToolsAPIKey:      cfg.DomainToolsAPIKey,
+		RiskIQUsername:         cfg.RiskIQUsername,
+		RiskIQAPIKey:           cfg.RiskIQAPIKey,
+		CrowdstrikeIntelID:     cfg.CrowdstrikeIntelID,
+		CrowdstrikeIntelSecret: cfg.CrowdstrikeIntelSecret,
 	})
+
+	log.Info().
+		Bool("virustotal", cfg.VirusTotalAPIKey != "").
+		Bool("abuseipdb", cfg.AbuseIPDBAPIKey != "").
+		Bool("greynoise", cfg.GreyNoiseAPIKey != "").
+		Bool("cyble", cfg.CybleAPIKey != "").
+		Bool("recorded_future", cfg.RecordedFutureAPIKey != "").
+		Bool("mandiant", cfg.MandiantAPIKey != "" && cfg.MandiantAPISecret != "").
+		Bool("anomali", cfg.AnomaliAPIKey != "").
+		Bool("xforce", cfg.XForceAPIKey != "").
+		Bool("flashpoint", cfg.FlashpointAPIKey != "").
+		Bool("intel471", cfg.Intel471APIKey != "").
+		Bool("domaintools", cfg.DomainToolsAPIKey != "").
+		Bool("riskiq", cfg.RiskIQAPIKey != "").
+		Bool("crowdstrike_intel", cfg.CrowdstrikeIntelID != "" && cfg.CrowdstrikeIntelSecret != "").
+		Msg("Threat intelligence providers configured")
 
 	// Initialize handler and server
 	h := handler.New(e)

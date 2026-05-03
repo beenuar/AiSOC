@@ -21,36 +21,80 @@ app.use(express.json());
 const server = http.createServer(app);
 
 // --- WebSocket server ---
-const wss = new WebSocketServer({ server, path: '/ws' });
+// Accept both `/ws` (legacy) and `/ws/:channel` (preferred). The channel lets
+// callers say up-front what they care about (alerts, cases, agents, all) so we
+// can avoid spamming a panel that only renders alerts with case/agent traffic.
+type Channel = 'alerts' | 'cases' | 'agents' | 'all';
+const VALID_CHANNELS: Channel[] = ['alerts', 'cases', 'agents', 'all'];
 
-// Client registry: tenantId -> Set of WebSocket clients
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url || '/', `http://localhost`);
+  const parts = url.pathname.split('/').filter(Boolean);
+  // /ws            → channel "all"
+  // /ws/<channel>  → that channel (must be in VALID_CHANNELS)
+  if (parts[0] !== 'ws') {
+    socket.destroy();
+    return;
+  }
+  const requested = (parts[1] as Channel | undefined) || 'all';
+  if (!VALID_CHANNELS.includes(requested)) {
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    (ws as any)._aisocChannel = requested;
+    wss.emit('connection', ws, req);
+  });
+});
+
+// Client registry keyed by tenantId. We additionally tag each socket with the
+// channel it subscribed to so broadcasts can filter cheaply.
 const clients = new Map<string, Set<any>>();
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url || '/', `http://localhost`);
   const tenantId = url.searchParams.get('tenant_id') || 'default';
+  const channel: Channel = (ws as any)._aisocChannel ?? 'all';
 
   if (!clients.has(tenantId)) {
     clients.set(tenantId, new Set());
   }
   clients.get(tenantId)!.add(ws);
-  log.info({ tenantId, totalClients: clients.get(tenantId)!.size }, 'WebSocket client connected');
+  log.info(
+    { tenantId, channel, totalClients: clients.get(tenantId)!.size },
+    'WebSocket client connected',
+  );
 
   ws.on('close', () => {
     clients.get(tenantId)?.delete(ws);
-    log.info({ tenantId }, 'WebSocket client disconnected');
+    log.info({ tenantId, channel }, 'WebSocket client disconnected');
   });
 
-  ws.send(JSON.stringify({ type: 'connected', tenantId }));
+  ws.send(JSON.stringify({ type: 'connected', tenantId, channel }));
 });
 
-function broadcastToTenant(tenantId: string, message: object) {
+/**
+ * Map message type → which channel(s) should receive it. "all" always wins.
+ * Add new mappings here when you wire additional Kafka topics through.
+ */
+const CHANNEL_FOR_TYPE: Record<string, Channel[]> = {
+  'alert.fused': ['alerts', 'all'],
+  'case.updated': ['cases', 'all'],
+  'agent.event': ['agents', 'all'],
+};
+
+function broadcastToTenant(tenantId: string, message: { type: string } & Record<string, unknown>) {
   const tenantClients = clients.get(tenantId);
   if (!tenantClients) return;
 
+  const allowed = CHANNEL_FOR_TYPE[message.type] ?? ['all'];
   const payload = JSON.stringify(message);
   for (const client of tenantClients) {
-    if (client.readyState === 1 /* OPEN */) {
+    if (client.readyState !== 1 /* OPEN */) continue;
+    const subscribed: Channel = (client as any)._aisocChannel ?? 'all';
+    if (subscribed === 'all' || allowed.includes(subscribed)) {
       client.send(payload);
     }
   }
@@ -118,9 +162,17 @@ async function startKafkaConsumer() {
 }
 
 // --- Health endpoint ---
-app.get('/health', (_req, res) => {
-  res.json({ status: 'healthy', service: 'aisoc-realtime', clients: wss.clients.size });
-});
+// Expose both `/health` (canonical) and `/healthz` (k8s + frontend default) so
+// callers don't have to guess.
+const reportHealth = (_req: express.Request, res: express.Response) => {
+  res.json({
+    status: 'healthy',
+    service: 'aisoc-realtime',
+    clients: wss.clients.size,
+  });
+};
+app.get('/health', reportHealth);
+app.get('/healthz', reportHealth);
 
 // --- Start ---
 server.listen(PORT, async () => {

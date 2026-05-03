@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <title>AiSOC  Open-source AI Security Operations Center</title>
+  <defs>
+    <linearGradient id="ogBg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#05080f"/>
+      <stop offset="55%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#0a0d14"/>
+    </linearGradient>
+    <radialGradient id="ogGlowBlue" cx="220" cy="160" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="rgba(59,130,246,0.55)"/>
+      <stop offset="100%" stop-color="rgba(59,130,246,0)"/>
+    </radialGradient>
+    <radialGradient id="ogGlowAmber" cx="980" cy="500" r="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="rgba(251,191,36,0.35)"/>
+      <stop offset="100%" stop-color="rgba(251,191,36,0)"/>
+    </radialGradient>
+    <pattern id="ogGrid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="ogShieldStroke" x1="600" y1="180" x2="600" y2="450">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="ogA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#bfdbfe"/>
+    </linearGradient>
+    <radialGradient id="ogSpark" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#ogBg)"/>
+  <rect width="1200" height="630" fill="url(#ogGrid)"/>
+  <rect width="1200" height="630" fill="url(#ogGlowBlue)"/>
+  <rect width="1200" height="630" fill="url(#ogGlowAmber)"/>
+
+  <!-- Mark on the left -->
+  <g transform="translate(110,170)">
+    <path d="M120 0 L240 65 L240 215 L120 290 L0 215 L0 65 Z"
+          fill="none" stroke="url(#ogShieldStroke)" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M120 30 L210 80 L210 200 L120 260 L30 200 L30 80 Z"
+          fill="rgba(59,130,246,0.06)" stroke="url(#ogShieldStroke)" stroke-width="2" opacity="0.6"/>
+    <path d="M55 230 L120 50 L185 230 M82 175 L158 175"
+          fill="none" stroke="url(#ogA)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="195" cy="65" r="18" fill="url(#ogSpark)"/>
+    <circle cx="195" cy="65" r="30" fill="none" stroke="rgba(251,191,36,0.35)" stroke-width="3"/>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <g font-family="Inter, system-ui, sans-serif" fill="#f8fafc">
+    <text x="430" y="248" font-size="116" font-weight="800" letter-spacing="-3.5">AiSOC</text>
+    <text x="432" y="298" font-size="22" font-weight="500" fill="#94a3b8" letter-spacing="3.6">OPEN-SOURCE " AI-NATIVE " MIT</text>
+    <text x="432" y="368" font-size="34" font-weight="600" fill="#cbd5f5">The AI Security Operations Center</text>
+    <text x="432" y="408" font-size="22" font-weight="400" fill="#94a3b8">Real-time detection ù MITRE ATT&amp;CK-aware ù Autonomous triage</text>
+  </g>
+
+  <!-- Tag pill -->
+  <g transform="translate(432,470)">
+    <rect width="220" height="46" rx="23" fill="rgba(59,130,246,0.16)" stroke="rgba(96,165,250,0.55)" stroke-width="1.5"/>
+    <circle cx="26" cy="23" r="6" fill="#22c55e"/>
+    <circle cx="26" cy="23" r="6" fill="none" stroke="rgba(34,197,94,0.45)" stroke-width="6"/>
+    <text x="48" y="30" font-family="Inter, system-ui, sans-serif" font-size="17" font-weight="600" fill="#dbeafe">Live ù v3 milestone</text>
+  </g>
+
+  <!-- Footer Cyble -->
+  <g transform="translate(432,548)" font-family="Inter, system-ui, sans-serif">
+    <text x="0" y="0" font-size="20" fill="#64748b">github.com/beenuar/AiSOC</text>
+    <text x="320" y="0" font-size="20" fill="#64748b">Built by Cyble ù Free forever</text>
+  </g>
+
+  <!-- subtle perimeter -->
+  <rect x="6" y="6" width="1188" height="618" rx="22" fill="none" stroke="rgba(96,165,250,0.18)" stroke-width="2"/>
+</svg>

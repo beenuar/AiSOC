@@ -47,8 +47,39 @@ type PortInfo struct {
 // EnrichmentSource tracks which data sources contributed to enrichment.
 type EnrichmentSource struct {
 	Name      string    `json:"name"`
+	Tier      string    `json:"tier,omitempty"` // "open-source", "free", "commercial"
 	Timestamp time.Time `json:"timestamp"`
 	Cached    bool      `json:"cached"`
+}
+
+// DarkWebContext captures dark-web / underground forum mentions
+// (Cyble, Flashpoint, Intel 471).
+type DarkWebContext struct {
+	Mentions   int      `json:"mentions"`
+	Sources    []string `json:"sources,omitempty"` // forum / market names
+	FirstSeen  *time.Time `json:"first_seen,omitempty"`
+	LastSeen   *time.Time `json:"last_seen,omitempty"`
+	Categories []string `json:"categories,omitempty"` // e.g. "ransomware-leak", "credential-dump"
+	Excerpt    string   `json:"excerpt,omitempty"`    // redacted snippet
+}
+
+// VulnerabilityRef links an IOC to disclosed vulnerabilities.
+type VulnerabilityRef struct {
+	CVE          string  `json:"cve"`
+	CVSS         float64 `json:"cvss,omitempty"`
+	EPSS         float64 `json:"epss,omitempty"`
+	Exploited    bool    `json:"exploited"`
+	KEV          bool    `json:"kev"`             // CISA Known Exploited Vuln
+	Description  string  `json:"description,omitempty"`
+}
+
+// BrandRisk surfaces brand-protection signals (Cyble, RiskIQ, DomainTools).
+type BrandRisk struct {
+	Score        int      `json:"score"` // 0-100
+	LookalikeOf  string   `json:"lookalike_of,omitempty"`
+	Phishing     bool     `json:"phishing"`
+	Defacement   bool     `json:"defacement"`
+	Indicators   []string `json:"indicators,omitempty"`
 }
 
 // EnrichmentResult is the unified enrichment output for any IOC type.
@@ -75,6 +106,9 @@ type EnrichmentResult struct {
 	IsDatacenter     bool                 `json:"is_datacenter"`
 	LastSeen         *time.Time           `json:"last_seen,omitempty"`
 	FirstSeen        *time.Time           `json:"first_seen,omitempty"`
+	DarkWeb          *DarkWebContext      `json:"dark_web,omitempty"`
+	Vulnerabilities  []VulnerabilityRef   `json:"vulnerabilities,omitempty"`
+	BrandRisk        *BrandRisk           `json:"brand_risk,omitempty"`
 	Sources          []EnrichmentSource   `json:"sources"`
 	EnrichmentErrors []string             `json:"enrichment_errors,omitempty"`
 	EnrichedAt       time.Time            `json:"enriched_at"`

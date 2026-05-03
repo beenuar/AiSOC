@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" width="280" height="64">
+  <title>AiSOC</title>
+  <defs>
+    <linearGradient id="aisocLogoOutline" x1="32" y1="8" x2="32" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="aisocLogoBody" x1="32" y1="14" x2="32" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5f5"/>
+    </linearGradient>
+    <radialGradient id="aisocLogoSpark" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </radialGradient>
+    <linearGradient id="aisocLogoText" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#cbd5f5"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path d="M32 6 L54 18 L54 42 L32 58 L10 42 L10 18 Z"
+          fill="none"
+          stroke="url(#aisocLogoOutline)"
+          stroke-width="3"
+          stroke-linejoin="round"/>
+    <path d="M32 12 L48 21 L48 39 L32 50 L16 39 L16 21 Z"
+          fill="rgba(59,130,246,0.08)"
+          stroke="url(#aisocLogoOutline)"
+          stroke-width="1.2"
+          stroke-linejoin="round"
+          opacity="0.7"/>
+    <path d="M21 44 L32 16 L43 44 M25.5 35.5 L38.5 35.5"
+          fill="none"
+          stroke="url(#aisocLogoBody)"
+          stroke-width="3.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <circle cx="46" cy="18" r="4" fill="url(#aisocLogoSpark)"/>
+    <circle cx="46" cy="18" r="6.5" fill="none" stroke="rgba(251,191,36,0.4)" stroke-width="1.4"/>
+  </g>
+  <g font-family="Inter, system-ui, sans-serif" font-weight="700" letter-spacing="-0.5">
+    <text x="74" y="42" font-size="30" fill="url(#aisocLogoText)">AiSOC</text>
+    <text x="184" y="42" font-size="14" font-weight="500" fill="rgba(148,163,184,0.85)" letter-spacing="0.4">by Cyble</text>
+  </g>
+</svg>

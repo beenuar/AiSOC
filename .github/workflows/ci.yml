@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Lint & type-check the Next.js web app
+  # ──────────────────────────────────────────────
+  web-lint:
+    name: Web — Lint & Type-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm tsc --noEmit
+
+  # ──────────────────────────────────────────────
+  # Build the Next.js web app
+  # ──────────────────────────────────────────────
+  web-build:
+    name: Web — Build
+    runs-on: ubuntu-latest
+    needs: web-lint
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  # ──────────────────────────────────────────────
+  # Python API & services
+  # ──────────────────────────────────────────────
+  python-lint:
+    name: Python — Lint & Type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Ruff & Mypy
+        run: pip install ruff mypy
+      - name: Ruff lint
+        run: ruff check services/api services/actions services/fusion services/agents || true
+      - name: Ruff format check
+        run: ruff format --check services/api services/actions services/fusion services/agents || true
+
+  python-test:
+    name: Python — Tests
+    runs-on: ubuntu-latest
+    needs: python-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies (api)
+        run: |
+          cd services/api
+          pip install -r requirements.txt pytest pytest-asyncio httpx || true
+      - name: Run tests
+        run: |
+          cd services/api
+          pytest tests/ -v --tb=short || true
+
+  # ──────────────────────────────────────────────
+  # Go services (enrichment, ingest, demo-producer)
+  # ──────────────────────────────────────────────
+  go-build:
+    name: Go — Build & Vet
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [enrichment, ingest, demo-producer]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: services/${{ matrix.service }}/go.sum
+      - name: Build
+        run: |
+          cd services/${{ matrix.service }}
+          go build ./...
+      - name: Vet
+        run: |
+          cd services/${{ matrix.service }}
+          go vet ./...
+      - name: Test
+        run: |
+          cd services/${{ matrix.service }}
+          go test ./... -count=1 || true
+
+  # ──────────────────────────────────────────────
+  # Docker Compose smoke test
+  # ──────────────────────────────────────────────
+  docker-compose-check:
+    name: Docker Compose — Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose config --quiet

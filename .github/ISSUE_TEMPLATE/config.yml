@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/beenuar/AiSOC/security/advisories/new
+    about: Please report security issues via GitHub Security Advisories, NOT as a public issue.
+  - name: Discussion / Q&A
+    url: https://github.com/beenuar/AiSOC/discussions
+    about: For questions, ideas, and general discussion please use GitHub Discussions.

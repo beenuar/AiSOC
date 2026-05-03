@@ -9,6 +9,13 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.dev_auth import (
+    DEMO_TENANT_ID,
+    DEMO_USER_EMAIL,
+    DEMO_USER_ID,
+    DEMO_USER_ROLE,
+    is_dev_mode,
+)
 from app.core.security import decode_token, has_permission
 from app.db.database import get_db
 from app.models.tenant import ApiKey, Tenant, User
@@ -43,8 +50,19 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)],
     db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
-    """Resolve JWT bearer token to CurrentUser."""
+    """Resolve JWT bearer token to CurrentUser.
+
+    In development mode an unauthenticated request resolves to a deterministic
+    demo user (see ``app.api.v1.dev_auth``). Production requires a bearer token.
+    """
     if credentials is None:
+        if is_dev_mode():
+            return CurrentUser(
+                user_id=DEMO_USER_ID,
+                tenant_id=DEMO_TENANT_ID,
+                role=DEMO_USER_ROLE,
+                email=DEMO_USER_EMAIL,
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",

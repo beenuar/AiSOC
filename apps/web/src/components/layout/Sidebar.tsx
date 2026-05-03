@@ -67,12 +67,33 @@ const ChartBarIcon = () => (
   </svg>
 );
 
+const SearchIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+  </svg>
+);
+
+const GraphIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <circle cx="6" cy="6" r="2" strokeWidth={1.5} />
+    <circle cx="18" cy="6" r="2" strokeWidth={1.5} />
+    <circle cx="12" cy="18" r="2" strokeWidth={1.5} />
+    <path strokeWidth={1.5} strokeLinecap="round" d="M7.5 7.5L11 16.5M16.5 7.5L13 16.5M8 6h8" />
+  </svg>
+);
+
+const SparklesIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+  </svg>
+);
+
 const navSections: NavSection[] = [
   {
     items: [
       {
         label: 'Dashboard',
-        href: '/',
+        href: '/dashboard',
         icon: <ChartBarIcon />,
       },
     ],
@@ -93,6 +114,11 @@ const navSections: NavSection[] = [
         icon: <FolderIcon />,
       },
       {
+        label: 'Hunt',
+        href: '/hunt',
+        icon: <SearchIcon />,
+      },
+      {
         label: 'Detection Rules',
         href: '/detection',
         icon: <EyeIcon />,
@@ -106,6 +132,16 @@ const navSections: NavSection[] = [
         label: 'Threat Intel',
         href: '/threat-intel',
         icon: <GlobeIcon />,
+      },
+      {
+        label: 'Attack Graph',
+        href: '/graph',
+        icon: <GraphIcon />,
+      },
+      {
+        label: 'AI Copilot',
+        href: '/copilot',
+        icon: <SparklesIcon />,
       },
     ],
   },
@@ -130,7 +166,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
+    if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
   };
 
@@ -202,7 +238,7 @@ export function Sidebar() {
           <span className="font-mono">v0.1.0</span>
           <span>·</span>
           <a
-            href="https://github.com/cyble-dev/aisoc"
+            href="https://github.com/beenuar/AiSOC"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-gray-400 transition-colors"

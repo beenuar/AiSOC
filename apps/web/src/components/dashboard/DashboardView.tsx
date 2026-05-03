@@ -8,6 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { format } from 'date-fns';
+import { LiveFeedPanel } from './LiveFeedPanel';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -28,11 +29,11 @@ const MOCK_METRICS: DashboardMetrics = {
     resolvedThisWeek: 34,
   },
   sources: [
-    { name: 'CrowdStrike', count: 412, status: 'active' },
-    { name: 'Splunk', count: 287, status: 'active' },
-    { name: 'AWS Security Hub', count: 198, status: 'active' },
-    { name: 'Microsoft Sentinel', count: 243, status: 'active' },
-    { name: 'Okta', count: 107, status: 'active' },
+    { name: 'Endpoint Telemetry', count: 412, status: 'active' },
+    { name: 'SIEM Events', count: 287, status: 'active' },
+    { name: 'Cloud Audit', count: 198, status: 'active' },
+    { name: 'Network Sensors', count: 243, status: 'active' },
+    { name: 'Identity Provider', count: 107, status: 'active' },
   ],
   topMitre: [
     { tactic: 'Execution', count: 89 },
@@ -48,11 +49,11 @@ const MOCK_METRICS: DashboardMetrics = {
     severity: 'all',
   })),
   threatsBySource: [
-    { source: 'CrowdStrike', count: 412 },
-    { source: 'Splunk', count: 287 },
-    { source: 'AWS', count: 198 },
-    { source: 'Sentinel', count: 243 },
-    { source: 'Okta', count: 107 },
+    { source: 'Endpoint Telemetry', count: 412 },
+    { source: 'SIEM Events', count: 287 },
+    { source: 'Cloud Audit', count: 198 },
+    { source: 'Network Sensors', count: 243 },
+    { source: 'Identity Provider', count: 107 },
   ],
 };
 
@@ -118,24 +119,6 @@ function CustomTooltip({ active, payload, label }: any) {
     </div>
   );
 }
-
-// ─── Live Feed ────────────────────────────────────────────────────────────────
-
-const LIVE_EVENTS = [
-  { id: 1, severity: 'critical', text: 'Ransomware indicators detected on DESKTOP-7892', time: '2s ago', source: 'CrowdStrike' },
-  { id: 2, severity: 'high', text: 'Suspicious login from unexpected geo: RU → admin account', time: '14s ago', source: 'Okta' },
-  { id: 3, severity: 'high', text: 'Port scan detected from 192.168.1.45', time: '31s ago', source: 'Splunk' },
-  { id: 4, severity: 'medium', text: 'Failed MFA attempts: 8 in 2 minutes', time: '1m ago', source: 'Okta' },
-  { id: 5, severity: 'medium', text: 'S3 bucket policy changed to public', time: '2m ago', source: 'AWS' },
-  { id: 6, severity: 'low', text: 'New admin user created outside business hours', time: '3m ago', source: 'Sentinel' },
-];
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'text-red-400 bg-red-500/10',
-  high: 'text-orange-400 bg-orange-500/10',
-  medium: 'text-yellow-400 bg-yellow-500/10',
-  low: 'text-blue-400 bg-blue-500/10',
-};
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
@@ -303,32 +286,8 @@ export function DashboardView() {
           </div>
         </div>
 
-        {/* Live Feed */}
-        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300">Live Feed</h3>
-            <span className="flex items-center gap-1 text-xs text-green-400">
-              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-              Live
-            </span>
-          </div>
-          <div className="space-y-2.5 overflow-y-auto max-h-52">
-            {LIVE_EVENTS.map((event) => (
-              <div key={event.id} className="flex items-start gap-2">
-                <span className={clsx(
-                  'text-xs px-1.5 py-0.5 rounded font-medium shrink-0 mt-0.5',
-                  SEVERITY_COLORS[event.severity]
-                )}>
-                  {event.severity.toUpperCase().slice(0, 4)}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-300 leading-tight">{event.text}</p>
-                  <p className="text-xs text-gray-600 mt-0.5">{event.source} · {event.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Live Feed (realtime via WebSocket) */}
+        <LiveFeedPanel />
       </div>
     </div>
   );

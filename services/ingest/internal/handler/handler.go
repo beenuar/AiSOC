@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cyble/aisoc/services/ingest/internal/config"
-	"github.com/cyble/aisoc/services/ingest/internal/normalizer"
-	"github.com/cyble/aisoc/services/ingest/internal/publisher"
+	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
+	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
 	"github.com/rs/zerolog/log"
 )
 

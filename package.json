@@ -20,7 +20,10 @@
     "infra:plan": "cd infra/terraform && terraform plan",
     "infra:apply": "cd infra/terraform && terraform apply",
     "docker:dev": "docker compose -f docker-compose.dev.yml up -d",
-    "docker:down": "docker compose -f docker-compose.dev.yml down"
+    "docker:down": "docker compose -f docker-compose.dev.yml down",
+    "seed:demo": "docker compose -f docker-compose.dev.yml exec api python -m app.scripts.seed_demo",
+    "demo:produce": "go run ./services/demo-producer",
+    "demo:produce:fast": "go run ./services/demo-producer --rate 8 --batch 10"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -12,9 +12,9 @@ keywords:
   - siem
   - soar
 
-home: https://github.com/cyble/aisoc
+home: https://github.com/beenuar/AiSOC
 sources:
-  - https://github.com/cyble/aisoc
+  - https://github.com/beenuar/AiSOC
 
 maintainers:
   - name: Cyble

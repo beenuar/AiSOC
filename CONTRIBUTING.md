@@ -10,7 +10,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 1. Fork the repository on GitHub
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/aisoc.git`
-3. Add the upstream remote: `git remote add upstream https://github.com/cyble/aisoc.git`
+3. Add the upstream remote: `git remote add upstream https://github.com/beenuar/AiSOC.git`
 4. Create a feature branch: `git checkout -b feature/my-feature`
 
 ## Development Setup

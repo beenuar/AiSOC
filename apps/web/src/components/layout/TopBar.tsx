@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 const routeLabels: Record<string, { title: string; description: string }> = {
@@ -13,13 +13,24 @@ const routeLabels: Record<string, { title: string; description: string }> = {
   '/settings': { title: 'Settings', description: 'Platform configuration' },
 };
 
-interface TopBarProps {
-  onSearch?: (query: string) => void;
-}
-
-export function TopBar({ onSearch }: TopBarProps) {
+export function TopBar() {
   const pathname = usePathname();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [now, setNow] = useState<Date | null>(null);
+  const [shortcut, setShortcut] = useState<'⌘K' | 'Ctrl K'>('⌘K');
+
+  // Update the clock every second on the client only (avoids hydration drift).
+  useEffect(() => {
+    setNow(new Date());
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Show the right OS-specific shortcut hint without breaking SSR.
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+    setShortcut(isMac ? '⌘K' : 'Ctrl K');
+  }, []);
 
   const routeKey = Object.keys(routeLabels).find(
     (key) => key !== '/' && pathname.startsWith(key)
@@ -27,24 +38,34 @@ export function TopBar({ onSearch }: TopBarProps) {
 
   const routeInfo = routeLabels[routeKey] || routeLabels['/alerts'];
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch?.(searchQuery);
+  const openPalette = () => {
+    // Synthesize the same keystroke the palette listens for. Keeps a single
+    // source of truth — the palette itself owns the open/close logic.
+    const event = new KeyboardEvent('keydown', {
+      key: 'k',
+      metaKey: true,
+      ctrlKey: true,
+      bubbles: true,
+    });
+    window.dispatchEvent(event);
   };
 
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const dateStr = now.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const timeStr = now
+    ? now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
+    : '—';
+  const dateStr = now
+    ? now.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
 
   return (
     <header className="fixed top-0 left-60 right-0 h-16 flex items-center justify-between px-6 bg-gray-900/90 backdrop-blur-sm border-b border-gray-800/60 z-20">
@@ -54,28 +75,35 @@ export function TopBar({ onSearch }: TopBarProps) {
         <p className="text-xs text-gray-500">{routeInfo.description}</p>
       </div>
 
-      {/* Center: NL Search */}
-      <form onSubmit={handleSearch} className="flex-1 max-w-lg mx-8">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-            <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search alerts, IPs, hashes, domains... (AI-powered)"
-            className="w-full pl-10 pr-4 py-2 bg-gray-800/60 border border-gray-700/60 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:bg-gray-800 transition-all"
-          />
-          {searchQuery && (
-            <div className="absolute inset-y-0 right-3 flex items-center">
-              <span className="text-xs text-gray-500 bg-gray-700/60 px-1.5 py-0.5 rounded font-mono">⏎</span>
-            </div>
-          )}
-        </div>
-      </form>
+      {/* Center: command palette launcher */}
+      <div className="flex-1 max-w-lg mx-8">
+        <button
+          type="button"
+          onClick={openPalette}
+          aria-label="Open command palette"
+          className="group relative flex w-full items-center gap-3 rounded-lg border border-gray-700/60 bg-gray-800/60 px-3 py-2 text-left text-sm text-gray-400 transition-all hover:border-blue-500/40 hover:bg-gray-800 focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        >
+          <svg
+            className="h-4 w-4 text-gray-500 transition-colors group-hover:text-gray-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <span className="flex-1 truncate text-gray-400 group-hover:text-gray-300">
+            Search alerts, cases, rules, or run a command…
+          </span>
+          <kbd className="pointer-events-none rounded bg-gray-700/60 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-gray-300">
+            {shortcut}
+          </kbd>
+        </button>
+      </div>
 
       {/* Right: clock, notifications, user */}
       <div className="flex items-center gap-4">

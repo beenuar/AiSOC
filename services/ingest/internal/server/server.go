@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cyble/aisoc/services/ingest/internal/config"
-	"github.com/cyble/aisoc/services/ingest/internal/handler"
+	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	"github.com/beenuar/aisoc/services/ingest/internal/handler"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"

@@ -1,271 +1,298 @@
-# AiSOC — AI-Powered Security Operations Center
-
 <div align="center">
 
-![AiSOC Logo](https://img.shields.io/badge/AiSOC-AI%20Security%20Operations-blue?style=for-the-badge)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Built by Cyble](https://img.shields.io/badge/Built%20by-Cyble-orange?style=for-the-badge)](https://cyble.com)
+<img src="apps/web/public/logo-mark.svg" alt="AiSOC" width="120" />
 
-**Enterprise-grade, open-source AI Security Operations Center**
+# AiSOC
 
-[Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
+### Open-source AI Security Operations Center by [Cyble](https://cyble.com)
+
+Real-time detection, autonomous triage, and MITRE ATT&CK-aware investigation in one MIT-licensed platform.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Built by Cyble](https://img.shields.io/badge/Built%20by-Cyble-2563eb?style=flat-square)](https://cyble.com)
+[![Made with ❤️](https://img.shields.io/badge/Made%20with-%E2%9D%A4%EF%B8%8F-ef4444?style=flat-square)](#)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
+
+[**Live demo**](#-quick-start) · [**Architecture**](#-architecture) · [**Console tour**](#-console-tour) · [**Roadmap**](ROADMAP.md) · [**Contributing**](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## Overview
+## ✨ Why AiSOC
 
-AiSOC is a production-ready, enterprise-grade AI Security Operations Center built for modern threat detection, investigation, and response. It combines real-time streaming data ingestion, AI-powered threat analysis using autonomous agents, and hyperautomation workflows to give security teams unprecedented visibility and response capabilities.
+Modern SOCs drown in alerts and pivot across a dozen consoles. AiSOC is a **single, opinionated stack** that:
 
-Built and open-sourced by **Cyble** under the MIT License.
+- **Ingests** events from any connector (CrowdStrike, Splunk, AWS, Okta, Sentinel) into a Kafka spine.
+- **Correlates** them in real time with deduplication, ML scoring, and Sigma/YARA detection.
+- **Enriches** every signal with threat-intel from TAXII 2.1, MISP, OTX, and CISA KEV.
+- **Reasons** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.
+- **Responds** with blast-radius-aware SOAR actions, every step explainable.
 
-## Features
-
-### 🤖 AI-Powered Investigation
-- **Autonomous AI Agents** — LangGraph-based multi-agent system for investigation, threat hunting, and remediation
-- **Natural Language Search** — Query your security data in plain English
-- **Explainable AI** — Every AI decision comes with full reasoning chains
-
-### ⚡ Real-Time Detection
-- **Stream Processing** — Kafka-based event streaming with sub-second latency
-- **Alert Fusion** — Intelligent deduplication and correlation reduces alert noise by 80%+
-- **MITRE ATT&CK Mapping** — Automatic technique and tactic classification
-
-### 🔗 Deep Integrations (Phase 1)
-- CrowdStrike Falcon
-- Splunk Enterprise / Cloud
-- AWS Security Hub
-- Okta Identity
-- Microsoft Sentinel
-
-### 🧠 Knowledge Graph (Neo4j)
-- **Entity Graph** — Hosts, Users, Alerts, IOCs, Techniques, Cases connected as a property graph
-- **Attack Path Reconstruction** — `/v1/graph/attack-path/{case_id}` returns the full kill-chain
-- **Blast Radius Analysis** — Multi-hop traversal feeds the action executor's gating logic
-- **MITRE Coverage** — Automatic mapping of telemetry to ATT&CK technique nodes
-
-### 🎯 Detection Engineering
-- **Sigma Rule Execution** — `pySigma` runner with OpenSearch/ClickHouse backends
-- **YARA Scanning** — `yara-python` runner for file/memory artifact analysis
-- **Multi-language Support** — KQL, EQL, Lucene, Regex query types
-- **On-demand Hunts** — `POST /v1/rules/hunt` for ad-hoc threat hunting
-
-### 🌐 Threat Intelligence Platform
-- **TAXII 2.1 Feed Poller** — Ingests STIX 2.1 bundles from MITRE, Mandiant, ISAC feeds
-- **MISP Integration** — Pulls events and IOCs from any MISP instance
-- **AlienVault OTX** — Subscribed pulse consumption
-- **CISA KEV Catalog** — Auto-correlates known-exploited CVEs against asset telemetry
-- **Bloom-filter Dedup** — Redis-backed; handles 10M+ IOCs with ~0.1% false-positive rate
-- **Triple Storage** — OpenSearch (search), Qdrant (semantic RAG), Neo4j (actor↔TTP graph)
-
-### 🤖 ML-Augmented Fusion
-- **Isolation Forest** — Unsupervised anomaly score per alert (auto-trained at 50+ samples)
-- **LightGBM Ranker** — Priority score trained on analyst feedback (LambdaRank objective)
-- **Feedback Loop** — `POST /ml/feedback` continuously improves the ranker
-- **Heuristic Fallback** — Always-on scoring even before models are trained
-
-### 🛰️ Vulnerability Correlation
-- **Shodan Enrichment** — Open ports, banners, ASN, CVEs per public IP (Go enrichment service)
-- **CISA KEV Cross-correlation** — Emits `VULNERABILITY_MATCH` Kafka events for KEV-listed CVEs
-- **Asset Context** — Links exposure data to Host nodes in the knowledge graph
-
-### 📊 SOC Console
-- **Real-time Dashboard** — Live metrics, trend charts, and threat feeds
-- **Alert Management** — Triage, investigate, and respond from a single pane
-- **Case Management** — Full incident lifecycle management
-- **Threat Intelligence** — IOC lookup, threat feed correlation
-- **Threat Hunting** — KQL, Sigma, and YARA query execution
-- **Attack Graph View** — Visual kill-chain reconstruction from Neo4j
-
-### 🛡️ Enterprise Ready
-- **Multi-tenant** — Complete tenant isolation with RBAC
-- **Audit Logging** — Full compliance trail for SOC2, ISO 27001
-- **Zero-trust** — JWT + API key auth with per-tenant scoping
-- **High Availability** — Kubernetes-native with horizontal autoscaling
+Everything ships under **MIT** — fork it, self-host it, audit it, extend it.
 
 ---
 
-## Architecture
+## 🚀 Highlights
 
+<table>
+<tr>
+<td valign="top" width="50%">
+
+### ⚡ Real-time fusion
+- Kafka spine with sub-second ingestion
+- Bloom-filter dedup on 10M+ IOCs
+- LightGBM + Isolation Forest scoring
+- Live WebSocket feed into the console
+
+### 🧠 AI Copilot
+- LangGraph agents with persistent memory
+- Qdrant RAG over MITRE ATT&CK + tenant data
+- Natural-language threat hunts
+- Every decision traceable end-to-end
+
+### 🕸️ Knowledge graph
+- Neo4j entity graph (hosts, users, alerts, IOCs)
+- Attack-path reconstruction per case
+- Blast-radius gating on automated actions
+
+</td>
+<td valign="top" width="50%">
+
+### 🎯 Detection engineering
+- Sigma over OpenSearch + ClickHouse
+- YARA file/memory scanning
+- KQL, EQL, Lucene, regex query types
+- On-demand hunts via REST
+
+### 🌐 Threat intelligence
+- TAXII 2.1, MISP, OTX, CISA KEV pollers
+- Triple storage: search · vector · graph
+- Auto-correlated `VULNERABILITY_MATCH` events
+- Shodan + CVE enrichment in Go
+
+### 🛡️ Built for production
+- Multi-tenant with Postgres RLS
+- JWT + API keys + RBAC
+- Audit-grade event log
+- Helm chart + Terraform modules
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    subgraph Sources["Sources"]
+        EDR["EDR / XDR"]
+        SIEM["SIEM"]
+        Cloud["Cloud APIs"]
+        IDP["Identity"]
+        Net["Network"]
+    end
+
+    subgraph Ingest["Ingest & Normalize"]
+        Connectors["Connectors\n(Python)"]
+        IngestSvc["Ingest worker\n(Go · OCSF)"]
+        Enrich["Enrichment\n(Go · IOC + Shodan)"]
+    end
+
+    subgraph Spine["Event Spine"]
+        Kafka[("Apache Kafka")]
+    end
+
+    subgraph Detect["Detect & Reason"]
+        Fusion["Fusion\n(Python · ML)"]
+        TI["Threat Intel\n(TAXII / MISP / OTX)"]
+        Rules["Rule engine\n(Sigma · YARA · KQL)"]
+        Agents["AI Agents\n(LangGraph)"]
+    end
+
+    subgraph Storage["Storage Tier"]
+        PG[("PostgreSQL\nconfig · cases")]
+        CH[("ClickHouse\nevents · metrics")]
+        OS[("OpenSearch\nIOCs · search")]
+        QD[("Qdrant\nvector RAG")]
+        N4[("Neo4j\nattack graph")]
+        RD[("Redis\ncache · pub/sub")]
+    end
+
+    subgraph Surface["Surface"]
+        API["Core API\n(FastAPI)"]
+        RT["Realtime\n(Node · WS)"]
+        Web["Web Console\n(Next.js 14)"]
+        Actions["Actions / SOAR\n(Python)"]
+    end
+
+    Sources --> Connectors --> IngestSvc --> Kafka
+    IngestSvc --> Enrich --> Kafka
+    Kafka --> Fusion --> Kafka
+    Kafka --> Rules --> Kafka
+    TI --> Storage
+    Fusion --> Storage
+    Agents --> QD
+    Agents --> N4
+    API --> Storage
+    RT --> Kafka
+    Web --> API
+    Web --> RT
+    Actions --> Kafka
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          AiSOC Platform                             │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                     Web Frontend (Next.js 14)                │  │
-│  │    Dashboard · Alerts · Cases · Threat Intel · Hunt · AI     │  │
-│  └──────────────────────────┬───────────────────────────────────┘  │
-│                             │                                        │
-│  ┌──────────────┐  ┌───────▼────────┐  ┌──────────────────────┐  │
-│  │  Real-time   │  │   Core API     │  │   AI Agent           │  │
-│  │  Service     │  │   (FastAPI)    │  │   Orchestrator       │  │
-│  │  (Node.js)   │  │   REST/GraphQL │  │   (LangGraph)        │  │
-│  │  WebSocket   │  └───────┬────────┘  └──────────────────────┘  │
-│  └──────────────┘          │                                        │
-│                    ┌───────▼────────────────┐                       │
-│                    │      Apache Kafka       │                       │
-│                    │   (Event Streaming)     │                       │
-│                    └───────┬────────────────┘                       │
-│                            │                                         │
-│  ┌───────────┬─────────────┼──────────────────┬──────────────┐     │
-│  │           │             │                  │              │     │
-│  ▼           ▼             ▼                  ▼              ▼     │
-│  Ingest    Enrich      Alert Fusion        Actions       Connectors │
-│  Worker   (Go/Redis)   (Python)           (Python)      (Python)   │
-│  (Go)                                                               │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                    Data Layer                                │  │
-│  │  PostgreSQL · ClickHouse · OpenSearch · Qdrant · Redis       │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-```
 
-### Service Map
+### 🔌 Service map
 
-| Service | Language | Port | Description |
-|---------|----------|------|-------------|
-| `api` | Python/FastAPI | 8000 | Core REST API — alerts, cases, tenants, RBAC, graph, rules |
-| `ingest` | Go | 9090 | High-throughput event ingestion, OCSF normalization, Shodan + CVE correlation |
-| `enrichment` | Go | 8080 | IOC enrichment via VirusTotal, AbuseIPDB, GreyNoise, Shodan |
-| `fusion` | Python | 8003 | Alert dedup, correlation, ML anomaly + priority scoring |
-| `agents` | Python/LangGraph | 8001 | AI investigation agents with full MITRE ATT&CK + Qdrant RAG |
-| `actions` | Python | 8002 | SOAR action execution with blast-radius gating |
-| `threatintel` | Python | 8005 | TAXII 2.1 / MISP / OTX / CISA KEV feed poller and IOC store |
-| `realtime` | Node.js | 4000 | WebSocket/SSE real-time event delivery |
-| `web` | Next.js 14 | 3000 | SOC console frontend |
+| Service | Lang | Port | Role |
+|---|---|---|---|
+| `web` | Next.js 14 + React | 3000 | SOC console + marketing landing |
+| `api` | Python · FastAPI | 8000 | Alerts, cases, RBAC, graph, rules |
+| `realtime` | Node.js · `ws` | 8086 | Per-channel WebSocket fan-out |
+| `agents` | Python · LangGraph | 8001 | Multi-agent reasoning + Qdrant RAG |
+| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest) |
+| `actions` | Python | 8002 | SOAR with blast-radius gating |
+| `threatintel` | Python | 8005 | TAXII / MISP / OTX / KEV polling |
+| `ingest` | Go | 8081 | OCSF normalization + Shodan/CVE |
+| `enrichment` | Go | 8080 | IOC enrichment (VT, AbuseIPDB, GreyNoise) |
 
-### Data Layer
+### 🗄️ Storage tier
 
 | Store | Purpose |
-|-------|---------|
-| **PostgreSQL** | App config, tenants, users, cases, detection rules, RLS-isolated |
-| **ClickHouse** | High-cardinality event analytics, alert metrics, IOC enrichment cache |
-| **OpenSearch** | Full-text IOC, actor, and threat report search; Sigma backend |
-| **Qdrant** | Vector RAG for AI agents, semantic IOC and ATT&CK technique search |
-| **Neo4j** | Knowledge graph: entity relationships, attack paths, blast radius |
-| **Redis** | Cache, pub/sub, IOC bloom filter, enrichment TTL cache |
-| **Kafka** | Event streaming bus (raw events, fused alerts, vulnerability matches) |
+|---|---|
+| **PostgreSQL** | Tenants, users, cases, detection rules · Row-level security |
+| **ClickHouse** | High-cardinality event analytics + alert metrics |
+| **OpenSearch** | Full-text IOC + actor + report search · Sigma backend |
+| **Qdrant** | Vector RAG for agents, semantic ATT&CK lookup |
+| **Neo4j** | Knowledge graph: entities, attack paths, blast radius |
+| **Redis** | Cache, pub/sub, IOC bloom filter, enrichment TTL |
+| **Kafka** | Event streaming spine (raw, fused, vulnerability, action) |
 
 ---
 
-## Quick Start
+## 🖥️ Console tour
+
+The console fuses the analyst's day-zero workflow into one cohesive surface:
+
+- **Dashboard** — live KPI tiles + trend chart + WebSocket-driven event ticker
+- **Alerts & Cases** — triage queues, status workflow, evidence timeline
+- **Attack Graph** — Cytoscape + fcose layout over the Neo4j subgraph for a case
+- **MITRE Heatmap** — coverage tiles with per-tactic technique density
+- **Threat Hunting** — Sigma / KQL / YARA editor with on-demand hunts
+- **Detection Rules** — Monaco-powered rule builder with Sigma autocompletion
+- **Threat Intel** — IOC search, feed status, and STIX/MISP source health
+- **AI Copilot** — slide-over dock invoked with `⌘J` for any page
+- **Command palette** — global `⌘K` for navigation, quick actions, and Copilot
+
+> **Marketing landing** lives at `/` and the console at `/dashboard`. Both share the same brand tokens.
+
+---
+
+## 🚀 Quick start
 
 ### Prerequisites
 
 - Docker 24+ and Docker Compose v2
 - Node.js 20+ and pnpm 8+
-- Go 1.21+ (for local development)
-- Python 3.11+ (for local development)
+- Go 1.21+ and Python 3.11+ (only for local service hacking)
 
-### 1. Clone and Configure
+### 1 · Clone
 
 ```bash
 git clone https://github.com/beenuar/AiSOC.git
-cd AiSOC
-cp .env.example .env  # if .env.example is missing, see Configuration below
+cd aisoc
+cp .env.example .env  # if missing, see Configuration below
 ```
 
-Edit `.env` with your configuration:
+### 2 · Configure
 
 ```env
-# Required for AI agents (use Anthropic OR OpenAI)
+# AI providers (one is required)
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
-# Optional: threat intelligence enrichment
+# Optional enrichment
 VIRUSTOTAL_API_KEY=...
 ABUSEIPDB_API_KEY=...
 GREYNOISE_API_KEY=...
 SHODAN_API_KEY=...
 
-# Optional: TAXII 2.1 feeds (comma-separated URL,collection,user,pass tuples)
+# Optional TAXII feeds (URL,collection,user,pass tuples, comma-joined)
 TAXII_FEEDS=https://cti-taxii.mitre.org/taxii/,enterprise-attack,,
 ```
 
-### 2. Start the Stack
+### 3 · Boot
 
 ```bash
-# Start core infrastructure + all services
 docker compose up -d
-
-# Wait for services to be ready (~60s for first start)
 docker compose ps
-
-# View logs from a specific service
-docker compose logs -f api
-docker compose logs -f fusion
-docker compose logs -f agents
 ```
 
-### 3. Access the Console
+First start takes ~60s while datastores warm up.
 
-| Surface | URL | Notes |
-|---------|-----|-------|
-| Web Console | http://localhost:3000 | Next.js frontend |
-| API Swagger | http://localhost:8000/docs | Interactive API explorer |
-| Agents API | http://localhost:8001/docs | LangGraph agent runner |
-| Actions API | http://localhost:8002/docs | SOAR playbooks |
-| Fusion API | http://localhost:8003/docs | ML status + feedback endpoints |
-| Threat Intel | http://localhost:8005/docs | IOC search + feed status |
-| Enrichment | http://localhost:8080/health | Shodan + KEV CVE correlation |
-| Ingest | http://localhost:8081/health | Go ingest worker |
-| Realtime WS | ws://localhost:8086/ws | Live alert stream |
-| Neo4j Browser | http://localhost:7474 | `neo4j` / `neo4j_dev_secret` |
-| OpenSearch | http://localhost:9200 | Full-text search |
-| Qdrant | http://localhost:6333 | Vector DB (RAG) |
-| ClickHouse | http://localhost:8123 | Analytics warehouse |
-| Grafana | http://localhost:3001 | `admin` / `admin` (monitoring profile) |
-| Jaeger | http://localhost:16686 | Distributed traces (monitoring profile) |
-
-Default API credentials: `admin@aisoc.local` / `changeme`
-
-### 4. Run with Connectors
+### 4 · Seed demo data
 
 ```bash
-# Start with connectors profile
-docker compose --profile connectors up -d
+pnpm seed:demo            # generates cases, alerts, IOCs, attack paths
+```
 
-# Start with monitoring
-docker compose --profile monitoring up -d
+This produces realistic, scrubbed traffic so the console is alive on first load.
+
+### 5 · Open
+
+| Surface | URL | Notes |
+|---|---|---|
+| Marketing | http://localhost:3000 | Public landing page |
+| Console | http://localhost:3000/dashboard | Default user: `admin@aisoc.local` / `changeme` |
+| API | http://localhost:8000/docs | Swagger UI |
+| Agents | http://localhost:8001/docs | LangGraph runner |
+| Realtime WS | ws://localhost:8086/ws/alerts | Live alert channel |
+| Neo4j | http://localhost:7474 | `neo4j` / `neo4j_dev_secret` |
+| Grafana | http://localhost:3001 | `admin` / `admin` (`monitoring` profile) |
+| Jaeger | http://localhost:16686 | Distributed traces (`monitoring` profile) |
+
+### Optional profiles
+
+```bash
+docker compose --profile connectors up -d   # CrowdStrike, Splunk, AWS, Okta, Sentinel
+docker compose --profile monitoring up -d   # Prometheus, Grafana, Jaeger
 ```
 
 ---
 
-## Development
-
-### Monorepo Structure
+## 🧩 Monorepo layout
 
 ```
 aisoc/
 ├── apps/
-│   └── web/              # Next.js 14 SOC console
+│   └── web/              # Next.js 14 console + marketing landing
 ├── services/
-│   ├── api/              # Python FastAPI — core REST API + Neo4j graph + rule engine
-│   ├── ingest/           # Go — event ingestion, OCSF, Shodan + CVE correlation
-│   ├── enrichment/       # Go — IOC enrichment
-│   ├── fusion/           # Python — alert dedup, correlation, ML scoring
-│   ├── agents/           # Python LangGraph — AI agents w/ full ATT&CK + Qdrant RAG
-│   ├── actions/          # Python — SOAR action execution
-│   ├── threatintel/      # Python — TAXII/MISP/OTX/KEV feed poller
-│   └── realtime/         # Node.js — WebSocket/SSE
-├── integrations/         # Connector implementations (CrowdStrike, Splunk, AWS, Okta, Sentinel, ...)
+│   ├── api/              # Core REST API + Neo4j graph + rule engine
+│   ├── ingest/           # Go · OCSF normalization · Shodan + CVE
+│   ├── enrichment/       # Go · IOC enrichment
+│   ├── fusion/           # Python · dedup + ML scoring
+│   ├── agents/           # Python · LangGraph + Qdrant RAG
+│   ├── actions/          # Python · SOAR + blast-radius gating
+│   ├── threatintel/      # Python · TAXII / MISP / OTX / KEV
+│   └── realtime/         # Node.js · per-channel WebSocket fan-out
+├── integrations/         # Connector implementations
 ├── packages/
-│   ├── types/            # Shared TypeScript types
-│   ├── ui/               # Shared React components
-│   └── ocsf/             # OCSF schema normalization
+│   ├── types/            # Shared TS types
+│   ├── ui/               # Shared React primitives
+│   └── ocsf/             # OCSF normalization
 ├── infra/
-│   ├── terraform/        # AWS infrastructure (VPC, EKS, RDS)
+│   ├── terraform/        # AWS (VPC, EKS, RDS)
 │   └── helm/             # Kubernetes Helm chart
-├── docs/
-│   ├── architecture/     # System design, data flows
-│   ├── api/              # API reference
-│   └── runbooks/         # Operations guides
+├── docs/                 # System design, API ref, runbooks
 └── docker-compose.yml
 ```
 
-### Frontend Development
+---
+
+## 👩‍💻 Development
+
+### Frontend
 
 ```bash
 cd apps/web
@@ -273,56 +300,35 @@ pnpm install
 pnpm dev
 ```
 
-### Backend Development
+The web app proxies the API and realtime services. Run them separately or boot the docker compose stack.
+
+### Backend (selective)
 
 ```bash
-# Start infrastructure only
 docker compose up -d postgres redis kafka clickhouse opensearch qdrant neo4j
 
-# Run core API
-cd services/api
-poetry install
-poetry run uvicorn app.main:app --reload --port 8000
-
-# Run fusion worker (with ML scoring)
-cd services/fusion
-poetry install
-poetry run uvicorn app.main:app --reload --port 8003
-
-# Run ingest worker
-cd services/ingest
-go run main.go
-
-# Run threat intel feed poller
-cd services/threatintel
-poetry install
-poetry run uvicorn app.main:app --reload --port 8005
+cd services/api && poetry install && poetry run uvicorn app.main:app --reload --port 8000
+cd services/fusion && poetry install && poetry run uvicorn app.main:app --reload --port 8003
+cd services/ingest && go run main.go
+cd services/threatintel && poetry install && poetry run uvicorn app.main:app --reload --port 8005
 ```
 
-### Running Tests
+### Tests
 
 ```bash
-# Frontend
 cd apps/web && pnpm test
-
-# Core API
 cd services/api && poetry run pytest
-
-# Go services
 cd services/ingest && go test ./...
 ```
 
 ---
 
-## Deployment
+## ☸️ Deployment
 
-### Kubernetes (Recommended)
+### Kubernetes (recommended)
 
 ```bash
-# Add Bitnami repo for dependencies
 helm repo add bitnami https://charts.bitnami.com/bitnami
-
-# Install AiSOC
 helm install aisoc ./infra/helm/aisoc \
   --namespace aisoc \
   --create-namespace \
@@ -330,7 +336,7 @@ helm install aisoc ./infra/helm/aisoc \
   --set global.environment=production
 ```
 
-### Terraform (AWS)
+### Terraform on AWS
 
 ```bash
 cd infra/terraform
@@ -341,63 +347,46 @@ terraform apply
 
 ---
 
-## Configuration
+## 🔭 Roadmap
 
-### Environment Variables
+We publish the public roadmap in [ROADMAP.md](ROADMAP.md). Highlights for the next quarter:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
-| `KAFKA_BOOTSTRAP_SERVERS` | Yes | Kafka broker addresses |
-| `OPENAI_API_KEY` | Yes | OpenAI API key for AI agents |
-| `SECRET_KEY` | Yes | JWT signing secret |
-| `VIRUSTOTAL_API_KEY` | No | VirusTotal enrichment |
-| `ABUSEIPDB_API_KEY` | No | AbuseIPDB enrichment |
-| `GREYNOISE_API_KEY` | No | GreyNoise enrichment |
+- v0.4 — multi-region replication, OPA-based action policies
+- v0.5 — agent-authored detections with human-in-the-loop review
+- v0.6 — federated threat intel sharing across self-hosted instances
 
 ---
 
-## API Documentation
+## 🤝 Contributing
 
-Once running, API docs are available at:
-- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- OpenAPI JSON: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+We welcome PRs of every size. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening a PR.
 
-For detailed API references, system design, and runbooks see:
-- [API Reference](docs/api/API_REFERENCE.md)
-- [System Design](docs/architecture/SYSTEM_DESIGN.md)
-- [Local Development Runbook](docs/runbooks/LOCAL_DEVELOPMENT.md)
-
----
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Good First Issues
+Good first issues:
 
 - Adding new connector integrations
-- Improving MITRE ATT&CK coverage
-- Frontend UI enhancements
-- Documentation improvements
+- Expanding MITRE ATT&CK coverage
+- Frontend UI polish
+- Documentation and tutorials
 - Test coverage
 
 ---
 
-## Security
+## 🔐 Security
 
-Please report security vulnerabilities to `security@cyble.com`. Do not open public GitHub issues for security vulnerabilities.
+Found a security issue? Please **do not** open a public issue. Email `security@cyble.com` (PGP key in [SECURITY.md](SECURITY.md)). We follow coordinated disclosure.
 
 ---
 
-## License
+## 📜 License
 
-Copyright © 2024 Cyble. Released under the [MIT License](LICENSE).
+[MIT](LICENSE) — © 2024–present [Cyble Inc.](https://cyble.com)
 
 ---
 
 <div align="center">
-Built with ❤️ by the <a href="https://cyble.com">Cyble</a> team
+
+**Built with ❤️ by [Cyble](https://cyble.com) and the open-source community.**
+
+[Report a bug](https://github.com/beenuar/AiSOC/issues/new?template=bug_report.md) · [Request a feature](https://github.com/beenuar/AiSOC/issues/new?template=feature_request.md) · [Become a contributor](CONTRIBUTING.md)
+
 </div>

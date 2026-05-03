@@ -1,4 +1,4 @@
-module github.com/cyble/aisoc/enrichment
+module github.com/beenuar/aisoc/enrichment
 
 go 1.21
 
