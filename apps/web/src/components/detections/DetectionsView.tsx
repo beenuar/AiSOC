@@ -20,6 +20,43 @@ import { EmptyState } from '@/components/ui/EmptyState';
 const NOW = Date.now();
 const ago = (mins: number) => new Date(NOW - mins * 60 * 1000).toISOString();
 
+const SAMPLE_SIGMA = `title: Suspicious PowerShell Encoded Command
+id: aisoc-rule-001
+status: experimental
+description: Flags powershell.exe spawning with -EncodedCommand
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: '\\powershell.exe'
+    CommandLine|contains: '-EncodedCommand'
+  condition: selection
+level: high
+tags:
+  - attack.execution
+  - attack.t1059.001
+`;
+
+const SAMPLE_KQL = `// Impossible travel
+SigninLogs
+| where ResultType == 0
+| extend lat = todouble(LocationDetails.geoCoordinates.latitude),
+         lon = todouble(LocationDetails.geoCoordinates.longitude)
+| order by UserPrincipalName, TimeGenerated asc
+| serialize
+| extend prevLat = prev(lat), prevLon = prev(lon), prevTime = prev(TimeGenerated)
+| where (datetime_diff('minute', TimeGenerated, prevTime)) between (1 .. 240)
+| extend km = geo_distance_2points(prevLon, prevLat, lon, lat) / 1000
+| where km / (datetime_diff('minute', TimeGenerated, prevTime) / 60.0) > 900
+| project TimeGenerated, UserPrincipalName, km, IPAddress
+`;
+
+const SAMPLE_EQL = `sequence by aws.account.id with maxspan=1h
+  [iam where event.action == "CreateAccessKey"]
+  [aws where event.module == "guardduty" and event.severity >= 7]
+`;
+
 const DEMO_RULES: DetectionRule[] = [
   {
     id: 'rule-001',
@@ -460,41 +497,3 @@ function Toggle({ enabled, onChange }: ToggleProps) {
   );
 }
 
-// ─── Sample bodies ────────────────────────────────────────────────────────────
-
-const SAMPLE_SIGMA = `title: Suspicious PowerShell Encoded Command
-id: aisoc-rule-001
-status: experimental
-description: Flags powershell.exe spawning with -EncodedCommand
-logsource:
-  product: windows
-  category: process_creation
-detection:
-  selection:
-    Image|endswith: '\\powershell.exe'
-    CommandLine|contains: '-EncodedCommand'
-  condition: selection
-level: high
-tags:
-  - attack.execution
-  - attack.t1059.001
-`;
-
-const SAMPLE_KQL = `// Impossible travel
-SigninLogs
-| where ResultType == 0
-| extend lat = todouble(LocationDetails.geoCoordinates.latitude),
-         lon = todouble(LocationDetails.geoCoordinates.longitude)
-| order by UserPrincipalName, TimeGenerated asc
-| serialize
-| extend prevLat = prev(lat), prevLon = prev(lon), prevTime = prev(TimeGenerated)
-| where (datetime_diff('minute', TimeGenerated, prevTime)) between (1 .. 240)
-| extend km = geo_distance_2points(prevLon, prevLat, lon, lat) / 1000
-| where km / (datetime_diff('minute', TimeGenerated, prevTime) / 60.0) > 900
-| project TimeGenerated, UserPrincipalName, km, IPAddress
-`;
-
-const SAMPLE_EQL = `sequence by aws.account.id with maxspan=1h
-  [iam where event.action == "CreateAccessKey"]
-  [aws where event.module == "guardduty" and event.severity >= 7]
-`;
