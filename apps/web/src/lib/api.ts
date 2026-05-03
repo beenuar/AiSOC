@@ -333,6 +333,47 @@ export const casesApi = {
       method: 'PATCH',
       body: JSON.stringify(task),
     }),
+
+  investigate: (caseId: string, alertSummary?: string) =>
+    request<{ run_id: string; case_id: string; status: string; message: string }>(
+      `/api/v1/cases/${caseId}/investigate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ alert_summary: alertSummary ?? '' }),
+      },
+    ),
+
+  getInvestigation: (caseId: string, runId: string) =>
+    request<{
+      run_id: string;
+      case_id: string;
+      status: string;
+      audit_log?: Array<{ kind: string; agent: string; summary: string; ts: string }>;
+      recon?: Record<string, unknown>;
+      forensic?: Record<string, unknown>;
+      responder?: Record<string, unknown>;
+      error?: string;
+    }>(`/api/v1/cases/${caseId}/investigations/${runId}`),
+
+  /** Trigger a browser download of the PDF report. */
+  downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
+    const resp = await fetch(`${API_BASE}/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`, {
+      headers: { 'X-Tenant-Id': TENANT_ID },
+    });
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => resp.statusText);
+      throw new Error(err);
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aisoc-report-${runId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ─── Metrics / Dashboard ─────────────────────────────────────────────────────

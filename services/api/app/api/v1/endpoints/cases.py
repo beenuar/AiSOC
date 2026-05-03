@@ -1,15 +1,19 @@
 """Case management endpoints."""
+import os
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.case import Case, CaseTask, CaseTimeline
+
+_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -276,3 +280,152 @@ async def get_timeline(
     )
     events = result.scalars().all()
     return [TimelineEventResponse.model_validate(e) for e in events]
+
+
+# ---------------------------------------------------------------------------
+# Pillar-1: AI Investigation
+# ---------------------------------------------------------------------------
+
+class InvestigateRequest(BaseModel):
+    alert_summary: str = ""
+    raw_alert: dict[str, Any] = {}
+
+
+class InvestigateResponse(BaseModel):
+    run_id: str
+    case_id: str
+    status: str
+    message: str
+
+
+@router.post("/{case_id}/investigate", response_model=InvestigateResponse, status_code=status.HTTP_202_ACCEPTED)
+async def investigate_case(
+    case_id: uuid.UUID,
+    body: InvestigateRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+    db: DBSession,
+) -> InvestigateResponse:
+    """
+    Trigger an autonomous AI investigation for this case.
+    Proxies to the agents service Pillar-1 orchestrator.
+    """
+    # Verify case ownership
+    result = await db.execute(
+        select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id)
+    )
+    case = result.scalar_one_or_none()
+    if case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+
+    alert_summary = body.alert_summary or case.title or ""
+    raw_alert = body.raw_alert or {"case_id": str(case_id), "title": case.title}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{_AGENTS_URL}/api/v1/cases/{case_id}/investigate",
+                json={
+                    "alert_summary": alert_summary,
+                    "raw_alert": raw_alert,
+                    "tenant_id": str(current_user.tenant_id),
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Agents service error: {exc.response.text}") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
+
+    # Record timeline entry
+    db.add(CaseTimeline(
+        case_id=case_id,
+        tenant_id=current_user.tenant_id,
+        event_type="ai_investigation_started",
+        content=f"AI investigation started (run_id={data.get('run_id')})",
+        user_id=current_user.user_id,
+        is_automated=True,
+        event_metadata={"run_id": data.get("run_id")},
+    ))
+    await db.commit()
+
+    return InvestigateResponse(**data)
+
+
+@router.get("/{case_id}/investigations/{run_id}")
+async def get_case_investigation(
+    case_id: uuid.UUID,
+    run_id: str,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> dict[str, Any]:
+    """Proxy: poll investigation run status from the agents service."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}")
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/{case_id}/investigations/{run_id}/report.md")
+async def get_case_report_md(
+    case_id: uuid.UUID,
+    run_id: str,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> Any:
+    """Proxy: download Markdown incident report from the agents service."""
+    from fastapi.responses import PlainTextResponse
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.md")
+            resp.raise_for_status()
+            return PlainTextResponse(content=resp.text)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/{case_id}/investigations/{run_id}/report.html")
+async def get_case_report_html(
+    case_id: uuid.UUID,
+    run_id: str,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> Any:
+    """Proxy: download HTML incident report from the agents service."""
+    from fastapi.responses import HTMLResponse
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.html")
+            resp.raise_for_status()
+            return HTMLResponse(content=resp.text)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/{case_id}/investigations/{run_id}/report.pdf")
+async def get_case_report_pdf(
+    case_id: uuid.UUID,
+    run_id: str,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> Any:
+    """Proxy: download PDF incident report (rendered by weasyprint in agents service)."""
+    from fastapi.responses import Response as FastAPIResponse
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.pdf")
+            resp.raise_for_status()
+            return FastAPIResponse(
+                content=resp.content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="aisoc-report-{run_id}.pdf"'},
+            )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

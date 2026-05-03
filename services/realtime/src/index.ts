@@ -161,6 +161,64 @@ async function startKafkaConsumer() {
   });
 }
 
+// --- Internal broadcast endpoint (called by other services) ---
+// POST /internal/agent-event
+// Body: { tenant_id?: string, run_id: string, kind: string, agent: string, summary: string, data?: unknown }
+// The realtime service re-broadcasts to all WebSocket clients on the `agents` channel.
+const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN || '';
+
+app.post('/internal/agent-event', (req, res) => {
+  // Lightweight auth: check shared secret if configured
+  if (INTERNAL_TOKEN) {
+    const auth = req.headers['x-internal-token'];
+    if (auth !== INTERNAL_TOKEN) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+  }
+
+  const { tenant_id, run_id, kind, agent, summary, data } = req.body as {
+    tenant_id?: string;
+    run_id: string;
+    kind: string;
+    agent: string;
+    summary: string;
+    data?: unknown;
+  };
+
+  if (!run_id || !kind || !agent) {
+    res.status(400).json({ error: 'run_id, kind, and agent are required' });
+    return;
+  }
+
+  const tenantId = tenant_id || 'default';
+  broadcastToTenant(tenantId, {
+    type: 'agent.event',
+    run_id,
+    kind,
+    agent,
+    summary,
+    data: data ?? null,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Also publish to Redis for SSE subscribers
+  const redisPub = new Redis(REDIS_URL);
+  const payload = JSON.stringify({
+    type: 'agent.event',
+    run_id,
+    kind,
+    agent,
+    summary,
+    timestamp: new Date().toISOString(),
+  });
+  redisPub.publish(`aisoc:events:${tenantId}`, payload)
+    .then(() => redisPub.disconnect())
+    .catch((err: unknown) => log.warn({ err }, 'Redis publish failed'));
+
+  res.status(202).json({ broadcast: true, tenantId });
+});
+
 // --- Health endpoint ---
 // Expose both `/health` (canonical) and `/healthz` (k8s + frontend default) so
 // callers don't have to guess.

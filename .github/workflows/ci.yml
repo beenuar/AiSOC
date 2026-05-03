@@ -88,10 +88,15 @@ jobs:
         run: |
           cd services/api
           pip install -r requirements.txt pytest pytest-asyncio httpx || true
-      - name: Run tests
+      - name: Run api tests
         run: |
           cd services/api
           pytest tests/ -v --tb=short || true
+      - name: Run agents unit tests (MITRE accuracy)
+        run: |
+          pip install pytest pytest-asyncio
+          cd services/agents
+          python3 -m pytest tests/test_mitre_accuracy.py -v --tb=short
 
   # ──────────────────────────────────────────────
   # Go services (enrichment, ingest, demo-producer)
@@ -120,6 +125,36 @@ jobs:
         run: |
           cd services/${{ matrix.service }}
           go test ./... -count=1 || true
+
+  # ──────────────────────────────────────────────
+  # Pillar-1 Eval: MITRE ATT&CK tactic accuracy
+  # Asserts >=80% accuracy across 20 synthetic incidents (offline, no LLM)
+  # ──────────────────────────────────────────────
+  p1-eval-mitre:
+    name: P1 Eval — MITRE Tactic Accuracy (≥80%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run MITRE accuracy evaluation
+        run: python3 scripts/eval_mitre_accuracy.py --json > eval_report.json
+      - name: Assert ≥80% accuracy
+        run: |
+          ACCURACY=$(python3 -c "import json,sys; d=json.load(open('eval_report.json')); print(d['accuracy'])")
+          python3 -c "
+          acc = float('$ACCURACY')
+          print(f'MITRE accuracy: {acc*100:.1f}%')
+          assert acc >= 0.80, f'FAIL: {acc*100:.1f}% < 80% threshold'
+          print('PASS')
+          "
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mitre-accuracy-report
+          path: eval_report.json
 
   # ──────────────────────────────────────────────
   # Docker Compose smoke test

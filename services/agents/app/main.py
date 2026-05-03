@@ -6,6 +6,7 @@ import structlog
 from fastapi import FastAPI
 
 from app.api.router import router
+from app.api.investigate import router as investigate_router
 from app.tools.mitre_full import load_attck_corpus, embed_techniques_into_qdrant
 
 logger = structlog.get_logger()
@@ -43,6 +44,7 @@ app = FastAPI(
 )
 
 app.include_router(router, prefix="/api/v1")
+app.include_router(investigate_router)  # prefix already set in investigate.py
 
 
 @app.get("/health")

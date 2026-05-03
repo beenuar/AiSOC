@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const REALTIME_HOST = process.env.REALTIME_URL || 'http://localhost:8086';
+
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@aisoc/ui', '@aisoc/types'],
@@ -23,6 +25,20 @@ const nextConfig = {
     NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8086',
     NEXT_PUBLIC_REALTIME_URL: process.env.NEXT_PUBLIC_REALTIME_URL || 'http://localhost:8086',
     NEXT_PUBLIC_TENANT_ID: process.env.NEXT_PUBLIC_TENANT_ID || 'default',
+  },
+  // Proxy WebSocket and HTTP calls to the realtime service during development.
+  // In production, nginx (or your reverse proxy) handles this routing.
+  async rewrites() {
+    return [
+      {
+        source: '/ws/:path*',
+        destination: `${REALTIME_HOST}/ws/:path*`,
+      },
+      {
+        source: '/sse',
+        destination: `${REALTIME_HOST}/sse`,
+      },
+    ];
   },
 };
 

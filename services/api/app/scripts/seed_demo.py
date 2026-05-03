@@ -83,6 +83,159 @@ _TITLES = [
     "Suricata: ET TROJAN beacon detected on {host}",
     "AWS GuardDuty: UnauthorizedAccess:IAMUser/MaliciousIPCaller",
     "Suspicious office macro executed on {host}",
+    "Kerberoasting attempt from {host}",
+    "Lateral movement via SMB from {host} to DC",
+    "Suspicious scheduled task creation on {host}",
+    "LSASS memory dump via procdump on {host}",
+    "Reverse shell via mshta.exe on {host}",
+    "CloudTrail: root account API call from {ip}",
+    "DLL side-loading in {host} AppData",
+    "Suspicious WMI execution by {user} on {host}",
+]
+
+# 20 richly described synthetic incident scenarios for the eval suite.
+# Each entry: (title_template, tactic_ids, technique_ids, description_template)
+_SYNTHETIC_INCIDENTS: list[tuple[str, list[str], list[str], str]] = [
+    (
+        "Ransomware staging detected on {host} — precursor IOCs found",
+        ["TA0002", "TA0005", "TA0040"],
+        ["T1059.001", "T1027", "T1486"],
+        "PowerShell dropper decoded and executed on {host}. Obfuscated payload staged in Temp. "
+        "Ransomware note template found. Linked to LockBit 3.0 campaign.",
+    ),
+    (
+        "APT credential harvesting campaign targeting {user}",
+        ["TA0006", "TA0003"],
+        ["T1110.001", "T1547.001"],
+        "Brute-force spray from {ip} against {user}. Successful login established persistence "
+        "via registry Run key. IoCs match APT28 TTPs.",
+    ),
+    (
+        "Insider threat: bulk download of PII by {user}",
+        ["TA0009", "TA0010"],
+        ["T1005", "T1041"],
+        "{user} downloaded >10 GB of customer records from internal DLP-monitored share. "
+        "Traffic egressed to personal Google Drive from {host}.",
+    ),
+    (
+        "Supply chain compromise: malicious npm package on {host}",
+        ["TA0001", "TA0002"],
+        ["T1195.001", "T1059.007"],
+        "Compromised npm package `event-stream` installed by CI pipeline on {host}. "
+        "Post-install hook executed reverse shell to {ip}.",
+    ),
+    (
+        "Kerberoasting and lateral movement from {host}",
+        ["TA0006", "TA0008"],
+        ["T1558.003", "T1021.001"],
+        "Service account TGS tickets requested en-masse from {host}. "
+        "Pass-the-hash lateral movement to finance server. Mimikatz signatures detected.",
+    ),
+    (
+        "Cloud misconfiguration: public S3 bucket with PII exposed",
+        ["TA0009", "TA0010"],
+        ["T1530", "T1567.002"],
+        "S3 bucket `corp-hr-backups` set world-readable. 40 k employee records accessible. "
+        "CloudTrail shows external IP {ip} enumerating objects.",
+    ),
+    (
+        "Zero-day exploit attempt against web application on {host}",
+        ["TA0001", "TA0002"],
+        ["T1190", "T1059.007"],
+        "WAF logs show SQL-injection and SSRF probes from {ip}. One request returned 200 with "
+        "internal metadata. Possible CVE-2024-XXXX exploitation.",
+    ),
+    (
+        "Living-off-the-land: certutil download cradle on {host}",
+        ["TA0002", "TA0005"],
+        ["T1105", "T1218.009"],
+        "certutil.exe -urlcache invoked from cmd.exe spawned by outlook.exe. "
+        "Payload downloaded from {ip}. Proxy logs confirm file retrieval.",
+    ),
+    (
+        "Identity provider compromise: SAML golden-ticket on {user}",
+        ["TA0006", "TA0007"],
+        ["T1606.002", "T1087.002"],
+        "Forged SAML assertion detected. Attacker pivoted to Azure AD as {user}. "
+        "Account enumeration across O365 tenant followed.",
+    ),
+    (
+        "Cryptominer dropped via vulnerable Docker socket on {host}",
+        ["TA0001", "TA0002", "TA0040"],
+        ["T1610", "T1059.004", "T1496"],
+        "Unauthenticated Docker API exploited. Container with XMRig spawned. "
+        "CPU usage spiked to 95%. Monero mining pool connections from {ip}.",
+    ),
+    (
+        "DGA-based C2 traffic from {host} — Emotet botnet indicators",
+        ["TA0011", "TA0010"],
+        ["T1568.002", "T1041"],
+        "Domain generation algorithm (DGA) traffic observed from {host}. "
+        "200+ NXDomain replies per minute. IoCs match Emotet epoch 5 infrastructure.",
+    ),
+    (
+        "BEC phishing: finance user {user} redirected payment",
+        ["TA0001", "TA0040"],
+        ["T1566.001", "T1657"],
+        "Spear-phishing email spoofed CFO. {user} clicked malicious link, credentials stolen. "
+        "Wire transfer of $250 k initiated to threat-actor account.",
+    ),
+    (
+        "Active Directory DCSync from non-DC host {host}",
+        ["TA0006", "TA0004"],
+        ["T1003.006", "T1078.002"],
+        "Replication rights abused from workstation {host}. All domain NTLM hashes replicated. "
+        "Matches skeleton key attack preparation.",
+    ),
+    (
+        "Container escape via privileged pod on {host}",
+        ["TA0004", "TA0007"],
+        ["T1611", "T1082"],
+        "Kubernetes privileged pod created by rogue service account. "
+        "cgroup escape to host namespace. Node file system accessed from pod.",
+    ),
+    (
+        "Firmware implant detected on {host} UEFI partition",
+        ["TA0003", "TA0005"],
+        ["T1542.001", "T1027.002"],
+        "UEFI secure-boot violation alert. Unknown module in firmware image. "
+        "Matches MosaicRegressor UEFI implant signatures.",
+    ),
+    (
+        "Watering-hole attack: internal wiki delivering drive-by exploit",
+        ["TA0001", "TA0002"],
+        ["T1189", "T1203"],
+        "Internal Confluence page injected with malicious JS. "
+        "Visitor {user} on {host} exploited via CVE-2024-1234 browser vulnerability.",
+    ),
+    (
+        "Malicious USB autorun on air-gapped {host}",
+        ["TA0001", "TA0009"],
+        ["T1091", "T1005"],
+        "USB device inserted on air-gapped system {host}. "
+        "AutoRun executed Python stager. Sensitive documents staged for exfiltration.",
+    ),
+    (
+        "OAuth consent phishing targeting {user}'s Microsoft account",
+        ["TA0001", "TA0006"],
+        ["T1528", "T1550.001"],
+        "Malicious OAuth app granted Mail.Read and Files.Read.All to {user}. "
+        "Inbox rules created to forward emails silently to attacker.",
+    ),
+    (
+        "Memory-only implant (fileless) executed in {host} process",
+        ["TA0002", "TA0005"],
+        ["T1055.012", "T1620"],
+        "Process hollowing detected: svchost.exe replaced with Cobalt Strike beacon. "
+        "No disk artefacts. IoC matches CS watermark 0x5A4D.",
+    ),
+    (
+        "DNS tunnelling for data exfiltration from {host}",
+        ["TA0011", "TA0010"],
+        ["T1071.004", "T1048.003"],
+        "DNS query volume from {host} 50× baseline. TXT records contain base64 payload. "
+        "Matches iodine/dnscat2 tool signatures. Exfil volume ~200 MB.",
+    ),
 ]
 
 _HOSTS = [
@@ -275,6 +428,62 @@ async def _seed_connectors(session, tenant: Tenant) -> int:
     return len(rows)
 
 
+def _make_synthetic_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_ids: list[uuid.UUID]) -> Case:
+    """Create a richly annotated synthetic incident from _SYNTHETIC_INCIDENTS for p1-eval."""
+    scenario = _SYNTHETIC_INCIDENTS[idx % len(_SYNTHETIC_INCIDENTS)]
+    title_tpl, tactic_ids, technique_ids, desc_tpl = scenario
+
+    host = _rng.choice(_HOSTS)
+    user = _rng.choice(_USERS)
+    ip = _random_ip()
+
+    title = title_tpl.format(host=host, user=user, ip=ip)
+    description = desc_tpl.format(host=host, user=user, ip=ip)
+
+    # Build ATT&CK arrays from the scenario's explicit tactic/technique lists
+    tactics = [
+        {"id": t_id, "name": next((t[1] for t in _TECHNIQUES if t[0] == t_id), t_id)}
+        for t_id in tactic_ids
+    ]
+    techniques = [
+        {"id": t_id, "name": next((t[3] for t in _TECHNIQUES if t[2] == t_id), t_id)}
+        for t_id in technique_ids
+    ]
+
+    severity = _rng.choices(_SEVERITIES, weights=[25, 40, 25, 10])[0]
+    status = _rng.choices(
+        ["open", "in_progress", "pending", "resolved", "closed"],
+        weights=[30, 35, 10, 15, 10],
+    )[0]
+
+    return Case(
+        tenant_id=tenant_id,
+        case_number=f"CASE-SYN-{2000 + idx:04d}",
+        title=title,
+        description=description,
+        status=status,
+        priority=severity,
+        severity=severity,
+        case_type="security_incident",
+        mitre_tactics=tactics,
+        mitre_techniques=techniques,
+        alert_ids=[str(a) for a in alert_ids],
+        tags=["demo", "synthetic", severity] + tactic_ids[:2],
+        summary=f"Synthetic incident #{idx + 1} for AI investigator evaluation.",
+        event_metadata={
+            "synthetic": True,
+            "expected_tactics": tactic_ids,
+            "expected_techniques": technique_ids,
+            "host": host,
+            "user": user,
+            "src_ip": ip,
+        },
+        created_at=when,
+        updated_at=when,
+        closed_at=when + timedelta(days=2) if status in ("resolved", "closed") else None,
+    )
+
+
 async def _seed_alerts_and_cases(session, tenant: Tenant, *, alert_count: int = 120) -> tuple[int, int]:
     existing = await session.execute(select(Alert).where(Alert.tenant_id == tenant.id).limit(1))
     if existing.scalar_one_or_none() is not None:
@@ -291,11 +500,21 @@ async def _seed_alerts_and_cases(session, tenant: Tenant, *, alert_count: int = 
     cases: list[Case] = []
     timeline_rows: list[CaseTimeline] = []
     task_rows: list[CaseTask] = []
+
+    # 8 generic cases (legacy)
     for i in range(8):
         when = now - timedelta(hours=_rng.randint(1, 240))
         related = _rng.sample(alerts, k=_rng.randint(2, 6))
         case = _make_case(tenant.id, i, when, [a.id for a in related])
         cases.append(case)
+
+    # 20 synthetic incidents with rich MITRE metadata for p1-eval
+    for i in range(20):
+        when = now - timedelta(hours=_rng.randint(1, 480))
+        related = _rng.sample(alerts, k=_rng.randint(1, 4))
+        case = _make_synthetic_case(tenant.id, i, when, [a.id for a in related])
+        cases.append(case)
+
     session.add_all(cases)
     await session.flush()
 

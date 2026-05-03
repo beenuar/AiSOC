@@ -15,7 +15,7 @@
  * backend hasn't been seeded.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
@@ -32,6 +32,8 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+
+type WorkspaceTab = 'overview' | 'investigation' | 'report';
 
 // ─── Demo case ────────────────────────────────────────────────────────────────
 
@@ -278,6 +280,7 @@ function TaskRow({ task, onChangeStatus }: TaskRowProps) {
 
 export function CaseWorkspace({ caseId }: { caseId: string }) {
   const [demoMode, setDemoMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
   const { data, error, isLoading, mutate } = useSWR<Case>(
     ['case', caseId],
     () => casesApi.get(caseId),
@@ -293,6 +296,146 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
   // Track demo mode for the header banner.
   if (useFallback && !demoMode) setDemoMode(true);
+
+  // ─── Investigation state ───────────────────────────────────────────────────
+  const [investigating, setInvestigating] = useState(false);
+  const [investigationRunId, setInvestigationRunId] = useState<string | null>(null);
+  const [investigationStatus, setInvestigationStatus] = useState<string>('idle');
+  const [investigationData, setInvestigationData] = useState<Record<string, unknown> | null>(null);
+  const [reportMd, setReportMd] = useState<string>('');
+  const [liveSteps, setLiveSteps] = useState<Array<{ kind: string; agent: string; summary: string; ts: string }>>([]);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const closeWs = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => { stopPolling(); closeWs(); }, [stopPolling, closeWs]);
+
+  /** Connect to the realtime service WebSocket for this run_id */
+  const connectWs = useCallback((runId: string, tenantId = 'default') => {
+    closeWs();
+    // Determine WS URL: same host, realtime port or proxied
+    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    // The Next.js dev server proxies /ws → realtime service on :8086
+    // In production, nginx handles the proxy.
+    const wsUrl = `${wsProto}://${window.location.host}/ws/agents?tenant_id=${tenantId}`;
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data as string) as Record<string, unknown>;
+          const msgRunId = msg.run_id as string | undefined;
+          // Only process events for this run
+          if (msgRunId && msgRunId !== runId) return;
+
+          if (msg.type === 'agent.event') {
+            const kind = (msg.kind ?? '') as string;
+            const agent = (msg.agent ?? '') as string;
+            const summary = (msg.summary ?? '') as string;
+            const ts = (msg.timestamp ?? new Date().toISOString()) as string;
+
+            setLiveSteps((prev) => [...prev, { kind, agent, summary, ts }]);
+
+            if (kind === 'completed') {
+              setInvestigationStatus('completed');
+              setInvestigating(false);
+              toast.success('Investigation complete — report ready!', { icon: '📋' });
+              // Fetch the Markdown report
+              fetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.md`)
+                .then((r) => r.ok ? r.text() : '')
+                .then((md) => { if (md) setReportMd(md); })
+                .catch(() => { /* best-effort */ });
+              // Also fetch full data
+              casesApi.getInvestigation(caseId, runId)
+                .then((inv) => setInvestigationData(inv as Record<string, unknown>))
+                .catch(() => { /* best-effort */ });
+              closeWs();
+            } else if (kind === 'error') {
+              setInvestigationStatus('failed');
+              setInvestigating(false);
+              toast.error(`Investigation failed: ${summary}`);
+              closeWs();
+            }
+          }
+        } catch { /* ignore parse errors */ }
+      };
+      ws.onerror = () => {
+        // Fall back to polling if WebSocket fails
+        ws.close();
+        wsRef.current = null;
+      };
+    } catch {
+      // WebSocket not available — polling fallback is already running
+    }
+  }, [caseId, closeWs]);
+
+  const startInvestigation = useCallback(async () => {
+    if (!caseRecord || investigating) return;
+    setInvestigating(true);
+    setInvestigationStatus('starting');
+    setLiveSteps([]);
+    setActiveTab('investigation');
+    try {
+      const result = await casesApi.investigate(caseId, caseRecord.description ?? caseRecord.title);
+      setInvestigationRunId(result.run_id);
+      setInvestigationStatus('running');
+      toast.success('AI investigation launched!', { icon: '🤖' });
+
+      // Connect via WebSocket for live updates (falls back to polling on error)
+      connectWs(result.run_id);
+
+      // Polling as a reliable fallback / data sync
+      pollRef.current = setInterval(async () => {
+        try {
+          const inv = await casesApi.getInvestigation(caseId, result.run_id);
+          setInvestigationData(inv as Record<string, unknown>);
+          setInvestigationStatus(inv.status);
+          if (inv.status === 'completed' || inv.status === 'failed') {
+            stopPolling();
+            setInvestigating(false);
+            if (inv.status === 'completed') {
+              toast.success('Investigation complete — report ready!', { icon: '📋' });
+              try {
+                const resp = await fetch(`/api/v1/cases/${caseId}/investigations/${result.run_id}/report.md`);
+                if (resp.ok) setReportMd(await resp.text());
+              } catch { /* best-effort */ }
+            } else {
+              toast.error(`Investigation failed: ${inv.error ?? 'unknown error'}`);
+            }
+          }
+        } catch {
+          // swallow transient errors
+        }
+      }, 5000);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Backend offline';
+      toast(`Demo mode: investigation not available (${message})`, { icon: '⚠️' });
+      // Set demo investigation result
+      setInvestigationStatus('completed');
+      setInvestigationData({
+        status: 'completed',
+        recon: { iocs: [{ type: 'ip', value: '192.168.1.105' }, { type: 'domain', value: 'c2.evil-corp.io' }], mitre_techniques: ['T1021.002', 'T1078'], summary: 'Lateral movement via SMB with stolen credentials. C2 domain identified.' },
+        forensic: { timeline: [{ ts: new Date().toISOString(), event: 'SMB connection from FIN-DB01 to BACKUP-SRV-12' }], root_cause_hypothesis: 'Compromised svc_backup service account used for lateral movement.', confidence: 0.88, summary: 'High confidence lateral movement chain identified.' },
+        responder: { recommended_actions: ['Isolate WIN-FIN-DB01', 'Rotate svc_backup credentials', 'Block C2 domain at perimeter'], risk_level: 'high', dry_run: true, summary: 'Containment actions generated (dry-run only — review before executing).' },
+        audit_log: [{ kind: 'recon', agent: 'ReconAgent', summary: 'Found 2 IOCs, 2 MITRE techniques in 1200ms', ts: new Date().toISOString() }, { kind: 'forensic', agent: 'ForensicAgent', summary: 'Timeline: 1 events, confidence 88%', ts: new Date().toISOString() }, { kind: 'responder', agent: 'ResponderAgent', summary: 'Generated 3 recommended actions (risk=high, dry_run=True)', ts: new Date().toISOString() }, { kind: 'report', agent: 'ReportWriterAgent', summary: 'Report written (1240 chars)', ts: new Date().toISOString() }],
+      });
+      setReportMd(`# Incident Report — ${caseRecord.title}\n\n**Generated by AiSOC AI Investigator (demo mode)**\n\n## Executive Summary\nLateral movement confirmed from WIN-FIN-DB01 to BACKUP-SRV-12 via compromised service account credentials.\n\n## IOCs\n- 192.168.1.105 (internal pivot source)\n- c2.evil-corp.io (C2 domain)\n\n## MITRE ATT&CK\n- T1021.002 — SMB/Windows Admin Shares\n- T1078 — Valid Accounts\n\n## Recommended Actions\n1. Isolate WIN-FIN-DB01 from network\n2. Rotate svc_backup credentials immediately\n3. Block c2.evil-corp.io at perimeter firewall\n\n---\n*This is a demo report generated without a live backend.*`);
+      setInvestigating(false);
+    }
+  }, [caseRecord, caseId, investigating, stopPolling]);
 
   // ─── Local mutations (optimistic) ──────────────────────────────────────────
 
@@ -498,10 +641,19 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               )}
             </select>
             <button
-              onClick={() => toast('Copilot will be wired up here.', { icon: '🤖' })}
-              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/20"
+              onClick={() => void startInvestigation()}
+              disabled={investigating}
+              className={clsx(
+                'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors',
+                investigating
+                  ? 'cursor-not-allowed border-slate-700/40 bg-slate-800/40 text-slate-500'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20',
+              )}
             >
-              Investigate with AI
+              {investigating && (
+                <span className="h-3 w-3 animate-spin rounded-full border border-emerald-500/30 border-t-emerald-400" />
+              )}
+              {investigating ? 'Investigating…' : '🤖 Investigate with AI'}
             </button>
           </div>
         </div>
@@ -530,7 +682,51 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
         </div>
       </div>
 
-      {/* Three-pane layout */}
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-800/70 text-xs">
+        {(['overview', 'investigation', 'report'] as WorkspaceTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={clsx(
+              'relative px-3 py-2 font-medium capitalize transition-colors',
+              activeTab === tab
+                ? 'text-emerald-300'
+                : 'text-slate-500 hover:text-slate-300',
+            )}
+          >
+            {tab === 'investigation' && investigating && (
+              <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+            )}
+            {tab}
+            {activeTab === tab && (
+              <span className="absolute inset-x-0 bottom-0 h-px bg-emerald-400" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Investigation tab */}
+      {activeTab === 'investigation' && (
+        <InvestigationPanel
+          status={investigationStatus}
+          data={investigationData}
+          liveSteps={liveSteps}
+          onViewReport={() => setActiveTab('report')}
+        />
+      )}
+
+      {/* Report tab */}
+      {activeTab === 'report' && (
+        <ReportPanel
+          markdown={reportMd}
+          caseId={caseRecord.id}
+          runId={investigationRunId ?? ''}
+        />
+      )}
+
+      {/* Overview: Three-pane layout */}
+      {activeTab === 'overview' && (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* Left: Linked alerts + IOCs */}
         <aside className="lg:col-span-3 space-y-4">
@@ -667,6 +863,329 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
           </Panel>
         </aside>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Investigation panel ──────────────────────────────────────────────────────
+
+type LiveStep = { kind: string; agent: string; summary: string; ts: string };
+
+function InvestigationPanel({
+  status,
+  data,
+  liveSteps,
+  onViewReport,
+}: {
+  status: string;
+  data: Record<string, unknown> | null;
+  liveSteps: LiveStep[];
+  onViewReport: () => void;
+}) {
+  if (status === 'idle' || status === 'starting') {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+        <span className="text-3xl">🤖</span>
+        <p className="mt-3 text-sm font-medium text-slate-300">AI Investigation</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Click &ldquo;Investigate with AI&rdquo; in the header to launch the autonomous investigator.
+        </p>
+      </div>
+    );
+  }
+
+  if (status === 'running') {
+    return (
+      <div className="rounded-xl border border-slate-800/70 bg-slate-900/30 p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-slate-300">Investigation in progress…</p>
+            <p className="text-xs text-slate-500">Agents are working. Steps appear below in real-time.</p>
+          </div>
+        </div>
+        {liveSteps.length > 0 && (
+          <LiveStepsFeed steps={liveSteps} />
+        )}
+      </div>
+    );
+  }
+
+  if (status === 'failed') {
+    return (
+      <div className="rounded-xl border border-red-800/40 bg-red-900/10 p-5">
+        <p className="text-sm font-semibold text-red-300">Investigation failed</p>
+        <p className="mt-1 text-xs text-slate-400">{String((data as { error?: string })?.error ?? 'Unknown error')}</p>
+        {liveSteps.length > 0 && (
+          <div className="mt-3">
+            <LiveStepsFeed steps={liveSteps} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // completed
+  const recon = data?.recon as Record<string, unknown> | undefined;
+  const forensic = data?.forensic as Record<string, unknown> | undefined;
+  const responder = data?.responder as Record<string, unknown> | undefined;
+  const auditLog = liveSteps.length > 0
+    ? liveSteps
+    : (data?.audit_log as Array<{ kind: string; agent: string; summary: string }>) ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/30">
+          ✓ Investigation complete
+        </span>
+        <button
+          onClick={onViewReport}
+          className="rounded-md border border-slate-700/70 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600"
+        >
+          View full report →
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Recon */}
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-300">🔍 Recon</h4>
+          {recon?.summary != null && <p className="text-xs text-slate-400">{String(recon.summary)}</p>}
+          {Array.isArray(recon?.iocs) && recon.iocs.length > 0 && (
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1">IOCs found:</p>
+              <ul className="space-y-0.5">
+                {(recon.iocs as Array<{ type: string; value: string }>).slice(0, 5).map((ioc) => (
+                  <li key={ioc.value} className="text-[11px] font-mono text-slate-300">
+                    <span className="text-slate-500">[{ioc.type}]</span> {ioc.value}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {Array.isArray(recon?.mitre_techniques) && recon.mitre_techniques.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {(recon.mitre_techniques as string[]).map((t) => (
+                <span key={t} className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] text-orange-300 ring-1 ring-orange-500/20">{t}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Forensic */}
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-purple-300">🔬 Forensic</h4>
+          {forensic?.summary != null && <p className="text-xs text-slate-400">{String(forensic.summary)}</p>}
+          {forensic?.root_cause_hypothesis != null && (
+            <div>
+              <p className="text-[11px] text-slate-500">Root cause hypothesis:</p>
+              <p className="text-xs text-slate-300">{String(forensic.root_cause_hypothesis)}</p>
+            </div>
+          )}
+          {typeof forensic?.confidence === 'number' && (
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-full rounded-full bg-purple-500" style={{ width: `${(forensic.confidence as number) * 100}%` }} />
+              </div>
+              <span className="text-[11px] text-slate-400">{Math.round((forensic.confidence as number) * 100)}% confidence</span>
+            </div>
+          )}
+        </div>
+
+        {/* Responder */}
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-300">🛡️ Response</h4>
+          {responder?.summary != null && <p className="text-xs text-slate-400">{String(responder.summary)}</p>}
+          {Array.isArray(responder?.recommended_actions) && (
+            <ul className="space-y-1">
+              {(responder.recommended_actions as string[]).slice(0, 4).map((action, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs text-slate-300">
+                  <span className="mt-0.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-400" />
+                  {action}
+                </li>
+              ))}
+            </ul>
+          )}
+          {responder?.risk_level != null && (
+            <span className={clsx(
+              'inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1',
+              responder.risk_level === 'high' ? 'bg-red-500/10 text-red-300 ring-red-500/20' :
+              responder.risk_level === 'medium' ? 'bg-amber-500/10 text-amber-300 ring-amber-500/20' :
+              'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+            )}>
+              {String(responder.risk_level)} risk
+            </span>
+          )}
+        </div>
+      </div>
+
+      {auditLog.length > 0 && (
+        <details className="rounded-xl border border-slate-800/80">
+          <summary className="cursor-pointer px-4 py-2 text-xs text-slate-400 hover:text-slate-200">
+            Agent audit log ({auditLog.length} steps)
+          </summary>
+          <AuditLogPreview log={auditLog} />
+        </details>
+      )}
+    </div>
+  );
+}
+
+function AuditLogPreview({ log }: { log: Array<{ kind: string; agent: string; summary: string }> }) {
+  return (
+    <ul className="p-4 space-y-1.5">
+      {log.map((entry, i) => (
+        <li key={i} className="flex items-start gap-2 text-[11px]">
+          <span className="font-mono text-slate-500">[{entry.kind}]</span>
+          <span className="font-semibold text-slate-400">{entry.agent}:</span>
+          <span className="text-slate-400">{entry.summary}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ─── Live steps feed (real-time WebSocket updates) ────────────────────────────
+
+const AGENT_ICONS: Record<string, string> = {
+  recon: '🔍',
+  forensic: '🧬',
+  responder: '🛡️',
+  report: '📋',
+  completed: '✅',
+  error: '❌',
+};
+
+function LiveStepsFeed({ steps }: { steps: LiveStep[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [steps.length]);
+
+  return (
+    <div className="rounded-lg border border-slate-800/60 bg-slate-950/60 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/60">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          Live agent steps
+        </span>
+        <span className="text-[10px] text-slate-600">{steps.length} events</span>
+      </div>
+      <ul className="max-h-56 overflow-y-auto divide-y divide-slate-800/40">
+        {steps.map((step, i) => {
+          const icon = AGENT_ICONS[step.kind] ?? '⚡';
+          return (
+            <li key={i} className="flex items-start gap-2.5 px-3 py-2">
+              <span className="shrink-0 text-base leading-none mt-0.5">{icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-300">{step.agent}</span>
+                  <span className="text-[10px] text-slate-600 font-mono">[{step.kind}]</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{step.summary}</p>
+              </div>
+              <span className="shrink-0 text-[9px] text-slate-600 font-mono mt-0.5">
+                {new Date(step.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+// ─── Report panel ─────────────────────────────────────────────────────────────
+
+function ReportPanel({
+  markdown,
+  caseId,
+  runId,
+}: {
+  markdown: string;
+  caseId: string;
+  runId: string;
+}) {
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const handleDownloadPdf = async () => {
+    if (!runId) return;
+    setPdfDownloading(true);
+    setPdfError(null);
+    try {
+      await casesApi.downloadReportPdf(caseId, runId);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'PDF download failed');
+    } finally {
+      setPdfDownloading(false);
+    }
+  };
+
+  if (!markdown) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+        <span className="text-3xl">📋</span>
+        <p className="mt-3 text-sm font-medium text-slate-300">No report yet</p>
+        <p className="mt-1 text-xs text-slate-500">Run an investigation to generate a report.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-slate-900/40">
+      <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Incident Report</h3>
+        <div className="flex items-center gap-3">
+          {/* Download Markdown */}
+          <button
+            onClick={() => {
+              const blob = new Blob([markdown], { type: 'text/markdown' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'incident-report.md';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="text-[11px] text-slate-400 hover:text-slate-200"
+          >
+            ↓ .md
+          </button>
+          {/* Download PDF */}
+          {runId && (
+            <button
+              onClick={handleDownloadPdf}
+              disabled={pdfDownloading}
+              className={clsx(
+                'flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+                pdfDownloading
+                  ? 'cursor-not-allowed text-slate-500'
+                  : 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40',
+              )}
+            >
+              {pdfDownloading ? (
+                <>
+                  <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+                  Generating…
+                </>
+              ) : (
+                <>↓ PDF</>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+      {pdfError && (
+        <div className="border-b border-red-900/40 bg-red-950/30 px-4 py-2 text-[11px] text-red-400">
+          PDF error: {pdfError}
+        </div>
+      )}
+      <pre className="overflow-auto whitespace-pre-wrap p-4 font-mono text-[11px] leading-relaxed text-slate-300">
+        {markdown}
+      </pre>
     </div>
   );
 }
