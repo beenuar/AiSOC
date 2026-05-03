@@ -61,3 +61,4 @@ logs/
 *.key
 *.crt
 secrets/
+.gstack/
