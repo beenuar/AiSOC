@@ -3,14 +3,29 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
+// Order matters: longer/more specific paths first so startsWith() picks
+// the right label for nested routes (e.g. /detection/catalog before /detection).
 const routeLabels: Record<string, { title: string; description: string }> = {
-  '/': { title: 'Dashboard', description: 'SOC overview and metrics' },
+  '/detection/catalog': { title: 'Detection Catalog', description: 'Curated rule packs and templates' },
+  '/settings/rbac': { title: 'Roles & Permissions', description: 'Access control and team management' },
+  '/dashboard': { title: 'Dashboard', description: 'SOC overview and metrics' },
   '/alerts': { title: 'Alerts', description: 'Security alerts and incidents' },
   '/cases': { title: 'Cases', description: 'Incident case management' },
+  '/hunt': { title: 'Threat Hunting', description: 'Proactive threat hunts and queries' },
   '/detection': { title: 'Detection Rules', description: 'SIEM detection rules and tuning' },
   '/threat-intel': { title: 'Threat Intelligence', description: 'IOC lookup and threat feeds' },
+  '/graph': { title: 'Attack Graph', description: 'Visualize relationships across alerts and assets' },
+  '/copilot': { title: 'AI Copilot', description: 'AI-assisted investigation and triage' },
+  '/playbooks': { title: 'Playbooks', description: 'Automated response and SOAR workflows' },
+  '/marketplace': { title: 'Marketplace', description: 'Plugins, integrations, and content packs' },
+  '/honeytokens': { title: 'Honeytokens', description: 'Deception assets and trip-wire alerts' },
+  '/purple-team': { title: 'Purple Team', description: 'Adversary emulation and detection coverage' },
   '/connectors': { title: 'Connectors', description: 'Security tool integrations' },
+  '/compliance': { title: 'Compliance', description: 'Frameworks, controls, and evidence' },
+  '/sla': { title: 'SLA Tracking', description: 'Response time targets and breach risk' },
+  '/audit': { title: 'Audit Log', description: 'Platform activity and security events' },
   '/settings': { title: 'Settings', description: 'Platform configuration' },
+  '/': { title: 'Dashboard', description: 'SOC overview and metrics' },
 };
 
 export function TopBar() {
@@ -32,11 +47,28 @@ export function TopBar() {
     setShortcut(isMac ? '⌘K' : 'Ctrl K');
   }, []);
 
+  // Match the most specific path first. Object insertion order is preserved
+  // and routeLabels lists nested routes (e.g. /detection/catalog) before
+  // their parents so startsWith() picks the deepest match.
   const routeKey = Object.keys(routeLabels).find(
     (key) => key !== '/' && pathname.startsWith(key)
-  ) || (pathname === '/' ? '/' : '/alerts');
+  ) || (pathname === '/' ? '/' : null);
 
-  const routeInfo = routeLabels[routeKey] || routeLabels['/alerts'];
+  // Derive a sensible title for unknown routes from the URL itself instead
+  // of silently falling back to "Alerts", which used to make every page
+  // look like the alerts page.
+  const fallbackFromPath = (() => {
+    const segment = pathname.split('/').filter(Boolean)[0] ?? '';
+    const title = segment
+      ? segment
+          .split('-')
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ')
+      : 'AiSOC';
+    return { title, description: '' };
+  })();
+
+  const routeInfo = routeKey ? routeLabels[routeKey] : fallbackFromPath;
 
   const openPalette = () => {
     // Synthesize the same keystroke the palette listens for. Keeps a single
