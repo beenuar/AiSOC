@@ -33,7 +33,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "AiSOC ${{ steps.version.outputs.VERSION }}"
           body: ${{ steps.changelog.outputs.BODY }}
