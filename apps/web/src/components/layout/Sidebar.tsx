@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
+import packageJson from '../../../package.json';
+
+const APP_VERSION = packageJson.version;
 
 interface NavItem {
   label: string;
@@ -297,7 +300,7 @@ export function Sidebar() {
       {/* Footer */}
       <div className="p-4 border-t border-gray-800/60">
         <div className="flex items-center gap-2 text-xs text-gray-600">
-          <span className="font-mono">v0.1.0</span>
+          <span className="font-mono">v{APP_VERSION}</span>
           <span>·</span>
           <a
             href="https://github.com/beenuar/AiSOC"
