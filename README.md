@@ -289,7 +289,15 @@ First start takes ~60s while datastores warm up.
 pnpm seed:demo            # generates cases, alerts, IOCs, attack paths, UEBA anomalies
 ```
 
-### 5 · Open
+### 5 · Verify
+
+```bash
+pnpm aisoc:doctor         # one-shot health check: ports, containers, demo data, API + WS
+```
+
+If anything is red, the doctor tells you exactly what to fix before you log in.
+
+### 6 · Open
 
 | Surface | URL | Notes |
 |---|---|---|

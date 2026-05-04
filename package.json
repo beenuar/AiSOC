@@ -19,18 +19,20 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "infra:plan": "cd infra/terraform && terraform plan",
     "infra:apply": "cd infra/terraform && terraform apply",
-    "docker:dev": "docker compose -f docker-compose.dev.yml up -d",
-    "docker:down": "docker compose -f docker-compose.dev.yml down",
-    "seed:demo": "docker compose -f docker-compose.dev.yml exec api python -m app.scripts.seed_demo",
+    "docker:dev": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "seed:demo": "docker compose exec api python -m app.scripts.seed_demo",
     "demo:produce": "go run ./services/demo-producer",
     "demo:produce:fast": "go run ./services/demo-producer --rate 8 --batch 10",
     "detections:validate": "python3 scripts/validate_detections.py",
     "marketplace:sync": "cp marketplace/index.json apps/web/public/marketplace/index.json && echo 'marketplace/index.json synced to apps/web/public/'",
-    "aisoc:lab": "bash scripts/lab.sh"
+    "aisoc:lab": "bash scripts/lab.sh",
+    "aisoc:doctor": "tsx scripts/aisoc-doctor.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "prettier": "^3.2.4",
+    "tsx": "^4.21.0",
     "turbo": "^1.12.4",
     "typescript": "^5.3.3"
   },

@@ -189,7 +189,9 @@ class InvestigatorOrchestrator:
                             "summary": entry.summary,
                             "node": node_name,
                             "case_id": case_id,
-                            "ts": entry.ts.isoformat() if hasattr(entry.ts, "isoformat") else str(entry.ts),
+                            "ts": entry.timestamp.isoformat()
+                            if hasattr(entry.timestamp, "isoformat")
+                            else str(entry.timestamp),
                         }
 
             # Emit the final "done" event with the complete state payload

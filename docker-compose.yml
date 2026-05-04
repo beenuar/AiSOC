@@ -351,7 +351,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8006:8003"
+      - "8088:8003"
     profiles:
       - connectors
     environment:
@@ -398,6 +398,74 @@ services:
       - aisoc
     restart: unless-stopped
 
+  ueba:
+    build:
+      context: ./services/ueba
+      dockerfile: Dockerfile
+    container_name: aisoc-ueba
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8007:8004"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/8
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
+      CORE_API_URL: http://api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  honeytokens:
+    build:
+      context: ./services/honeytokens
+      dockerfile: Dockerfile
+    container_name: aisoc-honeytokens
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8008:8005"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/9
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CORE_API_URL: http://api:8000
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  purple-team:
+    build:
+      context: ./services/purple-team
+      dockerfile: Dockerfile
+    container_name: aisoc-purple-team
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8006:8006"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/10
+      CORE_API_URL: http://api:8000
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+    networks:
+      - aisoc
+    restart: unless-stopped
+
   realtime:
     build:
       context: ./services/realtime
@@ -431,7 +499,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_WS_URL: ws://localhost:4000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8086
       NODE_ENV: production
     networks:
       - aisoc

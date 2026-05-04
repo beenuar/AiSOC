@@ -19,8 +19,14 @@ class StepKind(str, Enum):
     FORENSIC = "forensic"
     RESPONDER = "responder"
     REPORTER = "reporter"
+    REPORT = "report"
+    ERROR = "error"
     TOOL_CALL = "tool_call"
     LLM_CALL = "llm_call"
+    LLM_PROMPT = "llm_prompt"
+    LLM_RESPONSE = "llm_response"
+    EVIDENCE_CITED = "evidence_cited"
+    DECISION_REASON = "decision_reason"
 
 
 class AuditEntry(BaseModel):
