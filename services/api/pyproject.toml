@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "aisoc-api"
 version = "0.1.0"
-description = "AiSOC Core API Service - Open-source AI Security Operations Center by Cyble"
-authors = ["Cyble <opensource@cyble.com>"]
+description = "AiSOC Core API Service — Open-source AI Security Operations Center"
+authors = ["AiSOC contributors <opensource@aisoc.dev>"]
 license = "MIT"
 readme = "README.md"
 

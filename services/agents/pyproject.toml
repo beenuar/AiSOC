@@ -2,7 +2,7 @@
 name = "aisoc-agents"
 version = "0.1.0"
 description = "AiSOC AI Agent Orchestrator - LangGraph-based autonomous investigation and response"
-authors = ["Cyble <opensource@cyble.com>"]
+authors = ["AiSOC contributors <opensource@aisoc.dev>"]
 license = "MIT"
 
 [tool.poetry.dependencies]

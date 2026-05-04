@@ -1,7 +1,7 @@
 /**
  * AiSOC - AI Security Operations Center
  * Terraform Infrastructure - Main Configuration
- * Open-source by Cyble under MIT License
+ * AiSOC — open-source under MIT License
  */
 
 terraform {
@@ -43,7 +43,7 @@ provider "aws" {
       Project     = "AiSOC"
       Environment = var.environment
       ManagedBy   = "Terraform"
-      Owner       = "Cyble"
+      Owner       = "AiSOC"
     }
   }
 }

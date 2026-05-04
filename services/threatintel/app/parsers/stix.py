@@ -1,7 +1,7 @@
 """
 STIX 2.1 object parser — converts STIX objects to normalized IOC/actor dicts.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

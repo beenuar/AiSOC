@@ -9,7 +9,7 @@ description: >
   Jamf Pro Classic and Pro REST APIs.
 author: AiSOC Core Team
 tags: [mdm, jamf, endpoint, apple, identity]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/jamf-mdm
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/jamf-mdm
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

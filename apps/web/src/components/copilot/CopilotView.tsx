@@ -136,7 +136,7 @@ function buildDemoReply(prompt: string): CopilotMessage {
         '',
         '- Risk score **92** (top 1% of fleet).',
         '- 3 open alerts: privilege escalation, suspicious PowerShell, outbound to rare ASN.',
-        '- Most likely user: `j.harlow@cyble.example` — 4 logon events in last 2h, all from a new device.',
+        '- Most likely user: `j.harlow@aisoc.example` — 4 logon events in last 2h, all from a new device.',
         '- Observed ATT&CK techniques: T1078.002, T1059.001, T1071.001.',
         '',
         '**Recommended next steps**',

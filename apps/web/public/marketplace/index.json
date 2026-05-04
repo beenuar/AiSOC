@@ -1,7 +1,7 @@
 {
   "$schema": "https://aisoc.dev/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-04T08:01:43Z",
+  "generated": "2026-05-04T14:49:29Z",
   "categories": [
     {
       "id": "playbooks",
@@ -5548,7 +5548,7 @@
       ],
       "plugin_type": "action",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/cloudflare-waf",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/cloudflare-waf",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5575,7 +5575,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/datadog-incidents",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/datadog-incidents",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5602,7 +5602,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/github-audit",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/github-audit",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5629,7 +5629,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/gitlab-audit",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/gitlab-audit",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5656,7 +5656,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/jamf-mdm",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/jamf-mdm",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5683,7 +5683,7 @@
       ],
       "plugin_type": "widget",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/mttr-widget",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/mttr-widget",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5710,7 +5710,7 @@
       ],
       "plugin_type": "action",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/notion-incidents",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/notion-incidents",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5736,7 +5736,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/okta-connector",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/okta-connector",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5763,7 +5763,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/onepassword-events",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/onepassword-events",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5790,7 +5790,7 @@
       ],
       "plugin_type": "action",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/pagerduty-paging",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/pagerduty-paging",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5816,7 +5816,7 @@
       ],
       "plugin_type": "responder",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/slack-quarantine",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/slack-quarantine",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5844,7 +5844,7 @@
       ],
       "plugin_type": "connector",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/snowflake-events",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/snowflake-events",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5871,7 +5871,7 @@
       ],
       "plugin_type": "action",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/tailscale-acl",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/tailscale-acl",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5898,7 +5898,7 @@
       ],
       "plugin_type": "action",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/twilio-sms",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/twilio-sms",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",
@@ -5924,7 +5924,7 @@
       ],
       "plugin_type": "enricher",
       "license": "MIT",
-      "homepage": "https://github.com/beenuar/aisoc/tree/main/plugins/yara-enricher",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/yara-enricher",
       "min_aisoc_version": "4.0.0",
       "sdks": [
         "python",

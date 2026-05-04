@@ -14,7 +14,7 @@
     "siem"
   ],
   "license": "MIT",
-  "author": "Cyble Inc.",
+  "author": "AiSOC contributors",
   "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/mcp",
   "repository": {
     "type": "git",

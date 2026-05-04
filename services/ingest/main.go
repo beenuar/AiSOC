@@ -1,6 +1,6 @@
 // AiSOC Ingest Service
 // Handles raw event ingestion, OCSF normalization, ATT&CK mapping, and Kafka publishing
-// Part of the Cyble AiSOC platform (MIT License)
+// Part of the AiSOC platform (MIT License)
 package main
 
 import (

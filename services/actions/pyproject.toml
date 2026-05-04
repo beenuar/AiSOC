@@ -2,7 +2,7 @@
 name = "aisoc-actions"
 version = "0.1.0"
 description = "AiSOC Action Execution Service - blast-radius gated response actions with rollback"
-authors = ["Cyble <opensource@cyble.com>"]
+authors = ["AiSOC contributors <opensource@aisoc.dev>"]
 license = "MIT"
 
 [tool.poetry.dependencies]

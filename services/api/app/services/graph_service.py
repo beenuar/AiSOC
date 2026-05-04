@@ -1,6 +1,6 @@
 """
 Graph service: entity node management, attack-path queries, blast-radius traversal.
-Cyble Open-Source AI Security Operations Center - MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

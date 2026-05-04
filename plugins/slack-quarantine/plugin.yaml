@@ -9,7 +9,7 @@ description: >
   thread-based updates as the incident evolves.
 author: AiSOC Core Team
 tags: [slack, notification, quarantine, response]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/slack-quarantine
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/slack-quarantine
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

@@ -64,7 +64,7 @@ export function Logo({ size = 36, withWordmark = false, className }: LogoProps) 
       {withWordmark && (
         <span className="flex items-baseline gap-2 leading-none">
           <span className="text-xl font-bold tracking-tight text-white">AiSOC</span>
-          <span className="text-xs font-medium text-gray-500">by Cyble</span>
+          <span className="text-xs font-medium text-gray-500">open-source</span>
         </span>
       )}
     </span>

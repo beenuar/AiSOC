@@ -2,7 +2,7 @@
 name = "aisoc-fusion"
 version = "0.1.0"
 description = "AiSOC Alert Fusion Service - deduplication, correlation and incident grouping"
-authors = ["Cyble <opensource@cyble.com>"]
+authors = ["AiSOC contributors <opensource@aisoc.dev>"]
 license = "MIT"
 readme = "README.md"
 

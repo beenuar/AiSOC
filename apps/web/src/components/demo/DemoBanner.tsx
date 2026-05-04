@@ -40,7 +40,7 @@ export function DemoBanner() {
         |
       </span>
       <a
-        href="https://github.com/cyble/AiSOC#quickstart"
+        href="https://github.com/beenuar/AiSOC#quickstart"
         target="_blank"
         rel="noopener noreferrer"
         className="underline underline-offset-2 hover:text-amber-100 transition-colors"

@@ -80,7 +80,7 @@ def create_application() -> FastAPI:
     app = FastAPI(
         title="AiSOC Platform API",
         description=(
-            "Open-source AI Security Operations Center by Cyble. "
+            "AiSOC — open-source AI Security Operations Center. "
             "Autonomous threat detection, investigation, and response."
         ),
         version=settings.VERSION,

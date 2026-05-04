@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: '%s | AiSOC',
   },
   description:
-    'Open-source AI-powered Security Operations Center by Cyble. Real-time threat detection, autonomous investigation, MITRE ATT&CK-aware response — under MIT.',
+    'Open-source AI-powered Security Operations Center. Real-time threat detection, autonomous investigation, MITRE ATT&CK-aware response — under MIT.',
   keywords: [
     'AiSOC',
     'SOC',
@@ -34,10 +34,9 @@ export const metadata: Metadata = {
     'open source',
     'SOAR',
     'XDR',
-    'Cyble',
   ],
-  authors: [{ name: 'Cyble', url: 'https://cyble.com' }],
-  creator: 'Cyble',
+  authors: [{ name: 'AiSOC contributors', url: 'https://github.com/beenuar/AiSOC' }],
+  creator: 'AiSOC contributors',
   metadataBase: new URL('https://aisoc.dev'),
   openGraph: {
     title: 'AiSOC — AI Security Operations Center',

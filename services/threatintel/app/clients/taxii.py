@@ -1,7 +1,7 @@
 """
 TAXII 2.1 client for fetching STIX bundles from threat intelligence feeds.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 /**
  * AiSOC Shared Types - Main Entry Point
  *
- * Open-source AI Security Operations Center platform by Cyble
+ * AiSOC — open-source AI Security Operations Center platform
  * MIT License
  */
 

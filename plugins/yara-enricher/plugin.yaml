@@ -8,7 +8,7 @@ description: >
   so analysts can quickly triage malware indicators.
 author: AiSOC Core Team
 tags: [malware, yara, file-analysis, enrichment]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/yara-enricher
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/yara-enricher
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

@@ -1,4 +1,4 @@
-module github.com/aisoc-os/aisoc/sdk-go
+module github.com/beenuar/aisoc/sdk-go
 
 go 1.22
 

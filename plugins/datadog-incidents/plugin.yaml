@@ -8,7 +8,7 @@ description: >
   API so AiSOC can mirror infra alerts and security findings side-by-side.
 author: AiSOC Core Team
 tags: [observability, datadog, incidents, signals, connector]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/datadog-incidents
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/datadog-incidents
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

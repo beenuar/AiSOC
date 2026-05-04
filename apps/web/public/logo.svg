@@ -42,6 +42,6 @@
   </g>
   <g font-family="Inter, system-ui, sans-serif" font-weight="700" letter-spacing="-0.5">
     <text x="74" y="42" font-size="30" fill="url(#aisocLogoText)">AiSOC</text>
-    <text x="184" y="42" font-size="14" font-weight="500" fill="rgba(148,163,184,0.85)" letter-spacing="0.4">by Cyble</text>
+    <text x="184" y="42" font-size="14" font-weight="500" fill="rgba(148,163,184,0.85)" letter-spacing="0.4">open-source</text>
   </g>
 </svg>

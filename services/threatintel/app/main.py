@@ -5,7 +5,7 @@ Polls multiple threat intelligence feeds on configurable intervals,
 deduplicates via Redis Bloom filter, and writes normalized IOCs/actors
 into OpenSearch, Qdrant, and Neo4j.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

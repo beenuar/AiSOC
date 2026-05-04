@@ -14,7 +14,7 @@
 //
 // `--rate` is events per second per connector. `--duration 0` runs forever.
 //
-// Part of the Cyble AiSOC platform (MIT License).
+// Part of the AiSOC platform (MIT License).
 package main
 
 import (

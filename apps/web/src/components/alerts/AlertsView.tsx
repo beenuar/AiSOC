@@ -52,7 +52,7 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
     createdAt: new Date(Date.now() - i * 1800000).toISOString(),
     updatedAt: new Date(Date.now() - i * 900000).toISOString(),
     tenantId: 'default',
-    assignee: i % 3 === 0 ? 'analyst@cyble.com' : undefined,
+    assignee: i % 3 === 0 ? 'analyst@aisoc.dev' : undefined,
     tags: i % 2 === 0 ? ['mitre:T1059', 'endpoint'] : ['network'],
     iocs: [],
     mitreAttack: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' }] : [],

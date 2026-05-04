@@ -57,7 +57,7 @@ function buildDemoCase(id: string): Case {
       "Behavior consistent with T1021.002 (SMB/Windows Admin Shares).",
     status: 'in_progress',
     severity: 'critical',
-    assignee: 'sasha.lin@cyble.com',
+    assignee: 'sasha.lin@aisoc.dev',
     alertIds: ['alert-9012', 'alert-9013', 'alert-9019', 'alert-9024'],
     alertCount: 4,
     tags: ['lateral-movement', 'credential-access', 'finance-subnet'],

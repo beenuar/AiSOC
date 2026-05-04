@@ -2,11 +2,13 @@ openapi: 3.1.0
 info:
   title: AiSOC Platform API
   description: |
-    Open-source AI Security Operations Center by Cyble (v5.1.0).
+    Open-source AI Security Operations Center (v5.2.0).
 
     Autonomous threat detection, investigation, and response — with UEBA behavioral
     analytics, honeytoken deception, purple-team adversary emulation, enterprise RBAC,
-    immutable audit logging, and SOC 2 / ISO 27001 / NIST CSF compliance dashboards.
+    immutable audit logging, the v5.2 Investigation Ledger (signed agent actions),
+    Ambient Copilot, Responder PWA, public evaluation harness, MCP server, and
+    SOC 2 / ISO 27001 / NIST CSF compliance dashboards.
 
     ## Authentication
     Most endpoints require a JWT Bearer token obtained from `POST /api/v1/auth/login`.
@@ -19,11 +21,10 @@ info:
     ## Rate limiting
     Default: 1000 req/min per API key; 100 req/min per user token.
     Limits are surfaced via `X-RateLimit-*` response headers.
-  version: 5.1.0
+  version: 5.2.0
   contact:
     name: AiSOC Community
-    url: https://github.com/beenuar/AiSOC
-    email: security@cyble.com
+    url: https://github.com/beenuar/AiSOC/security/advisories/new
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT

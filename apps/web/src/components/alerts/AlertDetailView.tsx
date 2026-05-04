@@ -48,7 +48,7 @@ const MOCK_ALERT: Alert = {
     { type: 'hash', value: 'a1b2c3d4e5f6789012345678901234567890abcd', malicious: true },
   ],
   tags: ['powershell', 'c2-beacon', 'high-priority'],
-  assignee: 'analyst@cyble.com',
+  assignee: 'analyst@aisoc.dev',
   createdAt: new Date(Date.now() - 3600000).toISOString(),
   updatedAt: new Date(Date.now() - 1800000).toISOString(),
 };

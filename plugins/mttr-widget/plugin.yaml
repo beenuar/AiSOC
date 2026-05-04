@@ -8,7 +8,7 @@ description: >
   structured data ready for the AiSOC dashboard widget renderer.
 author: AiSOC Core Team
 tags: [metrics, mttr, mttd, dashboard, widget]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/mttr-widget
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/mttr-widget
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

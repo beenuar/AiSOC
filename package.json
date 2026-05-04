@@ -2,9 +2,9 @@
   "name": "aisoc",
   "version": "1.0.0",
   "private": true,
-  "description": "AiSOC - AI-powered Security Operations Center by Cyble",
+  "description": "AiSOC — Open-source AI-powered Security Operations Center",
   "license": "MIT",
-  "author": "Cyble Inc.",
+  "author": "AiSOC contributors",
   "workspaces": [
     "apps/*",
     "packages/*"

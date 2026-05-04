@@ -8,7 +8,7 @@ Handles the full lifecycle for each normalized IOC/actor batch:
   4. Neo4j graph merge
   5. Kafka event emission (optional)
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

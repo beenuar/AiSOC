@@ -1,7 +1,7 @@
 """
 Detection rule execution engine.
 Supports: Sigma (pySigma), YARA, KQL (simulated), EQL (simulated).
-Cyble Open-Source AI Security Operations Center - MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

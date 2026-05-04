@@ -1,6 +1,6 @@
 """
 AiSOC API Configuration
-Cyble Open-Source AI Security Operations Center
+AiSOC — open-source AI Security Operations Center
 MIT License
 """
 from functools import lru_cache

@@ -110,7 +110,7 @@ All flags can be set via env vars; the CLI flag wins if both are present.
 | `--aisoc-url` | `AISOC_URL` | `http://localhost:8081` | Base URL of the AiSOC API. |
 | `--api-key` | `AISOC_API_KEY` | _(none)_ | API key (`aisoc_pat_…`) or JWT. Required for non-public endpoints. |
 | `--timeout` | `AISOC_TIMEOUT_MS` | `20000` | Per-request timeout in ms. |
-| `--verbose` | `AISOC_VERBOSE=1` | off | Lifecycle logs to stderr (stdout stays JSON-RPC clean). |
+| `--verbose` | `AISOC_MCP_VERBOSE=1` | off | Lifecycle logs to stderr (stdout stays JSON-RPC clean). |
 
 ## Manual (no-installer) setup
 

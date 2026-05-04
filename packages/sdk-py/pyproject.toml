@@ -26,10 +26,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/aisoc-os/aisoc"
-Documentation = "https://aisoc-os.github.io/aisoc"
-Repository = "https://github.com/aisoc-os/aisoc"
-Issues = "https://github.com/aisoc-os/aisoc/issues"
+Homepage = "https://github.com/beenuar/AiSOC"
+Documentation = "https://beenuar.github.io/AiSOC"
+Repository = "https://github.com/beenuar/AiSOC"
+Issues = "https://github.com/beenuar/AiSOC/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aisoc_sdk"]

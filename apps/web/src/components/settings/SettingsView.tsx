@@ -92,7 +92,7 @@ interface ProfileData {
 
 const DEFAULT_PROFILE: ProfileData = {
   displayName: 'Sasha Lin',
-  email: 'sasha.lin@cyble.com',
+  email: 'sasha.lin@aisoc.dev',
   title: 'Senior SOC Analyst',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
 };
@@ -192,14 +192,14 @@ const DEMO_API_KEYS: ApiKey[] = [
 const DEMO_AUDIT: AuditEntry[] = [
   {
     id: 'a-1',
-    actor: 'sasha.lin@cyble.com',
+    actor: 'sasha.lin@aisoc.dev',
     action: 'enabled',
     target: 'Detection rule “Impossible Travel — Same User”',
     at: ago(12),
   },
   {
     id: 'a-2',
-    actor: 'admin@cyble.com',
+    actor: 'admin@aisoc.dev',
     action: 'rotated',
     target: 'API key “CI / Detection-as-Code Pipeline”',
     at: ago(60 * 6),
@@ -213,14 +213,14 @@ const DEMO_AUDIT: AuditEntry[] = [
   },
   {
     id: 'a-4',
-    actor: 'sasha.lin@cyble.com',
+    actor: 'sasha.lin@aisoc.dev',
     action: 'invited',
-    target: 'avi.sharma@cyble.com (analyst)',
+    target: 'avi.sharma@aisoc.dev (analyst)',
     at: ago(60 * 24 * 1),
   },
   {
     id: 'a-5',
-    actor: 'admin@cyble.com',
+    actor: 'admin@aisoc.dev',
     action: 'changed',
     target: 'Workspace timezone to America/Los_Angeles',
     at: ago(60 * 24 * 5),
@@ -628,7 +628,7 @@ function WorkspacePanel() {
         description="Tenant identity and locale settings. Available to workspace administrators."
       />
       <div className="grid gap-5 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Workspace name" value="Cyble — AiSOC Demo" />
+        <InfoTile label="Workspace name" value="AiSOC Demo" />
         <InfoTile label="Tenant ID" value="tenant_demo_01H0XE4T2WJ9N6" mono />
         <InfoTile label="Plan" value="Open-source (MIT)" />
         <InfoTile label="Region" value="us-east-1 / Multi-AZ" />
@@ -645,11 +645,11 @@ function WorkspacePanel() {
         </p>
         <ul className="mt-3 divide-y divide-gray-800 rounded-lg border border-gray-800 bg-gray-950/40">
           {[
-            { name: 'Sasha Lin', email: 'sasha.lin@cyble.com', role: 'Admin' },
-            { name: 'Avi Sharma', email: 'avi.sharma@cyble.com', role: 'Analyst' },
-            { name: 'Diego Vega', email: 'diego.vega@cyble.com', role: 'Analyst' },
-            { name: 'Mia Ocampo', email: 'mia.ocampo@cyble.com', role: 'Hunter' },
-            { name: 'CI Service', email: 'ci@cyble.com', role: 'Service' },
+            { name: 'Sasha Lin', email: 'sasha.lin@aisoc.dev', role: 'Admin' },
+            { name: 'Avi Sharma', email: 'avi.sharma@aisoc.dev', role: 'Analyst' },
+            { name: 'Diego Vega', email: 'diego.vega@aisoc.dev', role: 'Analyst' },
+            { name: 'Mia Ocampo', email: 'mia.ocampo@aisoc.dev', role: 'Hunter' },
+            { name: 'CI Service', email: 'ci@aisoc.dev', role: 'Service' },
           ].map((m) => (
             <li
               key={m.email}
@@ -1322,32 +1322,32 @@ function AboutPanel() {
     <div>
       <PanelHeader
         title="About AiSOC"
-        description="Open-source SOC platform — by Cyble, MIT licensed."
+        description="Open-source SOC platform — community-built, MIT licensed."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Version" value="v3.0.0-rc.1" />
+        <InfoTile label="Version" value="v5.2.0" />
         <InfoTile label="Build" value="local • dev" />
         <InfoTile label="License" value="MIT" />
-        <InfoTile label="Source" value="github.com/cybeio/aisoc" mono />
+        <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />
       </div>
       <div className="border-t border-gray-800 px-6 py-5 text-sm text-gray-400">
         <p>
           AiSOC is community-driven. Issues, ideas, and PRs welcome on GitHub.
-          For commercial deployment support, see{' '}
+          See the{' '}
           <a
             className="text-blue-400 hover:text-blue-300"
-            href="https://cyble.com"
+            href="https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md"
             target="_blank"
             rel="noreferrer"
           >
-            cyble.com
-          </a>
-          .
+            contributing guide
+          </a>{' '}
+          to get started.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <a
             className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
-            href="https://github.com/cybeio/aisoc"
+            href="https://github.com/beenuar/AiSOC"
             target="_blank"
             rel="noreferrer"
           >
@@ -1355,7 +1355,7 @@ function AboutPanel() {
           </a>
           <a
             className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
-            href="https://github.com/cybeio/aisoc/blob/main/CHANGELOG.md"
+            href="https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md"
             target="_blank"
             rel="noreferrer"
           >
@@ -1363,7 +1363,7 @@ function AboutPanel() {
           </a>
           <a
             className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-800"
-            href="https://github.com/cybeio/aisoc/blob/main/SECURITY.md"
+            href="https://github.com/beenuar/AiSOC/blob/main/SECURITY.md"
             target="_blank"
             rel="noreferrer"
           >

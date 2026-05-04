@@ -11,7 +11,7 @@ Priority score — LightGBM ranker trained on analyst feedback signals
 Both models are held in memory and retrained on demand when enough
 feedback accumulates. They fall back to heuristics if not yet trained.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

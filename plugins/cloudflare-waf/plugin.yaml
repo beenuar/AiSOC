@@ -9,7 +9,7 @@ description: >
   stuffing, and bot-attack playbooks.
 author: AiSOC Core Team
 tags: [network, cloudflare, waf, response, ddos]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/cloudflare-waf
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/cloudflare-waf
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

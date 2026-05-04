@@ -8,7 +8,7 @@ description: >
   access from unexpected regions or service accounts.
 author: AiSOC Core Team
 tags: [data, snowflake, warehouse, events, connector, exfil]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/snowflake-events
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/snowflake-events
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

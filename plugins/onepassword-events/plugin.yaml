@@ -8,7 +8,7 @@ description: >
   theft, anomalous access patterns, and insider misuse of privileged secrets.
 author: AiSOC Core Team
 tags: [identity, secrets, 1password, events, connector]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/onepassword-events
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/onepassword-events
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

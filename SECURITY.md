@@ -14,21 +14,14 @@ AiSOC is security software, so we take vulnerabilities in our own stack seriousl
 
 Please **do not** open a public GitHub issue or PR for security problems.
 
-Report to **`security@cyble.com`** with as much detail as possible:
+Use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new) to send us a report directly. Include as much detail as possible:
 
 - A clear description of the issue and its impact
 - Steps to reproduce, ideally a minimal proof of concept
 - Affected version, commit SHA, or container digest
 - Your name / handle if you'd like to be credited
 
-If your report contains sensitive details (payloads, tokens, customer data), encrypt it with our PGP key:
-
-```
-PGP Key: 0xCY8L3-A1S0C-2024
-Fingerprint: 3F2E 9C1B 7A5D 4E8F 1029  3847 5612 ABCD EF01 2345
-```
-
-Request the latest key by emailing `security@cyble.com`.
+If GitHub's reporting flow is not workable for your situation, you can instead reach the maintainers through the [SECURITY contact in the repository profile](https://github.com/beenuar/AiSOC). Please request our PGP key in your first message and we'll respond out-of-band before you send sensitive details (payloads, tokens, customer data).
 
 ## What to expect
 
@@ -59,14 +52,15 @@ Out of scope:
 
 If you operate AiSOC, please review:
 
-- `docs/runbooks/HARDENING.md` for production hardening steps
-- `infra/helm/aisoc/values.yaml` for the security-related defaults
-- `services/api/app/security/` for our auth, RBAC, and audit primitives
+- [`docs/runbooks/HARDENING.md`](docs/runbooks/HARDENING.md) for production hardening steps
+- [`infra/helm/aisoc/values.yaml`](infra/helm/aisoc/values.yaml) for the security-related defaults
+- [`services/api/app/core/security.py`](services/api/app/core/security.py) and [`services/api/app/auth/`](services/api/app/auth/) for our auth, RBAC, and SSO primitives
+- [`services/api/app/middleware/`](services/api/app/middleware/) for rate limiting, audit logging, and request hardening
 
 ## Bounty
 
-We currently run an **invite-only** bounty program. High-quality reports may be invited automatically. Email `security@cyble.com` if you'd like an invite.
+AiSOC is an open-source project and does not currently operate a paid bounty program. We deeply appreciate responsible reports and will credit researchers in advisories and the hall of fame.
 
 ## Hall of fame
 
-We publicly thank researchers who report valid issues at <https://cyble.com/security/hall-of-fame> after a fix has shipped.
+We publicly thank researchers who report valid issues. Once a fix has shipped, we credit reporters (with their consent) in the corresponding [GitHub Security Advisory](https://github.com/beenuar/AiSOC/security/advisories) and the relevant `CHANGELOG.md` entry.

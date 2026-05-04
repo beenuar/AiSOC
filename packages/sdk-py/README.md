@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/aisoc-sdk)](https://pypi.org/project/aisoc-sdk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 
-Async Python client SDK for [AiSOC](https://github.com/aisoc-os/aisoc).
+Async Python client SDK for [AiSOC](https://github.com/beenuar/AiSOC).
 
 ## Installation
 

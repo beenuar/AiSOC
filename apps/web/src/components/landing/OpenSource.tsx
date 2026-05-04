@@ -17,8 +17,8 @@ const PILLARS = [
     body: 'Every detection, every copilot decision, every connector action is logged with inputs, prompts, and rationale.',
   },
   {
-    title: 'Backed by Cyble',
-    body: 'Maintained by the threat intelligence team at Cyble. Security disclosures get a fast, real, human response.',
+    title: 'Community-driven',
+    body: 'Maintained by SOC analysts, detection engineers, and threat hunters in the open. Security disclosures get a fast, real, human response.',
   },
 ];
 

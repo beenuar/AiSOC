@@ -9,10 +9,10 @@ const config: Config = {
   favicon: "img/favicon.ico",
 
   url: "https://beenuar.github.io",
-  baseUrl: "/aisoc/",
+  baseUrl: "/AiSOC/",
 
   organizationName: "beenuar",
-  projectName: "aisoc",
+  projectName: "AiSOC",
 
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
@@ -28,11 +28,11 @@ const config: Config = {
       {
         docs: {
           sidebarPath: "./sidebars.ts",
-          editUrl: "https://github.com/beenuar/aisoc/tree/main/apps/docs/",
+          editUrl: "https://github.com/beenuar/AiSOC/tree/main/apps/docs/",
         },
         blog: {
           showReadingTime: true,
-          editUrl: "https://github.com/beenuar/aisoc/tree/main/apps/docs/",
+          editUrl: "https://github.com/beenuar/AiSOC/tree/main/apps/docs/",
         },
         theme: {
           customCss: "./src/css/custom.css",
@@ -58,7 +58,7 @@ const config: Config = {
         },
         { to: "/blog", label: "Blog", position: "left" },
         {
-          href: "https://github.com/beenuar/aisoc",
+          href: "https://github.com/beenuar/AiSOC",
           label: "GitHub",
           position: "right",
         },
@@ -80,11 +80,11 @@ const config: Config = {
           items: [
             {
               label: "GitHub Discussions",
-              href: "https://github.com/beenuar/aisoc/discussions",
+              href: "https://github.com/beenuar/AiSOC/discussions",
             },
             {
               label: "Issues",
-              href: "https://github.com/beenuar/aisoc/issues",
+              href: "https://github.com/beenuar/AiSOC/issues",
             },
           ],
         },
@@ -94,7 +94,7 @@ const config: Config = {
             { label: "Blog", to: "/blog" },
             {
               label: "GitHub",
-              href: "https://github.com/beenuar/aisoc",
+              href: "https://github.com/beenuar/AiSOC",
             },
           ],
         },

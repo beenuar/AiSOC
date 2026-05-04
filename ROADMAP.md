@@ -26,7 +26,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 - [x] Public REST API v1 at `/api/v1`, OpenAPI 3.1 at `docs/openapi.yaml`
 - [x] GraphQL gateway (Strawberry) proxying REST
 - [x] Scoped API tokens (`cases:read`, `playbooks:run`, `plugins:install`)
-- [x] Auto-generated client SDKs: `@aisoc/sdk` (TypeScript), `aisoc-sdk` (Python/PyPI), `github.com/beenuar/aisoc-go`
+- [x] Auto-generated client SDKs: `@aisoc/sdk` (TypeScript), `aisoc-sdk` (Python/PyPI), `github.com/beenuar/aisoc/sdk-go`
 - [x] Docusaurus docs site at `docs/site/`, deployed to GitHub Pages
 - [x] Demo Lab: `pnpm aisoc:lab` one-command full-stack + Conti-style ransomware scenario
 - [x] 4 reference plugins: Okta connector, YARA enricher, Slack quarantine responder, MTTR sparkline widget

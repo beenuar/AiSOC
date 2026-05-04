@@ -1,6 +1,6 @@
 /**
  * @aisoc/ui - AiSOC React UI Component Library
- * Open-source AI Security Operations Center by Cyble
+ * AiSOC — open-source AI Security Operations Center
  * MIT License
  */
 

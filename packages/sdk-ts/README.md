@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@aisoc/sdk)](https://www.npmjs.com/package/@aisoc/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 
-TypeScript client SDK for [AiSOC](https://github.com/aisoc-os/aisoc) — auto-generated types from `docs/openapi.yaml`, hand-crafted ergonomic API.
+TypeScript client SDK for [AiSOC](https://github.com/beenuar/AiSOC) — auto-generated types from `docs/openapi.yaml`, hand-crafted ergonomic API.
 
 ## Installation
 

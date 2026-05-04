@@ -2,7 +2,7 @@
 name = "aisoc-threatintel"
 version = "0.1.0"
 description = "AiSOC Threat Intelligence Feed Service — TAXII/STIX/MISP/OTX ingestion"
-authors = ["Cyble <opensource@cyble.com>"]
+authors = ["AiSOC contributors <opensource@aisoc.dev>"]
 license = "MIT"
 
 [tool.poetry.dependencies]

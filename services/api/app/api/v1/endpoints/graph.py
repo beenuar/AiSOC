@@ -1,6 +1,6 @@
 """
 Graph API endpoints: attack paths, blast radius, entity neighbors, MITRE coverage.
-Cyble Open-Source AI Security Operations Center - MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

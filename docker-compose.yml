@@ -1,7 +1,7 @@
 ###############################################################################
 # AiSOC - AI Security Operations Center
 # Docker Compose - Full Development Stack
-# Open-source by Cyble under MIT License
+# AiSOC — open-source under MIT License
 ###############################################################################
 
 version: '3.8'

@@ -5,7 +5,7 @@ Uses a counting Bloom filter approach with multiple hash functions to
 minimize false positives while allowing existence checks before
 expensive storage writes.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

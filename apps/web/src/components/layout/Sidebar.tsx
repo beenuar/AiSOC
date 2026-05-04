@@ -247,7 +247,7 @@ export function Sidebar() {
         <div>
           <span className="text-white font-bold text-base tracking-tight">Ai</span>
           <span className="text-blue-400 font-bold text-base tracking-tight">SOC</span>
-          <p className="text-xs text-gray-500 -mt-0.5">by Cyble</p>
+          <p className="text-xs text-gray-500 -mt-0.5">open-source</p>
         </div>
         {/* Live indicator */}
         <div className="ml-auto flex items-center gap-1">

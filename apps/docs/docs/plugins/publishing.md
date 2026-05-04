@@ -33,6 +33,6 @@ Share your plugin with the AiSOC community via the marketplace.
 
 - Include a `README.md` with installation and configuration instructions
 - Write tests with ≥ 80% coverage
-- Follow the AiSOC [Code of Conduct](https://github.com/beenuar/aisoc/blob/main/CODE_OF_CONDUCT.md)
+- Follow the AiSOC [Code of Conduct](https://github.com/beenuar/AiSOC/blob/main/CODE_OF_CONDUCT.md)
 - Pin dependency versions for reproducibility
 - Never log or store credentials in plain text

@@ -8,7 +8,7 @@ description: >
   or chat are unavailable.
 author: AiSOC Core Team
 tags: [notification, sms, twilio, paging, action]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/twilio-sms
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/twilio-sms
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

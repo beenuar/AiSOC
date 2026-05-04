@@ -9,7 +9,7 @@ description: >
   GitHub and GitLab from a single SOC.
 author: AiSOC Core Team
 tags: [identity, gitlab, audit, devsecops, connector]
-homepage: https://github.com/beenuar/aisoc/tree/main/plugins/gitlab-audit
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/gitlab-audit
 license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:

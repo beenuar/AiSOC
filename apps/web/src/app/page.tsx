@@ -8,14 +8,14 @@ import { OpenSource } from '@/components/landing/OpenSource';
 import { Footer } from '@/components/landing/Footer';
 
 export const metadata: Metadata = {
-  title: 'AiSOC — Open-source AI Security Operations Center by Cyble',
+  title: 'AiSOC — Open-source AI Security Operations Center',
   description:
     'Real-time detection, autonomous triage, and MITRE ATT&CK-aware investigation in one MIT-licensed platform. Self-hosted, extensible, free forever.',
   alternates: { canonical: '/' },
   openGraph: {
     title: 'AiSOC — Open-source AI Security Operations Center',
     description:
-      'Real-time detection, autonomous triage, and MITRE ATT&CK-aware investigation. MIT licensed. By Cyble.',
+      'Real-time detection, autonomous triage, and MITRE ATT&CK-aware investigation. MIT licensed. Community-built.',
     images: ['/og-image.svg'],
     type: 'website',
   },

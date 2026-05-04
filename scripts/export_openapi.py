@@ -12,7 +12,7 @@ Usage
 The script imports the FastAPI application directly (no running server needed)
 and calls ``app.openapi()`` to get the schema, then serialises it to YAML.
 
-MIT License — Cyble Open-Source AiSOC
+MIT License — AiSOC (open-source AI Security Operations Center)
 """
 from __future__ import annotations
 

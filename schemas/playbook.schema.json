@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/cyble-dev/aisoc/schemas/playbook.schema.json",
+  "$id": "https://github.com/beenuar/AiSOC/schemas/playbook.schema.json",
   "title": "AiSOC Playbook",
   "description": "Schema for AiSOC v4 Pillar-2 playbook definitions.",
   "type": "object",

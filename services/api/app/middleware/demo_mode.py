@@ -101,9 +101,9 @@ class DemoModeMiddleware(BaseHTTPMiddleware):
                     "This is the public AiSOC demo at demo.aisoc.dev. "
                     "Write actions are disabled here so every visitor sees "
                     "the same dataset. To run AiSOC for real, self-host it "
-                    "in 5 minutes — see https://github.com/cyble/AiSOC."
+                    "in 5 minutes — see https://github.com/beenuar/AiSOC."
                 ),
-                "self_host_url": "https://github.com/cyble/AiSOC#quickstart",
+                "self_host_url": "https://github.com/beenuar/AiSOC#quickstart",
                 "blocked_path": path,
                 "blocked_method": method,
             },

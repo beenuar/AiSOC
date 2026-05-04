@@ -4,7 +4,7 @@ Unit tests for app.services.plugin_manager
 These tests run without any external services; they exercise the
 PluginManager against temporary on-disk plugin fixtures.
 
-MIT License — Cyble Open-Source AiSOC
+MIT License — AiSOC (open-source AI Security Operations Center)
 """
 from __future__ import annotations
 

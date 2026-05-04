@@ -4,7 +4,7 @@ Neo4j storage layer for threat intelligence relationships.
 Writes IOC nodes, actor nodes, and their relationships into the
 knowledge graph for attack path and blast-radius queries.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

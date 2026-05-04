@@ -8,7 +8,7 @@ Thank you for contributing to AiSOC! Please read these guidelines before opening
 
 ## Code of Conduct
 
-All contributors must follow our [Code of Conduct](https://github.com/beenuar/aisoc/blob/main/CODE_OF_CONDUCT.md).
+All contributors must follow our [Code of Conduct](https://github.com/beenuar/AiSOC/blob/main/CODE_OF_CONDUCT.md).
 
 ## Branching Strategy
 
@@ -51,4 +51,4 @@ Report security vulnerabilities privately via GitHub Security Advisories.
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[MIT License](https://github.com/beenuar/aisoc/blob/main/LICENSE).
+[MIT License](https://github.com/beenuar/AiSOC/blob/main/LICENSE).

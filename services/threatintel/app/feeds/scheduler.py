@@ -4,7 +4,7 @@ APScheduler-based feed polling orchestrator.
 Coordinates TAXII, MISP, OTX, and CISA KEV polling intervals and
 pipes normalized IOCs through the deduplication + storage pipeline.
 
-Cyble Open-Source AI Security Operations Center — MIT License
+AiSOC — open-source AI Security Operations Center (MIT License)
 """
 from __future__ import annotations
 

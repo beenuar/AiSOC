@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # WebSocket API Reference
 
-AiSOC streams real-time events over an authenticated WebSocket connection served by the `realtime` service (port 8002).
+AiSOC streams real-time events over an authenticated WebSocket connection served by the `realtime` service (port 8086).
 
 ## Connection
 
@@ -15,7 +15,7 @@ wss://your-domain.com/ws?token=<jwt>
 Locally:
 
 ```
-ws://localhost:8002/ws?token=<jwt>
+ws://localhost:8086/ws?token=<jwt>
 ```
 
 Pass a valid JWT in the `token` query parameter. The connection is rejected with `4001 Unauthorized` if the token is missing or expired.
@@ -129,7 +129,7 @@ Available channels: `alerts`, `cases`, `detections`, `investigations`, `ueba`, `
 ## Example (Browser)
 
 ```javascript
-const ws = new WebSocket(`ws://localhost:8002/ws?token=${jwt}`);
+const ws = new WebSocket(`ws://localhost:8086/ws?token=${jwt}`);
 
 ws.onopen = () => {
   ws.send(JSON.stringify({ type: "subscribe", channel: "all" }));

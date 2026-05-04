@@ -46,7 +46,7 @@ When running locally, interactive Swagger UI is available at:
 - **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - **OpenAPI JSON**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 
-The full spec is also committed at [`docs/openapi.yaml`](https://github.com/beenuar/aisoc/blob/main/docs/openapi.yaml).
+The full spec is also committed at [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml).
 
 ## Endpoint Groups
 
@@ -92,6 +92,58 @@ The full spec is also committed at [`docs/openapi.yaml`](https://github.com/been
 | `POST` | `/playbooks/{id}/execute` | Execute a playbook |
 | `GET` | `/playbooks/{id}/runs` | Execution history |
 | `POST` | `/actions/dry-run` | Simulate an action |
+
+### Investigations & Ledger *(v5.2)*
+
+Every prompt, response, evidence citation, and tool call the AI investigator
+emits is appended to the **Investigation Ledger**. See
+[Cases — Investigation Ledger](../concepts/cases#investigation-ledger) for
+the data model and rationale.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/cases/{case_id}/investigations` | List ledger entries for a case |
+| `GET` | `/investigations/{id}` | Single ledger entry with full payload |
+| `POST` | `/cases/{case_id}/investigations:replay` | Replay an investigation deterministically |
+| `POST` | `/cases/{case_id}/investigations:start` | Kick off a fresh agent investigation |
+
+### Ambient Copilot *(v5.2)*
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/copilot/context/{resource_type}/{resource_id}` | Context-aware suggestions for an alert / case / rule / playbook |
+| `POST` | `/copilot/actions/{action_id}:run` | Run a suggested action with the right agent tool |
+
+### Marketplace *(v5.2)*
+
+The marketplace surface is backed by the JSON index at
+[`marketplace/index.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/index.json)
+and re-published to the web app at `/marketplace/index.json`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/marketplace/items` | List plugins, detections, and playbooks |
+| `GET` | `/marketplace/items/{slug}` | Item detail with manifest + signature |
+| `POST` | `/marketplace/items/{slug}:install` | Install a plugin / detection / playbook into the tenant |
+
+### Responder PWA *(v5.2)*
+
+These endpoints back the mobile-first `/responder/*` route group.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/oncall/rotations` | List / create on-call rotations |
+| `GET` | `/oncall/whoison` | Currently on-call responder |
+| `GET/POST` | `/passkeys` | List / register WebAuthn credentials |
+| `DELETE` | `/passkeys/{id}` | Revoke a passkey |
+| `POST` | `/passkeys/challenge` | Begin WebAuthn ceremony |
+| `POST` | `/passkeys/verify` | Complete WebAuthn ceremony |
+| `GET/POST` | `/approvals` | List / create approval requests |
+| `POST` | `/approvals/{id}:approve` | Approve a request |
+| `POST` | `/approvals/{id}:reject` | Reject a request |
+| `GET/POST` | `/push/subscriptions` | List / register Web Push subscriptions |
+| `DELETE` | `/push/subscriptions/{id}` | Revoke a Web Push subscription |
+| `POST` | `/push/test` | Send a test push to the calling user |
 
 ### Threat Intelligence
 
@@ -169,8 +221,12 @@ Response includes `"next_cursor"` when more pages exist.
 
 ## Client SDKs
 
-| Language | Package |
-|----------|---------|
-| Python | `packages/sdk-py` |
-| TypeScript | `packages/sdk-ts` |
-| Go | `packages/sdk-go` |
+| Language | Package | Notes |
+|----------|---------|-------|
+| Python | [`packages/sdk-py`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-py) | Async client built on `httpx` |
+| TypeScript | [`packages/sdk-ts`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-ts) | Browser + Node, fetch-based |
+| Go | [`packages/sdk-go`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-go) | Typed models + thin client helpers |
+
+In addition, the [Model Context Protocol server](../integrations/mcp)
+(`@aisoc/mcp`) exposes 11 of these endpoints as IDE-side tools for
+Claude / Cursor / Continue / Cody.
