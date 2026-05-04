@@ -216,19 +216,19 @@ jobs:
           import json, pathlib
           d = json.loads(pathlib.Path("eval_report.json").read_text())
           print("## AiSOC Pillar-1 Eval Harness — 200-incident synthetic dataset\n")
-          print("_Alert-reduction is a real measurement; the other three suites are substrate self-consistency gates._\n")
-          print(f"_Dataset: {d['dataset']}_  ")
-          print(f"_Generated: {d['generated_at']}_\n")
+          print("Alert-reduction is a real measurement; the other three suites are substrate self-consistency gates.\n")
+          print(f"Dataset: {d['dataset']}  ")
+          print(f"Generated: {d['generated_at']}\n")
           print("| Suite | Metric | Value | Target | Result |")
           print("|---|---|---:|---:|:---:|")
           for name, suite in d["suites"].items():
-              mark = "✅" if suite["passed"] else "❌"
+              mark = "PASS" if suite["passed"] else "FAIL"
               print(
                   f"| `{name}` | {suite['metric']} | "
-                  f"**{suite['value']:.3f}** | ≥ {suite['target']:.2f} | {mark} |"
+                  f"{suite['value']:.3f} | ≥ {suite['target']:.2f} | {mark} |"
               )
-          verdict = "✅ ALL GATES PASSED" if d["all_passed"] else "❌ REGRESSION DETECTED"
-          print(f"\n**{verdict}**\n")
+          verdict = "ALL GATES PASSED" if d["all_passed"] else "REGRESSION DETECTED"
+          print(f"\n{verdict}\n")
           PY
       - name: Upload eval report
         if: always()

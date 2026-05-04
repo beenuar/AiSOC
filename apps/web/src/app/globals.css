@@ -49,22 +49,6 @@ body {
   border-radius: 4px;
 }
 
-/* Grid background */
-.bg-grid {
-  background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-/* Glow effects */
-.glow-blue {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
-}
-
-.glow-red {
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
-}
-
 /* Custom select/input dark theme */
 select {
   -webkit-appearance: none;
@@ -99,14 +83,6 @@ select {
 
 .animate-ping-slow {
   animation: ping-slow 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-/* Subtle glass surface */
-.glass {
-  background: rgba(17, 21, 31, 0.65);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* Code blocks */

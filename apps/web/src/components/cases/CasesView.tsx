@@ -205,7 +205,6 @@ export function CasesView() {
         </div>
       ) : cases.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-gray-600">
-          <span className="text-3xl mb-2">📂</span>
           <p className="text-sm">No cases found</p>
         </div>
       ) : (

@@ -158,13 +158,13 @@ def main() -> None:
         }
         try:
             resp = _post(alerts_url, payload)
-            print(f"  [stage {alert['stage']}] ✓  {alert['title']} → id={resp.get('id', '?')}")
+            print(f"  [stage {alert['stage']}] ok  {alert['title']} -> id={resp.get('id', '?')}")
             injected += 1
         except urllib.error.HTTPError as e:
             body = e.read().decode()
-            print(f"  [stage {alert['stage']}] ✗  HTTP {e.code}: {body[:200]}", file=sys.stderr)
+            print(f"  [stage {alert['stage']}] FAIL  HTTP {e.code}: {body[:200]}", file=sys.stderr)
         except Exception as exc:  # noqa: BLE001
-            print(f"  [stage {alert['stage']}] ✗  {exc}", file=sys.stderr)
+            print(f"  [stage {alert['stage']}] FAIL  {exc}", file=sys.stderr)
 
         if args.delay:
             time.sleep(args.delay)

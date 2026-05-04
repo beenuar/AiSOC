@@ -191,7 +191,7 @@ export function FrameworkView({ framework }: Props) {
         </div>
         <div className="w-full bg-gray-700 rounded-full h-3">
           <div
-            className="h-3 rounded-full bg-gradient-to-r from-blue-600 to-green-500 transition-all"
+            className="h-3 rounded-full bg-emerald-500 transition-all"
             style={{ width: `${pctBar}%` }}
           />
         </div>

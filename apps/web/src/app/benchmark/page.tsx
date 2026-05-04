@@ -6,14 +6,14 @@ import { BenchmarkResults } from '@/components/benchmark/BenchmarkResults';
 import { ComparisonTable } from '@/components/benchmark/ComparisonTable';
 
 export const metadata: Metadata = {
-  title: 'Public Eval Harness — AiSOC',
+  title: 'Public eval harness — AiSOC',
   description:
-    "AiSOC's open, reproducible regression harness. 200 deterministic synthetic incidents, four CI gates over the substrate (extractors, fusion, templates, judges). Honest about what it measures — and what it doesn't.",
+    'A reproducible regression harness over the AiSOC substrate. 200 deterministic synthetic incidents and four CI gates: one real measurement (alert reduction) and three substrate self-consistency checks. The page documents what each metric measures and what it does not.',
   alternates: { canonical: '/benchmark' },
   openGraph: {
-    title: 'AiSOC Public Eval Harness',
+    title: 'AiSOC public eval harness',
     description:
-      'A regression-gate harness over the AiSOC substrate. Open dataset, open harness, CI-enforced. This is not an LLM-agent leaderboard, and we say so on the page.',
+      'A regression-gate harness over the AiSOC substrate. Open dataset, open harness, CI-enforced. The page is explicit that this is not an LLM-agent leaderboard.',
     type: 'article',
   },
 };
@@ -41,30 +41,28 @@ export default function BenchmarkPage() {
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Live, reproducible
+              Reproducible
             </span>
-            <span className="text-xs text-gray-500">Updated on every commit to main</span>
+            <span className="text-xs text-gray-500">Runs on every commit to main</span>
           </div>
           <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
             Public eval harness
           </h1>
           <p className="mt-4 max-w-3xl text-lg text-gray-400">
-            An <span className="text-white">open, deterministic regression harness</span>{' '}
-            over the AiSOC substrate &mdash; the keyword extractors, the fusion
-            pipeline, the report and response templates, and the offline judges
-            that grade them. The dataset, the harness, and the CI gate are all
-            in the repo. You can reproduce every number on this page in under
-            10 seconds on a laptop.
+            A deterministic regression harness over the AiSOC substrate &mdash;
+            the keyword extractors, the fusion pipeline, the report and
+            response templates, and the offline judges that grade them. The
+            dataset, the harness, and the CI gate are in the repo. The numbers
+            on this page reproduce in roughly 25 milliseconds on a laptop.
           </p>
 
           <div className="mt-5 max-w-3xl rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-4 text-sm text-amber-100/80">
-            <strong className="text-amber-200">Read this first:</strong>{' '}
-            this harness does <em>not</em> exercise the live LLM agent. It runs
-            deterministic substrate code against synthetic data so we can gate
-            every commit in milliseconds. Three of the four metrics measure
-            <em> internal consistency </em> of that substrate, not agent
-            accuracy. We explain exactly what each suite measures &mdash; and
-            doesn&apos;t &mdash; below.
+            <span className="font-semibold text-amber-200">Read this first:</span>{' '}
+            the harness does not exercise the live LLM agent. It runs
+            deterministic substrate code against synthetic data so the CI gate
+            can run in milliseconds. Three of the four metrics measure internal
+            consistency of that substrate, not agent accuracy. The sections
+            below describe what each suite measures and what it does not.
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -104,7 +102,7 @@ export default function BenchmarkPage() {
               href="https://github.com/beenuar/AiSOC/actions/workflows/ci.yml"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-glow-sm transition hover:bg-brand-400"
+              className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
               Latest CI run
               <svg
@@ -124,11 +122,10 @@ export default function BenchmarkPage() {
         <div className="mx-auto max-w-5xl">
           <h2 className="text-2xl font-semibold tracking-tight">Latest results</h2>
           <p className="mt-2 max-w-3xl text-sm text-gray-400">
-            Four metrics, four CI gates. Every gate is a hard fail in CI &mdash; a
-            regression blocks the build. The numbers below come from the most
-            recent successful run on <code className="text-gray-300">main</code>.
-            Click a card for what the metric actually measures and what it does
-            <em> not</em>.
+            Four metrics, four CI gates. A regression on any gate blocks the
+            build. The numbers below come from the most recent successful run
+            on <code className="text-gray-300">main</code>. Each card describes
+            what the metric measures and what it does not.
           </p>
           <div className="mt-8">
             <BenchmarkResults />
@@ -139,12 +136,8 @@ export default function BenchmarkPage() {
       <section className="px-6 pb-20">
         <div className="mx-auto max-w-4xl">
           <h2 className="text-2xl font-semibold tracking-tight">
-            What each suite actually measures
+            What each suite measures
           </h2>
-          <p className="mt-2 max-w-3xl text-sm text-gray-400">
-            We took a hard look at the harness and tightened the language so
-            the marketing matches the code. Here&apos;s the honest breakdown:
-          </p>
           <div className="mt-6 space-y-4 text-sm">
             <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.03] p-5">
               <div className="flex flex-wrap items-center gap-2">
@@ -177,13 +170,11 @@ export default function BenchmarkPage() {
               <p className="mt-2 text-gray-300">
                 Each synthetic incident is generated with a tactic label, and
                 its description is written to include keywords that the
-                hand-curated extractor recognizes. The 97% is therefore largely
+                hand-curated extractor recognises. The 97% is therefore largely
                 a check that the dataset and the extractor agree with each
-                other &mdash; not the accuracy of the LLM agent. It is
-                <em> still useful </em>: a regression in the extractor (a
-                misnamed tactic, a typo in the keyword table, a lost tactic)
-                will cause the gate to fail. Treat it as a regression sentinel
-                for the substrate, not a leaderboard score.
+                other, not a measure of LLM-agent accuracy. The gate still has
+                value as a regression sentinel: a misnamed tactic, a typo in
+                the keyword table, or a lost tactic will fail it.
               </p>
             </div>
 
@@ -199,12 +190,11 @@ export default function BenchmarkPage() {
               <p className="mt-2 text-gray-300">
                 The simulator wraps the incident description in a Markdown
                 report, and the judge looks for evidence keywords inside it.
-                Because those evidence keywords are drawn from the description,
-                the score is close to a string-copy tautology &mdash; it
-                confirms the report template includes the description, and the
-                judge can find keywords in it. It catches drops in the report
-                template (e.g. someone omits the Summary section) but does not
-                grade an actual LLM-written investigation.
+                Those evidence keywords are drawn from the description, so the
+                gate confirms that the report template includes the description
+                and that the judge can find the keywords. It catches drops in
+                the report template (for example a missing Summary section)
+                but does not grade an LLM-written investigation.
               </p>
             </div>
 
@@ -218,23 +208,22 @@ export default function BenchmarkPage() {
                 </span>
               </div>
               <p className="mt-2 text-gray-300">
-                The synthesizer embeds the expected MITRE techniques and the
-                first evidence keyword directly into the templated plan, then
-                the rubric judge checks for them. By construction the score is
-                ~1.000. This catches a broken templating pipeline (e.g. the
-                synthesizer stops emitting the action class) but is not a
-                grade of LLM output. We&apos;re calling it out so that
-                &ldquo;1.000&rdquo; is read correctly: it&apos;s green, not
-                impressive.
+                The synthesiser embeds the expected MITRE techniques and the
+                first evidence keyword directly into the templated plan, and
+                the rubric judge checks for them. The score is ~1.000 by
+                construction. This catches a broken templating pipeline (for
+                example, the synthesiser silently dropping an action class) but
+                is not a grade of LLM output. The 1.000 is a green
+                regression-gate signal, not a quality measurement.
               </p>
             </div>
           </div>
           <p className="mt-6 max-w-3xl text-sm text-gray-500">
-            The next harness milestone is <strong className="text-gray-300">
-            online evals</strong>: nightly runs that drive the real LangGraph
-            agent against the same dataset, with an LLM-as-judge gated by
-            <code className="text-gray-300"> OPENAI_API_KEY</code>. That&apos;s
-            where actual agent accuracy gets measured. Tracking issue:{' '}
+            The next milestone is an online eval: nightly runs that drive the
+            real LangGraph agent against the same dataset, with an
+            LLM-as-judge gated by{' '}
+            <code className="text-gray-300">OPENAI_API_KEY</code>. That is the
+            run where actual agent accuracy is measured. Tracking issue:{' '}
             <a
               className="underline decoration-dotted hover:text-gray-300"
               href="https://github.com/beenuar/AiSOC/issues"
@@ -274,23 +263,19 @@ export default function BenchmarkPage() {
       <section className="px-6 pb-20">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-2xl font-semibold tracking-tight">
-            Honest comparison vs vendors
+            Comparison to other AI SOC offerings
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-gray-400">
-            We measure what we ship and label it for what it is. Where a
-            vendor publishes a number, we cite it. Where a vendor doesn&apos;t,
-            we mark it absent. No marketing math.
+            Where a vendor publishes a number or a verifiable capability, it
+            is cited. Where a vendor does not, the row is marked absent.
           </p>
           <div className="mt-6">
             <ComparisonTable />
           </div>
           <p className="mt-6 max-w-3xl text-sm text-gray-500">
-            <strong className="text-gray-300">Why this matters: </strong>
-            a regulated bank cannot deploy a vendor whose agent is a black-box
-            cloud service. They can deploy AiSOC. Their auditor reviews the
-            same dataset, the same harness, and the same CI numbers we publish
-            here &mdash; including this candid breakdown of which suites
-            measure substrate health vs agent quality.
+            A self-hostable, MIT-licensed agent with a published regression
+            harness can be reviewed directly by an auditor. Vendor cloud
+            agents typically cannot be reviewed at the same level.
           </p>
         </div>
       </section>
@@ -298,62 +283,58 @@ export default function BenchmarkPage() {
       <section className="px-6 pb-20">
         <div className="mx-auto max-w-4xl">
           <h2 className="text-2xl font-semibold tracking-tight">What this is not</h2>
-          <p className="mt-2 text-sm text-gray-400">
-            We&apos;re allergic to overclaiming. A few honest caveats up front:
-          </p>
           <ul className="mt-5 space-y-3 text-sm text-gray-400">
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
-              <strong className="text-gray-200">No LLM agent runs here.</strong>{' '}
-              The harness exercises deterministic substrate code &mdash;
-              extractors, fusion, templates, keyword judges. The live LangGraph
+              <span className="font-semibold text-gray-200">No LLM agent runs here.</span>{' '}
+              The harness exercises deterministic substrate code: extractors,
+              fusion, templates, and keyword judges. The live LangGraph
               orchestrator (<code className="text-gray-300">services/agents/app/investigator/</code>)
-              is not invoked. An online eval that does invoke it nightly is on
-              the Phase-1 roadmap.
+              is not invoked. An online eval that drives it nightly is on the
+              roadmap.
             </li>
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
-              <strong className="text-gray-200">The dataset is synthetic.</strong>{' '}
-              200 incidents flag substrate regressions but don&apos;t claim
-              production parity. Real customer benchmarks will be opt-in and
-              federated.
+              <span className="font-semibold text-gray-200">The dataset is synthetic.</span>{' '}
+              200 incidents are enough to flag substrate regressions but not
+              enough to claim production parity. Federated, opt-in
+              real-customer evaluation is on the roadmap.
             </li>
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
-              <strong className="text-gray-200">The judges are keyword-based.</strong>{' '}
-              They can be gamed by template-stuffing. In several suites the
-              templates already include the keywords the judge looks for, so
-              those suites mostly verify the templates haven&apos;t broken
-              &mdash; not that an agent answered well. The full LLM-as-judge
+              <span className="font-semibold text-gray-200">The judges are keyword-based.</span>{' '}
+              They can be gamed by template-stuffing. In three of the four
+              suites the templates already include the keywords the judge
+              looks for, which is why those suites are labelled substrate
+              self-consistency rather than agent quality. The LLM-as-judge
               variant is the follow-up.
             </li>
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
-              <strong className="text-gray-200">
-                &ldquo;Public benchmark&rdquo; means the harness, not a
+              <span className="font-semibold text-gray-200">
+                &ldquo;Public eval harness&rdquo; means this harness, not a
                 third-party leaderboard.
-              </strong>{' '}
-              No outside body grades AiSOC. The value is that the dataset, the
-              code, and the gates are all open and CI-enforced &mdash; you can
-              run, audit, and break the harness yourself.
+              </span>{' '}
+              No outside body grades AiSOC. The dataset, the code, and the
+              gates are open and CI-enforced, and anyone can run, audit, or
+              extend the harness.
             </li>
           </ul>
         </div>
       </section>
 
       <section className="px-6 pb-24">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-brand-500/20 bg-gradient-to-br from-brand-500/10 to-transparent p-8 text-center">
+        <div className="mx-auto max-w-4xl rounded-2xl border border-brand-500/20 bg-surface-card p-8 text-center">
           <h2 className="text-2xl font-semibold tracking-tight">
-            Help us harden the harness
+            Contributing to the harness
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-gray-400">
-            Spot a tactic the extractor misses, a fusion miss, a tautological
-            judge, or a rubric weakness? File a PR with a fixture and the
-            gate will lock the regression in for everyone forever &mdash; or
-            help us land the online LLM-as-judge variant.
+            New fixtures for missed tactics or fusion edge cases, replacements
+            for tautological judges, and the online LLM-as-judge variant are
+            all in scope for contributions.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
               href="https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-glow-sm transition hover:bg-brand-400"
+              className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
               Contributing guide
             </a>

@@ -1,8 +1,7 @@
-# Migration Guide: v3 → v4 "Autonomous SOC"
+# Migration Guide: v3 → v4
 
-This guide covers every breaking change and the step-by-step upgrade path from
-AiSOC v3 (SOAR-focused) to v4 (Autonomous SOC). Read it **before** running
-`docker compose pull` or deploying to production.
+This guide covers the breaking changes and upgrade path from AiSOC v3 to v4.
+Read it before running `docker compose pull` or deploying to production.
 
 ---
 
@@ -28,16 +27,16 @@ AiSOC v3 (SOAR-focused) to v4 (Autonomous SOC). Read it **before** running
 
 | Area | v3 | v4 |
 |------|----|----|
-| **Core engine** | Rule-based SOAR engine | LangGraph multi-agent investigator |
-| **Playbook format** | Custom JSON (no schema) | JSON Schema 2020-12 (`playbook.schema.json`) |
-| **Plugin manifest** | `aisoc-plugin.json` only | `plugin.yaml` (preferred) + `aisoc-plugin.json` (legacy) |
-| **Plugin types** | `enricher`, `action`, `connector` | + `responder`, `detection`, `widget` |
-| **Plugin distribution** | Local directory only | Local directory + OCI images (via `oras`) |
-| **API auth** | JWT only | JWT + scoped API tokens (`/api/v1/api-keys`) |
-| **API schema** | REST only | REST (OpenAPI 3.1) + GraphQL |
-| **Observability** | Prometheus metrics only | Prometheus + OpenTelemetry traces (Jaeger/OTLP) |
-| **SDKs** | None | Python SDK, Go SDK, TypeScript SDK |
-| **Marketplace** | None | Community playbook & plugin marketplace |
+| Core engine | Rule-based SOAR engine | LangGraph multi-agent investigator |
+| Playbook format | Custom JSON (no schema) | JSON Schema 2020-12 (`playbook.schema.json`) |
+| Plugin manifest | `aisoc-plugin.json` only | `plugin.yaml` (preferred) + `aisoc-plugin.json` (legacy) |
+| Plugin types | `enricher`, `action`, `connector` | + `responder`, `detection`, `widget` |
+| Plugin distribution | Local directory only | Local directory + OCI images (via `oras`) |
+| API auth | JWT only | JWT + scoped API tokens (`/api/v1/api-keys`) |
+| API schema | REST only | REST (OpenAPI 3.1) + GraphQL |
+| Observability | Prometheus metrics only | Prometheus + OpenTelemetry traces (Jaeger/OTLP) |
+| SDKs | None | Python SDK, Go SDK, TypeScript SDK |
+| Marketplace | None | Community playbook & plugin marketplace |
 
 ---
 
@@ -235,13 +234,13 @@ Expected output:
 {"status":"ok","version":"4.0.0","services":{"db":"ok","redis":"ok","kafka":"ok"}}
 {"data":{"__typename":"Query"}}
 ["okta-connector","yara-enricher","slack-quarantine","mttr-widget"]
-✅ ALL GATES PASSED (alert reduction + 3 substrate self-consistency gates)
+ALL GATES PASSED (alert reduction + 3 substrate self-consistency gates)
 ```
 
-> The eval harness runs deterministic substrate code (extractors, fusion,
-> templates, judges) against synthetic incidents — it does **not** call the
-> live LLM agent. See [`apps/docs/docs/benchmark.md`](apps/docs/docs/benchmark.md)
-> for what each suite actually measures.
+The eval harness runs deterministic substrate code (extractors, fusion,
+templates, judges) against synthetic incidents. It does not call the live LLM
+agent. See [`apps/docs/docs/benchmark.md`](apps/docs/docs/benchmark.md) for
+what each suite measures.
 
 ---
 
@@ -300,23 +299,22 @@ Investigation responses now include `audit_log` and `iteration` fields:
 
 ## FAQ
 
-**Q: Do I need an OpenAI key for v4?**  
-A: Only for the AI Multi-Agent Investigator. All other features (playbooks,
-plugins, detections) work without an LLM key. Set `LLM_PROVIDER=none` to
-disable the investigator entirely.
+Q: Do I need an OpenAI key for v4?
+A: Only for the multi-agent investigator. Other features (playbooks, plugins,
+detections) work without an LLM key. Set `LLM_PROVIDER=none` to disable the
+investigator entirely.
 
-**Q: Can I run v3 and v4 side by side?**  
+Q: Can I run v3 and v4 side by side?
 A: Yes. Use a different Docker Compose project name:
 `docker compose -p aisoc-v4 up -d`
 
-**Q: Will my v3 playbooks still run?**  
+Q: Will my v3 playbooks still run?
 A: After `python3 scripts/upgrade_playbooks.py`, yes. The v4 engine is
 backward-compatible for the core `action` step type.
 
-**Q: How do I roll back to v3 if something goes wrong?**  
+Q: How do I roll back to v3 if something goes wrong?
 A: Restore the PostgreSQL backup from Step 1, then `docker compose pull` with
 the v3 image tags pinned in your `docker-compose.yml`.
 
-**Q: Where do I get help?**  
-A: Open an issue at https://github.com/beenuar/AiSOC/issues or join the
-`#aisoc-v4-upgrade` Slack channel.
+Q: Where do I get help?
+A: Open an issue at https://github.com/beenuar/AiSOC/issues.

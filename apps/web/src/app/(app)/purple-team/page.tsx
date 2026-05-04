@@ -206,9 +206,9 @@ function ExecutionsTable({ onReportDetection }: { onReportDetection: (ex: Execut
                 {ex.detected === null ? (
                   <span className="text-gray-400 text-xs">—</span>
                 ) : ex.detected ? (
-                  <span className="text-green-600 font-medium text-xs">✓ Yes</span>
+                  <span className="text-green-600 font-medium text-xs">Yes</span>
                 ) : (
-                  <span className="text-red-500 font-medium text-xs">✗ No</span>
+                  <span className="text-red-500 font-medium text-xs">No</span>
                 )}
               </td>
               <td className="px-4 py-2.5 text-gray-500 text-xs">

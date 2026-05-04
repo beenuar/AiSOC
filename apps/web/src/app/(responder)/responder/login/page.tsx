@@ -88,7 +88,7 @@ export default function ResponderLoginPage() {
       <div className="flex-1 flex flex-col justify-center px-6 max-w-md mx-auto w-full">
         {/* Brand mark */}
         <div className="flex flex-col items-center text-center mb-12">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/20">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center mb-5">
             <svg
               className="w-9 h-9 text-white"
               fill="none"

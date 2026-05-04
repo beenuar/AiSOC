@@ -29,7 +29,7 @@ class NotifySlackExecutor(BaseExecutor):
                         webhook_url,
                         json={
                             "channel": channel,
-                            "text": f"🚨 AiSOC Alert\n*Incident:* {request.incident_id}\n{message}",
+                            "text": f"AiSOC Alert\n*Incident:* {request.incident_id}\n{message}",
                         },
                     )
                     resp.raise_for_status()

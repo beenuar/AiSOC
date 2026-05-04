@@ -102,11 +102,11 @@ s3_delete_old() {
 notify_slack() {
   local status="$1" message="$2"
   [[ -z "$SLACK_WEBHOOK_URL" ]] && return
-  local emoji="✅"
-  [[ "$status" != "success" ]] && emoji="🚨"
+  local prefix="[ok]"
+  [[ "$status" != "success" ]] && prefix="[FAIL]"
   curl -s -X POST "$SLACK_WEBHOOK_URL" \
     -H 'Content-Type: application/json' \
-    -d "{\"text\":\"${emoji} AiSOC Backup [${TIMESTAMP}]: ${message}\"}" \
+    -d "{\"text\":\"${prefix} AiSOC Backup [${TIMESTAMP}]: ${message}\"}" \
     || true
 }
 

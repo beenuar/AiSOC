@@ -249,12 +249,12 @@ def main() -> int:
 
         if rule_failed:
             failed += 1
-            print(f"\n❌  {rel}")
+            print(f"\nFAIL  {rel}")
             for e in errors:
-                print(f"    • {e}")
+                print(f"    - {e}")
         else:
             warn_suffix = f" ({len(warnings)} warn)" if warnings else ""
-            print(f"✓  {rel}{warn_suffix}")
+            print(f"PASS  {rel}{warn_suffix}")
             for w in warnings:
                 print(f"    {w}")
 

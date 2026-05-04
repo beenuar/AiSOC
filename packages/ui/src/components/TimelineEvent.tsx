@@ -18,12 +18,12 @@ interface TimelineEventProps {
 }
 
 const EVENT_TYPE_CONFIG = {
-  alert: { dot: 'bg-red-500 ring-red-500/30', icon: '⚠', text: 'text-red-400' },
-  action: { dot: 'bg-blue-500 ring-blue-500/30', icon: '⚡', text: 'text-blue-400' },
-  system: { dot: 'bg-gray-500 ring-gray-500/30', icon: '⚙', text: 'text-gray-400' },
-  user: { dot: 'bg-green-500 ring-green-500/30', icon: '👤', text: 'text-green-400' },
-  ai: { dot: 'bg-purple-500 ring-purple-500/30', icon: '🤖', text: 'text-purple-400' },
-  enrichment: { dot: 'bg-cyan-500 ring-cyan-500/30', icon: '🔍', text: 'text-cyan-400' },
+  alert: { dot: 'bg-red-500 ring-red-500/30', text: 'text-red-400' },
+  action: { dot: 'bg-blue-500 ring-blue-500/30', text: 'text-blue-400' },
+  system: { dot: 'bg-gray-500 ring-gray-500/30', text: 'text-gray-400' },
+  user: { dot: 'bg-green-500 ring-green-500/30', text: 'text-green-400' },
+  ai: { dot: 'bg-purple-500 ring-purple-500/30', text: 'text-purple-400' },
+  enrichment: { dot: 'bg-cyan-500 ring-cyan-500/30', text: 'text-cyan-400' },
 };
 
 function formatTime(ts: string) {

@@ -24,9 +24,8 @@ playbooks/
 
 The runtime (`services/agents/app/playbook/store.py`) loads `packs/v1/**`
 on startup and merges with user-defined playbooks in
-`services/agents/data/playbooks/index.json`. **User playbooks always win
-over pack playbooks of the same ID** — the pack is the seed, not a
-hard-coded floor.
+`services/agents/data/playbooks/index.json`. User playbooks win over pack
+playbooks of the same ID; the pack is the seed, not a hard-coded floor.
 
 ## Playbook format
 
@@ -143,9 +142,9 @@ If you need a new playbook:
 3. The mutable `services/agents/data/playbooks/index.json` (any
    user-defined or API-created playbooks).
 
-That means: forking a pack playbook is a one-line operation. Save your
-edited copy under the same `id` via the API and the runtime serves your
-version forever — no need to fork the repo.
+Forking a pack playbook is therefore a one-line operation: save your
+edited copy under the same `id` via the API and the runtime serves that
+version. No repo fork required.
 
 ## Versioning
 

@@ -277,7 +277,7 @@ export function AlertsView() {
             disabled={(filters.page || 1) <= 1}
             className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            ←
+            Prev
           </button>
           <span className="px-2">Page {filters.page || 1}</span>
           <button
@@ -285,7 +285,7 @@ export function AlertsView() {
             disabled={alerts.length < (filters.pageSize || 25)}
             className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            →
+            Next
           </button>
         </div>
       </div>

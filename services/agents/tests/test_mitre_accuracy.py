@@ -336,5 +336,5 @@ if __name__ == "__main__":
     res = evaluate_mitre_accuracy()
     print(res.to_json())
     passed = res.accuracy >= 0.80
-    print(f"\n{'✓ PASS' if passed else '✗ FAIL'}: {res.accuracy * 100:.1f}% accuracy (threshold: 80%)")
+    print(f"\n{'PASS' if passed else 'FAIL'}: {res.accuracy * 100:.1f}% accuracy (threshold: 80%)")
     sys.exit(0 if passed else 1)

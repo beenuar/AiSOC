@@ -4,16 +4,15 @@ sidebar_position: 2
 
 # Quick Start
 
-Get AiSOC investigating a real case in your browser in under **5 minutes**.
+Two paths to a running AiSOC instance:
 
-There are two paths:
-
-1. **One-shot demo (recommended)** — `pnpm aisoc:demo` brings up a slim
-   stack from prebuilt GHCR images, seeds canonical demo data, kicks off an
-   AI investigation, and opens your browser at the live case.
-2. **Full development stack** — every microservice (UEBA, Honeytokens,
-   Purple Team, ClickHouse, OpenSearch, Neo4j, Qdrant, MCP, …) for hacking
-   on AiSOC itself.
+1. **One-shot demo** — `pnpm aisoc:demo` brings up a slim stack from prebuilt
+   GHCR images, seeds canonical demo data, kicks off an investigation, and
+   opens your browser at the live case. Roughly 3-4 minutes on a warm Docker
+   daemon.
+2. **Full development stack** — every microservice (UEBA, Honeytokens, Purple
+   Team, ClickHouse, OpenSearch, Neo4j, Qdrant, MCP) for hacking on AiSOC
+   itself.
 
 ## Prerequisites
 
@@ -44,13 +43,13 @@ That single command:
 5. Kicks off an AI investigation against a seeded case.
 6. Opens your browser at `/cases/<uuid>` so you land on a **live** investigation.
 
-| Step | Target |
+| Step | Approximate time |
 |---|---|
 | `docker compose pull` | ~90s |
 | `docker compose up` + healthchecks | ~60s |
 | Seed canonical data | ~30s |
 | Kick off investigation | ~30s |
-| **Total time-to-first-investigation** | **~3.5 min** |
+| Total | ~3.5 min |
 
 When you're done:
 
@@ -138,7 +137,7 @@ Runs a one-shot health check across ports, containers, demo data, the API,
 and the WebSocket gateway. If anything is red, it tells you exactly what to
 fix.
 
-### 6. Run the public eval harness (optional but recommended)
+### 6. Run the public eval harness (optional)
 
 ```bash
 # Generate 200 synthetic incidents and run all four substrate eval suites

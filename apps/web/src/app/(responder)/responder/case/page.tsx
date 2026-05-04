@@ -169,7 +169,7 @@ export default function ResponderCasesPage() {
                   : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-700',
               )}
             >
-              {mineOnly ? '✓ Mine' : 'Mine'}
+              {mineOnly ? 'Mine (on)' : 'Mine'}
             </button>
           ) : null}
           <button
@@ -182,7 +182,7 @@ export default function ResponderCasesPage() {
                 : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-700',
             )}
           >
-            {showClosed ? '✓ Closed' : 'Closed'}
+            {showClosed ? 'Closed (on)' : 'Closed'}
           </button>
         </div>
       </div>

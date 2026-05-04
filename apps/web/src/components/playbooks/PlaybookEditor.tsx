@@ -65,7 +65,6 @@ function TriggerBadge({
     <div
       className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border ${colorMap[on] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}
     >
-      <span>⚡</span>
       <span className="font-medium">on:{on}</span>
       {severity && severity.length > 0 && (
         <span className="opacity-70">[{severity.join(', ')}]</span>
@@ -163,9 +162,9 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
       setSynced(true);
       await mutate('/api/v1/playbooks');
       if (isNew) router.replace(`/playbooks/${saved.id}`);
-      setRunResult('✅ Saved successfully');
+      setRunResult('Saved');
     } catch (err) {
-      setRunResult(`❌ Save failed: ${err instanceof Error ? err.message : String(err)}`);
+      setRunResult(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -173,7 +172,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
 
   const handleRun = async () => {
     if (!playbook.id) {
-      setRunResult('⚠ Save the playbook first');
+      setRunResult('Save the playbook first');
       return;
     }
     setRunning(true);
@@ -186,9 +185,9 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setRunResult(`🚀 Dry run started — run_id: ${data.run_id}`);
+      setRunResult(`Dry run started — run_id: ${data.run_id}`);
     } catch (err) {
-      setRunResult(`❌ Run failed: ${err instanceof Error ? err.message : String(err)}`);
+      setRunResult(`Run failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setRunning(false);
     }
@@ -210,7 +209,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
           onClick={() => router.back()}
           className="text-gray-500 hover:text-gray-300 transition-colors"
         >
-          ← Back
+          Back
         </button>
 
         <div className="flex-1 flex items-center gap-3 overflow-hidden">
@@ -251,7 +250,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
             className="text-xs px-3 py-1.5 rounded border border-green-800 text-green-400 hover:bg-green-900/30 transition-colors disabled:opacity-40"
             title={isNew ? 'Save first' : 'Dry run'}
           >
-            {running ? 'Running…' : '▶ Dry Run'}
+            {running ? 'Running…' : 'Dry run'}
           </button>
           <button
             onClick={handleSave}
@@ -268,7 +267,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
         <div className="px-5 py-2 bg-gray-900/60 text-sm border-b border-gray-800/60 flex items-center justify-between">
           <span className="text-gray-300">{runResult}</span>
           <button onClick={() => setRunResult(null)} className="text-gray-600 hover:text-gray-400 text-xs">
-            ✕
+            Dismiss
           </button>
         </div>
       )}
@@ -400,7 +399,6 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
         <div className="flex-1 min-w-0 relative">
           {playbook.steps.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-700">
-              <div className="text-5xl mb-4">📋</div>
               <div className="text-lg font-medium text-gray-500">Empty playbook</div>
               <div className="text-sm mt-1 mb-6">Add your first step to get started</div>
               <button

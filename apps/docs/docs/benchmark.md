@@ -31,35 +31,30 @@ and doesn't — below.
 
 ## Why this exists
 
-The AI SOC market is full of unfalsifiable claims:
+Vendor claims about AI SOC performance — alert reduction percentages, MITRE
+coverage, analyst throughput — are typically not reproducible by buyers. The
+dataset, the baseline, and the rubric are not published. AiSOC takes the
+opposite approach: ship a small harness, label which metrics are real
+measurements and which are substrate self-checks, and let anyone reproduce
+the numbers.
 
-- *"90% alert reduction"* — measured on **whose** alerts, against **what** baseline?
-- *"10× analyst throughput"* — what's the dataset, the rubric, the failure mode?
-- *"Detects MITRE ATT&CK"* — across how many tactics? With what accuracy?
-
-You cannot deploy a black-box vendor in a regulated environment and tell your
-auditor "we trust their internal QA." AiSOC takes the opposite tack: rather
-than claim a number we can't substantiate, we publish a small, honest harness
-and call out exactly which numbers are real and which are mostly substrate
-self-checks.
-
-1. **The dataset is in the repo.** [`services/agents/tests/eval_data/synthetic_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json) — 200 cases, deterministic, regenerable.
-2. **The harness is in the repo.** Four pytest suites under [`services/agents/tests/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/tests).
-3. **The CI gate runs on every commit.** [Latest run](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml).
-4. **Historical numbers are queryable.** Every successful build pushes its `eval_report.json` to the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
+1. **The dataset is in the repo** — [`services/agents/tests/eval_data/synthetic_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json), 200 cases, deterministic, regenerable.
+2. **The harness is in the repo** — four pytest suites under [`services/agents/tests/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/tests).
+3. **The CI gate runs on every commit** — [latest run](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml).
+4. **Historical numbers are queryable** — every successful build pushes its `eval_report.json` to the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
 
 ## Latest results
 
 The four numbers below are produced by `scripts/run_evals.py` against the
-200-incident synthetic benchmark. They run in roughly **25 milliseconds total**
-(no LLM calls, no DB) so they're cheap enough to gate every commit.
+200-incident synthetic dataset. They run in roughly 25 milliseconds total (no
+LLM calls, no DB) so they're cheap enough to gate every commit.
 
-| Suite                          | Metric                | Latest      | Target  | What it actually checks |
-|--------------------------------|-----------------------|-------------|---------|--------------------------|
-| Alert reduction ratio          | reduction             | **75.3 %**  | ≥ 70 %  | **Real measurement** of the 3-tier fusion logic on a noisy 1 000-alert stream |
-| MITRE ATT&CK tactic accuracy   | accuracy              | **97.0 %**  | ≥ 80 %  | **Substrate self-consistency** — keyword extractor vs. dataset that's written for it |
-| Investigation completeness     | mean keyword coverage | **94.3 %**  | ≥ 85 %  | **Substrate self-consistency** — report template wraps the description; judge finds keywords from the description |
-| Response-plan quality          | mean rubric score     | **1.000**   | ≥ 0.80  | **Substrate self-consistency** — synthesizer embeds the keywords the rubric checks for |
+| Suite                          | Metric                | Latest    | Target  | What it checks |
+|--------------------------------|-----------------------|-----------|---------|----------------|
+| Alert reduction ratio          | reduction             | 75.3 %    | ≥ 70 %  | Real measurement of the 3-tier fusion logic on a noisy 1 000-alert stream |
+| MITRE ATT&CK tactic accuracy   | accuracy              | 97.0 %    | ≥ 80 %  | Substrate self-consistency — keyword extractor vs. dataset written for it |
+| Investigation completeness     | mean keyword coverage | 94.3 %    | ≥ 85 %  | Substrate self-consistency — report template wraps the description; judge finds keywords from the description |
+| Response-plan quality          | mean rubric score     | 1.000     | ≥ 0.80  | Substrate self-consistency — synthesizer embeds the keywords the rubric checks for |
 
 These numbers move with the codebase. The current snapshot lives at
 [`eval-results/eval/results/latest.json`](https://github.com/beenuar/AiSOC/blob/eval-results/eval/results/latest.json).
@@ -97,9 +92,6 @@ python3 scripts/run_evals.py --ci --out report.json
 
 ## What each suite actually measures
 
-We took a hard look at the harness and tightened the language so the
-documentation matches the code. Here is the honest breakdown:
-
 ### 1. Alert reduction ratio — `Real measurement`
 
 **Source:** [`services/agents/tests/test_alert_reduction.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_alert_reduction.py)
@@ -116,9 +108,8 @@ Incidents below the noise threshold (`score < 0.35`) are dropped. The output is
 whatever the code produces — a fusion regression will move the number. This is
 a legitimate measurement of fusion behavior on a controlled dataset.
 
-We deliberately quote ~75 % rather than the 90 % that vendors tend to market,
-because we're measuring the same logic on a fixed dataset every time, and we'd
-rather an auditor see a real number than a marketing one.
+The reported ~75 % is the actual output of the fusion pipeline on this fixed
+dataset. It is not tuned to match a marketing number.
 
 ### 2. MITRE ATT&CK tactic accuracy — `Substrate self-consistency`
 
@@ -189,46 +180,42 @@ This catches a broken templating pipeline (e.g. someone removes the MITRE
 references from the synthesizer, or the rubric stops matching) — it is
 **not** a grade of LLM-written response plans.
 
-## Honest comparison vs vendors
+## Comparison to other AI SOC offerings
 
 | Capability                                     | AiSOC | Wazuh | Splunk | Anvilogic | Prophet | Dropzone |
 |-----------------------------------------------|:-----:|:-----:|:------:|:---------:|:-------:|:--------:|
-| Open-source (MIT)                              |  ✅   |  ✅   |   ❌   |    ❌     |   ❌    |    ❌    |
-| Self-hostable (your data never leaves)         |  ✅   |  ✅   |   ✅   |    ❌     |   ❌    |    ❌    |
-| Agent decisions are step-by-step auditable     |  ✅   |  N/A  |  N/A   |    ❌     |   ❌    |    ❌    |
-| Public, reproducible regression harness        |  ✅   |  ❌   |   ❌   |    ❌     |   ❌    |    ❌    |
-| Eval dataset shipped in the repo               |  ✅   |  ❌   |   ❌   |    ❌     |   ❌    |    ❌    |
-| Substrate-level regression gate in CI          |  ✅   |  ❌   |   ❌   |    ❌     |   ❌    |    ❌    |
-| Plugin SDK (Python + Go)                       |  ✅   |  ✅   |   ✅   |    ⚠️     |   ❌    |    ❌    |
-| Free                                           |  ✅   |  ✅   |   ❌   |    ❌     |   ❌    |    ❌    |
+| Open-source (MIT)                              |  yes  |  yes  |   no   |    no     |   no    |    no    |
+| Self-hostable                                  |  yes  |  yes  |  yes   |    no     |   no    |    no    |
+| Agent decisions step-by-step auditable         |  yes  |  n/a  |  n/a   |    no     |   no    |    no    |
+| Public, reproducible regression harness        |  yes  |  no   |   no   |    no     |   no    |    no    |
+| Eval dataset shipped in the repo               |  yes  |  no   |   no   |    no     |   no    |    no    |
+| Substrate-level regression gate in CI          |  yes  |  no   |   no   |    no     |   no    |    no    |
+| Plugin SDK (Python + Go)                       |  yes  |  yes  |  yes   |  partial  |   no    |    no    |
+| Free                                           |  yes  |  yes  |   no   |    no     |   no    |    no    |
 
-> **Why this matters:** A regulated bank cannot deploy a vendor whose agent is a
-> black box cloud service. They can deploy AiSOC. Your auditor reviews the same
-> dataset, the same harness, and the same CI numbers we publish on this page —
-> and we tell them straight which numbers are real measurements and which are
-> regression sentinels.
+A self-hostable, MIT-licensed agent with a published regression harness is
+something an auditor or regulated buyer can review directly. Vendor cloud
+agents typically cannot be reviewed at the same level.
 
-## What this is _not_
+## What this is not
 
-We're allergic to overclaiming, so a few honest caveats:
+A few caveats:
 
 - **No LLM agent runs in this harness.** It exercises deterministic extractors
   and templated report/plan synthesis. The live `services/agents/` LangGraph
-  orchestrator that talks to OpenAI/Anthropic is **not** under test here. A
-  separate **online eval** (LLM-as-judge, real orchestrator) is on the
-  [Phase-1 roadmap](https://github.com/beenuar/AiSOC/blob/main/.cursor/plans/aisoc_leading-ai-soc_90-day_plan_9999bc93.plan.md#1c-eval-harness-from-20--200-cases--public-benchmark)
-  and will run nightly. That is where actual agent accuracy gets measured.
+  orchestrator that talks to OpenAI or Anthropic is not under test here. A
+  separate online eval (LLM-as-judge, real orchestrator) is on the roadmap and
+  will run nightly. That is where actual agent accuracy gets measured.
 - **The dataset is synthetic.** 200 incidents is enough to flag major
-  regressions but not enough to claim production parity. Real-customer
-  blindness is on the roadmap (federated, opt-in).
+  regressions but not enough to claim production parity. Federated, opt-in
+  real-customer evaluation is on the roadmap.
 - **Three of the four judges are tautological by design.** The dataset, the
   templates, and the judge were written together to keep the gate fast and
   deterministic. They will pass as long as the substrate is internally
   consistent. They will fail if it is not.
-- **"Public benchmark" means the harness, not a third-party leaderboard.**
+- **"Public eval harness" means this harness, not a third-party leaderboard.**
   These numbers are reproducible by anyone with `python3`. They are not
-  comparable to numbers from MITRE Engenuity, MLPerf, or any other external
-  evaluator.
+  comparable to MITRE Engenuity, MLPerf, or any other external evaluator.
 
 ## Historical results
 

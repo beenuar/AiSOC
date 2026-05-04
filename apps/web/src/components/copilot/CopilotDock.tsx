@@ -164,8 +164,8 @@ export function CopilotDock() {
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800/80 px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
-                  ⌬
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                  ai
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-white">AI Copilot</p>

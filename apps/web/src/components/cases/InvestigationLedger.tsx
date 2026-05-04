@@ -41,20 +41,20 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 // ─── Style maps ───────────────────────────────────────────────────────────────
 
-/** Map ledger `kind` enum → icon for the timeline glyph. */
+/** Map ledger `kind` enum → short text label for the timeline glyph. */
 const KIND_ICON: Record<string, string> = {
-  recon: '🔍',
-  forensic: '🧬',
-  responder: '🛡️',
-  reporter: '📋',
-  report: '📋',
-  llm_prompt: '🧠',
-  llm_response: '💬',
-  tool_call: '🔧',
-  evidence_cited: '📎',
-  decision_reason: '🤔',
-  error: '❌',
-  completed: '✅',
+  recon: 'rec',
+  forensic: 'frn',
+  responder: 'rsp',
+  reporter: 'rpt',
+  report: 'rpt',
+  llm_prompt: 'in',
+  llm_response: 'out',
+  tool_call: 'tool',
+  evidence_cited: 'evd',
+  decision_reason: 'why',
+  error: 'err',
+  completed: 'done',
 };
 
 /** Map ledger `kind` enum → tailwind colour family for chip styling. */
@@ -222,7 +222,7 @@ export function InvestigationLedger({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Ledger exported — verifiable JSON', { icon: '🔏' });
+      toast.success('Ledger exported — verifiable JSON');
     } catch (err) {
       toast.error(
         err instanceof Error
@@ -248,7 +248,6 @@ export function InvestigationLedger({
   if (runsError || !runs) {
     return (
       <EmptyState
-        icon={<span className="text-xl">📒</span>}
         title="Ledger unavailable"
         description="The investigation ledger API isn't reachable. Make sure the API service is running."
       />
@@ -258,7 +257,6 @@ export function InvestigationLedger({
   if (runs.length === 0) {
     return (
       <EmptyState
-        icon={<span className="text-xl">📒</span>}
         title="No investigations recorded yet"
         description="Click ‘Investigate with AI’ in the header to launch the agent. Every prompt, tool call, and decision will be logged here for replay and audit."
       />
@@ -323,7 +321,7 @@ export function InvestigationLedger({
             className="rounded-md border border-slate-700/70 bg-slate-800/50 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600"
             title="Export signed JSON for auditor handoff"
           >
-            🔏 Export
+            Export
           </button>
           <button
             onClick={() => void refreshEvents()}
@@ -387,7 +385,6 @@ export function InvestigationLedger({
           {selectedSeq == null || !resolvedRunId ? (
             <Panel title="Why this step?">
               <EmptyState
-                icon={<span className="text-xl">🔎</span>}
                 title="Select a step"
                 description="Click any decision in the timeline to see the literal prompt, response, evidence, and downstream effects."
               />
@@ -670,7 +667,7 @@ function HashRow({ label, value }: { label: string; value: string }) {
       <button
         onClick={() => {
           void navigator.clipboard.writeText(value);
-          toast.success('Hash copied', { icon: '📋' });
+          toast.success('Hash copied');
         }}
         className="text-[10px] text-slate-500 hover:text-slate-300"
         title="Copy hash"
@@ -734,7 +731,6 @@ function ArtifactBlock({ artifact }: { artifact: LedgerArtifactDetail }) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-900/40"
       >
-        <span className="text-sm leading-none">📎</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
           {artifact.kind}
         </span>

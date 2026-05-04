@@ -103,7 +103,7 @@ export default function ResponderAlertDetailPage() {
         }
         const next = await alertsApi.update(alertId, updates);
         setAlert(next);
-        showToast(`${label} ✓`);
+        showToast(`${label} — done`);
       } catch (err) {
         console.error('[responder] failed to update alert', err);
         showToast(err instanceof Error ? err.message : 'Action failed');
@@ -124,7 +124,7 @@ export default function ResponderAlertDetailPage() {
           until: window.preset === 'morning' ? nextMorningISO() : undefined,
         });
         setAlert(next);
-        showToast(`Snoozed for ${window.label.toLowerCase()} ✓`);
+        showToast(`Snoozed for ${window.label.toLowerCase()}`);
       } catch (err) {
         console.error('[responder] failed to snooze alert', err);
         showToast(err instanceof Error ? err.message : 'Snooze failed');

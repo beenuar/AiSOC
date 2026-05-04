@@ -31,7 +31,7 @@ const TRIGGER_COLORS: Record<string, string> = {
 function TriggerChip({ on }: { on: string }) {
   return (
     <span className={`text-xs px-2 py-0.5 rounded border ${TRIGGER_COLORS[on] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-      ⚡ {on}
+      {on}
     </span>
   );
 }
@@ -86,7 +86,7 @@ function RunButton({ playbook }: { playbook: Playbook }) {
     }
     setTimeout(() => setStatus('idle'), 3000);
   }
-  const label = { idle: '▶', running: '…', done: '✓', err: '✕' }[status];
+  const label = { idle: 'Run', running: '…', done: 'OK', err: 'Err' }[status];
   const color = {
     idle:    'text-green-500 hover:text-green-400',
     running: 'text-yellow-500',
@@ -132,7 +132,6 @@ function RunHistoryTab() {
   if (!data || data.length === 0)
     return (
       <div className="flex flex-col items-center py-20 text-gray-700">
-        <div className="text-4xl mb-3">📜</div>
         <div className="text-gray-500">No playbook runs yet. Trigger a dry run from the editor.</div>
       </div>
     );
@@ -397,7 +396,7 @@ function CommunityPlaybookCard({ playbook }: { playbook: CommunityPlaybook }) {
       <div className="flex items-center justify-between text-xs text-zinc-500 mt-auto pt-2 border-t border-zinc-700/40">
         <span>{playbook.install_count.toLocaleString()} installs</span>
         {playbook.rating > 0 && (
-          <span className="text-yellow-400">★ {playbook.rating.toFixed(1)}</span>
+          <span className="text-yellow-400">{playbook.rating.toFixed(1)} rating</span>
         )}
         <button
           onClick={handleInstall}
@@ -407,7 +406,7 @@ function CommunityPlaybookCard({ playbook }: { playbook: CommunityPlaybook }) {
             installed ? 'bg-emerald-900/40 text-emerald-300 cursor-default' : 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600'
           )}
         >
-          {installed ? '✓ Installed' : installing ? '…' : 'Install'}
+          {installed ? 'Installed' : installing ? '…' : 'Install'}
         </button>
       </div>
     </div>
@@ -458,7 +457,7 @@ export function PlaybooksView() {
           onClick={() => setTab('community')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === 'community' ? 'border-blue-500 text-blue-300' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
         >
-          🌐 Community
+          Community
         </button>
       </div>
 
@@ -481,7 +480,6 @@ export function PlaybooksView() {
 
           {!isLoading && !error && (!data || data.length === 0) && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="text-5xl mb-4">📋</div>
               <div className="text-lg font-medium text-gray-400 mb-2">No playbooks yet</div>
               <div className="text-sm text-gray-600 mb-6">
                 Create a playbook to automate your SOC response workflows

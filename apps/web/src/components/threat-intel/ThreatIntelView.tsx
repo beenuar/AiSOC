@@ -79,12 +79,12 @@ const MOCK_INDICATORS: ThreatIndicator[] = [
 
 // ─── Type badges ──────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  ip: { label: 'IP', icon: '🌐', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-  domain: { label: 'Domain', icon: '🔗', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  hash: { label: 'Hash', icon: '🔑', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
-  url: { label: 'URL', icon: '📎', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
-  email: { label: 'Email', icon: '✉️', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
+const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
+  ip: { label: 'IP', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  domain: { label: 'Domain', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  hash: { label: 'Hash', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
+  url: { label: 'URL', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+  email: { label: 'Email', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
 };
 
 const SEVERITY_CONFIG = {
@@ -140,7 +140,7 @@ function LookupForm() {
 
       {notFound && (
         <div className="mt-3 flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
-          <span>✓</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider">clean</span>
           <span>No threat indicators found for this IOC</span>
         </div>
       )}
@@ -148,7 +148,7 @@ function LookupForm() {
       {result && (
         <div className="mt-3 bg-red-500/5 border border-red-500/20 rounded-lg p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-red-400 font-medium text-sm">⚠ Malicious Indicator</span>
+            <span className="text-red-400 font-medium text-sm">Malicious indicator</span>
             <span className="text-xs text-gray-500">Confidence: {result.confidence}%</span>
           </div>
           <p className="text-xs text-gray-400">{result.description}</p>
@@ -174,7 +174,7 @@ function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
   return (
     <div className="flex items-center gap-4 py-3 border-b border-gray-800/60 last:border-0 hover:bg-gray-800/20 px-4 -mx-4 transition-colors rounded-lg">
       <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border shrink-0', typeCfg.color)}>
-        {typeCfg.icon} {typeCfg.label}
+        {typeCfg.label}
       </span>
 
       <div className="flex-1 min-w-0">
@@ -246,16 +246,13 @@ export function ThreatIntelView() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total IOCs', value: MOCK_INDICATORS.length, color: 'text-blue-400', icon: '🛡' },
-          { label: 'Malicious', value: MOCK_INDICATORS.filter(i => i.malicious).length, color: 'text-red-400', icon: '☠' },
-          { label: 'High Confidence', value: MOCK_INDICATORS.filter(i => i.confidence >= 80).length, color: 'text-orange-400', icon: '🎯' },
-          { label: 'Added Today', value: 3, color: 'text-green-400', icon: '➕' },
+          { label: 'Total IOCs', value: MOCK_INDICATORS.length, color: 'text-blue-400' },
+          { label: 'Malicious', value: MOCK_INDICATORS.filter(i => i.malicious).length, color: 'text-red-400' },
+          { label: 'High Confidence', value: MOCK_INDICATORS.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
+          { label: 'Added Today', value: 3, color: 'text-green-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <span>{stat.icon}</span>
-              <p className={clsx('text-2xl font-bold', stat.color)}>{stat.value}</p>
-            </div>
+            <p className={clsx('text-2xl font-bold mb-1', stat.color)}>{stat.value}</p>
             <p className="text-xs text-gray-500">{stat.label}</p>
           </div>
         ))}
@@ -305,7 +302,6 @@ export function ThreatIntelView() {
         </div>
         {indicators.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-600">
-            <span className="text-2xl mb-1">🔍</span>
             <p className="text-sm">No indicators found</p>
           </div>
         ) : (

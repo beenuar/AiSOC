@@ -316,7 +316,7 @@ export function DetectionsView() {
                 </Link>
                 <button
                   onClick={() =>
-                    toast('Starter pack import is coming soon', { icon: '📦' })
+                    toast('Starter pack import is coming soon')
                   }
                   className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
                 >

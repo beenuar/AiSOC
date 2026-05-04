@@ -348,7 +348,7 @@ function ContextualPanel({
   return (
     <div
       className={clsx(
-        'rounded-xl border bg-gradient-to-br from-violet-500/[0.06] via-slate-900/60 to-slate-900/30 backdrop-blur-sm',
+        'rounded-xl border bg-slate-900/60 backdrop-blur-sm',
         error
           ? 'border-rose-500/40'
           : fallback

@@ -58,48 +58,6 @@ const config: Config = {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'grid-pattern':
-          'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-        // A second, slightly louder grid for the marketing hero so it can read
-        // through a stronger glow without feeling washed out.
-        'grid-hero':
-          'linear-gradient(rgba(96,165,250,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(96,165,250,0.07) 1px, transparent 1px)',
-      },
-      backgroundSize: {
-        grid: '32px 32px',
-        'grid-lg': '56px 56px',
-      },
-      boxShadow: {
-        'glow-brand': '0 0 0 1px rgba(96,165,250,0.18), 0 20px 60px -25px rgba(59,130,246,0.55)',
-        'glow-sm': '0 0 0 1px rgba(96,165,250,0.18), 0 10px 30px -12px rgba(59,130,246,0.4)',
-      },
-      animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'fade-in': 'fadeIn 0.3s ease-in-out',
-        'slide-up': 'slideUp 0.3s ease-out',
-        'shimmer': 'shimmer 2.4s linear infinite',
-        'orbit-slow': 'orbit 18s linear infinite',
-      },
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%': { transform: 'translateY(8px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
-        orbit: {
-          '0%': { transform: 'rotate(0deg)' },
-          '100%': { transform: 'rotate(360deg)' },
-        },
-      },
     },
   },
   plugins: [],

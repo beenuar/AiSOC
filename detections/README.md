@@ -2,10 +2,10 @@
 
 This directory contains AiSOC detection rules in a Sigma-inspired YAML format.
 
-The pack ships **200 curated, fixture-tested rules** across six categories.
-Every rule has a positive fixture (a synthetic event that should fire it) and a
-negative fixture (a near-miss event that should *not* fire it). CI replays
-both on every PR using the canonical runtime matcher.
+The pack contains 200 fixture-tested rules across six categories. Every rule
+has a positive fixture (a synthetic event that should fire it) and a negative
+fixture (a near-miss event that should not fire it). CI replays both on every
+PR using the canonical runtime matcher.
 
 ## Distribution
 
@@ -17,7 +17,7 @@ both on every PR using the canonical runtime matcher.
 | `network/`    | 30    | C2, scanning, beaconing, DNS abuse, Tor, lateral movement       |
 | `application/`| 30    | Web, API, DB, secrets, supply chain, dependency abuse           |
 | `data-exfil/` | 20    | DLP, large transfers, archive uploads, tunneling, off-corp dest |
-| **Total**     | 200   |                                                                 |
+| Total         | 200   |                                                                 |
 
 ## Structure
 
@@ -63,11 +63,11 @@ created: "YYYY-MM-DD"
 modified: "YYYY-MM-DD"
 ```
 
-## Source of Truth
+## Source of truth
 
 The Python specs in [`scripts/detection_specs.py`](../scripts/detection_specs.py)
 and [`scripts/detection_specs_part2.py`](../scripts/detection_specs_part2.py)
-are the **canonical source of truth**. The on-disk YAML files are serialized
+are the canonical source of truth. The on-disk YAML files are serialized
 artifacts produced by [`scripts/generate_detections.py`](../scripts/generate_detections.py).
 Edit specs, regenerate, then commit both.
 
@@ -79,7 +79,7 @@ python3 scripts/generate_detections.py
 python3 scripts/validate_detections.py --strict-fixtures
 ```
 
-## Adding a New Rule
+## Adding a new rule
 
 1. Add a new spec dict to the appropriate list in `scripts/detection_specs.py`
    or `scripts/detection_specs_part2.py`.
@@ -90,7 +90,7 @@ python3 scripts/validate_detections.py --strict-fixtures
 4. Run `python3 scripts/validate_detections.py --strict-fixtures` to confirm
    the fixtures replay correctly.
 
-## CI Validation
+## CI validation
 
 The [`Validate Detection Rules`](../.github/workflows/validate-detections.yml)
 workflow runs on every push or PR touching `detections/**` or the spec/generator
@@ -103,5 +103,5 @@ scripts. It enforces:
 - No duplicate `id` values across all rules
 - `id` prefix matches the category directory
 - Both positive and negative fixtures exist
-- **Fixture replay**: positive fixture matches, negative does not — using the
-  same `matches()` runtime function as the engine
+- Fixture replay: positive fixture matches, negative does not, using the same
+  `matches()` runtime function as the engine

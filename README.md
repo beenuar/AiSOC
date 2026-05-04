@@ -4,76 +4,73 @@
 
 # AiSOC
 
-### The only AI SOC where the agent is open-source, auditable, and self-hostable.
-
-Every decision the agent makes is **logged step-by-step, queryable, and replayable**. Your data never leaves your infrastructure. MIT-licensed.
+An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and rationale are logged step-by-step and replayable. MIT-licensed.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
 [![Version](https://img.shields.io/badge/version-5.2.0-f59e0b?style=flat-square)](CHANGELOG.md)
 
-[**Live demo**](https://demo.aisoc.dev) · [**How we compare**](#-how-aisoc-compares) · [**Public eval harness**](apps/docs/docs/benchmark.md) · [**Deploy in one click**](#-deploy-in-one-click) · [**Architecture**](#-architecture) · [**Docs**](apps/docs/)
+[Live demo](https://demo.aisoc.dev) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
-<br/>
-
-[![▶ Try the live demo — no signup, lands on a live investigation in <60s](https://img.shields.io/badge/%E2%96%B6%20Try%20the%20live%20demo-no%20signup%2C%20%3C60s%20to%20a%20live%20investigation-22c55e?style=for-the-badge&logoColor=white)](https://demo.aisoc.dev/cases/INC-001?tab=ledger)
-
-<sub>Read-only · resets daily at 00:00&nbsp;UTC · lands on a live agent investigation. To run AiSOC on your own data, [self-host in 5 minutes](#-quick-start) or [deploy in one click](#-deploy-in-one-click).</sub>
+<sub>The hosted demo is read-only and resets daily at 00:00&nbsp;UTC. To run AiSOC on your own data, follow the [quick start](#quick-start) or pick a [deployment target](#deployment-options).</sub>
 
 </div>
 
 ---
 
-## 🛡️ Why this matters to a CISO
+## What AiSOC is
 
-A CISO at a regulated bank can deploy AiSOC. They cannot deploy a vendor whose agent is a black-box cloud service. AiSOC is the AI SOC your auditor will actually approve, because:
+AiSOC is a single self-hostable stack that ingests security events, correlates them, runs AI-driven investigation, and surfaces the result in a SOC console. The agent and the substrate are MIT-licensed, so you can read, fork, or replace either of them.
 
-1. **Every agent decision is on the record.** The Investigation Ledger logs the literal LLM prompt, the response, the evidence cited, and the downstream tool calls — for every step of every run. Replay it months later. Hand it to your auditor.
-2. **The substrate has a public, CI-gated regression harness.** We ship a 200-incident eval suite that gates every commit: alert-reduction ratio is a real measurement against a fixed noisy stream; MITRE-tactic, investigation-completeness, and response-quality checks are substrate self-consistency gates over deterministic templates and synthetic data. We are upfront about which is which — see the [public eval harness](apps/docs/docs/benchmark.md).
-3. **It runs entirely on your infrastructure.** No callbacks to a vendor cloud. No data exfil for "model improvement." MIT-licensed end-to-end.
-4. **You can fork the agent itself.** The orchestrator is a 600-line LangGraph in [`services/agents/`](services/agents/). Read it. Patch it. Replace the model. Keep the SIEM.
+Three properties distinguish it from closed-source AI SOC vendors:
+
+1. **Agent decisions are logged.** The Investigation Ledger stores the LLM prompt, the response, the evidence cited, and the downstream tool calls for every step of every run. Replays are available later.
+2. **The substrate has a public eval harness in CI.** A 200-incident harness gates every commit. Alert reduction is a real measurement against a fixed noisy stream; the MITRE-tactic, investigation-completeness, and response-quality suites are substrate self-consistency gates over deterministic templates and synthetic data. The [benchmark page](apps/docs/docs/benchmark.md) explains exactly which is which.
+3. **It runs entirely on your infrastructure.** No callbacks to a vendor cloud and no data exfiltration for "model improvement."
+
+The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agents/). It is small enough to read end-to-end, swap models in, and patch.
 
 ---
 
-## 📊 How AiSOC compares
+## How AiSOC compares
 
-| Capability | **AiSOC** | Wazuh | Splunk ES | Anvilogic | Prophet Security |
+| Capability | AiSOC | Wazuh | Splunk ES | Anvilogic | Prophet Security |
 |---|---|---|---|---|---|
-| Open-source license | ✅ MIT | ✅ GPL-2 | ❌ proprietary | ❌ proprietary | ❌ proprietary |
-| Self-hostable | ✅ | ✅ | ⚠️ enterprise-only | ❌ cloud-only | ❌ cloud-only |
-| Autonomous AI investigation | ✅ LangGraph | ❌ | ⚠️ partial (Splunk AI) | ✅ | ✅ |
-| **Agent decision audit trail** | ✅ public Investigation Ledger | n/a | n/a | ❌ black box | ❌ black box |
-| **Public substrate eval harness** | ✅ CI-gated, reproducible | n/a | n/a | ❌ unpublished | ❌ unpublished |
+| Open-source license | MIT | GPL-2 | proprietary | proprietary | proprietary |
+| Self-hostable | yes | yes | enterprise-only | cloud-only | cloud-only |
+| Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes | yes |
+| Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published | not published |
+| Public substrate eval harness | CI-gated, reproducible | n/a | n/a | not published | not published |
 | Detection content | 200+ Sigma rules | 1,200+ rules | 1,000+ apps | curated | curated |
-| Plugin SDK | ✅ Py / TS / Go | ⚠️ YAML rules only | apps | proprietary | proprietary |
-| Data residency | 100% your infra | 100% your infra | partial | vendor cloud | vendor cloud |
-| Pricing | $0 (you self-host) | $0 (you self-host) | $$ per ingest GB | $$$ enterprise | $$$ enterprise |
+| Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary | proprietary |
+| Data residency | your infra | your infra | partial | vendor cloud | vendor cloud |
+| Pricing | $0 (self-host) | $0 (self-host) | per ingest GB | enterprise | enterprise |
 
-The closed-source AI SOC vendors (Anvilogic, Prophet, Tines, Dropzone) ship excellent products. AiSOC is the only stack where the agent itself is open, the decisions are auditable, and the substrate is gated by a public, reproducible eval harness on every commit. That is the structural moat.
+Closed-source AI SOC vendors (Anvilogic, Prophet, Tines, Dropzone) ship working products. AiSOC's contribution is making the agent itself open, the per-step decision trail readable, and the substrate gated by a public eval harness on every commit.
 
 ---
 
-## 🚀 Deploy in one click
+## Deployment options
 
-Every deploy target ships with a tested config in [`infra/`](infra/). Pick the platform that matches your operational posture:
+Each target ships a tested config in [`infra/`](infra/):
 
-| Platform | Status | Config | One-click |
+| Platform | Status | Config | Notes |
 |---|---|---|---|
-| **Fly.io** (recommended for demo / staging) | ✅ first-class | [`infra/fly/`](infra/fly/) | [Deploy stack](infra/fly/README.md) — 4 apps, ~$14/mo |
-| **Render** (managed, sleep-on-idle for hobbyists) | ✅ supported | [`infra/render/render.yaml`](infra/render/render.yaml) | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC) |
-| **Railway** (PaaS, pay-as-you-go) | ✅ supported | [`infra/railway/railway.toml`](infra/railway/railway.toml) | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https%3A%2F%2Fgithub.com%2Fbeenuar%2FAiSOC&plugins=postgresql%2Credis) |
-| **Coolify** (your own VPS, free) | ✅ supported | [`docker-compose.yml`](docker-compose.yml) | [Coolify quickstart](infra/coolify/README.md) |
-| **Kubernetes / Helm** (production) | ✅ first-class | [`infra/helm/`](infra/helm/) | `helm install aisoc ./infra/helm/aisoc` |
-| **AWS / Terraform** (production) | ✅ first-class | [`infra/terraform/`](infra/terraform/) | `cd infra/terraform && terraform apply` |
+| Fly.io | first-class | [`infra/fly/`](infra/fly/) | 4 apps, ~$14/mo. See [infra/fly/README.md](infra/fly/README.md). |
+| Render | supported | [`infra/render/render.yaml`](infra/render/render.yaml) | Sleep-on-idle, hobbyist tier. |
+| Railway | supported | [`infra/railway/railway.toml`](infra/railway/railway.toml) | PaaS, pay-as-you-go. |
+| Coolify | supported | [`docker-compose.yml`](docker-compose.yml) | Self-hosted on your own VPS. See [infra/coolify/README.md](infra/coolify/README.md). |
+| Kubernetes / Helm | first-class | [`infra/helm/`](infra/helm/) | `helm install aisoc ./infra/helm/aisoc` |
+| AWS / Terraform | first-class | [`infra/terraform/`](infra/terraform/) | `cd infra/terraform && terraform apply` |
 
-> 💡 The Render/Railway/Coolify configs deploy the **lean demo profile**: api + agents + web + realtime + Postgres + Redis. ClickHouse, Kafka, OpenSearch, Neo4j, and Qdrant are optional and gated behind compose profiles. For a production-grade install with the full storage tier, use Helm or Terraform.
+The Render, Railway, and Coolify configs deploy the lean demo profile: api, agents, web, realtime, Postgres, and Redis. ClickHouse, Kafka, OpenSearch, Neo4j, and Qdrant are gated behind compose profiles. For a production-grade install with the full storage tier, use Helm or Terraform.
 
 ---
 
-## 🤝 Use it from Claude, Cursor, or Cody
+## Use it from Claude, Cursor, or Cody
 
-AiSOC ships a first-class **[MCP server](https://modelcontextprotocol.io)** so analysts can query alerts, run agent investigations, and **replay every step the agent took** without leaving the IDE or chat. One command wires up the connection:
+AiSOC ships an [MCP server](https://modelcontextprotocol.io) so analysts can query alerts, run agent investigations, and replay every step the agent took without leaving the IDE or chat.
 
 ```bash
 # Claude Desktop / Cursor / Continue / Cody
@@ -82,54 +79,54 @@ npx -y @aisoc/mcp install --host claude \
   --api-key  aisoc_pat_xxxxxxxxxxxx
 ```
 
-The server exposes 11 tools — discovery (`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`), deep-dive (`aisoc_get_case`, `aisoc_get_investigation`), and the action/replay set (`aisoc_run_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`) that lets the assistant walk the agent decision ledger step-by-step.
+The server exposes 11 tools — discovery (`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`), deep-dive (`aisoc_get_case`, `aisoc_get_investigation`), and the action/replay set (`aisoc_run_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`) for walking the agent decision ledger step-by-step.
 
-📖 Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md) · package source: [`services/mcp/`](services/mcp/) · npm: `@aisoc/mcp`
-
----
-
-## ✨ What's in the box
-
-Modern SOCs drown in alerts and pivot across a dozen consoles. AiSOC is a **single, opinionated stack** that:
-
-- **Ingests** events from any connector (CrowdStrike, Splunk, AWS, Okta, Sentinel) into a Kafka spine.
-- **Correlates** them in real time with deduplication, ML scoring, and Sigma/YARA detection.
-- **Enriches** every signal with threat-intel from TAXII 2.1, MISP, OTX, and CISA KEV.
-- **Reasons** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.
-- **Detects deviations** with UEBA — per-user behavioral baselines and Z-score anomaly scoring.
-- **Traps adversaries** with cryptographically signed honeytokens (URLs, files, AWS creds, emails).
-- **Validates coverage** with automated Atomic Red Team / Caldera adversary emulation.
-- **Responds** with blast-radius-aware SOAR actions, every step explainable.
-- **Governs** with multi-tenant RLS, granular RBAC, immutable audit logs, and SOC 2 / ISO 27001 / NIST CSF evidence dashboards.
-
-Everything ships under **MIT** — fork it, self-host it, audit it, extend it.
+Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source: [`services/mcp/`](services/mcp/). npm: `@aisoc/mcp`.
 
 ---
 
-## 🚀 Highlights
+## What's in the box
+
+AiSOC bundles the components a SOC normally pieces together from separate vendors:
+
+- **Ingest** events from any connector (CrowdStrike, Splunk, AWS, Okta, Sentinel) into a Kafka spine.
+- **Correlate** them in real time with deduplication, ML scoring, and Sigma/YARA detection.
+- **Enrich** every signal with threat intelligence from TAXII 2.1, MISP, OTX, and CISA KEV.
+- **Reason** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.
+- **Detect deviations** with UEBA — per-user behavioural baselines and Z-score anomaly scoring.
+- **Trap adversaries** with HMAC-signed honeytokens (URLs, files, AWS credentials, emails).
+- **Validate coverage** with automated Atomic Red Team and Caldera adversary emulation.
+- **Respond** with blast-radius-aware SOAR actions, every step explainable.
+- **Govern** with multi-tenant RLS, granular RBAC, immutable audit logs, and SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA evidence dashboards.
+
+Everything ships under MIT. Fork it, self-host it, audit it, extend it.
+
+---
+
+## Highlights
 
 <table>
 <tr>
 <td valign="top" width="50%">
 
-### ⚡ Real-time fusion
+### Real-time fusion
 - Kafka spine with sub-second ingestion
 - Bloom-filter dedup on 10M+ IOCs
 - LightGBM + Isolation Forest scoring
 - Live WebSocket feed into the console
 
-### 🧠 AI Copilot
+### AI Copilot
 - LangGraph agents with persistent memory
 - Qdrant RAG over MITRE ATT&CK + tenant data
 - Natural-language threat hunts
 - Every decision traceable end-to-end
 
-### 🕸️ Knowledge graph
+### Knowledge graph
 - Neo4j entity graph (hosts, users, alerts, IOCs)
 - Attack-path reconstruction per case
 - Blast-radius gating on automated actions
 
-### 👤 UEBA
+### UEBA
 - Per-user Welford online baseline (no batch jobs)
 - Z-score anomaly scoring with peer-group analysis
 - Kafka integration: `security.events` → `security.anomalies`
@@ -138,25 +135,25 @@ Everything ships under **MIT** — fork it, self-host it, audit it, extend it.
 </td>
 <td valign="top" width="50%">
 
-### 🎯 Detection engineering
+### Detection engineering
 - Sigma over OpenSearch + ClickHouse
 - YARA file/memory scanning
 - KQL, EQL, Lucene, regex query types
 - Community detection catalog with one-click install
 
-### 🍯 Honeytokens
+### Honeytokens
 - HMAC-SHA256 signed tokens (URL, file, AWS key, email)
 - First-touch webhook alerting
 - Token lifecycle: active / triggered / expired
-- Built-in lure URL copy & share
+- Built-in lure URL copy and share
 
-### 🟣 Purple Team
+### Purple Team
 - Atomic Red Team YAML parser + Caldera executor
 - ATT&CK coverage heatmap (tactic × technique)
 - Detection reporting (true positive / false negative)
 - Tabletop exercise session manager
 
-### 🛡️ Enterprise governance
+### Governance
 - SAML 2.0 + OIDC SSO
 - Multi-tenant Postgres RLS
 - Granular RBAC (`resource:action` permissions)
@@ -170,7 +167,7 @@ Everything ships under **MIT** — fork it, self-host it, audit it, extend it.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -236,7 +233,7 @@ flowchart LR
     Actions --> Kafka
 ```
 
-### 🔌 Service map
+### Service map
 
 | Service | Lang | Port | Role |
 |---|---|---|---|
@@ -253,68 +250,68 @@ flowchart LR
 | `ingest` | Go | 8081 | OCSF normalization + Shodan/CVE |
 | `enrichment` | Go | 8080 | IOC enrichment (VT, AbuseIPDB, GreyNoise) |
 
-### 🗄️ Storage tier
+### Storage tier
 
 | Store | Purpose |
 |---|---|
-| **PostgreSQL** | Tenants, users, cases, detection rules, RBAC, audit log, compliance · Row-level security |
-| **ClickHouse** | High-cardinality event analytics + alert metrics |
-| **OpenSearch** | Full-text IOC + actor + report search · Sigma backend |
-| **Qdrant** | Vector RAG for agents, semantic ATT&CK lookup |
-| **Neo4j** | Knowledge graph: entities, attack paths, blast radius |
-| **Redis** | Cache, pub/sub, IOC bloom filter, enrichment TTL |
-| **Kafka** | Event streaming spine (raw, fused, vulnerability, anomaly, action) |
+| PostgreSQL | Tenants, users, cases, detection rules, RBAC, audit log, compliance · Row-level security |
+| ClickHouse | High-cardinality event analytics + alert metrics |
+| OpenSearch | Full-text IOC + actor + report search · Sigma backend |
+| Qdrant | Vector RAG for agents, semantic ATT&CK lookup |
+| Neo4j | Knowledge graph: entities, attack paths, blast radius |
+| Redis | Cache, pub/sub, IOC bloom filter, enrichment TTL |
+| Kafka | Event streaming spine (raw, fused, vulnerability, anomaly, action) |
 
 ---
 
-## 🖥️ Console tour
+## Console tour
 
-The console fuses the analyst's day-zero workflow into one cohesive surface:
+The console fuses the analyst's day-zero workflow into one surface:
 
-- **Dashboard** — live KPI tiles + trend chart + WebSocket-driven event ticker
-- **Alerts & Cases** — triage queues, status workflow, evidence timeline
-- **Investigation Ledger** — replayable, step-by-step record of every prompt, tool call, and rationale the agent emitted on a case (the moat)
-- **Attack Graph** — Cytoscape + fcose layout over the Neo4j subgraph for a case
-- **MITRE Heatmap** — coverage tiles with per-tactic technique density
-- **Threat Hunting** — Sigma / KQL / YARA editor with on-demand hunts
-- **Detection Rules** — Monaco-powered rule builder with Sigma autocompletion
-- **Detection Catalog** — 200+ community Sigma rules with one-click tenant install
-- **Threat Intel** — IOC search, feed status, and STIX/MISP source health
-- **Marketplace** — 15 plugins + 50+ playbooks + 200+ detections, with ratings, badges, and category filter
-- **Playbooks** — community + private playbooks with SOAR automation
-- **UEBA** — behavioral anomaly feed + peer-group deviation chart
-- **Honeytokens** — create lures, view trigger log, copy lure URLs
-- **Purple Team** — ATT&CK heatmap, execution tracker, tabletop sessions
-- **Compliance** — SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA evidence
-- **SLA Dashboard** — MTTD, MTTR, MTTC metrics + breach alerts
-- **Audit Log** — immutable, paginated, tenant-scoped event history
-- **Benchmark** — public, reproducible eval harness (alert-reduction measurement + MITRE / completeness / response-quality substrate self-consistency gates), run in CI
-- **Settings → RBAC** — roles, permissions, and user-role assignments
-- **Ambient Copilot** — context-aware next-action suggestions on every alert, case, rule, and playbook page (one click → agent runs the right tool with the right payload)
-- **AI Copilot dock** — slide-over invoked with `⌘J` for any page
-- **Command palette** — global `⌘K` for navigation, quick actions, and Copilot
+- **Dashboard** — KPI tiles, trend chart, and a WebSocket-driven event ticker.
+- **Alerts & Cases** — triage queues, status workflow, evidence timeline.
+- **Investigation Ledger** — replayable, step-by-step record of every prompt, tool call, and rationale the agent emitted on a case.
+- **Attack Graph** — Cytoscape + fcose layout over the Neo4j subgraph for a case.
+- **MITRE Heatmap** — coverage tiles with per-tactic technique density.
+- **Threat Hunting** — Sigma / KQL / YARA editor with on-demand hunts.
+- **Detection Rules** — Monaco-powered rule builder with Sigma autocompletion.
+- **Detection Catalog** — community Sigma rules with one-click tenant install.
+- **Threat Intel** — IOC search, feed status, and STIX / MISP source health.
+- **Marketplace** — plugins, playbooks, and detections, with ratings, badges, and category filters.
+- **Playbooks** — community and private playbooks with SOAR automation.
+- **UEBA** — behavioural anomaly feed and peer-group deviation chart.
+- **Honeytokens** — create lures, view trigger log, copy lure URLs.
+- **Purple Team** — ATT&CK heatmap, execution tracker, tabletop sessions.
+- **Compliance** — SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA evidence.
+- **SLA Dashboard** — MTTD, MTTR, MTTC metrics + breach alerts.
+- **Audit Log** — immutable, paginated, tenant-scoped event history.
+- **Benchmark** — public eval harness (alert-reduction measurement plus three substrate self-consistency gates), run in CI.
+- **Settings → RBAC** — roles, permissions, and user-role assignments.
+- **Ambient Copilot** — context-aware next-action suggestions on alert, case, rule, and playbook pages. Each suggestion runs the right tool with the right payload.
+- **AI Copilot dock** — slide-over invoked with `⌘J` for any page.
+- **Command palette** — global `⌘K` for navigation, quick actions, and Copilot.
 
-### 📱 Responder PWA — mobile-first surface
+### Responder PWA
 
 A separate, installable PWA route at `/responder/*` for analysts who carry a pager:
 
-- **Passkey login** — WebAuthn / FIDO2 platform authenticators only, no SMS fallback
-- **On-call view** — current responder per tenant, surfaced in alerts on the desktop console too
-- **Approvals queue** — long-lived approval requests for blast-radius-gated SOAR actions, signed off with hardware-attested passkey
-- **Push notifications** — VAPID-signed Web Push delivered through `services/realtime`, follows the on-call rotation
-- **Offline shell** — service worker + cached app shell so the responder surface keeps loading on a flaky carrier link
+- **Passkey login** — WebAuthn / FIDO2 platform authenticators only, no SMS fallback.
+- **On-call view** — current responder per tenant, surfaced in alerts on the desktop console too.
+- **Approvals queue** — long-lived approval requests for blast-radius-gated SOAR actions, signed off with a hardware-attested passkey.
+- **Push notifications** — VAPID-signed Web Push delivered through `services/realtime`, following the on-call rotation.
+- **Offline shell** — service worker + cached app shell so the responder surface keeps loading on a flaky carrier link.
 
 See [`apps/web/src/app/(responder)/`](apps/web/src/app/(responder)/) and [`services/api/migrations/009_responder_pwa.sql`](services/api/migrations/009_responder_pwa.sql).
 
-> **Marketing landing** lives at `/` and the console at `/dashboard`. Both share the same brand tokens.
+The marketing landing lives at `/` and the console at `/dashboard`. Both share the same brand tokens.
 
 ---
 
-## 🚀 Quick start
+## Quick start
 
-### One-shot demo (under 5 minutes)
+### One-shot demo
 
-If you just want to see AiSOC investigate a real case in your browser:
+To see AiSOC investigate a seeded case in your browser:
 
 ```bash
 git clone https://github.com/beenuar/AiSOC.git
@@ -322,34 +319,31 @@ cd AiSOC
 pnpm aisoc:demo
 ```
 
-That single command pulls prebuilt images from `ghcr.io/beenuar/*`, brings up
-the slim demo profile (postgres, redis, kafka, api, agents, realtime, web),
-seeds canonical demo data, kicks off an AI investigation against a seeded
-case, and opens your browser at `/cases/<uuid>` so you land on a live
-investigation. Target on a warm Docker daemon:
+That command pulls prebuilt images from `ghcr.io/beenuar/*`, brings up the slim demo profile (postgres, redis, kafka, api, agents, realtime, web), seeds canonical demo data, runs an AI investigation against a seeded case, and opens your browser at `/cases/<uuid>`.
 
-| Step | Target |
+Approximate timings on a warm Docker daemon:
+
+| Step | Time |
 |---|---|
 | `docker compose pull` | ~90s |
 | `docker compose up` + healthchecks | ~60s |
 | Seed canonical data | ~30s |
 | Kick off investigation | ~30s |
-| **Total time-to-first-investigation** | **~3.5 min** |
+| Total | ~3.5 min |
 
 When you're done: `pnpm aisoc:demo:down` (deletes the demo volumes).
 
-The full development quick start with all services (UEBA, Honeytokens,
-Purple Team, ClickHouse, OpenSearch, Neo4j, Qdrant) is below.
+The full development quick start with all services (UEBA, Honeytokens, Purple Team, ClickHouse, OpenSearch, Neo4j, Qdrant) is below.
 
 ### Full stack (development)
 
-### Prerequisites
+#### Prerequisites
 
 - Docker 24+ and Docker Compose v2
 - Node.js 20+ and pnpm 8+
 - Go 1.21+ and Python 3.11+ (only for local service hacking)
 
-### 1 · Clone
+#### 1. Clone
 
 ```bash
 git clone https://github.com/beenuar/AiSOC.git
@@ -357,7 +351,7 @@ cd AiSOC
 cp .env.example .env
 ```
 
-### 2 · Configure
+#### 2. Configure
 
 ```env
 # AI providers (one required)
@@ -388,7 +382,7 @@ CALDERA_API_KEY=...
 ATOMIC_RED_TEAM_PATH=/opt/atomic-red-team/atomics
 ```
 
-### 3 · Boot
+#### 3. Boot
 
 ```bash
 docker compose up -d
@@ -397,21 +391,21 @@ docker compose ps
 
 First start takes ~60s while datastores warm up.
 
-### 4 · Seed demo data
+#### 4. Seed demo data
 
 ```bash
 pnpm seed:demo            # generates cases, alerts, IOCs, attack paths, UEBA anomalies
 ```
 
-### 5 · Verify
+#### 5. Verify
 
 ```bash
-pnpm aisoc:doctor         # one-shot health check: ports, containers, demo data, API + WS
+pnpm aisoc:doctor         # health check: ports, containers, demo data, API + WS
 ```
 
-If anything is red, the doctor tells you exactly what to fix before you log in.
+If any check fails, the doctor tells you exactly what to fix before logging in.
 
-### 5b · Run the public eval harness (optional but recommended)
+#### 5b. Run the public eval harness (optional)
 
 ```bash
 # Generate 200 synthetic incidents and run all four substrate eval suites
@@ -421,18 +415,11 @@ python scripts/run_evals.py --count 200 --report eval_report.json
 pytest services/agents/tests/test_mitre_accuracy.py
 ```
 
-The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`
-which the [public eval harness page](apps/docs/docs/benchmark.md) renders. The
-same harness runs in CI on every PR — see
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml). Important: the harness
-runs deterministic substrate code (extractors, fusion, templates, judges)
-against synthetic data — it does **not** call the live LLM agent. Three of
-the four metrics are substrate self-consistency gates rather than agent
-accuracy scores. The
-[benchmark page](apps/docs/docs/benchmark.md) documents exactly what each
-suite measures and what it doesn't.
+The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`, which the [public eval harness page](apps/docs/docs/benchmark.md) renders. The same harness runs in CI on every PR — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-### 6 · Open
+The harness runs deterministic substrate code (extractors, fusion, templates, judges) against synthetic data — it does not call the live LLM agent. Three of the four metrics are substrate self-consistency gates rather than agent accuracy scores. The [benchmark page](apps/docs/docs/benchmark.md) documents what each suite measures and what it does not.
+
+#### 6. Open
 
 | Surface | URL | Notes |
 |---|---|---|
@@ -440,7 +427,7 @@ suite measures and what it doesn't.
 | Console | http://localhost:3000/dashboard | Default user: `admin@aisoc.local` / `changeme` |
 | API (Swagger) | http://localhost:8000/docs | REST + GraphQL endpoints |
 | Agents | http://localhost:8001/docs | LangGraph runner |
-| UEBA | http://localhost:8007/docs | Behavioral analytics |
+| UEBA | http://localhost:8007/docs | Behavioural analytics |
 | Honeytokens | http://localhost:8008/docs | Honeytoken lifecycle |
 | Purple Team | http://localhost:8006/docs | Adversary emulation |
 | Realtime WS | ws://localhost:8086/ws/alerts | Live alert channel |
@@ -448,7 +435,7 @@ suite measures and what it doesn't.
 | Grafana | http://localhost:3001 | `admin` / `admin` (`monitoring` profile) |
 | Jaeger | http://localhost:16686 | Distributed traces (`monitoring` profile) |
 
-### Optional profiles
+#### Optional profiles
 
 ```bash
 docker compose --profile connectors up -d   # CrowdStrike, Splunk, AWS, Okta, Sentinel
@@ -457,7 +444,7 @@ docker compose --profile monitoring up -d   # Prometheus, Grafana, Jaeger, OTel 
 
 ---
 
-## 🧩 Monorepo layout
+## Monorepo layout
 
 ```
 AiSOC/
@@ -489,13 +476,13 @@ AiSOC/
 │   ├── plugin-sdk-py/    # Python plugin development SDK (PyPI: aisoc-plugin-sdk)
 │   ├── plugin-sdk-go/    # Go plugin development SDK (module: github.com/beenuar/aisoc/plugin-sdk-go)
 │   └── aisoc-cli/        # CLI: scaffold / validate / publish plugins & detections
-├── detections/           # 200+ community Sigma detection rules (YAML)
-├── playbooks/            # 50+ community SOAR playbooks (YAML)
-├── plugins/              # 15 first-party plugins (Go + Python)
+├── detections/           # Community Sigma detection rules (YAML)
+├── playbooks/            # Community SOAR playbooks (YAML)
+├── plugins/              # First-party plugins (Go + Python)
 ├── marketplace/          # Marketplace index (JSON, generated by scripts/build_marketplace.py)
 ├── infra/
 │   ├── coolify/          # Coolify (self-hosted Heroku-style PaaS) quickstart
-│   ├── fly/              # Fly.io machines + deploy script (recommended for hosted demo)
+│   ├── fly/              # Fly.io machines + deploy script
 │   ├── railway/          # Railway template (railway.toml)
 │   ├── render/           # Render blueprint (render.yaml)
 │   ├── terraform/        # AWS (VPC, EKS, RDS, ElastiCache, MSK)
@@ -519,9 +506,9 @@ AiSOC/
 
 ---
 
-## 📡 API Reference
+## API reference
 
-The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](docs/openapi.yaml). Key endpoint groups:
+The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](docs/openapi.yaml). Endpoint groups:
 
 | Tag | Prefix | Notes |
 |---|---|---|
@@ -548,9 +535,7 @@ Interactive docs: `http://localhost:8000/docs` (Swagger) or `http://localhost:80
 
 ---
 
-## 🧩 Plugin & Detection SDK
-
-Build custom integrations with the AiSOC Plugin SDK:
+## Plugin and detection SDK
 
 ```bash
 # Scaffold a new plugin
@@ -563,22 +548,17 @@ npx aisoc-cli validate detection ./detections/my-rule.yaml
 npx aisoc-cli publish plugin ./my-connector --key ~/.aisoc/signing.key
 ```
 
-SDKs available for:
-- **TypeScript** — `packages/plugin-sdk-ts` (npm: `@aisoc/plugin-sdk`)
-- **Python** — `packages/plugin-sdk-py` (PyPI: `aisoc-plugin-sdk`)
-- **Go** — `packages/plugin-sdk-go` (module: `github.com/beenuar/aisoc/plugin-sdk-go`)
+SDKs:
 
-Detection authors can drop YAML rules directly into `detections/` and SOAR
-playbooks into `playbooks/`. CI validates them on every PR
-([`scripts/validate_detections.py`](scripts/validate_detections.py),
-[`scripts/validate_playbooks.py`](scripts/validate_playbooks.py)) and
-[`scripts/build_marketplace.py`](scripts/build_marketplace.py) republishes
-[`marketplace/index.json`](marketplace/index.json) so the in-app Marketplace
-picks them up automatically.
+- TypeScript — `packages/plugin-sdk-ts` (npm: `@aisoc/plugin-sdk`)
+- Python — `packages/plugin-sdk-py` (PyPI: `aisoc-plugin-sdk`)
+- Go — `packages/plugin-sdk-go` (module: `github.com/beenuar/aisoc/plugin-sdk-go`)
+
+Detection authors can drop YAML rules directly into `detections/` and SOAR playbooks into `playbooks/`. CI validates them on every PR ([`scripts/validate_detections.py`](scripts/validate_detections.py), [`scripts/validate_playbooks.py`](scripts/validate_playbooks.py)) and [`scripts/build_marketplace.py`](scripts/build_marketplace.py) republishes [`marketplace/index.json`](marketplace/index.json) so the in-app Marketplace picks them up automatically.
 
 ---
 
-## 👩‍💻 Development
+## Development
 
 ### Frontend
 
@@ -637,9 +617,9 @@ cd services/ingest && go test ./...
 
 ---
 
-## ☸️ Deployment
+## Deployment
 
-### Kubernetes (recommended)
+### Kubernetes
 
 ```bash
 helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -652,7 +632,7 @@ helm install aisoc ./infra/helm/aisoc \
 
 The Helm chart includes HPA, PDB, and Ingress for every microservice.
 
-### Backup & restore
+### Backup and restore
 
 ```bash
 # Backup Postgres + ClickHouse + plugins to S3
@@ -684,9 +664,9 @@ terraform apply
 
 ---
 
-## 🔭 Roadmap
+## Roadmap
 
-We publish the public roadmap in [ROADMAP.md](ROADMAP.md). All v4.1, v5.0, v5.1, and v5.2 items have shipped (Investigation Ledger, Ambient Copilot, Responder PWA, public eval harness, MCP server, and the one-shot demo). Next up:
+The public roadmap lives in [ROADMAP.md](ROADMAP.md). The v4.1, v5.0, v5.1, and v5.2 items have shipped (Investigation Ledger, Ambient Copilot, Responder PWA, public eval harness, MCP server, and the one-shot demo). Next:
 
 - v6.0 — Agent-authored detections with human-in-the-loop review
 - v6.1 — Federated threat intel sharing across self-hosted instances
@@ -694,15 +674,15 @@ We publish the public roadmap in [ROADMAP.md](ROADMAP.md). All v4.1, v5.0, v5.1,
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-We welcome PRs of every size. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening a PR.
+PRs of every size are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening a PR.
 
 Good first issues:
 
-- Adding new connector integrations in `integrations/`
-- Expanding community Sigma detections in `detections/`
-- Building new plugins and publishing to the marketplace
+- New connector integrations in `integrations/`
+- Community Sigma detections in `detections/`
+- New plugins published to the marketplace
 - Frontend UI polish (Tailwind / React)
 - Documentation and tutorials in `apps/docs/`
 - Test coverage for any service
@@ -710,22 +690,18 @@ Good first issues:
 
 ---
 
-## 🔐 Security
+## Security
 
-Found a security issue? Please **do not** open a public issue. Use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new) — full policy in [SECURITY.md](SECURITY.md). We follow coordinated disclosure.
-
----
-
-## 📜 License
-
-[MIT](LICENSE) — © 2024–present AiSOC contributors
+For security issues, please do not open a public issue. Use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new). Full policy in [SECURITY.md](SECURITY.md). AiSOC follows coordinated disclosure.
 
 ---
+
+## License
+
+[MIT](LICENSE) — © 2024–present AiSOC contributors.
 
 <div align="center">
 
-**Built with ❤️ by the AiSOC open-source community.**
-
-[Report a bug](https://github.com/beenuar/AiSOC/issues/new?template=bug_report.md) · [Request a feature](https://github.com/beenuar/AiSOC/issues/new?template=feature_request.md) · [Become a contributor](CONTRIBUTING.md) · [Read the docs](apps/docs/)
+[Report a bug](https://github.com/beenuar/AiSOC/issues/new?template=bug_report.md) · [Request a feature](https://github.com/beenuar/AiSOC/issues/new?template=feature_request.md) · [Contribute](CONTRIBUTING.md) · [Read the docs](apps/docs/)
 
 </div>

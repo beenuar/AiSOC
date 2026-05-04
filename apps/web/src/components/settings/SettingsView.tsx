@@ -285,54 +285,46 @@ function saveProfile(profile: ProfileData) {
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-const TABS: { id: TabId; label: string; description: string; icon: string }[] = [
+const TABS: { id: TabId; label: string; description: string }[] = [
   {
     id: 'profile',
     label: 'Profile',
     description: 'Identity and personal display preferences.',
-    icon: '👤',
   },
   {
     id: 'workspace',
     label: 'Workspace',
     description: 'Tenant, branding, locale.',
-    icon: '🏢',
   },
   {
     id: 'integrations',
     label: 'Integrations',
     description: 'Connected log sources, EDRs, identity providers.',
-    icon: '🔌',
   },
   {
     id: 'api-keys',
     label: 'API keys',
     description: 'Programmatic access for pipelines and integrations.',
-    icon: '🔑',
   },
   {
     id: 'notifications',
     label: 'Notifications',
     description: 'How and when AiSOC should ping you.',
-    icon: '🔔',
   },
   {
     id: 'appearance',
     label: 'Appearance',
     description: 'Theme, density, animations.',
-    icon: '🎨',
   },
   {
     id: 'audit',
     label: 'Audit log',
     description: 'Recent administrative events.',
-    icon: '📜',
   },
   {
     id: 'about',
     label: 'About',
     description: 'Version, license, links.',
-    icon: 'ℹ️',
   },
 ];
 
@@ -367,20 +359,15 @@ export function SettingsView() {
                     type="button"
                     onClick={() => setTab(t.id)}
                     className={clsx(
-                      'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
+                      'flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
                       active
                         ? 'bg-gray-800/80 text-gray-50 ring-1 ring-blue-500/40'
                         : 'text-gray-300 hover:bg-gray-800/50 hover:text-gray-100',
                     )}
                   >
-                    <span aria-hidden className="text-base leading-5">
-                      {t.icon}
-                    </span>
-                    <span className="flex flex-col">
-                      <span className="font-medium">{t.label}</span>
-                      <span className="text-xs text-gray-500">
-                        {t.description}
-                      </span>
+                    <span className="font-medium">{t.label}</span>
+                    <span className="text-xs text-gray-500">
+                      {t.description}
                     </span>
                   </button>
                 </li>
@@ -557,7 +544,7 @@ function ProfilePanel() {
         <div className="flex items-center gap-4">
           <div
             aria-hidden
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xl font-semibold text-white shadow-lg ring-2 ring-gray-800"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white ring-2 ring-gray-800"
           >
             {initials || '?'}
           </div>

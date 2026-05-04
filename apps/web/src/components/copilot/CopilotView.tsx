@@ -27,36 +27,30 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 // ─── Suggested prompts ───────────────────────────────────────────────────────
 
-const SUGGESTED_PROMPTS: Array<{ icon: string; label: string; prompt: string }> = [
+const SUGGESTED_PROMPTS: Array<{ label: string; prompt: string }> = [
   {
-    icon: '🚨',
     label: 'Top critical alerts',
     prompt: 'Summarize the top 5 critical alerts in the last 24 hours.',
   },
   {
-    icon: '🔍',
     label: 'Investigate an entity',
     prompt:
       'Investigate host WIN-FIN-DB01: show recent alerts, related users, and ATT&CK techniques observed.',
   },
   {
-    icon: '🧬',
     label: 'Explain an ATT&CK technique',
     prompt: 'Explain MITRE ATT&CK T1078 (Valid Accounts) and how we detect it.',
   },
   {
-    icon: '🛡️',
     label: 'Tune a noisy rule',
     prompt:
       'Show me the noisiest detection rules this week and recommend exceptions to reduce false positives.',
   },
   {
-    icon: '⏱️',
     label: 'MTTR by severity',
     prompt: 'What is our MTTR by severity over the last 30 days, and what is trending?',
   },
   {
-    icon: '🌐',
     label: 'Threat intel match',
     prompt:
       'Has any indicator from the latest threat intel feed matched our telemetry in the last 7 days?',
@@ -75,16 +69,16 @@ function buildDemoReply(prompt: string): CopilotMessage {
       role: 'assistant',
       createdAt: now,
       content: [
-        '**MTTR by severity (last 30 days)**',
+        'MTTR by severity (last 30 days)',
         '',
-        '| Severity | MTTR | Δ vs prev 30d |',
+        '| Severity | MTTR | vs prev 30d |',
         '|---|---|---|',
-        '| Critical | 22 min | ▼ 18% |',
-        '| High | 1h 14m | ▼ 9% |',
-        '| Medium | 4h 03m | ▲ 4% |',
+        '| Critical | 22 min | -18% |',
+        '| High | 1h 14m | -9% |',
+        '| Medium | 4h 03m | +4% |',
         '| Low | 9h 47m | flat |',
         '',
-        'Critical and High are improving — driven by 3 new auto-containment playbooks. Medium is regressing because of a backlog in identity tickets; recommend re-triaging stale items > 6h.',
+        'Critical and High are improving, driven by 3 new auto-containment playbooks. Medium is regressing because of a backlog in identity tickets; recommend re-triaging stale items over 6h.',
       ].join('\n'),
       suggestions: [
         'Show me the stale Medium tickets > 6h.',
@@ -99,7 +93,7 @@ function buildDemoReply(prompt: string): CopilotMessage {
       role: 'assistant',
       createdAt: now,
       content: [
-        '**T1078 — Valid Accounts**',
+        'T1078 — Valid Accounts',
         '',
         'Adversaries obtain credentials and use them to access systems through legitimate authentication flows. There are four sub-techniques:',
         '- T1078.001 Default Accounts',
@@ -107,13 +101,13 @@ function buildDemoReply(prompt: string): CopilotMessage {
         '- T1078.003 Local Accounts',
         '- T1078.004 Cloud Accounts',
         '',
-        '**How we detect it**',
-        '1. Impossible travel & geo-velocity (`auth.geo_velocity > 800kph`).',
-        '2. New ASN + new device fingerprint within 24h of a sensitive role assignment.',
-        '3. MFA fatigue patterns: ≥ 3 push denies followed by an approval.',
+        'How the demo data flags it',
+        '1. Impossible travel and geo-velocity (`auth.geo_velocity > 800kph`).',
+        '2. New ASN plus new device fingerprint within 24h of a sensitive role assignment.',
+        '3. MFA fatigue patterns: 3 or more push denies followed by an approval.',
         '4. Service-account interactive logon outside its baselined hours.',
         '',
-        'Coverage today: **74%** across the 4 sub-techniques. Gap: limited Cloud Accounts coverage for non-AWS providers.',
+        'Coverage in the bundled rules: 74% across the 4 sub-techniques. Gap: limited Cloud Accounts coverage for non-AWS providers.',
       ].join('\n'),
       citations: [
         { label: 'rule:auth-impossible-travel', kind: 'rule' },
@@ -132,14 +126,14 @@ function buildDemoReply(prompt: string): CopilotMessage {
       role: 'assistant',
       createdAt: now,
       content: [
-        '**Investigation: WIN-FIN-DB01**',
+        'Investigation: WIN-FIN-DB01',
         '',
-        '- Risk score **92** (top 1% of fleet).',
+        '- Risk score 92 (top 1% of fleet).',
         '- 3 open alerts: privilege escalation, suspicious PowerShell, outbound to rare ASN.',
-        '- Most likely user: `j.harlow@aisoc.example` — 4 logon events in last 2h, all from a new device.',
+        '- Most likely user: `j.harlow@aisoc.example` (4 logon events in last 2h, all from a new device).',
         '- Observed ATT&CK techniques: T1078.002, T1059.001, T1071.001.',
         '',
-        '**Recommended next steps**',
+        'Recommended next steps',
         '1. Isolate the host (EDR action).',
         '2. Force credential reset for `j.harlow`.',
         '3. Block egress to ASN `AS204796` at the perimeter.',
@@ -161,11 +155,11 @@ function buildDemoReply(prompt: string): CopilotMessage {
     role: 'assistant',
     createdAt: now,
     content: [
-      "I'm running in demo mode (the LLM backend isn't reachable from this dev session), so this is a stub response.",
+      'Running in demo mode. The LLM backend is not reachable from this session, so this reply is a stub.',
       '',
-      'You can still try real prompts — they will go to `POST /api/v1/copilot/chat` once the API service is up.',
+      'Real prompts will be forwarded to `POST /api/v1/copilot/chat` once the API service is reachable.',
       '',
-      `> _You said:_ ${prompt}`,
+      `> You said: ${prompt}`,
     ].join('\n'),
     suggestions: [
       'Show me the top critical alerts.',
@@ -425,7 +419,7 @@ export function CopilotView() {
           onClick={startNew}
           className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-400"
         >
-          <span aria-hidden>＋</span> New chat
+          New chat
         </button>
 
         <div>
@@ -439,7 +433,6 @@ export function CopilotView() {
                   onClick={() => void send(p.prompt)}
                   className="group flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm text-slate-300 transition-colors hover:bg-slate-800/60 hover:text-white"
                 >
-                  <span aria-hidden>{p.icon}</span>
                   <span className="leading-tight">{p.label}</span>
                 </button>
               </li>
@@ -510,17 +503,13 @@ export function CopilotView() {
         <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto p-4">
           {empty ? (
             <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.456-2.456L14.25 6l1.035-.259a3.375 3.375 0 0 0 2.456-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
-                </svg>
-              </div>
               <h2 className="text-lg font-semibold text-white">
-                What can I help you with?
+                Copilot
               </h2>
               <p className="mt-1 max-w-md text-sm text-slate-400">
-                Try one of the suggestions below, or ask anything in plain
-                English. Cite an alert ID, hostname, or technique to scope it.
+                Ask about alerts, hosts, MITRE techniques, or detection
+                coverage. Cite an alert ID, hostname, or technique to scope
+                the answer.
               </p>
               <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
                 {SUGGESTED_PROMPTS.map((p) => (
@@ -529,9 +518,6 @@ export function CopilotView() {
                     onClick={() => void send(p.prompt)}
                     className="flex items-start gap-3 rounded-lg border border-slate-800/80 bg-slate-900/60 p-3 text-left transition-colors hover:border-emerald-500/40 hover:bg-slate-800/60"
                   >
-                    <span className="text-lg" aria-hidden>
-                      {p.icon}
-                    </span>
                     <span>
                       <span className="block text-sm font-medium text-white">
                         {p.label}
@@ -559,8 +545,8 @@ export function CopilotView() {
                     )}
                   >
                     {m.role === 'assistant' && (
-                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
-                        ⌬
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-emerald-500/15 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                        ai
                       </div>
                     )}
                     <div
@@ -619,8 +605,8 @@ export function CopilotView() {
               </AnimatePresence>
               {sending && (
                 <li className="flex justify-start gap-3">
-                  <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
-                    ⌬
+                  <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-emerald-500/15 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                    ai
                   </div>
                   <div className="rounded-2xl bg-slate-800/70 px-4 py-3 ring-1 ring-slate-700/60">
                     <TypingDots />

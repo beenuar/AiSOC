@@ -7,12 +7,12 @@ Drop your playbook as
 be auto-indexed by
 [`scripts/build_marketplace.py`](../../scripts/build_marketplace.py) on the
 next `pnpm marketplace:build`. It will appear in the in-app marketplace with
-a **Community** badge.
+a Community badge.
 
 ## Authoring a community playbook
 
 Use any playbook under [`playbooks/packs/v1/`](../packs/v1/) as a template.
-Every playbook **must**:
+Every playbook must:
 
 - Have a stable `id` (kebab-case). Convention for community playbooks:
   `community-<github-handle>-<short-name>`.
@@ -40,5 +40,5 @@ build script produces.
 ## Promotion path
 
 Community playbooks start with `verified: false` and `source: "community"`.
-A maintainer can promote a battle-tested playbook into
-`playbooks/packs/v1/<category>/` after review.
+A maintainer can promote a playbook into `playbooks/packs/v1/<category>/`
+after review.

@@ -1,22 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * aisoc:demo — single-command "time-to-wow" path.
+ * aisoc:demo — single-command path to a running demo stack.
  *
- * Goal: under 5 minutes from `pnpm aisoc:demo` to "user is staring at an
- * AI-driven investigation of a real case in their browser."
- *
- * Strategy:
+ * Steps:
  *   1. Verify Docker + docker compose are present
  *   2. Pull prebuilt images from ghcr.io/beenuar/* (no local builds)
  *   3. docker compose up -d using docker-compose.demo.yml (slim profile)
  *   4. Wait for postgres + api to be healthy
- *   5. Seed canonical demo data via `python -m app.scripts.seed_demo`
+ *   5. Seed demo data via `python -m app.scripts.seed_demo`
  *   6. Query the API for a seeded case UUID (dev mode auth bypass)
  *   7. Kick off an investigation on that case
  *   8. Open the user's browser at /cases/<uuid>
  *
- * Steady-state target: 90s pull + 60s startup + 30s seed + 30s investigation
- * = roughly 3.5 minutes on a warm Docker daemon.
+ * On a warm Docker daemon the full path is roughly 3.5 minutes:
+ * about 90s pull + 60s startup + 30s seed + 30s investigation.
  *
  * Usage: pnpm aisoc:demo
  *
@@ -29,7 +26,7 @@
  * Exit codes:
  *   0 = success, browser opened
  *   1 = failed to start the stack
- *   2 = stack started but data could not be seeded / investigated
+ *   2 = stack started but data could not be seeded or investigated
  */
 import { execSync, spawnSync } from "node:child_process";
 import { createConnection } from "node:net";
@@ -202,25 +199,25 @@ function checkDocker(): boolean {
   const docker = tryRun("docker --version");
   if (!docker) {
     console.error(
-      c.red("✗ docker is not installed or not on PATH.\n  Install Docker Desktop: https://www.docker.com/products/docker-desktop"),
+      c.red("docker is not installed or not on PATH.\n  Install Docker Desktop: https://www.docker.com/products/docker-desktop"),
     );
     return false;
   }
-  log(c.green("✓") + ` ${docker}`);
+  log(c.green("ok") + ` ${docker}`);
 
   const compose = tryRun("docker compose version");
   if (!compose) {
-    console.error(c.red("✗ docker compose v2 plugin is required (compose v1 not supported)."));
+    console.error(c.red("docker compose v2 plugin is required (compose v1 not supported)."));
     return false;
   }
-  log(c.green("✓") + ` ${compose}`);
+  log(c.green("ok") + ` ${compose}`);
 
   const info = tryRun("docker info --format '{{.ServerVersion}}'");
   if (!info) {
-    console.error(c.red("✗ docker daemon is not running. Start Docker Desktop and retry."));
+    console.error(c.red("docker daemon is not running. Start Docker Desktop and retry."));
     return false;
   }
-  log(c.green("✓") + ` docker daemon up (server ${info})`);
+  log(c.green("ok") + ` docker daemon up (server ${info})`);
   return true;
 }
 
@@ -240,8 +237,8 @@ function pullImages(flags: Flags): boolean {
   if (code !== 0) {
     console.error(
       c.yellow(
-        "⚠ image pull failed — falling back to local build. " +
-          "If you want to force build from source, use --rebuild.",
+        "image pull failed; falling back to local build. " +
+          "Use --rebuild to force building from source.",
       ),
     );
     flags.rebuild = true;
@@ -255,7 +252,7 @@ function startStack(flags: Flags): boolean {
   if (flags.rebuild) args.push("--build");
   const code = runStream("docker", args, { AISOC_TAG: flags.tag });
   if (code !== 0) {
-    console.error(c.red("✗ docker compose up failed. See output above."));
+    console.error(c.red("docker compose up failed. See output above."));
     return false;
   }
   return true;
@@ -299,7 +296,7 @@ async function waitForHealth(): Promise<boolean> {
     2000,
   );
   if (!webUp) {
-    console.error(c.yellow("⚠ web is slow to start; continuing anyway"));
+    console.error(c.yellow("web is slow to start; continuing anyway"));
   }
 
   return true;
@@ -321,7 +318,7 @@ function seedData(): boolean {
   if (code !== 0) {
     console.error(
       c.yellow(
-        "⚠ seed script returned non-zero. The stack may already be seeded — continuing.",
+        "seed script returned non-zero. The stack may already be seeded; continuing.",
       ),
     );
   }
@@ -336,14 +333,14 @@ async function findSeededCase(): Promise<{ id: string; case_number: string; titl
     const res = await fetchJson("http://localhost:8000/v1/cases?page_size=5", 4000);
     if (res && Array.isArray(res.items) && res.items.length > 0) {
       const c0 = res.items[0];
-      log(c.green("✓") + ` found case ${c0.case_number} (${c0.id})`);
+      log(c.green("ok") + ` found case ${c0.case_number} (${c0.id})`);
       return { id: c0.id, case_number: c0.case_number, title: c0.title };
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
   console.error(
     c.yellow(
-      "⚠ no seeded cases visible after 60s. The web console will still open, but to a blank cases list.",
+      "no seeded cases visible after 60s. The web console will still open, but to a blank cases list.",
     ),
   );
   return null;
@@ -359,10 +356,10 @@ async function kickoffInvestigation(caseId: string): Promise<boolean> {
     10000,
   );
   if (result) {
-    log(c.green("✓") + ` investigation queued (run_id ${result.run_id ?? "unknown"})`);
+    log(c.green("ok") + ` investigation queued (run_id ${result.run_id ?? "unknown"})`);
     return true;
   }
-  log(c.yellow("⚠") + " could not auto-launch investigation (no LLM key?). The case is still browsable.");
+  log(c.yellow("note") + " could not auto-launch investigation (no LLM key?). The case is still browsable.");
   return false;
 }
 
@@ -389,7 +386,7 @@ ${c.dim("Useful commands:")}
   docker compose -f docker-compose.demo.yml logs -f api
   docker compose -f docker-compose.demo.yml down -v   ${c.dim("# stop & wipe demo data")}
 
-${c.bold("Total time-to-wow:")} ${c.green(elapsed())}
+${c.bold("Total elapsed:")} ${c.green(elapsed())}
 `);
 }
 
@@ -400,18 +397,18 @@ async function main() {
 
   console.log(
     c.bold("AiSOC Demo") +
-      c.dim(` — single-command path · tag=${flags.tag}${flags.rebuild ? " · rebuild" : ""}`),
+      c.dim(` — tag=${flags.tag}${flags.rebuild ? " · rebuild" : ""}`),
   );
 
   if (!checkDocker()) process.exit(1);
   if (!pullImages(flags)) process.exit(1);
   if (!startStack(flags)) process.exit(1);
   if (!(await waitForHealth())) {
-    console.error(c.red("\n✗ stack failed to come up healthy. Run `pnpm aisoc:doctor` for details."));
+    console.error(c.red("\nstack failed to come up healthy. Run `pnpm aisoc:doctor` for details."));
     process.exit(1);
   }
   if (!seedData()) {
-    console.error(c.yellow("⚠ seed step had issues; continuing"));
+    console.error(c.yellow("seed step had issues; continuing"));
   }
   const seededCase = await findSeededCase();
   if (seededCase) {

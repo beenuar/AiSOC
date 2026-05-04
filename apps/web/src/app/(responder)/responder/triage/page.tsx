@@ -180,7 +180,7 @@ export default function ResponderTriagePage() {
                 : 'bg-transparent text-zinc-500 border-zinc-800 hover:border-zinc-700',
             )}
           >
-            {showResolved ? '✓ Show resolved' : 'Show resolved'}
+            {showResolved ? 'Showing resolved' : 'Show resolved'}
           </button>
         </div>
       </div>

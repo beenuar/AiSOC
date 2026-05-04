@@ -101,7 +101,7 @@ export default function ResponderCaseDetailPage() {
         }
         const next = await casesApi.update(caseId, updates);
         setCaseRecord(next);
-        showToast(`${label} ✓`);
+        showToast(`${label} — done`);
       } catch (err) {
         console.error('[responder] failed to update case', err);
         showToast(err instanceof Error ? err.message : 'Action failed');
@@ -123,7 +123,7 @@ export default function ResponderCaseDetailPage() {
     try {
       const next = await casesApi.update(caseId, { assignee: profile.email });
       setCaseRecord(next);
-      showToast('Claimed ✓');
+      showToast('Claimed');
     } catch (err) {
       console.error('[responder] failed to claim case', err);
       showToast(err instanceof Error ? err.message : 'Claim failed');
@@ -249,7 +249,7 @@ export default function ResponderCaseDetailPage() {
           {/* Action row — three thumb-reachable buttons */}
           <ActionGrid>
             <ActionButton
-              label={isMine ? 'Mine ✓' : 'Claim'}
+              label={isMine ? 'Claimed' : 'Claim'}
               busy={busyAction === 'Claim'}
               disabled={!!isMine}
               tone="primary"

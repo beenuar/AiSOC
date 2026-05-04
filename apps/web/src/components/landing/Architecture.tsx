@@ -42,7 +42,7 @@ const STORES = [
 export function Architecture() {
   return (
     <section id="architecture" className="relative py-24 md:py-32">
-      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-white/10" />
       <div className="mx-auto max-w-7xl px-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -55,11 +55,11 @@ export function Architecture() {
             How it works
           </span>
           <h2 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
-            One pipeline, end to end
+            Pipeline overview
           </h2>
           <p className="mt-4 text-lg text-gray-400">
-            Every box is a service you can swap, scale, or replace. No black boxes, no licenses,
-            no per-seat traps.
+            Each stage is a separate service with its own container image and
+            interface, so individual components can be swapped or replaced.
           </p>
         </motion.div>
 
@@ -87,7 +87,7 @@ export function Architecture() {
                 ))}
               </ul>
               {i < LAYERS.length - 1 && (
-                <div className="absolute -right-3 top-1/2 hidden h-px w-6 -translate-y-1/2 bg-gradient-to-r from-white/30 to-transparent lg:block" />
+                <div className="absolute -right-3 top-1/2 hidden h-px w-6 -translate-y-1/2 bg-white/20 lg:block" />
               )}
             </motion.div>
           ))}
@@ -101,7 +101,7 @@ export function Architecture() {
                 Storage tier
               </div>
               <div className="mt-1 text-sm text-gray-300">
-                Polyglot persistence — pick the right store for each workload.
+                Different stores are used for different workloads.
               </div>
             </div>
             <span className="hidden text-xs text-gray-500 md:block">

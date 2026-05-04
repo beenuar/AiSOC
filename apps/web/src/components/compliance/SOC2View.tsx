@@ -175,7 +175,7 @@ export function SOC2View() {
             </div>
             <div className="w-full bg-gray-100 rounded-full h-3">
               <div
-                className="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-green-500 transition-all duration-700"
+                className="h-3 rounded-full bg-emerald-500 transition-all duration-700"
                 style={{ width: `${data.summary.pct}%` }}
               />
             </div>

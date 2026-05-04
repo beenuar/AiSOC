@@ -215,7 +215,7 @@ export function ResponderShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-30 bg-zinc-950/95 backdrop-blur border-b border-zinc-900 supports-[padding:max(0px)]:pt-[max(0px,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
               <svg
                 className="w-5 h-5 text-white"
                 fill="none"

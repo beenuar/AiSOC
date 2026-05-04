@@ -2,8 +2,9 @@
 
 import { motion } from 'framer-motion';
 
-// A compact MITRE-coverage band. Not a real heatmap (the console has the real
-// thing) — this is an at-a-glance proof-of-coverage strip for marketing.
+// Illustrative MITRE ATT&CK tactic strip for the landing page. The numbers
+// below are static placeholders, not a live coverage report. The actual
+// heatmap is rendered by the console against the deployed detection set.
 const TACTICS = [
   { id: 'TA0001', name: 'Initial Access', covered: 9, total: 11 },
   { id: 'TA0002', name: 'Execution', covered: 12, total: 14 },
@@ -41,11 +42,13 @@ export function MitreStrip() {
               MITRE ATT&CK
             </span>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-white md:text-4xl">
-              Coverage you can prove
+              Coverage by tactic
             </h2>
             <p className="mt-4 text-lg text-gray-400">
-              Every detection rule and every alert ties back to ATT&CK techniques. The full heatmap
-              lives inside the console — this strip is just the headline.
+              Detection rules and alerts reference ATT&CK techniques, and the
+              console renders a live heatmap from the deployed rule set. The
+              tiles below are illustrative; numbers depend on which detection
+              packs you enable.
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-xs">
               <Legend tone="bg-emerald-500/30 border-emerald-400/40" label="≥ 85% covered" />

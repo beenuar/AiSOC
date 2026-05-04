@@ -219,7 +219,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
       if (result.matches > 0) {
         toast.success(`Match — ${result.matches} event(s)`);
       } else {
-        toast(`No match against the sample`, { icon: '🔍' });
+        toast(`No match against the sample`);
       }
     } catch (err) {
       console.warn('Test failed, using demo evaluator', err);
@@ -230,7 +230,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
           `Demo evaluator: matched ${demo.matches} event(s) (offline mode)`,
         );
       } else {
-        toast('Demo evaluator: no match (offline mode)', { icon: '🧪' });
+        toast('Demo evaluator: no match (offline mode)');
       }
     } finally {
       setTesting(false);

@@ -132,7 +132,7 @@ log "Component: ${COMPONENT}"
 # ── confirmation prompt ────────────────────────────────────────────────────────
 if [[ -t 0 ]]; then
   echo ""
-  echo "⚠️  WARNING: This will OVERWRITE the target database / files."
+  echo "WARNING: This will OVERWRITE the target database / files."
   read -r -p "Are you sure you want to restore from ${TIMESTAMP}? [yes/N] " confirm
   [[ "$confirm" != "yes" ]] && { log "Restore cancelled."; exit 0; }
 fi
@@ -150,7 +150,7 @@ restore_postgres() {
 
   log "Restoring to ${POSTGRES_URL}…"
   gunzip -c "$local_file" | psql "$POSTGRES_URL" --single-transaction
-  log "PostgreSQL restore complete ✓"
+  log "PostgreSQL restore complete"
 }
 
 # ── 2. ClickHouse restore ──────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ restore_clickhouse() {
       --get \
       --data-urlencode "query=INSERT INTO ${CLICKHOUSE_DATABASE}.${table} FORMAT TabSeparatedWithNames"
 
-    log "  Table ${table} restored ✓"
+    log "  Table ${table} restored"
   done <<< "$tables"
 
   log "ClickHouse restore complete"
@@ -213,7 +213,7 @@ restore_plugins() {
     s3_download "$mkt_src" "${outdir}/marketplace-index.json"
     cp "${outdir}/marketplace-index.json" "${repo_root}/marketplace/index.json"
     cp "${outdir}/marketplace-index.json" "${repo_root}/apps/web/public/marketplace/index.json"
-    log "  Marketplace index restored ✓"
+    log "  Marketplace index restored"
   fi
 
   # Restore detections archive
@@ -222,7 +222,7 @@ restore_plugins() {
     s3_download "$det_src" "${outdir}/detections.tar.gz"
     log "  Extracting detections archive…"
     tar -xzf "${outdir}/detections.tar.gz" -C "$repo_root"
-    log "  Detections restored ✓"
+    log "  Detections restored"
   fi
 
   # Restore plugin SDK packages
@@ -232,7 +232,7 @@ restore_plugins() {
       s3_download "$pkg_src" "${outdir}/${pkg}.tar.gz"
       log "  Extracting ${pkg}…"
       tar -xzf "${outdir}/${pkg}.tar.gz" -C "${repo_root}/packages"
-      log "  ${pkg} restored ✓"
+      log "  ${pkg} restored"
     fi
   done
 

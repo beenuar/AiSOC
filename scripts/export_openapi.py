@@ -49,13 +49,13 @@ def write_yaml(schema: dict, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", encoding="utf-8") as fh:
         yaml.dump(schema, fh, allow_unicode=True, sort_keys=False, default_flow_style=False)
-    print(f"✅  OpenAPI schema written to {dest.relative_to(REPO_ROOT)}")
+    print(f"OpenAPI schema written to {dest.relative_to(REPO_ROOT)}")
 
 
 def check_yaml(schema: dict, dest: Path) -> bool:
     """Return True if file matches generated schema."""
     if not dest.exists():
-        print(f"❌  {dest.relative_to(REPO_ROOT)} does not exist. Run: python scripts/export_openapi.py", file=sys.stderr)
+        print(f"{dest.relative_to(REPO_ROOT)} does not exist. Run: python scripts/export_openapi.py", file=sys.stderr)
         return False
 
     with dest.open("r", encoding="utf-8") as fh:
@@ -63,13 +63,13 @@ def check_yaml(schema: dict, dest: Path) -> bool:
 
     if existing != schema:
         print(
-            f"❌  {dest.relative_to(REPO_ROOT)} is out of date.\n"
+            f"{dest.relative_to(REPO_ROOT)} is out of date.\n"
             "    Run: python scripts/export_openapi.py  then commit the result.",
             file=sys.stderr,
         )
         return False
 
-    print(f"✅  {dest.relative_to(REPO_ROOT)} is up to date.")
+    print(f"{dest.relative_to(REPO_ROOT)} is up to date.")
     return True
 
 

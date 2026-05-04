@@ -248,7 +248,7 @@ function SavedList({
                 {s.language}
               </span>
               {s.pinned && (
-                <span className="text-[10px] text-amber-300">★ pinned</span>
+                <span className="text-[10px] text-amber-300">pinned</span>
               )}
             </div>
             <p className="mt-1 truncate text-sm text-slate-200">{s.name}</p>
@@ -441,10 +441,7 @@ export function HuntView() {
       });
       setDemoMode(true);
       setRunError(err);
-      toast(
-        'Backend unreachable — showing demo results',
-        { icon: '⚠️' },
-      );
+      toast('Backend unreachable — showing demo results');
     } finally {
       setRunning(false);
     }
@@ -681,12 +678,11 @@ export function HuntView() {
               />
             ) : results.hits.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-6 py-10">
-                <span className="mb-2 text-2xl text-emerald-400">✓</span>
                 <p className="text-sm font-medium text-emerald-300">
                   No matches in the selected window
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {runError ? 'Backend unreachable.' : 'Either you’re clean, or your query is too tight.'}
+                  {runError ? 'Backend unreachable.' : 'Either the data is clean, or the query is too tight.'}
                 </p>
               </div>
             ) : (

@@ -168,7 +168,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
 
         {/* User avatar */}
         <div className="flex items-center gap-2 cursor-pointer group">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white">
+          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">
             SO
           </div>
           <div className="hidden lg:block">

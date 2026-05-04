@@ -98,12 +98,6 @@ const TYPE_COLORS: Record<string, string> = {
   plugin:    'bg-emerald-900/40 text-emerald-300 border-emerald-700/60',
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  playbook:  '⚡',
-  detection: '🔍',
-  plugin:    '🔌',
-};
-
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -130,7 +124,7 @@ function TypeBadge({ type }: { type: string }) {
         TYPE_COLORS[type] ?? 'bg-zinc-700 text-zinc-300 border-zinc-600'
       )}
     >
-      {TYPE_ICONS[type] ?? '📦'} {type.charAt(0).toUpperCase() + type.slice(1)}
+      {type.charAt(0).toUpperCase() + type.slice(1)}
     </span>
   );
 }
@@ -141,7 +135,7 @@ function VerifiedBadge() {
       title="Verified by AiSOC team"
       className="inline-flex items-center gap-0.5 rounded border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 text-xs font-medium text-emerald-300"
     >
-      ✓ Verified
+      Verified
     </span>
   );
 }
@@ -225,7 +219,7 @@ function InstallButton({ item, installed, busy, onInstall, onUninstall }: Instal
           className="rounded bg-emerald-900/40 px-2 py-1 text-xs font-medium text-emerald-300"
           title="Enabled for this tenant"
         >
-          ✓ Installed
+          Installed
         </span>
         <button
           onClick={() => onUninstall(item)}
@@ -665,7 +659,7 @@ export function MarketplaceView() {
             className="self-start rounded-full bg-emerald-900/40 px-3 py-1 text-xs font-medium text-emerald-300"
             title="Items enabled for the current tenant"
           >
-            ✓ {installedSet.size} installed
+            {installedSet.size} installed
           </span>
         )}
       </div>

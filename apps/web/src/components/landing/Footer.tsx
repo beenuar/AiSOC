@@ -49,8 +49,8 @@ export function Footer() {
           <div className="col-span-2">
             <Logo size={36} withWordmark />
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-gray-400">
-              The open-source AI Security Operations Center. Maintained by the AiSOC community.
-              MIT licensed, forever.
+              An open-source AI security operations centre, maintained by the
+              AiSOC community and released under the MIT licence.
             </p>
             <div className="mt-5 flex gap-3">
               <a
@@ -104,23 +104,16 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-white/5 pt-6 text-xs text-gray-500 sm:flex-row sm:items-center">
           <div>
-            © {new Date().getFullYear()} AiSOC contributors. AiSOC is open-source software
-            released under the MIT License.
+            © {new Date().getFullYear()} AiSOC contributors. Released under the MIT License.
           </div>
-          <div className="flex items-center gap-4">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              All systems operational
-            </span>
-            <a
-              href="https://github.com/beenuar/AiSOC/releases"
-              target="_blank"
-              rel="noreferrer"
-              className="font-mono hover:text-white"
-            >
-              v5.2.0
-            </a>
-          </div>
+          <a
+            href="https://github.com/beenuar/AiSOC/releases"
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono hover:text-white"
+          >
+            v5.2.0
+          </a>
         </div>
       </div>
     </footer>

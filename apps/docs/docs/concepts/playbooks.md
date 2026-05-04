@@ -33,7 +33,7 @@ and response steps.
 
 ## Starter Templates
 
-AiSOC ships with 12 production-ready templates:
+AiSOC ships with 12 starter templates:
 
 | Template | Description |
 |----------|-------------|

@@ -2,137 +2,135 @@
 
 Last updated: 2026-05-04
 
-## ✅ ALL TASKS COMPLETE — v4.1 + v5.0 + v5.1 + v5.2 shipped
+## Status: v4.1, v5.0, v5.1, and v5.2 shipped
 
-> v4.1 "Community Ecosystem", v5.0 "Enterprise Ready", v5.1 "Detection Depth", and
-> v5.2 "Auditable, Mobile, Open" (the Leading-AI-SOC 90-day plan) are all
-> implemented. See ROADMAP.md and CHANGELOG.md for per-item status. Use
-> `pnpm aisoc:demo` for the streamlined demo (under five minutes), or
-> `pnpm aisoc:lab` for the full lab stack.
+v4.1, v5.0, v5.1, and v5.2 are all implemented. See ROADMAP.md and
+CHANGELOG.md for per-item status. Use `pnpm aisoc:demo` for the demo stack,
+or `pnpm aisoc:lab` for the full lab stack.
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| v1 — Initial monorepo | Core services, frontend, infra, docs | ✅ COMPLETED |
-| v2 — Enterprise upgrade | Knowledge graph, rule engine, ML fusion, threat intel | ✅ COMPLETED |
-| v4.0 — Autonomous SOC | Multi-agent investigator, Visual SOAR Studio, Plugin Platform, OpenTelemetry | ✅ COMPLETED |
-| v4.1 — Community Ecosystem | Plugin publishing, marketplace v2, detection catalog, playbook submissions, aisoc-cli | ✅ COMPLETED |
-| v5.0 — Enterprise Ready | SAML/OIDC, multi-tenant RLS, RBAC, audit log, compliance dashboards, SLA, HA Helm, backup, runbooks | ✅ COMPLETED |
-| v5.1 — Detection Depth | UEBA service, honeytokens service, purple-team service (ART + Caldera + ATT&CK heatmap + tabletop) | ✅ COMPLETED |
-| v5.2 — Auditable, Mobile, Open | Investigation Ledger, 200-incident public eval harness, Responder PWA + passkeys, Ambient Copilot, MCP server, streamlined demo | ✅ COMPLETED |
+| v1 — Initial monorepo | Core services, frontend, infra, docs | Completed |
+| v2 — Enterprise upgrade | Knowledge graph, rule engine, ML fusion, threat intel | Completed |
+| v4.0 | Multi-agent investigator, visual SOAR studio, plugin platform, OpenTelemetry | Completed |
+| v4.1 | Plugin publishing, marketplace v2, detection catalog, playbook submissions, aisoc-cli | Completed |
+| v5.0 | SAML/OIDC, multi-tenant RLS, RBAC, audit log, compliance dashboards, SLA, HA Helm, backup, runbooks | Completed |
+| v5.1 | UEBA service, honeytokens service, purple-team service (ART + Caldera + ATT&CK heatmap + tabletop) | Completed |
+| v5.2 | Investigation Ledger, 200-incident public eval harness, Responder PWA + passkeys, Ambient Copilot, MCP server, demo stack | Completed |
 
 ### v1 — Initial monorepo
 
 | ID | Task | Status |
 |----|------|--------|
-| setup-workspace | Initialize monorepo structure with pnpm + Turborepo | ✅ COMPLETED |
-| build-ingest | Build Go ingest workers with OCSF normalization + ATT&CK mapping | ✅ COMPLETED |
-| build-core-api | Build FastAPI Core API: tenants, RBAC, alerts, cases, reporting | ✅ COMPLETED |
-| build-enrichment | Build Go IOC enrichment microservice with Redis cache | ✅ COMPLETED |
-| build-alert-fusion | Build Alert Fusion Service (Python) for dedup + merge | ✅ COMPLETED |
-| build-agents | Build LangGraph AI Agent Orchestrator with all domain agents | ✅ COMPLETED |
-| build-actions | Build Action Execution Service with blast-radius gate + rollback | ✅ COMPLETED |
-| build-realtime | Build Node.js/Bun real-time service (WebSocket/SSE) | ✅ COMPLETED |
-| build-connectors | Build 5 Phase 1 connectors: CrowdStrike, Splunk, AWS, Okta, Sentinel | ✅ COMPLETED |
-| build-packages | Build shared packages: OCSF lib, TypeScript types, React UI components | ✅ COMPLETED |
-| build-frontend | Build Next.js 14 frontend: SOC console, case mgmt, attack graph, NL search | ✅ COMPLETED |
-| build-infra | Build Terraform infrastructure + Helm charts + Docker configs | ✅ COMPLETED |
-| build-docs | Create README, architecture docs, API docs, migration guides | ✅ COMPLETED |
-| setup-github | Create GitHub repository and push initial commit | ✅ COMPLETED |
-| github-push | Push complete codebase to GitHub | ✅ COMPLETED |
+| setup-workspace | Initialize monorepo structure with pnpm + Turborepo | Completed |
+| build-ingest | Build Go ingest workers with OCSF normalization + ATT&CK mapping | Completed |
+| build-core-api | Build FastAPI Core API: tenants, RBAC, alerts, cases, reporting | Completed |
+| build-enrichment | Build Go IOC enrichment microservice with Redis cache | Completed |
+| build-alert-fusion | Build Alert Fusion Service (Python) for dedup + merge | Completed |
+| build-agents | Build LangGraph AI Agent Orchestrator with all domain agents | Completed |
+| build-actions | Build Action Execution Service with blast-radius gate + rollback | Completed |
+| build-realtime | Build Node.js/Bun real-time service (WebSocket/SSE) | Completed |
+| build-connectors | Build 5 Phase 1 connectors: CrowdStrike, Splunk, AWS, Okta, Sentinel | Completed |
+| build-packages | Build shared packages: OCSF lib, TypeScript types, React UI components | Completed |
+| build-frontend | Build Next.js 14 frontend: SOC console, case mgmt, attack graph, NL search | Completed |
+| build-infra | Build Terraform infrastructure + Helm charts + Docker configs | Completed |
+| build-docs | Create README, architecture docs, API docs, migration guides | Completed |
+| setup-github | Create GitHub repository and push initial commit | Completed |
+| github-push | Push complete codebase to GitHub | Completed |
 
 ### v2 — Enterprise platform upgrade
 
 | ID | Task | Status |
 |----|------|--------|
-| infra-fixes | Reconcile docker-compose ports/profiles for fusion, threatintel, connectors | ✅ COMPLETED |
-| neo4j-graph | Add Neo4j to compose; implement `graph_service` (attack path, blast radius, neighbors, MITRE coverage) | ✅ COMPLETED |
-| rule-engine | Multi-language detection rule engine: Sigma (pySigma), YARA, KQL, Lucene, Regex with `/v1/rules` API | ✅ COMPLETED |
-| attck-corpus | Full MITRE ATT&CK STIX 2.1 corpus loader (Go + Python), in-process index, optional Qdrant embedding | ✅ COMPLETED |
-| threatintel-svc | New `services/threatintel`: TAXII 2.1 + MISP + OTX + CISA KEV pollers, Bloom dedup, OpenSearch+Qdrant+Neo4j sinks | ✅ COMPLETED |
-| ingest-shodan-cve | Shodan enrichment + CISA KEV cross-correlation in Go ingest, emits `vulnerability.matches` | ✅ COMPLETED |
-| ml-fusion | Isolation Forest anomaly + LightGBM LambdaRank priority scoring with analyst feedback loop | ✅ COMPLETED |
-| docs-update | Refreshed README, new SYSTEM_DESIGN.md, API_REFERENCE.md, LOCAL_DEVELOPMENT.md runbook | ✅ COMPLETED |
+| infra-fixes | Reconcile docker-compose ports/profiles for fusion, threatintel, connectors | Completed |
+| neo4j-graph | Add Neo4j to compose; implement `graph_service` (attack path, blast radius, neighbors, MITRE coverage) | Completed |
+| rule-engine | Multi-language detection rule engine: Sigma (pySigma), YARA, KQL, Lucene, Regex with `/v1/rules` API | Completed |
+| attck-corpus | Full MITRE ATT&CK STIX 2.1 corpus loader (Go + Python), in-process index, optional Qdrant embedding | Completed |
+| threatintel-svc | New `services/threatintel`: TAXII 2.1 + MISP + OTX + CISA KEV pollers, Bloom dedup, OpenSearch+Qdrant+Neo4j sinks | Completed |
+| ingest-shodan-cve | Shodan enrichment + CISA KEV cross-correlation in Go ingest, emits `vulnerability.matches` | Completed |
+| ml-fusion | Isolation Forest anomaly + LightGBM LambdaRank priority scoring with analyst feedback loop | Completed |
+| docs-update | Refreshed README, new SYSTEM_DESIGN.md, API_REFERENCE.md, LOCAL_DEVELOPMENT.md runbook | Completed |
 
-### v4 — Autonomous SOC
-
-| ID | Task | Status |
-|----|------|--------|
-| investigator | LangGraph multi-agent orchestrator (Recon, Forensic, Responder, ReportWriter) | ✅ COMPLETED |
-| case-workspace | Case Workspace UI — Investigation & Report tabs with streaming progress | ✅ COMPLETED |
-| eval-harness | Eval harness: 20 synthetic incidents, ≥80% MITRE-tactic accuracy CI gate | ✅ COMPLETED |
-| soar-studio | React Flow visual playbook editor + DAG engine (retries, conditions, on_failure) | ✅ COMPLETED |
-| playbook-schema | `playbook.schema.json` JSON Schema 2020-12 for portability and CI linting | ✅ COMPLETED |
-| detection-as-code | `detections/` directory with Sigma + AiSOC YAML; GitHub Action deploy-on-merge | ✅ COMPLETED |
-| playbook-templates | 12 starter playbook templates | ✅ COMPLETED |
-| marketplace | Community playbook + plugin marketplace static index | ✅ COMPLETED |
-| plugin-sdk | Plugin SDK in Python (`packages/plugin-sdk-py/`) and Go (`packages/plugin-sdk-go/`) | ✅ COMPLETED |
-| plugin-yaml | `plugin.yaml` manifest spec (connector \| enricher \| responder \| detection \| widget) | ✅ COMPLETED |
-| plugin-oci | Plugin loader with OCI image support (`oras pull`) | ✅ COMPLETED |
-| ref-plugins | 4 reference plugins: Okta connector, YARA enricher, Slack quarantine, MTTR widget | ✅ COMPLETED |
-| openapi | Public REST API v1, OpenAPI 3.1 at `docs/openapi.yaml` | ✅ COMPLETED |
-| graphql | GraphQL gateway (Strawberry) at `/graphql` | ✅ COMPLETED |
-| api-tokens | Scoped API tokens (`/api/v1/api-keys`) | ✅ COMPLETED |
-| client-sdks | Auto-generated TypeScript, Python, Go client SDKs | ✅ COMPLETED |
-| docs-site | Docusaurus docs site at `apps/docs/`, deployed to GitHub Pages | ✅ COMPLETED |
-| otel | OpenTelemetry traces across agents → api → realtime (OTLP/Jaeger) | ✅ COMPLETED |
-| demo-lab | `pnpm aisoc:lab` one-command full-stack demo + Conti ransomware scenario | ✅ COMPLETED |
-| migration | MIGRATION.md for v3 → v4 upgrade path | ✅ COMPLETED |
-
-### v4.1 — Community Ecosystem
+### v4
 
 | ID | Task | Status |
 |----|------|--------|
-| cli | `aisoc-cli` scaffold/validate/publish commands for plugins and detections | ✅ COMPLETED |
-| plugin-publish | Plugin publish flow: `community_plugins` table, POST `/api/v1/plugins/publish`, Ed25519 signature verification | ✅ COMPLETED |
-| marketplace-v2 | MarketplaceView.tsx with ratings, install counts, verified badges, category filter, sort | ✅ COMPLETED |
-| detection-catalog | Detection catalog: paginated Sigma browse API + UI page with install action | ✅ COMPLETED |
-| playbook-community | Playbook community submissions: `community_playbooks` table + submit/curate API + Community tab | ✅ COMPLETED |
+| investigator | LangGraph multi-agent orchestrator (Recon, Forensic, Responder, ReportWriter) | Completed |
+| case-workspace | Case Workspace UI — Investigation & Report tabs with streaming progress | Completed |
+| eval-harness | Eval harness: 20 synthetic incidents, ≥80% MITRE-tactic accuracy CI gate | Completed |
+| soar-studio | React Flow visual playbook editor + DAG engine (retries, conditions, on_failure) | Completed |
+| playbook-schema | `playbook.schema.json` JSON Schema 2020-12 for portability and CI linting | Completed |
+| detection-as-code | `detections/` directory with Sigma + AiSOC YAML; GitHub Action deploy-on-merge | Completed |
+| playbook-templates | 12 starter playbook templates | Completed |
+| marketplace | Community playbook + plugin marketplace static index | Completed |
+| plugin-sdk | Plugin SDK in Python (`packages/plugin-sdk-py/`) and Go (`packages/plugin-sdk-go/`) | Completed |
+| plugin-yaml | `plugin.yaml` manifest spec (connector \| enricher \| responder \| detection \| widget) | Completed |
+| plugin-oci | Plugin loader with OCI image support (`oras pull`) | Completed |
+| ref-plugins | 4 reference plugins: Okta connector, YARA enricher, Slack quarantine, MTTR widget | Completed |
+| openapi | Public REST API v1, OpenAPI 3.1 at `docs/openapi.yaml` | Completed |
+| graphql | GraphQL gateway (Strawberry) at `/graphql` | Completed |
+| api-tokens | Scoped API tokens (`/api/v1/api-keys`) | Completed |
+| client-sdks | Auto-generated TypeScript, Python, Go client SDKs | Completed |
+| docs-site | Docusaurus docs site at `apps/docs/`, deployed to GitHub Pages | Completed |
+| otel | OpenTelemetry traces across agents → api → realtime (OTLP/Jaeger) | Completed |
+| demo-lab | `pnpm aisoc:lab` one-command full-stack demo + Conti ransomware scenario | Completed |
+| migration | MIGRATION.md for v3 → v4 upgrade path | Completed |
 
-### v5.0 — Enterprise Ready
-
-| ID | Task | Status |
-|----|------|--------|
-| saml-oidc | SAML 2.0 + OIDC auth in `services/api/app/auth/` with JWT issuance | ✅ COMPLETED |
-| rls | Multi-tenant RLS: `tenant_id` migration, Postgres RLS policies, SQLAlchemy middleware | ✅ COMPLETED |
-| rbac | Granular RBAC: roles/permissions/user_roles tables + `require_permission()` + admin UI | ✅ COMPLETED |
-| audit-log | Immutable audit log: append-only `audit_log` table + FastAPI middleware + UI | ✅ COMPLETED |
-| soc2 | SOC 2 evidence dashboard: auto-collect evidence API + compliance page + PDF export | ✅ COMPLETED |
-| frameworks | ISO 27001 + NIST CSF + PCI-DSS/HIPAA/DORA: mapping YAMLs + `/api/v1/compliance/{framework}` + heatmap UI | ✅ COMPLETED |
-| sla | MTTD/MTTR/MTTC SLA tracking: `tenant_sla_config` table + metrics API + dashboard widget | ✅ COMPLETED |
-| helm-ha | Helm chart HPA, PDB, Ingress, per-service deployment templates | ✅ COMPLETED |
-| backup-cli | `scripts/backup.sh` and `scripts/restore.sh` for Postgres + ClickHouse + plugins | ✅ COMPLETED |
-| ops-docs | `docs/operations/multi-region.md` + `scripts/generate_runbook.py` from OTel traces | ✅ COMPLETED |
-
-### v5.1 — Detection Depth
-
-| ID | Task | Status |
-|----|------|--------|
-| ueba | `services/ueba/` — baseline computation (Welford), anomaly scoring (z-score), peer-group analysis, Kafka integration | ✅ COMPLETED |
-| honeytokens | `services/honeytokens/` — token generator, HMAC-signed webhook alerting, lifecycle management UI | ✅ COMPLETED |
-| purple-team | `services/purple-team/` — Atomic Red Team loader, Caldera client, ATT&CK coverage heatmap, tabletop simulator UI | ✅ COMPLETED |
-
-### v5.2 — Auditable, Mobile, Open (Leading-AI-SOC 90-day plan)
+### v4.1
 
 | ID | Task | Status |
 |----|------|--------|
-| investigation-ledger | Append-only ledger of every prompt, tool call, evidence shard, and rationale (`investigation_step` table + `services/agents/app/investigator/ledger.py` + UI) | ✅ COMPLETED |
-| ledger-api | `GET /api/v1/investigations/*` for listing, retrieving, and replaying ledger entries by case | ✅ COMPLETED |
-| eval-harness-v2 | 200-incident synthetic dataset covering all 14 MITRE tactics + 4 eval gates: alert reduction (real measurement) plus MITRE-tactic / completeness / response-quality substrate self-consistency gates | ✅ COMPLETED |
-| benchmark-page | Public eval harness page at `/benchmark` (docs + web) with published numbers, full method, honest comparison vs vendors, and explicit "what each suite actually measures" framing | ✅ COMPLETED |
-| ci-eval-gates | `scripts/run_evals.py --ci` wired into `.github/workflows/ci.yml` so every commit is gated on substrate self-consistency + alert-reduction thresholds | ✅ COMPLETED |
-| responder-pwa | Installable PWA (`apps/web/src/app/(responder)/`) with service worker, offline shell, manifest, icons | ✅ COMPLETED |
-| passkeys | WebAuthn passkey registration + login for Responder surface (FIDO2 platform authenticators only) | ✅ COMPLETED |
-| oncall | On-call schedule + handoff (`oncall.py` + Responder home page + alert page badge) | ✅ COMPLETED |
-| approvals | Long-lived approval requests for blast-radius-gated SOAR actions, approvable from PWA with passkey | ✅ COMPLETED |
-| web-push | VAPID-signed Web Push notifications wired into `services/realtime` + per-device subscriptions following on-call rotation | ✅ COMPLETED |
-| ambient-copilot | Contextual actions on alert / case / rule / playbook surfaces, grounded in the Investigation Ledger | ✅ COMPLETED |
-| mcp-server | `services/mcp/` — Model Context Protocol server exposing 11 AiSOC tools to Claude Desktop, Cursor, Cody, Continue | ✅ COMPLETED |
-| streamlined-demo | `pnpm aisoc:demo` + `docker-compose.demo.yml` + prebuilt GHCR images → first investigation under five minutes | ✅ COMPLETED |
-| content-pack | First-party content: 10 detections, 12 playbooks, 15 plugins indexed into `marketplace/index.json` | ✅ COMPLETED |
+| cli | `aisoc-cli` scaffold/validate/publish commands for plugins and detections | Completed |
+| plugin-publish | Plugin publish flow: `community_plugins` table, POST `/api/v1/plugins/publish`, Ed25519 signature verification | Completed |
+| marketplace-v2 | MarketplaceView.tsx with ratings, install counts, verified badges, category filter, sort | Completed |
+| detection-catalog | Detection catalog: paginated Sigma browse API + UI page with install action | Completed |
+| playbook-community | Playbook community submissions: `community_playbooks` table + submit/curate API + Community tab | Completed |
 
-## GitHub Repository
+### v5.0
 
-**https://github.com/beenuar/AiSOC**
+| ID | Task | Status |
+|----|------|--------|
+| saml-oidc | SAML 2.0 + OIDC auth in `services/api/app/auth/` with JWT issuance | Completed |
+| rls | Multi-tenant RLS: `tenant_id` migration, Postgres RLS policies, SQLAlchemy middleware | Completed |
+| rbac | Granular RBAC: roles/permissions/user_roles tables + `require_permission()` + admin UI | Completed |
+| audit-log | Immutable audit log: append-only `audit_log` table + FastAPI middleware + UI | Completed |
+| soc2 | SOC 2 evidence dashboard: auto-collect evidence API + compliance page + PDF export | Completed |
+| frameworks | ISO 27001 + NIST CSF + PCI-DSS/HIPAA/DORA: mapping YAMLs + `/api/v1/compliance/{framework}` + heatmap UI | Completed |
+| sla | MTTD/MTTR/MTTC SLA tracking: `tenant_sla_config` table + metrics API + dashboard widget | Completed |
+| helm-ha | Helm chart HPA, PDB, Ingress, per-service deployment templates | Completed |
+| backup-cli | `scripts/backup.sh` and `scripts/restore.sh` for Postgres + ClickHouse + plugins | Completed |
+| ops-docs | `docs/operations/multi-region.md` + `scripts/generate_runbook.py` from OTel traces | Completed |
+
+### v5.1
+
+| ID | Task | Status |
+|----|------|--------|
+| ueba | `services/ueba/` — baseline computation (Welford), anomaly scoring (z-score), peer-group analysis, Kafka integration | Completed |
+| honeytokens | `services/honeytokens/` — token generator, HMAC-signed webhook alerting, lifecycle management UI | Completed |
+| purple-team | `services/purple-team/` — Atomic Red Team loader, Caldera client, ATT&CK coverage heatmap, tabletop simulator UI | Completed |
+
+### v5.2
+
+| ID | Task | Status |
+|----|------|--------|
+| investigation-ledger | Append-only ledger of every prompt, tool call, evidence shard, and rationale (`investigation_step` table + `services/agents/app/investigator/ledger.py` + UI) | Completed |
+| ledger-api | `GET /api/v1/investigations/*` for listing, retrieving, and replaying ledger entries by case | Completed |
+| eval-harness-v2 | 200-incident synthetic dataset covering all 14 MITRE tactics + 4 eval gates: alert reduction (real measurement) plus MITRE-tactic / completeness / response-quality substrate self-consistency gates | Completed |
+| benchmark-page | Public eval harness page at `/benchmark` (docs + web) with published numbers, full method, comparison to other AI SOC offerings, and explicit "what each suite measures" framing | Completed |
+| ci-eval-gates | `scripts/run_evals.py --ci` wired into `.github/workflows/ci.yml` so every commit is gated on substrate self-consistency + alert-reduction thresholds | Completed |
+| responder-pwa | Installable PWA (`apps/web/src/app/(responder)/`) with service worker, offline shell, manifest, icons | Completed |
+| passkeys | WebAuthn passkey registration + login for Responder surface (FIDO2 platform authenticators only) | Completed |
+| oncall | On-call schedule + handoff (`oncall.py` + Responder home page + alert page badge) | Completed |
+| approvals | Long-lived approval requests for blast-radius-gated SOAR actions, approvable from PWA with passkey | Completed |
+| web-push | VAPID-signed Web Push notifications wired into `services/realtime` + per-device subscriptions following on-call rotation | Completed |
+| ambient-copilot | Contextual actions on alert / case / rule / playbook surfaces, grounded in the Investigation Ledger | Completed |
+| mcp-server | `services/mcp/` — Model Context Protocol server exposing 11 AiSOC tools to Claude Desktop, Cursor, Cody, Continue | Completed |
+| streamlined-demo | `pnpm aisoc:demo` + `docker-compose.demo.yml` + prebuilt GHCR images for the demo profile | Completed |
+| content-pack | First-party content: 10 detections, 12 playbooks, 15 plugins indexed into `marketplace/index.json` | Completed |
+
+## GitHub repository
+
+https://github.com/beenuar/AiSOC
 
 ## Services
 

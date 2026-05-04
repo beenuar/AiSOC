@@ -38,9 +38,9 @@ const c = {
 };
 
 function statusIcon(s: Status): string {
-  if (s === "OK") return c.green("✓ PASS");
-  if (s === "WARN") return c.yellow("⚠ WARN");
-  return c.red("✗ FAIL");
+  if (s === "OK") return c.green("PASS");
+  if (s === "WARN") return c.yellow("WARN");
+  return c.red("FAIL");
 }
 
 function record(name: string, status: Status, detail?: string) {
@@ -268,17 +268,17 @@ async function main() {
 
   if (fails > 0) {
     console.log(
-      c.red("\n  ✗ AiSOC is not healthy. ") +
+      c.red("\n  AiSOC is not healthy. ") +
         "See the failing checks above. " +
-        c.dim("Quickstart: https://github.com/cybeleinc/AiSOC#quickstart")
+        c.dim("Quickstart: https://github.com/beenuar/AiSOC#quickstart")
     );
     process.exit(1);
   }
   if (warns > 0) {
-    console.log(c.yellow("\n  ⚠ AiSOC is up but missing demo data or non-critical config."));
+    console.log(c.yellow("\n  AiSOC is up but missing demo data or non-critical config."));
     process.exit(0);
   }
-  console.log(c.green("\n  ✓ AiSOC is healthy and ready to investigate."));
+  console.log(c.green("\n  AiSOC is healthy."));
   process.exit(0);
 }
 

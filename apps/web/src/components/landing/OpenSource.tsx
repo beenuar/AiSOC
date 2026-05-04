@@ -6,19 +6,19 @@ import { motion } from 'framer-motion';
 const PILLARS = [
   {
     title: 'MIT licensed',
-    body: 'Use it in production, fork it, sell services around it. No CLA, no telemetry, no calls home.',
+    body: 'Use it, fork it, build services around it. No CLA, no telemetry, no calls home.',
   },
   {
     title: 'Self-hosted by default',
-    body: 'docker compose up gets you the full stack on your own hardware. Managed cloud is optional, never required.',
+    body: 'docker compose up runs the full stack on your own hardware. Managed hosting is optional.',
   },
   {
-    title: 'Auditable end-to-end',
-    body: 'Every detection, every copilot decision, every connector action is logged with inputs, prompts, and rationale.',
+    title: 'Auditable end to end',
+    body: 'Detections, agent decisions and connector actions are logged with inputs, prompts and rationale.',
   },
   {
-    title: 'Community-driven',
-    body: 'Maintained by SOC analysts, detection engineers, and threat hunters in the open. Security disclosures get a fast, real, human response.',
+    title: 'Community-maintained',
+    body: 'Maintained in the open by SOC analysts, detection engineers and contributors. Security disclosures are handled via SECURITY.md.',
   },
 ];
 
@@ -26,7 +26,7 @@ export function OpenSource() {
   return (
     <section id="open-source" className="relative py-24 md:py-32">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-surface-card to-surface-base p-8 md:p-12">
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-surface-card p-8 md:p-12">
           {/* Soft glow */}
           <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand-500/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-32 -left-32 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
@@ -42,12 +42,12 @@ export function OpenSource() {
                 Open source · MIT
               </span>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-white md:text-5xl">
-                Built in the open. Owned by you.
+                Built in the open.
               </h2>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-gray-400">
-                AiSOC is the SOC platform we wished existed — modern, AI-native, and free. No
-                runtime fees. No vendor lock-in. No artificial gates between &ldquo;community&rdquo;
-                and &ldquo;enterprise&rdquo; editions.
+                AiSOC is a single-edition open-source project. There are no
+                separate &ldquo;community&rdquo; and &ldquo;enterprise&rdquo; builds, no
+                runtime fees and no per-seat licensing.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">

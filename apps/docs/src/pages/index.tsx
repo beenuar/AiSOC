@@ -16,7 +16,7 @@ function HomepageHeader() {
           <Link
             className="button button--secondary button--lg"
             to="/docs/intro">
-            Get Started →
+            Get started
           </Link>
           <Link
             className="button button--outline button--secondary button--lg"
@@ -29,95 +29,89 @@ function HomepageHeader() {
   );
 }
 
-// Top three features lead with the structural moat: auditable agent decisions,
-// the public eval harness that gates the substrate underneath them, and the
-// MIT/self-host posture that makes both meaningful in regulated environments.
-// The remaining capability list follows so visitors see we ship the substrate
-// too — but the headline reason to pick AiSOC over a closed-source competitor
-// sits in rows 1–3.
+// Feature list. The first three rows describe the properties most relevant to a
+// regulated buyer (auditable agent, published eval harness, license posture);
+// the rest enumerate the substrate capabilities that ship in the box.
 const FEATURES = [
   {
-    title: '🔎 Auditable agent decisions',
+    title: 'Auditable agent decisions',
     description:
       'Every prompt, tool call, and rationale the agent emits is persisted to the investigation ledger and replayable step-by-step in the case workspace.',
   },
   {
-    title: '📊 Public eval harness',
+    title: 'Public eval harness',
     description:
-      '200-incident, CI-gated regression harness over the AiSOC substrate (extractors, fusion, templates, judges). Reproducible on your laptop in seconds. We are upfront about what each metric measures — and what it doesn\u2019t.',
+      '200-incident, CI-gated regression harness over the AiSOC substrate (extractors, fusion, templates, judges). Reproducible on a laptop in seconds. The page describes what each metric measures and what it does not.',
   },
   {
-    title: '🆓 MIT-licensed, self-hostable',
+    title: 'MIT-licensed, self-hostable',
     description:
-      'Read the code, audit the prompts, run the agent on your own data. No CLA, no telemetry, no calls home — your auditor can review every line.',
+      'The code, prompts, and templates are in the repo. No CLA, no telemetry, no calls home.',
   },
   {
-    title: '🔍 LangGraph multi-agent investigation',
+    title: 'LangGraph multi-agent investigation',
     description:
-      'Recon → forensic → responder → reporter graph for automated root-cause analysis, triage, and case enrichment.',
+      'Recon, forensic, responder, and reporter agents wired through a LangGraph orchestrator for triage and case enrichment.',
   },
   {
-    title: '📋 Playbook engine',
+    title: 'Playbook engine',
     description:
-      'Visual React Flow editor with 12+ starter templates for automated, human-gated response actions.',
+      'Visual React Flow editor with 12 starter templates for automated, human-gated response actions.',
   },
   {
-    title: '🧠 UEBA',
+    title: 'UEBA',
     description:
       'Per-user Welford online baselines, Z-score anomaly scoring, and Kafka-integrated anomaly publishing.',
   },
   {
-    title: '🍯 Honeytokens',
+    title: 'Honeytokens',
     description:
       'HMAC-SHA256 signed deceptive credentials (URL, file, AWS key, email) with first-touch webhook alerting.',
   },
   {
-    title: '🟣 Purple Team',
+    title: 'Purple Team',
     description:
-      'Atomic Red Team YAML parser + Caldera executor, ATT&CK coverage heatmap, and tabletop sessions.',
+      'Atomic Red Team YAML parser, Caldera executor, ATT&CK coverage heatmap, and tabletop sessions.',
   },
   {
-    title: '⚡ Real-time fusion',
+    title: 'Real-time fusion',
     description:
       'Kafka spine with sub-second alert ingestion, Bloom-filter dedup on 10M+ IOCs, ML scoring (LightGBM + Isolation Forest).',
   },
   {
-    title: '🕸️ Attack graph',
+    title: 'Attack graph',
     description:
       'Neo4j entity graph with attack-path reconstruction and blast-radius gating on automated actions.',
   },
   {
-    title: '🛡️ Detection engineering',
+    title: 'Detection engineering',
     description:
-      'Sigma over OpenSearch + ClickHouse, YARA, KQL/EQL — community catalog with one-click install.',
+      'Sigma over OpenSearch and ClickHouse, YARA, KQL/EQL — community catalog with one-click install.',
   },
   {
-    title: '🏛️ Enterprise governance',
+    title: 'Enterprise governance',
     description:
-      'SAML 2.0 + OIDC SSO, multi-tenant Postgres RLS, granular RBAC, and immutable audit log.',
+      'SAML 2.0 and OIDC SSO, multi-tenant Postgres RLS, granular RBAC, and immutable audit log.',
   },
   {
-    title: '📊 Compliance dashboards',
+    title: 'Compliance dashboards',
     description:
-      'SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA evidence with MTTD/MTTR/MTTC SLA tracking.',
+      'SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, and DORA evidence with MTTD/MTTR/MTTC SLA tracking.',
   },
   {
-    title: '🔌 Plugin ecosystem',
+    title: 'Plugin ecosystem',
     description:
       'Python and TypeScript SDKs, Ed25519-signed publishing, and a community marketplace.',
   },
   {
-    title: '🚀 Cloud-native',
+    title: 'Deployment',
     description:
       'Helm charts, Docker Compose, OpenTelemetry traces/metrics/logs, and PostgreSQL backup with KMS encryption.',
   },
 ];
 
-// Comparison rows are written as visitor-actionable claims, not marketing
-// gloss. We anchor each row to a concrete capability ("Agent decisions are
-// auditable line-by-line") so the table can be defended in a sales call.
-// Ordering is intentional: the top three rows are the ones a CISO at a
-// regulated org will use to disqualify closed-source SOCs first.
+// Comparison rows are concrete, defensible capability claims. Each row maps to
+// something a buyer can verify in the repo or in vendor documentation.
 type CompareCell = { kind: 'yes' | 'no' | 'caveat'; label: string };
 
 const COMPARE_HEADERS = [
@@ -216,12 +210,12 @@ function compareCellClass(cell: CompareCell): string {
 function ComparisonTable() {
   return (
     <div className="container margin-vert--xl">
-      <h2 className={styles.sectionTitle}>Why AiSOC vs. the alternatives</h2>
+      <h2 className={styles.sectionTitle}>How AiSOC compares</h2>
       <p className={styles.sectionLede}>
-        The structural moat: open-source, self-hostable, with every agent decision
-        auditable end-to-end. Closed-source AI SOCs run on someone else&apos;s
-        infrastructure and ship a black-box agent — neither survives a serious
-        compliance review.
+        AiSOC is open-source and self-hostable, and every agent decision is
+        recorded in the investigation ledger. Closed-source AI SOCs run on
+        vendor infrastructure and do not expose the agent loop, which makes
+        them harder to review under SOC 2, ISO 27001, or DORA controls.
       </p>
       <div className={styles.compareWrap}>
         <table className={styles.compareTable}>
@@ -256,9 +250,9 @@ function ComparisonTable() {
         </table>
       </div>
       <p className={styles.compareNote}>
-        Numbers and capability claims are sourced from each vendor&apos;s public
-        documentation as of 2026.{' '}
-        <Link to="/docs/intro">Verify ours →</Link>
+        Capability claims for other vendors are sourced from their public
+        documentation as of 2026. AiSOC&apos;s claims map directly to code in
+        this repository — see <Link to="/docs/intro">the docs</Link>.
       </p>
     </div>
   );
@@ -269,15 +263,15 @@ export default function Home(): React.JSX.Element {
   return (
     <Layout
       title={siteConfig.title}
-      description="The auditable AI SOC — every agent decision logged, replayable, and gated by a public, reproducible eval harness. MIT-licensed, self-hostable, with built-in UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance.">
+      description="An open-source AI SOC platform. Agent decisions are recorded in an investigation ledger and a public eval harness is run on every commit. MIT-licensed and self-hostable, with built-in UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance reporting.">
       <HomepageHeader />
       <main>
         <ComparisonTable />
         <div className="container margin-vert--xl">
-          <h2 className={styles.sectionTitle}>What you get out of the box</h2>
+          <h2 className={styles.sectionTitle}>What ships in the box</h2>
           <p className={styles.sectionLede}>
-            The trust trio leads — auditable agent, public eval harness, MIT
-            license — backed by the full SOC substrate underneath.
+            The first three rows describe the properties most relevant to a
+            regulated buyer. The remainder enumerate the SOC substrate.
           </p>
           <div className="row">
             {FEATURES.map(({ title, description }) => (

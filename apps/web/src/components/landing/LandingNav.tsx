@@ -69,7 +69,7 @@ export function LandingNav() {
           </a>
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-1.5 text-sm font-semibold text-white shadow-glow-sm transition hover:bg-brand-400"
+            className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-400"
           >
             Launch console
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">

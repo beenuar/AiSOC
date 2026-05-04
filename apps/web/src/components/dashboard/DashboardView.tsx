@@ -64,7 +64,6 @@ interface MetricCardProps {
   value: string | number;
   sub?: string;
   color?: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray';
-  icon?: string;
   trend?: { value: number; label: string };
 }
 
@@ -78,25 +77,20 @@ const COLOR_MAP = {
   gray: 'text-gray-400',
 };
 
-function MetricCard({ label, value, sub, color = 'blue', icon, trend }: MetricCardProps) {
+function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProps) {
   return (
     <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">{label}</p>
-          <p className={clsx('text-3xl font-bold', COLOR_MAP[color])}>{value}</p>
-          {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
-        </div>
-        {icon && (
-          <span className="text-2xl opacity-60">{icon}</span>
-        )}
+      <div>
+        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">{label}</p>
+        <p className={clsx('text-3xl font-bold', COLOR_MAP[color])}>{value}</p>
+        {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
       </div>
       {trend && (
         <div className={clsx(
           'flex items-center gap-1 mt-3 text-xs',
           trend.value >= 0 ? 'text-red-400' : 'text-green-400'
         )}>
-          <span>{trend.value >= 0 ? '↑' : '↓'} {Math.abs(trend.value)}%</span>
+          <span>{trend.value >= 0 ? '+' : '-'}{Math.abs(trend.value)}%</span>
           <span className="text-gray-600">{trend.label}</span>
         </div>
       )}
@@ -147,11 +141,7 @@ export function DashboardView() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Real-time visibility across your security landscape</p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-gray-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          All systems operational
+          <p className="text-sm text-gray-500 mt-0.5">Overview of alerts, cases, and detection sources</p>
         </div>
       </div>
 
@@ -162,7 +152,6 @@ export function DashboardView() {
           value={metrics.alerts.total}
           sub={`${metrics.alerts.new} new today`}
           color="blue"
-          icon="🔔"
           trend={{ value: 12, label: 'vs yesterday' }}
         />
         <MetricCard
@@ -170,7 +159,6 @@ export function DashboardView() {
           value={metrics.alerts.critical}
           sub="Require immediate action"
           color="red"
-          icon="🚨"
           trend={{ value: -3, label: 'vs yesterday' }}
         />
         <MetricCard
@@ -178,14 +166,12 @@ export function DashboardView() {
           value={metrics.cases.open}
           sub={`${metrics.cases.inProgress} in progress`}
           color="orange"
-          icon="📋"
         />
         <MetricCard
           label="MTTR"
           value={`${metrics.alerts.mttr}m`}
           sub="Mean time to resolve"
           color="green"
-          icon="⚡"
           trend={{ value: -8, label: 'vs last week' }}
         />
       </div>

@@ -40,10 +40,10 @@ done
 BOLD='\033[1m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; RED='\033[0;31m'; NC='\033[0m'
 
-banner() { echo -e "\n${BOLD}${CYAN}▶  $*${NC}"; }
-ok()     { echo -e "  ${GREEN}✓${NC}  $*"; }
-warn()   { echo -e "  ${YELLOW}⚠${NC}  $*"; }
-fail()   { echo -e "  ${RED}✗${NC}  $*"; exit 1; }
+banner() { echo -e "\n${BOLD}${CYAN}==> $*${NC}"; }
+ok()     { echo -e "  ${GREEN}ok${NC}    $*"; }
+warn()   { echo -e "  ${YELLOW}warn${NC}  $*"; }
+fail()   { echo -e "  ${RED}fail${NC}  $*"; exit 1; }
 
 # ── Tear-down ──────────────────────────────────────────────────────────────────
 if $DOWN; then
@@ -141,16 +141,16 @@ else
 fi
 
 # ── Print service URLs ─────────────────────────────────────────────────────────
-banner "AiSOC Demo Lab is ready! 🚀"
+banner "AiSOC Demo Lab is ready"
 echo ""
 echo -e "  ${BOLD}Service URLs${NC}"
-echo -e "  ${CYAN}Web App          ${NC}→  http://localhost:3000"
-echo -e "  ${CYAN}API (REST)       ${NC}→  http://localhost:8000/docs"
-echo -e "  ${CYAN}API (GraphQL)    ${NC}→  http://localhost:8000/graphql"
-echo -e "  ${CYAN}Agent Orchestrator${NC}→  http://localhost:8001/docs"
-echo -e "  ${CYAN}Jaeger Tracing   ${NC}→  http://localhost:16686"
-echo -e "  ${CYAN}Kafka UI         ${NC}→  http://localhost:8080"
-echo -e "  ${CYAN}OpenSearch       ${NC}→  http://localhost:9200"
+echo -e "  ${CYAN}Web App           ${NC} http://localhost:3000"
+echo -e "  ${CYAN}API (REST)        ${NC} http://localhost:8000/docs"
+echo -e "  ${CYAN}API (GraphQL)     ${NC} http://localhost:8000/graphql"
+echo -e "  ${CYAN}Agent Orchestrator${NC} http://localhost:8001/docs"
+echo -e "  ${CYAN}Jaeger Tracing    ${NC} http://localhost:16686"
+echo -e "  ${CYAN}Kafka UI          ${NC} http://localhost:8080"
+echo -e "  ${CYAN}OpenSearch        ${NC} http://localhost:9200"
 echo ""
 echo -e "  ${BOLD}Quick commands${NC}"
 echo -e "  ${YELLOW}pnpm aisoc:lab -- --logs${NC}   Follow all container logs"

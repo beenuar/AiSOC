@@ -88,7 +88,7 @@ function IOCBadge({ type, value, malicious }: { type: string; value: string; mal
         {type}
       </span>
       <span className="truncate max-w-xs">{value}</span>
-      {malicious && <span className="ml-auto text-red-500 shrink-0">⚠️</span>}
+      {malicious && <span className="ml-auto text-red-400 shrink-0 text-[10px] font-semibold uppercase tracking-wide">malicious</span>}
     </div>
   );
 }
@@ -158,11 +158,8 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
   if (!investigation) {
     return (
       <div className="text-center py-8">
-        <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
-          <span className="text-2xl">🤖</span>
-        </div>
-        <p className="text-sm text-gray-400 mb-1">AI Agent Investigation</p>
-        <p className="text-xs text-gray-600 mb-4">Let AI autonomously analyze this alert, correlate with threat intel, and suggest remediation steps.</p>
+        <p className="text-sm text-gray-400 mb-1">Agent investigation</p>
+        <p className="text-xs text-gray-600 mb-4">Run the agent on this alert to produce a markdown report, MITRE mapping, and a list of recommended actions. Every step is recorded in the case ledger.</p>
         <button
           onClick={startInvestigation}
           disabled={isRunning}

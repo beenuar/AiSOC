@@ -65,13 +65,13 @@ const MOCK_CONNECTORS: Connector[] = [
   },
 ];
 
-const CONNECTOR_ICONS: Record<string, string> = {
-  crowdstrike: '🦅',
-  splunk: '🔭',
-  aws: '☁️',
-  okta: '🔐',
-  sentinel: '🛡️',
-  custom: '⚙️',
+const CONNECTOR_LABELS: Record<string, string> = {
+  crowdstrike: 'CS',
+  splunk: 'SPL',
+  aws: 'AWS',
+  okta: 'OKT',
+  sentinel: 'SNT',
+  custom: 'GEN',
 };
 
 const STATUS_CONFIG = {
@@ -99,8 +99,8 @@ function ConnectorCard({ connector, onTest }: { connector: Connector; onTest: (i
     <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5 hover:border-gray-700/60 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center text-xl">
-            {CONNECTOR_ICONS[connector.type] || '⚙️'}
+          <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            {CONNECTOR_LABELS[connector.type] ?? 'GEN'}
           </div>
           <div>
             <h3 className="text-sm font-medium text-gray-200">{connector.name}</h3>
@@ -193,16 +193,13 @@ export function ConnectorsView() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total Connectors', value: connectors.length, color: 'text-blue-400', icon: '🔌' },
-          { label: 'Active', value: activeCount, color: 'text-green-400', icon: '✅' },
-          { label: 'Errors', value: errorCount, color: 'text-red-400', icon: '⚠️' },
-          { label: 'Total Alerts', value: totalAlerts.toLocaleString(), color: 'text-purple-400', icon: '📊' },
+          { label: 'Total Connectors', value: connectors.length, color: 'text-blue-400' },
+          { label: 'Active', value: activeCount, color: 'text-green-400' },
+          { label: 'Errors', value: errorCount, color: 'text-red-400' },
+          { label: 'Total Alerts', value: totalAlerts.toLocaleString(), color: 'text-purple-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <span>{stat.icon}</span>
-              <p className={clsx('text-2xl font-bold', stat.color)}>{stat.value}</p>
-            </div>
+            <p className={clsx('text-2xl font-bold mb-1', stat.color)}>{stat.value}</p>
             <p className="text-xs text-gray-500">{stat.label}</p>
           </div>
         ))}
@@ -255,7 +252,7 @@ export function ConnectorsView() {
                     : 'text-red-400 bg-red-500/10 border-red-500/20'
                 )}
               >
-                <span>{success ? '✓' : '✗'}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider">{success ? 'ok' : 'fail'}</span>
                 <span>{conn.name}: {success ? 'Connection successful' : 'Connection failed'}</span>
               </div>
             );

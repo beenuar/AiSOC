@@ -106,7 +106,7 @@ function buildDemoCase(id: string): Case {
         id: 'tl-5',
         type: 'status',
         timestamp: new Date(now - 12 * 60 * 1000).toISOString(),
-        title: 'Status → In progress',
+        title: 'Status changed to In progress',
         actor: 'sasha.lin',
       },
     ],
@@ -167,13 +167,13 @@ const TASK_STATUS_BADGE: Record<CaseTask['status'], string> = {
 };
 
 const TIMELINE_ICON: Record<string, string> = {
-  created: '🆕',
-  assigned: '👤',
-  status: '🔄',
-  note: '📝',
-  agent: '🤖',
-  comment: '💬',
-  alert: '🚨',
+  created: 'new',
+  assigned: 'asn',
+  status: 'sts',
+  note: 'note',
+  agent: 'ai',
+  comment: 'cmt',
+  alert: 'alrt',
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -201,10 +201,10 @@ function MitreChip({ id }: { id: string }) {
 }
 
 function TimelineItem({ event }: { event: CaseTimelineEvent }) {
-  const icon = TIMELINE_ICON[event.type] ?? '•';
+  const icon = TIMELINE_ICON[event.type] ?? '·';
   return (
     <li className="relative pl-10">
-      <span className="absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900 text-sm">
+      <span className="absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-700/70 bg-slate-900 text-[10px] font-medium uppercase tracking-wide text-slate-400">
         {icon}
       </span>
       <div className="rounded-lg border border-slate-800/60 bg-slate-900/40 p-3">
@@ -369,7 +369,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             if (kind === 'completed') {
               setInvestigationStatus('completed');
               setInvestigating(false);
-              toast.success('Investigation complete — report ready!', { icon: '📋' });
+              toast.success('Investigation complete — report ready');
               // Fetch the Markdown report
               fetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.md`)
                 .then((r) => r.ok ? r.text() : '')
@@ -409,7 +409,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       const result = await casesApi.investigate(caseId, caseRecord.description ?? caseRecord.title);
       setInvestigationRunId(result.run_id);
       setInvestigationStatus('running');
-      toast.success('AI investigation launched!', { icon: '🤖' });
+      toast.success('Agent investigation started');
 
       // Connect via WebSocket for live updates (falls back to polling on error)
       connectWs(result.run_id);
@@ -424,7 +424,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             stopPolling();
             setInvestigating(false);
             if (inv.status === 'completed') {
-              toast.success('Investigation complete — report ready!', { icon: '📋' });
+              toast.success('Investigation complete — report ready');
               try {
                 const resp = await fetch(`/api/v1/cases/${caseId}/investigations/${result.run_id}/report.md`);
                 if (resp.ok) setReportMd(await resp.text());
@@ -439,7 +439,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       }, 5000);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Backend offline';
-      toast(`Demo mode: investigation not available (${message})`, { icon: '⚠️' });
+      toast(`Demo mode: investigation not available (${message})`);
       // Set demo investigation result
       setInvestigationStatus('completed');
       setInvestigationData({
@@ -466,12 +466,9 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     void mutate({ ...caseRecord, status }, { revalidate: false });
     try {
       await casesApi.update(caseRecord.id, { status });
-      toast.success(`Status → ${STATUS_LABEL[status]}`);
+      toast.success(`Status set to ${STATUS_LABEL[status]}`);
     } catch {
-      toast(
-        `Demo: status set to ${STATUS_LABEL[status]} locally (backend offline)`,
-        { icon: '⚠️' },
-      );
+      toast(`Demo: status set to ${STATUS_LABEL[status]} locally (backend offline)`);
     } finally {
       setStatusUpdating(false);
     }
@@ -497,7 +494,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       await casesApi.addComment(caseRecord.id, trimmed);
       toast.success('Comment added');
     } catch {
-      toast('Saved locally (backend offline)', { icon: '📝' });
+      toast('Saved locally (backend offline)');
     }
   };
 
@@ -519,7 +516,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       await casesApi.addTask(caseRecord.id, optimistic);
       toast.success('Task added');
     } catch {
-      toast('Saved locally (backend offline)', { icon: '✓' });
+      toast('Saved locally (backend offline)');
     }
   };
 
@@ -601,7 +598,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       </div>
 
       {/* Header */}
-      <div className="rounded-xl border border-slate-800/80 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-slate-900/20 p-5">
+      <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -670,7 +667,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               {investigating && (
                 <span className="h-3 w-3 animate-spin rounded-full border border-emerald-500/30 border-t-emerald-400" />
               )}
-              {investigating ? 'Investigating…' : '🤖 Investigate with AI'}
+              {investigating ? 'Investigating…' : 'Investigate with agent'}
             </button>
           </div>
         </div>
@@ -811,7 +808,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                       className="flex items-center justify-between rounded-md border border-slate-800/80 bg-slate-900/40 px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-700 hover:bg-slate-800/40"
                     >
                       <span className="font-mono">{id}</span>
-                      <span className="text-slate-500">→</span>
+                      <span className="text-[10px] uppercase tracking-wide text-slate-500">open</span>
                     </Link>
                   </li>
                 ))}
@@ -953,10 +950,9 @@ function InvestigationPanel({
   if (status === 'idle' || status === 'starting') {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
-        <span className="text-3xl">🤖</span>
-        <p className="mt-3 text-sm font-medium text-slate-300">AI Investigation</p>
-        <p className="mt-1 text-xs text-slate-500">
-          Click &ldquo;Investigate with AI&rdquo; in the header to launch the autonomous investigator.
+        <p className="text-sm font-medium text-slate-300">Agent investigation</p>
+        <p className="mt-1 max-w-md text-xs text-slate-500">
+          Use &ldquo;Investigate with agent&rdquo; in the header to run the recon, forensic, and responder agents on this case.
         </p>
       </div>
     );
@@ -1005,20 +1001,20 @@ function InvestigationPanel({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/30">
-          ✓ Investigation complete
+          Investigation complete
         </span>
         <button
           onClick={onViewReport}
           className="rounded-md border border-slate-700/70 bg-slate-800/50 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600"
         >
-          View full report →
+          View full report
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Recon */}
         <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-300">🔍 Recon</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-300">Recon</h4>
           {recon?.summary != null && <p className="text-xs text-slate-400">{String(recon.summary)}</p>}
           {Array.isArray(recon?.iocs) && recon.iocs.length > 0 && (
             <div>
@@ -1043,7 +1039,7 @@ function InvestigationPanel({
 
         {/* Forensic */}
         <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-purple-300">🔬 Forensic</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-purple-300">Forensic</h4>
           {forensic?.summary != null && <p className="text-xs text-slate-400">{String(forensic.summary)}</p>}
           {forensic?.root_cause_hypothesis != null && (
             <div>
@@ -1063,7 +1059,7 @@ function InvestigationPanel({
 
         {/* Responder */}
         <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4 space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-300">🛡️ Response</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-300">Response</h4>
           {responder?.summary != null && <p className="text-xs text-slate-400">{String(responder.summary)}</p>}
           {Array.isArray(responder?.recommended_actions) && (
             <ul className="space-y-1">
@@ -1116,13 +1112,13 @@ function AuditLogPreview({ log }: { log: Array<{ kind: string; agent: string; su
 
 // ─── Live steps feed (real-time WebSocket updates) ────────────────────────────
 
-const AGENT_ICONS: Record<string, string> = {
-  recon: '🔍',
-  forensic: '🧬',
-  responder: '🛡️',
-  report: '📋',
-  completed: '✅',
-  error: '❌',
+const AGENT_LABELS: Record<string, string> = {
+  recon: 'recon',
+  forensic: 'forensic',
+  responder: 'responder',
+  report: 'report',
+  completed: 'done',
+  error: 'error',
 };
 
 function LiveStepsFeed({ steps }: { steps: LiveStep[] }) {
@@ -1141,10 +1137,12 @@ function LiveStepsFeed({ steps }: { steps: LiveStep[] }) {
       </div>
       <ul className="max-h-56 overflow-y-auto divide-y divide-slate-800/40">
         {steps.map((step, i) => {
-          const icon = AGENT_ICONS[step.kind] ?? '⚡';
+          const label = AGENT_LABELS[step.kind] ?? step.kind;
           return (
             <li key={i} className="flex items-start gap-2.5 px-3 py-2">
-              <span className="shrink-0 text-base leading-none mt-0.5">{icon}</span>
+              <span className="shrink-0 mt-0.5 rounded border border-slate-700/60 bg-slate-900 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                {label}
+              </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-semibold text-slate-300">{step.agent}</span>
@@ -1194,8 +1192,7 @@ function ReportPanel({
   if (!markdown) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
-        <span className="text-3xl">📋</span>
-        <p className="mt-3 text-sm font-medium text-slate-300">No report yet</p>
+        <p className="text-sm font-medium text-slate-300">No report yet</p>
         <p className="mt-1 text-xs text-slate-500">Run an investigation to generate a report.</p>
       </div>
     );
@@ -1219,7 +1216,7 @@ function ReportPanel({
             }}
             className="text-[11px] text-slate-400 hover:text-slate-200"
           >
-            ↓ .md
+            Download .md
           </button>
           {/* Download PDF */}
           {runId && (
@@ -1239,7 +1236,7 @@ function ReportPanel({
                   Generating…
                 </>
               ) : (
-                <>↓ PDF</>
+                <>Download PDF</>
               )}
             </button>
           )}

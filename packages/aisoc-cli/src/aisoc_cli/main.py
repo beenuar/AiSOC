@@ -197,10 +197,10 @@ def plugin_validate(path: str) -> None:
     if errors:
         console.print("[red bold]Validation FAILED[/red bold]")
         for err in errors:
-            console.print(f"  [red]✗[/red] {err}")
+            console.print(f"  [red]-[/red] {err}")
         sys.exit(1)
     else:
-        console.print(f"[green bold]✓ Validation passed[/green bold] — {manifest_file}")
+        console.print(f"[green bold]Validation passed[/green bold] — {manifest_file}")
         _print_manifest_table(manifest)
 
 
@@ -326,11 +326,11 @@ def detection_validate(file: str, sigma_cli: str) -> None:
             timeout=30,
         )
         if result.returncode == 0:
-            console.print(f"[green bold]✓ Valid Sigma rule[/green bold] — {rule_path}")
+            console.print(f"[green bold]Valid Sigma rule[/green bold] — {rule_path}")
             if result.stdout:
                 console.print(result.stdout)
         else:
-            console.print("[red bold]✗ Invalid Sigma rule[/red bold]")
+            console.print("[red bold]Invalid Sigma rule[/red bold]")
             if result.stderr:
                 console.print(result.stderr)
             if result.stdout:
@@ -423,14 +423,14 @@ def _basic_sigma_validate(rule_path: Path) -> None:
 
     missing = [f for f in required_fields if f not in rule]
     if missing:
-        console.print(f"[red bold]✗ Missing required Sigma fields:[/red bold] {', '.join(missing)}")
+        console.print(f"[red bold]Missing required Sigma fields:[/red bold] {', '.join(missing)}")
         sys.exit(1)
 
     if "condition" not in rule.get("detection", {}):
-        console.print("[red bold]✗ detection.condition is required[/red bold]")
+        console.print("[red bold]detection.condition is required[/red bold]")
         sys.exit(1)
 
-    console.print(f"[green bold]✓ Basic Sigma validation passed[/green bold] — {rule_path}")
+    console.print(f"[green bold]Basic Sigma validation passed[/green bold] — {rule_path}")
     console.print("[yellow]Install sigma-cli for full validation: pip install sigma-cli[/yellow]")
 
 

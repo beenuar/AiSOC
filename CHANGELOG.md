@@ -7,20 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes. The full Phase 1–4C work is in v5.2.0._
+_No unreleased changes._
 
 ---
 
 ## [5.2.0] — 2026-05-04
 
-### Added — v5.2 "Auditable, Mobile, Open"
+### Added
 
-The "Leading-AI-SOC 90-day Plan" — Phases 1 through 4C — landed as one
-release. Three structural moats over the closed-source incumbents
-(Anvilogic, Prophet, Dropzone, Tines): every agent decision is
-**auditable line-by-line**, every accuracy claim is **publicly
-benchmarked and CI-gated**, and the responder workflow is
-**mobile-first and self-hostable**.
+This release groups four areas of work: an append-only investigation
+ledger, a public eval harness, a mobile responder PWA, and a hosted
+demo profile. Details below.
 
 #### Auditable agent — Investigation Ledger
 
@@ -31,9 +28,8 @@ benchmarked and CI-gated**, and the responder workflow is
   rationale is persisted as an append-only `investigation_step` row,
   scoped to a tenant + case.
 - **Investigation Ledger UI** (`apps/web/src/components/cases/InvestigationLedger.tsx`)
-  — replayable step-by-step view in the case workspace with prompt /
-  response / tool-call diff. Hand it to your auditor, replay it months
-  later, fork the agent and prove the deltas.
+  — replayable step-by-step view in the case workspace with prompt,
+  response, and tool-call diffs.
 - **`GET /api/v1/investigations/*` endpoints** (`services/api/app/api/v1/endpoints/investigations.py`)
   for listing, retrieving, and replaying ledger entries by case.
 - **Investigator graph upgrades**
@@ -66,18 +62,17 @@ benchmarked and CI-gated**, and the responder workflow is
   against synthetic incidents — does not call the live LLM agent.
 - **Public eval harness page** (`apps/docs/docs/benchmark.md`,
   `apps/web/src/app/benchmark/page.tsx`,
-  `apps/web/src/components/benchmark/`) — published numbers, full method,
-  honest comparison vs vendors, and explicit "what each suite actually
-  measures" framing so readers can tell substrate self-consistency gates
-  apart from real measurements. Linked from the README and the docs
-  landing page.
+  `apps/web/src/components/benchmark/`) — published numbers, full
+  method, comparison to other AI SOC offerings, and explicit framing of
+  which suites measure substrate self-consistency vs real behaviour.
+  Linked from the README and the docs landing page.
 
 #### Mobile responder — Responder PWA
 
 - **Responder PWA** (`apps/web/src/app/(responder)/`,
   `apps/web/src/components/responder/`,
   `apps/web/src/components/pwa/`) — installable, offline-aware, push-
-  enabled SOC console for analysts who carry pagers. Service worker at
+  enabled responder console for on-call analysts. Service worker at
   `apps/web/public/sw.js`, manifest at `apps/web/public/manifest.json`,
   offline shell at `apps/web/public/offline.html`.
 - **Passkey authentication** (`services/api/app/models/responder.py`,
@@ -145,8 +140,8 @@ benchmarked and CI-gated**, and the responder workflow is
   — gates write operations, resets state every UTC midnight, and
   watermarks the UI as read-only. Tests at
   `services/api/tests/test_demo_mode.py`.
-- **Target time-to-first-investigation:** under 5 minutes on a warm
-  Docker daemon, ~3.5 minutes typical.
+- **Target time-to-first-investigation:** roughly 3–5 minutes on a warm
+  Docker daemon, depending on image cache state.
 - **Cleanup** — `pnpm aisoc:demo:down` removes the volumes; logs at
   `pnpm aisoc:demo:logs`.
 
@@ -207,11 +202,13 @@ benchmarked and CI-gated**, and the responder workflow is
 
 #### Marketing & docs
 
-- **`/why-open-source`** marketing page (`apps/web/src/app/why-open-source/page.tsx`)
-  — long-form argument for the structural moat.
+- **`/why-open-source`** page (`apps/web/src/app/why-open-source/page.tsx`)
+  — long-form description of the project's open-source posture and
+  trade-offs.
 - **Updated landing** (`apps/web/src/components/landing/{Hero,LandingNav,Footer,OpenSource}.tsx`)
-  — "live demo" button lands directly on a seeded investigation;
-  comparison rows are anchored to concrete defensible claims.
+  — the "live demo" button lands directly on a seeded investigation;
+  comparison rows reference specific behaviours rather than generic
+  claims.
 - **Docusaurus refresh** — new MCP integration page, benchmark page,
   Investigation Ledger references, Responder PWA mentions in concepts
   and quickstart.
@@ -249,7 +246,7 @@ benchmarked and CI-gated**, and the responder workflow is
 
 ## [5.1.0] — 2026-05-03
 
-### Added — v5.1 "Detection Depth"
+### Added
 
 - **UEBA service** (`services/ueba`) — User & Entity Behavior Analytics
   - Welford online algorithm for incremental baseline computation
@@ -276,7 +273,7 @@ benchmarked and CI-gated**, and the responder workflow is
 
 ## [5.0.0] — 2026-05-03
 
-### Added — v5.0 "Enterprise Ready"
+### Added
 
 - **SAML 2.0 + OIDC authentication** (`services/api/app/auth/`)
   - IdP-initiated and SP-initiated SAML 2.0 flows (python3-saml)
@@ -313,7 +310,7 @@ benchmarked and CI-gated**, and the responder workflow is
 
 ## [4.1.0] — 2026-05-03
 
-### Added — v4.1 "Community Ecosystem"
+### Added
 
 - **AiSOC CLI** (`packages/aisoc-cli`) — `scaffold`, `validate`, `publish` commands for plugins and detections
   - `aisoc scaffold plugin <name>` — generate plugin skeleton

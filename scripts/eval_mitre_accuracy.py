@@ -47,17 +47,17 @@ def main() -> None:
 
         # Print per-incident results
         for d in result.details:
-            status = "✓" if d["correct"] else "✗"
+            status = "PASS" if d["correct"] else "FAIL"
             print(
-                f"  {status} {d['incident'][:70]}\n"
+                f"  [{status}] {d['incident'][:70]}\n"
                 f"      expected={d['expected']}  predicted={d['predicted']}"
                 f"  overlap={d['overlap']}"
             )
 
         print(f"{'='*60}")
         passed = result.accuracy >= args.threshold
-        verdict = "✓ PASS" if passed else "✗ FAIL"
-        print(f"\n  {verdict}: {result.accuracy * 100:.1f}% ({'≥' if passed else '<'} {args.threshold * 100:.0f}%)")
+        verdict = "PASS" if passed else "FAIL"
+        print(f"\n  {verdict}: {result.accuracy * 100:.1f}% ({'>=' if passed else '<'} {args.threshold * 100:.0f}%)")
         print()
 
     # Write JSON report to disk for CI artifact upload

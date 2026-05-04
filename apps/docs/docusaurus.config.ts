@@ -5,7 +5,7 @@ import type * as Preset from "@docusaurus/preset-classic";
 const config: Config = {
   title: "AiSOC",
   tagline:
-    "The auditable AI SOC — every agent decision logged, replayable, and benchmarked publicly. MIT-licensed, self-hostable.",
+    "Open-source AI SOC platform. Agent decisions are recorded in an investigation ledger and a public eval harness runs in CI. MIT-licensed and self-hostable.",
   favicon: "img/favicon.ico",
 
   url: "https://beenuar.github.io",

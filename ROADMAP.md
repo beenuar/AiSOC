@@ -2,16 +2,16 @@
 
 This document captures the planned direction for AiSOC across major versions. All v4 deliverables and items deferred beyond v4 are listed here.
 
-## v4.0 — "Autonomous SOC" ✅ Shipped
+## v4.0 — Shipped
 
-### Pillar 1: AI Multi-Agent Investigator
+### AI multi-agent investigator
 - [x] Orchestrator (LangGraph state machine) in `services/agents/app/investigator/`
 - [x] ReconAgent, ForensicAgent, ResponderAgent (dry-run with analyst approval)
 - [x] ReportWriterAgent — streaming markdown + branded PDF
 - [x] Investigation & Report tabs in Case Workspace UI
 - [x] Eval harness: 20 synthetic incidents, ≥80% MITRE-tactic accuracy CI gate
 
-### Pillar 2: Visual SOAR Studio
+### Visual SOAR studio
 - [x] React Flow playbook editor with full node palette (Trigger, Condition, Action, Loop, Parallel, Human Approval, Wait, Notify)
 - [x] DAG playbook engine with retries, idempotency, blast-radius checks
 - [x] `playbook.schema.json` (JSON Schema 2020-12) for portability and CI linting
@@ -19,7 +19,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 - [x] 12 starter playbook templates
 - [x] Community playbook marketplace (static index v4.0; publishing flow v4.1)
 
-### Pillar 3: Plugin Platform + Public API + SDKs + Docs
+### Plugin platform, public API, SDKs, docs
 - [x] Plugin SDK in Python (`packages/plugin-sdk-py/`) and Go (`packages/plugin-sdk-go/`)
 - [x] `plugin.yaml` manifest spec (connector | enricher | responder | detection | widget)
 - [x] Plugin loader with OCI image support (`oras pull`) in api/actions/enrichment/connectors
@@ -38,7 +38,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
-## v4.1 — "Community Ecosystem" ✅ Shipped
+## v4.1 — Shipped
 
 - [x] Plugin publishing flow (signed community submissions, Ed25519 verification, review endpoints)
 - [x] Plugin marketplace UI v2 (ratings, install counts, verified badges, category filter, sort)
@@ -48,7 +48,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
-## v5.0 — "Enterprise Ready" ✅ Shipped
+## v5.0 — Shipped
 
 ### Identity & Access
 - [x] SAML 2.0 + OIDC authentication (Okta, Azure AD, Google Workspace)
@@ -71,7 +71,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
-## v5.1 — "Detection Depth" ✅ Shipped
+## v5.1 — Shipped
 
 ### UEBA
 - [x] Per-user, per-host, per-service behavioral baselines (Welford's algorithm)
@@ -92,7 +92,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
-## v6.0 — "Full-Spectrum Visibility"
+## v6.0 — Planned
 
 ### Investigation & Forensics Depth
 - Super-timeline view (Plaso-style, all event sources on one scrubbable axis)
@@ -102,13 +102,13 @@ This document captures the planned direction for AiSOC across major versions. Al
 - Evidence vault — signed, hashed, chain-of-custody for every artifact
 
 ### Data Source Breadth
-- **Identity:** Okta, Azure AD/Entra, Google Workspace, Duo (full production connectors)
-- **Cloud:** AWS CloudTrail/GuardDuty, Azure Defender, GCP Security Command Center, Kubernetes audit + Falco
-- **EDR:** CrowdStrike Falcon, SentinelOne, Microsoft Defender for Endpoint, Wazuh
-- **Email:** Gmail/Workspace, Microsoft 365, Mimecast, Proofpoint — phishing triage agent
-- **Network:** Zeek, Suricata/NFSen, NDR (Arkime/Stenographer)
-- **STIX/TAXII server** (both consume and serve IOCs)
-- **MISP** and **OpenCTI** federation
+- Identity: Okta, Azure AD/Entra, Google Workspace, Duo (full production connectors)
+- Cloud: AWS CloudTrail/GuardDuty, Azure Defender, GCP Security Command Center, Kubernetes audit + Falco
+- EDR: CrowdStrike Falcon, SentinelOne, Microsoft Defender for Endpoint, Wazuh
+- Email: Gmail/Workspace, Microsoft 365, Mimecast, Proofpoint — phishing triage agent
+- Network: Zeek, Suricata/NFSen, NDR (Arkime/Stenographer)
+- STIX/TAXII server (both consume and serve IOCs)
+- MISP and OpenCTI federation
 
 ### Attack Surface & Vulnerability
 - ASM / CTEM module — external attack surface discovery feeding TI
@@ -118,7 +118,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
-## v7.0 — "Operator Experience"
+## v7.0 — Planned
 
 - Mobile responder console (React Native) — triage and acknowledge from phone
 - WCAG AA full accessibility pass
