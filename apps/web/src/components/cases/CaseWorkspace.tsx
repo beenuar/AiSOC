@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -32,8 +33,16 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { InvestigationLedger } from './InvestigationLedger';
+import { ContextualActions } from '@/components/copilot/ContextualActions';
 
-type WorkspaceTab = 'overview' | 'investigation' | 'report';
+type WorkspaceTab = 'overview' | 'investigation' | 'ledger' | 'report';
+
+const VALID_TABS: readonly WorkspaceTab[] = ['overview', 'investigation', 'ledger', 'report'];
+
+function isWorkspaceTab(value: string | null): value is WorkspaceTab {
+  return value !== null && (VALID_TABS as readonly string[]).includes(value);
+}
 
 // ─── Demo case ────────────────────────────────────────────────────────────────
 
@@ -280,7 +289,15 @@ function TaskRow({ task, onChangeStatus }: TaskRowProps) {
 
 export function CaseWorkspace({ caseId }: { caseId: string }) {
   const [demoMode, setDemoMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
+  // Honor `?tab=…` so the hosted demo deeplink (`/cases/INC-001?tab=ledger`)
+  // lands visitors directly on the live agent decision feed. Falls back to
+  // the overview when the param is missing or unrecognized.
+  const searchParams = useSearchParams();
+  const initialTab: WorkspaceTab = useMemo(() => {
+    const t = searchParams?.get('tab') ?? null;
+    return isWorkspaceTab(t) ? t : 'overview';
+  }, [searchParams]);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab);
   const { data, error, isLoading, mutate } = useSWR<Case>(
     ['case', caseId],
     () => casesApi.get(caseId),
@@ -684,7 +701,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-slate-800/70 text-xs">
-        {(['overview', 'investigation', 'report'] as WorkspaceTab[]).map((tab) => (
+        {(['overview', 'investigation', 'ledger', 'report'] as WorkspaceTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -698,7 +715,19 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             {tab === 'investigation' && investigating && (
               <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
             )}
-            {tab}
+            {tab === 'ledger' ? (
+              <span className="inline-flex items-center gap-1">
+                Ledger
+                <span
+                  className="rounded bg-emerald-500/15 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-500/30"
+                  title="Auditable agent decision log — every prompt, tool call, and decision is durably stored and replayable forever"
+                >
+                  audit
+                </span>
+              </span>
+            ) : (
+              tab
+            )}
             {activeTab === tab && (
               <span className="absolute inset-x-0 bottom-0 h-px bg-emerald-400" />
             )}
@@ -716,6 +745,15 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
         />
       )}
 
+      {/* Ledger tab — persistent, replayable agent decision log */}
+      {activeTab === 'ledger' && (
+        <InvestigationLedger
+          caseId={caseRecord.id}
+          activeRunId={investigationRunId}
+          onSelectRun={(rid) => setInvestigationRunId(rid)}
+        />
+      )}
+
       {/* Report tab */}
       {activeTab === 'report' && (
         <ReportPanel
@@ -727,6 +765,34 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
       {/* Overview: Three-pane layout */}
       {activeTab === 'overview' && (
+      <div className="space-y-4">
+        {/*
+          Ambient Copilot — case-scoped contextual AI. We pass a compact
+          snapshot of the case (no embedded alert blobs or full timeline) so the
+          LLM has grounding without ballooning token usage. Backed by
+          `services/agents` `/api/v1/contextual` endpoints.
+        */}
+        <ContextualActions
+          page="cases"
+          entityId={caseRecord.id}
+          caseId={caseRecord.id}
+          entity={{
+            title: caseRecord.title,
+            description: caseRecord.description,
+            severity: caseRecord.severity,
+            status: caseRecord.status,
+            assignee: caseRecord.assignee,
+            mitre: caseRecord.mitre,
+            tags: caseRecord.tags,
+            alert_ids: caseRecord.alertIds,
+            alert_count: caseRecord.alertCount,
+            created_at: caseRecord.createdAt,
+            updated_at: caseRecord.updatedAt,
+            due_at: caseRecord.dueAt,
+          }}
+          eyebrow="Ask AiSOC about this case"
+        />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* Left: Linked alerts + IOCs */}
         <aside className="lg:col-span-3 space-y-4">
@@ -862,6 +928,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             />
           </Panel>
         </aside>
+      </div>
       </div>
       )}
     </div>

@@ -58,6 +58,36 @@ jobs:
       - run: pnpm build
 
   # ──────────────────────────────────────────────
+  # @aisoc/mcp — MCP server for Claude/Cursor/Cody
+  #   Typechecks, runs the vitest contract tests (config + tools registry +
+  #   installer file-write behaviour), and builds the dist bundle so the
+  #   `bin/aisoc-mcp` shebang is exercised on the same Node version we
+  #   publish under. Lives in the pnpm workspace; we reuse the root
+  #   lockfile to keep installs fast and reproducible.
+  # ──────────────────────────────────────────────
+  mcp-test:
+    name: MCP — Type-check, Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm --filter @aisoc/mcp typecheck
+      - name: Test
+        run: pnpm --filter @aisoc/mcp test
+      - name: Build
+        run: pnpm --filter @aisoc/mcp build
+
+  # ──────────────────────────────────────────────
   # Python API & services
   # ──────────────────────────────────────────────
   python-lint:
@@ -104,11 +134,16 @@ jobs:
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
         run: pytest tests/ -v --tb=short
-      - name: Run agents unit tests (MITRE accuracy)
+      - name: Run agents unit tests (Pillar-1 eval suites)
         run: |
           pip install --quiet pytest pytest-asyncio
           cd services/agents
-          python3 -m pytest tests/test_mitre_accuracy.py -v --tb=short
+          python3 -m pytest \
+            tests/test_mitre_accuracy.py \
+            tests/test_alert_reduction.py \
+            tests/test_investigation_completeness.py \
+            tests/test_response_quality.py \
+            -v --tb=short
 
   # ──────────────────────────────────────────────
   # Go services (enrichment, ingest, demo-producer)
@@ -139,34 +174,88 @@ jobs:
           go test ./... -count=1 || true
 
   # ──────────────────────────────────────────────
-  # Pillar-1 Eval: MITRE ATT&CK tactic accuracy
-  # Asserts >=80% accuracy across 20 synthetic incidents (offline, no LLM)
+  # Pillar-1 Eval Gate: 4-suite synthetic benchmark (200-incident dataset)
+  #   - MITRE ATT&CK tactic accuracy   (≥80%)
+  #   - Alert reduction ratio          (≥70%)
+  #   - Investigation completeness     (≥85%)
+  #   - Response-plan quality          (≥80%)
+  # All suites run offline (no LLM, no DB) against the deterministic
+  # `services/agents/tests/eval_data/synthetic_incidents.json` dataset.
+  # The job posts a markdown summary, uploads `eval_report.json`, and
+  # commits historical numbers to the `eval-results` branch as
+  # `eval/results/<commit_sha>.json` so the public benchmark page can
+  # query them over time.
   # ──────────────────────────────────────────────
-  p1-eval-mitre:
-    name: P1 Eval — MITRE Tactic Accuracy (≥80%)
+  p1-eval:
+    name: P1 Eval — Pillar-1 Benchmark Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run MITRE accuracy evaluation
-        run: python3 scripts/eval_mitre_accuracy.py --json > eval_report.json
-      - name: Assert ≥80% accuracy
+      - name: Run all eval suites
+        run: python3 scripts/run_evals.py --ci --out eval_report.json
+      - name: Post job summary
+        if: always()
         run: |
-          ACCURACY=$(python3 -c "import json,sys; d=json.load(open('eval_report.json')); print(d['accuracy'])")
-          python3 -c "
-          acc = float('$ACCURACY')
-          print(f'MITRE accuracy: {acc*100:.1f}%')
-          assert acc >= 0.80, f'FAIL: {acc*100:.1f}% < 80% threshold'
-          print('PASS')
-          "
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          d = json.loads(pathlib.Path("eval_report.json").read_text())
+          print("## AiSOC Pillar-1 Eval — 200-incident synthetic benchmark\n")
+          print(f"_Dataset: {d['dataset']}_  ")
+          print(f"_Generated: {d['generated_at']}_\n")
+          print("| Suite | Metric | Value | Target | Result |")
+          print("|---|---|---:|---:|:---:|")
+          for name, suite in d["suites"].items():
+              mark = "✅" if suite["passed"] else "❌"
+              print(
+                  f"| `{name}` | {suite['metric']} | "
+                  f"**{suite['value']:.3f}** | ≥ {suite['target']:.2f} | {mark} |"
+              )
+          verdict = "✅ ALL GATES PASSED" if d["all_passed"] else "❌ REGRESSION DETECTED"
+          print(f"\n**{verdict}**\n")
+          PY
       - name: Upload eval report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mitre-accuracy-report
+          name: aisoc-eval-report
           path: eval_report.json
+      - name: Publish historical numbers to eval-results branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -e
+          # Snapshot the report
+          cp eval_report.json /tmp/eval_report.json
+
+          git fetch origin eval-results:eval-results 2>/dev/null \
+            && git checkout eval-results \
+            || git checkout --orphan eval-results
+
+          # Clear any previous workspace state on the orphan branch
+          if [ ! -f .gitkeep ]; then
+            find . -mindepth 1 -maxdepth 1 \
+              ! -name '.git' ! -name 'eval' ! -name '.gitkeep' \
+              -exec rm -rf {} + 2>/dev/null || true
+          fi
+
+          mkdir -p eval/results
+          cp /tmp/eval_report.json "eval/results/${COMMIT_SHA}.json"
+
+          # Maintain a stable `latest.json` for the benchmark page badge
+          cp /tmp/eval_report.json eval/results/latest.json
+
+          git config user.email "ci@aisoc.dev"
+          git config user.name "AiSOC CI"
+          git add eval/results
+          git commit -m "eval: ${COMMIT_SHA::7} (auto)" || echo "no changes"
+          git push origin eval-results || echo "push skipped"
 
   # ──────────────────────────────────────────────
   # Pillar-2: Playbook JSON Schema lint

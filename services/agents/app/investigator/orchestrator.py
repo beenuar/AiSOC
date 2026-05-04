@@ -11,6 +11,7 @@ and short-circuits to END.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import datetime
 from typing import Any, AsyncIterator
 
@@ -18,6 +19,7 @@ import structlog
 from langgraph.graph import END, START, StateGraph
 from opentelemetry import trace
 
+from . import ledger
 from .forensic_agent import run_forensic
 from .recon_agent import run_recon
 from .report_writer_agent import run_report_writer
@@ -129,8 +131,15 @@ class InvestigatorOrchestrator:
         alert_summary: str,
         raw_alert: dict[str, Any] | None = None,
         tenant_id: str = "default",
+        run_id: uuid.UUID | None = None,
     ) -> InvestigatorState:
-        """Execute the full investigation pipeline and return the final state."""
+        """Execute the full investigation pipeline and return the final state.
+
+        Persists the run + every audit-log entry to the ledger if a database
+        is configured. ``run_id`` may be passed in by the caller (e.g. the
+        WebSocket emitter that already has the id), otherwise a new one is
+        generated here.
+        """
         with _tracer.start_as_current_span("investigator.run") as span:
             span.set_attribute("case.id", case_id)
             span.set_attribute("tenant.id", tenant_id)
@@ -140,14 +149,61 @@ class InvestigatorOrchestrator:
                 raw_alert=raw_alert or {},
                 tenant_id=tenant_id,
             )
-            logger.info("investigation.start", case_id=case_id)
+
+            run_uuid = run_id or uuid.uuid4()
+            tenant_uuid = await ledger.start_run(
+                run_id=run_uuid,
+                case_id=case_id,
+                tenant_ref=tenant_id,
+                alert_summary=alert_summary,
+                raw_alert=raw_alert,
+            )
+
+            logger.info("investigation.start", case_id=case_id, run_id=str(run_uuid))
             result = await self._graph.ainvoke(initial.to_dict())
             final = InvestigatorState.from_dict(result)
+
+            # Persist the full audit log post-hoc (one shot, no streaming)
+            if tenant_uuid is not None:
+                for seq, entry in enumerate(final.audit_log):
+                    await ledger.record_event(
+                        run_id=run_uuid,
+                        tenant_id=tenant_uuid,
+                        seq=seq,
+                        kind=entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind),
+                        agent=entry.agent,
+                        summary=entry.summary,
+                        payload=entry.metadata,
+                        input_hash=entry.input_hash,
+                        output_hash=entry.output_hash,
+                        duration_ms=int(entry.duration_ms),
+                        timestamp=entry.timestamp,
+                    )
+
+                # Stash the final report as an artifact for replay/audit
+                if final.report_md:
+                    await ledger.record_artifact(
+                        run_id=run_uuid,
+                        tenant_id=tenant_uuid,
+                        kind="report_md",
+                        content=final.report_md,
+                    )
+
+                await ledger.complete_run(
+                    run_id=run_uuid,
+                    tenant_id=tenant_uuid,
+                    status=final.status,
+                    error=final.error,
+                    iterations=final.iteration,
+                )
+
             span.set_attribute("investigation.status", final.status)
             span.set_attribute("investigation.iterations", final.iteration)
+            span.set_attribute("investigation.run_id", str(run_uuid))
             logger.info(
                 "investigation.end",
                 case_id=case_id,
+                run_id=str(run_uuid),
                 status=final.status,
                 iterations=final.iteration,
             )
@@ -159,12 +215,25 @@ class InvestigatorOrchestrator:
         alert_summary: str,
         raw_alert: dict[str, Any] | None = None,
         tenant_id: str = "default",
+        run_id: uuid.UUID | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """
-        Stream per-step state updates as typed events:
-          {"type": "step",  "kind": <str>, "agent": <str>, "summary": <str>, ...}
-          {"type": "done",  "state": {report_md, recon, forensic, responder, ...}}
-          {"type": "error", "error": <str>}
+        """Stream per-step state updates as typed events.
+
+        Event types yielded:
+          ``step``  - one per agent audit-log entry, in order, exactly once
+          ``done``  - terminal event with the full final state
+          ``error`` - terminal event if the graph raises
+
+        Each event includes ``run_id`` so consumers can correlate the live
+        WebSocket stream with the persisted ledger row.
+
+        Implementation note
+        -------------------
+        LangGraph's ``astream`` yields the entire mutated state at every
+        node transition, so naively iterating ``state.audit_log`` re-emits
+        previously yielded entries. We track the last emitted seq per run
+        and only forward new entries. This same monotonic seq becomes the
+        primary sort key in the persisted ledger.
         """
         initial = InvestigatorState(
             case_id=case_id,
@@ -172,33 +241,88 @@ class InvestigatorOrchestrator:
             raw_alert=raw_alert or {},
             tenant_id=tenant_id,
         )
-        logger.info("investigation.stream.start", case_id=case_id)
+
+        run_uuid = run_id or uuid.uuid4()
+        tenant_uuid = await ledger.start_run(
+            run_id=run_uuid,
+            case_id=case_id,
+            tenant_ref=tenant_id,
+            alert_summary=alert_summary,
+            raw_alert=raw_alert,
+        )
+
+        logger.info("investigation.stream.start", case_id=case_id, run_id=str(run_uuid))
         last_state: InvestigatorState | None = None
+        emitted_count = 0  # how many audit_log entries already streamed
         try:
             async for event in self._graph.astream(initial.to_dict()):
                 # event is {node_name: state_dict}
                 for node_name, state_dict in event.items():
                     state = InvestigatorState.from_dict(state_dict)
                     last_state = state
-                    # Emit all new audit-log entries since the last node
-                    for entry in state.audit_log:
+                    # Only emit audit-log entries we haven't seen yet
+                    new_entries = state.audit_log[emitted_count:]
+                    for offset, entry in enumerate(new_entries):
+                        seq = emitted_count + offset
+                        kind_val = (
+                            entry.kind.value
+                            if hasattr(entry.kind, "value")
+                            else str(entry.kind)
+                        )
+                        ts_str = (
+                            entry.timestamp.isoformat()
+                            if hasattr(entry.timestamp, "isoformat")
+                            else str(entry.timestamp)
+                        )
+                        # Persist before emitting so subscribers can deep-link
+                        if tenant_uuid is not None:
+                            await ledger.record_event(
+                                run_id=run_uuid,
+                                tenant_id=tenant_uuid,
+                                seq=seq,
+                                kind=kind_val,
+                                agent=entry.agent,
+                                summary=entry.summary,
+                                payload=entry.metadata,
+                                input_hash=entry.input_hash,
+                                output_hash=entry.output_hash,
+                                duration_ms=int(entry.duration_ms),
+                                timestamp=entry.timestamp,
+                            )
                         yield {
                             "type": "step",
-                            "kind": entry.kind,
+                            "kind": kind_val,
                             "agent": entry.agent,
                             "summary": entry.summary,
                             "node": node_name,
                             "case_id": case_id,
-                            "ts": entry.timestamp.isoformat()
-                            if hasattr(entry.timestamp, "isoformat")
-                            else str(entry.timestamp),
+                            "run_id": str(run_uuid),
+                            "seq": seq,
+                            "ts": ts_str,
                         }
+                    emitted_count = len(state.audit_log)
 
             # Emit the final "done" event with the complete state payload
             if last_state is not None:
+                if tenant_uuid is not None and last_state.report_md:
+                    await ledger.record_artifact(
+                        run_id=run_uuid,
+                        tenant_id=tenant_uuid,
+                        kind="report_md",
+                        content=last_state.report_md,
+                    )
+                if tenant_uuid is not None:
+                    await ledger.complete_run(
+                        run_id=run_uuid,
+                        tenant_id=tenant_uuid,
+                        status=last_state.status,
+                        error=last_state.error,
+                        iterations=last_state.iteration,
+                    )
                 yield {
                     "type": "done",
                     "case_id": case_id,
+                    "run_id": str(run_uuid),
                     "state": {
                         "status": last_state.status,
                         "report_md": last_state.report_md,
@@ -212,8 +336,25 @@ class InvestigatorOrchestrator:
                     },
                 }
         except Exception as exc:  # noqa: BLE001
-            logger.error("investigation.stream.error", case_id=case_id, error=str(exc))
-            yield {"type": "error", "error": str(exc), "case_id": case_id}
+            logger.error(
+                "investigation.stream.error",
+                case_id=case_id,
+                run_id=str(run_uuid),
+                error=str(exc),
+            )
+            if tenant_uuid is not None:
+                await ledger.complete_run(
+                    run_id=run_uuid,
+                    tenant_id=tenant_uuid,
+                    status="failed",
+                    error=str(exc),
+                )
+            yield {
+                "type": "error",
+                "error": str(exc),
+                "case_id": case_id,
+                "run_id": str(run_uuid),
+            }
 
 
 async def run_investigation(

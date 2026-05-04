@@ -16,6 +16,7 @@ import {
 import type { AlertSeverity } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ContextualActions } from '@/components/copilot/ContextualActions';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
@@ -328,6 +329,35 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
           </button>
         </div>
       </div>
+
+      {/*
+        Ambient Copilot — rule-scoped contextual AI. Only shown in edit mode where
+        the rule has a stable id + body to reason about; new-rule drafts have no
+        runtime stats so "why is this noisy?" doesn't apply yet. We pass the
+        live form state (not just the persisted snapshot) so the LLM sees what
+        the analyst is currently editing. Backed by `services/agents`
+        `/api/v1/contextual` endpoints.
+      */}
+      {mode === 'edit' && data ? (
+        <ContextualActions
+          page="detections"
+          entityId={data.id}
+          entity={{
+            id: data.id,
+            name: name || data.name,
+            description: description || data.description,
+            language,
+            body,
+            severity: severity ?? data.severity,
+            tags: tags.length ? tags : data.tags,
+            mitre: mitre.length ? mitre : data.mitre,
+            enabled: data.enabled,
+            hit_count: data.hitCount,
+            last_triggered_at: data.lastTriggeredAt,
+          }}
+          eyebrow="Ask AiSOC about this rule"
+        />
+      ) : null}
 
       {/* Body — two-column on lg+ */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">

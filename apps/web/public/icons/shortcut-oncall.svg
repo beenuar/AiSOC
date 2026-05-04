@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <title>On-call status shortcut</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="20" ry="20" fill="url(#bg)"/>
+  <!-- Bell with pulse -->
+  <path d="M48 22 Q34 22 34 38 L34 52 L28 60 L68 60 L62 52 L62 38 Q62 22 48 22 Z"
+        fill="#1e2533"
+        stroke="#f59e0b"
+        stroke-width="2"
+        stroke-linejoin="round"/>
+  <path d="M42 64 Q42 70 48 70 Q54 70 54 64 Z"
+        fill="#f59e0b"/>
+  <!-- Active status dot -->
+  <circle cx="68" cy="28" r="6" fill="#22c55e"/>
+  <circle cx="68" cy="28" r="9" fill="none" stroke="rgba(34,197,94,0.4)" stroke-width="1.5"/>
+</svg>

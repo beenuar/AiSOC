@@ -121,16 +121,48 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
     llm = ChatOpenAI(model=model, temperature=0)
 
     context = _build_context(state)
+    system_prompt = _SYSTEM_PROMPT.format(case_id=state.case_id)
     messages = [
-        SystemMessage(content=_SYSTEM_PROMPT.format(case_id=state.case_id)),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=context),
     ]
 
+    prompt_hash = state.log_llm_prompt(
+        agent="ReportWriterAgent",
+        prompt=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": context},
+        ],
+        model=model,
+        purpose="report: synthesise final markdown incident report",
+    )
+
+    t_llm = time.monotonic()
     try:
         response = await llm.ainvoke(messages)
         state.report_md = response.content
+        latency_ms = int((time.monotonic() - t_llm) * 1000)
+        tokens = 0
+        if hasattr(response, "response_metadata"):
+            tokens = (
+                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+                or 0
+            )
+        state.log_llm_response(
+            agent="ReportWriterAgent",
+            response=state.report_md if isinstance(state.report_md, str) else str(state.report_md),
+            prompt_hash=prompt_hash,
+            model=model,
+            tokens_used=tokens,
+            latency_ms=latency_ms,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("report_writer llm failed", error=str(exc))
+        state.log(
+            StepKind.ERROR,
+            "ReportWriterAgent",
+            f"LLM call failed, using fallback report: {exc}",
+        )
         state.report_md = _fallback_report(state)
 
     state.report_html = _md_to_html(state.report_md, state.case_id)

@@ -66,16 +66,54 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
         HumanMessage(content=prompt),
     ]
 
+    prompt_hash = state.log_llm_prompt(
+        agent="ForensicAgent",
+        prompt=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        model=model,
+        purpose="forensic: timeline, artefacts, root cause, blast radius",
+    )
+
+    t0 = time.monotonic()
     try:
         response = await llm.ainvoke(messages)
         content = response.content
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        tokens = 0
+        if hasattr(response, "response_metadata"):
+            tokens = (
+                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+                or 0
+            )
+        state.log_llm_response(
+            agent="ForensicAgent",
+            response=content if isinstance(content, str) else str(content),
+            prompt_hash=prompt_hash,
+            model=model,
+            tokens_used=tokens,
+            latency_ms=latency_ms,
+        )
         json_match = re.search(r'\{[\s\S]*\}', content)
         if json_match:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001
         logger.warning("forensic llm failed", error=str(exc))
+        state.log(
+            StepKind.ERROR,
+            "ForensicAgent",
+            f"LLM call failed: {exc}",
+        )
 
     # Fallback
+    state.log_decision(
+        agent="ForensicAgent",
+        decision="defer_to_manual",
+        reason="LLM unavailable or returned malformed output; cannot construct a confident forensic timeline",
+        confidence=0.1,
+        alternatives=["llm_extraction"],
+    )
     return {
         "timeline": [],
         "artefacts": [],
@@ -103,6 +141,23 @@ async def run_forensic(state_dict: dict[str, Any]) -> dict[str, Any]:
         confidence=float(llm_result.get("confidence", 0.0)),
         summary=llm_result.get("summary", ""),
     )
+
+    # Cite each forensic artefact as evidence for downstream replay
+    for artefact in state.forensic.artefacts[:50]:
+        state.log_evidence(
+            agent="ForensicAgent",
+            evidence_kind="artefact",
+            ref=str(artefact),
+            weight=state.forensic.confidence,
+        )
+
+    if state.forensic.root_cause_hypothesis:
+        state.log_decision(
+            agent="ForensicAgent",
+            decision="root_cause_hypothesis",
+            reason=state.forensic.root_cause_hypothesis,
+            confidence=state.forensic.confidence,
+        )
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     state.log(

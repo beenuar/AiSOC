@@ -41,7 +41,11 @@ Respond ONLY with a JSON object matching this schema:
 
 
 async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
-    """Call LLM to perform structured reconnaissance."""
+    """Call LLM to perform structured reconnaissance.
+
+    Records the LLM prompt and response into the audit ledger so the
+    reasoning trace is replayable.
+    """
     import os, json
 
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -54,9 +58,35 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         HumanMessage(content=prompt),
     ]
 
+    prompt_hash = state.log_llm_prompt(
+        agent="ReconAgent",
+        prompt=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        model=model,
+        purpose="recon: extract IOCs, MITRE techniques, and threat actors",
+    )
+
+    t0 = time.monotonic()
     try:
         response = await llm.ainvoke(messages)
         content = response.content
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        tokens = 0
+        if hasattr(response, "response_metadata"):
+            tokens = (
+                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+                or 0
+            )
+        state.log_llm_response(
+            agent="ReconAgent",
+            response=content if isinstance(content, str) else str(content),
+            prompt_hash=prompt_hash,
+            model=model,
+            tokens_used=tokens,
+            latency_ms=latency_ms,
+        )
         # Extract JSON from the response
         import re
         json_match = re.search(r'\{[\s\S]*\}', content)
@@ -64,10 +94,22 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001
         logger.warning("recon llm failed", error=str(exc))
+        state.log(
+            StepKind.ERROR,
+            "ReconAgent",
+            f"LLM call failed, falling back to heuristics: {exc}",
+        )
 
     # Fallback: heuristic extraction
     iocs = extract_iocs(state.alert_summary)
     techniques = map_to_mitre(state.alert_summary)
+    state.log_decision(
+        agent="ReconAgent",
+        decision="use_heuristic_fallback",
+        reason="LLM unavailable or returned malformed JSON; relying on regex IOC extraction and keyword MITRE mapping",
+        confidence=0.4,
+        alternatives=["llm_extraction"],
+    )
     return {
         "iocs": iocs,
         "mitre_techniques": techniques,
@@ -97,20 +139,52 @@ async def run_recon(state_dict: dict[str, Any]) -> dict[str, Any]:
             iocs.append(h)
             seen.add(h["value"])
 
-    # 2. Enrich IOCs (fan-out, cached)
+    # 2. Enrich IOCs (fan-out, cached) - each enrichment is a tool call, recorded
     async def _enrich(ioc: dict[str, str]) -> tuple[str, dict[str, Any]]:
         cached = state.enrichment_cache.get(ioc["value"])
         if cached:
+            state.log_tool_call(
+                agent="ReconAgent",
+                tool_name="enrich_ioc",
+                args={"value": ioc["value"], "type": ioc["type"], "cached": True},
+                result=cached,
+                latency_ms=0,
+                success=True,
+            )
             return ioc["value"], cached
+        t_enrich = time.monotonic()
         result = await enrich_ioc(ioc["value"], ioc["type"])
+        state.log_tool_call(
+            agent="ReconAgent",
+            tool_name="enrich_ioc",
+            args={"value": ioc["value"], "type": ioc["type"]},
+            result=result,
+            latency_ms=int((time.monotonic() - t_enrich) * 1000),
+            success=bool(result),
+        )
         return ioc["value"], result
 
     enrichment_results = await asyncio.gather(*[_enrich(ioc) for ioc in iocs])
     for val, result in enrichment_results:
         state.enrichment_cache[val] = result
+        # Cite each IOC as a piece of evidence
+        state.log_evidence(
+            agent="ReconAgent",
+            evidence_kind="ioc",
+            ref=val,
+            weight=1.0,
+            details={"enrichment": result},
+        )
 
     # 3. Build ReconFindings
     mitre = list(set(llm_result.get("mitre_techniques", []) + map_to_mitre(state.alert_summary)))
+    for technique in mitre:
+        state.log_evidence(
+            agent="ReconAgent",
+            evidence_kind="mitre_technique",
+            ref=technique,
+            weight=0.8,
+        )
     state.recon = ReconFindings(
         iocs=iocs,
         threat_actors=llm_result.get("threat_actors", []),

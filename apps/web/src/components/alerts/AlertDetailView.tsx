@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { alertsApi, agentsApi, type Alert, type AgentInvestigation } from '@/lib/api';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
+import { ContextualActions } from '@/components/copilot/ContextualActions';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -339,6 +340,31 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
         <div className="grid grid-cols-3 gap-4">
           {/* Left column - 2/3 */}
           <div className="col-span-2 space-y-4">
+            {/*
+              Ambient Copilot — quick contextual AI buttons. Backed by the
+              `services/agents` `/api/v1/contextual` endpoints. We pass a
+              compact snapshot of the alert (no rawEvent blob) so the LLM has
+              grounding without ballooning token usage.
+            */}
+            <ContextualActions
+              page="alerts"
+              entityId={alert.id}
+              entity={{
+                title: alert.title,
+                description: alert.description,
+                severity: alert.severity,
+                status: alert.status,
+                source: alert.source,
+                source_ref: alert.sourceRef,
+                risk_score: alert.riskScore,
+                tags: alert.tags,
+                mitre_attack: alert.mitreAttack,
+                iocs: alert.iocs,
+                created_at: alert.createdAt,
+              }}
+              eyebrow="Ask AiSOC about this alert"
+            />
+
             <Section title="Description">
               <p className="text-sm text-gray-300 leading-relaxed">{alert.description}</p>
             </Section>

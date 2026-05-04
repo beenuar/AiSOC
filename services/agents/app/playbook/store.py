@@ -26,15 +26,29 @@ logger = logging.getLogger("aisoc.playbook.store")
 
 _DEFAULT_STORE_DIR = Path(__file__).parent.parent.parent / "data" / "playbooks"
 
+# services/agents/app/playbook/store.py -> services/agents/app/playbook ->
+# services/agents/app -> services/agents -> services -> repo root
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_DEFAULT_PACK_ROOT = _REPO_ROOT / "playbooks" / "packs" / "v1"
+
 
 class PlaybookStore:
     """CRUD store for Playbook objects, backed by a JSON manifest file."""
 
-    def __init__(self, store_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        store_dir: Path | None = None,
+        pack_root: Path | None = None,
+    ) -> None:
         self._dir = store_dir or Path(
             os.getenv("PLAYBOOK_STORE_DIR", str(_DEFAULT_STORE_DIR))
         )
         self._dir.mkdir(parents=True, exist_ok=True)
+        # Optional canonical pack tree (playbooks/packs/v1/<category>/<slug>.playbook.json).
+        # Loaded read-only — mutations always go to self._dir/index.json.
+        self._pack_root = pack_root or Path(
+            os.getenv("PLAYBOOK_PACK_ROOT", str(_DEFAULT_PACK_ROOT))
+        )
         self._manifest_path = self._dir / "index.json"
         self._playbooks: dict[str, Playbook] = {}
         self._load()
@@ -55,21 +69,41 @@ class PlaybookStore:
     # Persistence
     # ------------------------------------------------------------------
 
-    def _load(self) -> None:
-        # 1) Load individual *.playbook.json fixture files shipped with the repo
-        for fixture in sorted(self._dir.glob("*.playbook.json")):
-            try:
-                data = json.loads(fixture.read_text())
-                pb = Playbook.model_validate(data)
-                if pb.id not in self._playbooks:
-                    self._playbooks[pb.id] = pb
-            except Exception as exc:
-                logger.warning("Skipping invalid fixture %s: %s", fixture.name, exc)
+    def _load_one(self, fixture: Path) -> None:
+        try:
+            data = json.loads(fixture.read_text())
+            pb = Playbook.model_validate(data)
+            if pb.id not in self._playbooks:
+                self._playbooks[pb.id] = pb
+        except Exception as exc:
+            logger.warning("Skipping invalid fixture %s: %s", fixture.name, exc)
 
-        # 2) Load/merge from the mutable index.json (user-created / API-created playbooks)
+    def _load(self) -> None:
+        # 1) Load individual *.playbook.json fixture files shipped with the runtime dir
+        for fixture in sorted(self._dir.glob("*.playbook.json")):
+            self._load_one(fixture)
+
+        # 2) Load the canonical v1 production pack (playbooks/packs/v1/**/*.playbook.json)
+        #    if present. These ship with the repo and are read-only here.
+        if self._pack_root.exists():
+            pack_count_before = len(self._playbooks)
+            for fixture in sorted(self._pack_root.rglob("*.playbook.json")):
+                self._load_one(fixture)
+            pack_count = len(self._playbooks) - pack_count_before
+            if pack_count:
+                logger.info(
+                    "Loaded %d playbooks from production pack %s",
+                    pack_count,
+                    self._pack_root,
+                )
+
+        # 3) Load/merge from the mutable index.json (user-created / API-created playbooks)
         if not self._manifest_path.exists():
             if self._playbooks:
-                logger.info("Loaded %d fixture playbooks from %s", len(self._playbooks), self._dir)
+                logger.info(
+                    "Loaded %d fixture+pack playbooks (no user index.json yet)",
+                    len(self._playbooks),
+                )
             return
         try:
             raw: list[dict] = json.loads(self._manifest_path.read_text())

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maskable icon: keep the safe zone (centered 80%) full of brand. Android
+  may crop up to 10% from each edge. The visible content (mark + outer
+  shield) stays inside the centered 410×410 region.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>AiSOC maskable icon</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+    <linearGradient id="outline" x1="256" y1="120" x2="256" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="body" x1="256" y1="160" x2="256" y2="368" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5f5"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- Safe zone marker (debug only  removed at build): -->
+  <path d="M256 110 L390 178 L390 322 L256 410 L122 322 L122 178 Z"
+        fill="rgba(59,130,246,0.08)"
+        stroke="url(#outline)"
+        stroke-width="11"
+        stroke-linejoin="round"/>
+  <path d="M180 350 L256 158 L332 350 M210 290 L302 290"
+        fill="none"
+        stroke="url(#body)"
+        stroke-width="22"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+  <circle cx="350" cy="172" r="22" fill="url(#spark)"/>
+  <circle cx="350" cy="172" r="36" fill="none" stroke="rgba(251,191,36,0.4)" stroke-width="5"/>
+</svg>

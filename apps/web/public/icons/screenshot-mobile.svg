@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 720" width="540" height="720">
+  <title>AiSOC Responder triage queue (mobile)</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#161b27"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+  </defs>
+  <rect width="540" height="720" fill="url(#bg)"/>
+
+  <!-- Status bar -->
+  <rect x="0" y="0" width="540" height="48" fill="#0a0d14"/>
+  <text x="32" y="32" font-family="-apple-system, system-ui, sans-serif" font-size="18" font-weight="600" fill="#cbd5f5">9:41</text>
+  <circle cx="488" cy="24" r="6" fill="#22c55e"/>
+  <text x="500" y="29" font-family="-apple-system, system-ui, sans-serif" font-size="14" fill="#cbd5f5">5G</text>
+
+  <!-- Header -->
+  <rect x="0" y="48" width="540" height="80" fill="#0a0d14" stroke="#1f2937" stroke-width="1"/>
+  <text x="32" y="92" font-family="-apple-system, system-ui, sans-serif" font-size="24" font-weight="700" fill="#ffffff">Triage Queue</text>
+  <text x="32" y="114" font-family="-apple-system, system-ui, sans-serif" font-size="14" fill="#64748b">12 alerts · 3 awaiting approval</text>
+
+  <!-- On-call status pill -->
+  <rect x="404" y="78" width="104" height="36" rx="18" fill="rgba(34,197,94,0.15)" stroke="#22c55e" stroke-width="1.5"/>
+  <circle cx="424" cy="96" r="5" fill="#22c55e"/>
+  <text x="438" y="101" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="600" fill="#22c55e">ON-CALL</text>
+
+  <!-- Critical alert card -->
+  <rect x="20" y="148" width="500" height="128" rx="12" fill="url(#card)" stroke="#ef4444" stroke-width="1.5"/>
+  <rect x="20" y="148" width="6" height="128" rx="3" fill="#ef4444"/>
+  <text x="40" y="180" font-family="-apple-system, system-ui, sans-serif" font-size="11" font-weight="700" fill="#ef4444" letter-spacing="0.5">P0 · CRITICAL</text>
+  <text x="40" y="208" font-family="-apple-system, system-ui, sans-serif" font-size="17" font-weight="600" fill="#ffffff">Ransomware execution detected</text>
+  <text x="40" y="228" font-family="-apple-system, system-ui, sans-serif" font-size="13" fill="#94a3b8">Host FIN-WS-04 · 2 min ago</text>
+  <text x="40" y="252" font-family="-apple-system, system-ui, sans-serif" font-size="12" fill="#cbd5f5">Agent recommends: isolate host (awaiting your approval)</text>
+  <!-- Approve button -->
+  <rect x="40" y="262" width="92" height="34" rx="8" fill="#ef4444"/>
+  <text x="86" y="284" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="600" fill="#ffffff" text-anchor="middle">Approve</text>
+  <!-- Snooze button -->
+  <rect x="142" y="262" width="92" height="34" rx="8" fill="rgba(100,116,139,0.2)" stroke="#64748b" stroke-width="1"/>
+  <text x="188" y="284" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="500" fill="#cbd5f5" text-anchor="middle">Snooze</text>
+
+  <!-- High alert card -->
+  <rect x="20" y="296" width="500" height="108" rx="12" fill="url(#card)" stroke="#f59e0b" stroke-width="1"/>
+  <rect x="20" y="296" width="6" height="108" rx="3" fill="#f59e0b"/>
+  <text x="40" y="324" font-family="-apple-system, system-ui, sans-serif" font-size="11" font-weight="700" fill="#f59e0b" letter-spacing="0.5">P1 · HIGH</text>
+  <text x="40" y="350" font-family="-apple-system, system-ui, sans-serif" font-size="16" font-weight="600" fill="#ffffff">Impossible travel · alice@acme.io</text>
+  <text x="40" y="370" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="400" fill="#94a3b8">Tokyo ’ Berlin in 12 min · 8 min ago</text>
+  <text x="40" y="390" font-family="-apple-system, system-ui, sans-serif" font-size="12" fill="#cbd5f5">Investigation running · 3/7 steps complete</text>
+
+  <!-- Medium alert card -->
+  <rect x="20" y="424" width="500" height="92" rx="12" fill="url(#card)" stroke="#3b82f6" stroke-width="1"/>
+  <rect x="20" y="424" width="6" height="92" rx="3" fill="#3b82f6"/>
+  <text x="40" y="452" font-family="-apple-system, system-ui, sans-serif" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="0.5">P2 · MEDIUM</text>
+  <text x="40" y="478" font-family="-apple-system, system-ui, sans-serif" font-size="16" font-weight="600" fill="#ffffff">Suspicious S3 bucket policy change</text>
+  <text x="40" y="498" font-family="-apple-system, system-ui, sans-serif" font-size="13" fill="#94a3b8">aws-prod · 22 min ago</text>
+
+  <!-- Medium alert card 2 -->
+  <rect x="20" y="536" width="500" height="92" rx="12" fill="url(#card)" stroke="#3b82f6" stroke-width="1"/>
+  <rect x="20" y="536" width="6" height="92" rx="3" fill="#3b82f6"/>
+  <text x="40" y="564" font-family="-apple-system, system-ui, sans-serif" font-size="11" font-weight="700" fill="#3b82f6" letter-spacing="0.5">P2 · MEDIUM</text>
+  <text x="40" y="590" font-family="-apple-system, system-ui, sans-serif" font-size="16" font-weight="600" fill="#ffffff">LOLBAS execution: certutil.exe</text>
+  <text x="40" y="610" font-family="-apple-system, system-ui, sans-serif" font-size="13" fill="#94a3b8">Host CORP-DEV-12 · 31 min ago</text>
+
+  <!-- Bottom tab bar -->
+  <rect x="0" y="652" width="540" height="68" fill="#0a0d14" stroke="#1f2937" stroke-width="1"/>
+  <!-- Triage tab (active) -->
+  <rect x="20" y="668" width="120" height="40" rx="10" fill="rgba(59,130,246,0.15)"/>
+  <text x="80" y="694" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="600" fill="#60a5fa" text-anchor="middle">Triage</text>
+  <!-- Cases tab -->
+  <text x="210" y="694" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="500" fill="#64748b" text-anchor="middle">Cases</text>
+  <!-- On-call tab -->
+  <text x="330" y="694" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="500" fill="#64748b" text-anchor="middle">On-call</text>
+  <!-- Profile tab -->
+  <text x="450" y="694" font-family="-apple-system, system-ui, sans-serif" font-size="13" font-weight="500" fill="#64748b" text-anchor="middle">Me</text>
+</svg>

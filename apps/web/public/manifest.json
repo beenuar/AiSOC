@@ -1,0 +1,81 @@
+{
+  "name": "AiSOC Responder",
+  "short_name": "AiSOC",
+  "description": "On-call responder PWA for the AiSOC Security Operations Center. Triage alerts, approve agent actions, and manage cases from your phone.",
+  "id": "/responder",
+  "start_url": "/responder",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "portrait-primary",
+  "background_color": "#0a0d14",
+  "theme_color": "#0a0d14",
+  "categories": ["productivity", "security", "business"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Triage queue",
+      "short_name": "Triage",
+      "description": "Open the live alert triage queue",
+      "url": "/responder?tab=queue",
+      "icons": [
+        { "src": "/icons/shortcut-triage.svg", "sizes": "96x96", "type": "image/svg+xml" }
+      ]
+    },
+    {
+      "name": "My cases",
+      "short_name": "Cases",
+      "description": "Cases assigned to me or awaiting my approval",
+      "url": "/responder?tab=cases",
+      "icons": [
+        { "src": "/icons/shortcut-cases.svg", "sizes": "96x96", "type": "image/svg+xml" }
+      ]
+    },
+    {
+      "name": "On-call status",
+      "short_name": "On-call",
+      "description": "Toggle on-call status and review approvals",
+      "url": "/responder?tab=oncall",
+      "icons": [
+        { "src": "/icons/shortcut-oncall.svg", "sizes": "96x96", "type": "image/svg+xml" }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-mobile.svg",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "Mobile triage queue"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
 from app.core.config import settings
 from app.middleware.audit_middleware import AuditMiddleware
+from app.middleware.demo_mode import DemoModeMiddleware
 from app.core.logging import configure_logging
 from app.core.telemetry import instrument_app
 from app.db.database import engine
@@ -93,7 +94,11 @@ def create_application() -> FastAPI:
     instrument_app(app)
 
     # Middleware
+    # Order matters: outermost = last added in Starlette. CORS/GZip must wrap
+    # everything else, then DemoMode (so its 403 still gets CORS headers),
+    # then Audit (so denied writes are still logged).
     app.add_middleware(AuditMiddleware)
+    app.add_middleware(DemoModeMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(
         CORSMiddleware,

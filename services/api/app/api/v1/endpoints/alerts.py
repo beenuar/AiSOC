@@ -38,10 +38,20 @@ class AlertResponse(BaseModel):
     event_time: datetime
     first_seen: datetime
     last_seen: datetime
+    snoozed_until: datetime | None = None
+    snoozed_by_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AlertSnoozeRequest(BaseModel):
+    """Snooze an alert from the mobile responder PWA."""
+
+    duration_minutes: int | None = None
+    until: datetime | None = None
+    reason: str | None = None
 
 
 class AlertListResponse(BaseModel):
@@ -249,6 +259,62 @@ async def escalate_alert(
     await db.execute(
         update(Alert).where(Alert.id == alert_id).values(
             severity=new_severity, updated_at=datetime.now(UTC)
+        )
+    )
+    await db.commit()
+    await db.refresh(alert)
+
+    return AlertResponse.model_validate(alert)
+
+
+@router.post("/{alert_id}/snooze", response_model=AlertResponse)
+async def snooze_alert(
+    alert_id: uuid.UUID,
+    body: AlertSnoozeRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    db: TenantDBSession,
+) -> AlertResponse:
+    """Defer an alert for a fixed window from the mobile responder PWA.
+
+    Either ``duration_minutes`` or ``until`` must be supplied. The alert
+    re-surfaces in the queue once ``snoozed_until`` is in the past.
+    """
+    from datetime import timedelta
+
+    if body.duration_minutes is None and body.until is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either duration_minutes or until must be provided",
+        )
+
+    if body.until is not None:
+        snoozed_until = body.until.astimezone(UTC) if body.until.tzinfo else body.until.replace(tzinfo=UTC)
+    else:
+        if (body.duration_minutes or 0) <= 0 or (body.duration_minutes or 0) > 60 * 24 * 30:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="duration_minutes must be between 1 and 43200 (30 days)",
+            )
+        snoozed_until = datetime.now(UTC) + timedelta(minutes=body.duration_minutes or 0)
+
+    result = await db.execute(
+        select(Alert).where(
+            Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id
+        )
+    )
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found"
+        )
+
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert_id)
+        .values(
+            snoozed_until=snoozed_until,
+            snoozed_by_id=current_user.user_id,
+            updated_at=datetime.now(UTC),
         )
     )
     await db.commit()

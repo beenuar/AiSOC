@@ -41,27 +41,42 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
 
   # Build & push Docker images
+  #
+  # Most services build from their own service directory. The `web` app is
+  # special: its Dockerfile copies workspace packages and pnpm config from the
+  # monorepo root, so its build context must be `.` (the repo root) with the
+  # Dockerfile path explicitly set.
   docker-push:
     name: Docker — Build & Push (${{ matrix.service }})
     runs-on: ubuntu-latest
     needs: release
     strategy:
+      fail-fast: false
       matrix:
         include:
           - service: api
             context: services/api
+            dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-core-api
+          - service: agents
+            context: services/agents
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-agents
           - service: enrichment
             context: services/enrichment
+            dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-enrichment
           - service: ingest
             context: services/ingest
+            dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-ingest
           - service: realtime
             context: services/realtime
+            dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-realtime
           - service: web
-            context: apps/web
+            context: .
+            dockerfile: apps/web/Dockerfile
             image: ghcr.io/beenuar/aisoc-web
     steps:
       - uses: actions/checkout@v4
@@ -74,9 +89,10 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
           push: true
           tags: |
             ${{ matrix.image }}:${{ github.ref_name }}
             ${{ matrix.image }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

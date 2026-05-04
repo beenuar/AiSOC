@@ -4,6 +4,17 @@ from app.models.alert import Alert
 from app.models.case import Case, CaseTask, CaseTimeline
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
+from app.models.investigation import (
+    InvestigationArtifact,
+    InvestigationEvent,
+    InvestigationRun,
+)
+from app.models.responder import (
+    AgentApproval,
+    OnCallStatus,
+    PasskeyChallenge,
+    PasskeyCredential,
+)
 from app.models.tenant import ApiKey, Tenant, User
 
 __all__ = [
@@ -17,4 +28,11 @@ __all__ = [
     "CaseTimeline",
     "Connector",
     "DetectionRule",
+    "InvestigationRun",
+    "InvestigationEvent",
+    "InvestigationArtifact",
+    "PasskeyCredential",
+    "PasskeyChallenge",
+    "OnCallStatus",
+    "AgentApproval",
 ]

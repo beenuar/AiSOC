@@ -6,12 +6,26 @@ import { Kafka } from 'kafkajs';
 import Redis from 'ioredis';
 import pino from 'pino';
 
+import { PushManager } from './push';
+
 const log = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 const PORT = parseInt(process.env.PORT || '8086', 10);
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379/4';
 const KAFKA_BROKERS = (process.env.KAFKA_BOOTSTRAP_SERVERS || 'localhost:9092').split(',');
 const KAFKA_TOPIC_FUSED = process.env.KAFKA_TOPIC_FUSED || 'aisoc.alerts.fused';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:soc@aisoc.dev';
+const PUSH_REDIS = new Redis(REDIS_URL);
+
+const pushManager = new PushManager({
+  redis: PUSH_REDIS,
+  logger: log,
+  vapidPublicKey: VAPID_PUBLIC_KEY,
+  vapidPrivateKey: VAPID_PRIVATE_KEY,
+  vapidSubject: VAPID_SUBJECT,
+});
 
 // --- Express setup ---
 const app = express();
@@ -154,6 +168,41 @@ async function startKafkaConsumer() {
           payload: event,
           timestamp: new Date().toISOString(),
         });
+
+        // Fan out P0/critical alerts to mobile responders. Lower-severity
+        // alerts stay WebSocket-only so we don't pager-storm on-call.
+        const severity = String(
+          event?.alert?.severity ?? event?.severity ?? '',
+        ).toLowerCase();
+        if (
+          pushManager.enabled &&
+          (severity === 'critical' || severity === 'high')
+        ) {
+          const alertId =
+            event?.alert?.id ?? event?.alert?.alert_id ?? event?.id ?? 'unknown';
+          const title = `${severity === 'critical' ? 'P0' : 'P1'} alert · ${
+            event?.alert?.title ?? event?.title ?? 'New alert'
+          }`;
+          pushManager
+            .sendToTarget(
+              { tenant_id: tenantId, topic: 'p0_alert' },
+              {
+                title,
+                body:
+                  event?.alert?.summary ??
+                  event?.summary ??
+                  'Tap to triage in the responder console',
+                url: `/responder/triage/${alertId}`,
+                tag: `alert-${alertId}`,
+                topic: 'p0_alert',
+                severity: severity as 'critical' | 'high',
+                alert_id: String(alertId),
+              },
+            )
+            .catch((err: unknown) =>
+              log.warn({ err, tenantId }, 'push fan-out for fused alert failed'),
+            );
+        }
       } catch (err) {
         log.warn({ err }, 'Failed to parse Kafka message');
       }
@@ -161,21 +210,40 @@ async function startKafkaConsumer() {
   });
 }
 
+// --- Web Push routes (Phase 4B mobile responder PWA) ---
+// Public key is needed by the browser to subscribe; the rest are
+// authenticated routes the API gateway forwards on behalf of a user.
+app.get('/v1/push/public-key', pushManager.publicKeyHandler);
+app.post('/v1/push/subscribe', pushManager.subscribeHandler);
+app.post('/v1/push/unsubscribe', pushManager.unsubscribeHandler);
+app.post('/v1/push/test', pushManager.testNotifyHandler);
+
 // --- Internal broadcast endpoint (called by other services) ---
 // POST /internal/agent-event
 // Body: { tenant_id?: string, run_id: string, kind: string, agent: string, summary: string, data?: unknown }
 // The realtime service re-broadcasts to all WebSocket clients on the `agents` channel.
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN || '';
 
-app.post('/internal/agent-event', (req, res) => {
-  // Lightweight auth: check shared secret if configured
-  if (INTERNAL_TOKEN) {
-    const auth = req.headers['x-internal-token'];
-    if (auth !== INTERNAL_TOKEN) {
-      res.status(401).json({ error: 'unauthorized' });
-      return;
-    }
+function requireInternal(req: express.Request, res: express.Response): boolean {
+  if (!INTERNAL_TOKEN) return true;
+  const auth = req.headers['x-internal-token'];
+  if (auth !== INTERNAL_TOKEN) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
   }
+  return true;
+}
+
+// Internal push fan-out used by the agents/api services to send a
+// notification to a tenant, user list, or topic. Same auth contract as
+// `internal/agent-event`.
+app.post('/internal/push', async (req, res) => {
+  if (!requireInternal(req, res)) return;
+  await pushManager.internalNotifyHandler(req, res);
+});
+
+app.post('/internal/agent-event', (req, res) => {
+  if (!requireInternal(req, res)) return;
 
   const { tenant_id, run_id, kind, agent, summary, data } = req.body as {
     tenant_id?: string;
@@ -183,7 +251,7 @@ app.post('/internal/agent-event', (req, res) => {
     kind: string;
     agent: string;
     summary: string;
-    data?: unknown;
+    data?: Record<string, unknown> | null;
   };
 
   if (!run_id || !kind || !agent) {
@@ -215,6 +283,43 @@ app.post('/internal/agent-event', (req, res) => {
   redisPub.publish(`aisoc:events:${tenantId}`, payload)
     .then(() => redisPub.disconnect())
     .catch((err: unknown) => log.warn({ err }, 'Redis publish failed'));
+
+  // Approval requests page on-call directly. Anything else stays
+  // websocket-only so the device doesn't buzz on every reasoning step.
+  if (
+    pushManager.enabled &&
+    (kind === 'APPROVAL_REQUEST' || kind === 'approval_request')
+  ) {
+    const approvalId =
+      (data && (data.approval_id as string | undefined)) ?? run_id;
+    const caseId = data && (data.case_id as string | undefined);
+    const userIds =
+      data &&
+      (data.notify_user_ids as string[] | undefined) instanceof Array
+        ? (data.notify_user_ids as string[])
+        : undefined;
+    pushManager
+      .sendToTarget(
+        userIds && userIds.length > 0
+          ? { tenant_id: tenantId, user_ids: userIds }
+          : { tenant_id: tenantId, topic: 'agent_approval' },
+        {
+          title: 'Agent needs your approval',
+          body: summary || `${agent} is waiting for a decision.`,
+          url: caseId
+            ? `/responder/case/${caseId}?approval=${approvalId}`
+            : `/responder/approvals?focus=${approvalId}`,
+          tag: `approval-${approvalId}`,
+          topic: 'agent_approval',
+          severity: 'high',
+          approval_id: String(approvalId),
+          case_id: caseId,
+        },
+      )
+      .catch((err: unknown) =>
+        log.warn({ err, tenantId }, 'push fan-out for approval failed'),
+      );
+  }
 
   res.status(202).json({ broadcast: true, tenantId });
 });

@@ -85,6 +85,25 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
     ...fetchOptions.headers,
   };
 
+  // Mobile responder PWA auth: if a passkey-issued JWT is present in
+  // localStorage, attach it as a Bearer token. The desktop console relies on
+  // cookies set by the API gateway, so this is purely additive.
+  if (typeof window !== 'undefined') {
+    try {
+      const existing =
+        (headers as Record<string, string>).Authorization ??
+        (headers as Record<string, string>).authorization;
+      if (!existing) {
+        const token = window.localStorage.getItem('aisoc.responder.accessToken');
+        if (token) {
+          (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+        }
+      }
+    } catch {
+      /* localStorage unavailable; ignore */
+    }
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -374,6 +393,120 @@ export const casesApi = {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   },
+};
+
+// ─── Investigation Ledger (persistent agent decision log) ───────────────────
+//
+// Backed by /v1/investigations endpoints. Every event the agent emits during
+// an investigation is durably stored and replayable forever. The ledger UI
+// renders this as a per-step timeline + side-panel "explain" view.
+
+export interface LedgerRunSummary {
+  id: string;
+  case_id: string;
+  status: 'running' | 'completed' | 'failed' | string;
+  model_used: string | null;
+  iterations: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  started_at: string;
+  completed_at: string | null;
+  error: string | null;
+}
+
+export interface LedgerRunDetail extends LedgerRunSummary {
+  alert_summary: string | null;
+  event_count: number;
+  artifact_count: number;
+}
+
+export interface LedgerEvent {
+  id: string;
+  run_id: string;
+  seq: number;
+  ts: string;
+  kind: string;
+  agent: string;
+  summary: string;
+  payload: Record<string, unknown> | null;
+  input_hash: string | null;
+  output_hash: string | null;
+  duration_ms: number;
+}
+
+export interface LedgerEventList {
+  items: LedgerEvent[];
+  total: number;
+  since: number | null;
+  next_seq: number | null;
+}
+
+export interface LedgerArtifactSummary {
+  id: string;
+  kind: string;
+  sha256: string;
+  size_bytes: number;
+  event_id: string | null;
+  created_at: string;
+}
+
+export interface LedgerArtifactDetail extends LedgerArtifactSummary {
+  content: string | null;
+  blob_ref: string | null;
+}
+
+export interface LedgerExplain {
+  run: LedgerRunSummary;
+  previous: LedgerEvent | null;
+  focus: LedgerEvent;
+  next: LedgerEvent | null;
+  artifacts: LedgerArtifactDetail[];
+}
+
+export const ledgerApi = {
+  /** List investigation runs for the current tenant (optionally scoped to a case). */
+  listRuns: (params?: { caseId?: string; status?: string; limit?: number }) =>
+    request<LedgerRunSummary[]>('/api/v1/investigations', {
+      params: {
+        case_id: params?.caseId,
+        status: params?.status,
+        limit: params?.limit,
+      },
+    }),
+
+  /** Run summary + counts of attached events/artifacts. */
+  getRun: (runId: string) =>
+    request<LedgerRunDetail>(`/api/v1/investigations/${runId}`),
+
+  /** Paginated event timeline. Use `since` to tail. */
+  listEvents: (runId: string, params?: { since?: number; limit?: number }) =>
+    request<LedgerEventList>(`/api/v1/investigations/${runId}/events`, {
+      params: { since: params?.since, limit: params?.limit },
+    }),
+
+  /** Full ordered event list (bounded). */
+  replay: (runId: string, maxEvents = 10000) =>
+    request<LedgerEvent[]>(`/api/v1/investigations/${runId}/replay`, {
+      params: { max_events: maxEvents },
+    }),
+
+  /** "Why did the agent do this?" — previous → focus → next plus inlined artifacts. */
+  explain: (runId: string, step: number) =>
+    request<LedgerExplain>(`/api/v1/investigations/${runId}/explain`, {
+      params: { step },
+    }),
+
+  /** Artifact list for a run. */
+  listArtifacts: (runId: string) =>
+    request<LedgerArtifactSummary[]>(
+      `/api/v1/investigations/${runId}/artifacts`,
+    ),
+
+  /** Single artifact (full inlined content). */
+  getArtifact: (runId: string, artifactId: string) =>
+    request<LedgerArtifactDetail>(
+      `/api/v1/investigations/${runId}/artifacts/${artifactId}`,
+    ),
 };
 
 // ─── Metrics / Dashboard ─────────────────────────────────────────────────────
@@ -838,6 +971,378 @@ export const copilotApi = {
     }),
 };
 
+// ─── Ambient Copilot (contextual actions) ───────────────────────────────────
+//
+// Phase 4A. Each page (alerts/cases/detections/playbooks) renders a small
+// row of buttons that call into `services/agents` with a tightly-scoped
+// system prompt. The result is rendered inline next to the entity the user
+// is looking at — no full Copilot conversation required.
+//
+// Endpoints live on the agents service (port 8001 / AGENTS_BASE), not on
+// the main API, because they share the same LangChain/MITRE plumbing as the
+// investigation orchestrator.
+
+export type ContextualPage = 'alerts' | 'cases' | 'detections' | 'playbooks';
+
+export interface ContextualSuggestion {
+  label: string;
+  action?: string | null;
+  href?: string | null;
+}
+
+export interface ContextualActionDescriptor {
+  key: string;
+  label: string;
+  description: string;
+  icon?: string | null;
+}
+
+export interface ContextualActionsCatalogue {
+  pages: Record<ContextualPage, ContextualActionDescriptor[]>;
+}
+
+export interface ContextualActionRequest {
+  page: ContextualPage;
+  action: string;
+  entity_id: string;
+  entity?: Record<string, unknown> | null;
+  question?: string | null;
+  case_id?: string | null;
+}
+
+export interface ContextualActionResponse {
+  id: string;
+  page: ContextualPage;
+  action: string;
+  entity_id: string;
+  title: string;
+  /** Markdown body. */
+  content: string;
+  /** 0-1 confidence. `0` when the LLM was not configured. */
+  confidence: number;
+  suggestions: ContextualSuggestion[];
+  citations: Array<Record<string, unknown>>;
+  model: string;
+  elapsed_ms: number;
+  fallback: boolean;
+  created_at: string;
+}
+
+/**
+ * One streamed NDJSON frame from `/action/stream`. The first frame is a
+ * header (no `delta`/`done`), subsequent frames carry `delta`, and the
+ * final frame has `done: true` plus suggestions + confidence.
+ */
+export interface ContextualStreamFrame {
+  /** Header frame fields. */
+  title?: string;
+  page?: ContextualPage;
+  action?: string;
+  entity_id?: string;
+  model?: string;
+  fallback?: boolean;
+  /** Body frame fields. */
+  delta?: string;
+  /** Footer frame fields. */
+  done?: boolean;
+  suggestions?: ContextualSuggestion[];
+  confidence?: number;
+  /** Error frame. */
+  error?: string;
+}
+
+export const contextualApi = {
+  /** Catalogue of supported (page, action) pairs. */
+  listActions: () =>
+    request<ContextualActionsCatalogue>('/api/v1/contextual/actions', {
+      baseUrl: AGENTS_BASE,
+    }),
+
+  /** One-shot contextual call. Returns a fully-formed Markdown response. */
+  run: (req: ContextualActionRequest) =>
+    request<ContextualActionResponse>('/api/v1/contextual/action', {
+      method: 'POST',
+      body: JSON.stringify(req),
+      baseUrl: AGENTS_BASE,
+    }),
+
+  /**
+   * Streaming variant. Returns the raw `Response` so the caller can read
+   * NDJSON frames via `response.body.getReader()`. See
+   * {@link ContextualStreamFrame} for the per-line shape.
+   */
+  stream: (req: ContextualActionRequest, signal?: AbortSignal) =>
+    fetch(`${AGENTS_BASE}/api/v1/contextual/action/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': TENANT_ID,
+      },
+      body: JSON.stringify(req),
+      signal,
+    }),
+};
+
+// ─── Web Push & Responder PWA ────────────────────────────────────────────────
+//
+// Phase 4B. The mobile responder PWA subscribes to Web Push so on-call
+// engineers get paged for P0 alerts and "agent needs your approval"
+// events without keeping the browser tab open. Subscriptions are stored
+// per-tenant on the realtime gateway, which fans events out from Kafka.
+
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  expirationTime?: number | null;
+}
+
+export interface PushSubscribeRequest {
+  subscription: PushSubscriptionPayload;
+  user_agent?: string;
+  user_id?: string | null;
+  topics?: string[];
+}
+
+export interface PushSubscribeResponse {
+  id: string;
+  vapid_public_key: string;
+  topics: string[];
+}
+
+export interface PushPublicKeyResponse {
+  /** VAPID public key as a URL-safe base64 string. */
+  public_key: string;
+  enabled: boolean;
+}
+
+export type OnCallStatus = 'available' | 'busy' | 'snoozed' | 'offline';
+
+export interface OnCallSnapshot {
+  user_id: string;
+  user_email: string | null;
+  user_name: string | null;
+  status: OnCallStatus;
+  rotation: string | null;
+  schedule_ref: string | null;
+  note: string | null;
+  /** ISO-8601 timestamp the current snooze ends (null otherwise). */
+  until: string | null;
+  updated_at: string;
+}
+
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+
+export interface ApprovalRequest {
+  id: string;
+  tenant_id: string;
+  run_id: string | null;
+  case_id: string | null;
+  alert_id: string | null;
+  requested_by: string;
+  required_user_id: string | null;
+  required_topic: string | null;
+  title: string;
+  summary: string;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  action: Record<string, unknown>;
+  status: ApprovalStatus;
+  decided_by_id: string | null;
+  decided_at: string | null;
+  decision_comment: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const responderApi = {
+  /** Fetch the VAPID public key the SW will subscribe with. */
+  getPublicKey: () =>
+    request<PushPublicKeyResponse>('/api/v1/push/public-key'),
+
+  /** Register a new Web Push subscription for this device. */
+  subscribe: (req: PushSubscribeRequest) =>
+    request<PushSubscribeResponse>('/api/v1/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+
+  /** Tear down an existing subscription (e.g. on sign-out). */
+  unsubscribe: (endpoint: string) =>
+    request<{ removed: boolean }>('/api/v1/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+
+  /** Send a test page to all of the caller's registered devices. */
+  testNotify: () =>
+    request<{ sent: number }>('/api/v1/push/test', {
+      method: 'POST',
+    }),
+
+  /** Snapshot of every user's on-call status (admin view). */
+  listOnCall: () =>
+    request<{ items: OnCallSnapshot[] }>('/api/v1/oncall'),
+
+  /** Current caller's on-call snapshot. */
+  getOnCall: () =>
+    request<OnCallSnapshot>('/api/v1/oncall/me'),
+
+  /** Toggle the caller's own on-call status (optionally for a window).
+   *
+   * Pass ``snooze_minutes`` together with ``status: 'snoozed'`` to defer
+   * paging temporarily — the backend computes ``until`` from that window.
+   */
+  setOnCall: (
+    status: OnCallStatus,
+    options?: {
+      snooze_minutes?: number | null;
+      note?: string | null;
+      rotation?: string | null;
+      schedule_ref?: string | null;
+    },
+  ) =>
+    request<OnCallSnapshot>('/api/v1/oncall/me', {
+      method: 'PUT',
+      body: JSON.stringify({
+        status,
+        snooze_minutes: options?.snooze_minutes ?? null,
+        note: options?.note ?? null,
+        rotation: options?.rotation ?? null,
+        schedule_ref: options?.schedule_ref ?? null,
+      }),
+    }),
+
+  /** Pending agent approval requests visible to me. */
+  listApprovals: (params?: {
+    status?: ApprovalStatus;
+    mine?: boolean;
+    risk_level?: ApprovalRequest['risk_level'];
+    page?: number;
+    page_size?: number;
+  }) =>
+    request<{
+      items: ApprovalRequest[];
+      total: number;
+      page: number;
+      page_size: number;
+      pages: number;
+    }>('/api/v1/approvals', {
+      params: {
+        status: params?.status ?? 'pending',
+        ...(params?.mine ? { mine: 'true' } : {}),
+        ...(params?.risk_level ? { risk_level: params.risk_level } : {}),
+        ...(params?.page ? { page: params.page } : {}),
+        ...(params?.page_size ? { page_size: params.page_size } : {}),
+      },
+    }),
+
+  /** Single approval (for the deep-linked notification view). */
+  getApproval: (id: string) =>
+    request<ApprovalRequest>(`/api/v1/approvals/${id}`),
+
+  /** Approve a pending agent action. */
+  approve: (id: string, comment?: string) =>
+    request<ApprovalRequest>(`/api/v1/approvals/${id}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve', comment: comment ?? null }),
+    }),
+
+  /** Deny a pending agent action with a required reason. */
+  deny: (id: string, reason: string) =>
+    request<ApprovalRequest>(`/api/v1/approvals/${id}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'deny', comment: reason }),
+    }),
+
+  /** Snooze an alert for the on-call rotation.
+   *
+   * Pass either ``durationMinutes`` (relative window) or ``until`` (absolute
+   * ISO-8601 timestamp). The alert re-surfaces in the queue once the window
+   * elapses.
+   */
+  snoozeAlert: (
+    alertId: string,
+    options: { durationMinutes?: number; until?: string; reason?: string },
+  ) =>
+    request<Alert>(`/api/v1/alerts/${alertId}/snooze`, {
+      method: 'POST',
+      body: JSON.stringify({
+        duration_minutes: options.durationMinutes ?? null,
+        until: options.until ?? null,
+        reason: options.reason ?? null,
+      }),
+    }),
+};
+
+// ─── WebAuthn / Passkey authentication (Phase 4B) ───────────────────────────
+//
+// The mobile responder uses passkeys instead of passwords. The flow is the
+// standard WebAuthn registration + authentication ceremony backed by
+// services/api/app/api/v1/endpoints/passkeys.py. Browsers handle the
+// platform UI; the helpers below just shuttle JSON between the SimpleWebAuthn
+// browser library and our backend.
+
+export interface PasskeyCredential {
+  id: string;
+  device_name: string;
+  created_at: string;
+  last_used_at: string | null;
+  transports: string[];
+}
+
+export const passkeyApi = {
+  /** Begin registration for the currently logged-in user. */
+  registerBegin: (deviceName: string) =>
+    request<{
+      publicKey: Record<string, unknown>;
+      challenge: string;
+      device_name_default: string;
+    }>('/api/v1/passkeys/register/begin', {
+      method: 'POST',
+      body: JSON.stringify({ device_name: deviceName }),
+    }),
+
+  /** Submit the platform attestation to persist the new credential. */
+  registerFinish: (challenge: string, credential: Record<string, unknown>) =>
+    request<PasskeyCredential>('/api/v1/passkeys/register/finish', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, credential }),
+    }),
+
+  /** Begin a passwordless login (email is optional / hint only). */
+  authenticateBegin: (email?: string) =>
+    request<{ publicKey: Record<string, unknown>; challenge: string }>(
+      '/api/v1/passkeys/authenticate/begin',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email: email ?? null }),
+      },
+    ),
+
+  /** Verify the assertion and return a JWT pair. */
+  authenticateFinish: (challenge: string, credential: Record<string, unknown>) =>
+    request<{
+      access_token: string;
+      refresh_token: string;
+      token_type: string;
+      expires_in: number;
+    }>('/api/v1/passkeys/authenticate/finish', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, credential }),
+    }),
+
+  /** Active credentials for the current user. */
+  list: () =>
+    request<{ items: PasskeyCredential[] }>('/api/v1/passkeys/credentials'),
+
+  /** Soft-revoke one of my credentials. */
+  delete: (id: string) =>
+    request<void>(`/api/v1/passkeys/credentials/${id}`, { method: 'DELETE' }),
+};
+
 // ─── Realtime / WebSocket helpers ────────────────────────────────────────────
 
 export const realtimeApi = {
@@ -864,5 +1369,9 @@ export default {
   graph: graphApi,
   detection: detectionApi,
   copilot: copilotApi,
+  contextual: contextualApi,
+  ledger: ledgerApi,
   realtime: realtimeApi,
+  responder: responderApi,
+  passkey: passkeyApi,
 };

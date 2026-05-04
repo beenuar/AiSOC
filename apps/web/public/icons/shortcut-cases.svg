@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <title>My cases shortcut</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="20" ry="20" fill="url(#bg)"/>
+  <!-- Folder/case icon with stacked tabs -->
+  <path d="M22 32 L40 32 L46 38 L74 38 L74 70 Q74 74 70 74 L26 74 Q22 74 22 70 Z"
+        fill="#1e2533"
+        stroke="#3b82f6"
+        stroke-width="2"
+        stroke-linejoin="round"/>
+  <line x1="30" y1="48" x2="66" y2="48" stroke="#cbd5f5" stroke-width="2" stroke-linecap="round"/>
+  <line x1="30" y1="56" x2="58" y2="56" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+  <line x1="30" y1="64" x2="50" y2="64" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>
+  <!-- Tag indicator -->
+  <circle cx="68" cy="32" r="6" fill="#22c55e"/>
+</svg>

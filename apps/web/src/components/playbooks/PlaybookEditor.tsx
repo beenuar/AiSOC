@@ -17,6 +17,7 @@ import { PlaybookFlowCanvas } from './PlaybookFlowCanvas';
 import { StepInspector } from './StepInspector';
 import type { Playbook, PlaybookStep, StepType } from './types';
 import { STEP_TYPE_META } from './stepColors';
+import { ContextualActions } from '@/components/copilot/ContextualActions';
 
 const STEP_TYPES: StepType[] = [
   'enrich', 'investigate', 'notify', 'block_ip',
@@ -271,6 +272,39 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
           </button>
         </div>
       )}
+
+      {/*
+        Ambient Copilot — playbook-scoped contextual AI. Only rendered for saved
+        playbooks (`!isNew && playbook.id`); brand-new drafts have no real
+        steps to reason about yet. We pass a compact snapshot of the live form
+        state (not just the persisted record) so "explain this playbook" /
+        "suggest improvements" reflect the user's in-flight edits. Backed by
+        `services/agents` `/api/v1/contextual` endpoints.
+      */}
+      {!isNew && playbook.id ? (
+        <div className="px-5 py-3 border-b border-gray-800/60 bg-gray-900/30">
+          <ContextualActions
+            page="playbooks"
+            entityId={playbook.id}
+            entity={{
+              id: playbook.id,
+              name: playbook.name,
+              description: playbook.description,
+              version: playbook.version,
+              tags: playbook.tags,
+              trigger: playbook.trigger,
+              enabled: playbook.enabled,
+              step_count: playbook.steps.length,
+              steps: playbook.steps.map((s) => ({
+                id: s.id,
+                type: s.type,
+                name: s.name,
+              })),
+            }}
+            eyebrow="Ask AiSOC about this playbook"
+          />
+        </div>
+      ) : null}
 
       {/* ── Body ── */}
       <div className="flex flex-1 min-h-0">

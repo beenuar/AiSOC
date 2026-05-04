@@ -16,7 +16,7 @@ import json
 import os
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import structlog
@@ -90,6 +90,12 @@ async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> Non
 
 async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> None:
     audit_log: list[dict[str, Any]] = []
+    # Reuse the API-issued run id as the ledger row id so consumers can
+    # cross-reference the realtime stream and the persisted timeline.
+    try:
+        run_uuid = UUID(run_id)
+    except (ValueError, TypeError):
+        run_uuid = uuid4()
     try:
         # Use the streaming orchestrator so we can emit events progressively
         async for event in _orch.stream(
@@ -97,6 +103,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
             alert_summary=req.alert_summary,
             raw_alert=req.raw_alert,
             tenant_id=req.tenant_id,
+            run_id=run_uuid,
         ):
             if event.get("type") == "step":
                 audit_log.append(event)

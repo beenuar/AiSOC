@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>AiSOC PWA icon  large</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+    <linearGradient id="outline" x1="256" y1="80" x2="256" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="body" x1="256" y1="128" x2="256" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5f5"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" ry="96" fill="url(#bg)"/>
+  <path d="M256 72 L432 160 L432 332 L256 448 L80 332 L80 160 Z"
+        fill="rgba(59,130,246,0.08)"
+        stroke="url(#outline)"
+        stroke-width="14"
+        stroke-linejoin="round"/>
+  <path d="M164 368 L256 132 L348 368 M196 296 L316 296"
+        fill="none"
+        stroke="url(#body)"
+        stroke-width="28"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+  <circle cx="372" cy="148" r="28" fill="url(#spark)"/>
+  <circle cx="372" cy="148" r="46" fill="none" stroke="rgba(251,191,36,0.4)" stroke-width="6"/>
+</svg>

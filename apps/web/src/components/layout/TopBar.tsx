@@ -28,7 +28,16 @@ const routeLabels: Record<string, { title: string; description: string }> = {
   '/': { title: 'Dashboard', description: 'SOC overview and metrics' },
 };
 
-export function TopBar() {
+interface TopBarProps {
+  /**
+   * When true, the demo banner is rendered above this bar so we shift the
+   * fixed-position TopBar down by its height (h-9 = 36px). Driven by
+   * `AppShell` which reads `isDemoMode()` once at render.
+   */
+  demoOffset?: boolean;
+}
+
+export function TopBar({ demoOffset = false }: TopBarProps) {
   const pathname = usePathname();
   const [now, setNow] = useState<Date | null>(null);
   const [shortcut, setShortcut] = useState<'⌘K' | 'Ctrl K'>('⌘K');
@@ -100,7 +109,11 @@ export function TopBar() {
     : '';
 
   return (
-    <header className="fixed top-0 left-60 right-0 h-16 flex items-center justify-between px-6 bg-gray-900/90 backdrop-blur-sm border-b border-gray-800/60 z-20">
+    <header
+      className={`fixed left-60 right-0 h-16 flex items-center justify-between px-6 bg-gray-900/90 backdrop-blur-sm border-b border-gray-800/60 z-20 ${
+        demoOffset ? 'top-9' : 'top-0'
+      }`}
+    >
       {/* Page title */}
       <div>
         <h1 className="text-base font-semibold text-white leading-tight">{routeInfo.title}</h1>

@@ -55,6 +55,10 @@ class Alert(Base):
     assigned_to_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Mobile responder PWA: temporarily defer this alert from the queue.
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    snoozed_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
     # Raw data
     raw_event: Mapped[dict] = mapped_column(JSONB, default=dict)
     enrichment_data: Mapped[dict] = mapped_column(JSONB, default=dict)

@@ -63,15 +63,52 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
         HumanMessage(content=prompt),
     ]
 
+    prompt_hash = state.log_llm_prompt(
+        agent="ResponderAgent",
+        prompt=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        model=model,
+        purpose="responder: containment/eradication/recovery plan",
+    )
+
+    t0 = time.monotonic()
     try:
         response = await llm.ainvoke(messages)
         content = response.content
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        tokens = 0
+        if hasattr(response, "response_metadata"):
+            tokens = (
+                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+                or 0
+            )
+        state.log_llm_response(
+            agent="ResponderAgent",
+            response=content if isinstance(content, str) else str(content),
+            prompt_hash=prompt_hash,
+            model=model,
+            tokens_used=tokens,
+            latency_ms=latency_ms,
+        )
         json_match = re.search(r'\{[\s\S]*\}', content)
         if json_match:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001
         logger.warning("responder llm failed", error=str(exc))
+        state.log(
+            StepKind.ERROR,
+            "ResponderAgent",
+            f"LLM call failed: {exc}",
+        )
 
+    state.log_decision(
+        agent="ResponderAgent",
+        decision="default_high_risk_plan",
+        reason="LLM unavailable; falling back to conservative high-risk containment template",
+        confidence=0.3,
+    )
     return {
         "recommended_actions": [],
         "containment_steps": ["Isolate affected systems immediately."],
@@ -101,6 +138,18 @@ async def run_responder(state_dict: dict[str, Any]) -> dict[str, Any]:
         risk_level=llm_result.get("risk_level", "medium"),
         dry_run=True,
         summary=llm_result.get("summary", ""),
+    )
+
+    # Record the headline risk decision so auditors can see why we picked this level
+    state.log_decision(
+        agent="ResponderAgent",
+        decision=f"risk_level={state.responder.risk_level}",
+        reason=(
+            f"Based on root cause '{state.forensic.root_cause_hypothesis}' with "
+            f"forensic confidence {state.forensic.confidence:.0%} and blast radius "
+            f"'{state.forensic.blast_radius}'."
+        ),
+        confidence=state.forensic.confidence,
     )
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)

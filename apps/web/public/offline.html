@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>AiSOC — Offline</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0a0d14" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0a0d14;
+        color: #e2e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 24px;
+        text-align: center;
+        background:
+          radial-gradient(ellipse at top, rgba(59, 130, 246, 0.08), transparent 60%),
+          linear-gradient(180deg, #0a0d14 0%, #11151f 100%);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        color: #fbbf24;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+      .badge::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #fbbf24;
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      h1 {
+        font-size: 28px;
+        margin: 24px 0 12px;
+        font-weight: 700;
+        color: #fff;
+      }
+      p {
+        color: #94a3b8;
+        font-size: 15px;
+        line-height: 1.55;
+        max-width: 440px;
+        margin: 0 0 24px;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      button,
+      a.btn {
+        appearance: none;
+        border: none;
+        cursor: pointer;
+        padding: 12px 20px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: transform 100ms ease, background 100ms ease;
+      }
+      .primary {
+        background: #3b82f6;
+        color: #fff;
+      }
+      .primary:hover { background: #2563eb; }
+      .secondary {
+        background: rgba(100, 116, 139, 0.12);
+        color: #cbd5f5;
+        border: 1px solid rgba(100, 116, 139, 0.3);
+      }
+      .secondary:hover { background: rgba(100, 116, 139, 0.18); }
+      .stack-card {
+        margin-top: 36px;
+        max-width: 460px;
+        padding: 16px 18px;
+        border-radius: 12px;
+        background: rgba(17, 21, 31, 0.7);
+        border: 1px solid rgba(59, 130, 246, 0.18);
+        text-align: left;
+      }
+      .stack-card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #93c5fd;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .stack-card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: #94a3b8;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      svg.logo {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="logo" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#3b82f6" />
+          <stop offset="100%" stop-color="#1e3a8a" />
+        </linearGradient>
+      </defs>
+      <rect width="96" height="96" rx="20" fill="url(#g)" />
+      <path d="M48 22 L72 36 L72 56 C72 66 60 74 48 78 C36 74 24 66 24 56 L24 36 Z" fill="#0a0d14" stroke="#fff" stroke-width="2" />
+      <path d="M40 50 L46 56 L58 42" stroke="#22c55e" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span class="badge">Offline</span>
+    <h1>You're offline</h1>
+    <p>
+      AiSOC Responder needs a connection to fetch live alerts and approvals.
+      Your last cached triage view is still available, and any approvals
+      queued while offline will be sent automatically once you reconnect.
+    </p>
+    <div class="actions">
+      <button class="primary" onclick="location.reload()">Retry connection</button>
+      <a class="btn secondary" href="/responder">Open last cached view</a>
+    </div>
+    <div class="stack-card">
+      <h3>What still works offline</h3>
+      <ul>
+        <li>Read previously loaded alerts and cases</li>
+        <li>Queue approvals — they sync when you reconnect</li>
+        <li>Receive push notifications (if granted)</li>
+        <li>View on-call schedule snapshot</li>
+      </ul>
+    </div>
+    <script>
+      // Auto-retry every 30s — if we're back, reload to the live app.
+      setInterval(() => {
+        if (navigator.onLine) location.reload();
+      }, 30_000);
+      window.addEventListener('online', () => location.reload());
+    </script>
+  </body>
+</html>

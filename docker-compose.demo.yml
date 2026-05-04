@@ -1,0 +1,202 @@
+###############################################################################
+# AiSOC - AI Security Operations Center
+# Docker Compose - Slim Demo Profile (time-to-wow under 5 minutes)
+#
+# This profile pulls prebuilt images from GHCR instead of building locally,
+# and only includes the 6 services required to demo a triaging investigation:
+#   postgres, redis, zookeeper, kafka, api, agents, realtime, web
+#
+# Optional heavyweights (clickhouse, opensearch, qdrant, neo4j, kafka-ui,
+# enrichment, fusion, ingest, threatintel, ueba, honeytokens, purple-team,
+# actions, connectors, monitoring) are intentionally excluded.
+#
+# Usage:
+#   pnpm aisoc:demo
+#
+# Manual usage:
+#   docker compose -f docker-compose.demo.yml pull
+#   docker compose -f docker-compose.demo.yml up -d
+###############################################################################
+
+networks:
+  aisoc-demo:
+    driver: bridge
+
+volumes:
+  postgres_demo_data:
+  redis_demo_data:
+  kafka_demo_data:
+
+services:
+
+  # ─── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aisoc-demo-postgres
+    environment:
+      POSTGRES_DB: aisoc
+      POSTGRES_USER: aisoc
+      POSTGRES_PASSWORD: aisoc_dev_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql/data
+    networks:
+      - aisoc-demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aisoc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: aisoc-demo-redis
+    command: redis-server --appendonly yes --requirepass redis_dev_secret
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_demo_data:/data
+    networks:
+      - aisoc-demo
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_secret", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: aisoc-demo-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - aisoc-demo
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: aisoc-demo-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+    networks:
+      - aisoc-demo
+    volumes:
+      - kafka_demo_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── Application Services (prebuilt from GHCR) ──────────────────────────────
+
+  api:
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
+    container_name: aisoc-demo-api
+    pull_policy: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SECRET_KEY: dev_secret_key_change_in_production
+      ENV: development
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:3000
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  agents:
+    image: ghcr.io/beenuar/aisoc-agents:${AISOC_TAG:-latest}
+    container_name: aisoc-demo-agents
+    pull_policy: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8084"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      REDIS_URL: redis://:redis_dev_secret@redis:6379/4
+      CORE_API_URL: http://api:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ENV: development
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  realtime:
+    image: ghcr.io/beenuar/aisoc-realtime:${AISOC_TAG:-latest}
+    container_name: aisoc-demo-realtime
+    pull_policy: always
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8086:4000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:redis_dev_secret@redis:6379
+      REDIS_PASSWORD: redis_dev_secret
+      PORT: 4000
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/beenuar/aisoc-web:${AISOC_TAG:-latest}
+    container_name: aisoc-demo-web
+    pull_policy: always
+    depends_on:
+      - api
+      - realtime
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8086
+      NODE_ENV: production
+    networks:
+      - aisoc-demo
+    restart: unless-stopped

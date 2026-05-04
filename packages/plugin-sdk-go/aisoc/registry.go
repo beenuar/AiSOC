@@ -109,6 +109,19 @@ func (r *Registry) Connectors() []Connector {
 	return out
 }
 
+// Widgets returns all registered plugins that implement the Widget interface.
+func (r *Registry) Widgets() []Widget {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []Widget
+	for _, p := range r.plugins {
+		if w, ok := p.(Widget); ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // Len returns the total number of registered plugins.
 func (r *Registry) Len() int {
 	r.mu.RLock()
