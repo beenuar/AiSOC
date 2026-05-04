@@ -1,12 +1,18 @@
 """
-Pillar-1 Evaluation: Response-Plan Quality
-===========================================
-Honest, offline rubric scoring of the response actions an investigator
-agent would emit for each of the 200 synthetic incidents.
+Pillar-1 Evaluation: Response-Plan Quality — Substrate Self-Consistency Gate
+=============================================================================
+Offline rubric scoring of the deterministic substrate response-plan
+generator against each of the 200 synthetic incidents.
 
 A real production deploy would feed each (incident, response_plan) pair
-to an LLM-as-judge with the same rubric below. CI cannot make LLM calls,
-so we run an offline keyword-based judge that mirrors the rubric.
+to an LLM-as-judge with the same rubric below, on real (or held-out
+adversarial) incidents. CI cannot make LLM calls, so we run an offline
+keyword-based judge that mirrors the rubric *against a templated plan
+built from the same synthetic incident* — by construction the plan
+references the incident's response_class, severity, MITRE labels, and
+evidence keywords, so this is a SUBSTRATE SELF-CONSISTENCY GATE that
+catches regressions in the templater or the dataset, NOT a measurement
+of whether a real LLM agent emits a high-quality plan on blind data.
 
 Rubric (each criterion is 0-1, total /5):
     1. **action_aligned_with_class** - the recommended action matches the
@@ -23,7 +29,10 @@ Rubric (each criterion is 0-1, total /5):
 
 Quality score = mean rubric score across 200 incidents.
 
-We assert mean ≥ 0.80 (4/5 rubric criteria on average).
+We assert mean ≥ 0.80 (4/5 rubric criteria on average) as a substrate
+regression floor.
+
+See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 
 Run:
     pytest services/agents/tests/test_response_quality.py -v

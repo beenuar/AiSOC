@@ -42,6 +42,40 @@ test(agents): add unit tests for investigation agent
 - Maintain or improve test coverage
 - Run the full test suite before submitting a PR
 
+### Public eval harness
+
+Anything that touches the agent (`services/agents/`), the orchestrator
+graph, prompts, tools, RAG corpus, or detection content **must** be
+re-graded against the public eval harness. The harness lives under
+[`scripts/run_evals.py`](scripts/run_evals.py) and per-axis tests under
+[`services/agents/tests/`](services/agents/tests/).
+
+```bash
+# Generate 200 synthetic incidents and run all four substrate eval suites
+python scripts/run_evals.py --count 200 --report eval_report.json
+
+# Or run a single eval axis
+pytest services/agents/tests/test_mitre_accuracy.py
+pytest services/agents/tests/test_alert_reduction.py
+pytest services/agents/tests/test_investigation_completeness.py
+pytest services/agents/tests/test_response_quality.py
+```
+
+The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`,
+which the public [eval harness page](apps/docs/docs/benchmark.md) renders.
+The same harness runs in CI on every PR — see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml). PRs that regress any
+axis below the published numbers must include a written justification and
+before/after delta in the PR body.
+
+> **Be honest about what changed.** The harness runs deterministic substrate
+> code (extractors, fusion, templates, judges) against synthetic incidents
+> — it does **not** call the live LLM agent. Three of the four metrics are
+> substrate self-consistency gates rather than agent accuracy scores. The
+> [eval harness page](apps/docs/docs/benchmark.md) explains exactly which is
+> which. If your PR changes which metric category a suite belongs to,
+> update that page in the same commit.
+
 ## Submitting a Pull Request
 
 1. Update your branch: `git fetch upstream && git rebase upstream/main`

@@ -1,17 +1,26 @@
 """
-Pillar-1 Evaluation: MITRE ATT&CK Tactic Accuracy Test
-========================================================
-This test validates the investigator pipeline's ability to correctly
-identify MITRE ATT&CK tactics for the synthetic incident scenarios
-in `eval_data/synthetic_incidents.json` (200 cases as of v6.0).
+Pillar-1 Evaluation: MITRE ATT&CK Tactic — Substrate Self-Consistency Gate
+==========================================================================
+This test gates the substrate's tactic extractor against the synthetic
+incident scenarios in `eval_data/synthetic_incidents.json` (200 cases as of
+v6.0).
 
-It runs OFFLINE (no LLM calls, no DB) by using a keyword extractor that
-proxies for LLM tactic-detection. The test asserts ≥80% accuracy.
+It runs OFFLINE (no LLM calls, no DB) using a keyword-based tactic
+extractor over the same synthetic descriptions that were generated to
+contain those keywords. As a result, the resulting accuracy / precision /
+recall / F1 numbers are a SUBSTRATE SELF-CONSISTENCY GATE — they detect
+regressions in the extractor or the dataset relative to each other, NOT a
+real LLM-agent tactic-detection accuracy score on adversarial / blind data.
+
+The test asserts ≥80% accuracy as a regression floor.
+
+See `apps/docs/docs/benchmark.md` for what each suite actually measures
+and how it differs from a third-party leaderboard score.
 
 Run:
     pytest services/agents/tests/test_mitre_accuracy.py -v
-    # or via the CI eval script:
-    python scripts/eval_mitre_accuracy.py
+    # or via the public eval harness:
+    python scripts/run_evals.py --count 200 --report eval_report.json
 """
 from __future__ import annotations
 

@@ -174,20 +174,31 @@ jobs:
           go test ./... -count=1 || true
 
   # ──────────────────────────────────────────────
-  # Pillar-1 Eval Gate: 4-suite synthetic benchmark (200-incident dataset)
-  #   - MITRE ATT&CK tactic accuracy   (≥80%)
-  #   - Alert reduction ratio          (≥70%)
-  #   - Investigation completeness     (≥85%)
-  #   - Response-plan quality          (≥80%)
+  # Pillar-1 Eval Gate: 4-suite eval harness (200-incident synthetic dataset)
+  #   - Alert reduction ratio          (≥70%)  — REAL measurement against a
+  #                                              fixed noisy alert stream
+  #   - MITRE ATT&CK tactic accuracy   (≥80%)  — substrate self-consistency
+  #                                              gate (extractor vs. dataset
+  #                                              that's written to feed it)
+  #   - Investigation completeness     (≥85%)  — substrate self-consistency
+  #                                              gate (templated report vs.
+  #                                              keywords from the same data)
+  #   - Response-plan quality          (≥80%)  — substrate self-consistency
+  #                                              gate (templated plan vs.
+  #                                              rubric using the same data)
   # All suites run offline (no LLM, no DB) against the deterministic
   # `services/agents/tests/eval_data/synthetic_incidents.json` dataset.
+  # This harness gates the substrate (extractors, fusion, templates, judges)
+  # — it does NOT call the live LLM agent, so three of the four metrics are
+  # self-consistency gates rather than agent accuracy scores. See
+  # `apps/docs/docs/benchmark.md` for what each suite actually measures.
   # The job posts a markdown summary, uploads `eval_report.json`, and
   # commits historical numbers to the `eval-results` branch as
-  # `eval/results/<commit_sha>.json` so the public benchmark page can
+  # `eval/results/<commit_sha>.json` so the public eval harness page can
   # query them over time.
   # ──────────────────────────────────────────────
   p1-eval:
-    name: P1 Eval — Pillar-1 Benchmark Gate
+    name: P1 Eval — Pillar-1 Eval Harness Gate
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -204,7 +215,8 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json, pathlib
           d = json.loads(pathlib.Path("eval_report.json").read_text())
-          print("## AiSOC Pillar-1 Eval — 200-incident synthetic benchmark\n")
+          print("## AiSOC Pillar-1 Eval Harness — 200-incident synthetic dataset\n")
+          print("_Alert-reduction is a real measurement; the other three suites are substrate self-consistency gates._\n")
           print(f"_Dataset: {d['dataset']}_  ")
           print(f"_Generated: {d['generated_at']}_\n")
           print("| Suite | Metric | Value | Target | Result |")
@@ -248,7 +260,7 @@ jobs:
           mkdir -p eval/results
           cp /tmp/eval_report.json "eval/results/${COMMIT_SHA}.json"
 
-          # Maintain a stable `latest.json` for the benchmark page badge
+          # Maintain a stable `latest.json` for the eval harness page badge
           cp /tmp/eval_report.json eval/results/latest.json
 
           git config user.email "ci@aisoc.dev"

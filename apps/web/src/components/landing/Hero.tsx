@@ -33,7 +33,7 @@ export function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
-            Open-source · MIT · by Cyble
+            Open-source · MIT · community-built
           </span>
 
           <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight text-white md:text-6xl lg:text-7xl">
@@ -46,8 +46,9 @@ export function Hero() {
 
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
             Every agent decision is logged step-by-step, queryable, and replayable.
-            Benchmarked publicly on a 200-incident MITRE suite. MIT-licensed and
-            self-hostable — your data never leaves your infrastructure.
+            Substrate gated by a public, reproducible 200-case eval harness on every
+            commit. MIT-licensed and self-hostable — your data never leaves your
+            infrastructure.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -87,11 +88,11 @@ export function Hero() {
           </p>
 
           {/* Quick facts row — anchors the three pillars (auditable agent, public
-              benchmark, MIT) so the moat is visible above the fold without
+              eval harness, MIT) so the moat is visible above the fold without
               the visitor needing to scroll into the comparison strip. */}
           <dl className="mt-10 grid grid-cols-3 gap-6 border-t border-white/5 pt-8">
             <Stat label="Agent decisions" value="100%" caption="logged + replayable" />
-            <Stat label="MITRE eval" value="200 cases" caption="public, CI-gated" />
+            <Stat label="Eval harness" value="200 cases" caption="public, CI-gated" />
             <Stat label="License" value="MIT" caption="audit, fork, self-host" />
           </dl>
         </motion.div>

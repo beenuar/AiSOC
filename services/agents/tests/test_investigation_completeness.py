@@ -1,28 +1,33 @@
 """
-Pillar-1 Evaluation: Investigation Completeness
-================================================
-Honest, offline measurement of how well a generated investigation report
-covers the evidence present in an incident description.
+Pillar-1 Evaluation: Investigation Completeness — Substrate Self-Consistency Gate
+==================================================================================
+Offline regression gate that the deterministic substrate report writer
+preserves the evidence present in an incident description.
 
 For each of the 200 synthetic incidents we have a hand-curated list of
 `evidence_keywords` (host names, IPs, users, file names, CVEs, malware
-families, technique tells, etc.). A "complete" investigation report must
-mention each piece of evidence at least once.
+families, technique tells, etc.). A "complete" report must mention each
+piece of evidence at least once.
 
 Because we cannot make real LLM calls in CI, we simulate a deterministic
 "report writer" by piping the incident description through a normalize→
 sentence-extract→bullet-format function that mirrors what the
-`ReportWriterAgent` does when handed structured evidence. The simulated
-report should cover the evidence keywords by virtue of *not dropping
-anything from the source description.*
+`ReportWriterAgent` does when handed structured evidence. By construction,
+the simulator wraps the source description, and the source description was
+generated to include the evidence keywords — so this is a SUBSTRATE
+SELF-CONSISTENCY GATE that detects regressions in the report-writer or the
+dataset, NOT a measurement of whether a real LLM agent actually writes a
+complete report on adversarial / blind data.
 
 The metric we publish is:
 
     completeness = (mentioned evidence keywords) / (total evidence keywords)
 
-We assert mean completeness ≥ 0.85 across 200 incidents (a real LLM agent
-should exceed this; the simulator gives us a hard *lower bound* — if the
-simulator falls below the floor the source data is broken).
+We assert mean completeness ≥ 0.85 across 200 incidents (the simulator
+gives us a hard *lower bound* — if it falls below the floor the source
+data or the writer is broken).
+
+See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 
 Run:
     pytest services/agents/tests/test_investigation_completeness.py -v

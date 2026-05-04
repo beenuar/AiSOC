@@ -226,8 +226,8 @@ curl -s -X POST http://localhost:8000/graphql \
 # Plugin manager loaded?
 curl http://localhost:8000/api/v1/plugins | jq .[].id
 
-# Run the eval harness (requires OPENAI_API_KEY)
-python3 scripts/eval_mitre_accuracy.py --quick
+# Run the public eval harness (offline, no LLM call required)
+python3 scripts/run_evals.py --count 200 --report eval_report.json
 ```
 
 Expected output:
@@ -235,8 +235,13 @@ Expected output:
 {"status":"ok","version":"4.0.0","services":{"db":"ok","redis":"ok","kafka":"ok"}}
 {"data":{"__typename":"Query"}}
 ["okta-connector","yara-enricher","slack-quarantine","mttr-widget"]
-MITRE accuracy: 87% (quick mode, 20 techniques)
+✅ ALL GATES PASSED (alert reduction + 3 substrate self-consistency gates)
 ```
+
+> The eval harness runs deterministic substrate code (extractors, fusion,
+> templates, judges) against synthetic incidents — it does **not** call the
+> live LLM agent. See [`apps/docs/docs/benchmark.md`](apps/docs/docs/benchmark.md)
+> for what each suite actually measures.
 
 ---
 
@@ -313,5 +318,5 @@ A: Restore the PostgreSQL backup from Step 1, then `docker compose pull` with
 the v3 image tags pinned in your `docker-compose.yml`.
 
 **Q: Where do I get help?**  
-A: Open an issue at https://github.com/beenuar/aisoc/issues or join the
+A: Open an issue at https://github.com/beenuar/AiSOC/issues or join the
 `#aisoc-v4-upgrade` Slack channel.

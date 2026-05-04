@@ -1,10 +1,18 @@
 """
-Pillar-1 Evaluation: Alert Reduction Ratio
-============================================
+Pillar-1 Evaluation: Alert Reduction Ratio — Real Measurement
+==============================================================
 Anvilogic publicly claims a 90% alert-reduction figure. We measure ours
 honestly, offline, against a deterministic 1000-alert noisy stream that
 intentionally includes near-duplicates, host/user variations, time-windowed
 bursts, and benign chatter.
+
+Unlike the other three pillar-1 suites (which are substrate self-consistency
+gates over deterministic templates), this suite is a REAL MEASUREMENT: the
+alert stream is generated independently from the fusion logic, so the
+reduction ratio reflects how well the fusion algorithm actually collapses
+noisy traffic into incidents. The number is honestly comparable to a
+vendor's reduction claim *for this specific synthetic workload* — though
+production traffic shape and real adversarial alerts will of course differ.
 
 The fusion logic groups alerts by:
   1. Same (rule_id, host, user) within a 10-minute window  → 1 incident
@@ -16,6 +24,8 @@ Then we drop any incident scored below the configured noise threshold.
 
 This is *deterministic* (the alert stream is generated from a seed) so
 runs are byte-stable and historical numbers are queryable.
+
+See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 
 Run:
     pytest services/agents/tests/test_alert_reduction.py -v

@@ -23,9 +23,9 @@ const PILLARS = [
     body: 'Every prompt, every tool call, every evidence citation, every decision the agent makes is written to a durable, queryable, replayable ledger. Not summarised. Not redacted. The literal LLM I/O.',
   },
   {
-    label: 'Public benchmark',
+    label: 'Public eval harness',
     href: '/benchmark',
-    body: 'A 200-incident MITRE suite runs on every commit. Four CI gates. The harness, the dataset, the rubric, and the historical results are all in the repo. Reproduce them on your laptop.',
+    body: 'A 200-case substrate eval suite runs on every commit. Four CI gates: one real measurement (alert reduction) and three substrate self-consistency checks (MITRE tactic, completeness, response quality). The harness, the dataset, the rubric, and the historical results are all in the repo. Reproduce them on your laptop — and read the page for what each metric does and does not measure.',
   },
   {
     label: 'MIT, end-to-end',
@@ -40,8 +40,8 @@ const ARTEFACTS = [
     body: "Hand your auditor a JSON file. They read every step the agent took, every prompt issued, every model used, every token spent, every evidence row cited, every action executed, in order, with hashes. They don't have to trust us. They read the events.",
   },
   {
-    title: 'A reproducible accuracy number',
-    body: 'Your auditor clones the repo and runs `python3 scripts/run_evals.py`. They get the same MITRE accuracy, alert reduction ratio, completeness coverage, and response-quality score we publish. The CI gate is the source of truth, not the marketing site.',
+    title: 'A reproducible eval harness',
+    body: 'Your auditor clones the repo and runs `python3 scripts/run_evals.py`. They get the same alert-reduction ratio, MITRE-tactic gate, completeness coverage, and response-quality score we publish. The CI gate is the source of truth, not the marketing site. We document explicitly which metrics measure substrate behaviour and which would still need an online LLM-as-judge to call "agent accuracy".',
   },
   {
     title: 'Source code for the agent itself',
@@ -61,7 +61,7 @@ const CONTRASTS: readonly Contrast[] = [
     points: [
       'Agent runs in vendor cloud. Your incident data leaves your network for inference.',
       'Prompts and policy are proprietary. You cannot audit how the agent reasons or what it tells the model about your case.',
-      'Accuracy claims are marketing. No reproducible harness, no public CI gate, no historical regression record.',
+      'Accuracy claims are marketing. No reproducible eval harness, no public CI gate, no historical regression record.',
       'No fork right. If the vendor changes the model, the policy, or the price, you have one option: comply.',
     ],
   },
@@ -70,7 +70,7 @@ const CONTRASTS: readonly Contrast[] = [
     points: [
       'The dashboard is open. The agent is not. The thing you actually need to audit is in a private repo.',
       'License is SSPL or BSL with a CLA. You "own" your fork until the next licence flip.',
-      'The benchmark is internal. You see the score. You cannot see the dataset or rerun the harness.',
+      'The eval harness is internal. You see the score. You cannot see the dataset or rerun the harness.',
       'Self-hosting is technically allowed and operationally hostile.',
     ],
   },
@@ -79,7 +79,7 @@ const CONTRASTS: readonly Contrast[] = [
     points: [
       'Agent runs on your infrastructure. Your incident data, by default, never leaves your network.',
       'Every prompt, response, tool call, and decision is in the Investigation Ledger and replayable forever.',
-      'Accuracy is a CI gate. The dataset, the harness, the rubric, and the latest numbers are all public and reproducible in seconds.',
+      'Substrate behaviour is gated in CI on every commit. The dataset, the harness, the rubric, and the latest numbers are public and reproducible in seconds — and we are upfront about which metrics measure the substrate vs. the agent.',
       'MIT, no CLA. Fork it, patch the prompts, ship it. We do not have the legal right to take that away.',
     ],
     accent: true,
@@ -313,7 +313,7 @@ export default function WhyOpenSourcePage() {
             </li>
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
               <strong className="text-gray-200">No telemetry.</strong>{' '}
-              Self-hosted deployments emit no analytics back to Cyble.
+              Self-hosted deployments emit no analytics back to the project.
               Detection tuning, agent decisions, and operator behaviour stay
               on your boxes. The only network calls AiSOC initiates are the
               ones you configured: your LLM provider, your TI feed, your
@@ -383,12 +383,19 @@ export default function WhyOpenSourcePage() {
           <ul className="space-y-3">
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
               <strong className="text-gray-200">
-                We do not claim better accuracy than every vendor.
+                We do not claim better agent accuracy than every vendor.
               </strong>{' '}
-              We claim measurable accuracy. Anyone who reads the benchmark
-              page can see exactly where we are. The gap between &ldquo;we
-              measure ours; they don&rsquo;t publish theirs&rdquo; is the
-              part that matters to a regulated buyer.
+              We claim a public, reproducible eval harness over the
+              substrate. Anyone who reads the{' '}
+              <Link href="/benchmark" className="text-brand-300 underline">
+                eval harness page
+              </Link>{' '}
+              can see exactly which metrics measure real behaviour
+              (alert reduction) and which are substrate self-consistency
+              gates (MITRE tactic, completeness, response quality). The
+              gap between &ldquo;we publish a harness you can rerun; they
+              don&rsquo;t&rdquo; is the part that matters to a regulated
+              buyer.
             </li>
             <li className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
               <strong className="text-gray-200">
@@ -421,9 +428,9 @@ export default function WhyOpenSourcePage() {
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-gray-400">
             Three artefacts, all reproducible in under a minute: a live
-            investigation with the full ledger open, the public benchmark on
-            your laptop, and the agent source on GitHub. None of them
-            require a signup.
+            investigation with the full ledger open, the public eval
+            harness on your laptop, and the agent source on GitHub. None
+            of them require a signup.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
@@ -446,7 +453,7 @@ export default function WhyOpenSourcePage() {
               href="/benchmark"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
             >
-              Read the benchmark
+              Read the eval harness
             </Link>
             <a
               href="https://github.com/beenuar/AiSOC"

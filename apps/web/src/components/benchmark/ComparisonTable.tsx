@@ -10,12 +10,22 @@ interface Vendor {
   reproducible: string;
 }
 
+/**
+ * The AiSOC row uses qualifiers that match what the harness actually does:
+ * - Alert reduction is a *real* measurement against a fixed noisy stream, so
+ *   we tag it "measured".
+ * - MITRE "accuracy" is a substrate self-consistency check (extractor vs.
+ *   dataset that's written to feed it), so we tag it "regression gate" rather
+ *   than implying it is a leaderboard score for an LLM agent.
+ * - "Reproducible harness" replaces "reproducible benchmark" to avoid sounding
+ *   like a third-party leaderboard.
+ */
 const VENDORS: Vendor[] = [
   {
     name: 'AiSOC',
     type: 'open',
-    reduction: '75.3% (measured)',
-    mitre: '97% (measured)',
+    reduction: '75.3% (measured on fixed noisy stream)',
+    mitre: '97% (substrate regression gate)',
     audit: 'Per-step ledger',
     selfHost: 'Yes (MIT)',
     reproducible: 'Yes — every commit',
@@ -54,16 +64,16 @@ const VENDORS: Vendor[] = [
     mitre: 'Not applicable',
     audit: 'Run history',
     selfHost: 'On-prem option',
-    reproducible: 'No published bench',
+    reproducible: 'No published harness',
   },
 ];
 
 const COLUMNS = [
   { key: 'reduction', label: 'Alert reduction' },
-  { key: 'mitre', label: 'MITRE accuracy' },
+  { key: 'mitre', label: 'MITRE accuracy gate' },
   { key: 'audit', label: 'Decision audit' },
   { key: 'selfHost', label: 'Self-host' },
-  { key: 'reproducible', label: 'Reproducible benchmark' },
+  { key: 'reproducible', label: 'Reproducible harness' },
 ] as const;
 
 export function ComparisonTable() {

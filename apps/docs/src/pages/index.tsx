@@ -20,7 +20,7 @@ function HomepageHeader() {
           </Link>
           <Link
             className="button button--outline button--secondary button--lg"
-            href="https://github.com/beenuar/aisoc">
+            href="https://github.com/beenuar/AiSOC">
             GitHub
           </Link>
         </div>
@@ -30,10 +30,11 @@ function HomepageHeader() {
 }
 
 // Top three features lead with the structural moat: auditable agent decisions,
-// the public benchmark that proves them, and the MIT/self-host posture that
-// makes both meaningful in regulated environments. The remaining capability
-// list follows so visitors see we ship the substrate too — but the headline
-// reason to pick AiSOC over a closed-source competitor sits in rows 1–3.
+// the public eval harness that gates the substrate underneath them, and the
+// MIT/self-host posture that makes both meaningful in regulated environments.
+// The remaining capability list follows so visitors see we ship the substrate
+// too — but the headline reason to pick AiSOC over a closed-source competitor
+// sits in rows 1–3.
 const FEATURES = [
   {
     title: '🔎 Auditable agent decisions',
@@ -41,9 +42,9 @@ const FEATURES = [
       'Every prompt, tool call, and rationale the agent emits is persisted to the investigation ledger and replayable step-by-step in the case workspace.',
   },
   {
-    title: '📊 Public MITRE benchmark',
+    title: '📊 Public eval harness',
     description:
-      '200-incident eval suite covering MITRE ATT&CK accuracy, alert reduction, investigation completeness, and response quality. Numbers are CI-gated and reproducible on your laptop.',
+      '200-incident, CI-gated regression harness over the AiSOC substrate (extractors, fusion, templates, judges). Reproducible on your laptop in seconds. We are upfront about what each metric measures — and what it doesn\u2019t.',
   },
   {
     title: '🆓 MIT-licensed, self-hostable',
@@ -150,7 +151,7 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
     ],
   },
   {
-    feature: 'Detection accuracy is publicly benchmarked',
+    feature: 'Substrate has a public regression-gate harness',
     cells: [
       { kind: 'yes', label: '200-case suite, CI-gated' },
       { kind: 'no', label: 'Not published' },
@@ -268,14 +269,14 @@ export default function Home(): React.JSX.Element {
   return (
     <Layout
       title={siteConfig.title}
-      description="The auditable AI SOC — every agent decision logged, replayable, and benchmarked publicly. MIT-licensed, self-hostable, with built-in UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance.">
+      description="The auditable AI SOC — every agent decision logged, replayable, and gated by a public, reproducible eval harness. MIT-licensed, self-hostable, with built-in UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance.">
       <HomepageHeader />
       <main>
         <ComparisonTable />
         <div className="container margin-vert--xl">
           <h2 className={styles.sectionTitle}>What you get out of the box</h2>
           <p className={styles.sectionLede}>
-            The trust trio leads — auditable agent, public benchmark, MIT
+            The trust trio leads — auditable agent, public eval harness, MIT
             license — backed by the full SOC substrate underneath.
           </p>
           <div className="row">

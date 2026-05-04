@@ -1,12 +1,14 @@
 # AiSOC Build Progress
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
-## ✅ ALL TASKS COMPLETE — v4.1 + v5.0 + v5.1 shipped
+## ✅ ALL TASKS COMPLETE — v4.1 + v5.0 + v5.1 + v5.2 shipped
 
-> v4.1 "Community Ecosystem", v5.0 "Enterprise Ready", and v5.1 "Detection Depth" are
-> all implemented. See ROADMAP.md for per-item status. Use `pnpm aisoc:lab` to spin
-> up the full demo stack.
+> v4.1 "Community Ecosystem", v5.0 "Enterprise Ready", v5.1 "Detection Depth", and
+> v5.2 "Auditable, Mobile, Open" (the Leading-AI-SOC 90-day plan) are all
+> implemented. See ROADMAP.md and CHANGELOG.md for per-item status. Use
+> `pnpm aisoc:demo` for the streamlined demo (under five minutes), or
+> `pnpm aisoc:lab` for the full lab stack.
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -16,6 +18,7 @@ Last updated: 2026-05-03
 | v4.1 — Community Ecosystem | Plugin publishing, marketplace v2, detection catalog, playbook submissions, aisoc-cli | ✅ COMPLETED |
 | v5.0 — Enterprise Ready | SAML/OIDC, multi-tenant RLS, RBAC, audit log, compliance dashboards, SLA, HA Helm, backup, runbooks | ✅ COMPLETED |
 | v5.1 — Detection Depth | UEBA service, honeytokens service, purple-team service (ART + Caldera + ATT&CK heatmap + tabletop) | ✅ COMPLETED |
+| v5.2 — Auditable, Mobile, Open | Investigation Ledger, 200-incident public eval harness, Responder PWA + passkeys, Ambient Copilot, MCP server, streamlined demo | ✅ COMPLETED |
 
 ### v1 — Initial monorepo
 
@@ -108,6 +111,25 @@ Last updated: 2026-05-03
 | honeytokens | `services/honeytokens/` — token generator, HMAC-signed webhook alerting, lifecycle management UI | ✅ COMPLETED |
 | purple-team | `services/purple-team/` — Atomic Red Team loader, Caldera client, ATT&CK coverage heatmap, tabletop simulator UI | ✅ COMPLETED |
 
+### v5.2 — Auditable, Mobile, Open (Leading-AI-SOC 90-day plan)
+
+| ID | Task | Status |
+|----|------|--------|
+| investigation-ledger | Append-only ledger of every prompt, tool call, evidence shard, and rationale (`investigation_step` table + `services/agents/app/investigator/ledger.py` + UI) | ✅ COMPLETED |
+| ledger-api | `GET /api/v1/investigations/*` for listing, retrieving, and replaying ledger entries by case | ✅ COMPLETED |
+| eval-harness-v2 | 200-incident synthetic dataset covering all 14 MITRE tactics + 4 eval gates: alert reduction (real measurement) plus MITRE-tactic / completeness / response-quality substrate self-consistency gates | ✅ COMPLETED |
+| benchmark-page | Public eval harness page at `/benchmark` (docs + web) with published numbers, full method, honest comparison vs vendors, and explicit "what each suite actually measures" framing | ✅ COMPLETED |
+| ci-eval-gates | `scripts/run_evals.py --ci` wired into `.github/workflows/ci.yml` so every commit is gated on substrate self-consistency + alert-reduction thresholds | ✅ COMPLETED |
+| responder-pwa | Installable PWA (`apps/web/src/app/(responder)/`) with service worker, offline shell, manifest, icons | ✅ COMPLETED |
+| passkeys | WebAuthn passkey registration + login for Responder surface (FIDO2 platform authenticators only) | ✅ COMPLETED |
+| oncall | On-call schedule + handoff (`oncall.py` + Responder home page + alert page badge) | ✅ COMPLETED |
+| approvals | Long-lived approval requests for blast-radius-gated SOAR actions, approvable from PWA with passkey | ✅ COMPLETED |
+| web-push | VAPID-signed Web Push notifications wired into `services/realtime` + per-device subscriptions following on-call rotation | ✅ COMPLETED |
+| ambient-copilot | Contextual actions on alert / case / rule / playbook surfaces, grounded in the Investigation Ledger | ✅ COMPLETED |
+| mcp-server | `services/mcp/` — Model Context Protocol server exposing 11 AiSOC tools to Claude Desktop, Cursor, Cody, Continue | ✅ COMPLETED |
+| streamlined-demo | `pnpm aisoc:demo` + `docker-compose.demo.yml` + prebuilt GHCR images → first investigation under five minutes | ✅ COMPLETED |
+| content-pack | First-party content: 10 detections, 12 playbooks, 15 plugins indexed into `marketplace/index.json` | ✅ COMPLETED |
+
 ## GitHub Repository
 
 **https://github.com/beenuar/AiSOC**
@@ -128,8 +150,9 @@ Last updated: 2026-05-03
 | `services/ueba` | Python 3.11 | 8004 | Behavioral baseline, anomaly scoring, peer-group analysis, Kafka |
 | `services/honeytokens` | Python 3.11 | 8005 | Token generation, first-touch alerting, lifecycle management |
 | `services/purple-team` | Python 3.11 | 8006 | Atomic Red Team, Caldera integration, ATT&CK coverage, tabletop |
-| `services/realtime` | Node.js 20 | 4000 | WebSocket/SSE fan-out |
-| `apps/web` | Next.js 14 | 3000 | SOC console |
+| `services/realtime` | Node.js 20 | 4000 | WebSocket/SSE fan-out + VAPID Web Push |
+| `services/mcp` | Node.js 20 | stdio | Model Context Protocol server, 11 AiSOC tools for Claude / Cursor / Cody / Continue |
+| `apps/web` | Next.js 14 | 3000 | SOC console + Responder PWA + `/benchmark` page |
 
 ### Connectors (Phase 1)
 
@@ -161,14 +184,21 @@ Last updated: 2026-05-03
 
 * `infra/terraform` — AWS (VPC, EKS, RDS, ElastiCache, MSK)
 * `infra/helm/aisoc` — Kubernetes Helm chart
-* `docker-compose.yml` — Full local stack
+* `docker-compose.yml` — Full local lab stack (`pnpm aisoc:lab`)
+* `docker-compose.demo.yml` — Streamlined demo stack with prebuilt GHCR images (`pnpm aisoc:demo`)
+* `.github/workflows/release.yml` + `publish-images.yml` — Build and publish per-service images to `ghcr.io/beenuar/aisoc-*`
 
 ### Documentation
 
 * `README.md` — Project overview, quick start, architecture diagram
+* `CHANGELOG.md` — Per-release feature log; v5.2.0 covers Phase 1–4C
+* `ROADMAP.md` — Per-item phase status across v1 → v5.2
+* `MIGRATION.md` — Upgrade guide between major versions
+* `SECURITY.md` — Vulnerability disclosure policy
+* `apps/docs/` — Docusaurus site (intro, quickstart, architecture, concepts, plugins, deployment, contributing, benchmark, integrations/mcp)
+* `docs/openapi.yaml` — Generated OpenAPI 3.0 spec, source of truth for client SDKs
 * `docs/architecture/SYSTEM_DESIGN.md` — Service topology, knowledge graph, ML fusion, threat intel pipeline
-* `docs/api/API_REFERENCE.md` — REST endpoints (graph, rules, IOC search, ML)
 * `docs/runbooks/LOCAL_DEVELOPMENT.md` — Step-by-step local launch + smoke test
-* `CONTRIBUTING.md` — Contribution guidelines
+* `CONTRIBUTING.md` — Contribution guidelines incl. eval harness + content authoring
 * `LICENSE` — MIT
 * `.env.example` — Environment variable reference
