@@ -62,3 +62,9 @@ logs/
 *.crt
 secrets/
 .gstack/
+
+# Local eval / build artifacts
+eval_report.json
+eval_mitre_accuracy_report.json
+.gocache/
+*.tsbuildinfo
