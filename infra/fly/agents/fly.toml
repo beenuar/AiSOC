@@ -1,0 +1,52 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AiSOC Demo - Agents service (LangGraph orchestrator + investigator)
+#
+# Deployed at:    https://aisoc-demo-agents.fly.dev
+# Internal name:  aisoc-demo-agents.internal:8084
+#
+# Reads:  Postgres, Redis, KB (in-image), MITRE ATT&CK JSON (in-image)
+# Writes: investigation_runs, investigation_events, investigation_artifacts
+#
+# Note: in demo mode the agents call a deterministic offline pipeline
+# (no OPENAI_API_KEY required). Operators can enable LLM-backed mode by
+# setting OPENAI_API_KEY as a Fly secret.
+# ──────────────────────────────────────────────────────────────────────────────
+
+app = "aisoc-demo-agents"
+primary_region = "iad"
+kill_signal    = "SIGINT"
+kill_timeout   = "10s"            # agent runs may need to flush ledger writes
+
+# Dockerfile path is relative to the build context (= services/agents/).
+# Deploy script runs `flyctl deploy` from that dir.
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENVIRONMENT     = "demo"
+  LOG_LEVEL       = "info"
+  PORT            = "8084"
+  AISOC_DEMO_MODE = "true"
+  CORE_API_URL    = "http://aisoc-demo-api.internal:8000"
+  # In demo mode, fall back to deterministic pipeline if no key set
+  AISOC_AGENT_MODE = "deterministic"
+  ATTCK_DATA_PATH  = "/app/data/enterprise-attack.json"
+
+[http_service]
+  internal_port       = 8084
+  force_https         = true
+  auto_stop_machines  = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes           = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "5s"
+    path         = "/health"
+
+[[vm]]
+  size      = "shared-cpu-2x"     # agent runs are CPU-bound during burst
+  memory_mb = 2048

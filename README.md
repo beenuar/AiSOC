@@ -4,23 +4,92 @@
 
 # AiSOC
 
-### Open-source AI Security Operations Center by [Cyble](https://cyble.com)
+### The only AI SOC where the agent is open-source, auditable, and self-hostable.
 
-Real-time detection, autonomous triage, MITRE ATT&CK-aware investigation, and enterprise-grade compliance in one MIT-licensed platform.
+Every decision the agent makes is **logged step-by-step, queryable, and replayable**. Your data never leaves your infrastructure. MIT-licensed.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Built by Cyble](https://img.shields.io/badge/Built%20by-Cyble-2563eb?style=flat-square)](https://cyble.com)
-[![Made with ❤️](https://img.shields.io/badge/Made%20with-%E2%9D%A4%EF%B8%8F-ef4444?style=flat-square)](#)
+[![MITRE accuracy: public benchmark](https://img.shields.io/badge/MITRE%20accuracy-public%20benchmark-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
+[![Built by Cyble](https://img.shields.io/badge/Built%20by-Cyble-7c3aed?style=flat-square)](https://cyble.com)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
 [![Version](https://img.shields.io/badge/version-5.1.0-f59e0b?style=flat-square)](#-changelog)
 
-[**Live demo**](#-quick-start) · [**Architecture**](#-architecture) · [**Console tour**](#-console-tour) · [**API docs**](#-api-reference) · [**Roadmap**](ROADMAP.md) · [**Contributing**](CONTRIBUTING.md) · [**Docs site**](apps/docs/)
+[**Live demo**](https://demo.aisoc.dev) · [**How we compare**](#-how-aisoc-compares) · [**Public benchmark**](apps/docs/docs/benchmark.md) · [**Deploy in one click**](#-deploy-in-one-click) · [**Architecture**](#-architecture) · [**Docs**](apps/docs/)
+
+<br/>
+
+[![▶ Try the live demo — no signup, lands on a live investigation in <60s](https://img.shields.io/badge/%E2%96%B6%20Try%20the%20live%20demo-no%20signup%2C%20%3C60s%20to%20a%20live%20investigation-22c55e?style=for-the-badge&logoColor=white)](https://demo.aisoc.dev/cases/INC-001?tab=ledger)
+
+<sub>Read-only · resets daily at 00:00&nbsp;UTC · lands on a live agent investigation. To run AiSOC on your own data, [self-host in 5 minutes](#-quick-start) or [deploy in one click](#-deploy-in-one-click).</sub>
 
 </div>
 
 ---
 
-## ✨ Why AiSOC
+## 🛡️ Why this matters to a CISO
+
+A CISO at a regulated bank can deploy AiSOC. They cannot deploy a vendor whose agent is a black-box cloud service. AiSOC is the AI SOC your auditor will actually approve, because:
+
+1. **Every agent decision is on the record.** The Investigation Ledger logs the literal LLM prompt, the response, the evidence cited, and the downstream tool calls — for every step of every run. Replay it months later. Hand it to your auditor.
+2. **The benchmarks are public, reproducible, and run in CI.** We publish MITRE ATT&CK accuracy, alert reduction, investigation completeness, and response quality numbers — and the harness is one command away. See the [public benchmark](apps/docs/docs/benchmark.md).
+3. **It runs entirely on your infrastructure.** No callbacks to a vendor cloud. No data exfil for "model improvement." MIT-licensed end-to-end.
+4. **You can fork the agent itself.** The orchestrator is a 600-line LangGraph in [`services/agents/`](services/agents/). Read it. Patch it. Replace the model. Keep the SIEM.
+
+---
+
+## 📊 How AiSOC compares
+
+| Capability | **AiSOC** | Wazuh | Splunk ES | Anvilogic | Prophet Security |
+|---|---|---|---|---|---|
+| Open-source license | ✅ MIT | ✅ GPL-2 | ❌ proprietary | ❌ proprietary | ❌ proprietary |
+| Self-hostable | ✅ | ✅ | ⚠️ enterprise-only | ❌ cloud-only | ❌ cloud-only |
+| Autonomous AI investigation | ✅ LangGraph | ❌ | ⚠️ partial (Splunk AI) | ✅ | ✅ |
+| **Agent decision audit trail** | ✅ public Investigation Ledger | n/a | n/a | ❌ black box | ❌ black box |
+| **Public MITRE accuracy benchmark** | ✅ in CI, reproducible | n/a | n/a | ❌ unpublished | ❌ unpublished |
+| Detection content | 200+ Sigma rules | 1,200+ rules | 1,000+ apps | curated | curated |
+| Plugin SDK | ✅ Py / TS / Go | ⚠️ YAML rules only | apps | proprietary | proprietary |
+| Data residency | 100% your infra | 100% your infra | partial | vendor cloud | vendor cloud |
+| Pricing | $0 (you self-host) | $0 (you self-host) | $$ per ingest GB | $$$ enterprise | $$$ enterprise |
+
+The closed-source AI SOC vendors (Anvilogic, Prophet, Tines, Dropzone) ship excellent products. AiSOC is the only stack where the agent itself is open, the decisions are auditable, and the benchmark numbers are public. That is the structural moat.
+
+---
+
+## 🚀 Deploy in one click
+
+Every deploy target ships with a tested config in [`infra/`](infra/). Pick the platform that matches your operational posture:
+
+| Platform | Status | Config | One-click |
+|---|---|---|---|
+| **Fly.io** (recommended for demo / staging) | ✅ first-class | [`infra/fly/`](infra/fly/) | [Deploy stack](infra/fly/README.md) — 4 apps, ~$14/mo |
+| **Render** (managed, sleep-on-idle for hobbyists) | ✅ supported | [`infra/render/render.yaml`](infra/render/render.yaml) | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC) |
+| **Railway** (PaaS, pay-as-you-go) | ✅ supported | [`infra/railway/railway.toml`](infra/railway/railway.toml) | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https%3A%2F%2Fgithub.com%2Fbeenuar%2FAiSOC&plugins=postgresql%2Credis) |
+| **Coolify** (your own VPS, free) | ✅ supported | [`docker-compose.yml`](docker-compose.yml) | [Coolify quickstart](infra/coolify/README.md) |
+| **Kubernetes / Helm** (production) | ✅ first-class | [`infra/helm/`](infra/helm/) | `helm install aisoc ./infra/helm/aisoc` |
+| **AWS / Terraform** (production) | ✅ first-class | [`infra/terraform/`](infra/terraform/) | `cd infra/terraform && terraform apply` |
+
+> 💡 The Render/Railway/Coolify configs deploy the **lean demo profile**: api + agents + web + realtime + Postgres + Redis. ClickHouse, Kafka, OpenSearch, Neo4j, and Qdrant are optional and gated behind compose profiles. For a production-grade install with the full storage tier, use Helm or Terraform.
+
+---
+
+## 🤝 Use it from Claude, Cursor, or Cody
+
+AiSOC ships a first-class **[MCP server](https://modelcontextprotocol.io)** so analysts can query alerts, run agent investigations, and **replay every step the agent took** without leaving the IDE or chat. One command wires up the connection:
+
+```bash
+# Claude Desktop / Cursor / Continue / Cody
+npx -y @aisoc/mcp install --host claude \
+  --aisoc-url https://aisoc.your-company.com \
+  --api-key  aisoc_pat_xxxxxxxxxxxx
+```
+
+The server exposes 11 tools — discovery (`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`), deep-dive (`aisoc_get_case`, `aisoc_get_investigation`), and the action/replay set (`aisoc_run_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`) that lets the assistant walk the agent decision ledger step-by-step.
+
+📖 Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md) · package source: [`services/mcp/`](services/mcp/) · npm: `@aisoc/mcp`
+
+---
+
+## ✨ What's in the box
 
 Modern SOCs drown in alerts and pivot across a dozen consoles. AiSOC is a **single, opinionated stack** that:
 
@@ -228,6 +297,37 @@ The console fuses the analyst's day-zero workflow into one cohesive surface:
 ---
 
 ## 🚀 Quick start
+
+### One-shot demo (under 5 minutes)
+
+If you just want to see AiSOC investigate a real case in your browser:
+
+```bash
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC
+pnpm aisoc:demo
+```
+
+That single command pulls prebuilt images from `ghcr.io/beenuar/*`, brings up
+the slim demo profile (postgres, redis, kafka, api, agents, realtime, web),
+seeds canonical demo data, kicks off an AI investigation against a seeded
+case, and opens your browser at `/cases/<uuid>` so you land on a live
+investigation. Target on a warm Docker daemon:
+
+| Step | Target |
+|---|---|
+| `docker compose pull` | ~90s |
+| `docker compose up` + healthchecks | ~60s |
+| Seed canonical data | ~30s |
+| Kick off investigation | ~30s |
+| **Total time-to-first-investigation** | **~3.5 min** |
+
+When you're done: `pnpm aisoc:demo:down` (deletes the demo volumes).
+
+The full development quick start with all services (UEBA, Honeytokens,
+Purple Team, ClickHouse, OpenSearch, Neo4j, Qdrant) is below.
+
+### Full stack (development)
 
 ### Prerequisites
 

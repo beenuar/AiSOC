@@ -65,6 +65,65 @@ Connectors are one of the most valuable contributions. To add a new connector:
 
 Existing connectors you can use as references: `crowdstrike`, `aws-security-hub`, `microsoft-sentinel`, `splunk`, `okta`.
 
+## Community Marketplace
+
+The AiSOC marketplace is content-as-code. Anything in
+[`detections/`](detections/), [`playbooks/`](playbooks/), and
+[`plugins/`](plugins/) is automatically picked up by
+[`scripts/build_marketplace.py`](scripts/build_marketplace.py) and surfaced in
+the in-app **Marketplace** view at `/marketplace`. There is no separate
+registry to push to — you ship a PR, the index regenerates, and your
+contribution shows up.
+
+### Where contributions go
+
+Each content type has a `community/` namespace reserved for outside
+contributors:
+
+- Detections → `detections/community/<your-rule>.yaml`
+- Playbooks → `playbooks/community/<pack-name>/<your-playbook>.playbook.json`
+- Plugins → `plugins/community/<your-plugin-id>/`
+
+These show up in the Marketplace with a **Community** badge (versus the
+**Verified** badge on AiSOC-authored content). Core content lives directly
+under `detections/<category>/`, `playbooks/packs/v1/<category>/`, and
+`plugins/<plugin-id>/`.
+
+### Submitting a contribution
+
+1. Pick the right namespace (rule, playbook, or plugin) and follow the schema
+   used by an existing item of the same type. Detection schema lives in
+   [`detections/README.md`](detections/README.md), playbook schema in
+   [`playbooks/README.md`](playbooks/README.md), plugin schema in
+   [`packages/plugin-sdk-py/README.md`](packages/plugin-sdk-py/README.md) and
+   [`packages/plugin-sdk-go/README.md`](packages/plugin-sdk-go/README.md).
+2. **Rebuild the marketplace index locally:**
+   ```bash
+   pnpm marketplace:build
+   pnpm marketplace:sync
+   ```
+3. Verify CI will be happy:
+   ```bash
+   pnpm marketplace:check       # asserts the index matches what's on disk
+   python3 scripts/validate_detections.py   # if you added detections
+   ```
+4. Open a PR. CI runs `marketplace:check`, detection validation, and any
+   plugin SDK tests. A maintainer will review for content quality, MITRE
+   ATT&CK accuracy, and false-positive notes.
+
+### Quality bar for community marketplace items
+
+- **Detections** must include MITRE ATT&CK technique IDs in `tags` (format
+  `mitre.attack.T1234[.567]`) and a fixture under `detections/fixtures/`.
+- **Playbooks** must declare a clear trigger, an explicit decision tree, and
+  any human-approval gates. No silent destructive actions.
+- **Plugins** must implement the relevant SDK interface in either Python or
+  Go (preferably both). They must declare `min_aisoc_version`, `license`, and
+  a `homepage` URL. Network calls go through the SDK's HTTP helpers, never
+  bare `requests` or `net/http` calls.
+- All items get `verified: false` and `source: "community"` in the index until
+  a maintainer promotes them.
+
 ## Reporting Bugs
 
 Please use the GitHub issue tracker. Include:

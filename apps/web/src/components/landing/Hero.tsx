@@ -39,26 +39,34 @@ export function Hero() {
           <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight text-white md:text-6xl lg:text-7xl">
             The{' '}
             <span className="bg-gradient-to-r from-brand-300 via-brand-400 to-amber-300 bg-clip-text text-transparent">
-              AI Security
+              auditable
             </span>{' '}
-            Operations Center.
+            AI SOC.
           </h1>
 
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-400 md:text-xl">
-            Real-time detection, autonomous triage, and MITRE ATT&CK-aware investigation —
-            wired together with an AI copilot that explains every decision. Self-hosted,
-            extensible, free forever.
+          <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
+            Every agent decision is logged step-by-step, queryable, and replayable.
+            Benchmarked publicly on a 200-incident MITRE suite. MIT-licensed and
+            self-hostable — your data never leaves your infrastructure.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href="/dashboard"
+            <a
+              href="https://demo.aisoc.dev/cases/INC-001?tab=ledger"
+              target="_blank"
+              rel="noreferrer"
               className="group inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-glow-brand transition hover:bg-brand-400"
             >
-              Launch the console
+              Try the live demo
               <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="currentColor" aria-hidden="true">
                 <path d="M7.05 4.05a1 1 0 011.41 0l5 5a1 1 0 010 1.41l-5 5a1 1 0 11-1.41-1.41L11.09 10 7.05 5.46a1 1 0 010-1.41z" />
               </svg>
+            </a>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-gray-200 transition hover:border-white/30 hover:bg-white/[0.08]"
+            >
+              Launch console
             </Link>
             <a
               href="https://github.com/beenuar/AiSOC"
@@ -73,11 +81,18 @@ export function Hero() {
             </a>
           </div>
 
-          {/* Quick facts row — speaks to credibility before scrolling */}
+          <p className="mt-3 text-xs text-gray-500">
+            Demo lands directly on a live agent investigation in under 60 seconds —
+            no signup, resets daily.
+          </p>
+
+          {/* Quick facts row — anchors the three pillars (auditable agent, public
+              benchmark, MIT) so the moat is visible above the fold without
+              the visitor needing to scroll into the comparison strip. */}
           <dl className="mt-10 grid grid-cols-3 gap-6 border-t border-white/5 pt-8">
-            <Stat label="Latency" value="< 200ms" caption="ingest → alert" />
-            <Stat label="Coverage" value="14 ATT&CK" caption="tactics out of the box" />
-            <Stat label="License" value="MIT" caption="audit, fork, ship" />
+            <Stat label="Agent decisions" value="100%" caption="logged + replayable" />
+            <Stat label="MITRE eval" value="200 cases" caption="public, CI-gated" />
+            <Stat label="License" value="MIT" caption="audit, fork, self-host" />
           </dl>
         </motion.div>
 

@@ -1,0 +1,231 @@
+# AiSOC on Render — Blueprint manifest
+#
+# Why this exists:
+#   The "Deploy to Render" button in README.md points GitHub at this file.
+#   Render reads it as a Blueprint and provisions the entire AiSOC stack —
+#   4 web services + Postgres + Redis — in a single click, no manual setup.
+#
+# What it deploys (the *lean demo profile* — same shape as Fly):
+#   - api       (FastAPI core)
+#   - agents    (LangGraph orchestrator)
+#   - web       (Next.js console + marketing)
+#   - realtime  (WebSocket fanout)
+#   - aisoc-postgres  (managed Render Postgres)
+#   - aisoc-redis     (managed Render Redis)
+#
+# What it skips (and why):
+#   - Kafka, ClickHouse, OpenSearch, Neo4j, Qdrant — Render does not offer
+#     managed versions, and self-hosting them on Render's instance plans is
+#     wasteful. The lean profile uses the AISOC_DISABLE_* flags (defined in
+#     services/api/app/core/config.py) so the API and agents degrade
+#     gracefully: alerts work, cases work, the agent investigates. Heavy
+#     analytics (ClickHouse-backed event search, Neo4j attack graphs) are
+#     hidden in the UI when the backing store is absent.
+#
+#   For a production install with the full storage tier, use Helm
+#   (infra/helm/) or Terraform (infra/terraform/) — those targets assume
+#   you have your own Kafka, ClickHouse, etc.
+#
+# Plan choice (`starter` vs `free`):
+#   We default to `starter` ($7/svc/mo) because the `free` plan sleeps after
+#   15 min of inactivity — the agent's WebSocket connection breaks, and
+#   cold starts blow the sub-60s time-to-first-investigation budget the
+#   demo promises. Override `plan: free` per-service if you're truly just
+#   kicking the tires.
+#
+# Re-deploys:
+#   Render auto-redeploys on every push to the branch tracked by the
+#   service. The `buildCommand` rebuilds the relevant Docker image; the
+#   `startCommand` is the same one used in the service's Dockerfile.
+
+services:
+  # ─── api ──────────────────────────────────────────────────────────────
+  # Core FastAPI app. Mirrors the Fly demo's api service.
+  - type: web
+    name: aisoc-api
+    runtime: docker
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: ./services/api
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: demo
+      - key: PORT
+        value: "8000"
+      # Demo gates: write actions return 403, mutating endpoints become
+      # read-only. Flip these to `false` for a production deploy.
+      - key: AISOC_DEMO_MODE
+        value: "true"
+      - key: AISOC_DEMO_TENANT
+        value: demo
+      # Disable optional integrations — Render doesn't offer Kafka/CH/etc.
+      - key: AISOC_DISABLE_KAFKA
+        value: "true"
+      - key: AISOC_DISABLE_CLICKHOUSE
+        value: "true"
+      - key: AISOC_DISABLE_OPENSEARCH
+        value: "true"
+      - key: AISOC_DISABLE_NEO4J
+        value: "true"
+      - key: AISOC_DISABLE_QDRANT
+        value: "true"
+      # Database wiring: Render injects the connection string via
+      # `fromDatabase` when the resource is in the same Blueprint.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aisoc-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aisoc-redis
+          property: connectionString
+      # Cross-service URLs — used by the api when it needs to call agents
+      # (e.g. /investigate kickoff). Render assigns each service a
+      # `<name>.onrender.com` hostname which we resolve via fromService.
+      - key: AGENTS_API_URL
+        fromService:
+          type: web
+          name: aisoc-agents
+          property: hostport
+      # Auto-generated JWT secret — rotated only if the user destroys it.
+      - key: JWT_SECRET
+        generateValue: true
+
+  # ─── agents ───────────────────────────────────────────────────────────
+  # LangGraph orchestrator + investigator. Talks to api over Render's
+  # internal network (same hostport mechanism the api uses to reach it).
+  - type: web
+    name: aisoc-agents
+    runtime: docker
+    dockerfilePath: ./services/agents/Dockerfile
+    dockerContext: ./services/agents
+    # Agents need more memory for the LangGraph runtime + LLM client
+    # buffers — Render's `standard` plan ships 2GB vs starter's 512MB.
+    plan: standard
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: demo
+      - key: PORT
+        value: "8084"
+      # Deterministic mode means the agent runs the canonical investigation
+      # without hitting OpenAI/Anthropic — keeps the demo cheap and
+      # offline-reproducible. Users with their own API keys can flip this.
+      - key: AISOC_AGENT_MODE
+        value: deterministic
+      - key: AISOC_DISABLE_KAFKA
+        value: "true"
+      - key: AISOC_DISABLE_QDRANT
+        value: "true"
+      - key: AISOC_DISABLE_NEO4J
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aisoc-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aisoc-redis
+          property: connectionString
+      - key: CORE_API_URL
+        fromService:
+          type: web
+          name: aisoc-api
+          property: hostport
+      # Optional — users wire these via the Render dashboard if they want
+      # the agent to call out to OpenAI/Anthropic. Defaults to deterministic
+      # offline mode.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # ─── realtime ─────────────────────────────────────────────────────────
+  # Node.js WebSocket fanout. Has to keep the connection open for live
+  # ledger streaming, so we explicitly keep it on starter (no sleep).
+  - type: web
+    name: aisoc-realtime
+    runtime: docker
+    dockerfilePath: ./services/realtime/Dockerfile
+    dockerContext: ./services/realtime
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8086"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aisoc-redis
+          property: connectionString
+      # No Kafka — realtime falls back to Redis pub/sub for fanout when
+      # AISOC_DISABLE_KAFKA is set. See services/realtime/src/index.ts.
+      - key: AISOC_DISABLE_KAFKA
+        value: "true"
+
+  # ─── web ──────────────────────────────────────────────────────────────
+  # Next.js console + marketing landing. Served last — depends on api +
+  # realtime URLs being known so it can bake them into NEXT_PUBLIC_*.
+  - type: web
+    name: aisoc-web
+    runtime: docker
+    # The web Dockerfile needs the monorepo root as context (it copies
+    # pnpm-workspace.yaml + packages/). This is the same gotcha we hit on
+    # Fly, hence the explicit `.` context.
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      # Public-facing URLs — consumed by the browser, so they must be the
+      # internet-reachable hostnames Render assigns each service.
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: aisoc-api
+          property: host
+      - key: NEXT_PUBLIC_WS_URL
+        fromService:
+          type: web
+          name: aisoc-realtime
+          property: host
+      # Demo banner — same flags the Fly demo uses, surfaced via
+      # apps/web/src/lib/demoMode.ts.
+      - key: NEXT_PUBLIC_AISOC_DEMO_MODE
+        value: "true"
+      - key: NEXT_PUBLIC_AISOC_DEMO_DEEPLINK
+        value: /cases/INC-001?tab=ledger
+      - key: NEXT_PUBLIC_AISOC_DEMO_BANNER
+        value: "Demo data resets daily. All write actions are disabled."
+
+  # ─── redis ────────────────────────────────────────────────────────────
+  # Render's managed Redis. Used as cache + pub/sub spine when Kafka is
+  # disabled. The free `starter` plan caps at 25MB which is more than
+  # enough for the demo profile.
+  - type: redis
+    name: aisoc-redis
+    plan: starter
+    ipAllowList: []  # private — only siblings in this Blueprint reach it.
+
+databases:
+  # ─── postgres ─────────────────────────────────────────────────────────
+  # Render's managed Postgres. Demo profile fits comfortably in the
+  # `starter` plan (1GB storage). Production deploys should resize via
+  # the Render dashboard or use an external managed Postgres (RDS, etc.).
+  - name: aisoc-postgres
+    plan: starter
+    databaseName: aisoc
+    user: aisoc

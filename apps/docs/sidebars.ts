@@ -5,7 +5,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Getting Started",
-      items: ["intro", "quickstart", "architecture"],
+      items: ["intro", "quickstart", "architecture", "benchmark"],
     },
     {
       type: "category",
@@ -21,6 +21,11 @@ const sidebars: SidebarsConfig = {
         "plugins/go-sdk",
         "plugins/publishing",
       ],
+    },
+    {
+      type: "category",
+      label: "Integrations",
+      items: ["integrations/mcp"],
     },
     {
       type: "category",

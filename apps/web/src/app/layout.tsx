@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
+import { PwaBootstrap } from '@/components/pwa/PwaBootstrap';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -56,6 +57,13 @@ export const metadata: Metadata = {
       { url: '/favicon.svg', type: 'image/svg+xml' },
       { url: '/favicon.ico', sizes: 'any' },
     ],
+    apple: [{ url: '/icons/icon-192.svg', type: 'image/svg+xml' }],
+  },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'AiSOC',
+    statusBarStyle: 'black-translucent',
   },
   robots: { index: true, follow: true },
 };
@@ -74,6 +82,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="bg-[#0a0d14] text-gray-100 antialiased">
+        <PwaBootstrap />
         {children}
         <Toaster
           position="bottom-right"

@@ -1,0 +1,49 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AiSOC Demo - Realtime service (WebSocket)
+#
+# Deployed at:    https://aisoc-demo-realtime.fly.dev
+# Internal name:  aisoc-demo-realtime.internal:4000
+# Public WS:      wss://aisoc-demo-realtime.fly.dev
+#
+# The web frontend connects directly over wss://. In demo mode the realtime
+# service multiplexes Redis pub/sub for "alert created" / "investigation event"
+# fanout. Kafka is intentionally disabled to keep the demo lean.
+# ──────────────────────────────────────────────────────────────────────────────
+
+app = "aisoc-demo-realtime"
+primary_region = "iad"
+kill_signal    = "SIGINT"
+kill_timeout   = "5s"
+
+# Dockerfile path is relative to the build context (= services/realtime/).
+# Deploy script runs `flyctl deploy` from that dir.
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV         = "production"
+  PORT             = "4000"
+  AISOC_DEMO_MODE  = "true"
+  AISOC_DISABLE_KAFKA = "true"
+  # WebSocket origin allowlist: only the demo web app
+  ALLOWED_ORIGINS  = "https://demo.aisoc.dev,https://aisoc-demo-web.fly.dev"
+
+[http_service]
+  internal_port       = 4000
+  force_https         = true
+  # Realtime needs to stay up - sleeping kills WS connections
+  auto_stop_machines  = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes           = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "5s"
+    path         = "/health"
+
+[[vm]]
+  size      = "shared-cpu-1x"
+  memory_mb = 512

@@ -6,10 +6,11 @@ import clsx from 'clsx';
 import { Logo } from './Logo';
 
 const NAV_LINKS = [
-  { label: 'Platform', href: '#features' },
-  { label: 'How it works', href: '#architecture' },
-  { label: 'MITRE', href: '#mitre' },
-  { label: 'Open source', href: '#open-source' },
+  { label: 'Platform', href: '/#features' },
+  { label: 'How it works', href: '/#architecture' },
+  { label: 'MITRE', href: '/#mitre' },
+  { label: 'Why open source', href: '/why-open-source' },
+  { label: 'Benchmark', href: '/benchmark' },
 ];
 
 /**
@@ -44,13 +45,13 @@ export function LandingNav() {
 
         <nav className="hidden items-center gap-8 md:flex">
           {NAV_LINKS.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className="text-sm font-medium text-gray-400 transition-colors hover:text-white"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -98,14 +99,14 @@ export function LandingNav() {
         <div className="border-t border-white/5 bg-surface-base/95 backdrop-blur-md md:hidden">
           <div className="space-y-1 px-4 py-3">
             {NAV_LINKS.map((link) => (
-              <a
+              <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
                 className="block rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
             <div className="flex gap-2 pt-2">
               <a

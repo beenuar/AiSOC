@@ -1,0 +1,69 @@
+{
+  "name": "@aisoc/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that exposes AiSOC (alerts, cases, agent investigations, the decision ledger) to Claude Desktop, Cursor, Cody, Continue, and any MCP-aware agent.",
+  "keywords": [
+    "aisoc",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "cursor",
+    "cody",
+    "soc",
+    "security",
+    "siem"
+  ],
+  "license": "MIT",
+  "author": "Cyble Inc.",
+  "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beenuar/AiSOC.git",
+    "directory": "services/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/beenuar/AiSOC/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "aisoc-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/index.ts serve",
+    "build": "tsc -p tsconfig.json && node -e \"import('node:fs').then(fs=>fs.chmodSync('dist/index.js', 0o755))\"",
+    "start": "node dist/index.js serve",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

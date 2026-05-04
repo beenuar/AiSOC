@@ -1,0 +1,74 @@
+# AiSOC on Railway — service manifest
+#
+# Why this exists:
+#   The "Deploy on Railway" button in README.md uses Railway's template
+#   system (railway.com/new/template?template=…) which clones this repo
+#   and reads this file to figure out the build + run config.
+#
+# What Railway does *not* do (vs Render Blueprints / Fly stacks):
+#   railway.toml is per-service, not multi-service. Railway's preferred
+#   way to ship a multi-service app is via a *Template* — either through
+#   the dashboard wizard or by publishing one. So this file configures
+#   *one* service (the api), and the README's deploy button passes
+#   `&plugins=postgresql%2Credis` to ask Railway to provision the two
+#   stateful dependencies as plugins on the same project.
+#
+#   For the other services (agents, web, realtime), the recommended path
+#   is "+ New service → Deploy from GitHub repo → set root directory".
+#   See infra/railway/README.md for the full walkthrough.
+#
+# Why this is the path of least resistance:
+#   - Railway gives us $5/mo of free credit per project, which is enough
+#     to run the full demo stack for a few days of evaluation.
+#   - Their pay-as-you-go model means demo traffic that drops to zero
+#     stops costing money — better than Render's flat $7/svc/mo for
+#     casual self-hosters.
+#   - Internal networking is automatic: every service gets a private
+#     `<service>.railway.internal` hostname, no flytoml-style config.
+
+[build]
+# Use the api Dockerfile as the canonical build. Same Dockerfile as Fly
+# and Render — the build context is services/api/.
+builder = "DOCKERFILE"
+dockerfilePath = "services/api/Dockerfile"
+# Railway honors the build context the Dockerfile expects. The api
+# Dockerfile is self-contained (services/api/), so we set it explicitly.
+buildContext = "services/api"
+
+[deploy]
+# Health-check path that the api exposes. Railway will not mark the
+# service "Active" until /health returns 200, which prevents serving
+# traffic during boot.
+healthcheckPath = "/health"
+# Generous timeout — the first boot does Alembic migrations + ledger
+# table creation, which can take ~20s on a cold Postgres.
+healthcheckTimeout = 60
+# `ON_FAILURE` is the default; we set it explicitly because demo traffic
+# is bursty and we don't want a single 502 to nuke the deploy.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Service-level env. The actual secrets (DATABASE_URL, REDIS_URL) are
+# auto-injected by Railway when you attach the Postgres + Redis plugins
+# — we do NOT set them here, because hardcoding `${{ Postgres.DATABASE_URL }}`
+# only works once the user has named the plugin "Postgres". The deploy
+# template handles that.
+[deploy.envs]
+ENVIRONMENT = "demo"
+PORT = "8000"
+
+# Demo gates — same flags as Render and Fly. Self-hosters running for
+# real should set AISOC_DEMO_MODE=false in the dashboard after deploy.
+AISOC_DEMO_MODE = "true"
+AISOC_DEMO_TENANT = "demo"
+
+# Disable optional integrations. Railway plugins exist for Postgres and
+# Redis, not for Kafka/ClickHouse/OpenSearch/Neo4j/Qdrant — and shipping
+# them as raw services on Railway would balloon the project's resource
+# usage past the free credit. The api degrades gracefully when these are
+# off, so the demo profile works fine without them.
+AISOC_DISABLE_KAFKA = "true"
+AISOC_DISABLE_CLICKHOUSE = "true"
+AISOC_DISABLE_OPENSEARCH = "true"
+AISOC_DISABLE_NEO4J = "true"
+AISOC_DISABLE_QDRANT = "true"

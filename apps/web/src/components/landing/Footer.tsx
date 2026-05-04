@@ -5,15 +5,17 @@ const COLUMNS = [
   {
     label: 'Platform',
     links: [
-      { label: 'Features', href: '#features' },
-      { label: 'How it works', href: '#architecture' },
-      { label: 'MITRE coverage', href: '#mitre' },
+      { label: 'Features', href: '/#features' },
+      { label: 'How it works', href: '/#architecture' },
+      { label: 'MITRE coverage', href: '/#mitre' },
+      { label: 'Benchmark', href: '/benchmark' },
       { label: 'Console', href: '/dashboard' },
     ],
   },
   {
     label: 'Open source',
     links: [
+      { label: 'Why open source', href: '/why-open-source' },
       { label: 'GitHub', href: 'https://github.com/beenuar/AiSOC' },
       { label: 'Quickstart', href: 'https://github.com/beenuar/AiSOC#quickstart' },
       { label: 'Roadmap', href: 'https://github.com/beenuar/AiSOC/blob/main/ROADMAP.md' },
