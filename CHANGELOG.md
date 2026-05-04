@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/detection` route 500 error** — moved `SAMPLE_SIGMA` / `SAMPLE_KQL` / `SAMPLE_EQL` constant declarations above their use in `DEMO_RULES` to resolve a Temporal Dead Zone reference error in `apps/web/src/components/detections/DetectionsView.tsx` (`0ef4a65`).
+- **TopBar title mismatch on most routes** — expanded the `routeLabels` map in `apps/web/src/components/layout/TopBar.tsx` to cover all 19 sidebar destinations and added a URL-segment fallback so non-mapped routes no longer render `Alerts` (`4ca84bb`).
+- **Sidebar footer showed `v0.1.0`** — bumped `apps/web/package.json` to `5.1.0` and read the version dynamically in `apps/web/src/components/layout/Sidebar.tsx` so the footer always tracks the package version (`f4d9189`).
+- **Docs homepage underselling v5.1.0** — refreshed the Docusaurus tagline in `apps/docs/docusaurus.config.ts` and expanded the feature list in `apps/docs/src/pages/index.tsx` to cover UEBA, Honeytokens, Purple Team, and the v5.0 governance surface (`2e1873d`).
+
 ---
 
 ## [5.1.0] — 2026-05-03
@@ -157,7 +164,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Helm chart for Kubernetes deployment (`infra/helm/aisoc/`)
 - MIT License
 
-[Unreleased]: https://github.com/beenuar/AiSOC/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/beenuar/AiSOC/compare/v5.1.0...HEAD
+[5.1.0]: https://github.com/beenuar/AiSOC/compare/v5.0.0...v5.1.0
+[5.0.0]: https://github.com/beenuar/AiSOC/compare/v4.1.0...v5.0.0
+[4.1.0]: https://github.com/beenuar/AiSOC/compare/v3.0.0...v4.1.0
 [3.0.0]: https://github.com/beenuar/AiSOC/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/beenuar/AiSOC/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/beenuar/AiSOC/releases/tag/v1.0.0

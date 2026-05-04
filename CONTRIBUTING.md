@@ -9,7 +9,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 ## Getting Started
 
 1. Fork the repository on GitHub
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/aisoc.git`
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/AiSOC.git`
 3. Add the upstream remote: `git remote add upstream https://github.com/beenuar/AiSOC.git`
 4. Create a feature branch: `git checkout -b feature/my-feature`
 
@@ -53,8 +53,8 @@ test(agents): add unit tests for investigation agent
 
 Connectors are one of the most valuable contributions. To add a new connector:
 
-1. Create a new directory under `connectors/<name>/`
-2. Implement the connector following the pattern in `connectors/crowdstrike/`
+1. Create a new directory under `integrations/connectors/<name>/`
+2. Implement the connector following the pattern in `integrations/connectors/crowdstrike/`
 3. Required files:
    - `main.py` — Entry point
    - `connector.py` — Connector class implementing `BaseConnector`
@@ -62,6 +62,8 @@ Connectors are one of the most valuable contributions. To add a new connector:
    - `README.md` — Connector documentation
 4. Add connector config to `docker-compose.yml`
 5. Write integration tests
+
+Existing connectors you can use as references: `crowdstrike`, `aws-security-hub`, `microsoft-sentinel`, `splunk`, `okta`.
 
 ## Reporting Bugs
 
