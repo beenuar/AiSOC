@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     alerts,
     api_keys,
+    approvals,
     audit,
     auth,
     cases,
@@ -12,8 +13,13 @@ from app.api.v1.endpoints import (
     connectors,
     detection_rules,
     graph,
+    investigations,
+    marketplace,
+    oncall,
+    passkeys,
     playbooks,
     plugins,
+    push,
     rbac,
     sla,
     tenants,
@@ -32,7 +38,15 @@ api_router.include_router(graph.router)
 api_router.include_router(playbooks.router)
 api_router.include_router(plugins.router)
 api_router.include_router(community.router)
+api_router.include_router(marketplace.router)
 api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(compliance.router)
 api_router.include_router(sla.router)
+api_router.include_router(investigations.router)
+
+# Mobile responder PWA (Phase 4B)
+api_router.include_router(push.router)
+api_router.include_router(oncall.router)
+api_router.include_router(approvals.router)
+api_router.include_router(passkeys.router)

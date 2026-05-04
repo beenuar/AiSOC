@@ -1,0 +1,4443 @@
+[
+  {
+    "id": "INC-EVAL-001",
+    "title": "Spear-phishing email with macro-laden attachment delivered to eve@aisoc.dev",
+    "description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious VBA macro to eve@aisoc.dev. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known LockBit 3.0 infrastructure.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1059.005"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "phishing email",
+      "macro",
+      "192.168.1.100",
+      "WIN-DC-PRIMARY",
+      "eve@aisoc.dev",
+      "stage-2 payload"
+    ]
+  },
+  {
+    "id": "INC-EVAL-002",
+    "title": "Exploitation of public-facing web app on WIN-DEVOPS-LT",
+    "description": "WAF logs show SQL-injection and SSRF probes from 91.134.231.15 against the application on WIN-DEVOPS-LT. One request returned 200 with internal cloud-metadata content. Likely exploitation of CVE-2024-1234.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1190",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WAF",
+      "SQL injection",
+      "SSRF",
+      "CVE-2024-1234",
+      "WIN-DEVOPS-LT",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-003",
+    "title": "Watering-hole exploit served from internal Confluence by 192.168.1.100",
+    "description": "Internal Confluence page injected with malicious JavaScript by 192.168.1.100. Drive-by exploit triggered browser exploitation on multiple visitors including alice@aisoc.dev. Linked to MosaicRegressor TTPs.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1189",
+      "T1203"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "watering hole",
+      "drive-by",
+      "Confluence",
+      "192.168.1.100",
+      "alice@aisoc.dev",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-004",
+    "title": "Supply-chain compromise: malicious npm package on GCP-GKE-NODE-04",
+    "description": "CI pipeline on GCP-GKE-NODE-04 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 203.0.113.45. Build artefacts may be tainted.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.001",
+      "T1059.007"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "supply chain",
+      "npm package",
+      "event-stream",
+      "post-install",
+      "GCP-GKE-NODE-04",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-005",
+    "title": "Malicious USB autorun on air-gapped host AZURE-VM-FIN-001",
+    "description": "USB device inserted on air-gapped AZURE-VM-FIN-001 by ops-lead@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1091",
+      "T1005"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "USB",
+      "autorun",
+      "air-gapped",
+      "AZURE-VM-FIN-001",
+      "ops-lead@aisoc.dev",
+      "Python stager"
+    ]
+  },
+  {
+    "id": "INC-EVAL-006",
+    "title": "OAuth consent phishing targeting alice@aisoc.dev",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by alice@aisoc.dev. Inbox forwarding rule created sending mail to 185.220.101.7.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1528",
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "OAuth consent",
+      "Mail.Read",
+      "Files.Read.All",
+      "alice@aisoc.dev",
+      "185.220.101.7",
+      "forwarding rule"
+    ]
+  },
+  {
+    "id": "INC-EVAL-007",
+    "title": "Obfuscated PowerShell dropper executed on WIN-HR-DESKTOP",
+    "description": "PowerShell dropper executed on WIN-HR-DESKTOP by carol@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to ALPHV/BlackCat ransomware staging.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1059.001",
+      "T1027"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "powershell",
+      "obfuscated",
+      "base64",
+      "WIN-HR-DESKTOP",
+      "carol@aisoc.dev",
+      "ALPHV/BlackCat"
+    ]
+  },
+  {
+    "id": "INC-EVAL-008",
+    "title": "Living-off-the-land: certutil download cradle on GCP-GKE-NODE-04",
+    "description": "certutil.exe -urlcache invoked from cmd.exe on GCP-GKE-NODE-04. cmd.exe was spawned by outlook.exe. Payload downloaded from 203.0.113.45.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1105",
+      "T1218.009"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "certutil",
+      "urlcache",
+      "outlook.exe",
+      "GCP-GKE-NODE-04",
+      "203.0.113.45",
+      "download cradle"
+    ]
+  },
+  {
+    "id": "INC-EVAL-009",
+    "title": "Container runtime abuse: malicious `docker run` on LIN-BUILD-CI03",
+    "description": "Unauthenticated Docker API on LIN-BUILD-CI03 exploited from 45.142.122.111. Container with cryptominer spawned. CPU on host saturated to 95%.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1610",
+      "T1059.004",
+      "T1496"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "docker",
+      "container",
+      "cryptominer",
+      "miner",
+      "LIN-BUILD-CI03",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-010",
+    "title": "Malicious WMI subscription on MAC-CFO-LAPTOP",
+    "description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by admin@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1546.003",
+      "T1059.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WMI",
+      "subscription",
+      "permanent",
+      "MAC-CFO-LAPTOP",
+      "admin@aisoc.dev",
+      "encoded script"
+    ]
+  },
+  {
+    "id": "INC-EVAL-011",
+    "title": "Registry Run key persistence created by eve@aisoc.dev on WIN-DC-SECONDARY",
+    "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on WIN-DC-SECONDARY. Points to roaming binary signed with revoked cert. Linked to Emotet epoch 5.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1547.001"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "registry run",
+      "persistence",
+      "revoked cert",
+      "WIN-DC-SECONDARY",
+      "eve@aisoc.dev",
+      "Emotet epoch 5"
+    ]
+  },
+  {
+    "id": "INC-EVAL-012",
+    "title": "Scheduled task persistence on WIN-DEVOPS-LT",
+    "description": "Hidden scheduled task created on WIN-DEVOPS-LT by dave@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1053.005"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "scheduled task",
+      "persistence",
+      "APPDATA",
+      "WIN-DEVOPS-LT",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-013",
+    "title": "Firmware implant detected on UEFI partition of GCP-GKE-NODE-04",
+    "description": "UEFI secure-boot violation on GCP-GKE-NODE-04. Unknown module detected in firmware. Signature matches MosaicRegressor implant.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1542.001",
+      "T1027.002"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UEFI",
+      "firmware",
+      "implant",
+      "secure boot",
+      "GCP-GKE-NODE-04",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-014",
+    "title": "Backdoor cron job installed on WIN-DEVOPS-LT",
+    "description": "/etc/cron.d entry created by carol@aisoc.dev on WIN-DEVOPS-LT. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1053.003",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "cron",
+      "backdoor",
+      "reverse shell",
+      "WIN-DEVOPS-LT",
+      "carol@aisoc.dev",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-015",
+    "title": "UAC bypass observed on GCP-GKE-NODE-04",
+    "description": "fodhelper.exe abuse on GCP-GKE-NODE-04 by ops-lead@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1548.002"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UAC",
+      "fodhelper",
+      "auto-elevation",
+      "GCP-GKE-NODE-04",
+      "ops-lead@aisoc.dev",
+      "SYSTEM"
+    ]
+  },
+  {
+    "id": "INC-EVAL-016",
+    "title": "Container escape via privileged pod on MAC-LEGAL-LAPTOP",
+    "description": "Kubernetes privileged pod created on MAC-LEGAL-LAPTOP by alice@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1611",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "kubernetes",
+      "privileged pod",
+      "container escape",
+      "cgroup",
+      "MAC-LEGAL-LAPTOP",
+      "alice@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-017",
+    "title": "Linux SUID binary abuse on LIN-DB-REPLICA",
+    "description": "Custom SUID binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command execution as root. Likely escalation by bob@aisoc.dev.",
+    "expected_tactics": [
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1548.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "SUID",
+      "/tmp",
+      "root escalation",
+      "LIN-DB-REPLICA",
+      "bob@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-018",
+    "title": "Memory-only fileless implant in svchost on WIN-HR-DESKTOP",
+    "description": "Process hollowing detected on WIN-HR-DESKTOP: svchost.exe replaced with Cobalt Strike beacon to 203.0.113.45. No disk artefacts. Linked to Lazarus.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1055.012",
+      "T1620"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "process hollowing",
+      "fileless",
+      "svchost",
+      "Cobalt Strike",
+      "WIN-HR-DESKTOP",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-019",
+    "title": "Indicator removal: Windows event log cleared on WIN-PROD-WEB02",
+    "description": "Security event log cleared on WIN-PROD-WEB02 by ops-lead@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "wevtutil",
+      "log cleared",
+      "indicator removal",
+      "WIN-PROD-WEB02",
+      "ops-lead@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-020",
+    "title": "Disable security tooling on WIN-PROD-WEB02",
+    "description": "carol@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on WIN-PROD-WEB02. Tampering telemetry triggered alert.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1562.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "defender",
+      "crowdstrike",
+      "sysmon",
+      "tampering",
+      "WIN-PROD-WEB02",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-021",
+    "title": "LSASS memory dump on WIN-DC-PRIMARY by dave@aisoc.dev",
+    "description": "comsvcs.dll MiniDump observed on WIN-DC-PRIMARY. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1003.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "lsass",
+      "minidump",
+      "comsvcs",
+      "mimikatz",
+      "WIN-DC-PRIMARY",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-022",
+    "title": "Brute-force credential spray against eve@aisoc.dev from 45.142.122.111",
+    "description": "Credential spray from 45.142.122.111 against eve@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1110.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "brute force",
+      "credential spray",
+      "eve@aisoc.dev",
+      "45.142.122.111",
+      "azure ad"
+    ]
+  },
+  {
+    "id": "INC-EVAL-023",
+    "title": "Kerberoasting from WIN-FIN-DB01",
+    "description": "Service account TGS tickets requested en-masse from WIN-FIN-DB01 by ops-lead@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1558.003",
+      "T1021.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "kerberoast",
+      "TGS",
+      "RC4",
+      "mimikatz",
+      "WIN-FIN-DB01",
+      "ops-lead@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-024",
+    "title": "Active Directory DCSync from non-DC host K8S-PROD-CLUSTER",
+    "description": "Replication rights abused from K8S-PROD-CLUSTER by ops-lead@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1003.006",
+      "T1078.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "dcsync",
+      "replication",
+      "ntlm hash",
+      "K8S-PROD-CLUSTER",
+      "ops-lead@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-025",
+    "title": "SAML golden-ticket: forged assertion targeting svc-deploy@aisoc.dev",
+    "description": "Forged SAML assertion detected for svc-deploy@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 91.134.231.15.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1606.002",
+      "T1087.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "saml",
+      "golden ticket",
+      "forged",
+      "azure ad",
+      "svc-deploy@aisoc.dev",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-026",
+    "title": "Domain enumeration from LIN-BUILD-CI03",
+    "description": "ldap discovery from LIN-BUILD-CI03 by carol@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1087.002"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "ldap",
+      "bloodhound",
+      "domain enumeration",
+      "LIN-BUILD-CI03",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-027",
+    "title": "Network share enumeration on AWS-EC2-PROD-API",
+    "description": "Mass SMB share enumeration from AWS-EC2-PROD-API by svc-deploy@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1135"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "smb",
+      "net.exe",
+      "Get-SmbShare",
+      "share enumeration",
+      "AWS-EC2-PROD-API",
+      "svc-deploy@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-028",
+    "title": "Pass-the-hash from WIN-DC-PRIMARY to K8S-PROD-CLUSTER",
+    "description": "Pass-the-hash lateral movement from WIN-DC-PRIMARY to K8S-PROD-CLUSTER by alice@aisoc.dev. Golden ticket indicators present. Linked to APT29.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.002",
+      "T1558.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "pass-the-hash",
+      "golden ticket",
+      "WIN-DC-PRIMARY",
+      "K8S-PROD-CLUSTER",
+      "alice@aisoc.dev",
+      "APT29"
+    ]
+  },
+  {
+    "id": "INC-EVAL-029",
+    "title": "RDP lateral movement from K8S-PROD-CLUSTER",
+    "description": "Anomalous RDP session from K8S-PROD-CLUSTER (dave@aisoc.dev) to GCP-GKE-NODE-04 outside business hours. Source admin not normal for GCP-GKE-NODE-04.",
+    "expected_tactics": [
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1021.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "rdp",
+      "lateral movement",
+      "outside hours",
+      "K8S-PROD-CLUSTER",
+      "GCP-GKE-NODE-04",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-030",
+    "title": "WMI lateral execution from AWS-EC2-PROD-API to WIN-DC-PRIMARY",
+    "description": "wmic.exe /node:WIN-DC-PRIMARY process call create observed from AWS-EC2-PROD-API by eve@aisoc.dev. Remote command execution; payload from 198.51.100.23.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1047"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "wmic",
+      "lateral",
+      "AWS-EC2-PROD-API",
+      "WIN-DC-PRIMARY",
+      "eve@aisoc.dev",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-031",
+    "title": "Bulk PII download by svc-deploy@aisoc.dev",
+    "description": "svc-deploy@aisoc.dev downloaded >10 GB of customer records from production database from AZURE-VM-FIN-001. Outside normal access pattern.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1005",
+      "T1041"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "bulk download",
+      "pii",
+      "customer record",
+      "AZURE-VM-FIN-001",
+      "svc-deploy@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-032",
+    "title": "Clipboard logging implant on WIN-DC-PRIMARY",
+    "description": "Clipboard contents from WIN-DC-PRIMARY (carol@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "expected_tactics": [
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1115"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "clipboard",
+      "keylog",
+      "credentials",
+      "WIN-DC-PRIMARY",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-033",
+    "title": "DNS tunnelling exfiltration from LIN-DB-REPLICA",
+    "description": "DNS query volume from LIN-DB-REPLICA 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 198.51.100.23.",
+    "expected_tactics": [
+      "TA0011",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1071.004",
+      "T1048.003"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "dns tunnel",
+      "txt records",
+      "base64",
+      "exfiltrat",
+      "LIN-DB-REPLICA",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-034",
+    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from LIN-OBS-LOGGER",
+    "description": "Egress from LIN-OBS-LOGGER to s3://atk-stage-192.168.1.100/dump/ by carol@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "expected_tactics": [
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "s3",
+      "cloud storage",
+      "egress",
+      "exfiltrat",
+      "LIN-OBS-LOGGER",
+      "192.168.1.100",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-035",
+    "title": "Personal Drive exfil by grace@aisoc.dev",
+    "description": "grace@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002",
+      "T1005"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "google drive",
+      "personal",
+      "exfiltrat",
+      "source code",
+      "pii",
+      "LIN-K8S-NODE01",
+      "grace@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-036",
+    "title": "DGA-based C2 traffic from AZURE-VM-FIN-001",
+    "description": "DGA traffic from AZURE-VM-FIN-001 observed; 200+ NXDomain replies/min, IoCs match APT29 epoch 5. Beacons to 45.142.122.111.",
+    "expected_tactics": [
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1568.002"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "dga",
+      "domain generation",
+      "nxdomain",
+      "beacon",
+      "AZURE-VM-FIN-001",
+      "45.142.122.111",
+      "APT29"
+    ]
+  },
+  {
+    "id": "INC-EVAL-037",
+    "title": "HTTPS C2 beacon from GCP-GKE-NODE-04 to 10.0.99.42",
+    "description": "Periodic HTTPS beacon from GCP-GKE-NODE-04 to 10.0.99.42 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
+    "expected_tactics": [
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1071.001"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "c2",
+      "beacon",
+      "ja3",
+      "Cobalt Strike",
+      "GCP-GKE-NODE-04",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-038",
+    "title": "Ransomware encryption in progress on WIN-DC-SECONDARY",
+    "description": "Mass file rename observed on WIN-DC-SECONDARY (svc-deploy@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Lazarus.txt found.",
+    "expected_tactics": [
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1486"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "ransomware",
+      "encrypt",
+      "rename",
+      "ransom note",
+      "WIN-DC-SECONDARY",
+      "svc-deploy@aisoc.dev",
+      "Lazarus"
+    ]
+  },
+  {
+    "id": "INC-EVAL-039",
+    "title": "Cryptominer execution on WIN-PROD-WEB02",
+    "description": "XMRig miner spawned on WIN-PROD-WEB02; CPU saturated to 95%. Mining pool 10.0.99.42:5555. Linked to Emotet epoch 5.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1496"
+    ],
+    "severity": "medium",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "xmrig",
+      "miner",
+      "cryptomine",
+      "WIN-PROD-WEB02",
+      "10.0.99.42",
+      "Emotet epoch 5"
+    ]
+  },
+  {
+    "id": "INC-EVAL-040",
+    "title": "BEC: payment redirect by svc-backup@aisoc.dev",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by svc-backup@aisoc.dev from WIN-DC-SECONDARY to threat-actor account. Linked to MagicWeb.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1657"
+    ],
+    "severity": "critical",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "phishing",
+      "spoofed cfo",
+      "wire transfer",
+      "$250",
+      "svc-backup@aisoc.dev",
+      "WIN-DC-SECONDARY",
+      "MagicWeb"
+    ]
+  },
+  {
+    "id": "INC-EVAL-041",
+    "title": "Public S3 bucket exposing PII",
+    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 185.220.101.7.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1530",
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "s3",
+      "public bucket",
+      "pii",
+      "cloudtrail",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-042",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for cfo@aisoc.dev",
+    "description": "Successful Azure AD sign-in for cfo@aisoc.dev from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1078.004",
+      "T1550.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "azure ad",
+      "impossible travel",
+      "session token",
+      "mfa",
+      "cfo@aisoc.dev",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-043",
+    "title": "DDoS volumetric flood targeting public-facing LIN-K8S-NODE01",
+    "description": "L4 SYN flood from a botnet (>1M PPS) targeting LIN-K8S-NODE01. Edge mitigation engaged but service degraded for 12 minutes.",
+    "expected_tactics": [
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1498.001"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "ddos",
+      "syn flood",
+      "botnet",
+      "LIN-K8S-NODE01",
+      "1M PPS"
+    ]
+  },
+  {
+    "id": "INC-EVAL-044",
+    "title": "Insider preparing departure: large mailbox export by ops-lead@aisoc.dev",
+    "description": "ops-lead@aisoc.dev exported full mailbox PST (8 GB) from WIN-DC-PRIMARY. HR flag: notice given last week.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1114.002",
+      "T1567.002"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "mailbox export",
+      "PST",
+      "insider",
+      "departure",
+      "ops-lead@aisoc.dev",
+      "WIN-DC-PRIMARY"
+    ]
+  },
+  {
+    "id": "INC-EVAL-045",
+    "title": "Malicious Office add-in installed for grace@aisoc.dev",
+    "description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on GCP-GKE-NODE-04; loads on every Outlook startup; beacons to 192.168.1.100.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1137.006",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "office add-in",
+      "vsto",
+      "outlook",
+      "grace@aisoc.dev",
+      "GCP-GKE-NODE-04",
+      "192.168.1.100"
+    ]
+  },
+  {
+    "id": "INC-EVAL-046",
+    "title": "GitHub PAT leaked and abused from 198.51.100.23",
+    "description": "Personal access token belonging to alice@aisoc.dev used from 198.51.100.23 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1552.001",
+      "T1213.003"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "github",
+      "pat",
+      "token",
+      "private repo",
+      "alice@aisoc.dev",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-047",
+    "title": "EC2 instance metadata service abused on WIN-DC-SECONDARY",
+    "description": "IMDSv1 abused on WIN-DC-SECONDARY; temporary IAM credentials for role exfilled to 45.142.122.111. CloudTrail shows AssumeRole from external.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1552.005",
+      "T1078.004"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "imds",
+      "metadata",
+      "iam credentials",
+      "AssumeRole",
+      "WIN-DC-SECONDARY",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-048",
+    "title": "Vendor admin password reset abuse for heidi@aisoc.dev",
+    "description": "Password reset for heidi@aisoc.dev performed by helpdesk in response to social-engineering call from 203.0.113.45. Token claimed within 90 seconds.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1566.004",
+      "T1078"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "password reset",
+      "social engineering",
+      "helpdesk",
+      "heidi@aisoc.dev",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-049",
+    "title": "OAuth refresh-token theft for admin@aisoc.dev",
+    "description": "Refresh token for admin@aisoc.dev replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "oauth",
+      "refresh token",
+      "replay",
+      "onedrive",
+      "mailbox",
+      "admin@aisoc.dev",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-050",
+    "title": "Container image with embedded backdoor pulled by AWS-EC2-PROD-API",
+    "description": "Image registry/repo:malicious-backdoor pulled by AWS-EC2-PROD-API. Layer scan flagged embedded netcat reverse-shell binary.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.002",
+      "T1610"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "container image",
+      "registry",
+      "backdoor",
+      "netcat",
+      "AWS-EC2-PROD-API"
+    ]
+  },
+  {
+    "id": "INC-EVAL-051",
+    "title": "Outlook rule auto-forwarding mail from bob@aisoc.dev",
+    "description": "Outlook inbox rule created for bob@aisoc.dev that forwards all mail to external address at 10.0.99.42. Linked to LockBit 3.0.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1564.008",
+      "T1114.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "outlook rule",
+      "forward",
+      "mail",
+      "bob@aisoc.dev",
+      "10.0.99.42",
+      "LockBit 3.0"
+    ]
+  },
+  {
+    "id": "INC-EVAL-052",
+    "title": "Linux journald log tampering on WIN-HR-DESKTOP",
+    "description": "journalctl --rotate --vacuum-time=1s observed on WIN-HR-DESKTOP by dave@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.002"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "journalctl",
+      "log tampering",
+      "vacuum",
+      "WIN-HR-DESKTOP",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-053",
+    "title": "Compromised CI runner on WIN-DEVOPS-LT pushing to production",
+    "description": "Self-hosted CI runner WIN-DEVOPS-LT compromised. Job triggered from PR injected secret exfil step; secrets posted to 172.16.50.7.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1195.002",
+      "T1552.004"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "ci runner",
+      "self-hosted",
+      "secret",
+      "exfil",
+      "WIN-DEVOPS-LT",
+      "172.16.50.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-054",
+    "title": "Suspicious VPN login from new geography for admin@aisoc.dev",
+    "description": "VPN login for admin@aisoc.dev from 192.168.1.100 (new country, no prior history). Subsequent lateral SMB scan from VPN range to GCP-GKE-NODE-04.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1078.004",
+      "T1021.002"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "vpn",
+      "new geography",
+      "lateral",
+      "smb scan",
+      "admin@aisoc.dev",
+      "192.168.1.100",
+      "GCP-GKE-NODE-04"
+    ]
+  },
+  {
+    "id": "INC-EVAL-055",
+    "title": "Privileged command run as service account on LIN-K8S-NODE01",
+    "description": "Service account heidi@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on LIN-K8S-NODE01. Anomalous.",
+    "expected_tactics": [
+      "TA0005",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1078.001",
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "service account",
+      "wevtutil",
+      "log clear",
+      "heidi@aisoc.dev",
+      "LIN-K8S-NODE01"
+    ]
+  },
+  {
+    "id": "INC-EVAL-056",
+    "title": "Spear-phishing email with macro-laden attachment delivered to svc-backup@aisoc.dev",
+    "description": "Inbound email from 198.51.100.23 delivered an Office document with a malicious VBA macro to svc-backup@aisoc.dev. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1059.005"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "phishing email",
+      "macro",
+      "198.51.100.23",
+      "WIN-DC-PRIMARY",
+      "svc-backup@aisoc.dev",
+      "stage-2 payload"
+    ]
+  },
+  {
+    "id": "INC-EVAL-057",
+    "title": "Exploitation of public-facing web app on WIN-FIN-DB01",
+    "description": "WAF logs show SQL-injection and SSRF probes from 203.0.113.45 against the application on WIN-FIN-DB01. One request returned 200 with internal cloud-metadata content. Likely exploitation of CVE-2024-1234.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1190",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WAF",
+      "SQL injection",
+      "SSRF",
+      "CVE-2024-1234",
+      "WIN-FIN-DB01",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-058",
+    "title": "Watering-hole exploit served from internal Confluence by 10.0.99.42",
+    "description": "Internal Confluence page injected with malicious JavaScript by 10.0.99.42. Drive-by exploit triggered browser exploitation on multiple visitors including eve@aisoc.dev. Linked to Emotet epoch 5 TTPs.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1189",
+      "T1203"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "watering hole",
+      "drive-by",
+      "Confluence",
+      "10.0.99.42",
+      "eve@aisoc.dev",
+      "Emotet epoch 5"
+    ]
+  },
+  {
+    "id": "INC-EVAL-059",
+    "title": "Supply-chain compromise: malicious npm package on AZURE-VM-FIN-001",
+    "description": "CI pipeline on AZURE-VM-FIN-001 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 185.220.101.7. Build artefacts may be tainted.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.001",
+      "T1059.007"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "supply chain",
+      "npm package",
+      "event-stream",
+      "post-install",
+      "AZURE-VM-FIN-001",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-060",
+    "title": "Malicious USB autorun on air-gapped host WIN-EXCHANGE-01",
+    "description": "USB device inserted on air-gapped WIN-EXCHANGE-01 by ceo@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1091",
+      "T1005"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "USB",
+      "autorun",
+      "air-gapped",
+      "WIN-EXCHANGE-01",
+      "ceo@aisoc.dev",
+      "Python stager"
+    ]
+  },
+  {
+    "id": "INC-EVAL-061",
+    "title": "OAuth consent phishing targeting svc-backup@aisoc.dev",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by svc-backup@aisoc.dev. Inbox forwarding rule created sending mail to 172.16.50.7.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1528",
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "OAuth consent",
+      "Mail.Read",
+      "Files.Read.All",
+      "svc-backup@aisoc.dev",
+      "172.16.50.7",
+      "forwarding rule"
+    ]
+  },
+  {
+    "id": "INC-EVAL-062",
+    "title": "Obfuscated PowerShell dropper executed on AWS-EC2-PROD-API",
+    "description": "PowerShell dropper executed on AWS-EC2-PROD-API by ops-lead@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to Cobalt Strike ransomware staging.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1059.001",
+      "T1027"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "powershell",
+      "obfuscated",
+      "base64",
+      "AWS-EC2-PROD-API",
+      "ops-lead@aisoc.dev",
+      "Cobalt Strike"
+    ]
+  },
+  {
+    "id": "INC-EVAL-063",
+    "title": "Living-off-the-land: certutil download cradle on WIN-FIN-DB01",
+    "description": "certutil.exe -urlcache invoked from cmd.exe on WIN-FIN-DB01. cmd.exe was spawned by outlook.exe. Payload downloaded from 198.51.100.23.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1105",
+      "T1218.009"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "certutil",
+      "urlcache",
+      "outlook.exe",
+      "WIN-FIN-DB01",
+      "198.51.100.23",
+      "download cradle"
+    ]
+  },
+  {
+    "id": "INC-EVAL-064",
+    "title": "Container runtime abuse: malicious `docker run` on WIN-PROD-WEB02",
+    "description": "Unauthenticated Docker API on WIN-PROD-WEB02 exploited from 45.142.122.111. Container with cryptominer spawned. CPU on host saturated to 95%.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1610",
+      "T1059.004",
+      "T1496"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "docker",
+      "container",
+      "cryptominer",
+      "miner",
+      "WIN-PROD-WEB02",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-065",
+    "title": "Malicious WMI subscription on AWS-EC2-PROD-API",
+    "description": "Permanent WMI event subscription created on AWS-EC2-PROD-API by ceo@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1546.003",
+      "T1059.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WMI",
+      "subscription",
+      "permanent",
+      "AWS-EC2-PROD-API",
+      "ceo@aisoc.dev",
+      "encoded script"
+    ]
+  },
+  {
+    "id": "INC-EVAL-066",
+    "title": "Registry Run key persistence created by alice@aisoc.dev on AWS-EC2-PROD-API",
+    "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-EC2-PROD-API. Points to roaming binary signed with revoked cert. Linked to Lazarus.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1547.001"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "registry run",
+      "persistence",
+      "revoked cert",
+      "AWS-EC2-PROD-API",
+      "alice@aisoc.dev",
+      "Lazarus"
+    ]
+  },
+  {
+    "id": "INC-EVAL-067",
+    "title": "Scheduled task persistence on WIN-FIN-DB01",
+    "description": "Hidden scheduled task created on WIN-FIN-DB01 by dave@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1053.005"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "scheduled task",
+      "persistence",
+      "APPDATA",
+      "WIN-FIN-DB01",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-068",
+    "title": "Firmware implant detected on UEFI partition of GCP-GKE-NODE-04",
+    "description": "UEFI secure-boot violation on GCP-GKE-NODE-04. Unknown module detected in firmware. Signature matches MosaicRegressor implant.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1542.001",
+      "T1027.002"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UEFI",
+      "firmware",
+      "implant",
+      "secure boot",
+      "GCP-GKE-NODE-04",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-069",
+    "title": "Backdoor cron job installed on LIN-K8S-NODE01",
+    "description": "/etc/cron.d entry created by svc-backup@aisoc.dev on LIN-K8S-NODE01. Reverse shell beacon to 192.168.1.100 every 5 minutes.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1053.003",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "cron",
+      "backdoor",
+      "reverse shell",
+      "LIN-K8S-NODE01",
+      "svc-backup@aisoc.dev",
+      "192.168.1.100"
+    ]
+  },
+  {
+    "id": "INC-EVAL-070",
+    "title": "UAC bypass observed on LIN-EDGE-VPN02",
+    "description": "fodhelper.exe abuse on LIN-EDGE-VPN02 by carol@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1548.002"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UAC",
+      "fodhelper",
+      "auto-elevation",
+      "LIN-EDGE-VPN02",
+      "carol@aisoc.dev",
+      "SYSTEM"
+    ]
+  },
+  {
+    "id": "INC-EVAL-071",
+    "title": "Container escape via privileged pod on WIN-HR-DESKTOP",
+    "description": "Kubernetes privileged pod created on WIN-HR-DESKTOP by dave@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1611",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "kubernetes",
+      "privileged pod",
+      "container escape",
+      "cgroup",
+      "WIN-HR-DESKTOP",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-072",
+    "title": "Linux SUID binary abuse on AZURE-VM-FIN-001",
+    "description": "Custom SUID binary discovered in /tmp on AZURE-VM-FIN-001; allows arbitrary command execution as root. Likely escalation by carol@aisoc.dev.",
+    "expected_tactics": [
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1548.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "SUID",
+      "/tmp",
+      "root escalation",
+      "AZURE-VM-FIN-001",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-073",
+    "title": "Memory-only fileless implant in svchost on WIN-DEVOPS-LT",
+    "description": "Process hollowing detected on WIN-DEVOPS-LT: svchost.exe replaced with Cobalt Strike beacon to 185.220.101.7. No disk artefacts. Linked to MagicWeb.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1055.012",
+      "T1620"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "process hollowing",
+      "fileless",
+      "svchost",
+      "Cobalt Strike",
+      "WIN-DEVOPS-LT",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-074",
+    "title": "Indicator removal: Windows event log cleared on AZURE-VM-FIN-001",
+    "description": "Security event log cleared on AZURE-VM-FIN-001 by frank@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "wevtutil",
+      "log cleared",
+      "indicator removal",
+      "AZURE-VM-FIN-001",
+      "frank@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-075",
+    "title": "Disable security tooling on WIN-EXCHANGE-01",
+    "description": "heidi@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on WIN-EXCHANGE-01. Tampering telemetry triggered alert.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1562.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "defender",
+      "crowdstrike",
+      "sysmon",
+      "tampering",
+      "WIN-EXCHANGE-01",
+      "heidi@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-076",
+    "title": "LSASS memory dump on LIN-BUILD-CI03 by frank@aisoc.dev",
+    "description": "comsvcs.dll MiniDump observed on LIN-BUILD-CI03. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1003.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "lsass",
+      "minidump",
+      "comsvcs",
+      "mimikatz",
+      "LIN-BUILD-CI03",
+      "frank@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-077",
+    "title": "Brute-force credential spray against bob@aisoc.dev from 198.51.100.23",
+    "description": "Credential spray from 198.51.100.23 against bob@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1110.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "brute force",
+      "credential spray",
+      "bob@aisoc.dev",
+      "198.51.100.23",
+      "azure ad"
+    ]
+  },
+  {
+    "id": "INC-EVAL-078",
+    "title": "Kerberoasting from MAC-CFO-LAPTOP",
+    "description": "Service account TGS tickets requested en-masse from MAC-CFO-LAPTOP by ceo@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1558.003",
+      "T1021.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "kerberoast",
+      "TGS",
+      "RC4",
+      "mimikatz",
+      "MAC-CFO-LAPTOP",
+      "ceo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-079",
+    "title": "Active Directory DCSync from non-DC host WIN-HR-DESKTOP",
+    "description": "Replication rights abused from WIN-HR-DESKTOP by frank@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1003.006",
+      "T1078.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "dcsync",
+      "replication",
+      "ntlm hash",
+      "WIN-HR-DESKTOP",
+      "frank@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-080",
+    "title": "SAML golden-ticket: forged assertion targeting carol@aisoc.dev",
+    "description": "Forged SAML assertion detected for carol@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 203.0.113.45.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1606.002",
+      "T1087.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "saml",
+      "golden ticket",
+      "forged",
+      "azure ad",
+      "carol@aisoc.dev",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-081",
+    "title": "Domain enumeration from MAC-LEGAL-LAPTOP",
+    "description": "ldap discovery from MAC-LEGAL-LAPTOP by heidi@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1087.002"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "ldap",
+      "bloodhound",
+      "domain enumeration",
+      "MAC-LEGAL-LAPTOP",
+      "heidi@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-082",
+    "title": "Network share enumeration on WIN-HR-DESKTOP",
+    "description": "Mass SMB share enumeration from WIN-HR-DESKTOP by eve@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1135"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "smb",
+      "net.exe",
+      "Get-SmbShare",
+      "share enumeration",
+      "WIN-HR-DESKTOP",
+      "eve@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-083",
+    "title": "Pass-the-hash from WIN-EXCHANGE-01 to LIN-K8S-NODE01",
+    "description": "Pass-the-hash lateral movement from WIN-EXCHANGE-01 to LIN-K8S-NODE01 by alice@aisoc.dev. Golden ticket indicators present. Linked to APT28.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.002",
+      "T1558.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "pass-the-hash",
+      "golden ticket",
+      "WIN-EXCHANGE-01",
+      "LIN-K8S-NODE01",
+      "alice@aisoc.dev",
+      "APT28"
+    ]
+  },
+  {
+    "id": "INC-EVAL-084",
+    "title": "RDP lateral movement from LIN-DB-REPLICA",
+    "description": "Anomalous RDP session from LIN-DB-REPLICA (eve@aisoc.dev) to WIN-DEVOPS-LT outside business hours. Source admin not normal for WIN-DEVOPS-LT.",
+    "expected_tactics": [
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1021.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "rdp",
+      "lateral movement",
+      "outside hours",
+      "LIN-DB-REPLICA",
+      "WIN-DEVOPS-LT",
+      "eve@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-085",
+    "title": "WMI lateral execution from AZURE-VM-FIN-001 to WIN-FILE-SHARE",
+    "description": "wmic.exe /node:WIN-FILE-SHARE process call create observed from AZURE-VM-FIN-001 by eve@aisoc.dev. Remote command execution; payload from 198.51.100.23.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1047"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "wmic",
+      "lateral",
+      "AZURE-VM-FIN-001",
+      "WIN-FILE-SHARE",
+      "eve@aisoc.dev",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-086",
+    "title": "Bulk PII download by svc-backup@aisoc.dev",
+    "description": "svc-backup@aisoc.dev downloaded >10 GB of customer records from production database from GCP-GKE-NODE-04. Outside normal access pattern.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1005",
+      "T1041"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "bulk download",
+      "pii",
+      "customer record",
+      "GCP-GKE-NODE-04",
+      "svc-backup@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-087",
+    "title": "Clipboard logging implant on GCP-GKE-NODE-04",
+    "description": "Clipboard contents from GCP-GKE-NODE-04 (svc-backup@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "expected_tactics": [
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1115"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "clipboard",
+      "keylog",
+      "credentials",
+      "GCP-GKE-NODE-04",
+      "svc-backup@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-088",
+    "title": "DNS tunnelling exfiltration from GCP-GKE-NODE-04",
+    "description": "DNS query volume from GCP-GKE-NODE-04 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 45.142.122.111.",
+    "expected_tactics": [
+      "TA0011",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1071.004",
+      "T1048.003"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "dns tunnel",
+      "txt records",
+      "base64",
+      "exfiltrat",
+      "GCP-GKE-NODE-04",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-089",
+    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-FILE-SHARE",
+    "description": "Egress from WIN-FILE-SHARE to s3://atk-stage-185.220.101.7/dump/ by svc-backup@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "expected_tactics": [
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "s3",
+      "cloud storage",
+      "egress",
+      "exfiltrat",
+      "WIN-FILE-SHARE",
+      "185.220.101.7",
+      "svc-backup@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-090",
+    "title": "Personal Drive exfil by dave@aisoc.dev",
+    "description": "dave@aisoc.dev on WIN-DC-SECONDARY uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002",
+      "T1005"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "google drive",
+      "personal",
+      "exfiltrat",
+      "source code",
+      "pii",
+      "WIN-DC-SECONDARY",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-091",
+    "title": "DGA-based C2 traffic from WIN-DC-SECONDARY",
+    "description": "DGA traffic from WIN-DC-SECONDARY observed; 200+ NXDomain replies/min, IoCs match APT29 epoch 5. Beacons to 10.0.99.42.",
+    "expected_tactics": [
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1568.002"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "dga",
+      "domain generation",
+      "nxdomain",
+      "beacon",
+      "WIN-DC-SECONDARY",
+      "10.0.99.42",
+      "APT29"
+    ]
+  },
+  {
+    "id": "INC-EVAL-092",
+    "title": "HTTPS C2 beacon from WIN-EXCHANGE-01 to 185.220.101.7",
+    "description": "Periodic HTTPS beacon from WIN-EXCHANGE-01 to 185.220.101.7 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
+    "expected_tactics": [
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1071.001"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "c2",
+      "beacon",
+      "ja3",
+      "Cobalt Strike",
+      "WIN-EXCHANGE-01",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-093",
+    "title": "Ransomware encryption in progress on WIN-EXCHANGE-01",
+    "description": "Mass file rename observed on WIN-EXCHANGE-01 (heidi@aisoc.dev); ..tooktdata extension applied to ~20 k files. Ransomware note R3ADM3-Cobalt Strike.txt found.",
+    "expected_tactics": [
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1486"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "ransomware",
+      "encrypt",
+      "rename",
+      "ransom note",
+      "WIN-EXCHANGE-01",
+      "heidi@aisoc.dev",
+      "Cobalt Strike"
+    ]
+  },
+  {
+    "id": "INC-EVAL-094",
+    "title": "Cryptominer execution on WIN-EXCHANGE-01",
+    "description": "XMRig miner spawned on WIN-EXCHANGE-01; CPU saturated to 95%. Mining pool 192.168.1.100:5555. Linked to MosaicRegressor.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1496"
+    ],
+    "severity": "medium",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "xmrig",
+      "miner",
+      "cryptomine",
+      "WIN-EXCHANGE-01",
+      "192.168.1.100",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-095",
+    "title": "BEC: payment redirect by frank@aisoc.dev",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by frank@aisoc.dev from K8S-PROD-CLUSTER to threat-actor account. Linked to Lazarus.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1657"
+    ],
+    "severity": "critical",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "phishing",
+      "spoofed cfo",
+      "wire transfer",
+      "$250",
+      "frank@aisoc.dev",
+      "K8S-PROD-CLUSTER",
+      "Lazarus"
+    ]
+  },
+  {
+    "id": "INC-EVAL-096",
+    "title": "Public S3 bucket exposing PII",
+    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 45.142.122.111.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1530",
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "s3",
+      "public bucket",
+      "pii",
+      "cloudtrail",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-097",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@aisoc.dev",
+    "description": "Successful Azure AD sign-in for grace@aisoc.dev from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1078.004",
+      "T1550.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "azure ad",
+      "impossible travel",
+      "session token",
+      "mfa",
+      "grace@aisoc.dev",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-098",
+    "title": "DDoS volumetric flood targeting public-facing K8S-PROD-CLUSTER",
+    "description": "L4 SYN flood from a botnet (>1M PPS) targeting K8S-PROD-CLUSTER. Edge mitigation engaged but service degraded for 12 minutes.",
+    "expected_tactics": [
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1498.001"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "ddos",
+      "syn flood",
+      "botnet",
+      "K8S-PROD-CLUSTER",
+      "1M PPS"
+    ]
+  },
+  {
+    "id": "INC-EVAL-099",
+    "title": "Insider preparing departure: large mailbox export by grace@aisoc.dev",
+    "description": "grace@aisoc.dev exported full mailbox PST (8 GB) from LIN-OBS-LOGGER. HR flag: notice given last week.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1114.002",
+      "T1567.002"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "mailbox export",
+      "PST",
+      "insider",
+      "departure",
+      "grace@aisoc.dev",
+      "LIN-OBS-LOGGER"
+    ]
+  },
+  {
+    "id": "INC-EVAL-100",
+    "title": "Malicious Office add-in installed for ops-lead@aisoc.dev",
+    "description": "Office VSTO add-in registered under HKCU for ops-lead@aisoc.dev on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 91.134.231.15.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1137.006",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "office add-in",
+      "vsto",
+      "outlook",
+      "ops-lead@aisoc.dev",
+      "WIN-FILE-SHARE",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-101",
+    "title": "GitHub PAT leaked and abused from 203.0.113.45",
+    "description": "Personal access token belonging to grace@aisoc.dev used from 203.0.113.45 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1552.001",
+      "T1213.003"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "github",
+      "pat",
+      "token",
+      "private repo",
+      "grace@aisoc.dev",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-102",
+    "title": "EC2 instance metadata service abused on WIN-FILE-SHARE",
+    "description": "IMDSv1 abused on WIN-FILE-SHARE; temporary IAM credentials for role exfilled to 192.168.1.100. CloudTrail shows AssumeRole from external.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1552.005",
+      "T1078.004"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "imds",
+      "metadata",
+      "iam credentials",
+      "AssumeRole",
+      "WIN-FILE-SHARE",
+      "192.168.1.100"
+    ]
+  },
+  {
+    "id": "INC-EVAL-103",
+    "title": "Vendor admin password reset abuse for svc-backup@aisoc.dev",
+    "description": "Password reset for svc-backup@aisoc.dev performed by helpdesk in response to social-engineering call from 198.51.100.23. Token claimed within 90 seconds.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1566.004",
+      "T1078"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "password reset",
+      "social engineering",
+      "helpdesk",
+      "svc-backup@aisoc.dev",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-104",
+    "title": "OAuth refresh-token theft for admin@aisoc.dev",
+    "description": "Refresh token for admin@aisoc.dev replayed from 203.0.113.45. Granted access to mailbox + OneDrive without re-prompt.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "oauth",
+      "refresh token",
+      "replay",
+      "onedrive",
+      "mailbox",
+      "admin@aisoc.dev",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-105",
+    "title": "Container image with embedded backdoor pulled by AZURE-VM-FIN-001",
+    "description": "Image registry/repo:malicious-backdoor pulled by AZURE-VM-FIN-001. Layer scan flagged embedded netcat reverse-shell binary.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.002",
+      "T1610"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "container image",
+      "registry",
+      "backdoor",
+      "netcat",
+      "AZURE-VM-FIN-001"
+    ]
+  },
+  {
+    "id": "INC-EVAL-106",
+    "title": "Outlook rule auto-forwarding mail from alice@aisoc.dev",
+    "description": "Outlook inbox rule created for alice@aisoc.dev that forwards all mail to external address at 192.168.1.100. Linked to FIN7.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1564.008",
+      "T1114.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "outlook rule",
+      "forward",
+      "mail",
+      "alice@aisoc.dev",
+      "192.168.1.100",
+      "FIN7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-107",
+    "title": "Linux journald log tampering on MAC-LEGAL-LAPTOP",
+    "description": "journalctl --rotate --vacuum-time=1s observed on MAC-LEGAL-LAPTOP by grace@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.002"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "journalctl",
+      "log tampering",
+      "vacuum",
+      "MAC-LEGAL-LAPTOP",
+      "grace@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-108",
+    "title": "Compromised CI runner on MAC-LEGAL-LAPTOP pushing to production",
+    "description": "Self-hosted CI runner MAC-LEGAL-LAPTOP compromised. Job triggered from PR injected secret exfil step; secrets posted to 10.0.99.42.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1195.002",
+      "T1552.004"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "ci runner",
+      "self-hosted",
+      "secret",
+      "exfil",
+      "MAC-LEGAL-LAPTOP",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-109",
+    "title": "Suspicious VPN login from new geography for heidi@aisoc.dev",
+    "description": "VPN login for heidi@aisoc.dev from 45.142.122.111 (new country, no prior history). Subsequent lateral SMB scan from VPN range to WIN-DC-SECONDARY.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1078.004",
+      "T1021.002"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "vpn",
+      "new geography",
+      "lateral",
+      "smb scan",
+      "heidi@aisoc.dev",
+      "45.142.122.111",
+      "WIN-DC-SECONDARY"
+    ]
+  },
+  {
+    "id": "INC-EVAL-110",
+    "title": "Privileged command run as service account on MAC-CFO-LAPTOP",
+    "description": "Service account ceo@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on MAC-CFO-LAPTOP. Anomalous.",
+    "expected_tactics": [
+      "TA0005",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1078.001",
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "service account",
+      "wevtutil",
+      "log clear",
+      "ceo@aisoc.dev",
+      "MAC-CFO-LAPTOP"
+    ]
+  },
+  {
+    "id": "INC-EVAL-111",
+    "title": "Spear-phishing email with macro-laden attachment delivered to bob@aisoc.dev",
+    "description": "Inbound email from 172.16.50.7 delivered an Office document with a malicious VBA macro to bob@aisoc.dev. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known APT29 infrastructure.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1059.005"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "phishing email",
+      "macro",
+      "172.16.50.7",
+      "WIN-DC-PRIMARY",
+      "bob@aisoc.dev",
+      "stage-2 payload"
+    ]
+  },
+  {
+    "id": "INC-EVAL-112",
+    "title": "Exploitation of public-facing web app on LIN-EDGE-VPN02",
+    "description": "WAF logs show SQL-injection and SSRF probes from 45.142.122.111 against the application on LIN-EDGE-VPN02. One request returned 200 with internal cloud-metadata content. Likely exploitation of CVE-2024-1234.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1190",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WAF",
+      "SQL injection",
+      "SSRF",
+      "CVE-2024-1234",
+      "LIN-EDGE-VPN02",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-113",
+    "title": "Watering-hole exploit served from internal Confluence by 45.142.122.111",
+    "description": "Internal Confluence page injected with malicious JavaScript by 45.142.122.111. Drive-by exploit triggered browser exploitation on multiple visitors including grace@aisoc.dev. Linked to APT28 TTPs.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1189",
+      "T1203"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "watering hole",
+      "drive-by",
+      "Confluence",
+      "45.142.122.111",
+      "grace@aisoc.dev",
+      "APT28"
+    ]
+  },
+  {
+    "id": "INC-EVAL-114",
+    "title": "Supply-chain compromise: malicious npm package on WIN-HR-DESKTOP",
+    "description": "CI pipeline on WIN-HR-DESKTOP installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 203.0.113.45. Build artefacts may be tainted.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.001",
+      "T1059.007"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "supply chain",
+      "npm package",
+      "event-stream",
+      "post-install",
+      "WIN-HR-DESKTOP",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-115",
+    "title": "Malicious USB autorun on air-gapped host GCP-GKE-NODE-04",
+    "description": "USB device inserted on air-gapped GCP-GKE-NODE-04 by bob@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1091",
+      "T1005"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "USB",
+      "autorun",
+      "air-gapped",
+      "GCP-GKE-NODE-04",
+      "bob@aisoc.dev",
+      "Python stager"
+    ]
+  },
+  {
+    "id": "INC-EVAL-116",
+    "title": "OAuth consent phishing targeting ceo@aisoc.dev",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 192.168.1.100.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1528",
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "OAuth consent",
+      "Mail.Read",
+      "Files.Read.All",
+      "ceo@aisoc.dev",
+      "192.168.1.100",
+      "forwarding rule"
+    ]
+  },
+  {
+    "id": "INC-EVAL-117",
+    "title": "Obfuscated PowerShell dropper executed on LIN-K8S-NODE01",
+    "description": "PowerShell dropper executed on LIN-K8S-NODE01 by svc-backup@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon ransomware staging.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1059.001",
+      "T1027"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "powershell",
+      "obfuscated",
+      "base64",
+      "LIN-K8S-NODE01",
+      "svc-backup@aisoc.dev",
+      "Volt Typhoon"
+    ]
+  },
+  {
+    "id": "INC-EVAL-118",
+    "title": "Living-off-the-land: certutil download cradle on AWS-EC2-PROD-API",
+    "description": "certutil.exe -urlcache invoked from cmd.exe on AWS-EC2-PROD-API. cmd.exe was spawned by outlook.exe. Payload downloaded from 91.134.231.15.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1105",
+      "T1218.009"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "certutil",
+      "urlcache",
+      "outlook.exe",
+      "AWS-EC2-PROD-API",
+      "91.134.231.15",
+      "download cradle"
+    ]
+  },
+  {
+    "id": "INC-EVAL-119",
+    "title": "Container runtime abuse: malicious `docker run` on WIN-EXCHANGE-01",
+    "description": "Unauthenticated Docker API on WIN-EXCHANGE-01 exploited from 185.220.101.7. Container with cryptominer spawned. CPU on host saturated to 95%.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1610",
+      "T1059.004",
+      "T1496"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "docker",
+      "container",
+      "cryptominer",
+      "miner",
+      "WIN-EXCHANGE-01",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-120",
+    "title": "Malicious WMI subscription on LIN-DB-REPLICA",
+    "description": "Permanent WMI event subscription created on LIN-DB-REPLICA by ops-lead@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1546.003",
+      "T1059.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WMI",
+      "subscription",
+      "permanent",
+      "LIN-DB-REPLICA",
+      "ops-lead@aisoc.dev",
+      "encoded script"
+    ]
+  },
+  {
+    "id": "INC-EVAL-121",
+    "title": "Registry Run key persistence created by frank@aisoc.dev on WIN-DC-PRIMARY",
+    "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on WIN-DC-PRIMARY. Points to roaming binary signed with revoked cert. Linked to APT28.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1547.001"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "registry run",
+      "persistence",
+      "revoked cert",
+      "WIN-DC-PRIMARY",
+      "frank@aisoc.dev",
+      "APT28"
+    ]
+  },
+  {
+    "id": "INC-EVAL-122",
+    "title": "Scheduled task persistence on GCP-GKE-NODE-04",
+    "description": "Hidden scheduled task created on GCP-GKE-NODE-04 by bob@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1053.005"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "scheduled task",
+      "persistence",
+      "APPDATA",
+      "GCP-GKE-NODE-04",
+      "bob@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-123",
+    "title": "Firmware implant detected on UEFI partition of LIN-OBS-LOGGER",
+    "description": "UEFI secure-boot violation on LIN-OBS-LOGGER. Unknown module detected in firmware. Signature matches MosaicRegressor implant.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1542.001",
+      "T1027.002"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UEFI",
+      "firmware",
+      "implant",
+      "secure boot",
+      "LIN-OBS-LOGGER",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-124",
+    "title": "Backdoor cron job installed on MAC-CFO-LAPTOP",
+    "description": "/etc/cron.d entry created by ops-lead@aisoc.dev on MAC-CFO-LAPTOP. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1053.003",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "cron",
+      "backdoor",
+      "reverse shell",
+      "MAC-CFO-LAPTOP",
+      "ops-lead@aisoc.dev",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-125",
+    "title": "UAC bypass observed on WIN-FILE-SHARE",
+    "description": "fodhelper.exe abuse on WIN-FILE-SHARE by svc-backup@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1548.002"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UAC",
+      "fodhelper",
+      "auto-elevation",
+      "WIN-FILE-SHARE",
+      "svc-backup@aisoc.dev",
+      "SYSTEM"
+    ]
+  },
+  {
+    "id": "INC-EVAL-126",
+    "title": "Container escape via privileged pod on LIN-K8S-NODE01",
+    "description": "Kubernetes privileged pod created on LIN-K8S-NODE01 by svc-backup@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1611",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "kubernetes",
+      "privileged pod",
+      "container escape",
+      "cgroup",
+      "LIN-K8S-NODE01",
+      "svc-backup@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-127",
+    "title": "Linux SUID binary abuse on WIN-EXCHANGE-01",
+    "description": "Custom SUID binary discovered in /tmp on WIN-EXCHANGE-01; allows arbitrary command execution as root. Likely escalation by grace@aisoc.dev.",
+    "expected_tactics": [
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1548.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "SUID",
+      "/tmp",
+      "root escalation",
+      "WIN-EXCHANGE-01",
+      "grace@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-128",
+    "title": "Memory-only fileless implant in svchost on WIN-DC-SECONDARY",
+    "description": "Process hollowing detected on WIN-DC-SECONDARY: svchost.exe replaced with Cobalt Strike beacon to 10.0.99.42. No disk artefacts. Linked to APT28.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1055.012",
+      "T1620"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "process hollowing",
+      "fileless",
+      "svchost",
+      "Cobalt Strike",
+      "WIN-DC-SECONDARY",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-129",
+    "title": "Indicator removal: Windows event log cleared on MAC-CFO-LAPTOP",
+    "description": "Security event log cleared on MAC-CFO-LAPTOP by carol@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "wevtutil",
+      "log cleared",
+      "indicator removal",
+      "MAC-CFO-LAPTOP",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-130",
+    "title": "Disable security tooling on LIN-OBS-LOGGER",
+    "description": "ops-lead@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1562.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "defender",
+      "crowdstrike",
+      "sysmon",
+      "tampering",
+      "LIN-OBS-LOGGER",
+      "ops-lead@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-131",
+    "title": "LSASS memory dump on LIN-DB-REPLICA by ceo@aisoc.dev",
+    "description": "comsvcs.dll MiniDump observed on LIN-DB-REPLICA. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1003.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "lsass",
+      "minidump",
+      "comsvcs",
+      "mimikatz",
+      "LIN-DB-REPLICA",
+      "ceo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-132",
+    "title": "Brute-force credential spray against svc-deploy@aisoc.dev from 192.168.1.100",
+    "description": "Credential spray from 192.168.1.100 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1110.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "brute force",
+      "credential spray",
+      "svc-deploy@aisoc.dev",
+      "192.168.1.100",
+      "azure ad"
+    ]
+  },
+  {
+    "id": "INC-EVAL-133",
+    "title": "Kerberoasting from LIN-EDGE-VPN02",
+    "description": "Service account TGS tickets requested en-masse from LIN-EDGE-VPN02 by bob@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1558.003",
+      "T1021.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "kerberoast",
+      "TGS",
+      "RC4",
+      "mimikatz",
+      "LIN-EDGE-VPN02",
+      "bob@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-134",
+    "title": "Active Directory DCSync from non-DC host WIN-DEVOPS-LT",
+    "description": "Replication rights abused from WIN-DEVOPS-LT by svc-deploy@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1003.006",
+      "T1078.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "dcsync",
+      "replication",
+      "ntlm hash",
+      "WIN-DEVOPS-LT",
+      "svc-deploy@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-135",
+    "title": "SAML golden-ticket: forged assertion targeting dave@aisoc.dev",
+    "description": "Forged SAML assertion detected for dave@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 91.134.231.15.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1606.002",
+      "T1087.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "saml",
+      "golden ticket",
+      "forged",
+      "azure ad",
+      "dave@aisoc.dev",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-136",
+    "title": "Domain enumeration from AZURE-VM-FIN-001",
+    "description": "ldap discovery from AZURE-VM-FIN-001 by frank@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1087.002"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "ldap",
+      "bloodhound",
+      "domain enumeration",
+      "AZURE-VM-FIN-001",
+      "frank@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-137",
+    "title": "Network share enumeration on K8S-PROD-CLUSTER",
+    "description": "Mass SMB share enumeration from K8S-PROD-CLUSTER by dave@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1135"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "smb",
+      "net.exe",
+      "Get-SmbShare",
+      "share enumeration",
+      "K8S-PROD-CLUSTER",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-138",
+    "title": "Pass-the-hash from WIN-FIN-DB01 to WIN-DC-PRIMARY",
+    "description": "Pass-the-hash lateral movement from WIN-FIN-DB01 to WIN-DC-PRIMARY by cfo@aisoc.dev. Golden ticket indicators present. Linked to APT29.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.002",
+      "T1558.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "pass-the-hash",
+      "golden ticket",
+      "WIN-FIN-DB01",
+      "WIN-DC-PRIMARY",
+      "cfo@aisoc.dev",
+      "APT29"
+    ]
+  },
+  {
+    "id": "INC-EVAL-139",
+    "title": "RDP lateral movement from WIN-EXCHANGE-01",
+    "description": "Anomalous RDP session from WIN-EXCHANGE-01 (svc-deploy@aisoc.dev) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02.",
+    "expected_tactics": [
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1021.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "rdp",
+      "lateral movement",
+      "outside hours",
+      "WIN-EXCHANGE-01",
+      "LIN-EDGE-VPN02",
+      "svc-deploy@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-140",
+    "title": "WMI lateral execution from WIN-PROD-WEB02 to MAC-LEGAL-LAPTOP",
+    "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from WIN-PROD-WEB02 by eve@aisoc.dev. Remote command execution; payload from 45.142.122.111.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1047"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "wmic",
+      "lateral",
+      "WIN-PROD-WEB02",
+      "MAC-LEGAL-LAPTOP",
+      "eve@aisoc.dev",
+      "45.142.122.111"
+    ]
+  },
+  {
+    "id": "INC-EVAL-141",
+    "title": "Bulk PII download by grace@aisoc.dev",
+    "description": "grace@aisoc.dev downloaded >10 GB of customer records from production database from LIN-BUILD-CI03. Outside normal access pattern.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1005",
+      "T1041"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "bulk download",
+      "pii",
+      "customer record",
+      "LIN-BUILD-CI03",
+      "grace@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-142",
+    "title": "Clipboard logging implant on WIN-DC-PRIMARY",
+    "description": "Clipboard contents from WIN-DC-PRIMARY (heidi@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "expected_tactics": [
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1115"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "clipboard",
+      "keylog",
+      "credentials",
+      "WIN-DC-PRIMARY",
+      "heidi@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-143",
+    "title": "DNS tunnelling exfiltration from MAC-CFO-LAPTOP",
+    "description": "DNS query volume from MAC-CFO-LAPTOP 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 91.134.231.15.",
+    "expected_tactics": [
+      "TA0011",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1071.004",
+      "T1048.003"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "dns tunnel",
+      "txt records",
+      "base64",
+      "exfiltrat",
+      "MAC-CFO-LAPTOP",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-144",
+    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from AZURE-VM-FIN-001",
+    "description": "Egress from AZURE-VM-FIN-001 to s3://atk-stage-45.142.122.111/dump/ by ceo@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "expected_tactics": [
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "s3",
+      "cloud storage",
+      "egress",
+      "exfiltrat",
+      "AZURE-VM-FIN-001",
+      "45.142.122.111",
+      "ceo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-145",
+    "title": "Personal Drive exfil by carol@aisoc.dev",
+    "description": "carol@aisoc.dev on WIN-DC-PRIMARY uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002",
+      "T1005"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "google drive",
+      "personal",
+      "exfiltrat",
+      "source code",
+      "pii",
+      "WIN-DC-PRIMARY",
+      "carol@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-146",
+    "title": "DGA-based C2 traffic from LIN-EDGE-VPN02",
+    "description": "DGA traffic from LIN-EDGE-VPN02 observed; 200+ NXDomain replies/min, IoCs match LockBit 3.0 epoch 5. Beacons to 203.0.113.45.",
+    "expected_tactics": [
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1568.002"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "dga",
+      "domain generation",
+      "nxdomain",
+      "beacon",
+      "LIN-EDGE-VPN02",
+      "203.0.113.45",
+      "LockBit 3.0"
+    ]
+  },
+  {
+    "id": "INC-EVAL-147",
+    "title": "HTTPS C2 beacon from MAC-LEGAL-LAPTOP to 192.168.1.100",
+    "description": "Periodic HTTPS beacon from MAC-LEGAL-LAPTOP to 192.168.1.100 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
+    "expected_tactics": [
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1071.001"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "c2",
+      "beacon",
+      "ja3",
+      "Cobalt Strike",
+      "MAC-LEGAL-LAPTOP",
+      "192.168.1.100"
+    ]
+  },
+  {
+    "id": "INC-EVAL-148",
+    "title": "Ransomware encryption in progress on WIN-DC-PRIMARY",
+    "description": "Mass file rename observed on WIN-DC-PRIMARY (ceo@aisoc.dev); ..tooktdata extension applied to ~20 k files. Ransomware note R3ADM3-Lazarus.txt found.",
+    "expected_tactics": [
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1486"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "ransomware",
+      "encrypt",
+      "rename",
+      "ransom note",
+      "WIN-DC-PRIMARY",
+      "ceo@aisoc.dev",
+      "Lazarus"
+    ]
+  },
+  {
+    "id": "INC-EVAL-149",
+    "title": "Cryptominer execution on WIN-DC-PRIMARY",
+    "description": "XMRig miner spawned on WIN-DC-PRIMARY; CPU saturated to 95%. Mining pool 45.142.122.111:5555. Linked to APT29.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1496"
+    ],
+    "severity": "medium",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "xmrig",
+      "miner",
+      "cryptomine",
+      "WIN-DC-PRIMARY",
+      "45.142.122.111",
+      "APT29"
+    ]
+  },
+  {
+    "id": "INC-EVAL-150",
+    "title": "BEC: payment redirect by frank@aisoc.dev",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by frank@aisoc.dev from WIN-DC-PRIMARY to threat-actor account. Linked to MosaicRegressor.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1657"
+    ],
+    "severity": "critical",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "phishing",
+      "spoofed cfo",
+      "wire transfer",
+      "$250",
+      "frank@aisoc.dev",
+      "WIN-DC-PRIMARY",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-151",
+    "title": "Public S3 bucket exposing PII",
+    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 203.0.113.45.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1530",
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "s3",
+      "public bucket",
+      "pii",
+      "cloudtrail",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-152",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@aisoc.dev",
+    "description": "Successful Azure AD sign-in for grace@aisoc.dev from 10.0.99.42 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1078.004",
+      "T1550.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "azure ad",
+      "impossible travel",
+      "session token",
+      "mfa",
+      "grace@aisoc.dev",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-153",
+    "title": "DDoS volumetric flood targeting public-facing AWS-EC2-PROD-API",
+    "description": "L4 SYN flood from a botnet (>1M PPS) targeting AWS-EC2-PROD-API. Edge mitigation engaged but service degraded for 12 minutes.",
+    "expected_tactics": [
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1498.001"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "ddos",
+      "syn flood",
+      "botnet",
+      "AWS-EC2-PROD-API",
+      "1M PPS"
+    ]
+  },
+  {
+    "id": "INC-EVAL-154",
+    "title": "Insider preparing departure: large mailbox export by ceo@aisoc.dev",
+    "description": "ceo@aisoc.dev exported full mailbox PST (8 GB) from LIN-EDGE-VPN02. HR flag: notice given last week.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1114.002",
+      "T1567.002"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "mailbox export",
+      "PST",
+      "insider",
+      "departure",
+      "ceo@aisoc.dev",
+      "LIN-EDGE-VPN02"
+    ]
+  },
+  {
+    "id": "INC-EVAL-155",
+    "title": "Malicious Office add-in installed for dave@aisoc.dev",
+    "description": "Office VSTO add-in registered under HKCU for dave@aisoc.dev on MAC-LEGAL-LAPTOP; loads on every Outlook startup; beacons to 185.220.101.7.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1137.006",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "office add-in",
+      "vsto",
+      "outlook",
+      "dave@aisoc.dev",
+      "MAC-LEGAL-LAPTOP",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-156",
+    "title": "GitHub PAT leaked and abused from 185.220.101.7",
+    "description": "Personal access token belonging to ops-lead@aisoc.dev used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1552.001",
+      "T1213.003"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "github",
+      "pat",
+      "token",
+      "private repo",
+      "ops-lead@aisoc.dev",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-157",
+    "title": "EC2 instance metadata service abused on WIN-DC-SECONDARY",
+    "description": "IMDSv1 abused on WIN-DC-SECONDARY; temporary IAM credentials for role exfilled to 185.220.101.7. CloudTrail shows AssumeRole from external.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1552.005",
+      "T1078.004"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "imds",
+      "metadata",
+      "iam credentials",
+      "AssumeRole",
+      "WIN-DC-SECONDARY",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-158",
+    "title": "Vendor admin password reset abuse for heidi@aisoc.dev",
+    "description": "Password reset for heidi@aisoc.dev performed by helpdesk in response to social-engineering call from 198.51.100.23. Token claimed within 90 seconds.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1566.004",
+      "T1078"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "password reset",
+      "social engineering",
+      "helpdesk",
+      "heidi@aisoc.dev",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-159",
+    "title": "OAuth refresh-token theft for cfo@aisoc.dev",
+    "description": "Refresh token for cfo@aisoc.dev replayed from 192.168.1.100. Granted access to mailbox + OneDrive without re-prompt.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "oauth",
+      "refresh token",
+      "replay",
+      "onedrive",
+      "mailbox",
+      "cfo@aisoc.dev",
+      "192.168.1.100"
+    ]
+  },
+  {
+    "id": "INC-EVAL-160",
+    "title": "Container image with embedded backdoor pulled by WIN-FILE-SHARE",
+    "description": "Image registry/repo:malicious-backdoor pulled by WIN-FILE-SHARE. Layer scan flagged embedded netcat reverse-shell binary.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.002",
+      "T1610"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "container image",
+      "registry",
+      "backdoor",
+      "netcat",
+      "WIN-FILE-SHARE"
+    ]
+  },
+  {
+    "id": "INC-EVAL-161",
+    "title": "Outlook rule auto-forwarding mail from bob@aisoc.dev",
+    "description": "Outlook inbox rule created for bob@aisoc.dev that forwards all mail to external address at 185.220.101.7. Linked to Scattered Spider.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1564.008",
+      "T1114.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "outlook rule",
+      "forward",
+      "mail",
+      "bob@aisoc.dev",
+      "185.220.101.7",
+      "Scattered Spider"
+    ]
+  },
+  {
+    "id": "INC-EVAL-162",
+    "title": "Linux journald log tampering on MAC-LEGAL-LAPTOP",
+    "description": "journalctl --rotate --vacuum-time=1s observed on MAC-LEGAL-LAPTOP by cfo@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.002"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "journalctl",
+      "log tampering",
+      "vacuum",
+      "MAC-LEGAL-LAPTOP",
+      "cfo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-163",
+    "title": "Compromised CI runner on K8S-PROD-CLUSTER pushing to production",
+    "description": "Self-hosted CI runner K8S-PROD-CLUSTER compromised. Job triggered from PR injected secret exfil step; secrets posted to 185.220.101.7.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1195.002",
+      "T1552.004"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "ci runner",
+      "self-hosted",
+      "secret",
+      "exfil",
+      "K8S-PROD-CLUSTER",
+      "185.220.101.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-164",
+    "title": "Suspicious VPN login from new geography for ops-lead@aisoc.dev",
+    "description": "VPN login for ops-lead@aisoc.dev from 203.0.113.45 (new country, no prior history). Subsequent lateral SMB scan from VPN range to AZURE-VM-FIN-001.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1078.004",
+      "T1021.002"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "vpn",
+      "new geography",
+      "lateral",
+      "smb scan",
+      "ops-lead@aisoc.dev",
+      "203.0.113.45",
+      "AZURE-VM-FIN-001"
+    ]
+  },
+  {
+    "id": "INC-EVAL-165",
+    "title": "Privileged command run as service account on WIN-HR-DESKTOP",
+    "description": "Service account eve@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-HR-DESKTOP. Anomalous.",
+    "expected_tactics": [
+      "TA0005",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1078.001",
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "service account",
+      "wevtutil",
+      "log clear",
+      "eve@aisoc.dev",
+      "WIN-HR-DESKTOP"
+    ]
+  },
+  {
+    "id": "INC-EVAL-166",
+    "title": "Spear-phishing email with macro-laden attachment delivered to grace@aisoc.dev",
+    "description": "Inbound email from 198.51.100.23 delivered an Office document with a malicious VBA macro to grace@aisoc.dev. Attachment opened on LIN-K8S-NODE01; macro spawned cmd.exe and downloaded a stage-2 payload from a known Emotet epoch 5 infrastructure.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1566.001",
+      "T1059.005"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "phishing email",
+      "macro",
+      "198.51.100.23",
+      "LIN-K8S-NODE01",
+      "grace@aisoc.dev",
+      "stage-2 payload"
+    ]
+  },
+  {
+    "id": "INC-EVAL-167",
+    "title": "Exploitation of public-facing web app on WIN-DEVOPS-LT",
+    "description": "WAF logs show SQL-injection and SSRF probes from 10.0.99.42 against the application on WIN-DEVOPS-LT. One request returned 200 with internal cloud-metadata content. Likely exploitation of CVE-2024-1234.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1190",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WAF",
+      "SQL injection",
+      "SSRF",
+      "CVE-2024-1234",
+      "WIN-DEVOPS-LT",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-168",
+    "title": "Watering-hole exploit served from internal Confluence by 45.142.122.111",
+    "description": "Internal Confluence page injected with malicious JavaScript by 45.142.122.111. Drive-by exploit triggered browser exploitation on multiple visitors including frank@aisoc.dev. Linked to LockBit 3.0 TTPs.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1189",
+      "T1203"
+    ],
+    "severity": "high",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "watering hole",
+      "drive-by",
+      "Confluence",
+      "45.142.122.111",
+      "frank@aisoc.dev",
+      "LockBit 3.0"
+    ]
+  },
+  {
+    "id": "INC-EVAL-169",
+    "title": "Supply-chain compromise: malicious npm package on WIN-FIN-DB01",
+    "description": "CI pipeline on WIN-FIN-DB01 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 203.0.113.45. Build artefacts may be tainted.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1195.001",
+      "T1059.007"
+    ],
+    "severity": "critical",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "supply chain",
+      "npm package",
+      "event-stream",
+      "post-install",
+      "WIN-FIN-DB01",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-170",
+    "title": "Malicious USB autorun on air-gapped host WIN-PROD-WEB02",
+    "description": "USB device inserted on air-gapped WIN-PROD-WEB02 by heidi@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1091",
+      "T1005"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "USB",
+      "autorun",
+      "air-gapped",
+      "WIN-PROD-WEB02",
+      "heidi@aisoc.dev",
+      "Python stager"
+    ]
+  },
+  {
+    "id": "INC-EVAL-171",
+    "title": "OAuth consent phishing targeting cfo@aisoc.dev",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by cfo@aisoc.dev. Inbox forwarding rule created sending mail to 198.51.100.23.",
+    "expected_tactics": [
+      "TA0001",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1528",
+      "T1550.001"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "OAuth consent",
+      "Mail.Read",
+      "Files.Read.All",
+      "cfo@aisoc.dev",
+      "198.51.100.23",
+      "forwarding rule"
+    ]
+  },
+  {
+    "id": "INC-EVAL-172",
+    "title": "Obfuscated PowerShell dropper executed on K8S-PROD-CLUSTER",
+    "description": "PowerShell dropper executed on K8S-PROD-CLUSTER by grace@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to ALPHV/BlackCat ransomware staging.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1059.001",
+      "T1027"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "powershell",
+      "obfuscated",
+      "base64",
+      "K8S-PROD-CLUSTER",
+      "grace@aisoc.dev",
+      "ALPHV/BlackCat"
+    ]
+  },
+  {
+    "id": "INC-EVAL-173",
+    "title": "Living-off-the-land: certutil download cradle on WIN-HR-DESKTOP",
+    "description": "certutil.exe -urlcache invoked from cmd.exe on WIN-HR-DESKTOP. cmd.exe was spawned by outlook.exe. Payload downloaded from 45.142.122.111.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1105",
+      "T1218.009"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "certutil",
+      "urlcache",
+      "outlook.exe",
+      "WIN-HR-DESKTOP",
+      "45.142.122.111",
+      "download cradle"
+    ]
+  },
+  {
+    "id": "INC-EVAL-174",
+    "title": "Container runtime abuse: malicious `docker run` on GCP-GKE-NODE-04",
+    "description": "Unauthenticated Docker API on GCP-GKE-NODE-04 exploited from 172.16.50.7. Container with cryptominer spawned. CPU on host saturated to 95%.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0001",
+      "TA0040"
+    ],
+    "expected_techniques": [
+      "T1610",
+      "T1059.004",
+      "T1496"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "docker",
+      "container",
+      "cryptominer",
+      "miner",
+      "GCP-GKE-NODE-04",
+      "172.16.50.7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-175",
+    "title": "Malicious WMI subscription on LIN-BUILD-CI03",
+    "description": "Permanent WMI event subscription created on LIN-BUILD-CI03 by svc-deploy@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1546.003",
+      "T1059.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "WMI",
+      "subscription",
+      "permanent",
+      "LIN-BUILD-CI03",
+      "svc-deploy@aisoc.dev",
+      "encoded script"
+    ]
+  },
+  {
+    "id": "INC-EVAL-176",
+    "title": "Registry Run key persistence created by cfo@aisoc.dev on LIN-DB-REPLICA",
+    "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on LIN-DB-REPLICA. Points to roaming binary signed with revoked cert. Linked to Scattered Spider.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1547.001"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "registry run",
+      "persistence",
+      "revoked cert",
+      "LIN-DB-REPLICA",
+      "cfo@aisoc.dev",
+      "Scattered Spider"
+    ]
+  },
+  {
+    "id": "INC-EVAL-177",
+    "title": "Scheduled task persistence on WIN-PROD-WEB02",
+    "description": "Hidden scheduled task created on WIN-PROD-WEB02 by dave@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "expected_tactics": [
+      "TA0003"
+    ],
+    "expected_techniques": [
+      "T1053.005"
+    ],
+    "severity": "medium",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "scheduled task",
+      "persistence",
+      "APPDATA",
+      "WIN-PROD-WEB02",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-178",
+    "title": "Firmware implant detected on UEFI partition of WIN-PROD-WEB02",
+    "description": "UEFI secure-boot violation on WIN-PROD-WEB02. Unknown module detected in firmware. Signature matches MosaicRegressor implant.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1542.001",
+      "T1027.002"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UEFI",
+      "firmware",
+      "implant",
+      "secure boot",
+      "WIN-PROD-WEB02",
+      "MosaicRegressor"
+    ]
+  },
+  {
+    "id": "INC-EVAL-179",
+    "title": "Backdoor cron job installed on LIN-OBS-LOGGER",
+    "description": "/etc/cron.d entry created by heidi@aisoc.dev on LIN-OBS-LOGGER. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
+    "expected_tactics": [
+      "TA0003",
+      "TA0011"
+    ],
+    "expected_techniques": [
+      "T1053.003",
+      "T1071.001"
+    ],
+    "severity": "high",
+    "response_class": "rollback_change",
+    "evidence_keywords": [
+      "cron",
+      "backdoor",
+      "reverse shell",
+      "LIN-OBS-LOGGER",
+      "heidi@aisoc.dev",
+      "10.0.99.42"
+    ]
+  },
+  {
+    "id": "INC-EVAL-180",
+    "title": "UAC bypass observed on WIN-EXCHANGE-01",
+    "description": "fodhelper.exe abuse on WIN-EXCHANGE-01 by ceo@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1548.002"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "UAC",
+      "fodhelper",
+      "auto-elevation",
+      "WIN-EXCHANGE-01",
+      "ceo@aisoc.dev",
+      "SYSTEM"
+    ]
+  },
+  {
+    "id": "INC-EVAL-181",
+    "title": "Container escape via privileged pod on LIN-BUILD-CI03",
+    "description": "Kubernetes privileged pod created on LIN-BUILD-CI03 by heidi@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "expected_tactics": [
+      "TA0004",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1611",
+      "T1082"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "kubernetes",
+      "privileged pod",
+      "container escape",
+      "cgroup",
+      "LIN-BUILD-CI03",
+      "heidi@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-182",
+    "title": "Linux SUID binary abuse on WIN-DC-SECONDARY",
+    "description": "Custom SUID binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command execution as root. Likely escalation by ops-lead@aisoc.dev.",
+    "expected_tactics": [
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1548.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "SUID",
+      "/tmp",
+      "root escalation",
+      "WIN-DC-SECONDARY",
+      "ops-lead@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-183",
+    "title": "Memory-only fileless implant in svchost on WIN-DC-PRIMARY",
+    "description": "Process hollowing detected on WIN-DC-PRIMARY: svchost.exe replaced with Cobalt Strike beacon to 203.0.113.45. No disk artefacts. Linked to MagicWeb.",
+    "expected_tactics": [
+      "TA0002",
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1055.012",
+      "T1620"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "process hollowing",
+      "fileless",
+      "svchost",
+      "Cobalt Strike",
+      "WIN-DC-PRIMARY",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-184",
+    "title": "Indicator removal: Windows event log cleared on WIN-PROD-WEB02",
+    "description": "Security event log cleared on WIN-PROD-WEB02 by ceo@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1070.001"
+    ],
+    "severity": "high",
+    "response_class": "escalate",
+    "evidence_keywords": [
+      "wevtutil",
+      "log cleared",
+      "indicator removal",
+      "WIN-PROD-WEB02",
+      "ceo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-185",
+    "title": "Disable security tooling on WIN-PROD-WEB02",
+    "description": "svc-deploy@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on WIN-PROD-WEB02. Tampering telemetry triggered alert.",
+    "expected_tactics": [
+      "TA0005"
+    ],
+    "expected_techniques": [
+      "T1562.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "defender",
+      "crowdstrike",
+      "sysmon",
+      "tampering",
+      "WIN-PROD-WEB02",
+      "svc-deploy@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-186",
+    "title": "LSASS memory dump on WIN-PROD-WEB02 by heidi@aisoc.dev",
+    "description": "comsvcs.dll MiniDump observed on WIN-PROD-WEB02. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1003.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "lsass",
+      "minidump",
+      "comsvcs",
+      "mimikatz",
+      "WIN-PROD-WEB02",
+      "heidi@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-187",
+    "title": "Brute-force credential spray against ceo@aisoc.dev from 10.0.99.42",
+    "description": "Credential spray from 10.0.99.42 against ceo@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "expected_tactics": [
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1110.003"
+    ],
+    "severity": "high",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "brute force",
+      "credential spray",
+      "ceo@aisoc.dev",
+      "10.0.99.42",
+      "azure ad"
+    ]
+  },
+  {
+    "id": "INC-EVAL-188",
+    "title": "Kerberoasting from MAC-CFO-LAPTOP",
+    "description": "Service account TGS tickets requested en-masse from MAC-CFO-LAPTOP by bob@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1558.003",
+      "T1021.001"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "kerberoast",
+      "TGS",
+      "RC4",
+      "mimikatz",
+      "MAC-CFO-LAPTOP",
+      "bob@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-189",
+    "title": "Active Directory DCSync from non-DC host WIN-DC-PRIMARY",
+    "description": "Replication rights abused from WIN-DC-PRIMARY by frank@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0004"
+    ],
+    "expected_techniques": [
+      "T1003.006",
+      "T1078.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "dcsync",
+      "replication",
+      "ntlm hash",
+      "WIN-DC-PRIMARY",
+      "frank@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-190",
+    "title": "SAML golden-ticket: forged assertion targeting eve@aisoc.dev",
+    "description": "Forged SAML assertion detected for eve@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 203.0.113.45.",
+    "expected_tactics": [
+      "TA0006",
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1606.002",
+      "T1087.002"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "saml",
+      "golden ticket",
+      "forged",
+      "azure ad",
+      "eve@aisoc.dev",
+      "203.0.113.45"
+    ]
+  },
+  {
+    "id": "INC-EVAL-191",
+    "title": "Domain enumeration from LIN-K8S-NODE01",
+    "description": "ldap discovery from LIN-K8S-NODE01 by ceo@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1087.002"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "ldap",
+      "bloodhound",
+      "domain enumeration",
+      "LIN-K8S-NODE01",
+      "ceo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-192",
+    "title": "Network share enumeration on LIN-OBS-LOGGER",
+    "description": "Mass SMB share enumeration from LIN-OBS-LOGGER by dave@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "expected_tactics": [
+      "TA0007"
+    ],
+    "expected_techniques": [
+      "T1135"
+    ],
+    "severity": "medium",
+    "response_class": "monitor",
+    "evidence_keywords": [
+      "smb",
+      "net.exe",
+      "Get-SmbShare",
+      "share enumeration",
+      "LIN-OBS-LOGGER",
+      "dave@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-193",
+    "title": "Pass-the-hash from AZURE-VM-FIN-001 to WIN-DC-PRIMARY",
+    "description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to WIN-DC-PRIMARY by svc-backup@aisoc.dev. Golden ticket indicators present. Linked to FIN7.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0006"
+    ],
+    "expected_techniques": [
+      "T1550.002",
+      "T1558.001"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "pass-the-hash",
+      "golden ticket",
+      "AZURE-VM-FIN-001",
+      "WIN-DC-PRIMARY",
+      "svc-backup@aisoc.dev",
+      "FIN7"
+    ]
+  },
+  {
+    "id": "INC-EVAL-194",
+    "title": "RDP lateral movement from LIN-EDGE-VPN02",
+    "description": "Anomalous RDP session from LIN-EDGE-VPN02 (ceo@aisoc.dev) to LIN-DB-REPLICA outside business hours. Source admin not normal for LIN-DB-REPLICA.",
+    "expected_tactics": [
+      "TA0008"
+    ],
+    "expected_techniques": [
+      "T1021.001"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "rdp",
+      "lateral movement",
+      "outside hours",
+      "LIN-EDGE-VPN02",
+      "LIN-DB-REPLICA",
+      "ceo@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-195",
+    "title": "WMI lateral execution from WIN-EXCHANGE-01 to AZURE-VM-FIN-001",
+    "description": "wmic.exe /node:AZURE-VM-FIN-001 process call create observed from WIN-EXCHANGE-01 by ceo@aisoc.dev. Remote command execution; payload from 198.51.100.23.",
+    "expected_tactics": [
+      "TA0008",
+      "TA0002"
+    ],
+    "expected_techniques": [
+      "T1047"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "wmic",
+      "lateral",
+      "WIN-EXCHANGE-01",
+      "AZURE-VM-FIN-001",
+      "ceo@aisoc.dev",
+      "198.51.100.23"
+    ]
+  },
+  {
+    "id": "INC-EVAL-196",
+    "title": "Bulk PII download by bob@aisoc.dev",
+    "description": "bob@aisoc.dev downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1005",
+      "T1041"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "bulk download",
+      "pii",
+      "customer record",
+      "WIN-DC-PRIMARY",
+      "bob@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-197",
+    "title": "Clipboard logging implant on WIN-FIN-DB01",
+    "description": "Clipboard contents from WIN-FIN-DB01 (grace@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "expected_tactics": [
+      "TA0009"
+    ],
+    "expected_techniques": [
+      "T1115"
+    ],
+    "severity": "high",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "clipboard",
+      "keylog",
+      "credentials",
+      "WIN-FIN-DB01",
+      "grace@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-198",
+    "title": "DNS tunnelling exfiltration from AZURE-VM-FIN-001",
+    "description": "DNS query volume from AZURE-VM-FIN-001 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 91.134.231.15.",
+    "expected_tactics": [
+      "TA0011",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1071.004",
+      "T1048.003"
+    ],
+    "severity": "critical",
+    "response_class": "isolate_host",
+    "evidence_keywords": [
+      "dns tunnel",
+      "txt records",
+      "base64",
+      "exfiltrat",
+      "AZURE-VM-FIN-001",
+      "91.134.231.15"
+    ]
+  },
+  {
+    "id": "INC-EVAL-199",
+    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from LIN-BUILD-CI03",
+    "description": "Egress from LIN-BUILD-CI03 to s3://atk-stage-198.51.100.23/dump/ by svc-deploy@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "expected_tactics": [
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002"
+    ],
+    "severity": "critical",
+    "response_class": "block_indicator",
+    "evidence_keywords": [
+      "s3",
+      "cloud storage",
+      "egress",
+      "exfiltrat",
+      "LIN-BUILD-CI03",
+      "198.51.100.23",
+      "svc-deploy@aisoc.dev"
+    ]
+  },
+  {
+    "id": "INC-EVAL-200",
+    "title": "Personal Drive exfil by ceo@aisoc.dev",
+    "description": "ceo@aisoc.dev on AZURE-VM-FIN-001 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "expected_tactics": [
+      "TA0009",
+      "TA0010"
+    ],
+    "expected_techniques": [
+      "T1567.002",
+      "T1005"
+    ],
+    "severity": "critical",
+    "response_class": "disable_account",
+    "evidence_keywords": [
+      "google drive",
+      "personal",
+      "exfiltrat",
+      "source code",
+      "pii",
+      "AZURE-VM-FIN-001",
+      "ceo@aisoc.dev"
+    ]
+  }
+]
