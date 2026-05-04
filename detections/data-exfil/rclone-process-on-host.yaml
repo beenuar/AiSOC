@@ -1,0 +1,23 @@
+id: det-data-exfil-003
+name: rclone or megacmd Process Spawned on Host
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'rclone or megacmd
+  Process Spawned on Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1567.002
+- tlp.white
+category: data-exfil
+log_source:
+  product: edr
+  service: process-create
+detection:
+  condition: |
+    image_basename IN ["rclone.exe", "rclone", "megacmd", "megacmd.exe"]
+false_positives:
+- Allowlisted backup tooling (must be in allowlist)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

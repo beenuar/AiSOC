@@ -1,0 +1,5 @@
+{
+  "bucket": "customer-pii",
+  "event_name": "PutBucketAcl",
+  "public_grant": false
+}

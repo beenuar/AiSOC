@@ -1,0 +1,104 @@
+{
+  "id": "bec-vendor-payment-redirect-v1",
+  "name": "BEC: Vendor Payment Redirect \u2014 Freeze",
+  "description": "Triggered when a vendor banking detail change happens via email. Freezes pending payments and pages CFO.",
+  "version": "1.0.0",
+  "tags": [
+    "bec",
+    "bec",
+    "finance",
+    "mitre.t1565.001"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "bec"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "freeze",
+      "name": "Freeze pending vendor payment",
+      "type": "http",
+      "params": {
+        "url": "${ERP_URL}/payments/{{alert.payment_id}}/freeze",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate vendor change",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page CFO",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Vendor payment {{alert.payment_id}} frozen pending review.",
+        "service_key_env": "PD_CFO_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "approve",
+      "name": "Wait for human approval",
+      "type": "condition",
+      "params": {},
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 5,
+      "condition": {
+        "field": "context.approved_by_oncall",
+        "operator": "eq",
+        "value": true
+      },
+      "next_true": "release"
+    },
+    {
+      "id": "release",
+      "name": "Release payment after approval",
+      "type": "http",
+      "params": {
+        "url": "${ERP_URL}/payments/{{alert.payment_id}}/release",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "t1",
+      "name": "Open BEC payment ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "BEC payment redirect: {{alert.vendor}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

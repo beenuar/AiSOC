@@ -1,0 +1,7 @@
+{
+  "avg_payload_bytes": 32,
+  "packet_count": 10,
+  "protocol": "ICMP",
+  "src_host": "wks-001",
+  "time_window_minutes": 60
+}

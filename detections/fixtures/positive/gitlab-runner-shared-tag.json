@@ -1,0 +1,5 @@
+{
+  "actor": "user@corp.com",
+  "event_type": "runners.register",
+  "runner_scope": "shared"
+}

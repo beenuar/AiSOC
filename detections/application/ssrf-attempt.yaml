@@ -1,0 +1,24 @@
+id: det-application-004
+name: SSRF Attempt to Cloud Metadata Endpoint
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'SSRF Attempt
+  to Cloud Metadata Endpoint'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1190
+- mitre.attack.t1212
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_uri PATTERN_MATCH_ANY ["169\.254\.169\.254", "metadata\.google\.internal", "metadata\.azure\.com", "127\.0\.0\.1:80"]
+false_positives:
+- Allowlisted internal metadata-style apps (rare)
+playbook: tpl-webattack
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

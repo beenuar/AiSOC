@@ -1,0 +1,24 @@
+id: det-identity-024
+name: GitHub App Installed with Repo Admin Permission
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'GitHub App Installed
+  with Repo Admin Permission'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    action == "integration_installation.create"
+    AND permission_administration == "write"
+false_positives:
+- GitHub Apps from approved-publisher list
+playbook: tpl-supply-chain
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

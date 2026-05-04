@@ -1,0 +1,6 @@
+{
+  "nsg": "prod-db",
+  "operation_name": "Microsoft.Network/networkSecurityGroups/securityRules/write",
+  "rule_destination_port": 3389,
+  "rule_source": "10.0.0.0/8"
+}

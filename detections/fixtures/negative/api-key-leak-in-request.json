@@ -1,0 +1,4 @@
+{
+  "host": "internal.corp.com",
+  "request_body": "{\"username\":\"alice\"}"
+}

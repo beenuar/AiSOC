@@ -1,0 +1,5 @@
+{
+  "app": "thirdparty-import",
+  "operation_name": "Add app role assignment to service principal",
+  "scope": "User.Read"
+}

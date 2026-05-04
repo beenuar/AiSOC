@@ -1,0 +1,5 @@
+{
+  "action": "integration_installation.create",
+  "app": "thirdparty-bot",
+  "permission_administration": "read"
+}

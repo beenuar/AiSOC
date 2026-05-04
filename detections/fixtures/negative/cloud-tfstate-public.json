@@ -1,0 +1,5 @@
+{
+  "bucket": "ops-iac",
+  "bucket_visibility": "private",
+  "object_path": "iac/prod/main.tfstate"
+}

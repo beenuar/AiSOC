@@ -1,0 +1,5 @@
+{
+  "command_line": "osascript -e 'tell application \"Calendar\" to activate'",
+  "host": "mac-01",
+  "image_basename": "osascript"
+}

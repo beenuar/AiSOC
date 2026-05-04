@@ -1,0 +1,6 @@
+{
+  "caller_tenant_id": "tenant-B",
+  "event_type": "object.read",
+  "object_tenant_id": "tenant-A",
+  "object_tenant_id_eq_caller_tenant_id": false
+}

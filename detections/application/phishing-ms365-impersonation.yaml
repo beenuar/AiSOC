@@ -1,0 +1,23 @@
+id: det-application-029
+name: Microsoft 365 Brand Impersonation Phishing URL
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Microsoft 365
+  Brand Impersonation Phishing URL'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1566.002
+- tlp.white
+category: application
+log_source:
+  product: email
+  service: messages
+detection:
+  condition: |
+    url_brand_impersonation IN ["microsoft", "office365", "okta", "google-login"]
+false_positives:
+- Approved internal phishing-simulation campaigns (must be tagged)
+playbook: tpl-phishing
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

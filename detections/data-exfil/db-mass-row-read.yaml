@@ -1,0 +1,25 @@
+id: det-data-exfil-008
+name: Database Application Reads Anomalously High Row Count
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Database Application
+  Reads Anomalously High Row Count'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: data-exfil
+log_source:
+  product: db
+  service: query
+detection:
+  condition: |
+    event_type == "SQL_SELECT"
+    AND rows_read_per_session > 500000
+    AND baseline_z_score > 4
+false_positives:
+- Reporting jobs (allowlist principal)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

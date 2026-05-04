@@ -1,0 +1,24 @@
+id: det-endpoint-025
+name: Reverse Shell Pattern from /bin/bash
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Reverse Shell Pattern
+  from /bin/bash'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1059.004
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    image_basename == "bash"
+    AND command_line CONTAINS_ANY ["bash -i >& /dev/tcp/", "0<&196;exec 196<>/dev/tcp/", "bash -c "bash -i""]
+false_positives:
+- Red-team / pentest exercises (must be ticketed)
+playbook: tpl-malware-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

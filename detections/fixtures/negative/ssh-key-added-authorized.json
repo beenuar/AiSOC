@@ -1,0 +1,6 @@
+{
+  "actor": "user",
+  "event_type": "PATH",
+  "file_path": "/home/user/.bashrc",
+  "host": "linux-01"
+}

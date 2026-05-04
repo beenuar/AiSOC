@@ -1,0 +1,25 @@
+id: det-network-017
+name: LDAP Bind from Workstation to Domain Controller (Excessive)
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'LDAP Bind from Workstation
+  to Domain Controller (Excessive)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1087.002
+- tlp.white
+category: network
+log_source:
+  product: windows
+  service: directory-service
+detection:
+  condition: |
+    event_id == 1644
+    AND ldap_query_count_per_src > 200
+    AND time_window_minutes < 5
+false_positives:
+- Legitimate identity-management tooling (allowlist principal)
+playbook: tpl-recon
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

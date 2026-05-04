@@ -1,0 +1,23 @@
+id: det-cloud-031
+name: GCP Audit Log Sink Disabled or Deleted
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'GCP Audit Log Sink
+  Disabled or Deleted'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1562.008
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: audit
+detection:
+  condition: |
+    method_name IN ["google.logging.v2.ConfigServiceV2.DeleteSink", "google.logging.v2.ConfigServiceV2.UpdateSink"]
+false_positives:
+- Sink migration (must reference replacement sink)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

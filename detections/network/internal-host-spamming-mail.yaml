@@ -1,0 +1,26 @@
+id: det-network-021
+name: Internal Host Spamming SMTP
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Internal Host Spamming
+  SMTP'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1566
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    protocol == "TCP"
+    AND dst_port IN [25, 465, 587]
+    AND smtp_count_per_src > 200
+    AND time_window_minutes < 10
+false_positives:
+- Approved bulk mailers (allowlisted source)
+playbook: tpl-malware-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,26 @@
+id: det-application-021
+name: POST Without Referer/Origin to Sensitive Endpoint
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'POST Without
+  Referer/Origin to Sensitive Endpoint'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    method == "POST"
+    AND request_uri_in_sensitive_paths == true
+    AND referer_present == false
+    AND origin_present == false
+false_positives:
+- Allowlisted server-to-server APIs that bypass browser flow
+playbook: tpl-webattack
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

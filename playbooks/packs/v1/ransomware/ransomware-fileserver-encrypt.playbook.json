@@ -1,0 +1,89 @@
+{
+  "id": "ransomware-fileserver-encrypt-v1",
+  "name": "Ransomware: File-Server Encryption Activity",
+  "description": "Triggered by mass-rename / mass-extension-change on a file server. Network-segments the host to halt SMB lateral encryption.",
+  "version": "1.0.0",
+  "tags": [
+    "ransomware",
+    "ransomware",
+    "fileserver",
+    "mitre.t1486"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "ransomware"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "iso",
+      "name": "Network-segment file server",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "smb-deny",
+      "name": "Push deny rule to firewall (SMB)",
+      "type": "http",
+      "params": {
+        "url": "${FW_URL}/policy/deny-smb",
+        "method": "POST",
+        "body_template": "{\"src\":\"{{alert.host}}\",\"port\":445}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Forensic investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page storage and on-call",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "File-server ransomware: {{alert.host}}. SMB egress blocked.",
+        "service_key_env": "PD_STORAGE_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open SEV1 ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "File-server ransomware: {{alert.host}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

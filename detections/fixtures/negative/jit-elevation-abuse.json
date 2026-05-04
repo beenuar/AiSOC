@@ -1,0 +1,5 @@
+{
+  "elevation_duration_minutes": 60,
+  "event_type": "user.privilege.elevate",
+  "user": "user@corp.com"
+}

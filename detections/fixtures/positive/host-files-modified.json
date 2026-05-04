@@ -1,0 +1,6 @@
+{
+  "actor": "user@corp.com",
+  "event_type": "FileWrite",
+  "file_path": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+  "host": "wks-001"
+}

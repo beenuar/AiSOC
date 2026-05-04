@@ -1,0 +1,24 @@
+id: det-data-exfil-016
+name: Inbox Rule Forwarding to External Address
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Inbox Rule Forwarding
+  to External Address'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.003
+- tlp.white
+category: data-exfil
+log_source:
+  product: azure
+  service: exchange-online
+detection:
+  condition: |
+    operation_name IN ["New-InboxRule", "Set-InboxRule"]
+    AND forward_destination_external == true
+false_positives:
+- Approved external assistant/EA address (allowlisted)
+playbook: tpl-account-compromise
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

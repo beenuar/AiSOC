@@ -1,0 +1,24 @@
+id: det-data-exfil-010
+name: Git Push Containing PII or Secret Pattern
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Git Push Containing
+  PII or Secret Pattern'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1552.001
+- tlp.white
+category: data-exfil
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    action == "git.push"
+    AND diff_text PATTERN_MATCH_ANY ["AKIA[0-9A-Z]{16}", "ghp_[A-Za-z0-9]{36}", "[A-Z0-9._%+-]+@[A-Z0-9.-]+ pii=true"]
+false_positives:
+- Test fixtures (must be tagged)
+playbook: tpl-secret-leak
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

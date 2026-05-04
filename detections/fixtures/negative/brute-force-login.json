@@ -1,0 +1,7 @@
+{
+  "event_type": "user.session.start",
+  "fail_count": 2,
+  "outcome": "FAILURE",
+  "time_window_minutes": 30,
+  "user": "ceo@corp.com"
+}

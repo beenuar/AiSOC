@@ -1,0 +1,6 @@
+{
+  "device_class": "USB-MassStorage",
+  "event_type": "DeviceConnect",
+  "host": "finance-01",
+  "host_role": "restricted"
+}

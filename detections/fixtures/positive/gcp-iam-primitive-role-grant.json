@@ -1,0 +1,6 @@
+{
+  "method_name": "SetIamPolicy",
+  "principal": "user@corp.com",
+  "project": "prod",
+  "role": "roles/owner"
+}

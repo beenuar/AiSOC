@@ -1,0 +1,6 @@
+{
+  "actor": "user@corp.com",
+  "event_type": "FileWrite",
+  "file_path": "C:\\Users\\dev\\dev-hosts.bak",
+  "host": "wks-001"
+}

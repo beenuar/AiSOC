@@ -1,0 +1,5 @@
+{
+  "event_name": "AddPermission",
+  "function": "process-customer-pii",
+  "principal": "*"
+}

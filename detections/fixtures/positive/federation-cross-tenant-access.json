@@ -1,0 +1,4 @@
+{
+  "operation_name": "Add cross-tenant access policy",
+  "partner_tenant": "external-tenant-id"
+}

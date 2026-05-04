@@ -1,0 +1,26 @@
+id: det-data-exfil-014
+name: Bulk Zip Creation on File Server
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Bulk Zip Creation
+  on File Server'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1560.001
+- tlp.white
+category: data-exfil
+log_source:
+  product: edr
+  service: file-create
+detection:
+  condition: |
+    event_type == "FileCreate"
+    AND file_path ENDSWITH ".zip"
+    AND zip_size_bytes > 500000000
+    AND host_role == "fileserver"
+false_positives:
+- Approved backup process (must be from backup principal)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

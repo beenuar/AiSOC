@@ -1,0 +1,25 @@
+id: det-endpoint-024
+name: Shell Spawned by Web Server Process
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Shell Spawned by
+  Web Server Process'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1059.004
+- mitre.attack.t1505.003
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    parent_image_basename IN ["nginx", "apache2", "httpd", "php-fpm", "node", "java"]
+    AND image_basename IN ["bash", "sh", "zsh", "ksh", "dash"]
+false_positives:
+- CGI applications by design (allowlist by app)
+playbook: tpl-webshell
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

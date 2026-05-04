@@ -1,0 +1,6 @@
+{
+  "baseline_z_score": 0.4,
+  "event_type": "SQL_SELECT",
+  "rows_read_per_session": 50,
+  "user": "user@corp.com"
+}

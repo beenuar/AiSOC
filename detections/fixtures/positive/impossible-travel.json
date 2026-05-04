@@ -1,0 +1,7 @@
+{
+  "event_type": "user.session.start",
+  "outcome": "SUCCESS",
+  "time_delta_minutes": 30,
+  "travel_speed_kmh": 1100,
+  "user": "vp@corp.com"
+}

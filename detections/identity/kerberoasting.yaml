@@ -1,0 +1,26 @@
+id: det-identity-032
+name: Kerberoasting (Service-Ticket Request for SPN)
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Kerberoasting (Service-Ticket
+  Request for SPN)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1558.003
+- tlp.white
+category: identity
+log_source:
+  product: windows
+  service: security
+detection:
+  condition: |
+    event_id == 4769
+    AND ticket_encryption IN ["RC4-HMAC", "0x17"]
+    AND spn_count_per_user > 5
+    AND time_window_minutes < 5
+false_positives:
+- Legacy services that still issue RC4 tickets (host_role=legacy tag)
+playbook: tpl-credential-theft
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,78 @@
+{
+  "id": "insider-privilege-misuse-v1",
+  "name": "Insider: Privilege Misuse",
+  "description": "Triggered when a privileged account performs actions outside its approved JIT window. Revokes privilege and pages HR-Sec.",
+  "version": "1.0.0",
+  "tags": [
+    "insider-risk",
+    "insider",
+    "privilege",
+    "mitre.t1078.004"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "insider-risk"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "revoke-priv",
+      "name": "Revoke privileged role",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/roles/{{alert.role}}",
+        "method": "DELETE"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate privilege misuse",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page HR-Sec",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Privilege misuse by {{alert.user}} ({{alert.role}}). Role revoked.",
+        "service_key_env": "PD_HRSEC_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open privilege-misuse ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Privilege misuse: {{alert.user}}",
+        "queue": "hr"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

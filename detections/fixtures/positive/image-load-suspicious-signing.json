@@ -1,0 +1,6 @@
+{
+  "event_type": "ImageLoad",
+  "host": "wks-001",
+  "image_basename_loaded": "evil.dll",
+  "signature_status": "Invalid"
+}

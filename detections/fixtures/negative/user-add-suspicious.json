@@ -1,0 +1,5 @@
+{
+  "command_line": "useradd -r -s /usr/sbin/nologin svc-app",
+  "event_type": "USER_ADD",
+  "host": "linux-01"
+}

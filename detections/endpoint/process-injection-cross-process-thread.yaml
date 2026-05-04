@@ -1,0 +1,25 @@
+id: det-endpoint-015
+name: Cross-Process Remote Thread Injection
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Cross-Process Remote
+  Thread Injection'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1055
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: thread
+detection:
+  condition: |
+    event_type == "CreateRemoteThread"
+    AND source_image_basename_not_in_allowlist == true
+    AND target_image_basename IN ["explorer.exe", "svchost.exe", "lsass.exe", "winlogon.exe"]
+false_positives:
+- Debuggers (allowlist by signed publisher)
+playbook: tpl-malware-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

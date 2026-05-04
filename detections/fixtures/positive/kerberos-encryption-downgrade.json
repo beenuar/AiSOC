@@ -1,0 +1,5 @@
+{
+  "event_id": 4768,
+  "ticket_encryption": "RC4-HMAC",
+  "user": "user@corp.com"
+}

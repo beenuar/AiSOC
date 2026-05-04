@@ -1,0 +1,6 @@
+{
+  "event_id": 4662,
+  "operation_type": "DS-Replication-Get-Changes-All",
+  "source_role": "workstation",
+  "user": "user@corp.com"
+}

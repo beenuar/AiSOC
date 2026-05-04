@@ -1,0 +1,24 @@
+id: det-endpoint-027
+name: SSH authorized_keys File Modified
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'SSH authorized_keys
+  File Modified'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.004
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    event_type IN ["PATH", "FILE_WRITE"]
+    AND file_path ENDSWITH "/.ssh/authorized_keys"
+false_positives:
+- Provisioning tools (must be allowlisted)
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

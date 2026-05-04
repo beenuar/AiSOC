@@ -1,0 +1,75 @@
+{
+  "id": "insider-after-hours-access-v1",
+  "name": "Insider: Anomalous After-Hours Access",
+  "description": "Triggered when a user accesses sensitive systems outside their normal pattern. Step-up MFA and log for HR review.",
+  "version": "1.0.0",
+  "tags": [
+    "insider-risk",
+    "insider",
+    "anomaly",
+    "mitre.t1078"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "medium"
+    ],
+    "tags": [
+      "insider-risk"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich user normal pattern",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.user"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "step-up",
+      "name": "Force MFA step-up",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/factors/challenge",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Score anomaly likelihood",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "t1",
+      "name": "Open after-hours review",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P4",
+        "title_template": "After-hours access: {{alert.user}}",
+        "queue": "hr"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

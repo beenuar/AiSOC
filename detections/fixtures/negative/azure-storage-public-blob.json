@@ -1,0 +1,5 @@
+{
+  "container": "customer-data",
+  "operation_name": "Microsoft.Storage/storageAccounts/blobServices/containers/write",
+  "public_access": "none"
+}

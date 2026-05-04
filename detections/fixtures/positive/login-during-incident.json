@@ -1,0 +1,7 @@
+{
+  "active_p0_or_p1_incident": true,
+  "event_type": "user.session.start",
+  "outcome": "SUCCESS",
+  "user": "user@corp.com",
+  "user_role": "marketing"
+}

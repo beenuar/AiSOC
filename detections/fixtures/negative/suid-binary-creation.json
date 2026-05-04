@@ -1,0 +1,9 @@
+{
+  "event_type": "PATH",
+  "host": "linux-01",
+  "path": "/tmp/notes.txt",
+  "permissions": [
+    "S_IRUSR",
+    "S_IWUSR"
+  ]
+}

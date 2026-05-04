@@ -1,0 +1,78 @@
+{
+  "id": "ddos-volumetric-l3-v1",
+  "name": "DDoS: Volumetric L3/L4",
+  "description": "Triggered by volumetric flood detection at edge. Engages scrubbing provider and pages on-call.",
+  "version": "1.0.0",
+  "tags": [
+    "ddos",
+    "ddos",
+    "network",
+    "mitre.t1498"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "ddos"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "scrub-on",
+      "name": "Engage DDoS scrubbing",
+      "type": "http",
+      "params": {
+        "url": "${DDOS_URL}/scrubbing/enable",
+        "method": "POST",
+        "body_template": "{\"target\":\"{{alert.target}}\"}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate attack signature",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page network on-call",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "L3/L4 DDoS on {{alert.target}}. Scrubbing engaged.",
+        "service_key_env": "PD_NETWORK_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open DDoS ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "L3/L4 DDoS: {{alert.target}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

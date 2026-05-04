@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import clsx from 'clsx';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface MarketplaceItem {
+export interface MarketplaceItem {
   id: string;
   type: 'playbook' | 'detection' | 'plugin';
   name: string;
@@ -15,24 +15,72 @@ interface MarketplaceItem {
   author: string;
   tags: string[];
   severity?: 'low' | 'medium' | 'high' | 'critical';
-  // community stats
+  // community stats (populated when the install API is wired up)
   install_count?: number;
   rating?: number;
   rating_count?: number;
+  // provenance
   verified?: boolean;
+  source?: 'core' | 'community';
+  path?: string;
   // playbook-specific
   trigger?: string;
   steps?: number;
   // detection-specific
   category?: string;
+  log_source?: string;
+  playbook?: string;
   // plugin-specific
   plugin_type?: string;
+  license?: string;
+  homepage?: string;
+  min_aisoc_version?: string;
+  sdks?: string[];
+  // shared
+  mitre_techniques?: string[];
+}
+
+interface MitreCoverage {
+  techniques: Record<string, number>;
+  unique_techniques: number;
+  total_with_mitre: number;
+}
+
+interface MarketplaceStats {
+  total: number;
+  playbooks: number;
+  detections: number;
+  plugins: number;
+  verified: number;
+  community: number;
 }
 
 interface MarketplaceIndex {
   version: string;
   generated: string;
   items: MarketplaceItem[];
+  stats?: MarketplaceStats;
+  mitre_coverage?: MitreCoverage;
+}
+
+interface InstalledRecord {
+  id: string;
+  type: 'detection' | 'playbook' | 'plugin';
+  name: string;
+  version: string;
+  content_sha256: string;
+  installed_at: string;
+  installed_by: string;
+}
+
+interface InstalledResponse {
+  total: number;
+  items: InstalledRecord[];
+}
+
+// Composite key for the installed-items set: "<type>:<id>"
+function installedKey(type: string, id: string): string {
+  return `${type}:${id}`;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -98,6 +146,17 @@ function VerifiedBadge() {
   );
 }
 
+function CommunityBadge() {
+  return (
+    <span
+      title="Community contribution"
+      className="inline-flex items-center gap-0.5 rounded border border-blue-700/60 bg-blue-900/30 px-1.5 py-0.5 text-xs font-medium text-blue-300"
+    >
+      Community
+    </span>
+  );
+}
+
 function StarRating({ rating, count }: { rating: number; count: number }) {
   const full = Math.floor(rating);
   const half = rating - full >= 0.5;
@@ -116,46 +175,111 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
   );
 }
 
-function InstallButton({ item }: { item: MarketplaceItem }) {
-  const [installing, setInstalling] = useState(false);
-  const [installed, setInstalled] = useState(false);
+function MitreTechniquesRow({ ids }: { ids: string[] }) {
+  if (!ids || ids.length === 0) return null;
+  const head = ids.slice(0, 3);
+  const rest = ids.length - head.length;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1"
+      title={`Maps to MITRE ATT&CK techniques: ${ids.join(', ')}`}
+    >
+      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+        ATT&amp;CK
+      </span>
+      {head.map((tid) => (
+        <a
+          key={tid}
+          href={`https://attack.mitre.org/techniques/${tid.replace('.', '/')}/`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border border-rose-700/60 bg-rose-900/30 px-1.5 py-0.5 text-[11px] font-mono font-medium text-rose-200 hover:bg-rose-900/50"
+        >
+          {tid}
+        </a>
+      ))}
+      {rest > 0 && (
+        <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[11px] text-zinc-400">
+          +{rest}
+        </span>
+      )}
+    </div>
+  );
+}
 
-  const handleInstall = async () => {
-    setInstalling(true);
-    try {
-      const endpoint =
-        item.type === 'plugin'
-          ? `/api/v1/community/plugins/${item.id}/install`
-          : item.type === 'detection'
-          ? `/api/v1/community/detections/${item.id}/install`
-          : `/api/v1/community/playbooks/${item.id}/install`;
+interface InstallButtonProps {
+  item: MarketplaceItem;
+  installed: boolean;
+  busy: boolean;
+  onInstall: (item: MarketplaceItem) => void | Promise<void>;
+  onUninstall: (item: MarketplaceItem) => void | Promise<void>;
+}
 
-      await fetch(endpoint, { method: 'POST' });
-      setInstalled(true);
-    } catch {
-      // silently ignore for now
-    } finally {
-      setInstalling(false);
-    }
-  };
+function InstallButton({ item, installed, busy, onInstall, onUninstall }: InstallButtonProps) {
+  if (installed) {
+    // Allow operators to back out of an install; visible affordance, not destructive
+    // since marketplace items are already on disk – we just clear the per-tenant flag.
+    return (
+      <div className="flex items-center gap-1">
+        <span
+          className="rounded bg-emerald-900/40 px-2 py-1 text-xs font-medium text-emerald-300"
+          title="Enabled for this tenant"
+        >
+          ✓ Installed
+        </span>
+        <button
+          onClick={() => onUninstall(item)}
+          disabled={busy}
+          title="Remove from this tenant"
+          className="rounded px-1.5 py-1 text-xs text-zinc-400 hover:text-rose-300 disabled:opacity-50"
+        >
+          {busy ? '…' : '×'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <button
-      onClick={handleInstall}
-      disabled={installing || installed}
-      className={clsx(
-        'rounded px-2 py-1 text-xs font-medium transition-colors',
-        installed
-          ? 'bg-emerald-900/40 text-emerald-300 cursor-default'
-          : 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600'
-      )}
+      onClick={() => onInstall(item)}
+      disabled={busy}
+      className="rounded bg-zinc-700 px-2 py-1 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:opacity-60"
     >
-      {installed ? '✓ Installed' : installing ? '…' : 'Install'}
+      {busy ? '…' : 'Install'}
     </button>
   );
 }
 
-function ItemCard({ item, sortBy }: { item: MarketplaceItem; sortBy: string }) {
+function SdkChips({ sdks }: { sdks?: string[] }) {
+  if (!sdks || sdks.length === 0) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1"
+      title={`Reference implementations available: ${sdks.join(', ')}`}
+    >
+      {sdks.includes('python') && (
+        <span className="rounded border border-yellow-700/60 bg-yellow-900/30 px-1.5 py-0.5 text-[10px] font-mono uppercase text-yellow-300">
+          Py
+        </span>
+      )}
+      {sdks.includes('go') && (
+        <span className="rounded border border-sky-700/60 bg-sky-900/30 px-1.5 py-0.5 text-[10px] font-mono uppercase text-sky-300">
+          Go
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface ItemCardProps {
+  item: MarketplaceItem;
+  installed: boolean;
+  busy: boolean;
+  onInstall: (item: MarketplaceItem) => void | Promise<void>;
+  onUninstall: (item: MarketplaceItem) => void | Promise<void>;
+}
+
+function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 hover:border-zinc-600 transition-colors">
       {/* Header */}
@@ -165,7 +289,7 @@ function ItemCard({ item, sortBy }: { item: MarketplaceItem; sortBy: string }) {
         </h3>
         <div className="flex shrink-0 flex-wrap gap-1 justify-end">
           <TypeBadge type={item.type} />
-          {item.verified && <VerifiedBadge />}
+          {item.source === 'community' ? <CommunityBadge /> : item.verified && <VerifiedBadge />}
         </div>
       </div>
 
@@ -174,19 +298,26 @@ function ItemCard({ item, sortBy }: { item: MarketplaceItem; sortBy: string }) {
         {item.description}
       </p>
 
+      {/* MITRE techniques (detections + playbooks) */}
+      {item.mitre_techniques && item.mitre_techniques.length > 0 && (
+        <MitreTechniquesRow ids={item.mitre_techniques} />
+      )}
+
       {/* Rating + install count */}
-      <div className="flex items-center justify-between gap-2">
-        {item.rating !== undefined && item.rating > 0 ? (
-          <StarRating rating={item.rating} count={item.rating_count ?? 0} />
-        ) : (
-          <span className="text-xs text-zinc-600">No ratings yet</span>
-        )}
-        {item.install_count !== undefined && (
-          <span className="text-xs text-zinc-500">
-            {item.install_count.toLocaleString()} installs
-          </span>
-        )}
-      </div>
+      {(item.rating || item.install_count) && (
+        <div className="flex items-center justify-between gap-2">
+          {item.rating !== undefined && item.rating > 0 ? (
+            <StarRating rating={item.rating} count={item.rating_count ?? 0} />
+          ) : (
+            <span className="text-xs text-zinc-600">No ratings yet</span>
+          )}
+          {item.install_count !== undefined && (
+            <span className="text-xs text-zinc-500">
+              {item.install_count.toLocaleString()} installs
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Metadata row */}
       <div className="flex flex-wrap items-center gap-2 mt-auto pt-2 border-t border-zinc-700/40">
@@ -203,13 +334,23 @@ function ItemCard({ item, sortBy }: { item: MarketplaceItem; sortBy: string }) {
         {item.type === 'detection' && item.category && (
           <span className="text-xs text-zinc-500">{item.category}</span>
         )}
+        {item.type === 'detection' && item.log_source && (
+          <span className="text-xs text-zinc-500">via {item.log_source}</span>
+        )}
         {item.type === 'plugin' && item.plugin_type && (
           <span className="text-xs text-zinc-500">{item.plugin_type}</span>
         )}
+        {item.type === 'plugin' && <SdkChips sdks={item.sdks} />}
 
         <span className="text-xs text-zinc-600">v{item.version}</span>
         <div className="ml-auto">
-          <InstallButton item={item} />
+          <InstallButton
+            item={item}
+            installed={installed}
+            busy={busy}
+            onInstall={onInstall}
+            onUninstall={onUninstall}
+          />
         </div>
       </div>
 
@@ -238,6 +379,17 @@ function ItemCard({ item, sortBy }: { item: MarketplaceItem; sortBy: string }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 type SortOption = 'name' | 'install_count' | 'rating' | 'newest';
+type SourceFilter = 'all' | 'core' | 'community';
+type SdkFilter = 'all' | 'python' | 'go' | 'both';
+
+// Fetch the installed-set, but treat 401/404 as "not signed in / API offline"
+// so the marketplace stays usable in static demos and unauthenticated previews.
+async function fetchInstalled(url: string): Promise<InstalledResponse | null> {
+  const res = await fetch(url, { credentials: 'include' });
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`installed: HTTP ${res.status}`);
+  return (await res.json()) as InstalledResponse;
+}
 
 export function MarketplaceView() {
   const { data, error, isLoading } = useSWR<MarketplaceIndex>(
@@ -245,40 +397,190 @@ export function MarketplaceView() {
     fetcher
   );
 
+  const {
+    data: installedData,
+    mutate: refreshInstalled,
+  } = useSWR<InstalledResponse | null>(
+    '/api/v1/marketplace/installed',
+    fetchInstalled,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  // Locally-tracked install state; the SWR data above is the source of truth
+  // when the API is reachable, but optimistic toggles live here for snappier UX.
+  const [localInstalled, setLocalInstalled] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const installedSet = useMemo(() => {
+    const set = new Set<string>(localInstalled);
+    if (installedData?.items) {
+      for (const r of installedData.items) {
+        set.add(installedKey(r.type, r.id));
+      }
+    }
+    return set;
+  }, [installedData, localInstalled]);
+
+  const setBusyKey = useCallback((key: string, on: boolean) => {
+    setBusy((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const handleInstall = useCallback(
+    async (item: MarketplaceItem) => {
+      const key = installedKey(item.type, item.id);
+      setActionError(null);
+      setBusyKey(key, true);
+      // Optimistic mark so the UI flips immediately even when API is offline.
+      setLocalInstalled((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+      try {
+        const res = await fetch('/api/v1/marketplace/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ type: item.type, id: item.id }),
+        });
+        if (!res.ok && res.status !== 401 && res.status !== 404) {
+          throw new Error(`install: HTTP ${res.status}`);
+        }
+        await refreshInstalled();
+      } catch (err) {
+        // Roll the optimistic flag back; surface a one-line toast.
+        setLocalInstalled((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        setActionError(
+          err instanceof Error
+            ? `Could not install ${item.id}: ${err.message}`
+            : `Could not install ${item.id}.`,
+        );
+      } finally {
+        setBusyKey(key, false);
+      }
+    },
+    [refreshInstalled, setBusyKey],
+  );
+
+  const handleUninstall = useCallback(
+    async (item: MarketplaceItem) => {
+      const key = installedKey(item.type, item.id);
+      setActionError(null);
+      setBusyKey(key, true);
+      setLocalInstalled((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      try {
+        const url = `/api/v1/marketplace/install?type=${encodeURIComponent(
+          item.type,
+        )}&id=${encodeURIComponent(item.id)}`;
+        const res = await fetch(url, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok && res.status !== 401 && res.status !== 404) {
+          throw new Error(`uninstall: HTTP ${res.status}`);
+        }
+        await refreshInstalled();
+      } catch (err) {
+        setLocalInstalled((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+        setActionError(
+          err instanceof Error
+            ? `Could not uninstall ${item.id}: ${err.message}`
+            : `Could not uninstall ${item.id}.`,
+        );
+      } finally {
+        setBusyKey(key, false);
+      }
+    },
+    [refreshInstalled, setBusyKey],
+  );
+
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'playbook' | 'detection' | 'plugin'>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('install_count');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [sdkFilter, setSdkFilter] = useState<SdkFilter>('all');
+  const [mitreFilter, setMitreFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  const categories = useMemo(() => {
-    if (!data?.items) return [];
-    const cats = new Set(data.items.flatMap((i) => i.tags ?? []));
-    return Array.from(cats).sort();
+  // Build distinct, sorted MITRE technique list (with item counts) for the filter.
+  const mitreOptions = useMemo(() => {
+    if (!data?.items) return [] as { id: string; count: number }[];
+    const byId = new Map<string, number>();
+    for (const it of data.items) {
+      for (const tid of it.mitre_techniques ?? []) {
+        byId.set(tid, (byId.get(tid) ?? 0) + 1);
+      }
+    }
+    return Array.from(byId.entries())
+      .map(([id, count]) => ({ id, count }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }, [data]);
+
+  // Distinct content categories (detection.category + playbook.category) for filter.
+  const categoryOptions = useMemo(() => {
+    if (!data?.items) return [] as string[];
+    const set = new Set<string>();
+    for (const it of data.items) {
+      if (it.category) set.add(it.category);
+    }
+    return Array.from(set).sort();
   }, [data]);
 
   const items = useMemo(() => {
     if (!data?.items) return [];
 
-    let filtered = data.items.filter((item) => {
+    const filtered = data.items.filter((item) => {
       if (typeFilter !== 'all' && item.type !== typeFilter) return false;
       if (severityFilter !== 'all' && item.severity !== severityFilter) return false;
-      if (categoryFilter !== 'all' && !(item.tags ?? []).includes(categoryFilter)) return false;
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+      if (sourceFilter !== 'all' && (item.source ?? 'core') !== sourceFilter) return false;
+      if (mitreFilter !== 'all' && !(item.mitre_techniques ?? []).includes(mitreFilter)) return false;
+      if (sdkFilter !== 'all') {
+        if (item.type !== 'plugin') return false;
+        const sdks = item.sdks ?? [];
+        if (sdkFilter === 'both' && !(sdks.includes('python') && sdks.includes('go'))) {
+          return false;
+        }
+        if ((sdkFilter === 'python' || sdkFilter === 'go') && !sdks.includes(sdkFilter)) {
+          return false;
+        }
+      }
       if (search) {
         const q = search.toLowerCase();
         return (
           item.name.toLowerCase().includes(q) ||
           item.description.toLowerCase().includes(q) ||
-          (item.tags ?? []).some((t) => t.toLowerCase().includes(q))
+          (item.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
+          (item.mitre_techniques ?? []).some((m) => m.toLowerCase().includes(q)) ||
+          item.id.toLowerCase().includes(q)
         );
       }
       return true;
     });
 
-    // Sort
     filtered.sort((a, b) => {
-      let va: number | string, vb: number | string;
+      let va: number | string = 0;
+      let vb: number | string = 0;
       if (sortBy === 'name') {
         va = a.name.toLowerCase();
         vb = b.name.toLowerCase();
@@ -288,26 +590,41 @@ export function MarketplaceView() {
       } else if (sortBy === 'rating') {
         va = a.rating ?? 0;
         vb = b.rating ?? 0;
-      } else {
-        va = 0;
-        vb = 0;
       }
       if (va < vb) return sortOrder === 'asc' ? -1 : 1;
       if (va > vb) return sortOrder === 'asc' ? 1 : -1;
+      // Stable secondary sort by id
+      const ida = a.id.toLowerCase();
+      const idb = b.id.toLowerCase();
+      if (ida < idb) return -1;
+      if (ida > idb) return 1;
       return 0;
     });
 
     return filtered;
-  }, [data, search, typeFilter, severityFilter, categoryFilter, sortBy, sortOrder]);
+  }, [
+    data,
+    search,
+    typeFilter,
+    severityFilter,
+    categoryFilter,
+    sourceFilter,
+    sdkFilter,
+    mitreFilter,
+    sortBy,
+    sortOrder,
+  ]);
 
   const stats = useMemo(() => {
     if (!data?.items) return null;
+    if (data.stats) return data.stats;
     return {
       total:      data.items.length,
       playbooks:  data.items.filter((i) => i.type === 'playbook').length,
       detections: data.items.filter((i) => i.type === 'detection').length,
       plugins:    data.items.filter((i) => i.type === 'plugin').length,
       verified:   data.items.filter((i) => i.verified).length,
+      community:  data.items.filter((i) => i.source === 'community').length,
     };
   }, [data]);
 
@@ -316,29 +633,69 @@ export function MarketplaceView() {
       setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortBy(field);
-      setSortOrder('desc');
+      setSortOrder(field === 'name' ? 'asc' : 'desc');
     }
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setTypeFilter('all');
+    setSeverityFilter('all');
+    setCategoryFilter('all');
+    setSourceFilter('all');
+    setSdkFilter('all');
+    setMitreFilter('all');
   };
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100">Marketplace</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Browse and install community-contributed playbooks, detection rules, and plugins for your SOC.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-[280px] flex-1">
+          <h1 className="text-2xl font-bold text-zinc-100">Marketplace</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Browse and install detection rules, response playbooks, and plugins shipped with AiSOC. Every entry is generated directly from the
+            repo&rsquo;s <code className="text-zinc-300">detections/</code>,{' '}
+            <code className="text-zinc-300">playbooks/</code> and{' '}
+            <code className="text-zinc-300">plugins/</code> trees, so what you see here is what your AiSOC instance has on disk.
+          </p>
+        </div>
+        {installedSet.size > 0 && (
+          <span
+            className="self-start rounded-full bg-emerald-900/40 px-3 py-1 text-xs font-medium text-emerald-300"
+            title="Items enabled for the current tenant"
+          >
+            ✓ {installedSet.size} installed
+          </span>
+        )}
       </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-lg border border-rose-700/40 bg-rose-900/20 px-4 py-2 text-sm text-rose-200"
+        >
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-rose-400 hover:text-rose-200"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           {[
             { label: 'Total',       value: stats.total,      color: 'text-zinc-100' },
             { label: 'Playbooks',   value: stats.playbooks,  color: 'text-purple-300' },
             { label: 'Detections',  value: stats.detections, color: 'text-cyan-300' },
             { label: 'Plugins',     value: stats.plugins,    color: 'text-emerald-300' },
             { label: 'Verified',    value: stats.verified,   color: 'text-emerald-400' },
+            { label: 'Community',   value: stats.community,  color: 'text-blue-300' },
           ].map(({ label, value, color }) => (
             <div
               key={label}
@@ -351,14 +708,14 @@ export function MarketplaceView() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Search + primary filter chips */}
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, description, or tag…"
-          className="flex-1 min-w-[200px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+          placeholder="Search by name, description, tag, MITRE ID, or item ID…"
+          className="flex-1 min-w-[240px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
         />
 
         {/* Type filter */}
@@ -377,38 +734,96 @@ export function MarketplaceView() {
           ))}
         </div>
 
-        {/* Severity filter */}
+        {/* Source filter (core vs community) */}
+        <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1">
+          {(['all', 'core', 'community'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSourceFilter(s)}
+              className={clsx(
+                'rounded px-2.5 py-1.5 text-xs font-medium transition-colors capitalize',
+                sourceFilter === s ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+              )}
+            >
+              {s === 'all' ? 'All sources' : s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Secondary filters: severity, category, MITRE, SDK */}
+      <div className="flex flex-wrap items-center gap-3 -mt-3">
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
         >
-          <option value="all">All Severities</option>
+          <option value="all">All severities</option>
           <option value="critical">Critical</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
 
-        {/* Category filter */}
-        {categories.length > 0 && (
+        {categoryOptions.length > 0 && (
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
           >
-            <option value="all">All Categories</option>
-            {categories.map((c) => (
+            <option value="all">All categories</option>
+            {categoryOptions.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
         )}
+
+        {/* MITRE technique filter - the headline new filter the plan asks for */}
+        {mitreOptions.length > 0 && (
+          <select
+            value={mitreFilter}
+            onChange={(e) => setMitreFilter(e.target.value)}
+            className="rounded-lg border border-rose-800/60 bg-rose-900/20 px-3 py-2 text-sm text-rose-200 focus:border-rose-600 focus:outline-none"
+            title="Filter by MITRE ATT&CK technique"
+          >
+            <option value="all">
+              MITRE ATT&amp;CK ({mitreOptions.length} techniques)
+            </option>
+            {mitreOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id} ({m.count})
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* SDK filter (only meaningful when type=plugin or all) */}
+        <select
+          value={sdkFilter}
+          onChange={(e) => setSdkFilter(e.target.value as SdkFilter)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+          title="Filter plugins by SDK availability"
+        >
+          <option value="all">Any SDK</option>
+          <option value="both">Plugins: Python + Go</option>
+          <option value="python">Plugins: Python only</option>
+          <option value="go">Plugins: Go only</option>
+        </select>
+
+        <a
+          href="https://github.com/beenuar/aisoc/blob/main/CONTRIBUTING.md#community-marketplace"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto rounded-lg border border-blue-700/60 bg-blue-900/20 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-900/40"
+        >
+          + Contribute to the marketplace
+        </a>
       </div>
 
       {/* Sort bar */}
       <div className="flex items-center gap-2 -mt-3">
         <span className="text-xs text-zinc-500">Sort by:</span>
-        {(['install_count', 'rating', 'name'] as SortOption[]).map((field) => (
+        {(['name', 'install_count', 'rating'] as SortOption[]).map((field) => (
           <button
             key={field}
             onClick={() => toggleSort(field)}
@@ -437,7 +852,7 @@ export function MarketplaceView() {
         <div className="rounded-lg border border-red-700/40 bg-red-900/20 p-4 text-sm text-red-300">
           Failed to load marketplace data. Make sure{' '}
           <code className="text-red-200">/marketplace/index.json</code> is served
-          as a static file.
+          as a static file. Run <code className="text-red-200">pnpm marketplace:build</code> to regenerate it.
         </div>
       )}
 
@@ -445,12 +860,7 @@ export function MarketplaceView() {
         <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
           <p className="text-sm">No items match your filters.</p>
           <button
-            onClick={() => {
-              setSearch('');
-              setTypeFilter('all');
-              setSeverityFilter('all');
-              setCategoryFilter('all');
-            }}
+            onClick={clearFilters}
             className="mt-2 text-xs text-zinc-400 underline hover:text-zinc-200"
           >
             Clear filters
@@ -460,9 +870,19 @@ export function MarketplaceView() {
 
       {!isLoading && !error && items.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-6">
-          {items.map((item) => (
-            <ItemCard key={item.id} item={item} sortBy={sortBy} />
-          ))}
+          {items.map((item) => {
+            const key = installedKey(item.type, item.id);
+            return (
+              <ItemCard
+                key={key}
+                item={item}
+                installed={installedSet.has(key)}
+                busy={busy.has(key)}
+                onInstall={handleInstall}
+                onUninstall={handleUninstall}
+              />
+            );
+          })}
         </div>
       )}
     </div>

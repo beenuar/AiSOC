@@ -1,0 +1,6 @@
+{
+  "dst_asn": "AS999999",
+  "dst_asn_seen_count": 1,
+  "src_host": "wks-001",
+  "time_window_days": 90
+}

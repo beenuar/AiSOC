@@ -1,0 +1,23 @@
+id: det-identity-037
+name: Federation Trust Relationship Modified
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Federation Trust
+  Relationship Modified'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556.007
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: azuread-audit
+detection:
+  condition: |
+    operation_name IN ["Set domain authentication", "Set federation settings on domain"]
+false_positives:
+- Approved federation cutover (must reference change ticket)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

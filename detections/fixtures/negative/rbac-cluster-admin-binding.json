@@ -1,0 +1,6 @@
+{
+  "object_resource": "clusterrolebindings",
+  "role_ref": "view",
+  "subject": "user@corp.com",
+  "verb": "create"
+}

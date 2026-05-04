@@ -1,0 +1,5 @@
+{
+  "operation_name": "AddMemberToRole",
+  "role_name": "Global Administrator",
+  "target_user": "user@corp.com"
+}

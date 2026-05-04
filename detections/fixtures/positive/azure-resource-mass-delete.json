@@ -1,0 +1,6 @@
+{
+  "delete_count_per_principal": 120,
+  "operation_name": "Microsoft.Storage/storageAccounts/delete",
+  "principal": "user@corp.com",
+  "time_window_minutes": 5
+}

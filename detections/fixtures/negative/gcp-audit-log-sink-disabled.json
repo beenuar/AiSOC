@@ -1,0 +1,5 @@
+{
+  "method_name": "google.logging.v2.ConfigServiceV2.CreateSink",
+  "principal": "user@corp.com",
+  "sink": "org-default"
+}

@@ -1,0 +1,5 @@
+{
+  "event_name": "ScheduleKeyDeletion",
+  "key_id": "alias/prod-encrypt",
+  "user_arn": "arn:aws:iam::111:user/intern"
+}

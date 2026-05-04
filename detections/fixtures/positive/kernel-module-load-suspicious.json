@@ -1,0 +1,5 @@
+{
+  "event_type": "MODULE",
+  "host": "linux-01",
+  "module_path": "/tmp/rootkit.ko"
+}

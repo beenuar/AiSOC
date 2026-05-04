@@ -1,0 +1,89 @@
+{
+  "id": "insider-source-code-exfil-v1",
+  "name": "Insider: Source-Code Exfil",
+  "description": "Triggered when a developer pushes private source to a personal remote or pastebin-like target. Blocks dest, pages eng-leadership.",
+  "version": "1.0.0",
+  "tags": [
+    "insider-risk",
+    "insider",
+    "source-code",
+    "mitre.t1567"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "insider-risk"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich destination",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.dst_host"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "block-dest",
+      "name": "Block destination at proxy",
+      "type": "http",
+      "params": {
+        "url": "${PROXY_URL}/policy/block",
+        "method": "POST",
+        "body_template": "{\"host\":\"{{alert.dst_host}}\",\"reason\":\"src-exfil\"}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate exfil chain",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page eng-leadership",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Source-code exfil suspected from {{alert.user}} to {{alert.dst_host}}.",
+        "service_key_env": "PD_ENG_LEAD_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open exfil ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Source-code exfil: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

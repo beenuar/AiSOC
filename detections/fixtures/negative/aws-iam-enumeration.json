@@ -1,0 +1,6 @@
+{
+  "event_name_count": 4,
+  "event_source": "iam.amazonaws.com",
+  "time_window_minutes": 5,
+  "user_arn": "arn:aws:iam::111:user/admin"
+}

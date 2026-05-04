@@ -1,0 +1,5 @@
+{
+  "dst_in_blocklist": false,
+  "dst_ip": "1.1.1.1",
+  "src_host": "wks-001"
+}

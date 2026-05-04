@@ -1,0 +1,4 @@
+{
+  "event_name": "CreateFlowLogs",
+  "vpc_id": "vpc-prod"
+}

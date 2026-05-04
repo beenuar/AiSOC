@@ -1,0 +1,25 @@
+id: det-identity-034
+name: Golden Ticket Indicator (Anomalous TGT Lifetime)
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Golden Ticket Indicator
+  (Anomalous TGT Lifetime)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1558.001
+- tlp.white
+category: identity
+log_source:
+  product: windows
+  service: security
+detection:
+  condition: |
+    event_id == 4624
+    AND logon_type == 3
+    AND ticket_lifetime_hours > 24
+false_positives:
+- Forest-trust kerberos tickets (rare; allowlist trust)
+playbook: tpl-credential-theft
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

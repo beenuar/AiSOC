@@ -1,0 +1,6 @@
+{
+  "event_id": 4688,
+  "process_command_line": "wmic /node:srv01 process call create cmd.exe",
+  "src_host": "wks-001",
+  "src_role": "workstation"
+}

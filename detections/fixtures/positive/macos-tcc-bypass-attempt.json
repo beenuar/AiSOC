@@ -1,0 +1,5 @@
+{
+  "command_line": "sqlite3 ~/Library/Application\\ Support/com.apple.TCC/TCC.db",
+  "host": "mac-01",
+  "image_basename": "sqlite3"
+}

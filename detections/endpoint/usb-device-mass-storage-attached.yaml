@@ -1,0 +1,25 @@
+id: det-endpoint-037
+name: USB Mass-Storage Device Attached to Restricted Host
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'USB Mass-Storage
+  Device Attached to Restricted Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1052.001
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: device
+detection:
+  condition: |
+    event_type == "DeviceConnect"
+    AND device_class == "USB-MassStorage"
+    AND host_role == "restricted"
+false_positives:
+- IT-issued encrypted USB keys (allowlist by device serial)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

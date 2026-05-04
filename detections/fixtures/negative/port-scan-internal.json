@@ -1,0 +1,6 @@
+{
+  "distinct_dst_per_src": 1,
+  "distinct_ports_per_src": 3,
+  "src_ip": "10.0.5.7",
+  "time_window_minutes": 60
+}

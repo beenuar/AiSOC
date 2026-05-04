@@ -1,0 +1,7 @@
+{
+  "namespace": "kube-system",
+  "object_resource": "pods",
+  "user": "system:nodes",
+  "verb": "create",
+  "volume_path": "/var/log"
+}

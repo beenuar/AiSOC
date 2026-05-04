@@ -1,0 +1,5 @@
+{
+  "dataset": "customer_metrics",
+  "iam_member": "user:analyst@corp.com",
+  "method_name": "google.cloud.bigquery.v2.DatasetService.UpdateDataset"
+}

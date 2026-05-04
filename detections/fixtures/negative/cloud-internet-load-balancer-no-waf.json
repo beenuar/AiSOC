@@ -1,0 +1,6 @@
+{
+  "event_name": "CreateLoadBalancer",
+  "lb": "prod-api",
+  "scheme": "internet-facing",
+  "waf_attached": true
+}

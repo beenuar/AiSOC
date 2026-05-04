@@ -1,32 +1,25 @@
-id: det-net-003
+id: det-network-003
 name: Internal Network Port Scan
-description: >
-  Detects lateral movement or reconnaissance activity where a single source
-  host initiates connections to more than 20 distinct destination ports on
-  10 or more distinct internal hosts within a five-minute window.
-version: "1.0.0"
-severity: medium
+description: Detects horizontal and vertical port scanning activity originating from inside the network.
+  Often the first sign of an attacker performing reconnaissance after gaining initial foothold.
+version: 1.0.0
+severity: high
 tags:
-  - mitre.attack.t1046
-  - tlp.white
+- mitre.attack.t1046
+- tlp.white
 category: network
 log_source:
-  product: network-firewall
-  service: flow-logs
+  product: ndr
+  service: flow
 detection:
   condition: |
-    src_ip IN ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-    AND dest_ip IN ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-    AND unique_dest_ports_per_src_per_5min > 20
-    AND unique_dest_hosts_per_src_per_5min > 10
-  filters:
-    - src_ip: vulnerability-scanner-cidrs
+    distinct_ports_per_src > 50
+    AND distinct_dst_per_src > 25
+    AND time_window_minutes < 5
 false_positives:
-  - Authorised vulnerability scanners (Nessus, Qualys)
-  - Network inventory tools (Nmap scheduled scans)
-  - Configuration management systems (Ansible, Puppet)
-playbook: tpl-phishing-triage
+- Vulnerability scanners (must be allowlisted)
+playbook: tpl-recon
 enabled: true
 author: AiSOC
-created: "2025-01-15"
-modified: "2025-01-15"
+created: '2026-05-03'
+modified: '2026-05-03'

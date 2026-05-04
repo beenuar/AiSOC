@@ -1,0 +1,6 @@
+{
+  "actor": "admin@corp.com",
+  "event_type": "ServiceStart",
+  "host": "wks-001",
+  "service_name": "WinDefend"
+}

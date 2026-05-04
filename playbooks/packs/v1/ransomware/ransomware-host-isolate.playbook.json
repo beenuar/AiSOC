@@ -1,0 +1,99 @@
+{
+  "id": "ransomware-host-isolate-v1",
+  "name": "Ransomware: Host Isolation & Snapshot",
+  "description": "Immediate host isolation, disk snapshot for forensics, page on-call. Standard first-response for endpoint ransomware.",
+  "version": "1.0.0",
+  "tags": [
+    "ransomware",
+    "ransomware",
+    "endpoint",
+    "mitre.t1486"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "ransomware"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "iso",
+      "name": "Isolate host (EDR)",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "snap",
+      "name": "Snapshot host disk",
+      "type": "http",
+      "params": {
+        "url": "${EDR_URL}/hosts/{{alert.host}}/snapshot",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "e1",
+      "name": "Enrich file hash",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.file_hash"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "inv",
+      "name": "Forensic investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page on-call (SEV1)",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "RANSOMWARE: {{alert.host}} isolated. Snapshot {{context.snapshot_id}} taken.",
+        "service_key_env": "PD_RANSOMWARE_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open SEV1 ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "RANSOMWARE: {{alert.host}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

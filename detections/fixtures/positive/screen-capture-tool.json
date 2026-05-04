@@ -1,0 +1,5 @@
+{
+  "host": "finance-01",
+  "host_role": "sensitive",
+  "image_basename": "obs64.exe"
+}

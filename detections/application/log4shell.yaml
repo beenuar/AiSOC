@@ -1,0 +1,23 @@
+id: det-application-005
+name: Log4Shell JNDI Pattern in HTTP Header
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Log4Shell JNDI
+  Pattern in HTTP Header'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    header_value PATTERN_MATCH_ANY ["\$\{jndi:ldap:", "\$\{jndi:dns:", "\$\{jndi:rmi:"]
+false_positives:
+- Internal canary strings used for log4j detection (allowlist src)
+playbook: tpl-webattack
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

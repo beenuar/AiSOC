@@ -1,0 +1,7 @@
+{
+  "namespace": "default",
+  "object_resource": "pods",
+  "user": "user@corp.com",
+  "verb": "create",
+  "volume_path": "/"
+}

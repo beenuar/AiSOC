@@ -1,0 +1,24 @@
+id: det-cloud-010
+name: AWS Lambda Function with Public Invoke Permission
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS Lambda Function
+  with Public Invoke Permission'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    event_name == "AddPermission"
+    AND principal == "*"
+false_positives:
+- Public webhook endpoint (must have purpose=public-webhook tag)
+playbook: tpl-cloud-misconfig
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

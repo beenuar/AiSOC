@@ -1,0 +1,6 @@
+{
+  "driver_basename": "ntoskrnl.exe",
+  "driver_hash_in_byovd_list": false,
+  "event_type": "DriverLoad",
+  "host": "wks-001"
+}

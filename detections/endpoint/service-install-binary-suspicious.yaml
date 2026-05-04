@@ -1,0 +1,24 @@
+id: det-endpoint-009
+name: New Service Installed with Suspicious Binary Path
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'New Service Installed
+  with Suspicious Binary Path'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1543.003
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: system
+detection:
+  condition: |
+    event_id == 7045
+    AND service_path STARTSWITH_ANY ["C:\Users\", "C:\ProgramData\", "C:\Windows\Temp\"]
+false_positives:
+- Vendor agents installed during onboarding (must be allowlisted by publisher)
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,24 @@
+id: det-network-023
+name: Outbound IPv6 Teredo / 6to4 Tunneling Traffic
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound IPv6 Teredo
+  / 6to4 Tunneling Traffic'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1572
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    protocol == "UDP"
+    AND dst_port IN [3544, 41]
+false_positives:
+- Legacy IPv6 transition mechanisms (allowlist host)
+playbook: tpl-c2
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

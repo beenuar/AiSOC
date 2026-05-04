@@ -1,0 +1,24 @@
+id: det-data-exfil-002
+name: Outbound Bytes Spike Above Baseline (Anomaly)
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Outbound Bytes
+  Spike Above Baseline (Anomaly)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1041
+- tlp.white
+category: data-exfil
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    bytes_out_per_src > 200000000
+    AND baseline_z_score > 4
+false_positives:
+- Approved bulk syncs (allowlist src)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,27 @@
+id: det-cloud-006
+name: AWS Security Group Opened to 0.0.0.0/0
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS Security Group
+  Opened to 0.0.0.0/0'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1190
+- mitre.attack.t1133
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    event_name == "AuthorizeSecurityGroupIngress"
+    AND ip_range == "0.0.0.0/0"
+    AND port IN [22, 3389, 3306, 5432, 1433, 6379]
+false_positives:
+- Public load balancers (must be tagged role=public-lb)
+- WAF-protected origins
+playbook: tpl-cloud-misconfig
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

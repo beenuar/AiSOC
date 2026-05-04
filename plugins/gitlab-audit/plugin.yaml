@@ -1,0 +1,37 @@
+id: gitlab-audit
+name: GitLab Audit Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Pulls GitLab audit events at the instance, group, or project level. Mirrors
+  the github-audit connector so security teams can monitor access changes,
+  permission grants, secret rotations, and CI configuration changes across both
+  GitHub and GitLab from a single SOC.
+author: AiSOC Core Team
+tags: [identity, gitlab, audit, devsecops, connector]
+homepage: https://github.com/beenuar/aisoc/tree/main/plugins/gitlab-audit
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [token]
+  properties:
+    base_url:
+      type: string
+      default: https://gitlab.com
+      description: "Base URL of GitLab instance (self-hosted or gitlab.com)"
+    token:
+      type: string
+      description: "Personal access token or admin token with audit_event scope"
+      secret: true
+    scope:
+      type: string
+      enum: [instance, group, project]
+      default: instance
+    scope_id:
+      type: string
+      description: "Group or project ID when scope is group/project"
+    poll_interval_seconds:
+      type: integer
+      default: 60
+      minimum: 30

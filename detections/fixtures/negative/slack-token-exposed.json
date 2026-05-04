@@ -1,0 +1,6 @@
+{
+  "channel": "#general",
+  "channel_visibility": "public",
+  "event_type": "message.posted",
+  "message_text": "morning standup notes attached"
+}

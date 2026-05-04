@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "request_count_per_src": 5,
+  "request_uri": "/login",
+  "src_ip": "10.0.5.7",
+  "time_window_minutes": 30
+}

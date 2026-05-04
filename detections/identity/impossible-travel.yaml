@@ -1,15 +1,13 @@
-id: det-id-002
-name: Impossible Travel - Authentication from Two Distant Geolocations
-description: >
-  Detects when a user account authenticates from two geographically distant
-  IP addresses within a timeframe that makes physical travel impossible
-  (speed > 800 km/h), strongly suggesting credential compromise or account
-  sharing.
-version: "1.0.0"
+id: det-identity-002
+name: Impossible Travel Between Two Authentications
+description: Detects two successful authentication events for the same user from geographically distant
+  locations within a time window that would require travel speeds exceeding 800 km/h. Strong indicator
+  of compromised credentials being shared between attacker and legitimate user.
+version: 1.0.0
 severity: high
 tags:
-  - mitre.attack.t1078
-  - tlp.white
+- mitre.attack.t1078
+- tlp.white
 category: identity
 log_source:
   product: okta
@@ -20,15 +18,11 @@ detection:
     AND outcome == "SUCCESS"
     AND travel_speed_kmh > 800
     AND time_delta_minutes < 120
-  filters:
-    - user_type: "service_account"
-    - src_ip: vpn-gateway-ips
 false_positives:
-  - VPN usage that changes apparent geolocation
-  - Tor exit nodes or proxy services
-  - IPv6 / IPv4 dual-stack geolocation inconsistencies
+- VPN usage that changes apparent geolocation
+- Tor / proxy services
 playbook: tpl-account-compromise
 enabled: true
 author: AiSOC
-created: "2025-01-15"
-modified: "2025-01-15"
+created: '2026-05-03'
+modified: '2026-05-03'

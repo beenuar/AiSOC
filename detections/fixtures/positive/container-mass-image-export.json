@@ -1,0 +1,7 @@
+{
+  "dst_registry_in_allowlist": false,
+  "event_type": "image.push",
+  "image_count_per_principal": 12,
+  "principal": "user@corp.com",
+  "time_window_minutes": 8
+}

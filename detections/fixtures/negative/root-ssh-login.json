@@ -1,0 +1,6 @@
+{
+  "event_type": "ssh-accept",
+  "host": "db-prod-01",
+  "host_role": "production",
+  "user": "deploy"
+}

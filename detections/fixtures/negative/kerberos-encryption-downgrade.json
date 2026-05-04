@@ -1,0 +1,5 @@
+{
+  "event_id": 4768,
+  "ticket_encryption": "AES256-CTS-HMAC-SHA1-96",
+  "user": "user@corp.com"
+}

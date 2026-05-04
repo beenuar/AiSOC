@@ -1,0 +1,6 @@
+{
+  "event_name": "AssumeRole",
+  "external_account_in_allowlist": false,
+  "user_arn": "arn:aws:sts::999999999999:assumed-role/external",
+  "user_arn_external_account": true
+}

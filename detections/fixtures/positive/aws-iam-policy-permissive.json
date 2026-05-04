@@ -1,0 +1,6 @@
+{
+  "event_name": "PutRolePolicy",
+  "policy_action": "*",
+  "policy_resource": "*",
+  "role": "deploy-bot"
+}

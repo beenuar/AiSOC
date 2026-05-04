@@ -1,0 +1,7 @@
+{
+  "dst_port": 161,
+  "protocol": "UDP",
+  "snmp_community": "secured-string",
+  "src_ip": "10.0.5.7",
+  "src_ip_class": "internal"
+}

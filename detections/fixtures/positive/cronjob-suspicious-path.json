@@ -1,0 +1,6 @@
+{
+  "command_text": "*/5 * * * * /tmp/.beacon",
+  "event_type": "PATH",
+  "file_path": "/etc/cron.d/update",
+  "host": "linux-01"
+}

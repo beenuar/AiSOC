@@ -1,0 +1,6 @@
+{
+  "device_fingerprint_seen_before": true,
+  "event_type": "user.session.access_token",
+  "session_age_hours": 24,
+  "user": "ceo@corp.com"
+}

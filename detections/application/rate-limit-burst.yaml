@@ -1,0 +1,26 @@
+id: det-application-008
+name: Rate Limit Burst on Authentication Endpoint
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Rate Limit Burst
+  on Authentication Endpoint'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1110
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_uri ENDSWITH "/login"
+    AND method == "POST"
+    AND request_count_per_src > 200
+    AND time_window_minutes < 5
+false_positives:
+- Load testing against staging (src allowlist)
+playbook: tpl-account-compromise
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

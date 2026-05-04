@@ -1,0 +1,7 @@
+{
+  "dst_ip": "10.0.5.7",
+  "dst_ip_class": "internal",
+  "dst_port": 443,
+  "src_ip": "203.0.113.7",
+  "src_ip_class": "internet"
+}

@@ -1,0 +1,23 @@
+id: det-network-020
+name: Outbound Connection to Threat-Intel-Blocked IP
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound Connection
+  to Threat-Intel-Blocked IP'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1071.001
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    dst_in_blocklist == true
+false_positives:
+- TI false-positives (retire IP via tuning)
+playbook: tpl-c2
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,25 @@
+id: det-cloud-025
+name: Azure Resource Mass Deletion
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Azure Resource Mass
+  Deletion'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: activity
+detection:
+  condition: |
+    operation_name ENDSWITH "/delete"
+    AND delete_count_per_principal > 50
+    AND time_window_minutes < 15
+false_positives:
+- Sandbox cleanup (must originate from automation principal)
+playbook: tpl-data-destruction
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

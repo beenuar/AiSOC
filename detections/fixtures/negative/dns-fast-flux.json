@@ -1,0 +1,6 @@
+{
+  "distinct_a_records": 4,
+  "domain": "company-cdn.tld",
+  "time_window_hours": 24,
+  "ttl_seconds": 300
+}

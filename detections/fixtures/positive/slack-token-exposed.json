@@ -1,0 +1,6 @@
+{
+  "channel": "#general",
+  "channel_visibility": "public",
+  "event_type": "message.posted",
+  "message_text": "deploy creds: xoxb-1234-abcd-EXAMPLE"
+}

@@ -1,0 +1,6 @@
+{
+  "event_name": "AuthorizeSecurityGroupIngress",
+  "ip_range": "0.0.0.0/0",
+  "port": 22,
+  "sg_id": "sg-prod-db"
+}

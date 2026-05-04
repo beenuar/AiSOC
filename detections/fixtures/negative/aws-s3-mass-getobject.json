@@ -1,0 +1,6 @@
+{
+  "event_name": "GetObject",
+  "object_count_per_principal": 35,
+  "time_window_minutes": 30,
+  "user_arn": "arn:aws:iam::111:user/intern"
+}

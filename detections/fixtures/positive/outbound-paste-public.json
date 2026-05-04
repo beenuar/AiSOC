@@ -1,0 +1,7 @@
+{
+  "bytes_out": 50000,
+  "dst_host": "pastebin.com",
+  "dst_in_paste_list": true,
+  "method": "POST",
+  "src_host": "wks-001"
+}

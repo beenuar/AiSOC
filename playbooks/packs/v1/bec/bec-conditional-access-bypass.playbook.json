@@ -1,0 +1,89 @@
+{
+  "id": "bec-conditional-access-bypass-v1",
+  "name": "BEC: Conditional Access Policy Bypass",
+  "description": "Triggered when a BEC-related sign-in succeeds from a region that should be blocked by Conditional Access. Restores policy.",
+  "version": "1.0.0",
+  "tags": [
+    "bec",
+    "bec",
+    "identity",
+    "conditional-access"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "bec"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich CA policy state",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.policy_id"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "restore",
+      "name": "Restore conditional access policy",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/policies/{{alert.policy_id}}/enable",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate CA bypass",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page identity team",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "CA policy {{alert.policy_id}} re-enabled. Bypass observed.",
+        "service_key_env": "PD_IDENTITY_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open CA-bypass ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "CA bypass: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

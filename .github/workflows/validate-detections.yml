@@ -5,11 +5,15 @@ on:
     paths:
       - "detections/**"
       - "scripts/validate_detections.py"
+      - "scripts/generate_detections.py"
+      - "scripts/detection_specs*.py"
       - ".github/workflows/validate-detections.yml"
   pull_request:
     paths:
       - "detections/**"
       - "scripts/validate_detections.py"
+      - "scripts/generate_detections.py"
+      - "scripts/detection_specs*.py"
 
 jobs:
   validate:
@@ -28,8 +32,8 @@ jobs:
       - name: Install PyYAML
         run: pip install pyyaml
 
-      - name: Run detection rule validator
-        run: python3 scripts/validate_detections.py
+      - name: Run detection rule validator (strict fixture replay)
+        run: python3 scripts/validate_detections.py --strict-fixtures
 
       - name: Count rules by severity
         if: always()
@@ -52,7 +56,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          for cat in network endpoint cloud identity application; do
+          for cat in network endpoint cloud identity application data-exfil; do
             count=$(find detections/$cat/ -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
             echo "| $cat | $count |" >> $GITHUB_STEP_SUMMARY
           done

@@ -1,0 +1,7 @@
+{
+  "extension_change_pattern": "to-known-archive",
+  "host": "wks-001",
+  "process": "7z.exe",
+  "rename_count_per_process": 5,
+  "time_window_minutes": 30
+}

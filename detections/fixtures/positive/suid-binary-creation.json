@@ -1,0 +1,8 @@
+{
+  "event_type": "PATH",
+  "host": "linux-01",
+  "path": "/tmp/.helper",
+  "permissions": [
+    "S_ISUID"
+  ]
+}

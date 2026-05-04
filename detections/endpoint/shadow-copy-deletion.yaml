@@ -1,0 +1,24 @@
+id: det-endpoint-012
+name: Volume Shadow Copies Deleted
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Volume Shadow Copies
+  Deleted'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1490
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: process-create
+detection:
+  condition: |
+    image_basename IN ["vssadmin.exe", "wmic.exe", "diskshadow.exe", "wbadmin.exe"]
+    AND command_line CONTAINS_ANY ["delete shadows", "shadowcopy delete", "delete catalog -quiet"]
+false_positives:
+- Backup software cleaning old shadows (must be allowlisted)
+playbook: tpl-ransomware
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

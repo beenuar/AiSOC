@@ -1,0 +1,24 @@
+id: det-application-014
+name: Build Pipeline Fetched Public Package With Internal Name
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Build Pipeline
+  Fetched Public Package With Internal Name'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1195.002
+- tlp.white
+category: application
+log_source:
+  product: build
+  service: package
+detection:
+  condition: |
+    package_name_in_internal_namespace == true
+    AND package_source IN ["public-npm", "public-pypi", "public-rubygems"]
+false_positives:
+- Approved scoped public packages (allowlist names)
+playbook: tpl-supply-chain
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

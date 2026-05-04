@@ -1,0 +1,35 @@
+id: twilio-sms
+name: Twilio SMS Notifier
+version: "1.0.0"
+plugin_type: action
+description: >
+  Sends SMS messages via Twilio's REST API. Useful for paging on-call
+  responders, emergency notifications, and out-of-band alerts when email
+  or chat are unavailable.
+author: AiSOC Core Team
+tags: [notification, sms, twilio, paging, action]
+homepage: https://github.com/beenuar/aisoc/tree/main/plugins/twilio-sms
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [account_sid, auth_token, from_number]
+  properties:
+    account_sid:
+      type: string
+      description: "Twilio Account SID"
+    auth_token:
+      type: string
+      description: "Twilio auth token"
+      secret: true
+    from_number:
+      type: string
+      description: "Twilio phone number in E.164 format (e.g. +14155551234)"
+    default_recipients:
+      type: array
+      items:
+        type: string
+      description: "Fallback recipients in E.164 format if none provided in payload"
+supported_actions:
+  - send_sms
+  - bulk_send

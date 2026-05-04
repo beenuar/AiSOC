@@ -1,37 +1,25 @@
-id: det-ep-001
-name: Ransomware - Mass File Extension Modification
-description: >
-  Detects rapid mass file rename or write operations that change file extensions
-  to known ransomware patterns or unknown extensions, which is a strong indicator
-  of encryption-based ransomware activity on an endpoint.
-version: "1.0.0"
+id: det-endpoint-003
+name: Mass File Extension Rename Indicative of Ransomware
+description: Detects bulk file rename operations where file extensions are changed to novel patterns within
+  a short time window. This is a high-fidelity indicator of ransomware encryption activity.
+version: 1.0.0
 severity: critical
 tags:
-  - mitre.attack.t1486
-  - tlp.white
+- mitre.attack.t1486
+- tlp.white
 category: endpoint
 log_source:
   product: edr
-  service: file-events
+  service: file-rename
 detection:
   condition: |
-    event_type IN ["file_rename", "file_write"]
-    AND unique_extension_changes_per_process_per_minute > 50
-    AND (
-      new_extension IN [
-        ".locked", ".encrypted", ".enc", ".crypt", ".crypted",
-        ".cryp", ".cryt", ".crinf", ".r5a", ".XRNT", ".XTBL",
-        ".RDM", ".RRK", ".xcrypt", ".p5tkjw", ".wncry", ".wncryt"
-      ]
-      OR new_extension_length > 8
-    )
-  filters:
-    - process_name: "backup-agent.exe"
+    rename_count_per_process > 200
+    AND extension_change_pattern == "to-novel-extension"
+    AND time_window_minutes < 5
 false_positives:
-  - Backup software performing file version archival
-  - Legitimate encryption tools (7-Zip, VeraCrypt)
-playbook: tpl-ransomware-response
+- Bulk archive operations (must be in allowlisted backup tools)
+playbook: tpl-ransomware
 enabled: true
 author: AiSOC
-created: "2025-01-15"
-modified: "2025-01-15"
+created: '2026-05-03'
+modified: '2026-05-03'

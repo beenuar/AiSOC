@@ -1,0 +1,7 @@
+{
+  "dst_port": 161,
+  "protocol": "UDP",
+  "snmp_community": "public",
+  "src_ip": "203.0.113.7",
+  "src_ip_class": "internet"
+}

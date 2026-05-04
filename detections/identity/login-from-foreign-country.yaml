@@ -1,0 +1,25 @@
+id: det-identity-006
+name: Login from Country Outside Allowed Geography
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Login from Country
+  Outside Allowed Geography'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND outcome == "SUCCESS"
+    AND src_country_not_in_allowlist == true
+false_positives:
+- Approved business travel (must be tagged)
+playbook: tpl-account-compromise
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

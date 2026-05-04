@@ -1,0 +1,25 @@
+id: det-network-009
+name: DNS Fast-Flux (Many Distinct A-Records / Short TTL)
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Fast-Flux (Many
+  Distinct A-Records / Short TTL)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1568.001
+- tlp.white
+category: network
+log_source:
+  product: dns
+  service: query
+detection:
+  condition: |
+    distinct_a_records > 30
+    AND ttl_seconds < 60
+    AND time_window_hours < 1
+false_positives:
+- Large CDNs (allowlist parent zone)
+playbook: tpl-c2
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

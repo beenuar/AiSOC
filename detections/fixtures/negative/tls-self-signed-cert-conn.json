@@ -1,0 +1,6 @@
+{
+  "dst_in_allowlist": true,
+  "dst_ip": "10.0.5.7",
+  "src_host": "wks-001",
+  "tls_cert_self_signed": true
+}

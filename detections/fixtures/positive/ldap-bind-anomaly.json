@@ -1,0 +1,6 @@
+{
+  "event_id": 1644,
+  "ldap_query_count_per_src": 500,
+  "src_host": "wks-001",
+  "time_window_minutes": 3
+}

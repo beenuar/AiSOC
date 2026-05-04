@@ -1,0 +1,5 @@
+{
+  "backup_dst_in_allowlist": true,
+  "destination": "approved-dr-account",
+  "event_type": "Backup.Export"
+}

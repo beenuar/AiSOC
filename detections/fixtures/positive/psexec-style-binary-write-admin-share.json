@@ -1,0 +1,6 @@
+{
+  "event_type": "FileCreate",
+  "file_path": "\\\\target\\ADMIN$\\PSEXESVC.exe",
+  "host": "wks-001",
+  "image_basename_creator": "psexec.exe"
+}

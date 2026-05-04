@@ -1,0 +1,4 @@
+{
+  "operation_name": "Update cross-tenant access policy",
+  "partner_tenant": "allowlisted-partner-tenant"
+}

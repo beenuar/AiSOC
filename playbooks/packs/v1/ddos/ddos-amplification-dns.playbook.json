@@ -1,0 +1,78 @@
+{
+  "id": "ddos-amplification-dns-v1",
+  "name": "DDoS: DNS Amplification",
+  "description": "Triggered when an inbound spike of crafted DNS queries hits an authoritative server. Sinkholes spoofed sources.",
+  "version": "1.0.0",
+  "tags": [
+    "ddos",
+    "ddos",
+    "dns",
+    "mitre.t1498.002"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high"
+    ],
+    "tags": [
+      "ddos"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "sinkhole",
+      "name": "Sinkhole spoofed sources",
+      "type": "http",
+      "params": {
+        "url": "${DNS_URL}/sinkhole-batch",
+        "method": "POST",
+        "body_template": "{\"src_ips\": {{alert.spoofed_sources}}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate amplification",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify network team",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "DNS amplification mitigated. {{context.sinkholed_count}} sources sinkholed.",
+        "webhook_env": "SLACK_NETWORK_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open DNS-amp ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "DNS amplification: {{alert.target}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

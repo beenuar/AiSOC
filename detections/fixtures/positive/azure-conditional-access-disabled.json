@@ -1,0 +1,5 @@
+{
+  "operation_name": "Update conditional access policy",
+  "policy_name": "MFA-required",
+  "policy_state": "disabled"
+}

@@ -1,0 +1,5 @@
+{
+  "actor": "user@corp.com",
+  "operation_name": "Search-Mailbox -DeleteContent:$false -TargetMailbox",
+  "target": "ceo@corp.com"
+}

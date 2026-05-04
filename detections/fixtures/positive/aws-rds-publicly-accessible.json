@@ -1,0 +1,5 @@
+{
+  "db_id": "prod-pii",
+  "event_name": "ModifyDBInstance",
+  "publicly_accessible": true
+}

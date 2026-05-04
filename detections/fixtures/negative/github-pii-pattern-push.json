@@ -1,0 +1,6 @@
+{
+  "action": "git.push",
+  "actor": "user@corp.com",
+  "diff_text": "+ // refactor: rename helper",
+  "ref": "refs/heads/main"
+}

@@ -1,0 +1,25 @@
+id: det-endpoint-010
+name: Binary Written to ADMIN$ via SMB
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Binary Written
+  to ADMIN$ via SMB'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1021.002
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: file-create
+detection:
+  condition: |
+    event_type == "FileCreate"
+    AND file_path CONTAINS "ADMIN$"
+    AND file_path ENDSWITH ".exe"
+false_positives:
+- SCCM agent deployment (allowlist signed publisher)
+playbook: tpl-lateral-movement
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

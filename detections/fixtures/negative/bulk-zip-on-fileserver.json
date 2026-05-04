@@ -1,0 +1,7 @@
+{
+  "event_type": "FileCreate",
+  "file_path": "C:\\share\\report.docx",
+  "host": "fs-01",
+  "host_role": "fileserver",
+  "zip_size_bytes": null
+}

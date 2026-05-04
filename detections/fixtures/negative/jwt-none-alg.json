@@ -1,0 +1,5 @@
+{
+  "authorization_header": "Bearer signed.jwt.value",
+  "authorization_header_jwt_alg": "RS256",
+  "host": "api.corp.com"
+}

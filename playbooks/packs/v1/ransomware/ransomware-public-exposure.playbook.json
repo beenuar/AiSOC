@@ -1,0 +1,100 @@
+{
+  "id": "ransomware-public-exposure-v1",
+  "name": "Ransomware: Internet-Exposed Asset Containment",
+  "description": "Triggered when a host with public exposure shows ransomware indicators. Pulls the asset off the internet immediately.",
+  "version": "1.0.0",
+  "tags": [
+    "ransomware",
+    "ransomware",
+    "exposure",
+    "mitre.t1486"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "ransomware"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "detach-eip",
+      "name": "Detach public IP",
+      "type": "http",
+      "params": {
+        "url": "${CLOUD_URL}/instances/{{alert.host}}/detach-public-ip",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "iso",
+      "name": "Isolate host (EDR)",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "snap",
+      "name": "Snapshot host disk",
+      "type": "http",
+      "params": {
+        "url": "${EDR_URL}/hosts/{{alert.host}}/snapshot",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Forensic investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page on-call (SEV1)",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Internet-exposed host {{alert.host}} pulled off-net. Ransomware suspected.",
+        "service_key_env": "PD_RANSOMWARE_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open SEV1 ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Ransomware on exposed host: {{alert.host}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

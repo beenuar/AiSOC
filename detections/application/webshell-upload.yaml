@@ -1,0 +1,25 @@
+id: det-application-006
+name: Webshell File Upload Pattern
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Webshell File
+  Upload Pattern'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1505.003
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    method IN ["POST", "PUT"]
+    AND file_extension IN [".jsp", ".php", ".asp", ".aspx"]
+    AND request_uri CONTAINS_ANY ["/upload", "/wp-content/", "/cgi-bin/"]
+false_positives:
+- CMS file uploads with sandboxed extensions (allowlist app role)
+playbook: tpl-webshell
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

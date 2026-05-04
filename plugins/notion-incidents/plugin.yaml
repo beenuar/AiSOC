@@ -1,0 +1,32 @@
+id: notion-incidents
+name: Notion Incidents Sync
+version: "1.0.0"
+plugin_type: action
+description: >
+  Syncs AiSOC incidents to a Notion database. Creates a new page per
+  incident with severity, status, MITRE techniques, summary, and a link
+  back to the AiSOC case. Useful for runbook archives and post-mortems.
+author: AiSOC Core Team
+tags: [collaboration, notion, incidents, postmortem, action]
+homepage: https://github.com/beenuar/aisoc/tree/main/plugins/notion-incidents
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_token, database_id]
+  properties:
+    api_token:
+      type: string
+      description: "Notion integration token (secret_*)"
+      secret: true
+    database_id:
+      type: string
+      description: "Target Notion database ID (UUID, no dashes required)"
+    notion_version:
+      type: string
+      default: "2022-06-28"
+      description: "Notion API version header"
+supported_actions:
+  - create_incident_page
+  - update_incident_page
+  - append_post_mortem

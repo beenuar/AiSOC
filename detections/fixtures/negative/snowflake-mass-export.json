@@ -1,0 +1,7 @@
+{
+  "event_type": "QUERY",
+  "query": "SELECT * FROM CUSTOMER",
+  "rows_produced": 1000000,
+  "user": "etl-svc",
+  "user_type": "service"
+}

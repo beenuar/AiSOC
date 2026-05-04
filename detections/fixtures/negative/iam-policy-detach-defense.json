@@ -1,0 +1,5 @@
+{
+  "event_name": "DetachRolePolicy",
+  "policy_name": "ReadOnlyAccess",
+  "role": "deploy-bot"
+}

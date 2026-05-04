@@ -1,0 +1,8 @@
+{
+  "namespace": "production",
+  "object_resource": "pods",
+  "subresource": "exec",
+  "user": "user@corp.com",
+  "user_role": "operator",
+  "verb": "create"
+}

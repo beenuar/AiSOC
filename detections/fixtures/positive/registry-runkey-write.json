@@ -1,0 +1,6 @@
+{
+  "event_type": "RegistryValueSet",
+  "host": "wks-001",
+  "registry_path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+  "value_data": "C:\\Users\\Public\\beacon.exe"
+}

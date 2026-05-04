@@ -1,0 +1,7 @@
+{
+  "avg_subdomain_len": 65,
+  "parent_domain": "evil.tld",
+  "query_count": 250,
+  "src_host": "wks-001",
+  "time_window_minutes": 12
+}

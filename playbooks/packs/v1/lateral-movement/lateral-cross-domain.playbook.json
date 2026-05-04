@@ -1,0 +1,78 @@
+{
+  "id": "lateral-cross-domain-v1",
+  "name": "Lateral: Cross-Domain Movement",
+  "description": "Triggered when an account from one trust domain authenticates to an asset in a separately-classified domain in a way that violates policy. Segments the network and investigates.",
+  "version": "1.0.0",
+  "tags": [
+    "lateral-movement",
+    "lateral",
+    "trust",
+    "mitre.t1021"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "lateral-movement"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "segment",
+      "name": "Apply network segmentation rule",
+      "type": "http",
+      "params": {
+        "url": "${FW_URL}/policy/segment",
+        "method": "POST",
+        "body_template": "{\"src\":\"{{alert.src_host}}\",\"dst_domain\":\"{{alert.dst_domain}}\"}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate cross-domain movement",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page on-call",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Cross-domain lateral {{alert.user}}. Segmentation applied.",
+        "service_key_env": "PD_SOC_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open cross-domain ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Cross-domain lateral: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

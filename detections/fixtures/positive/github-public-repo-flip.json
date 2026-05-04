@@ -1,0 +1,6 @@
+{
+  "action": "repo.visibility_change",
+  "actor": "user@corp.com",
+  "repo": "internal-tooling",
+  "visibility": "public"
+}

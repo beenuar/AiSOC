@@ -1,0 +1,6 @@
+{
+  "distinct_a_records": 80,
+  "domain": "evil.tld",
+  "time_window_hours": 0.5,
+  "ttl_seconds": 30
+}

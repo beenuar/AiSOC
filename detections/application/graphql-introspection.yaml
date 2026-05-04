@@ -1,0 +1,24 @@
+id: det-application-009
+name: GraphQL Introspection Query in Production
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'GraphQL Introspection
+  Query in Production'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1592
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_uri ENDSWITH "/graphql"
+    AND request_body CONTAINS_ANY ["__schema", "__typename"]
+false_positives:
+- Permitted public APIs (allowlist host)
+playbook: tpl-recon
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

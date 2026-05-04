@@ -1,0 +1,90 @@
+{
+  "id": "supply-pypi-typosquat-v1",
+  "name": "Supply Chain: PyPI Typosquat",
+  "description": "Triggered when a typosquat package is observed in CI installs. Pulls install lock to canonical name and audits.",
+  "version": "1.0.0",
+  "tags": [
+    "supply-chain",
+    "supply-chain",
+    "pypi",
+    "mitre.t1195"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high"
+    ],
+    "tags": [
+      "supply-chain"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "block",
+      "name": "Block typosquat at mirror",
+      "type": "http",
+      "params": {
+        "url": "${REGISTRY_URL}/policy/block",
+        "method": "POST",
+        "body_template": "{\"ecosystem\":\"pypi\",\"package\":\"{{alert.package_name}}\"}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "audit",
+      "name": "List repos with this dependency",
+      "type": "http",
+      "params": {
+        "url": "${SCA_URL}/repos?ecosystem=pypi&package={{alert.package_name}}",
+        "method": "GET"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate typosquat",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "cloud"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify eng team",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "PyPI typosquat {{alert.package_name}} blocked. {{context.repo_count}} repos affected.",
+        "webhook_env": "SLACK_ENG_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open typosquat ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "PyPI typosquat: {{alert.package_name}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

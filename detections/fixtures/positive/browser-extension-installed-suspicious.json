@@ -1,0 +1,5 @@
+{
+  "command_line": "chrome.exe --load-extension=C:\\Users\\Public\\evil-ext",
+  "host": "wks-001",
+  "image_basename": "chrome.exe"
+}

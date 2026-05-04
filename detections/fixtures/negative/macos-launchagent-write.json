@@ -1,0 +1,5 @@
+{
+  "event_type": "ES_EVENT_TYPE_NOTIFY_CREATE",
+  "file_path": "/Users/alice/Documents/notes.txt",
+  "host": "mac-01"
+}

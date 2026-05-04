@@ -1,0 +1,26 @@
+id: det-identity-015
+name: Authentication During Active P0/P1 Incident Window
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Authentication
+  During Active P0/P1 Incident Window'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND outcome == "SUCCESS"
+    AND active_p0_or_p1_incident == true
+    AND user_role NOT IN ["incident_responder", "admin"]
+false_positives:
+- IR team members not in the responder allowlist (rare; tag and continue)
+playbook: tpl-incident-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

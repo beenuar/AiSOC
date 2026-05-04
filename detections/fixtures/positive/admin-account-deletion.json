@@ -1,0 +1,5 @@
+{
+  "event_type": "user.lifecycle.deactivate",
+  "target_user": "ceo@corp.com",
+  "target_user_role": "admin"
+}

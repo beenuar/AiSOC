@@ -1,0 +1,23 @@
+id: det-identity-019
+name: Active Directory Group Policy Modified
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Active Directory
+  Group Policy Modified'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1484.001
+- tlp.white
+category: identity
+log_source:
+  product: windows
+  service: security
+detection:
+  condition: |
+    event_id IN [5136, 5137, 5138, 5139]
+false_positives:
+- Change-management approved GPO updates (ticket reference required)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

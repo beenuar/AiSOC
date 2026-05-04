@@ -1,0 +1,24 @@
+id: det-endpoint-018
+name: Hosts File Modified
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Hosts File Modified'.
+  Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1565.001
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: file-write
+detection:
+  condition: |
+    event_type == "FileWrite"
+    AND file_path ENDSWITH "\drivers\etc\hosts"
+false_positives:
+- Localhost development entries by developers (allowlist users)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

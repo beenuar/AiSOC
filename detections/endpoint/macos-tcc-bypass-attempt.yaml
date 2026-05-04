@@ -1,0 +1,24 @@
+id: det-endpoint-032
+name: macOS TCC Bypass Pattern (Direct DB Write)
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS TCC Bypass
+  Pattern (Direct DB Write)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556.006
+- tlp.white
+category: endpoint
+log_source:
+  product: macos
+  service: endpointsecurity
+detection:
+  condition: |
+    image_basename == "sqlite3"
+    AND command_line CONTAINS_ANY ["TCC.db", "kTCCService"]
+false_positives:
+- Apple support tooling (rare)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

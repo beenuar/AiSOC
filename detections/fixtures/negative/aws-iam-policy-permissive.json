@@ -1,0 +1,6 @@
+{
+  "event_name": "PutRolePolicy",
+  "policy_action": "s3:GetObject",
+  "policy_resource": "arn:aws:s3:::reports/*",
+  "role": "deploy-bot"
+}

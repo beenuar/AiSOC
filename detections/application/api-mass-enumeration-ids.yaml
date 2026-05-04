@@ -1,0 +1,24 @@
+id: det-application-019
+name: Sequential ID Enumeration Pattern Against API
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Sequential ID
+  Enumeration Pattern Against API'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1592
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    distinct_object_ids_per_src > 1000
+    AND time_window_minutes < 5
+false_positives:
+- Bulk-export job (src must be in allowlist)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

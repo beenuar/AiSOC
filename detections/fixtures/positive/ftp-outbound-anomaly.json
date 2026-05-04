@@ -1,0 +1,7 @@
+{
+  "bytes_out": 200000000,
+  "dst_port": 21,
+  "protocol": "TCP",
+  "src_host": "wks-001",
+  "src_in_allowlist": false
+}

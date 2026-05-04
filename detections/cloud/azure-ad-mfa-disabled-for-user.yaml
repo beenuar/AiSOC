@@ -1,0 +1,23 @@
+id: det-cloud-022
+name: Azure AD MFA Disabled for User
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Azure AD MFA Disabled
+  for User'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556.006
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: azuread-audit
+detection:
+  condition: |
+    operation_name == "Disable Strong Authentication"
+false_positives:
+- Account migration to passkey-only (purpose=passkey tag required)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

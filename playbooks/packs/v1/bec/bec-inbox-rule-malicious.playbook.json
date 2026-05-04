@@ -1,0 +1,101 @@
+{
+  "id": "bec-inbox-rule-malicious-v1",
+  "name": "BEC: Malicious Inbox Rule Removed",
+  "description": "Triggered when a forwarding/filter rule is created that hides vendor or finance keywords. Removes the rule and resets creds.",
+  "version": "1.0.0",
+  "tags": [
+    "bec",
+    "bec",
+    "email",
+    "mitre.t1564.008"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "bec"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich rule details",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.inbox_rule_id"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "delete-rule",
+      "name": "Delete malicious inbox rule",
+      "type": "http",
+      "params": {
+        "url": "${MAIL_URL}/users/{{alert.user}}/rules/{{alert.inbox_rule_id}}",
+        "method": "DELETE"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "revoke",
+      "name": "Revoke active sessions",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/sessions/revoke-all",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate BEC chain",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify finance team",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "BEC rule removed for {{alert.user}}. Validate any vendor changes in the last 7d.",
+        "webhook_env": "SLACK_FINANCE_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open BEC ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "BEC inbox rule: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

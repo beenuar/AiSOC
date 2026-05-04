@@ -1,0 +1,26 @@
+id: det-network-018
+name: SNMP Public Community String Probe From Internet
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'SNMP Public Community
+  String Probe From Internet'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    protocol == "UDP"
+    AND dst_port == 161
+    AND src_ip_class == "internet"
+    AND snmp_community IN ["public", "private"]
+false_positives:
+- Misconfigured legacy device (decommission ticketed)
+playbook: tpl-recon
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

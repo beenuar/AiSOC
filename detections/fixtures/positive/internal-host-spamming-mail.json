@@ -1,0 +1,7 @@
+{
+  "dst_port": 25,
+  "protocol": "TCP",
+  "smtp_count_per_src": 800,
+  "src_host": "wks-001",
+  "time_window_minutes": 5
+}

@@ -1,0 +1,5 @@
+{
+  "event_type": "policy.lifecycle.update",
+  "policy_change_field": "session_timeout:8h",
+  "policy_name": "all-employees"
+}

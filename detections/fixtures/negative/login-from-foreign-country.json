@@ -1,0 +1,7 @@
+{
+  "event_type": "user.session.start",
+  "outcome": "SUCCESS",
+  "src_country": "US",
+  "src_country_not_in_allowlist": false,
+  "user": "user@corp.com"
+}

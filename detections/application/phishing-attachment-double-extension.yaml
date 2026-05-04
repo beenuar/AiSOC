@@ -1,0 +1,23 @@
+id: det-application-030
+name: Email Attachment with Double Extension Pattern
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Email Attachment
+  with Double Extension Pattern'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1566.001
+- tlp.white
+category: application
+log_source:
+  product: email
+  service: messages
+detection:
+  condition: |
+    attachment_filename MATCH ".+\.(pdf|doc|xls|jpg|png)\.(exe|js|vbs|scr|jar)$"
+false_positives:
+- Vendor archives with intentional double-extension labels (rare)
+playbook: tpl-phishing
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

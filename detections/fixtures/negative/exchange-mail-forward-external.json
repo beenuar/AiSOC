@@ -1,0 +1,6 @@
+{
+  "forward_destination_external": false,
+  "forward_to": "team-folder",
+  "operation_name": "New-InboxRule",
+  "user": "ceo@corp.com"
+}

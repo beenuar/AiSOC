@@ -1,0 +1,7 @@
+{
+  "event_id": 4769,
+  "spn_count_per_user": 12,
+  "ticket_encryption": "RC4-HMAC",
+  "time_window_minutes": 2,
+  "user": "user@corp.com"
+}

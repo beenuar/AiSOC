@@ -1,0 +1,68 @@
+name: Validate Playbook Pack
+
+on:
+  push:
+    paths:
+      - "playbooks/**"
+      - "services/agents/app/playbook/models.py"
+      - "scripts/validate_playbooks.py"
+      - "scripts/generate_playbooks.py"
+      - ".github/workflows/validate-playbooks.yml"
+  pull_request:
+    paths:
+      - "playbooks/**"
+      - "services/agents/app/playbook/models.py"
+      - "scripts/validate_playbooks.py"
+      - "scripts/generate_playbooks.py"
+
+jobs:
+  validate:
+    name: Validate & summarise playbook pack
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps for playbook model
+        run: pip install --quiet pydantic httpx
+
+      - name: Run playbook validator
+        run: python3 scripts/validate_playbooks.py
+
+      - name: Verify generator is reproducible (no drift)
+        # If someone hand-edits a generated playbook without updating the
+        # generator, the pack drifts from the source of truth. Re-run the
+        # generator into a tmp tree and diff against the committed tree.
+        run: |
+          python3 scripts/generate_playbooks.py
+          if ! git diff --quiet -- playbooks/packs/v1; then
+            echo "::error::scripts/generate_playbooks.py output differs from committed tree."
+            echo "Either regenerate locally with python3 scripts/generate_playbooks.py and commit,"
+            echo "or update the spec in scripts/generate_playbooks.py to match your edit."
+            git --no-pager diff --stat -- playbooks/packs/v1
+            exit 1
+          fi
+
+      - name: Count playbooks by category
+        if: always()
+        run: |
+          echo "### Playbook Pack Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          total=0
+          for cat in account-takeover ransomware bec insider-risk \
+                     cloud-misconfig data-exfil lateral-movement \
+                     supply-chain ddos; do
+            count=$(find playbooks/packs/v1/$cat -name "*.playbook.json" 2>/dev/null | wc -l | tr -d ' ')
+            echo "| $cat | $count |" >> $GITHUB_STEP_SUMMARY
+            total=$((total + count))
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total playbooks: $total**" >> $GITHUB_STEP_SUMMARY

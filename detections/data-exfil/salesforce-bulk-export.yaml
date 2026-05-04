@@ -1,0 +1,25 @@
+id: det-data-exfil-006
+name: Salesforce Bulk Data Export by Non-Allowlisted User
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Salesforce Bulk
+  Data Export by Non-Allowlisted User'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: data-exfil
+log_source:
+  product: salesforce
+  service: audit
+detection:
+  condition: |
+    event_type IN ["DataExport", "ReportExport"]
+    AND row_count > 50000
+    AND actor_in_export_allowlist == false
+false_positives:
+- Allowlisted analytics roles (must be in allowlist)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

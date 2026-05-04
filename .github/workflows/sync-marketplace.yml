@@ -5,10 +5,19 @@ on:
     branches: [main]
     paths:
       - "marketplace/index.json"
+      - "apps/web/public/marketplace/index.json"
+      - "scripts/build_marketplace.py"
+      - "detections/**"
+      - "playbooks/**"
+      - "plugins/**"
   pull_request:
     paths:
       - "marketplace/index.json"
       - "apps/web/public/marketplace/index.json"
+      - "scripts/build_marketplace.py"
+      - "detections/**"
+      - "playbooks/**"
+      - "plugins/**"
 
 jobs:
   sync:
@@ -19,28 +28,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install pyyaml
+
       - name: Validate JSON syntax
-        run: python3 -c "import json, sys; json.load(open('marketplace/index.json')); print('marketplace/index.json is valid JSON')"
+        run: python3 -c "import json; json.load(open('marketplace/index.json')); print('marketplace/index.json is valid JSON')"
+
+      - name: Verify on-disk index matches scripts/build_marketplace.py output
+        run: python3 scripts/build_marketplace.py --check
 
       - name: Check public copy is in sync
         run: |
           if ! diff -q marketplace/index.json apps/web/public/marketplace/index.json > /dev/null 2>&1; then
             echo "::error::apps/web/public/marketplace/index.json is out of sync with marketplace/index.json"
-            echo "Run: pnpm marketplace:sync"
+            echo "Run: pnpm marketplace:build && pnpm marketplace:sync"
             exit 1
           fi
-          echo "Public copy is in sync ✓"
+          echo "Public copy is in sync"
 
       - name: Summarise items
         if: always()
         run: |
           echo "### Marketplace Index Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          total=$(python3 -c "import json; d=json.load(open('marketplace/index.json')); print(len(d['items']))")
-          playbooks=$(python3 -c "import json; d=json.load(open('marketplace/index.json')); print(sum(1 for i in d['items'] if i['type']=='playbook'))")
-          detections=$(python3 -c "import json; d=json.load(open('marketplace/index.json')); print(sum(1 for i in d['items'] if i['type']=='detection'))")
-          echo "| Category   | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|------------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Total      | $total |" >> $GITHUB_STEP_SUMMARY
-          echo "| Playbooks  | $playbooks |" >> $GITHUB_STEP_SUMMARY
-          echo "| Detections | $detections |" >> $GITHUB_STEP_SUMMARY
+          python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
+          import json
+          d = json.load(open('marketplace/index.json'))
+          stats = d.get('stats', {})
+          mitre = d.get('mitre_coverage', {})
+          print('| Category   | Count |')
+          print('|------------|-------|')
+          print(f"| Total      | {stats.get('total', len(d['items']))} |")
+          print(f"| Playbooks  | {stats.get('playbooks', 0)} |")
+          print(f"| Detections | {stats.get('detections', 0)} |")
+          print(f"| Plugins    | {stats.get('plugins', 0)} |")
+          print(f"| Verified   | {stats.get('verified', 0)} |")
+          print(f"| Community  | {stats.get('community', 0)} |")
+          print()
+          print(f"**MITRE ATT&CK coverage:** {mitre.get('unique_techniques', 0)} unique techniques across {mitre.get('total_with_mitre', 0)} items.")
+          PY

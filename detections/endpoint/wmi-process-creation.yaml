@@ -1,0 +1,24 @@
+id: det-endpoint-006
+name: Process Created via WMI by Non-Admin Tool
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Process Created
+  via WMI by Non-Admin Tool'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1047
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: process-create
+detection:
+  condition: |
+    parent_image_basename IN ["wmiprvse.exe"]
+    AND image_basename_in_allowlist == false
+false_positives:
+- SCCM / Intune agents (allowlist signed publisher)
+playbook: tpl-lateral-movement
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,7 @@
+{
+  "event_id": 4769,
+  "spn_count_per_user": 1,
+  "ticket_encryption": "AES256-CTS-HMAC-SHA1-96",
+  "time_window_minutes": 60,
+  "user": "user@corp.com"
+}

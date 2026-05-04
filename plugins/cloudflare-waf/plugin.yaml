@@ -1,0 +1,28 @@
+id: cloudflare-waf
+name: Cloudflare WAF Action
+version: "1.0.0"
+plugin_type: action
+description: >
+  Cloudflare WAF action plugin. Blocks IPs at the zone or account level,
+  toggles "Under Attack" mode, manages firewall rules, and purges cache via
+  the Cloudflare API. Useful as an inline response step in DDoS, credential
+  stuffing, and bot-attack playbooks.
+author: AiSOC Core Team
+tags: [network, cloudflare, waf, response, ddos]
+homepage: https://github.com/beenuar/aisoc/tree/main/plugins/cloudflare-waf
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_token]
+  properties:
+    api_token:
+      type: string
+      description: "Cloudflare API token with Zone:Edit + Account:Edit"
+      secret: true
+    account_id:
+      type: string
+      description: "Cloudflare account ID (required for account-scoped block lists)"
+    zone_id:
+      type: string
+      description: "Default zone ID for zone-scoped actions"

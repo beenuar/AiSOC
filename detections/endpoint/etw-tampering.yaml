@@ -1,0 +1,25 @@
+id: det-endpoint-017
+name: ETW Tampering / Logging Disable
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'ETW Tampering /
+  Logging Disable'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.006
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: process-create
+detection:
+  condition: |
+    ANY OF:
+      - image_basename == "logman.exe" AND command_line CONTAINS "stop"
+      - image_basename == "wevtutil.exe" AND command_line CONTAINS_ANY ["sl", "/e:false", "cl"]
+false_positives:
+- Vendor agents managing trace lifecycle (allowlist signed publisher)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

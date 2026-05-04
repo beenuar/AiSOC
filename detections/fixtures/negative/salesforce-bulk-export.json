@@ -1,0 +1,6 @@
+{
+  "actor": "analytics-svc@corp.com",
+  "actor_in_export_allowlist": true,
+  "event_type": "DataExport",
+  "row_count": 200
+}

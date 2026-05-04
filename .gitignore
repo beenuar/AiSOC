@@ -46,6 +46,10 @@ htmlcov/
 *.swo
 .cursor/hooks/state/
 
+# Go test/build binaries inside plugins
+plugins/**/*-build-test
+plugins/**/*-build
+
 # OS
 .DS_Store
 Thumbs.db

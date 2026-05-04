@@ -1,0 +1,6 @@
+{
+  "actor": "user",
+  "event_type": "PATH",
+  "file_path": "/home/user/.ssh/authorized_keys",
+  "host": "linux-01"
+}

@@ -1,0 +1,7 @@
+{
+  "event_type": "CreateRemoteThread",
+  "host": "wks-001",
+  "source_image_basename": "MsMpEng.exe",
+  "source_image_basename_not_in_allowlist": false,
+  "target_image_basename": "explorer.exe"
+}

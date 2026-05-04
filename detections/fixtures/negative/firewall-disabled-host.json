@@ -1,0 +1,5 @@
+{
+  "command_line": "netsh advfirewall show allprofiles",
+  "host": "wks-001",
+  "image_basename": "netsh.exe"
+}

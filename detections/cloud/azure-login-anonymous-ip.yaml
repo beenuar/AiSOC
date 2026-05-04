@@ -1,0 +1,23 @@
+id: det-cloud-024
+name: Azure AD Login from Tor / Anonymous IP
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Azure AD Login from
+  Tor / Anonymous IP'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.004
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: azuread-signin
+detection:
+  condition: |
+    risk_event_type == "anonymizedIPAddress"
+false_positives:
+- Researchers using Tor for testing (must be tagged research-account)
+playbook: tpl-account-compromise
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

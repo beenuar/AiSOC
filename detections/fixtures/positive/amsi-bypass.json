@@ -1,0 +1,5 @@
+{
+  "command_line": "powershell.exe -c \"[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')...\"",
+  "host": "wks-001",
+  "image_basename": "powershell.exe"
+}

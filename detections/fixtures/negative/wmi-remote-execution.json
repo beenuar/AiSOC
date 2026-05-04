@@ -1,0 +1,6 @@
+{
+  "event_id": 4688,
+  "process_command_line": "wmic process list",
+  "src_host": "srv-01",
+  "src_role": "server"
+}

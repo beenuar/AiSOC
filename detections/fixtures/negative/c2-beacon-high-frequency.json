@@ -1,0 +1,7 @@
+{
+  "connection_count": 12,
+  "destination_ip": "203.0.113.7",
+  "interval_consistency": 0.4,
+  "interval_seconds": 30,
+  "time_window_minutes": 30
+}

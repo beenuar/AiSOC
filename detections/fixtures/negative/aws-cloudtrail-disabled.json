@@ -1,0 +1,5 @@
+{
+  "event_name": "StartLogging",
+  "trail_name": "org-default",
+  "user_arn": "arn:aws:iam::111:user/admin"
+}
