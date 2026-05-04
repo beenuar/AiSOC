@@ -68,3 +68,7 @@ eval_report.json
 eval_mitre_accuracy_report.json
 .gocache/
 *.tsbuildinfo
+
+# Docusaurus generated cache (apps/docs)
+apps/docs/.docusaurus/
+apps/docs/build/
