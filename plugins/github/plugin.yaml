@@ -1,0 +1,27 @@
+id: github
+name: GitHub Connector (Audit + Code Scanning)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  GitHub organization audit log and Code Scanning alerts via the GitHub REST
+  API. Streams org-level admin events plus security findings (CodeQL, secret
+  scanning, third-party scanners) into AiSOC for unified supply-chain and VCS
+  threat coverage. Requires a fine-grained PAT or GitHub App installation
+  token with read:audit_log and security_events scopes.
+author: AiSOC Core Team
+tags: [vcs, github, audit, code-scanning, supply-chain, identity]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/github.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [organization, token]
+  properties:
+    organization:
+      type: string
+      description: "GitHub organization slug, e.g. acme-corp"
+    token:
+      type: string
+      description: "Fine-grained PAT or GitHub App installation token (read:audit_log, security_events)"
+      secret: true

@@ -14,6 +14,27 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Connectors",
+      items: [
+        "connectors/index",
+        "connectors/azure-entra",
+        "connectors/azure-activity",
+        "connectors/azure-defender",
+        "connectors/gcp-cloud-audit",
+        "connectors/gcp-scc",
+        "connectors/m365-audit",
+        "connectors/google-workspace",
+        "connectors/cloudflare",
+        "connectors/github",
+      ],
+    },
+    {
+      type: "category",
+      label: "Operations",
+      items: ["operations/credentials"],
+    },
+    {
+      type: "category",
       label: "Plugin SDK",
       items: [
         "plugins/overview",

@@ -1,0 +1,32 @@
+id: azure-activity
+name: Azure Activity Logs Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Azure Activity Logs subscription-level control-plane events (resource creates,
+  role assignments, policy changes) via the Azure Monitor REST API. Flags
+  high-blast-radius operations such as RBAC role grants and policy
+  modifications, then forwards to AiSOC for cloud-plane detection coverage.
+author: AiSOC Core Team
+tags: [cloud, azure, activity, audit, control-plane, microsoft]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_activity.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tenant_id, client_id, client_secret, subscription_id]
+  properties:
+    tenant_id:
+      type: string
+      description: "Azure AD tenant ID (GUID)"
+    client_id:
+      type: string
+      description: "Application (Client) ID of the Azure AD app registration"
+    client_secret:
+      type: string
+      description: "Client secret for the Azure AD app registration"
+      secret: true
+    subscription_id:
+      type: string
+      description: "Azure subscription ID to pull Activity Logs from"

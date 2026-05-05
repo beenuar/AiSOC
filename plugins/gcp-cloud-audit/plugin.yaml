@@ -1,0 +1,26 @@
+id: gcp-cloud-audit
+name: GCP Cloud Audit Logs Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Google Cloud Platform Admin Activity, Data Access, and System Event audit
+  logs via the Cloud Logging API. Captures IAM changes, resource mutations,
+  and high-risk data-plane reads, then normalizes to AiSOC's event schema.
+  Requires a service account with roles/logging.viewer on the target project.
+author: AiSOC Core Team
+tags: [cloud, gcp, google, audit, logging, control-plane]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/gcp_cloud_audit.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [project_id, service_account_json]
+  properties:
+    project_id:
+      type: string
+      description: "GCP project ID to pull Cloud Audit Logs from"
+    service_account_json:
+      type: string
+      description: "Service account JSON key, encrypted at rest by the credential vault"
+      secret: true

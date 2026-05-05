@@ -1,7 +1,7 @@
 {
   "$schema": "https://aisoc.dev/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-05T06:47:15Z",
+  "generated": "2026-05-05T22:11:19Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,15 +20,15 @@
     }
   ],
   "stats": {
-    "total": 6978,
+    "total": 6987,
     "playbooks": 50,
     "detections": 6913,
-    "plugins": 15,
-    "verified": 865,
+    "plugins": 24,
+    "verified": 874,
     "community": 0,
     "by_tier": {
       "imported": 6113,
-      "stable": 865
+      "stable": 874
     },
     "detections_by_tier": {
       "imported": 6113,
@@ -221585,6 +221585,110 @@
       "path": "playbooks/packs/v1/supply-chain/supply-vendor-breach.playbook.json"
     },
     {
+      "id": "azure-activity",
+      "type": "plugin",
+      "name": "Azure Activity Logs Connector",
+      "description": "Azure Activity Logs subscription-level control-plane events (resource creates, role assignments, policy changes) via the Azure Monitor REST API. Flags high-blast-radius operations such as RBAC role grants and policy modifications, then forwards to AiSOC for cloud-plane detection coverage.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "azure",
+        "activity",
+        "audit",
+        "control-plane",
+        "microsoft"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_activity.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/azure-activity/plugin.yaml"
+    },
+    {
+      "id": "azure-defender",
+      "type": "plugin",
+      "name": "Microsoft Defender Connector",
+      "description": "Microsoft Defender (XDR / Defender for Cloud) alerts via Microsoft Graph Security API. Pulls cross-product alerts (endpoint, identity, cloud apps, cloud workloads) and normalizes them into AiSOC's incident schema. Requires an Azure AD app registration with SecurityAlert.Read.All.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "edr",
+        "xdr",
+        "azure",
+        "microsoft",
+        "defender",
+        "alerts"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_defender.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/azure-defender/plugin.yaml"
+    },
+    {
+      "id": "azure-entra",
+      "type": "plugin",
+      "name": "Microsoft Entra ID Connector",
+      "description": "Microsoft Entra ID (formerly Azure AD) directory audits and risky sign-ins via Microsoft Graph. Streams directoryAudits, signIns, and IdentityRiskyUser events into AiSOC for identity-plane detection coverage. Requires an Azure AD app registration with AuditLog.Read.All and Directory.Read.All application permissions.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "iam",
+        "azure",
+        "entra",
+        "identity",
+        "microsoft",
+        "audit"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_entra.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/azure-entra/plugin.yaml"
+    },
+    {
+      "id": "cloudflare",
+      "type": "plugin",
+      "name": "Cloudflare Audit Logs Connector",
+      "description": "Cloudflare account-scope audit logs (zone changes, API token grants, member adds, WAF/firewall edits) via the Cloudflare v4 API. Captures operator activity across the account so high-risk admin actions land in AiSOC alongside other identity-plane signal. Requires an API token scoped to Account: Audit Logs: Read.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "cloudflare",
+        "audit",
+        "identity",
+        "admin",
+        "edge"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cloudflare.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/cloudflare/plugin.yaml"
+    },
+    {
       "id": "cloudflare-waf",
       "type": "plugin",
       "name": "Cloudflare WAF Action",
@@ -221639,6 +221743,85 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/datadog-incidents/plugin.yaml"
+    },
+    {
+      "id": "gcp-cloud-audit",
+      "type": "plugin",
+      "name": "GCP Cloud Audit Logs Connector",
+      "description": "Google Cloud Platform Admin Activity, Data Access, and System Event audit logs via the Cloud Logging API. Captures IAM changes, resource mutations, and high-risk data-plane reads, then normalizes to AiSOC's event schema. Requires a service account with roles/logging.viewer on the target project.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "gcp",
+        "google",
+        "audit",
+        "logging",
+        "control-plane"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/gcp_cloud_audit.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/gcp-cloud-audit/plugin.yaml"
+    },
+    {
+      "id": "gcp-scc",
+      "type": "plugin",
+      "name": "GCP Security Command Center Connector",
+      "description": "Google Cloud Security Command Center findings (misconfigurations, threats, vulnerabilities) at the organization scope. Streams ACTIVE findings into AiSOC for unified cloud-posture and runtime-threat triage. Requires a service account with roles/securitycenter.findingsViewer on the organization.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "gcp",
+        "google",
+        "scc",
+        "posture",
+        "vuln",
+        "findings"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/gcp_scc.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/gcp-scc/plugin.yaml"
+    },
+    {
+      "id": "github",
+      "type": "plugin",
+      "name": "GitHub Connector (Audit + Code Scanning)",
+      "description": "GitHub organization audit log and Code Scanning alerts via the GitHub REST API. Streams org-level admin events plus security findings (CodeQL, secret scanning, third-party scanners) into AiSOC for unified supply-chain and VCS threat coverage. Requires a fine-grained PAT or GitHub App installation token with read:audit_log and security_events scopes.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "vcs",
+        "github",
+        "audit",
+        "code-scanning",
+        "supply-chain",
+        "identity"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/github.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/github/plugin.yaml"
     },
     {
       "id": "github-audit",
@@ -221697,6 +221880,32 @@
       "path": "plugins/gitlab-audit/plugin.yaml"
     },
     {
+      "id": "google-workspace",
+      "type": "plugin",
+      "name": "Google Workspace Connector",
+      "description": "Google Workspace audit logs (login, admin, drive, token, mobile) via the Admin SDK Reports API. Provides identity- and SaaS-plane signal across the Workspace surface, including suspicious-login flags and 2-step-verification state changes. Requires a service account with domain-wide delegation and the admin.reports.audit.readonly scope.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "google",
+        "workspace",
+        "gsuite",
+        "identity",
+        "audit"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/google_workspace.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/google-workspace/plugin.yaml"
+    },
+    {
       "id": "jamf-mdm",
       "type": "plugin",
       "name": "Jamf Pro MDM Connector",
@@ -221723,6 +221932,34 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/jamf-mdm/plugin.yaml"
+    },
+    {
+      "id": "m365-audit",
+      "type": "plugin",
+      "name": "Microsoft 365 Audit Connector",
+      "description": "Microsoft 365 unified audit log (Azure AD, Exchange, SharePoint/OneDrive, Teams, Power BI) via the Office 365 Management Activity API. Surfaces SaaS data-access and configuration events with the same Azure AD app credentials used by the Entra connector. Requires ActivityFeed.Read on the registered app.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "microsoft",
+        "m365",
+        "office365",
+        "audit",
+        "exchange",
+        "sharepoint",
+        "teams"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/m365_audit.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/m365-audit/plugin.yaml"
     },
     {
       "id": "mttr-widget",

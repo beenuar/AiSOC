@@ -1,0 +1,27 @@
+id: google-workspace
+name: Google Workspace Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Google Workspace audit logs (login, admin, drive, token, mobile) via the
+  Admin SDK Reports API. Provides identity- and SaaS-plane signal across the
+  Workspace surface, including suspicious-login flags and 2-step-verification
+  state changes. Requires a service account with domain-wide delegation and
+  the admin.reports.audit.readonly scope.
+author: AiSOC Core Team
+tags: [saas, google, workspace, gsuite, identity, audit]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/google_workspace.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [admin_email, service_account_json]
+  properties:
+    admin_email:
+      type: string
+      description: "Super-admin email to impersonate via domain-wide delegation"
+    service_account_json:
+      type: string
+      description: "Service account JSON key, encrypted at rest by the credential vault"
+      secret: true

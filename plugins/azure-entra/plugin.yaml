@@ -1,0 +1,30 @@
+id: azure-entra
+name: Microsoft Entra ID Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Microsoft Entra ID (formerly Azure AD) directory audits and risky sign-ins
+  via Microsoft Graph. Streams directoryAudits, signIns, and IdentityRiskyUser
+  events into AiSOC for identity-plane detection coverage. Requires an Azure AD
+  app registration with AuditLog.Read.All and Directory.Read.All application
+  permissions.
+author: AiSOC Core Team
+tags: [iam, azure, entra, identity, microsoft, audit]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_entra.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tenant_id, client_id, client_secret]
+  properties:
+    tenant_id:
+      type: string
+      description: "Azure AD tenant ID (GUID)"
+    client_id:
+      type: string
+      description: "Application (Client) ID of the Azure AD app registration"
+    client_secret:
+      type: string
+      description: "Client secret for the Azure AD app registration"
+      secret: true
