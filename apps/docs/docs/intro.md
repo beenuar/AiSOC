@@ -8,7 +8,7 @@ AiSOC (v5.2.0) is an open-source AI Security Operations Center maintained by
 the AiSOC community. The agent itself is MIT-licensed, self-hostable, and
 auditable: every LLM prompt, tool call, evidence citation, and decision is
 recorded in a replayable Investigation Ledger, and the substrate is gated by a
-public, reproducible eval harness on every commit.
+public, reproducible eval harness on every PR targeting `main` / `develop`.
 
 ## Capabilities
 
@@ -22,12 +22,12 @@ public, reproducible eval harness on every commit.
 - **UEBA** — per-user Welford online baseline, Z-score anomaly scoring, and Kafka-integrated anomaly publishing.
 - **Honeytokens** — HMAC-SHA256 signed deceptive credentials (URL, file, AWS key, email) with first-touch webhook alerting.
 - **Purple Team** — Atomic Red Team YAML parser + Caldera executor, ATT&CK coverage heatmap, tabletop sessions.
-- **Detection engineering** — 200+ Sigma rules over OpenSearch + ClickHouse, YARA, KQL / EQL, community catalog with one-click install.
+- **Detection engineering** — 800 native Sigma-shaped rules plus ~6,000 imported from SigmaHQ, Splunk Security Content, Chronicle, and MITRE CAR (each tagged with provenance), running over OpenSearch + ClickHouse, YARA, KQL / EQL, community catalog with one-click install.
 - **Playbook engine** — 50+ community SOAR playbooks with explicit decision trees and human-approval gates on destructive actions.
 - **Threat intelligence** — TAXII 2.1, MISP, OTX, CISA KEV with triple storage (search, vector, graph).
 - **Governance** — SAML 2.0 + OIDC SSO, multi-tenant RLS, granular RBAC, immutable audit log.
 - **Compliance dashboards** — SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA evidence with MTTD / MTTR / MTTC SLA tracking.
-- **Marketplace** — 15 first-party plugins, 50+ playbooks, 200+ detections, surfaced in-app via [`marketplace/index.json`](https://github.com/beenuar/AiSOC/tree/main/marketplace).
+- **Marketplace** — 15 first-party plugins, 50+ playbooks, 6,900+ detections (filtered by tier: stable / beta / imported / community), surfaced in-app via [`marketplace/index.json`](https://github.com/beenuar/AiSOC/tree/main/marketplace).
 - **SDKs** — Python, TypeScript, and Go SDKs for client and plugin development; Ed25519-signed publishing.
 - **Model Context Protocol** — `@aisoc/mcp` exposes 11 tools to Claude, Cursor, Continue, and Cody so analysts can replay agent decisions from inside their IDE ([MCP integration](./integrations/mcp)).
 

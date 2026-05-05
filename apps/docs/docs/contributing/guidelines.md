@@ -12,18 +12,23 @@ All contributors must follow our [Code of Conduct](https://github.com/beenuar/Ai
 
 ## Branching Strategy
 
-- `main` — stable, tagged releases
-- `dev` — active development
+- `main` — the long-lived branch most contributors target. Tags cut here.
+- `develop` — optional integration branch; CI watches both `main` and
+  `develop`, so coordinated multi-PR work can land here first.
 - `feature/<name>` — new features
 - `fix/<name>` — bug fixes
 
 ## Pull Requests
 
-1. Fork the repo and create a branch from `dev`
-2. Write tests for any new code
-3. Ensure CI passes (`pytest`, `go test ./...`, `pnpm lint`)
-4. Update documentation if needed
-5. Open a PR against `dev`
+1. Fork the repo and create a branch from `main`
+   (or from `develop` if you are coordinating a stack of changes there).
+2. Write tests for any new code.
+3. Ensure CI passes locally: `pnpm lint`, `pnpm --filter @aisoc/web test`,
+   `pytest services/<name>/tests/` for Python services you touched, and
+   `go test ./...` for Go services you touched.
+4. Update documentation if behavior, commands, or APIs changed.
+5. Open a PR against `main` (or `develop` if your work is being coordinated
+   on the integration branch).
 
 ## Commit Messages
 

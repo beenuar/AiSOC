@@ -11,9 +11,9 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
 [![Version](https://img.shields.io/badge/version-5.2.0-f59e0b?style=flat-square)](CHANGELOG.md)
 
-[How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
+[Live demo](https://tryaisoc.com) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
-<sub>AiSOC is fully self-hostable. Follow the [quick start](#quick-start) or pick a [deployment target](#deployment-options) below.</sub>
+<sub>The demo at <a href="https://tryaisoc.com">tryaisoc.com</a> is a self-hosted instance fronted by a Cloudflare Tunnel — when it's reachable, the stack is running locally on a maintainer's box. It can therefore go offline at any time. To run your own (in 3.5 min, with seeded data), see <a href="#one-shot-demo">One-shot demo</a>; to expose your own instance on your own domain via Cloudflare Tunnel, see <a href="#public-demo-on-your-own-domain">Public demo on your own domain</a>.</sub>
 
 </div>
 
@@ -26,7 +26,7 @@ AiSOC is a single self-hostable stack that ingests security events, correlates t
 Three properties distinguish it from closed-source AI SOC vendors:
 
 1. **Agent decisions are logged.** The Investigation Ledger stores the LLM prompt, the response, the evidence cited, and the downstream tool calls for every step of every run. Replays are available later.
-2. **The substrate has a public eval harness in CI.** A 200-incident harness gates every commit. Alert reduction is a real measurement against a fixed noisy stream; the MITRE-tactic, investigation-completeness, and response-quality suites are substrate self-consistency gates over deterministic templates and synthetic data. The [benchmark page](apps/docs/docs/benchmark.md) explains exactly which is which.
+2. **The substrate has a public eval harness in CI.** Four suites gate every PR targeting `main` / `develop`: a 200-incident synthetic dataset drives the MITRE-tactic, investigation-completeness, and response-quality gates, and a separately generated 1,000-alert noisy stream drives the alert-reduction gate. Alert reduction is a real measurement against that fixed stream; the other three are substrate self-consistency gates over deterministic templates. The [benchmark page](apps/docs/docs/benchmark.md) explains exactly which is which.
 3. **It runs entirely on your infrastructure.** No callbacks to a vendor cloud and no data exfiltration for "model improvement."
 
 The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agents/). It is small enough to read end-to-end, swap models in, and patch.
@@ -35,19 +35,19 @@ The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agent
 
 ## How AiSOC compares
 
-| Capability | AiSOC | Wazuh | Splunk ES | Anvilogic | Prophet Security |
-|---|---|---|---|---|---|
-| Open-source license | MIT | GPL-2 | proprietary | proprietary | proprietary |
-| Self-hostable | yes | yes | enterprise-only | cloud-only | cloud-only |
-| Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes | yes |
-| Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published | not published |
-| Public substrate eval harness | CI-gated, reproducible | n/a | n/a | not published | not published |
-| Detection content | 200+ Sigma rules | 1,200+ rules | 1,000+ apps | curated | curated |
-| Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary | proprietary |
-| Data residency | your infra | your infra | partial | vendor cloud | vendor cloud |
-| Pricing | $0 (self-host) | $0 (self-host) | per ingest GB | enterprise | enterprise |
+| Capability | AiSOC | Wazuh | Splunk ES | Closed-source AI SOC |
+|---|---|---|---|---|
+| Open-source license | MIT | GPL-2 | proprietary | proprietary |
+| Self-hostable | yes | yes | enterprise-only | cloud-only |
+| Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes |
+| Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published |
+| Public substrate eval harness | CI-gated, reproducible | n/a | n/a | not published |
+| Detection content | 800 native + 6,000+ imported (Sigma / Splunk / Chronicle / CAR) | 1,200+ rules | 1,000+ apps | curated |
+| Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary |
+| Data residency | your infra | your infra | partial | vendor cloud |
+| Pricing | $0 (self-host) | $0 (self-host) | per ingest GB | enterprise |
 
-Closed-source AI SOC vendors (Anvilogic, Prophet, Tines, Dropzone) ship working products. AiSOC's contribution is making the agent itself open, the per-step decision trail readable, and the substrate gated by a public eval harness on every commit.
+Closed-source AI SOC vendors ship working products. AiSOC's contribution is making the agent itself open, the per-step decision trail readable, and the substrate gated by a public eval harness on every PR targeting `main` / `develop`.
 
 ---
 
@@ -335,6 +335,66 @@ When you're done: `pnpm aisoc:demo:down` (deletes the demo volumes).
 
 The full development quick start with all services (UEBA, Honeytokens, Purple Team, ClickHouse, OpenSearch, Neo4j, Qdrant) is below.
 
+### Public demo on your own domain
+
+The same demo stack can be reached from the public internet without exposing
+ports, opening firewall rules, or paying for a cloud VM. AiSOC ships a
+Cloudflare Tunnel template plus a wrapper script that:
+
+1. Brings up the slim demo profile via `pnpm aisoc:demo --no-open` (Postgres, Redis, Kafka, api, agents, realtime, web).
+2. Creates a named `cloudflared` tunnel (or reuses one if it already exists).
+3. Renders an ingress config from [`infra/cloudflare/config.yml.example`](infra/cloudflare/config.yml.example) into `~/.cloudflared/<tunnel-name>.yml`, after validating it with `cloudflared tunnel ingress validate`.
+4. Adds DNS routes on your zone so the apex (`https://<your-domain>`) and the `api`, `ws`, `docs` subdomains all resolve to the tunnel.
+5. Runs `cloudflared tunnel run` in the foreground (Ctrl+C exits cleanly; the local stack keeps running).
+
+The result: a publicly reachable, fully self-hosted SOC console, served from
+your laptop, accepting only traffic that came in through Cloudflare. No
+inbound ports are opened on your router or firewall.
+
+#### Prerequisites
+
+- A domain whose DNS is managed by Cloudflare.
+- The [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/) CLI installed locally (`brew install cloudflared` on macOS).
+- `cloudflared tunnel login` run once on this machine — it drops a `cert.pem` in `~/.cloudflared/` that authorises this host to manage tunnels and DNS records on the zone.
+
+#### Run it
+
+```bash
+# Default: tryaisoc.com (apex → web, api/ws/docs.tryaisoc.com → api/realtime/docs)
+pnpm demo:public
+
+# Or point it at any zone you control:
+DOMAIN=demo.example.com pnpm demo:public
+
+# Already have the local stack running? Just bring the tunnel up:
+pnpm demo:public:tunnel-only
+
+# Just provision the tunnel + DNS, but don't run cloudflared
+# (useful before `cloudflared service install` to leave it running 24/7):
+SKIP_RUN=1 pnpm demo:public:setup
+```
+
+All env vars are forwarded to [`infra/cloudflare/tunnel.sh`](infra/cloudflare/tunnel.sh):
+`DOMAIN` (apex, default `tryaisoc.com`), `TUNNEL_NAME` (default `aisoc-tryaisoc`),
+`SUBDOMAINS` (default `"api ws docs"`), `SKIP_DNS=1` (don't touch DNS records),
+`SKIP_RUN=1` (set up everything but don't run the tunnel).
+Run `bash scripts/demo-public.sh --help` to see the full set, or read
+[`infra/cloudflare/README.md`](infra/cloudflare/README.md) for the topology
+diagram and production-hardening notes (running `cloudflared` as a launchd /
+systemd service, layering Cloudflare Access in front, etc).
+
+#### Stop it
+
+```bash
+# Ctrl-C in the tunnel terminal stops cloudflared.
+# Then bring the local stack down:
+pnpm aisoc:demo:down
+```
+
+The `tryaisoc.com` instance linked at the top of this README is exactly that:
+this script, running from a maintainer's machine. The tunnel infra is
+upstream so anyone can do the same on their own domain.
+
 ### Full stack (development)
 
 #### Prerequisites
@@ -408,14 +468,17 @@ If any check fails, the doctor tells you exactly what to fix before logging in.
 #### 5b. Run the public eval harness (optional)
 
 ```bash
-# Generate 200 synthetic incidents and run all four substrate eval suites
-python scripts/run_evals.py --count 200 --report eval_report.json
+# Run all four substrate eval suites against the bundled 200-incident
+# dataset and write a machine-readable report. The dataset size is fixed by
+# services/agents/tests/eval_data/synthetic_incidents.json — there is no
+# --count flag.
+python scripts/run_evals.py --out eval_report.json
 
 # Or run a single eval gate
 pytest services/agents/tests/test_mitre_accuracy.py
 ```
 
-The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`, which the [public eval harness page](apps/docs/docs/benchmark.md) renders. The same harness runs in CI on every PR — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`, which the [public eval harness page](apps/docs/docs/benchmark.md) renders. The same harness runs in CI on every PR targeting `main` / `develop` — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 The harness runs deterministic substrate code (extractors, fusion, templates, judges) against synthetic data — it does not call the live LLM agent. Three of the four metrics are substrate self-consistency gates rather than agent accuracy scores. The [benchmark page](apps/docs/docs/benchmark.md) documents what each suite measures and what it does not.
 
@@ -537,15 +600,21 @@ Interactive docs: `http://localhost:8000/docs` (Swagger) or `http://localhost:80
 
 ## Plugin and detection SDK
 
+The CLI is published as a Python package. Install it with `pipx` (recommended) or `pip`:
+
 ```bash
+pipx install aisoc-cli            # PyPI release
+# or, from the monorepo:
+pip install -e packages/aisoc-cli
+
 # Scaffold a new plugin
-npx aisoc-cli scaffold plugin my-connector
+aisoc scaffold plugin my-connector
 
 # Validate a detection rule
-npx aisoc-cli validate detection ./detections/my-rule.yaml
+aisoc validate detection ./detections/my-rule.yaml
 
 # Publish to community registry (Ed25519 signed)
-npx aisoc-cli publish plugin ./my-connector --key ~/.aisoc/signing.key
+aisoc publish plugin ./my-connector --key ~/.aisoc/signing.key
 ```
 
 SDKs:

@@ -117,7 +117,7 @@ or `pnpm aisoc:lab` for the full lab stack.
 | ledger-api | `GET /api/v1/investigations/*` for listing, retrieving, and replaying ledger entries by case | Completed |
 | eval-harness-v2 | 200-incident synthetic dataset covering all 14 MITRE tactics + 4 eval gates: alert reduction (real measurement) plus MITRE-tactic / completeness / response-quality substrate self-consistency gates | Completed |
 | benchmark-page | Public eval harness page at `/benchmark` (docs + web) with published numbers, full method, comparison to other AI SOC offerings, and explicit "what each suite measures" framing | Completed |
-| ci-eval-gates | `scripts/run_evals.py --ci` wired into `.github/workflows/ci.yml` so every commit is gated on substrate self-consistency + alert-reduction thresholds | Completed |
+| ci-eval-gates | `scripts/run_evals.py --ci` wired into `.github/workflows/ci.yml` so every PR targeting `main` / `develop` is gated on substrate self-consistency + alert-reduction thresholds | Completed |
 | responder-pwa | Installable PWA (`apps/web/src/app/(responder)/`) with service worker, offline shell, manifest, icons | Completed |
 | passkeys | WebAuthn passkey registration + login for Responder surface (FIDO2 platform authenticators only) | Completed |
 | oncall | On-call schedule + handoff (`oncall.py` + Responder home page + alert page badge) | Completed |

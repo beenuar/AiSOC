@@ -100,5 +100,7 @@ Each service exposes the same shape on its own port (`8001`, `8002`, `8003`, `80
 ```bash
 docker compose logs -f agents
 docker compose logs -f api
-docker compose logs -f mcp
+docker compose logs -f realtime
 ```
+
+The full list of services is in [`docker-compose.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.yml) — `api`, `agents`, `fusion`, `actions`, `connectors`, `threatintel`, `ueba`, `honeytokens`, `purple-team`, `realtime`, `ingest-worker`, `enrichment`, `web`, plus the data-plane services (`postgres`, `redis`, `kafka`, `clickhouse`, `opensearch`, `qdrant`).

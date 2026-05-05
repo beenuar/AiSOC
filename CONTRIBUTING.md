@@ -22,8 +22,9 @@ See [README.md](README.md#development) for detailed setup instructions.
 ### Code Style
 
 - **TypeScript/JavaScript**: ESLint + Prettier (config in root)
-- **Python**: Black + isort + mypy (config in pyproject.toml)
-- **Go**: gofmt + golangci-lint
+- **Python**: `ruff` for linting and formatting, `mypy` for type checking
+  (config in [`ruff.toml`](ruff.toml) and per-service `pyproject.toml`)
+- **Go**: `gofmt` + `go vet`
 
 ### Commit Messages
 
@@ -51,8 +52,11 @@ re-graded against the public eval harness. The harness lives under
 [`services/agents/tests/`](services/agents/tests/).
 
 ```bash
-# Generate 200 synthetic incidents and run all four substrate eval suites
-python scripts/run_evals.py --count 200 --report eval_report.json
+# Run all four substrate eval suites against the bundled 200-incident
+# dataset and write a JSON report. The dataset size is fixed by
+# services/agents/tests/eval_data/synthetic_incidents.json — there is no
+# --count flag.
+python scripts/run_evals.py --out eval_report.json
 
 # Or run a single eval axis
 pytest services/agents/tests/test_mitre_accuracy.py
@@ -79,9 +83,14 @@ before/after delta in the PR body.
 ## Submitting a Pull Request
 
 1. Update your branch: `git fetch upstream && git rebase upstream/main`
-2. Run tests: `pnpm test` (frontend) and `poetry run pytest` (Python)
+2. Run tests:
+   - `pnpm --filter @aisoc/web test` (web smoke tests)
+   - `pytest services/<name>/tests/` for any Python service you touched
+   - `( cd services/<name> && go test ./... )` for any Go service you touched
 3. Push to your fork: `git push origin feature/my-feature`
-4. Open a PR on GitHub with a clear description of changes
+4. Open a PR on GitHub against `main` with a clear description of changes.
+   CI also runs on `develop` for integration branches; both targets are
+   accepted, but most contributors should target `main`.
 
 ## Adding New Connectors
 

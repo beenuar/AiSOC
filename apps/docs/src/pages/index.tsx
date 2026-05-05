@@ -119,8 +119,7 @@ const COMPARE_HEADERS = [
   'AiSOC',
   'Wazuh',
   'Splunk Enterprise Security',
-  'Anvilogic',
-  'Prophet Security',
+  'Closed-source AI SOC',
 ] as const;
 
 const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
@@ -131,7 +130,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'yes', label: 'Yes — GPLv2' },
       { kind: 'no', label: 'No' },
       { kind: 'no', label: 'Cloud-only' },
-      { kind: 'no', label: 'Cloud-only' },
     ],
   },
   {
@@ -140,7 +138,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'yes', label: 'Yes — full ledger + replay' },
       { kind: 'caveat', label: 'No agent layer' },
       { kind: 'no', label: 'Black-box ML' },
-      { kind: 'no', label: 'Black-box agent' },
       { kind: 'no', label: 'Black-box agent' },
     ],
   },
@@ -151,7 +148,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'no', label: 'Not published' },
       { kind: 'no', label: 'Not published' },
       { kind: 'caveat', label: 'Vendor-claimed only' },
-      { kind: 'caveat', label: 'Vendor-claimed only' },
     ],
   },
   {
@@ -161,7 +157,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'no', label: 'No' },
       { kind: 'caveat', label: 'Splunk AI Assistant add-on' },
       { kind: 'yes', label: 'Closed-source' },
-      { kind: 'yes', label: 'Closed-source' },
     ],
   },
   {
@@ -170,7 +165,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'yes', label: 'Built-in' },
       { kind: 'caveat', label: 'Partial' },
       { kind: 'caveat', label: 'Premium add-on' },
-      { kind: 'yes', label: 'Yes' },
       { kind: 'caveat', label: 'Limited' },
     ],
   },
@@ -181,7 +175,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'caveat', label: 'Wodles only' },
       { kind: 'yes', label: 'Splunkbase' },
       { kind: 'no', label: 'Vendor-only' },
-      { kind: 'no', label: 'Vendor-only' },
     ],
   },
   {
@@ -190,7 +183,6 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
       { kind: 'yes', label: 'Built-in dashboards' },
       { kind: 'no', label: 'No' },
       { kind: 'yes', label: 'Premium add-on' },
-      { kind: 'caveat', label: 'Reporting only' },
       { kind: 'caveat', label: 'Reporting only' },
     ],
   },
@@ -263,7 +255,7 @@ export default function Home(): React.JSX.Element {
   return (
     <Layout
       title={siteConfig.title}
-      description="An open-source AI SOC platform. Agent decisions are recorded in an investigation ledger and a public eval harness is run on every commit. MIT-licensed and self-hostable, with built-in UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance reporting.">
+      description="An open-source AI SOC platform. Agent decisions are recorded in an investigation ledger and a public eval harness is run on every PR targeting main / develop. MIT-licensed and self-hostable, with built-in UEBA, honeytokens, purple-team emulation, and SOC 2 / ISO 27001 / NIST CSF compliance reporting.">
       <HomepageHeader />
       <main>
         <ComparisonTable />

@@ -140,8 +140,11 @@ fix.
 ### 6. Run the public eval harness (optional)
 
 ```bash
-# Generate 200 synthetic incidents and run all four substrate eval suites
-python scripts/run_evals.py --count 200 --report eval_report.json
+# Run all four substrate eval suites against the bundled 200-incident
+# dataset and write a JSON report. The dataset size is fixed by
+# services/agents/tests/eval_data/synthetic_incidents.json — there is no
+# --count flag.
+python scripts/run_evals.py --out eval_report.json
 
 # Or run a single eval gate
 pytest services/agents/tests/test_mitre_accuracy.py
@@ -176,12 +179,12 @@ it on your phone via "Add to Home Screen" and sign in with a passkey.
 | Alerts | `/alerts` | Raw signal feed with Ambient Copilot suggestions |
 | Cases | `/cases` | Unified case management |
 | Case workspace | `/cases/<id>` | Evidence timeline + **Investigation Ledger** + attack graph |
-| Detections | `/detections` | Sigma/YARA/KQL rule catalog (200+ rules) |
+| Detections | `/detections` | Sigma/YARA/KQL rule catalog (800 native + ~6,000 imported, filterable by tier) |
 | Playbooks | `/playbooks` | SOAR automation builder (50+ packs) |
 | UEBA | `/ueba` | User behavior anomaly timeline |
 | Honeytokens | `/honeytokens` | Deceptive token lifecycle |
 | Purple Team | `/purple-team` | ATT&CK coverage · emulation runs · tabletop |
-| Marketplace | `/marketplace` | 15 plugins + 50+ playbooks + 200+ detections |
+| Marketplace | `/marketplace` | 15 plugins + 50+ playbooks + 6,900+ detections (tier-filtered) |
 | Benchmark | `/benchmark` | Public eval harness — alert reduction + substrate self-consistency gates |
 | Compliance | `/compliance` | SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA |
 | Audit Log | `/audit` | Immutable, tenant-scoped activity ledger |

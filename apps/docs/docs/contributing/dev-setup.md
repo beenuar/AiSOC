@@ -203,8 +203,8 @@ substrate self-consistency gates.
 
 AiSOC ships a curated marketplace at
 [`marketplace/index.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/index.json)
-that aggregates ~200 detections, 50+ playbooks, and 15 first-party
-plugins. To add to the catalog:
+that aggregates 6,900+ detections (filtered by tier), 50+ playbooks, and
+15 first-party plugins. To add to the catalog:
 
 1. Drop your YAML into `detections/<vendor>/` or `playbooks/<vendor>/`.
 2. Add or update the plugin under `plugins/<vendor>/`.

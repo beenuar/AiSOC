@@ -10,10 +10,12 @@ description: AiSOC's open, deterministic regression harness. 200 synthetic incid
 >
 > This page is _not_ a leaderboard for AI SOC agents. It is a CI-gated harness
 > that exercises the deterministic substrate underneath AiSOC — the keyword
-> extractors, the fusion pipeline, the report and response templates, and the
-> offline judges that grade them. The dataset, the harness, and the CI gate are
-> all in the repo. You can reproduce every number on this page in under
-> 10 seconds on a laptop.
+> extractors, the in-harness fusion grouping (a faithful re-implementation of
+> the production Tier 1/2/3 logic in `services/fusion`, minus the DB-backed
+> dedup and ML scoring), the report and response templates, and the offline
+> judges that grade them. The dataset, the harness, and the CI gate are all in
+> the repo. You can reproduce every number on this page in under 10 seconds on
+> a laptop.
 
 [![MITRE Accuracy](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbeenuar%2FAiSOC%2Feval-results%2Feval%2Fresults%2Fbadge-mitre.json)](#latest-results)
 [![Alert Reduction](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fbeenuar%2FAiSOC%2Feval-results%2Feval%2Fresults%2Fbadge-reduction.json)](#latest-results)
@@ -22,11 +24,14 @@ description: AiSOC's open, deterministic regression harness. 200 synthetic incid
 
 :::warning Read this first
 This harness does **not** exercise the live LLM agent (`services/agents`
-LangGraph orchestrator). It runs **deterministic substrate code** against
-**synthetic data** so we can gate every commit in milliseconds. Three of the
-four metrics on this page measure the **internal consistency** of that
-substrate — not agent accuracy. We explain exactly what each suite measures —
-and doesn't — below.
+LangGraph orchestrator), and the `alert_reduction` suite does **not** call the
+production `services/fusion` engine — it calls a standalone re-implementation
+of the same Tier 1/2/3 grouping rules that lives in the test file. It runs
+**deterministic substrate code** against **synthetic data** so we can gate
+every PR targeting `main` / `develop` in milliseconds. Three of the four
+metrics on this page measure the **internal consistency** of that substrate —
+not agent accuracy. We explain exactly what each suite measures — and doesn't
+— below.
 :::
 
 ## Why this exists
@@ -38,16 +43,19 @@ opposite approach: ship a small harness, label which metrics are real
 measurements and which are substrate self-checks, and let anyone reproduce
 the numbers.
 
-1. **The dataset is in the repo** — [`services/agents/tests/eval_data/synthetic_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json), 200 cases, deterministic, regenerable.
+1. **The dataset is in the repo** — [`services/agents/tests/eval_data/synthetic_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_incidents.json), 200 cases, deterministic, regenerable. Three of the four suites use it; the alert-reduction suite uses a separately generated 1 000-alert stream produced by `generate_noisy_alert_stream` in the test file.
 2. **The harness is in the repo** — four pytest suites under [`services/agents/tests/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/tests).
-3. **The CI gate runs on every commit** — [latest run](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml).
-4. **Historical numbers are queryable** — every successful build pushes its `eval_report.json` to the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
+3. **The CI gate runs on every PR targeting `main` / `develop`** — [latest run](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml). (CI is currently scoped to those two branches; PRs to long-lived feature branches are not gated.)
+4. **Historical numbers are queryable** — every successful build pushes its report (written by `scripts/run_evals.py --out`) to the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
 
 ## Latest results
 
-The four numbers below are produced by `scripts/run_evals.py` against the
-200-incident synthetic dataset. They run in roughly 25 milliseconds total (no
-LLM calls, no DB) so they're cheap enough to gate every commit.
+The four numbers below are produced by `scripts/run_evals.py`. The MITRE,
+completeness, and response-quality suites run against the 200-incident
+synthetic dataset; the alert-reduction suite runs against a separately
+generated 1 000-alert noisy stream. The whole run takes roughly 25 ms total
+(no LLM calls, no DB) so it's cheap enough to gate every PR targeting `main`
+or `develop`.
 
 | Suite                          | Metric                | Latest    | Target  | What it checks |
 |--------------------------------|-----------------------|-----------|---------|----------------|
@@ -98,18 +106,23 @@ python3 scripts/run_evals.py --ci --out report.json
 
 A 1 000-alert noisy stream — pure duplicates, near-duplicates within a
 30-minute host window, multi-host rule storms, and benign low-score chatter —
-is fed into the **real** fusion pipeline:
+is fed into the in-harness `fuse_alerts` function. That function is a
+deterministic, in-memory re-implementation of the same Tier 1/2/3 grouping
+rules used by the production `services/fusion` engine — minus the
+DB-backed deduplicator and the ML scorer. The grouping logic itself is the
+same:
 
 - **Tier 1** — same `(rule, host, user)` within 10 minutes → 1 incident
 - **Tier 2** — same `(rule, host)` within 30 minutes → merge into a Tier-1 incident
 - **Tier 3** — same rule within 5 minutes across ≥ 3 hosts → "storm" incident
 
 Incidents below the noise threshold (`score < 0.35`) are dropped. The output is
-whatever the code produces — a fusion regression will move the number. This is
-a legitimate measurement of fusion behavior on a controlled dataset.
+whatever the code produces — a fusion-rule regression will move the number.
+This is a legitimate measurement of grouping behavior on a controlled dataset,
+but it is **not** end-to-end coverage of the production fusion service.
 
-The reported ~75 % is the actual output of the fusion pipeline on this fixed
-dataset. It is not tuned to match a marketing number.
+The reported ~75 % is the actual output of the in-harness grouping function on
+this fixed dataset. It is not tuned to match a marketing number.
 
 ### 2. MITRE ATT&CK tactic accuracy — `Substrate self-consistency`
 
@@ -182,16 +195,16 @@ references from the synthesizer, or the rubric stops matching) — it is
 
 ## Comparison to other AI SOC offerings
 
-| Capability                                     | AiSOC | Wazuh | Splunk | Anvilogic | Prophet | Dropzone |
-|-----------------------------------------------|:-----:|:-----:|:------:|:---------:|:-------:|:--------:|
-| Open-source (MIT)                              |  yes  |  yes  |   no   |    no     |   no    |    no    |
-| Self-hostable                                  |  yes  |  yes  |  yes   |    no     |   no    |    no    |
-| Agent decisions step-by-step auditable         |  yes  |  n/a  |  n/a   |    no     |   no    |    no    |
-| Public, reproducible regression harness        |  yes  |  no   |   no   |    no     |   no    |    no    |
-| Eval dataset shipped in the repo               |  yes  |  no   |   no   |    no     |   no    |    no    |
-| Substrate-level regression gate in CI          |  yes  |  no   |   no   |    no     |   no    |    no    |
-| Plugin SDK (Python + Go)                       |  yes  |  yes  |  yes   |  partial  |   no    |    no    |
-| Free                                           |  yes  |  yes  |   no   |    no     |   no    |    no    |
+| Capability                                     | AiSOC | Wazuh | Splunk | Closed-source AI SOC |
+|-----------------------------------------------|:-----:|:-----:|:------:|:---------------------:|
+| Open-source (MIT)                              |  yes  |  yes  |   no   |          no           |
+| Self-hostable                                  |  yes  |  yes  |  yes   |          no           |
+| Agent decisions step-by-step auditable         |  yes  |  n/a  |  n/a   |          no           |
+| Public, reproducible regression harness        |  yes  |  no   |   no   |          no           |
+| Eval dataset shipped in the repo               |  yes  |  no   |   no   |          no           |
+| Substrate-level regression gate in CI          |  yes  |  no   |   no   |          no           |
+| Plugin SDK (Python + Go)                       |  yes  |  yes  |  yes   |        partial        |
+| Free                                           |  yes  |  yes  |   no   |          no           |
 
 A self-hostable, MIT-licensed agent with a published regression harness is
 something an auditor or regulated buyer can review directly. Vendor cloud

@@ -225,8 +225,10 @@ curl -s -X POST http://localhost:8000/graphql \
 # Plugin manager loaded?
 curl http://localhost:8000/api/v1/plugins | jq .[].id
 
-# Run the public eval harness (offline, no LLM call required)
-python3 scripts/run_evals.py --count 200 --report eval_report.json
+# Run the public eval harness against the bundled 200-incident dataset
+# (offline, no LLM call required). The dataset size is fixed — there is no
+# --count flag, and the output flag is --out, not --report.
+python3 scripts/run_evals.py --out eval_report.json
 ```
 
 Expected output:

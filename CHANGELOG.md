@@ -7,7 +7,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Honesty + scale pass (P0–P4 of the post-gimmick improvement plan)
+
+This is a "fix the foundations" pass: tighten security defaults, drop
+overclaims, harden CI, fix DX rough edges, scale detection content from
+~200 to 6,913 rules with explicit tiering, and ship a public demo
+hosted on `tryaisoc.com` via Cloudflare Tunnel.
+
+#### Security defaults (P0)
+
+- **GraphQL tenant scoping** (`services/api/app/graphql/`) — every
+  resolver is wrapped with a `tenant_scope` helper, GraphiQL is forced
+  off in production, and a tenant-isolation regression test asserts
+  cross-tenant reads return 0 rows.
+- **Plugin signature gate** (`services/api/app/services/plugin_manager.py`,
+  `packages/plugin-sdk-py/src/aisoc_plugin_sdk/loader.py`,
+  `packages/plugin-sdk-go/aisoc/loader.go`) — Ed25519 signature
+  verification is required before loading any plugin. `PLUGIN_TRUST_MODE`
+  controls policy: `strict` (default, signed only), `permissive` (warn
+  + load), `dev` (skip). Publisher signing flow is documented in
+  `packages/plugin-sdk-py/README.md` and `packages/plugin-sdk-go/README.md`.
+- **`/metrics` and compose hardening** (`docker-compose.yml`,
+  `docker-compose.demo.yml`, `services/api/app/main.py`,
+  `services/api/app/core/security.py`) — service ports bind to
+  `127.0.0.1` by default, the API logs a loud warning if `SECRET_KEY`
+  is unset or default, the `admin` role permissions are corrected to
+  match the documented matrix, and `/metrics` is gated behind
+  `METRICS_TOKEN`.
+
+#### Honesty surface (P1)
+
+- **Fusion pipeline framing** (`services/agents/app/fusion/`,
+  `apps/docs/docs/architecture.md`) — replaced "real fusion pipeline"
+  with the actual scope (rule-based + ML scoring fan-in, no
+  reinforcement learning).
+- **CI cadence wording** (`README.md`, `CONTRIBUTING.md`) — "every
+  commit" → "every push and PR to `main`".
+- **Eval harness honesty** (`scripts/eval/`, `apps/docs/docs/`) —
+  removed "Macro F1" references, reframed the 200-incident synthetic
+  dataset as substrate self-consistency, dropped the hardcoded
+  `SUITES` constant, fixed the broken `--report` flag, and aligned
+  Prophet usage in code and docs.
+
+#### CI gates (P2)
+
+- **No more `|| true`** (`.github/workflows/ci.yml`) — removed every
+  silent failure suppression.
+- **Web Vitest smoke** — `apps/web` ships a Vitest suite covering
+  marketplace filters, detection coverage view, and core layouts.
+- **SDK + service jobs** — added Python pytest + Vitest jobs for
+  `packages/sdk-{py,ts,go}` and `packages/plugin-sdk-{py,go}`, plus
+  pytest jobs for `services/{api,agents,actions,connectors}`.
+- **Detection + playbook validation in CI**
+  (`.github/workflows/validate-detections.yml`,
+  `.github/workflows/check-openapi.yml`) — `validate_detections.py`
+  runs against all 6,913 rules and the OpenAPI spec is regenerated
+  and compared on every PR.
+
+#### DX (P3)
+
+- **`aisoc-doctor` probes fixed** (`tools/aisoc-doctor/`) — checks
+  match the actual ports, env var names, and service URLs.
+- **CLI consistency** (`packages/cli/`, `README.md`,
+  `apps/docs/docs/`) — `npx aisoc` and `aisoc` resolve identically;
+  package names, missing pnpm scripts, and the `mcp` service
+  reference are corrected; branching/tooling and env var names match
+  across docs.
+- **Infra READMEs** — `infra/k8s/`, `infra/helm/`, `infra/terraform/`,
+  `infra/render/`, `infra/fly/`, `infra/railway/`, `infra/coolify/`
+  each have a `README.md` documenting prerequisites, secrets, and
+  invocation.
+
+#### Detection scale + tiering (P4)
+
+- **800 native rules** — added 600 new Sigma-shaped detections across
+  five new spec modules (`scripts/detection_specs_part3_cloud.py`,
+  `_identity.py`, `_endpoint.py`, `_network.py`,
+  `_application.py`), each with `match_when`, MITRE tagging, and
+  auto-generated positive/negative fixtures via
+  `scripts/detection_specs_part3_helpers.py`. Native total:
+  200 → **800**.
+- **6,113 imported rules with provenance** — wired importers under
+  `tools/detection_import/{sigma,splunk,chronicle,car}_importer.py`
+  for SigmaHQ, Splunk Security Content, Chronicle, and MITRE CAR.
+  Each imported rule is tagged with its source, license, and original
+  ID; rules whose mappings cannot be replayed against AiSOC fixtures
+  are quarantined under `detections/<source>-imports/quarantine/`
+  (~5,937 quarantined, ~6,113 active).
+- **Title → name migration** — imported YAMLs now use the canonical
+  `name:` field instead of `title:`, matching `validate_detections.py`'s
+  required schema. `tools/detection_import/common.py` was updated and
+  6,113 existing files were migrated in place.
+- **Marketplace tier UX** (`apps/web/src/components/marketplace/MarketplaceView.tsx`,
+  `MarketplaceView.test.tsx`, `marketplace/index.json`,
+  `apps/web/public/marketplace/index.json`,
+  `scripts/build_marketplace.py`) — items now expose a `tier` field
+  (`stable` / `beta` / `imported` / `community`), the marketplace UI
+  defaults to `stable` and shows per-tier counts on filter chips,
+  and `build_marketplace.py` infers tiers from `plugin.yaml` and
+  source paths.
+- **MITRE ATT&CK coverage view** (`apps/web/src/app/(app)/detection/coverage/`,
+  `apps/web/src/lib/mitreTactics.ts`) — new in-app dashboard rendering
+  the coverage matrix from the marketplace index.
+- **Documentation refresh** — updated `README.md`,
+  `apps/docs/docs/intro.md`, `apps/docs/docs/quickstart.md`,
+  `apps/docs/docs/concepts/detections.md`,
+  `apps/docs/docs/contributing/dev-setup.md`,
+  `detections/README.md`, and `.github/workflows/validate-detections.yml`
+  to reflect 800 native + ~6,000 imported (filterable by tier) and
+  drop stale "200+ rules" claims.
+
+#### Public demo on `tryaisoc.com`
+
+- **Cloudflare Tunnel infra** (`infra/cloudflare/`) — `config.yml`,
+  `tunnel.sh`, and a README explaining how to run the demo profile
+  behind `tryaisoc.com` via `cloudflared`.
+- **`make demo-public` target** — boots `docker-compose.demo.yml`
+  (read-only demo profile with seeded incidents) and brings up the
+  Cloudflare tunnel that maps `tryaisoc.com` → `localhost:3000`
+  (web), `api.tryaisoc.com` → `localhost:8000` (API), and
+  `docs.tryaisoc.com` → `localhost:3001` (Docusaurus).
+- **README "Try it live"** — top-of-README link to the public demo
+  with a one-liner for hosting your own.
 
 ---
 

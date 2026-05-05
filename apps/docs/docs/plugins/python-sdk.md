@@ -7,8 +7,11 @@ sidebar_position: 2
 ## Installation
 
 ```bash
-pip install aisoc-sdk
+pip install aisoc-plugin-sdk
 ```
+
+The PyPI distribution is `aisoc-plugin-sdk`; the import path is
+`aisoc_plugin_sdk`. The source lives in `packages/plugin-sdk-py/`.
 
 ## Quick Start: Enricher
 

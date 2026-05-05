@@ -86,7 +86,7 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 | `DATABASE_MAX_OVERFLOW` | `10` | SQLAlchemy max overflow |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis DSN |
 | `REDIS_POOL_SIZE` | `20` | Redis connection pool size |
-| `KAFKA_BROKERS` | `localhost:9092` | Comma-separated broker list |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Comma-separated broker list (canonical name; `KAFKA_BROKERS` is honored as a back-compat alias) |
 | `KAFKA_TOPIC_EVENTS` | `aisoc.normalized_events` | Topic for normalized events |
 | `KAFKA_TOPIC_ALERTS` | `aisoc.alerts` | Topic for emitted alerts |
 
@@ -186,7 +186,7 @@ Source: [`services/ingest/internal/config/config.go`](https://github.com/beenuar
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HTTP_PORT` | `8080` | HTTP listener port |
-| `KAFKA_BROKERS` | `localhost:9092` | Comma-separated broker list |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Comma-separated broker list (canonical; `KAFKA_BROKERS` accepted as alias) |
 | `KAFKA_TOPIC` | `security.events` | Topic for normalized events |
 | `REDIS_ADDR` | `localhost:6379` | Redis address (for dedup and rate limiting) |
 | `DATABASE_DSN` | `postgres://aisoc:aisoc@localhost:5432/aisoc?sslmode=disable` | Postgres DSN |
@@ -291,7 +291,7 @@ SECRET_KEY=$(openssl rand -hex 32)
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 DATABASE_URL=postgresql+asyncpg://aisoc:changeme@localhost:5432/aisoc
 REDIS_URL=redis://localhost:6379/0
-KAFKA_BROKERS=localhost:9092
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 OPENSEARCH_URL=http://localhost:9200
 QDRANT_URL=http://localhost:6333
 CORS_ORIGINS=http://localhost:3000
