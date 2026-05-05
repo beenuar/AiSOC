@@ -1,4 +1,4 @@
-"""demo_seed — Reset and warm up the hosted demo at demo.aisoc.dev.
+"""demo_seed — Reset and warm up the hosted demo at tryaisoc.com.
 
 This is the canonical entrypoint for the hosted-demo refresh job. It runs
 inside the api image (so it gets DATABASE_URL via Fly Postgres attach,
@@ -8,7 +8,7 @@ and is invoked one of three ways:
 * **Post-deploy** — `infra/fly/fly-demo-deploy.sh` runs it via
   `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.demo_seed
   --reset --kickoff-investigation"` once the deploy completes, so visitors
-  hitting `demo.aisoc.dev` immediately see a hot investigation.
+  hitting `tryaisoc.com` immediately see a hot investigation.
 * **Daily cron** — A Fly scheduled machine on the api app re-runs this
   every 24h at 00:00 UTC to scrub demo state and re-seed.
 * **Local recovery** — Self-hosters can run

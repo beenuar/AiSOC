@@ -157,7 +157,7 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
-    # Demo mode (hosted at demo.aisoc.dev)
+    # Demo mode (hosted at tryaisoc.com)
     # When AISOC_DEMO_MODE=true the API rejects mutating requests outside the
     # demo tenant with 403, surfaces a banner, and pre-seeds canonical data.
     AISOC_DEMO_MODE: bool = False

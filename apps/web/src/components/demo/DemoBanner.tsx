@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * DemoBanner — top-of-page strip rendered on the hosted demo at demo.aisoc.dev.
+ * DemoBanner — top-of-page strip rendered on the hosted demo at tryaisoc.com.
  *
  * Sits inside `AppShell` above the TopBar so it covers every authenticated
  * page. Renders nothing when `NEXT_PUBLIC_DEMO_MODE !== 'true'`, so self-hosted

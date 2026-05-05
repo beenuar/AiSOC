@@ -17,10 +17,10 @@ primary_region = "iad"
 kill_signal    = "SIGINT"
 kill_timeout   = "10s"            # agent runs may need to flush ledger writes
 
-# Dockerfile path is relative to the build context (= services/agents/).
-# Deploy script runs `flyctl deploy` from that dir.
-[build]
-  dockerfile = "Dockerfile"
+# No [build] override: flyctl resolves `dockerfile` relative to fly.toml's
+# location, not cwd. Omitting it makes flyctl fall back to
+# `<cwd>/Dockerfile`, and the deploy script cd's into services/agents/
+# before invoking `flyctl deploy`, so the right Dockerfile is picked up.
 
 [env]
   ENVIRONMENT     = "demo"

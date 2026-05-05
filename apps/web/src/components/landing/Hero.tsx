@@ -40,7 +40,7 @@ export function Hero() {
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
-              href="https://demo.aisoc.dev/cases/INC-001?tab=ledger"
+              href="https://tryaisoc.com/cases/INC-001?tab=ledger"
               target="_blank"
               rel="noreferrer"
               className="group inline-flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-400"

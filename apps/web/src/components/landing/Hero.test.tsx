@@ -39,7 +39,7 @@ describe('Hero', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/auditable AI SOC/i);
     expect(screen.getByRole('link', { name: /open the demo/i })).toHaveAttribute(
       'href',
-      'https://demo.aisoc.dev/cases/INC-001?tab=ledger',
+      'https://tryaisoc.com/cases/INC-001?tab=ledger',
     );
     expect(screen.getByRole('link', { name: /open console/i })).toHaveAttribute('href', '/dashboard');
   });

@@ -420,7 +420,7 @@ export default function WhyOpenSourcePage() {
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
-              href="https://demo.aisoc.dev/cases/INC-001?tab=ledger"
+              href="https://tryaisoc.com/cases/INC-001?tab=ledger"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"

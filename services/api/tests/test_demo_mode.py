@@ -146,7 +146,7 @@ def test_options_preflight_is_allowed(app: FastAPI) -> None:
     client = TestClient(app)
     r = client.options(
         "/api/v1/cases",
-        headers={"Origin": "https://demo.aisoc.dev", "Access-Control-Request-Method": "GET"},
+        headers={"Origin": "https://tryaisoc.com", "Access-Control-Request-Method": "GET"},
     )
     # FastAPI's TestClient + CORSMiddleware would normally answer this; without
     # CORSMiddleware it 405s, but the demo-mode middleware itself never blocks

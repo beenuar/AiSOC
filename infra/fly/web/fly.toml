@@ -2,13 +2,18 @@
 # AiSOC Demo - Web (Next.js)
 #
 # Deployed at:    https://aisoc-demo-web.fly.dev
-# Public domain:  https://demo.aisoc.dev (configured via Fly certs)
+# Public domain:  https://tryaisoc.com  (CNAME → aisoc-demo-web.fly.dev)
 #
-# This is the only public-facing service. The api/agents/realtime fly apps
-# only expose internal addressing through the .internal DNS to keep the
-# demo's blast radius small.
+# Three public hostnames front this stack:
+#   tryaisoc.com      → aisoc-demo-web      (this app, Next.js UI)
+#   api.tryaisoc.com  → aisoc-demo-api      (FastAPI, /health, /docs, /api/v1/*)
+#   ws.tryaisoc.com   → aisoc-demo-realtime (WebSocket fanout, wss://)
 #
-# Reads: api (HTTP), realtime (WSS)
+# Why three subdomains instead of routing everything through the web app's
+# Next.js rewrites: the realtime service speaks raw WebSocket, which Next's
+# rewrites can't proxy in production. Splitting api/ws onto their own Fly
+# certs is the standard pattern and keeps the browser's CORS/CSP boundary
+# explicit.
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = "aisoc-demo-web"
@@ -18,23 +23,56 @@ kill_timeout   = "5s"
 
 # Web Dockerfile expects the *monorepo root* as build context (it COPYs
 # pnpm-workspace.yaml + packages/* to resolve workspace deps). The deploy
-# script runs `flyctl deploy` from the repo root, and we point at the
-# Dockerfile via its repo-relative path.
+# script runs `flyctl deploy` from the repo root, so the build context is
+# correct, but flyctl resolves the `dockerfile` field relative to *this
+# fly.toml's directory* (infra/fly/web/), not relative to CWD. So we have
+# to walk back up to the repo root with `../../../` and then down to the
+# real Dockerfile path. Without the `../../../` prefix, flyctl looks for
+# `infra/fly/web/apps/web/Dockerfile` and dies with "dockerfile not found".
+#
+# build.args: Next.js inlines NEXT_PUBLIC_* values into the *client* bundle
+# at build time (next build reads process.env then). Setting them only in
+# [env] would make them runtime-only — fine for SSR, but the browser-side
+# fetch()/WebSocket calls in apps/web/src/lib/api.ts would silently fall
+# back to same-origin and break. So we pass them through `docker build
+# --build-arg` here, the Dockerfile re-exports them as ENV before the
+# build step, and Next bakes the literal URL into the JS chunks.
 [build]
-  dockerfile = "apps/web/Dockerfile"
+  dockerfile = "../../../apps/web/Dockerfile"
+
+  [build.args]
+    NEXT_PUBLIC_API_URL = "https://api.tryaisoc.com"
+    NEXT_PUBLIC_WS_URL  = "wss://ws.tryaisoc.com"
 
 [env]
   NODE_ENV               = "production"
   PORT                   = "3000"
   NEXT_PUBLIC_DEMO_MODE  = "true"
-  # Public URLs: web is public, api/realtime are accessed through public Fly hostnames
-  # so the browser can reach them. In a self-hosted setup these would be private.
-  NEXT_PUBLIC_API_URL    = "https://aisoc-demo-api.fly.dev"
-  NEXT_PUBLIC_WS_URL     = "wss://aisoc-demo-realtime.fly.dev"
+  # Public URLs the browser uses to reach api / realtime. Kept in sync with
+  # [build.args] above so SSR and client agree on the same backend hostnames.
+  NEXT_PUBLIC_API_URL    = "https://api.tryaisoc.com"
+  NEXT_PUBLIC_WS_URL     = "wss://ws.tryaisoc.com"
   NEXT_PUBLIC_DEMO_RESET = "daily-utc-0000"
   NEXT_PUBLIC_DEMO_BANNER = "Demo data resets daily at 00:00 UTC. All write actions are disabled."
   # Default landing in demo mode: pre-seeded incident with running investigation
   NEXT_PUBLIC_DEMO_DEEPLINK = "/cases/INC-001?tab=ledger"
+  # Server-side rewrite targets for next.config.js. Only some paths flow
+  # through the Next proxy:
+  #   /api/v1/contextual/*  → agents (apps/web/src/lib/api.ts uses an empty
+  #                          AGENTS_BASE, so contextual calls land same-origin
+  #                          on tryaisoc.com and Next rewrites them to agents
+  #                          internal — public api.tryaisoc.com would 404)
+  #   /ws/*, /sse           → realtime (rarely hit; the browser opens
+  #                          wss://ws.tryaisoc.com directly when NEXT_PUBLIC_WS_URL
+  #                          is set, but the rewrite is a safety net)
+  #   /api/v1/* catch-all   → api (mostly unused; browser goes to api.tryaisoc.com
+  #                          via NEXT_PUBLIC_API_URL)
+  # Without these set, the Dockerfile defaults (`http://agents:8084` etc.) leak
+  # through and the Next process tries to resolve them in Fly's DNS, which
+  # has no `agents` record. Use the full *.internal:port form for 6PN.
+  AGENTS_URL    = "http://aisoc-demo-agents.internal:8084"
+  API_URL       = "http://aisoc-demo-api.internal:8000"
+  REALTIME_URL  = "http://aisoc-demo-realtime.internal:4000"
 
 [http_service]
   internal_port       = 3000

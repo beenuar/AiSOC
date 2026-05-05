@@ -1,5 +1,5 @@
 /**
- * Demo-mode helpers for the hosted demo at demo.aisoc.dev.
+ * Demo-mode helpers for the hosted demo at tryaisoc.com.
  *
  * Reads `NEXT_PUBLIC_DEMO_MODE` (set by `infra/fly/web/fly.toml`) to flag-gate
  * write actions in the UI:

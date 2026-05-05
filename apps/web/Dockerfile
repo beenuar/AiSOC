@@ -20,7 +20,7 @@ COPY apps/web ./apps/web
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# ─── Build-time rewrite targets ─────────────────────────────────────────────
+# ─── Build-time rewrite targets (server-side) ───────────────────────────────
 # Next.js bakes rewrite destinations into .next/routes-manifest.json at
 # build time, so these args MUST be provided to docker build (e.g. via
 # `args:` in docker-compose.demo.yml's `web.build:` block) when targeting
@@ -33,6 +33,20 @@ ARG REALTIME_URL=http://realtime:4000
 ENV API_URL=${API_URL}
 ENV AGENTS_URL=${AGENTS_URL}
 ENV REALTIME_URL=${REALTIME_URL}
+
+# ─── Build-time public URLs (client-side bundle) ────────────────────────────
+# Anything Next.js exposes to the browser via process.env.NEXT_PUBLIC_* is
+# substituted at `next build` time (read from the build environment), then
+# inlined as a string literal into the client JS chunks. Setting them only
+# in the runtime container has no effect on the bundle.
+#
+# Defaults are empty so dev/local builds fall back to same-origin requests
+# (apps/web/src/lib/api.ts checks for empty string and uses window.location).
+# In Fly the values come from infra/fly/web/fly.toml's [build.args].
+ARG NEXT_PUBLIC_API_URL=""
+ARG NEXT_PUBLIC_WS_URL=""
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 
 # Use pnpm's default symlinked node_modules — same layout as local dev,
 # so tsup/tsc bin shims resolve correctly inside each workspace package.

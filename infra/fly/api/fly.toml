@@ -2,6 +2,7 @@
 # AiSOC Demo - API service (FastAPI)
 #
 # Deployed at:    https://aisoc-demo-api.fly.dev
+# Public domain:  https://api.tryaisoc.com  (CNAME → aisoc-demo-api.fly.dev)
 # Internal name:  aisoc-demo-api.internal:8000
 #
 # Reads:  Postgres (Fly managed), Redis (Upstash via Fly), demo tenant
@@ -9,15 +10,17 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = "aisoc-demo-api"
-primary_region = "iad"          # us-east, lowest latency to demo.aisoc.dev
+primary_region = "iad"          # us-east, lowest latency to tryaisoc.com
 kill_signal    = "SIGINT"
 kill_timeout   = "5s"
 
-# Dockerfile path is relative to the build context (= the service source dir).
-# The deploy script runs `flyctl deploy` from `services/api/` so `COPY . .`
-# in the Dockerfile sees the API source. See infra/fly/fly-demo-deploy.sh.
-[build]
-  dockerfile = "Dockerfile"
+# No [build] override: flyctl resolves `dockerfile` relative to *fly.toml's*
+# location, not the build context. Since this fly.toml lives at
+# infra/fly/api/fly.toml but the Dockerfile lives at services/api/Dockerfile,
+# any literal "Dockerfile" entry would resolve to infra/fly/api/Dockerfile and
+# fail. Omitting [build] makes flyctl fall back to `<cwd>/Dockerfile`, and the
+# deploy script cd's into services/api/ before invoking `flyctl deploy`, so
+# the right Dockerfile gets picked up automatically.
 
 [env]
   ENVIRONMENT      = "demo"
@@ -39,6 +42,18 @@ kill_timeout   = "5s"
   # app over Fly's internal 6PN DNS.
   CORE_API_URL    = "http://localhost:8000"
   AGENTS_API_URL  = "http://aisoc-demo-agents.internal:8084"
+  # Cross-origin allowlist for the browser. The Next.js app at tryaisoc.com
+  # calls api.tryaisoc.com directly (see infra/fly/web/fly.toml's build args),
+  # and we keep the .fly.dev hosts whitelisted as a fallback for direct
+  # debugging without DNS. Comma-separated; parsed by Settings.parse_cors.
+  CORS_ORIGINS    = "https://tryaisoc.com,https://api.tryaisoc.com,https://aisoc-demo-web.fly.dev,https://aisoc-demo-api.fly.dev"
+  # Realtime base used by the API for /api/v1/push/* fan-out. Internal-only.
+  REALTIME_BASE_URL = "http://aisoc-demo-realtime.internal:4000"
+  # WebAuthn / passkey config. RP_ID is the eTLD+1 of the user-facing UI;
+  # RP_ORIGINS must be the exact scheme+host the browser presents.
+  PASSKEY_RP_ID      = "tryaisoc.com"
+  PASSKEY_RP_NAME    = "AiSOC"
+  PASSKEY_RP_ORIGINS = "https://tryaisoc.com"
 
 [http_service]
   internal_port       = 8000

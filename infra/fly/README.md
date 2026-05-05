@@ -1,7 +1,21 @@
 # AiSOC Hosted Demo (Fly.io)
 
 This directory contains the infrastructure-as-code for the public demo at
-**[demo.aisoc.dev](https://demo.aisoc.dev)**, deployed on Fly.io.
+**[tryaisoc.com](https://tryaisoc.com)**, deployed on Fly.io.
+
+Three public hostnames front the stack:
+
+| Hostname             | Fly app                | Purpose                          |
+|----------------------|------------------------|----------------------------------|
+| `tryaisoc.com`       | `aisoc-demo-web`       | Next.js UI (apex/root domain)    |
+| `api.tryaisoc.com`   | `aisoc-demo-api`       | FastAPI: `/health`, `/api/v1/*`  |
+| `ws.tryaisoc.com`    | `aisoc-demo-realtime`  | WebSocket fanout (`wss://`)      |
+
+Why three hostnames instead of routing everything through `tryaisoc.com`:
+the realtime service speaks raw WebSocket which Next.js rewrites can't
+proxy in production, and sending all `/api/v1/*` through the web app's
+machine would double latency. Splitting api/ws onto their own Fly certs
+is the standard pattern and keeps the browser's CORS/CSP boundary explicit.
 
 ## Goal
 
@@ -15,22 +29,19 @@ this stack is engineered for.
 ## Architecture
 
 ```
-                     demo.aisoc.dev (TLS via Fly certs)
+    tryaisoc.com         api.tryaisoc.com      ws.tryaisoc.com
+        │                       │                     │
+        ▼                       ▼                     ▼
+  ┌──────────────┐     ┌──────────────────┐   ┌──────────────────────┐
+  │ aisoc-demo-  │     │ aisoc-demo-api   │   │ aisoc-demo-realtime  │
+  │ web (Next.js)│     │ (FastAPI)        │   │ (WebSocket)          │
+  │ shared-cpu-1x│     │ shared-cpu-1x    │   │ shared-cpu-1x · 0.5GB│
+  │ 1GB · min=1  │     │ 1GB · min=1      │   │ auto_stop=off (WS)   │
+  └──────────────┘     └──────────────────┘   └──────────────────────┘
+        │                       │                     │
+        └───── 6PN internal ────┴─────────────────────┘
                                 │
                                 ▼
-              ┌──────────────────────────────────┐
-              │  aisoc-demo-web      (Next.js)   │  public
-              │  shared-cpu-1x · 1GB · min=1     │
-              └──────────────────────────────────┘
-                       │                │
-                  https│           wss  │
-                       ▼                ▼
-   ┌──────────────────────┐   ┌──────────────────────┐
-   │ aisoc-demo-api       │   │ aisoc-demo-realtime  │
-   │ (FastAPI)            │   │ (WebSocket)          │
-   │ shared-cpu-1x · 1GB  │   │ shared-cpu-1x · 0.5GB│
-   │ min=1, demo middleware│  │ auto_stop=off (WS)   │
-   └──────────────────────┘   └──────────────────────┘
                        │                │
                        └───────┬────────┘
                                ▼
@@ -126,20 +137,28 @@ T+anytime  ┌──────────────────────
 brew install flyctl
 flyctl auth login
 
-# 2. Create org "aisoc" if it doesn't exist
-flyctl orgs create aisoc
+# 2. Pick the org. The deploy script defaults to `personal` (each Fly user's
+#    default org). Override with FLY_ORG=… if you're deploying under a team org.
+export FLY_ORG=personal
 
-# 3. Reserve app names (one-time)
+# 3. Reserve app names (one-time, idempotent)
 for app in aisoc-demo-api aisoc-demo-agents aisoc-demo-web \
            aisoc-demo-realtime; do
-  flyctl apps create "$app" --org aisoc
+  flyctl apps create "$app" --org "$FLY_ORG" 2>/dev/null || true
 done
 
-# 4. Provision Postgres + Upstash + deploy everything
+# 4. Provision Postgres + Upstash + deploy everything + request TLS certs
 ./infra/fly/fly-demo-deploy.sh --provision
 
-# 5. Add DNS:
-#    demo.aisoc.dev  CNAME  aisoc-demo-web.fly.dev
+# 5. Add DNS at your provider (the deploy script prints the exact records):
+#    tryaisoc.com.       CNAME  aisoc-demo-web.fly.dev.
+#    api.tryaisoc.com.   CNAME  aisoc-demo-api.fly.dev.
+#    ws.tryaisoc.com.    CNAME  aisoc-demo-realtime.fly.dev.
+#
+#    tryaisoc.com is an apex/root record. If your DNS provider doesn't support
+#    CNAME at apex, use ALIAS/ANAME, or run
+#      flyctl certs show tryaisoc.com --app aisoc-demo-web
+#    to get the A/AAAA records to use instead.
 ```
 
 ## Routine deploy
@@ -183,8 +202,11 @@ curl -sI https://aisoc-demo-api.fly.dev/api/v1/cases | grep -i x-aisoc
 curl -si -X POST https://aisoc-demo-api.fly.dev/api/v1/cases | head -3
 # expect: HTTP/2 403 …
 
+# Public domain (after DNS propagates)
+curl -sf https://api.tryaisoc.com/health
+
 # Visitor flow
-open https://demo.aisoc.dev/cases/INC-001?tab=ledger
+open https://tryaisoc.com/cases/INC-001?tab=ledger
 ```
 
 ## Troubleshooting
@@ -197,7 +219,7 @@ open https://demo.aisoc.dev/cases/INC-001?tab=ledger
 | INC-001 case missing                         | Re-run seed: `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.demo_seed --reset --kickoff-investigation"` |
 | Daily seed cron not firing                   | Verify the scheduled machine: `flyctl machine list -a aisoc-demo-api` (look for `aisoc-demo-seed-cron`) |
 | WS disconnects in 30s                        | Realtime `auto_stop_machines = "off"` — verify fly.toml |
-| Cert pending                                 | `flyctl certs check demo.aisoc.dev --app aisoc-demo-web` |
+| Cert pending                                 | `flyctl certs show tryaisoc.com --app aisoc-demo-web` (and same for `api.` / `ws.` subdomains) |
 
 ## Cost envelope
 
