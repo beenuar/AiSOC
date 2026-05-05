@@ -177,7 +177,7 @@ async def update_rule(
     return DetectionRuleResponse.model_validate(rule)
 
 
-@router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_rule(
     rule_id: uuid.UUID,
     current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],

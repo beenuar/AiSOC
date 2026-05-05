@@ -23,14 +23,19 @@
 #
 # Env vars (all optional):
 #
-#   DOMAIN        Apex domain to publish (default: tryaisoc.com)
-#   TUNNEL_NAME   Cloudflare Tunnel name (default: aisoc-tryaisoc)
-#   SUBDOMAINS    Space-separated subdomains to wire up under DOMAIN
-#                 (default: "api ws docs")
-#   SKIP_DNS=1    Skip the DNS-route step (useful if DNS is already set
-#                 or managed outside cloudflared)
-#   SKIP_RUN=1    Generate config + DNS but don't run the tunnel
-#                 (useful for `cloudflared service install` flows)
+#   DOMAIN               Apex domain to publish (default: tryaisoc.com)
+#   TUNNEL_NAME          Cloudflare Tunnel name (default: aisoc-tryaisoc)
+#   SUBDOMAINS           Space-separated subdomains to wire up under DOMAIN
+#                        (default: "api ws docs")
+#   TUNNEL_ORIGIN_CERT   Path to the Cloudflare origin certificate
+#                        (default: ~/.cloudflared/cert.pem). Set this to
+#                        keep multiple Cloudflare accounts side-by-side —
+#                        e.g. cert.pem for one zone and
+#                        cert.tryaisoc.pem for tryaisoc.com.
+#   SKIP_DNS=1           Skip the DNS-route step (useful if DNS is already
+#                        set or managed outside cloudflared)
+#   SKIP_RUN=1           Generate config + DNS but don't run the tunnel
+#                        (useful for `cloudflared service install` flows)
 
 set -euo pipefail
 
@@ -42,6 +47,12 @@ DOMAIN="${DOMAIN:-tryaisoc.com}"
 TUNNEL_NAME="${TUNNEL_NAME:-aisoc-tryaisoc}"
 SUBDOMAINS="${SUBDOMAINS:-api ws docs}"
 CFD_DIR="${CFD_DIR:-$HOME/.cloudflared}"
+# TUNNEL_ORIGIN_CERT is a recognised cloudflared env var: it points the binary
+# at a non-default cert.pem. We default it to the conventional location so
+# users with a single account see no behaviour change, but exporting it lets
+# multi-account setups keep their certs separate.
+TUNNEL_ORIGIN_CERT="${TUNNEL_ORIGIN_CERT:-$CFD_DIR/cert.pem}"
+export TUNNEL_ORIGIN_CERT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="$SCRIPT_DIR/config.yml.example"
 RENDERED_CONFIG="$CFD_DIR/${TUNNEL_NAME}.yml"
@@ -73,8 +84,8 @@ fatal()  { printf "%s[tunnel]%s %s%s%s\n" "$C_DIM" "$C_RESET" "$C_RED" "$*" "$C_
 command -v cloudflared >/dev/null 2>&1 || fatal \
   "cloudflared is not installed. Install it with 'brew install cloudflared' (macOS) or follow https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/install-and-setup/installation/."
 
-if [ ! -f "$CFD_DIR/cert.pem" ]; then
-  fatal "Missing $CFD_DIR/cert.pem. Run 'cloudflared tunnel login' first to authorise this machine for the $DOMAIN zone."
+if [ ! -f "$TUNNEL_ORIGIN_CERT" ]; then
+  fatal "Missing origin certificate at $TUNNEL_ORIGIN_CERT. Run 'cloudflared tunnel login' to authorise this machine for the $DOMAIN zone, or set TUNNEL_ORIGIN_CERT to point at an existing cert."
 fi
 
 if [ ! -f "$TEMPLATE" ]; then
@@ -87,6 +98,7 @@ log "domain        = ${C_BOLD}${DOMAIN}${C_RESET}"
 log "tunnel name   = ${C_BOLD}${TUNNEL_NAME}${C_RESET}"
 log "subdomains    = ${C_BOLD}${SUBDOMAINS}${C_RESET}"
 log "config dir    = ${CFD_DIR}"
+log "origin cert   = ${TUNNEL_ORIGIN_CERT}"
 
 # ---------------------------------------------------------------------------
 # Step 1 — find or create the tunnel
@@ -162,14 +174,43 @@ else
   # at this tunnel, it succeeds silently. If it points at *another* tunnel,
   # it fails with a clear error. We treat that as fatal because silently
   # repointing someone else's record would be a footgun.
+  #
+  # SUBTLE FOOTGUN: if the active cert.pem belongs to a different Cloudflare
+  # account/zone than $DOMAIN, cloudflared "succeeds" by creating a CNAME on
+  # the *cert's* zone with $DOMAIN as a label — e.g. asked to route
+  # tryaisoc.com it will create `tryaisoc.com.intel.nexus`. We detect that
+  # pattern explicitly and abort with guidance.
   route_dns() {
     local host="$1"
-    if cloudflared tunnel route dns "$TUNNEL_NAME" "$host" 2>&1 | tee /tmp/cfd-route-${TUNNEL_NAME}.log | grep -q "successfully\|already exists"; then
+    local log="/tmp/cfd-route-${TUNNEL_NAME}.log"
+    cloudflared tunnel route dns "$TUNNEL_NAME" "$host" >"$log" 2>&1 || true
+
+    # Misroute detection: cloudflared logs lines like
+    #   "INF Added CNAME <fqdn> which will route to ..."
+    # If <fqdn> doesn't end with the host we asked for, the cert is wrong.
+    local added_cname
+    added_cname="$(grep -oE 'Added CNAME [^ ]+' "$log" | awk '{print $3}' | head -n1 || true)"
+    if [ -n "$added_cname" ] && [ "$added_cname" != "$host" ]; then
+      cat "$log" >&2
+      fatal "DNS misroute detected for ${host}: cloudflared created '${added_cname}' instead. The active origin certificate at ${TUNNEL_ORIGIN_CERT} is authorised for a *different* Cloudflare zone, not ${DOMAIN}.
+
+To fix:
+  1. Back up the current cert if you want to keep it:
+       mv ${TUNNEL_ORIGIN_CERT} ${TUNNEL_ORIGIN_CERT}.$(date +%Y%m%d).bak
+  2. Log in with the Cloudflare account that owns ${DOMAIN}:
+       cloudflared tunnel login
+     (this writes a fresh ${TUNNEL_ORIGIN_CERT})
+  3. (Optional) save it under a per-account name and export:
+       mv ${TUNNEL_ORIGIN_CERT} ${CFD_DIR}/cert.${DOMAIN}.pem
+       export TUNNEL_ORIGIN_CERT=${CFD_DIR}/cert.${DOMAIN}.pem
+  4. Re-run this script. You may also want to delete the misrouted CNAME
+     ('${added_cname}') from the wrong zone in the Cloudflare dashboard."
+    fi
+
+    if grep -q "successfully\|already exists\|Added CNAME" "$log"; then
       ok "  $host → $TUNNEL_NAME"
-    elif grep -q "already exists" /tmp/cfd-route-${TUNNEL_NAME}.log; then
-      ok "  $host (already pointed at $TUNNEL_NAME)"
     else
-      cat /tmp/cfd-route-${TUNNEL_NAME}.log >&2
+      cat "$log" >&2
       fatal "failed to route DNS for $host (see log above)"
     fi
   }

@@ -222,7 +222,7 @@ async def update_role(
     )
 
 
-@router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_role(
     role_id: uuid.UUID,
     current_user: Annotated[AuthUser, Depends(require_permission("roles:write"))],
@@ -288,7 +288,7 @@ async def assign_role(
     return UserRoleOut(user_id=user_id, role_id=role.id, role_name=role.name)
 
 
-@router.delete("/users/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/users/{user_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_role(
     user_id: uuid.UUID,
     role_id: uuid.UUID,

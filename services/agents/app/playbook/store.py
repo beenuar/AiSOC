@@ -27,9 +27,29 @@ logger = logging.getLogger("aisoc.playbook.store")
 
 _DEFAULT_STORE_DIR = Path(__file__).parent.parent.parent / "data" / "playbooks"
 
-# services/agents/app/playbook/store.py -> services/agents/app/playbook ->
-# services/agents/app -> services/agents -> services -> repo root
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+
+def _resolve_repo_root() -> Path:
+    """Best-effort repo root resolution.
+
+    On the host the file lives at ``services/agents/app/playbook/store.py``
+    so the repo root is ``parents[4]``. Inside the agents Docker image the
+    code is copied to ``/app/app/playbook/store.py`` and only ``parents[2]``
+    exists. We walk up while the index is in range and treat the first
+    ancestor that contains a ``playbooks`` directory as the root; otherwise
+    we fall back to the deepest available ancestor.
+    """
+    here = Path(__file__).resolve()
+    candidates = list(here.parents)
+    for candidate in candidates:
+        if (candidate / "playbooks" / "packs").is_dir():
+            return candidate
+    # Prefer the conventional host layout when available.
+    if len(candidates) > 4:
+        return candidates[4]
+    return candidates[-1]
+
+
+_REPO_ROOT = _resolve_repo_root()
 _DEFAULT_PACK_ROOT = _REPO_ROOT / "playbooks" / "packs" / "v1"
 
 

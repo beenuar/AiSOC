@@ -71,7 +71,7 @@ async def update_playbook(playbook_id: str, request: Request):
     return await _proxy("PUT", f"/{playbook_id}", json=body)
 
 
-@router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204)
+@router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
 async def delete_playbook(playbook_id: str):
     await _proxy("DELETE", f"/{playbook_id}")
 

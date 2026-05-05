@@ -39,13 +39,14 @@ router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
 # ── Locating the on-disk index ────────────────────────────────────────────────
 
-# This file lives at services/api/app/api/v1/endpoints/marketplace.py, so the
-# repo root is seven levels up (endpoints/v1/api/app/api/services/<root>).
-# Falling back to a couple of well-known absolute locations keeps things
-# working in containerised deploys where the index has been baked alongside
-# the API binary.
+# On the host this file lives at services/api/app/api/v1/endpoints/marketplace.py
+# so the repo root is six levels up. Inside the API Docker image only the
+# /app/app/... subtree is copied, so parents[6] would IndexError. We resolve
+# the deepest available ancestor and rely on the absolute container paths
+# below as a safety net.
 _HERE = Path(__file__).resolve()
-_REPO_ROOT = _HERE.parents[6]
+_HERE_PARENTS = list(_HERE.parents)
+_REPO_ROOT = _HERE_PARENTS[6] if len(_HERE_PARENTS) > 6 else _HERE_PARENTS[-1]
 _CANDIDATE_PATHS = [
     _REPO_ROOT / "marketplace" / "index.json",
     _REPO_ROOT / "apps" / "web" / "public" / "marketplace" / "index.json",

@@ -79,7 +79,7 @@ async def update_playbook(playbook_id: str, data: dict[str, Any]) -> dict:
     return updated.model_dump()
 
 
-@router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204)
+@router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
 async def delete_playbook(playbook_id: str) -> None:
     store = PlaybookStore.default()
     if not store.delete(playbook_id):

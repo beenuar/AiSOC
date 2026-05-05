@@ -32,6 +32,16 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        # pydantic-settings v2 attempts to JSON-decode environment variables
+        # whose annotation is a complex type (list/dict/...) BEFORE any
+        # ``field_validator(mode="before")`` runs. That breaks our documented
+        # convention of comma-separated values for fields like ``CORS_ORIGINS``
+        # (e.g. ``CORS_ORIGINS=http://localhost:3000``). Disabling decoding
+        # makes the raw string flow into the validator unchanged, which then
+        # parses the comma-separated form. Operators who prefer JSON syntax
+        # can still pass ``["..."]`` via the .env file pathway because the
+        # validator falls through for non-string inputs.
+        enable_decoding=False,
     )
 
     # App

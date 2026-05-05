@@ -11,7 +11,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { passkeyApi } from '@/lib/api';
 import {
   saveSession,
@@ -22,7 +22,11 @@ import { getPasskey, isWebAuthnSupported } from '@/lib/responder/webauthn';
 
 type Phase = 'idle' | 'pending' | 'success' | 'error';
 
-export default function ResponderLoginPage() {
+// Avoid Next 14 static-prerender bailout — this page reads `?next=` from
+// the URL and is only ever reached interactively from a phone.
+export const dynamic = 'force-dynamic';
+
+function ResponderLoginInner() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search?.get('next') || '/responder/triage';
@@ -218,5 +222,13 @@ export default function ResponderLoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResponderLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResponderLoginInner />
+    </Suspense>
   );
 }

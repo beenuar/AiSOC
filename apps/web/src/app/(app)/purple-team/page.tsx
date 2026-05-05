@@ -3,7 +3,10 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 
-const API = process.env.NEXT_PUBLIC_PURPLE_TEAM_API ?? 'http://localhost:8006'
+// Same-origin by default — Next.js rewrites proxy `/api/v1/purple-team/*` to
+// the purple-team service. Override with `NEXT_PUBLIC_PURPLE_TEAM_API` for
+// debugging against a different origin.
+const API = process.env.NEXT_PUBLIC_PURPLE_TEAM_API ?? ''
 
 // --------------------------------------------------------------------------
 // Types

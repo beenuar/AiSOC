@@ -120,8 +120,17 @@ services:
 
   api:
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
+    # Local build context for `pnpm aisoc:demo --rebuild`. Without this the
+    # `--build` flag is a no-op because compose has nothing to build from.
+    # When pulling prebuilt images this block is ignored.
+    build:
+      context: ./services/api
     container_name: aisoc-demo-api
-    pull_policy: always
+    # `missing` lets `pnpm aisoc:demo --rebuild` use locally built images
+    # without being clobbered by a registry pull. Compose still pulls when
+    # the image isn't present locally (first run) or when the user runs
+    # `docker compose pull` explicitly.
+    pull_policy: missing
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,8 +161,10 @@ services:
 
   agents:
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_TAG:-latest}
+    build:
+      context: ./services/agents
     container_name: aisoc-demo-agents
-    pull_policy: always
+    pull_policy: missing
     depends_on:
       postgres:
         condition: service_healthy
@@ -175,8 +186,10 @@ services:
 
   realtime:
     image: ghcr.io/beenuar/aisoc-realtime:${AISOC_TAG:-latest}
+    build:
+      context: ./services/realtime
     container_name: aisoc-demo-realtime
-    pull_policy: always
+    pull_policy: missing
     depends_on:
       redis:
         condition: service_healthy
@@ -195,16 +208,28 @@ services:
 
   web:
     image: ghcr.io/beenuar/aisoc-web:${AISOC_TAG:-latest}
+    # Build context for `pnpm aisoc:demo --rebuild`. The Dockerfile bakes the
+    # frontend bundle with empty NEXT_PUBLIC_* defaults so every fetch is a
+    # same-origin relative path (`/api/v1/...`, `/ws/...`). Next.js then
+    # proxies those to the services below using the Docker DNS targets in
+    # `environment:`.
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: aisoc-demo-web
-    pull_policy: always
+    pull_policy: missing
     depends_on:
       - api
+      - agents
       - realtime
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_WS_URL: ws://localhost:8086
+      # Server-side rewrite targets (used by the Next.js Node process).
+      # These never reach the browser — only the proxy layer in next.config.js.
+      API_URL: http://api:8000
+      AGENTS_URL: http://agents:8084
+      REALTIME_URL: http://realtime:4000
       NODE_ENV: production
     networks:
       - aisoc-demo

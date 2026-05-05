@@ -130,7 +130,7 @@ async def update_connector(
     return ConnectorResponse.model_validate(connector)
 
 
-@router.delete("/{connector_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{connector_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_connector(
     connector_id: uuid.UUID,
     current_user: Annotated[AuthUser, Depends(require_permission("connectors:delete"))],

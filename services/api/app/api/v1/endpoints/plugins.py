@@ -163,7 +163,7 @@ async def reload_plugin(
     return _to_plugin_out(_mgr().get_plugin(plugin_id))  # type: ignore[arg-type]
 
 
-@router.delete("/{plugin_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{plugin_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def unload_plugin(
     plugin_id: str,
     _: Annotated[AuthUser, Depends(require_permission("plugins:admin"))] = None,

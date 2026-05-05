@@ -148,7 +148,7 @@ async def revoke_token(token_id: uuid.UUID, db: DB) -> TokenOut:
     return TokenOut.model_validate(token)
 
 
-@router.delete("/{token_id}", status_code=204)
+@router.delete("/{token_id}", status_code=204, response_model=None)
 async def delete_token(token_id: uuid.UUID, db: DB) -> None:
     result = await db.execute(select(Honeytoken).where(Honeytoken.id == token_id))
     token = result.scalar_one_or_none()

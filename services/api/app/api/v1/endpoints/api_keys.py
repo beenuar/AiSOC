@@ -247,7 +247,7 @@ async def update_api_key(
     return _api_key_to_out(ak)
 
 
-@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_api_key(
     key_id: uuid.UUID,
     db: DBSession,

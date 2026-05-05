@@ -477,7 +477,7 @@ async def list_my_credentials(
     return CredentialsListResponse(items=[PasskeyCredentialOut.model_validate(r) for r in rows])
 
 
-@router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_credential(
     credential_id: uuid.UUID,
     user: AuthUser,

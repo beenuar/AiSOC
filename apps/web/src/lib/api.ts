@@ -9,26 +9,45 @@
  *     wrap with SWR / React Query for caching + retries.
  *   - Errors are thrown as native `Error` with the HTTP status + body so
  *     UI components can catch and render `<ErrorState error={e} />`.
- *   - Base URLs are configured via NEXT_PUBLIC_* env vars and default to
- *     local-development hostnames.
+ *   - Base URLs default to "" (same-origin) so the browser hits whatever
+ *     host it loaded the page from. Next.js `rewrites()` then proxies the
+ *     `/api/v1/*`, `/api/v1/contextual/*`, `/ws/*` and `/sse` paths to the
+ *     right downstream service. This makes the bundle host-agnostic — the
+ *     same image works on `localhost:3000`, behind nginx, or behind a
+ *     Cloudflare Tunnel pointed at `tryaisoc.com`.
+ *   - `NEXT_PUBLIC_*_URL` env vars are still honoured if you want to bypass
+ *     the proxy (e.g. point the bundle at a different API origin during
+ *     local debugging).
  */
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const AGENTS_BASE =
-  process.env.NEXT_PUBLIC_AGENTS_URL || 'http://localhost:8001';
-const ACTIONS_BASE =
-  process.env.NEXT_PUBLIC_ACTIONS_URL || 'http://localhost:8002';
-const FUSION_BASE =
-  process.env.NEXT_PUBLIC_FUSION_URL || 'http://localhost:8003';
-const THREATINTEL_BASE =
-  process.env.NEXT_PUBLIC_THREATINTEL_URL || 'http://localhost:8005';
-const ENRICHMENT_BASE =
-  process.env.NEXT_PUBLIC_ENRICHMENT_URL || 'http://localhost:8080';
-const REALTIME_BASE =
-  process.env.NEXT_PUBLIC_REALTIME_URL || 'http://localhost:8086';
-const WS_BASE =
-  process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8086';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const AGENTS_BASE = process.env.NEXT_PUBLIC_AGENTS_URL || '';
+const ACTIONS_BASE = process.env.NEXT_PUBLIC_ACTIONS_URL || '';
+const FUSION_BASE = process.env.NEXT_PUBLIC_FUSION_URL || '';
+const THREATINTEL_BASE = process.env.NEXT_PUBLIC_THREATINTEL_URL || '';
+const ENRICHMENT_BASE = process.env.NEXT_PUBLIC_ENRICHMENT_URL || '';
+const REALTIME_BASE = process.env.NEXT_PUBLIC_REALTIME_URL || '';
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || '';
+
+/**
+ * Compute the WebSocket origin at call time.
+ *
+ * If the bundle was built with `NEXT_PUBLIC_WS_URL` set, use that verbatim.
+ * Otherwise, derive `wss://<current-host>` from `window.location` so the WS
+ * connection lands on the same host the page was loaded from (the Next.js
+ * rewrites then proxy `/ws/*` to the realtime gateway).
+ *
+ * SSR fallback: returns `''` so the resulting URL is path-only; nothing on
+ * the server actually opens WebSockets.
+ */
+function wsOrigin(): string {
+  if (WS_BASE) return WS_BASE;
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}`;
+  }
+  return '';
+}
 
 const TENANT_ID =
   process.env.NEXT_PUBLIC_TENANT_ID ||
@@ -1083,6 +1102,19 @@ export const contextualApi = {
     }),
 };
 
+// Re-export base URLs so dev tooling and tests can introspect them.
+// Production callers should prefer the typed functions above.
+export const __apiBases = {
+  api: API_BASE,
+  agents: AGENTS_BASE,
+  actions: ACTIONS_BASE,
+  fusion: FUSION_BASE,
+  threatintel: THREATINTEL_BASE,
+  enrichment: ENRICHMENT_BASE,
+  realtime: REALTIME_BASE,
+  ws: WS_BASE,
+} as const;
+
 // ─── Web Push & Responder PWA ────────────────────────────────────────────────
 //
 // Phase 4B. The mobile responder PWA subscribes to Web Push so on-call
@@ -1348,14 +1380,19 @@ export const passkeyApi = {
 export const realtimeApi = {
   /** Returns a ready-to-open WebSocket URL for the given channel. */
   channelUrl(channel: 'alerts' | 'cases' | 'agents' | 'all') {
-    return `${WS_BASE}/ws/${channel}?tenant_id=${encodeURIComponent(TENANT_ID)}`;
+    return `${wsOrigin()}/ws/${channel}?tenant_id=${encodeURIComponent(TENANT_ID)}`;
   },
 
-  /** Health endpoint of the realtime gateway, useful for status pages. */
+  /**
+   * Health endpoint of the realtime gateway, useful for status pages.
+   * Uses the dedicated `/api/v1/realtime/healthz` proxy path so it works
+   * same-origin behind the Cloudflare Tunnel.
+   */
   health: () =>
-    request<{ status: string; clients: number }>('/healthz', {
-      baseUrl: REALTIME_BASE,
-    }),
+    request<{ status: string; clients: number }>(
+      '/api/v1/realtime/healthz',
+      { baseUrl: REALTIME_BASE },
+    ),
 };
 
 export default {

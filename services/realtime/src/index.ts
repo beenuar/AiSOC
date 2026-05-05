@@ -292,7 +292,7 @@ app.post('/internal/agent-event', (req, res) => {
   ) {
     const approvalId =
       (data && (data.approval_id as string | undefined)) ?? run_id;
-    const caseId = data && (data.case_id as string | undefined);
+    const caseId = (data?.case_id as string | undefined) ?? undefined;
     const userIds =
       data &&
       (data.notify_user_ids as string[] | undefined) instanceof Array

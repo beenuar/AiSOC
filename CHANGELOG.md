@@ -119,16 +119,31 @@ hosted on `tryaisoc.com` via Cloudflare Tunnel.
 
 #### Public demo on `tryaisoc.com`
 
-- **Cloudflare Tunnel infra** (`infra/cloudflare/`) — `config.yml`,
+- **Cloudflare Tunnel infra** (`infra/cloudflare/`) — `config.yml.example`,
   `tunnel.sh`, and a README explaining how to run the demo profile
-  behind `tryaisoc.com` via `cloudflared`.
-- **`make demo-public` target** — boots `docker-compose.demo.yml`
-  (read-only demo profile with seeded incidents) and brings up the
-  Cloudflare tunnel that maps `tryaisoc.com` → `localhost:3000`
-  (web), `api.tryaisoc.com` → `localhost:8000` (API), and
-  `docs.tryaisoc.com` → `localhost:3001` (Docusaurus).
+  behind `tryaisoc.com` via `cloudflared`. Tunnel script reads
+  `DOMAIN`, `TUNNEL_NAME`, `SUBDOMAINS`, `SKIP_DNS`, `SKIP_RUN` env
+  vars; defaults publish apex + `api.`, `ws.`, `docs.` subdomains.
+- **`pnpm demo:public` script** (`scripts/demo-public.sh`) — boots
+  `docker-compose.demo.yml` (read-only demo profile with seeded
+  incidents) via `pnpm aisoc:demo --no-open`, then brings up the
+  Cloudflare Tunnel that maps `tryaisoc.com` → web (`:3000`),
+  `api.tryaisoc.com` → api (`:8000`), `ws.tryaisoc.com` → realtime
+  (`:4000`), and `docs.tryaisoc.com` → Docusaurus (`:3001`).
+  Companion scripts: `pnpm demo:public:tunnel-only` (skip stack
+  bring-up, just run the tunnel) and `pnpm demo:public:setup`
+  (provision tunnel + DNS without running cloudflared, for
+  `cloudflared service install` flows).
+- **Public-host-agnostic web bundle** (`apps/web/next.config.js`,
+  `apps/web/src/lib/api.ts`) — the Next.js client now emits
+  same-origin relative paths (`/api/v1/...`, `/ws/...`) instead of
+  `localhost:8000`-baked URLs, with server-side rewrites proxying
+  to api/agents/realtime by Docker DNS name. The same image works
+  on `localhost:3000`, behind Cloudflare Tunnel on `tryaisoc.com`,
+  or behind any reverse proxy without a rebuild.
 - **README "Try it live"** — top-of-README link to the public demo
-  with a one-liner for hosting your own.
+  with a one-liner for hosting your own on a Cloudflare-managed
+  domain.
 
 ---
 
