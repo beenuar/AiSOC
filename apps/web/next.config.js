@@ -74,10 +74,29 @@ const nextConfig = {
         source: '/api/v1/realtime/healthz',
         destination: `${REALTIME_HOST}/healthz`,
       },
-      // Contextual actions live on the agents service, not the core API.
+      // Agents service owns contextual actions, playbooks, and investigations.
+      // These must come before the `/api/v1/:path*` catch-all so they don't
+      // get sent to the core API (which doesn't have those routes and would
+      // 503).
       {
         source: '/api/v1/contextual/:path*',
         destination: `${AGENTS_HOST}/api/v1/contextual/:path*`,
+      },
+      {
+        source: '/api/v1/playbooks/:path*',
+        destination: `${AGENTS_HOST}/api/v1/playbooks/:path*`,
+      },
+      {
+        source: '/api/v1/playbooks',
+        destination: `${AGENTS_HOST}/api/v1/playbooks`,
+      },
+      {
+        source: '/api/v1/investigations/:path*',
+        destination: `${AGENTS_HOST}/api/v1/investigations/:path*`,
+      },
+      {
+        source: '/api/v1/investigations',
+        destination: `${AGENTS_HOST}/api/v1/investigations`,
       },
       // Catch-all for the core API.
       {

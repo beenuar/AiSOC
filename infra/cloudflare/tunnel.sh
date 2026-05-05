@@ -15,27 +15,55 @@
 #      ingress publishes (apex, api, ws, docs).
 #   5. Runs `cloudflared tunnel run` in the foreground. Ctrl+C exits cleanly.
 #
+# Two ways to authenticate, pick whichever you prefer:
+#
+#   (A) Origin certificate flow (classic)
+#       - Run `cloudflared tunnel login`, accept the zone in the browser, and a
+#         cert.pem lands in ~/.cloudflared/. This script then creates the named
+#         tunnel, writes its config + DNS routes, and runs it.
+#
+#   (B) Tunnel-token flow (modern, no cert.pem required) ★ FALLBACK
+#       - Create a tunnel in the Cloudflare Zero Trust dashboard
+#         (Networks → Tunnels → Create a tunnel → Cloudflared).
+#       - Configure the public hostnames there (apex/api/ws/docs → localhost
+#         3000/8000/8086/3001 — see infra/cloudflare/config.yml.example).
+#       - Copy the tunnel token shown in the dashboard install command.
+#       - Export it and re-run this script:
+#             export CLOUDFLARE_TUNNEL_TOKEN='ey…'   # the long token
+#             bash infra/cloudflare/tunnel.sh
+#         The script will skip cert.pem / create / DNS steps entirely and just
+#         run `cloudflared tunnel run --token …`. DNS + ingress are managed by
+#         the dashboard.
+#
 # Usage:
 #
 #   bash infra/cloudflare/tunnel.sh                # default: tryaisoc.com
 #   DOMAIN=demo.example.com bash infra/cloudflare/tunnel.sh
 #   TUNNEL_NAME=my-aisoc bash infra/cloudflare/tunnel.sh
+#   CLOUDFLARE_TUNNEL_TOKEN=ey… bash infra/cloudflare/tunnel.sh
 #
 # Env vars (all optional):
 #
-#   DOMAIN               Apex domain to publish (default: tryaisoc.com)
-#   TUNNEL_NAME          Cloudflare Tunnel name (default: aisoc-tryaisoc)
-#   SUBDOMAINS           Space-separated subdomains to wire up under DOMAIN
-#                        (default: "api ws docs")
-#   TUNNEL_ORIGIN_CERT   Path to the Cloudflare origin certificate
-#                        (default: ~/.cloudflared/cert.pem). Set this to
-#                        keep multiple Cloudflare accounts side-by-side —
-#                        e.g. cert.pem for one zone and
-#                        cert.tryaisoc.pem for tryaisoc.com.
-#   SKIP_DNS=1           Skip the DNS-route step (useful if DNS is already
-#                        set or managed outside cloudflared)
-#   SKIP_RUN=1           Generate config + DNS but don't run the tunnel
-#                        (useful for `cloudflared service install` flows)
+#   DOMAIN                    Apex domain to publish (default: tryaisoc.com)
+#   TUNNEL_NAME               Cloudflare Tunnel name (default: aisoc-tryaisoc).
+#                             Ignored when CLOUDFLARE_TUNNEL_TOKEN is set —
+#                             the dashboard owns the name in that case.
+#   SUBDOMAINS                Space-separated subdomains to wire up under
+#                             DOMAIN (default: "api ws docs"). Ignored when
+#                             CLOUDFLARE_TUNNEL_TOKEN is set.
+#   CLOUDFLARE_TUNNEL_TOKEN   If set, run via dashboard-managed token. The
+#                             cert.pem / create / DNS / ingress steps are
+#                             skipped because the dashboard owns them.
+#   TUNNEL_ORIGIN_CERT        Path to the Cloudflare origin certificate
+#                             (default: ~/.cloudflared/cert.pem). Set this to
+#                             keep multiple Cloudflare accounts side-by-side —
+#                             e.g. cert.pem for one zone and
+#                             cert.tryaisoc.pem for tryaisoc.com. Ignored when
+#                             CLOUDFLARE_TUNNEL_TOKEN is set.
+#   SKIP_DNS=1                Skip the DNS-route step (useful if DNS is
+#                             already set or managed outside cloudflared)
+#   SKIP_RUN=1                Generate config + DNS but don't run the tunnel
+#                             (useful for `cloudflared service install` flows)
 
 set -euo pipefail
 
@@ -84,8 +112,71 @@ fatal()  { printf "%s[tunnel]%s %s%s%s\n" "$C_DIM" "$C_RESET" "$C_RED" "$*" "$C_
 command -v cloudflared >/dev/null 2>&1 || fatal \
   "cloudflared is not installed. Install it with 'brew install cloudflared' (macOS) or follow https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/install-and-setup/installation/."
 
+# ---------------------------------------------------------------------------
+# Tunnel-token shortcut (dashboard-managed)
+# ---------------------------------------------------------------------------
+#
+# When CLOUDFLARE_TUNNEL_TOKEN is set we hand the entire tunnel lifecycle to
+# the Cloudflare Zero Trust dashboard: ingress rules, DNS records, and the
+# tunnel name are all stored server-side. We just run cloudflared with the
+# token and stream connections. This is the fastest path to "live demo" if
+# you can't (or don't want to) run `cloudflared tunnel login` locally.
+#
+# How to get a token:
+#   1. https://one.dash.cloudflare.com/  → Networks → Tunnels → Create a tunnel
+#   2. Pick the "Cloudflared" connector. Name it whatever you like.
+#   3. The dashboard shows an install command containing `--token ey…`. Copy
+#      everything after `--token`.
+#   4. In the "Public hostnames" tab, add four entries pointing at your local
+#      host (the box running `pnpm aisoc:demo`):
+#          tryaisoc.com         → http://localhost:3000
+#          api.tryaisoc.com     → http://localhost:8000
+#          ws.tryaisoc.com      → http://localhost:8086
+#          docs.tryaisoc.com    → http://localhost:3001
+#      (Substitute your DOMAIN if different. Internal Docker names won't work
+#      here; cloudflared connects from your host to the Compose port mapping.)
+#   5. Re-run this script with the token exported.
+if [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
+  log "${C_BOLD}token mode${C_RESET}: dashboard owns the tunnel; skipping cert.pem / create / DNS"
+  log "domain        = ${C_BOLD}${DOMAIN}${C_RESET}"
+  log "config dir    = ${CFD_DIR}"
+
+  cat <<EOF
+
+${C_BOLD}AiSOC public demo (token-managed) is now reachable at the public hostnames
+configured in your Cloudflare Zero Trust dashboard, e.g.:${C_RESET}
+  • https://${DOMAIN}
+  • https://api.${DOMAIN}
+  • https://ws.${DOMAIN}
+  • https://docs.${DOMAIN}
+
+${C_DIM}Press Ctrl+C to stop the tunnel. The Compose stack will keep running.${C_RESET}
+
+EOF
+
+  if [ "${SKIP_RUN:-0}" = "1" ]; then
+    ok "SKIP_RUN=1 — token is set but not running. Run manually with:"
+    log "  cloudflared tunnel run --token \$CLOUDFLARE_TUNNEL_TOKEN"
+    exit 0
+  fi
+
+  exec cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN"
+fi
+
 if [ ! -f "$TUNNEL_ORIGIN_CERT" ]; then
-  fatal "Missing origin certificate at $TUNNEL_ORIGIN_CERT. Run 'cloudflared tunnel login' to authorise this machine for the $DOMAIN zone, or set TUNNEL_ORIGIN_CERT to point at an existing cert."
+  fatal "Missing origin certificate at $TUNNEL_ORIGIN_CERT.
+
+Two ways to fix this:
+
+  (a) Run 'cloudflared tunnel login' and accept the ${DOMAIN} zone in the
+      browser. cloudflared writes ${TUNNEL_ORIGIN_CERT} when it succeeds.
+      If your browser downloads a cert.pem instead of writing it, move
+      that file into ${CFD_DIR}/.
+
+  (b) Use a tunnel token from the Zero Trust dashboard (no cert needed):
+        export CLOUDFLARE_TUNNEL_TOKEN='ey…'
+        bash infra/cloudflare/tunnel.sh
+      See the comment block at the top of this script for details."
 fi
 
 if [ ! -f "$TEMPLATE" ]; then
