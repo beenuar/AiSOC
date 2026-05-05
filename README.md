@@ -355,29 +355,35 @@ inbound ports are opened on your router or firewall.
 
 - A domain whose DNS is managed by Cloudflare.
 - The [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/) CLI installed locally (`brew install cloudflared` on macOS).
-- `cloudflared tunnel login` run once on this machine — it drops a `cert.pem` in `~/.cloudflared/` that authorises this host to manage tunnels and DNS records on the zone.
+- One of two auth methods (the script accepts either):
+  - **(A) Origin-cert flow:** run `cloudflared tunnel login` once on this machine — it drops a `cert.pem` in `~/.cloudflared/` that authorises this host to manage tunnels and DNS records on the zone. The script will then create the tunnel, render the ingress config, and wire DNS automatically.
+  - **(B) Tunnel-token flow ★:** create a tunnel in the Cloudflare Zero Trust dashboard (Networks → Tunnels → *Create a tunnel* → Cloudflared), configure the four public hostnames (apex/api/ws/docs → `localhost:3000/8000/8086/3001`), and copy the `--token ey…` value the dashboard hands you. No `cert.pem` required, no local DNS plumbing. Useful when the browser-based `cloudflared tunnel login` won't write a cert (corporate browsers, headless boxes, etc).
 
 #### Run it
 
 ```bash
-# Default: tryaisoc.com (apex → web, api/ws/docs.tryaisoc.com → api/realtime/docs)
-pnpm demo:public
+# (A) Origin-cert flow — script manages tunnel, ingress, and DNS:
+pnpm demo:public                         # default: tryaisoc.com
+DOMAIN=demo.example.com pnpm demo:public # any zone you control
 
-# Or point it at any zone you control:
-DOMAIN=demo.example.com pnpm demo:public
+# (B) Tunnel-token flow — dashboard owns the tunnel, ingress, and DNS:
+export CLOUDFLARE_TUNNEL_TOKEN='ey…'     # paste the token from the dashboard
+pnpm demo:public                         # script auto-detects the token
 
 # Already have the local stack running? Just bring the tunnel up:
-pnpm demo:public:tunnel-only
+pnpm demo:public:tunnel-only             # works for both auth modes
 
 # Just provision the tunnel + DNS, but don't run cloudflared
-# (useful before `cloudflared service install` to leave it running 24/7):
+# (origin-cert flow only — useful before `cloudflared service install`
+# to leave it running 24/7):
 SKIP_RUN=1 pnpm demo:public:setup
 ```
 
 All env vars are forwarded to [`infra/cloudflare/tunnel.sh`](infra/cloudflare/tunnel.sh):
-`DOMAIN` (apex, default `tryaisoc.com`), `TUNNEL_NAME` (default `aisoc-tryaisoc`),
-`SUBDOMAINS` (default `"api ws docs"`), `SKIP_DNS=1` (don't touch DNS records),
-`SKIP_RUN=1` (set up everything but don't run the tunnel).
+`DOMAIN` (apex, default `tryaisoc.com`), `TUNNEL_NAME` (default `aisoc-tryaisoc`,
+ignored in token mode), `SUBDOMAINS` (default `"api ws docs"`, ignored in token
+mode), `SKIP_DNS=1` (don't touch DNS records), `SKIP_RUN=1` (set up everything
+but don't run the tunnel), and `CLOUDFLARE_TUNNEL_TOKEN` (switch to flow B).
 Run `bash scripts/demo-public.sh --help` to see the full set, or read
 [`infra/cloudflare/README.md`](infra/cloudflare/README.md) for the topology
 diagram and production-hardening notes (running `cloudflared` as a launchd /

@@ -21,12 +21,58 @@ own machine without opening a single inbound port on your router or firewall.
 2. **A Cloudflare account that owns `tryaisoc.com`** (or any other zone you
    control — point `tunnel.sh` at it via the `DOMAIN` env var; no source edits
    required).
-3. **Login once** — `cloudflared tunnel login`. This drops a `cert.pem` in
-   `~/.cloudflared/` that authorises this machine to manage tunnels and DNS
-   for the zone.
+3. **One auth method** (see *Two auth modes* below).
 4. **A running stack** — the demo profile from `pnpm aisoc:demo` is the
    intended target. The wrapper `pnpm demo:public` (see below) brings the
    stack up and the tunnel up in one command.
+
+## Two auth modes
+
+`tunnel.sh` accepts either of the two auth shapes Cloudflare supports today.
+The script auto-detects which one is in use; you only need to supply one.
+
+### (A) Origin-cert mode — default
+
+Run `cloudflared tunnel login` once. It opens a browser, you pick the zone, and
+`cloudflared` writes `~/.cloudflared/cert.pem`. From there, `tunnel.sh` will:
+
+1. Create / reuse the named tunnel (`TUNNEL_NAME`, default `aisoc-tryaisoc`).
+2. Render `config.yml` from `config.yml.example`.
+3. Add DNS routes for the apex + each subdomain in `SUBDOMAINS`.
+4. Run `cloudflared tunnel run` against the rendered config.
+
+Choose this mode when you want one command to provision the tunnel,
+ingress, and DNS records.
+
+### (B) Tunnel-token mode — for headless / restricted-browser hosts
+
+If `cloudflared tunnel login` won't write a cert (corporate browsers, locked-down
+machines, headless servers, etc), create the tunnel in the [Cloudflare Zero Trust
+dashboard](https://one.dash.cloudflare.com/) instead:
+
+1. **Networks → Tunnels → Create a tunnel → Cloudflared.**
+2. Name the tunnel (e.g. `aisoc-tryaisoc`) and copy the long `--token ey…` value
+   the dashboard hands you.
+3. **Public Hostnames** tab — add four entries on the zone you control:
+
+   | Subdomain | Type   | URL                       |
+   | --------- | ------ | ------------------------- |
+   | *(apex)*  | `HTTP` | `localhost:3000`          |
+   | `api`     | `HTTP` | `localhost:8000`          |
+   | `ws`      | `HTTP` | `localhost:8086`          |
+   | `docs`    | `HTTP` | `localhost:3001`          |
+
+4. Export the token and run the wrapper:
+
+   ```sh
+   export CLOUDFLARE_TUNNEL_TOKEN='ey…'
+   pnpm demo:public            # or: pnpm demo:public:tunnel-only
+   ```
+
+When `CLOUDFLARE_TUNNEL_TOKEN` is set, `tunnel.sh` skips `cert.pem`, the local
+`config.yml` render, and the DNS-route step — the dashboard owns all of that —
+and execs `cloudflared tunnel run --token <token>` directly. `TUNNEL_NAME` and
+`SUBDOMAINS` are ignored in this mode (the dashboard already knows them).
 
 ## Topology
 
@@ -103,9 +149,9 @@ pnpm aisoc:demo            # or: docker compose -f docker-compose.demo.yml up -d
 bash infra/cloudflare/tunnel.sh
 ```
 
-`tunnel.sh` will:
+`tunnel.sh` in **origin-cert mode** (default, no token set) will:
 
-1. Verify `cloudflared` is installed and authenticated.
+1. Verify `cloudflared` is installed and authenticated (`~/.cloudflared/cert.pem`).
 2. Create a tunnel named `aisoc-tryaisoc` (configurable via `TUNNEL_NAME`) if
    it doesn't already exist.
 3. Render `config.yml` from `config.yml.example`, substituting the tunnel
@@ -116,6 +162,13 @@ bash infra/cloudflare/tunnel.sh
    `SUBDOMAINS` (default `"api ws docs"`).
 6. Run `cloudflared tunnel --config <generated-config> run`.
 
+`tunnel.sh` in **token mode** (`CLOUDFLARE_TUNNEL_TOKEN` set) will:
+
+1. Verify `cloudflared` is installed.
+2. Skip everything cert-bound (no `cert.pem` check, no `config.yml` render, no
+   DNS routes, no `TUNNEL_NAME` lookup) — the dashboard owns all of that.
+3. Exec `cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN"`.
+
 The first run takes ~10 seconds for DNS propagation; subsequent runs are
 instant.
 
@@ -124,14 +177,15 @@ instant.
 Both `pnpm demo:public*` and `bash infra/cloudflare/tunnel.sh` honour the
 same set:
 
-| Var           | Default          | Purpose                                                  |
-| ------------- | ---------------- | -------------------------------------------------------- |
-| `DOMAIN`      | `tryaisoc.com`   | Apex domain. The script routes `DOMAIN` and each subdomain in `SUBDOMAINS` to the tunnel. |
-| `TUNNEL_NAME` | `aisoc-tryaisoc` | Cloudflare tunnel name. Reused if it already exists.     |
-| `SUBDOMAINS`  | `"api ws docs"`  | Space-separated list of subdomains to route in addition to the apex. |
-| `SKIP_DNS`    | *(unset)*        | If set to `1`, don't touch DNS records (assume they exist). |
-| `SKIP_RUN`    | *(unset)*        | If set to `1`, set everything up but don't run the tunnel — pair with `cloudflared service install` for a 24/7 setup. |
-| `CFD_DIR`     | `~/.cloudflared` | Where `cloudflared`'s `cert.pem`, credentials JSONs, and rendered configs live. |
+| Var                       | Default          | Purpose                                                  |
+| ------------------------- | ---------------- | -------------------------------------------------------- |
+| `DOMAIN`                  | `tryaisoc.com`   | Apex domain. In **origin-cert mode** the script routes `DOMAIN` and each subdomain in `SUBDOMAINS` to the tunnel. In **token mode** it's used purely for log/banner output (the dashboard already knows the hostnames). |
+| `TUNNEL_NAME`             | `aisoc-tryaisoc` | Cloudflare tunnel name. Reused if it already exists. **Ignored in token mode** — the dashboard owns the tunnel name. |
+| `SUBDOMAINS`              | `"api ws docs"`  | Space-separated list of subdomains to route in addition to the apex. **Ignored in token mode** — the dashboard already routes them. |
+| `SKIP_DNS`                | *(unset)*        | If set to `1`, don't touch DNS records (assume they exist). **No-op in token mode** — DNS is already managed by the dashboard. |
+| `SKIP_RUN`                | *(unset)*        | If set to `1`, set everything up but don't run the tunnel — pair with `cloudflared service install` for a 24/7 setup. Honoured in both modes. |
+| `CFD_DIR`                 | `~/.cloudflared` | Where `cloudflared`'s `cert.pem`, credentials JSONs, and rendered configs live. **Only consulted in origin-cert mode.** |
+| `CLOUDFLARE_TUNNEL_TOKEN` | *(unset)*        | If set, switches the script to **token mode**: skips `cert.pem` / tunnel-create / DNS / config-render and execs `cloudflared tunnel run --token <value>` directly. Use the long `ey…` token from the Cloudflare Zero Trust dashboard (Networks → Tunnels → Install connector → Docker tab). |
 
 `scripts/demo-public.sh --help` documents the wrapper-level flags
 (`--skip-stack`, `--no-open`, etc.) on top of these.
@@ -170,7 +224,8 @@ DOMAIN=aisoc.example.com SKIP_RUN=1 pnpm demo:public:setup
 ```
 
 Cloudflare needs to manage DNS for the zone, and you need to have run
-`cloudflared tunnel login` once for that account. Everything else is
+`cloudflared tunnel login` once for that account (origin-cert mode) — *or* set
+`CLOUDFLARE_TUNNEL_TOKEN` from the dashboard (token mode). Everything else is
 parameterised.
 
 ## Stopping
@@ -179,14 +234,23 @@ parameterised.
 running. To take everything down:
 
 ```sh
+# Bring the local stack down (works in either auth mode):
 pnpm aisoc:demo:down
-cloudflared tunnel delete aisoc-tryaisoc   # only if you want to release the tunnel + DNS
+
+# Origin-cert mode only — release the tunnel + DNS records the script created:
+cloudflared tunnel delete aisoc-tryaisoc
+
+# Token mode — delete the tunnel from the Cloudflare Zero Trust dashboard
+# (Networks → Tunnels → … → Delete). The CLI command above won't work here
+# because this machine has no cert.pem to authorise the delete.
 ```
 
 ## Production-grade extras (optional)
 
 If you want to leave the demo up 24/7 without a terminal window pinned, run
-`cloudflared` as a launchd / systemd service:
+`cloudflared` as a launchd / systemd service.
+
+**Origin-cert mode** — point the service at the rendered config:
 
 ```sh
 # macOS
@@ -197,7 +261,16 @@ sudo cloudflared service install \
 sudo cloudflared service install
 ```
 
-`cloudflared service uninstall` reverses it.
+**Token mode** — install the service with the dashboard token. The command the
+Cloudflare dashboard hands you on the *Install connector → Docker* tab also
+works for `service install`:
+
+```sh
+# macOS / Linux
+sudo cloudflared service install ey…   # paste the same token you use locally
+```
+
+`cloudflared service uninstall` reverses either flavour.
 
 ## What the tunnel does NOT do
 

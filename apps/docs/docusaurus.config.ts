@@ -2,14 +2,23 @@ import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
+// Two deploy targets share this build:
+//   1. GitHub Pages (default): https://beenuar.github.io/AiSOC/
+//   2. Custom domain          : https://docs.tryaisoc.com/  (served behind cloudflared tunnel)
+//
+// Override at build time with:
+//   DOCS_URL=https://docs.tryaisoc.com DOCS_BASE_URL=/ pnpm --filter @aisoc/docs build
+const DOCS_URL = process.env.DOCS_URL || "https://beenuar.github.io";
+const DOCS_BASE_URL = process.env.DOCS_BASE_URL || "/AiSOC/";
+
 const config: Config = {
   title: "AiSOC",
   tagline:
     "Open-source AI SOC platform. Agent decisions are recorded in an investigation ledger and a public eval harness runs in CI. MIT-licensed and self-hostable.",
   favicon: "img/favicon.ico",
 
-  url: "https://beenuar.github.io",
-  baseUrl: "/AiSOC/",
+  url: DOCS_URL,
+  baseUrl: DOCS_BASE_URL,
 
   organizationName: "beenuar",
   projectName: "AiSOC",
