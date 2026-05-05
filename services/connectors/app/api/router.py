@@ -1,76 +1,158 @@
 """
 Connectors service REST API.
+
+Catalog and schema endpoints are now backed by the
+``app.connectors`` registry so adding a connector requires zero changes
+here — drop the class in, register it in ``connectors/__init__.py``, and
+its schema flows through to the wizard automatically.
+
+This service is a *stateless* microservice. It does not own connector
+instance rows (those live in the API service's Postgres) and it does not
+manage credentials at rest (that's the API's ``CredentialVault``). Its
+job is twofold:
+
+1. Catalog: tell the API service which connector classes this build
+   ships and what configuration schema each one expects.
+2. Test: instantiate a connector class with caller-supplied (already
+   decrypted) credentials, run ``test_connection()``, and return the
+   verdict. This lets the API service offer a "Test connection" button
+   in the wizard without having to re-implement every vendor SDK.
+
+Production connector polling and ingest happen elsewhere (the
+``ConnectorScheduler`` + ``IngestClient`` modules wired into the
+service's lifespan), not in this router.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field as PydField
+
+from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
 
 logger = structlog.get_logger()
 router = APIRouter()
 
 
+class TestConnectionRequest(BaseModel):
+    """Stateless test-connection payload.
+
+    The API service decrypts the stored ``auth_config`` before forwarding
+    it here; this service never sees vault tokens. ``connector_config``
+    carries non-secret runtime knobs (poll interval, region, etc.) that
+    some connectors take in their constructor alongside credentials.
+    """
+
+    auth_config: dict[str, Any] = PydField(
+        default_factory=dict,
+        description="Plaintext credential fields for the connector.",
+    )
+    connector_config: dict[str, Any] = PydField(
+        default_factory=dict,
+        description="Non-secret runtime config that's passed to the connector constructor.",
+    )
+
+
 @router.get("/connectors")
 async def list_connectors():
-    """List all available connectors."""
+    """List every connector registered with this build."""
     return {
         "connectors": [
-            {"id": "crowdstrike", "name": "CrowdStrike Falcon", "category": "EDR"},
-            {"id": "splunk", "name": "Splunk SIEM", "category": "SIEM"},
-            {"id": "aws_security_hub", "name": "AWS Security Hub", "category": "Cloud"},
-            {"id": "okta", "name": "Okta Identity", "category": "IAM"},
-            {"id": "microsoft_sentinel", "name": "Microsoft Sentinel", "category": "SIEM"},
+            {
+                "id": cls.connector_id,
+                "name": cls.connector_name,
+                "category": cls.connector_category,
+            }
+            for cls in CONNECTOR_REGISTRY.values()
         ]
     }
 
 
+@router.get("/connectors/schemas")
+async def list_schemas():
+    """Bulk fetch every connector's configuration schema.
+
+    Frontend uses this to populate the AddConnector wizard without firing
+    one request per connector.
+    """
+    return {"schemas": list_connector_schemas()}
+
+
 @router.get("/connectors/{connector_id}/schema")
 async def get_connector_schema(connector_id: str):
-    """Get configuration schema for a connector."""
-    schemas = {
-        "crowdstrike": {
-            "fields": [
-                {"name": "client_id", "type": "string", "required": True, "label": "Client ID"},
-                {"name": "client_secret", "type": "secret", "required": True, "label": "Client Secret"},
-                {"name": "base_url", "type": "string", "required": False, "label": "Base URL", "default": "https://api.crowdstrike.com"},
-            ]
-        },
-        "splunk": {
-            "fields": [
-                {"name": "base_url", "type": "string", "required": True, "label": "Splunk URL"},
-                {"name": "token", "type": "secret", "required": True, "label": "HEC Token"},
-                {"name": "saved_search", "type": "string", "required": False, "label": "Saved Search Name"},
-            ]
-        },
-        "aws_security_hub": {
-            "fields": [
-                {"name": "region", "type": "string", "required": True, "label": "AWS Region", "default": "us-east-1"},
-                {"name": "access_key", "type": "string", "required": False, "label": "Access Key ID"},
-                {"name": "secret_key", "type": "secret", "required": False, "label": "Secret Access Key"},
-            ]
-        },
-        "okta": {
-            "fields": [
-                {"name": "domain", "type": "string", "required": True, "label": "Okta Domain", "placeholder": "https://yourorg.okta.com"},
-                {"name": "api_token", "type": "secret", "required": True, "label": "API Token"},
-            ]
-        },
-        "microsoft_sentinel": {
-            "fields": [
-                {"name": "tenant_id", "type": "string", "required": True, "label": "Tenant ID"},
-                {"name": "client_id", "type": "string", "required": True, "label": "Client ID"},
-                {"name": "client_secret", "type": "secret", "required": True, "label": "Client Secret"},
-                {"name": "subscription_id", "type": "string", "required": True, "label": "Subscription ID"},
-                {"name": "resource_group", "type": "string", "required": True, "label": "Resource Group"},
-                {"name": "workspace", "type": "string", "required": True, "label": "Workspace Name"},
-            ]
-        },
-    }
-    schema = schemas.get(connector_id)
-    if not schema:
+    """Configuration schema for a single connector."""
+    cls = CONNECTOR_REGISTRY.get(connector_id)
+    if cls is None:
         raise HTTPException(status_code=404, detail=f"Connector '{connector_id}' not found")
-    return schema
+    return cls.schema().to_dict()
+
+
+@router.post("/connectors/{connector_id}/test")
+async def test_connector_connection(connector_id: str, payload: TestConnectionRequest):
+    """Run a stateless ``test_connection()`` for the given connector.
+
+    The API service is expected to:
+
+    1. Look up the stored connector instance row (or accept fresh creds
+       from the wizard's "Test connection" button before the row exists).
+    2. Decrypt ``auth_config`` via the credential vault.
+    3. POST the resulting plaintext blob here, alongside ``connector_config``.
+
+    We then construct the connector class with the merged keyword
+    arguments and call its ``test_connection()`` coroutine. The connector
+    is responsible for catching its own network errors and returning a
+    structured ``{"success": bool, ...}`` payload — we do not synthesise
+    that ourselves so the wizard surface always shows the connector's
+    own diagnostic message (e.g. "401 Unauthorized" vs "DNS lookup
+    failed").
+    """
+    cls = CONNECTOR_REGISTRY.get(connector_id)
+    if cls is None:
+        raise HTTPException(status_code=404, detail=f"Connector '{connector_id}' not found")
+
+    # Merge auth + non-secret config into kwargs. We keep them in this order
+    # because a malicious ``connector_config`` mustn't be able to overwrite
+    # a legitimate ``auth_config`` field — but in practice the API service
+    # validates both blobs against the schema before we ever see them, so
+    # this ordering is defensive belt-and-braces rather than a real
+    # boundary.
+    kwargs = {**payload.auth_config, **payload.connector_config}
+
+    try:
+        connector = cls(**kwargs)
+    except TypeError as exc:
+        # Almost always "missing 1 required positional argument" or "got
+        # unexpected keyword argument", i.e. caller passed a config that
+        # doesn't match this connector's schema. Surface as 422 so the
+        # frontend can highlight the offending field.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"connector config does not match schema: {exc}",
+        ) from exc
+    except Exception as exc:  # pragma: no cover - last-ditch
+        logger.exception("connector.test.constructor_error", connector_id=connector_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"failed to construct connector: {exc}",
+        ) from exc
+
+    try:
+        result = await connector.test_connection()
+    except Exception as exc:  # pragma: no cover - connector misbehaving
+        # A well-behaved connector swallows its own errors and returns
+        # {"success": False, "error": ...}. If one raises anyway, we
+        # convert to the same shape so the wizard UI doesn't have two
+        # error formats to deal with.
+        logger.exception("connector.test.runtime_error", connector_id=connector_id)
+        result = {"success": False, "connector": connector_id, "error": str(exc)}
+
+    if not isinstance(result, dict):
+        # Defensive: some connectors might return None on success. Coerce.
+        result = {"success": bool(result), "connector": connector_id}
+    return result
 
 
 @router.get("/health")

@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.connectors.base import BaseConnector
+from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
@@ -22,6 +22,25 @@ _SENTINEL_API = "https://management.azure.com/subscriptions/{sub_id}/resourceGro
 class MicrosoftSentinelConnector(BaseConnector):
     connector_id = "microsoft_sentinel"
     connector_name = "Microsoft Sentinel"
+    connector_category = "siem"
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            connector_id=cls.connector_id,
+            connector_name=cls.connector_name,
+            category=cls.connector_category,
+            description="Microsoft Sentinel incidents via the Azure Security Insights REST API.",
+            docs_url="/docs/connectors/microsoft-sentinel",
+            fields=[
+                Field("tenant_id", "string", "Tenant ID"),
+                Field("client_id", "string", "Client ID"),
+                Field("client_secret", "secret", "Client Secret"),
+                Field("subscription_id", "string", "Subscription ID"),
+                Field("resource_group", "string", "Resource Group"),
+                Field("workspace", "string", "Workspace Name"),
+            ],
+        )
 
     def __init__(
         self,

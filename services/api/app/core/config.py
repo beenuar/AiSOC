@@ -66,6 +66,30 @@ class Settings(BaseSettings):
     # a kubernetes secret / fly.io secret in production.
     METRICS_TOKEN: str = ""
 
+    # Application-layer encryption key for connector credentials and other
+    # sensitive ``auth_config`` payloads stored in Postgres. Must be a 32-byte
+    # url-safe base64 key (the Fernet format). Generate one with
+    # ``python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"``
+    # and load it via Fly secrets / k8s secret. When empty in a development
+    # environment the API auto-generates a process-local key on first use and
+    # logs a warning; outside development the API refuses to encrypt or
+    # decrypt anything until it's set, so credentials cannot be silently
+    # written in plaintext. Rotate by re-encrypting via
+    # ``AISOC_CREDENTIAL_KEY_ROTATION_FROM`` (comma-separated previous keys).
+    AISOC_CREDENTIAL_KEY: str = ""
+    AISOC_CREDENTIAL_KEY_ROTATION_FROM: str = ""
+
+    # Internal URL for the connectors microservice. The API service proxies
+    # catalog lookups (``GET /connectors``) and stateless connection tests
+    # (``POST /connectors/{type}/test``) to this URL so the wizard UI can
+    # render schema-driven forms and verify credentials before saving.
+    # Default targets the docker-compose hostname; override locally with
+    # e.g. ``http://localhost:8088`` when the connectors service is
+    # exposed on the host. Empty disables proxying entirely (catalog and
+    # test endpoints will return 503).
+    CONNECTORS_SERVICE_URL: str = "http://connectors:8003"
+    CONNECTORS_SERVICE_TIMEOUT_SECONDS: float = 15.0
+
     # Database
     DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"
     DATABASE_POOL_SIZE: int = 20
@@ -216,6 +240,12 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     # Plugin trust mode: never silently default to disabled in prod.
     if not _is_dev_env(s.ENVIRONMENT) and s.PLUGIN_TRUST_MODE.lower() == "disabled":
         msgs.append("PLUGIN_TRUST_MODE=disabled outside development — plugins will load without signature verification.")
+
+    # Connector credential vault: refuse to silently boot without an encryption
+    # key outside development. Without this, ``Connector.auth_config`` would
+    # round-trip in plaintext.
+    if not _is_dev_env(s.ENVIRONMENT) and not s.AISOC_CREDENTIAL_KEY:
+        msgs.append("AISOC_CREDENTIAL_KEY is empty in a non-development environment — connector credentials cannot be encrypted at rest.")
 
     logger = logging.getLogger("aisoc.config")
     for msg in msgs:

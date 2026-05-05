@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.connectors.base import BaseConnector
+from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
@@ -23,6 +23,29 @@ _DETECTION_DETAILS_URL = "https://api.crowdstrike.com/detects/entities/summaries
 class CrowdStrikeConnector(BaseConnector):
     connector_id = "crowdstrike"
     connector_name = "CrowdStrike Falcon"
+    connector_category = "edr"
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            connector_id=cls.connector_id,
+            connector_name=cls.connector_name,
+            category=cls.connector_category,
+            description="CrowdStrike Falcon detections via the Falcon REST API.",
+            docs_url="/docs/connectors/crowdstrike",
+            fields=[
+                Field("client_id", "string", "Client ID"),
+                Field("client_secret", "secret", "Client Secret"),
+                Field(
+                    "base_url",
+                    "string",
+                    "Base URL",
+                    required=False,
+                    default="https://api.crowdstrike.com",
+                    help_text="Override only if your tenant lives in a non-US cloud (e.g. api.eu-1.crowdstrike.com).",
+                ),
+            ],
+        )
 
     def __init__(self, client_id: str, client_secret: str, base_url: str = "https://api.crowdstrike.com"):
         self._client_id = client_id

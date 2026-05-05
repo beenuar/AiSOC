@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.connectors.base import BaseConnector
+from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
@@ -19,6 +19,26 @@ logger = structlog.get_logger()
 class OktaConnector(BaseConnector):
     connector_id = "okta"
     connector_name = "Okta Identity"
+    connector_category = "iam"
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            connector_id=cls.connector_id,
+            connector_name=cls.connector_name,
+            category=cls.connector_category,
+            description="Okta system log events (auth, MFA, account locks, blocked requests).",
+            docs_url="/docs/connectors/okta",
+            fields=[
+                Field(
+                    "domain",
+                    "string",
+                    "Okta Domain",
+                    placeholder="https://yourorg.okta.com",
+                ),
+                Field("api_token", "secret", "API Token"),
+            ],
+        )
 
     def __init__(self, domain: str, api_token: str):
         self._domain = domain.rstrip("/")

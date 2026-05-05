@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.connectors.base import BaseConnector
+from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
@@ -18,6 +18,34 @@ logger = structlog.get_logger()
 class SplunkConnector(BaseConnector):
     connector_id = "splunk"
     connector_name = "Splunk SIEM"
+    connector_category = "siem"
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            connector_id=cls.connector_id,
+            connector_name=cls.connector_name,
+            category=cls.connector_category,
+            description="Splunk Enterprise / Cloud notable events via the REST API.",
+            docs_url="/docs/connectors/splunk",
+            fields=[
+                Field(
+                    "base_url",
+                    "string",
+                    "Splunk URL",
+                    placeholder="https://splunk.example.com:8089",
+                    help_text="Management port (default 8089), not the web UI port.",
+                ),
+                Field("token", "secret", "HEC / API Token"),
+                Field(
+                    "saved_search",
+                    "string",
+                    "Saved Search Name",
+                    required=False,
+                    default="AiSOC_Alerts",
+                ),
+            ],
+        )
 
     def __init__(self, base_url: str, token: str, saved_search: str = "AiSOC_Alerts"):
         self._base_url = base_url.rstrip("/")

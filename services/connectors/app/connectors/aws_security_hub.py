@@ -10,7 +10,7 @@ from typing import Any
 
 import structlog
 
-from app.connectors.base import BaseConnector
+from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
@@ -18,6 +18,34 @@ logger = structlog.get_logger()
 class AWSSecurityHubConnector(BaseConnector):
     connector_id = "aws_security_hub"
     connector_name = "AWS Security Hub"
+    connector_category = "cloud"
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            connector_id=cls.connector_id,
+            connector_name=cls.connector_name,
+            category=cls.connector_category,
+            description="AWS Security Hub findings (GuardDuty, Inspector, Macie, third-party).",
+            docs_url="/docs/connectors/aws-security-hub",
+            fields=[
+                Field("region", "string", "AWS Region", default="us-east-1"),
+                Field(
+                    "access_key",
+                    "string",
+                    "Access Key ID",
+                    required=False,
+                    help_text="Leave blank to use the runtime IAM role / instance profile.",
+                ),
+                Field(
+                    "secret_key",
+                    "secret",
+                    "Secret Access Key",
+                    required=False,
+                    help_text="Required only when supplying a static access key above.",
+                ),
+            ],
+        )
 
     def __init__(self, region: str = "us-east-1", access_key: str = "", secret_key: str = ""):
         self._region = region

@@ -30,6 +30,8 @@ def _make_settings(**overrides) -> Settings:
         "SECRET_KEY": "a" * 64,
         "METRICS_TOKEN": "long-random-token",
         "PLUGIN_TRUST_MODE": "strict",
+        # Pre-generated Fernet key. Real deployments mount this via Fly secret.
+        "AISOC_CREDENTIAL_KEY": "Z7t9fM3pZ8U_bN5oVxQYr1w2kLsHd4aJiTvE6cNxYpA=",
     }
     base.update(overrides)
     # ``_env_file=None`` skips .env discovery so test runs are deterministic
@@ -83,6 +85,20 @@ def test_clean_prod_settings_emit_no_warnings():
     s = _make_settings()
     msgs = warn_if_insecure_defaults(s)
     assert msgs == []
+
+
+def test_empty_credential_key_in_prod_warns():
+    """Operators must set AISOC_CREDENTIAL_KEY before connector secrets touch Postgres."""
+    s = _make_settings(AISOC_CREDENTIAL_KEY="")
+    msgs = warn_if_insecure_defaults(s)
+    assert any("AISOC_CREDENTIAL_KEY" in m for m in msgs)
+
+
+def test_empty_credential_key_in_dev_does_not_warn():
+    """Dev auto-generates an ephemeral key, so silence here is intentional."""
+    s = _make_settings(ENVIRONMENT="development", AISOC_CREDENTIAL_KEY="")
+    msgs = warn_if_insecure_defaults(s)
+    assert not any("AISOC_CREDENTIAL_KEY" in m for m in msgs)
 
 
 # ─── /metrics auth gate ────────────────────────────────────────────────────
