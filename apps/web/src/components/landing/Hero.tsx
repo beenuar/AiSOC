@@ -31,8 +31,11 @@ export function Hero() {
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
             Agent prompts, tool calls, and decisions are recorded in an investigation
             ledger and replayable per case. The substrate underneath is gated by a
-            200-incident eval harness that runs on every commit. MIT-licensed and
-            self-hostable.
+            200-incident eval harness that runs on every PR targeting{' '}
+            <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">main</code>{' '}
+            /{' '}
+            <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">develop</code>.
+            MIT-licensed and self-hostable.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -74,7 +77,7 @@ export function Hero() {
               eval harness, and the license. */}
           <dl className="mt-10 grid grid-cols-3 gap-6 border-t border-white/5 pt-8">
             <Stat label="Agent decisions" value="Ledger" caption="prompt + tool + rationale per step" />
-            <Stat label="Eval harness" value="200 cases" caption="runs in CI on every commit" />
+            <Stat label="Eval harness" value="200 cases" caption="runs in CI on every PR to main / develop" />
             <Stat label="License" value="MIT" caption="audit, fork, self-host" />
           </dl>
         </motion.div>

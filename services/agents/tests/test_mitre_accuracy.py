@@ -19,9 +19,11 @@ and how it differs from a third-party leaderboard score.
 
 Run:
     pytest services/agents/tests/test_mitre_accuracy.py -v
-    # or via the public eval harness:
-    python scripts/run_evals.py --count 200 --report eval_report.json
+    # or via the public eval harness (writes a JSON report; dataset size is
+    # fixed by eval_data/synthetic_incidents.json, so there is no --count):
+    python scripts/run_evals.py --out eval_report.json
 """
+
 from __future__ import annotations
 
 import json
@@ -42,8 +44,7 @@ _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
 def _load_dataset() -> list[dict[str, Any]]:
     if not _DATASET_PATH.exists():
         raise FileNotFoundError(
-            f"Synthetic incidents dataset missing at {_DATASET_PATH}. "
-            f"Run `python3 scripts/generate_eval_incidents.py` to regenerate."
+            f"Synthetic incidents dataset missing at {_DATASET_PATH}. Run `python3 scripts/generate_eval_incidents.py` to regenerate."
         )
     with _DATASET_PATH.open() as f:
         return json.load(f)
@@ -87,71 +88,218 @@ _TACTIC_NAMES: dict[str, str] = {
 
 _TACTIC_KEYWORDS: dict[str, list[str]] = {
     "TA0001": [
-        "initial access", "phishing", "spear-phish", "exploit", "watering hole",
-        "supply chain", "valid account", "external remote service", "drive-by",
-        "usb", "spear", "oauth consent", "social engineering", "social-engineering",
-        "vpn login", "new geography", "compromised npm", "container image",
+        "initial access",
+        "phishing",
+        "spear-phish",
+        "exploit",
+        "watering hole",
+        "supply chain",
+        "valid account",
+        "external remote service",
+        "drive-by",
+        "usb",
+        "spear",
+        "oauth consent",
+        "social engineering",
+        "social-engineering",
+        "vpn login",
+        "new geography",
+        "compromised npm",
+        "container image",
         "wire transfer",
     ],
     "TA0002": [
-        "execution", "powershell", "cmd.exe", "script", "macro", "python", "node",
-        "certutil", "wmi", "wmic", "mshta", "process hollow", "process create",
-        "npm", "post-install", "container with", "docker run", "javascript",
-        "stage-2 payload", "vba", "browser exploitation", "drive-by",
+        "execution",
+        "powershell",
+        "cmd.exe",
+        "script",
+        "macro",
+        "python",
+        "node",
+        "certutil",
+        "wmi",
+        "wmic",
+        "mshta",
+        "process hollow",
+        "process create",
+        "npm",
+        "post-install",
+        "container with",
+        "docker run",
+        "javascript",
+        "stage-2 payload",
+        "vba",
+        "browser exploitation",
+        "drive-by",
     ],
     "TA0003": [
-        "persistence", "registry run", "scheduled task", "startup", "service",
-        "implant", "backdoor", "rootkit", "firmware", "uefi", "cron", "wmi event",
-        "permanent wmi", "office add-in", "vsto", "outlook startup",
+        "persistence",
+        "registry run",
+        "scheduled task",
+        "startup",
+        "service",
+        "implant",
+        "backdoor",
+        "rootkit",
+        "firmware",
+        "uefi",
+        "cron",
+        "wmi event",
+        "permanent wmi",
+        "office add-in",
+        "vsto",
+        "outlook startup",
     ],
     "TA0004": [
-        "privilege escalation", "escalation", "escalate", "container escape",
-        "privileged pod", "bypass", "elevation", "sudo", "uac bypass", "uac",
-        "fodhelper", "suid", "metadata service",
+        "privilege escalation",
+        "escalation",
+        "escalate",
+        "container escape",
+        "privileged pod",
+        "bypass",
+        "elevation",
+        "sudo",
+        "uac bypass",
+        "uac",
+        "fodhelper",
+        "suid",
+        "metadata service",
     ],
     "TA0005": [
-        "defense evasion", "obfuscat", "fileless", "memory-only", "memory only",
-        "hollowing", "side-load", "dll", "certutil", "masquerad", "encode", "pack",
-        "log cleared", "wevtutil", "journalctl", "vacuum", "indicator removal",
-        "tampering", "stop defender", "stop crowdstrike", "stop sysmon",
+        "defense evasion",
+        "obfuscat",
+        "fileless",
+        "memory-only",
+        "memory only",
+        "hollowing",
+        "side-load",
+        "dll",
+        "certutil",
+        "masquerad",
+        "encode",
+        "pack",
+        "log cleared",
+        "wevtutil",
+        "journalctl",
+        "vacuum",
+        "indicator removal",
+        "tampering",
+        "stop defender",
+        "stop crowdstrike",
+        "stop sysmon",
         "secure boot",
     ],
     "TA0006": [
-        "credential", "brute force", "brute-force", "kerberoast", "dcsync",
-        "lsass", "minidump", "dump", "harvest", "password reset", "password spray",
-        "credential spray", "saml", "oauth", "ntlm", "mimikatz", "pat",
-        "personal access token", "refresh token", "imds", "session token",
-        "stolen session", "tgs",
+        "credential",
+        "brute force",
+        "brute-force",
+        "kerberoast",
+        "dcsync",
+        "lsass",
+        "minidump",
+        "dump",
+        "harvest",
+        "password reset",
+        "password spray",
+        "credential spray",
+        "saml",
+        "oauth",
+        "ntlm",
+        "mimikatz",
+        "pat",
+        "personal access token",
+        "refresh token",
+        "imds",
+        "session token",
+        "stolen session",
+        "tgs",
     ],
     "TA0007": [
-        "discovery", "enumerat", "scan", "account discovery", "network share",
-        "recon", "replication", "ldap", "bloodhound", "smb share", "share enum",
+        "discovery",
+        "enumerat",
+        "scan",
+        "account discovery",
+        "network share",
+        "recon",
+        "replication",
+        "ldap",
+        "bloodhound",
+        "smb share",
+        "share enum",
         "system info",
     ],
     "TA0008": [
-        "lateral movement", "lateral", "rdp", "pass-the-hash", "pass the hash",
-        "remote service", "pivoting", "ssh", "smb scan", "wmic /node",
+        "lateral movement",
+        "lateral",
+        "rdp",
+        "pass-the-hash",
+        "pass the hash",
+        "remote service",
+        "pivoting",
+        "ssh",
+        "smb scan",
+        "wmic /node",
         "wmi remote",
     ],
     "TA0009": [
-        "collection", "data from local", "screenshot", "keylog", "clipboard",
-        "bulk download", "pii", "customer record", "mailbox export", "pst",
-        "private repo", "private repos",
+        "collection",
+        "data from local",
+        "screenshot",
+        "keylog",
+        "clipboard",
+        "bulk download",
+        "pii",
+        "customer record",
+        "mailbox export",
+        "pst",
+        "private repo",
+        "private repos",
     ],
     "TA0010": [
-        "exfiltrat", "c2 channel", "cloud storage", "dns tunnel", "ftp",
-        "upload", "egress", "google drive", "drive upload", "personal drive",
-        "transfer to", "s3 bucket", "s3://", "data egress",
+        "exfiltrat",
+        "c2 channel",
+        "cloud storage",
+        "dns tunnel",
+        "ftp",
+        "upload",
+        "egress",
+        "google drive",
+        "drive upload",
+        "personal drive",
+        "transfer to",
+        "s3 bucket",
+        "s3://",
+        "data egress",
     ],
     "TA0011": [
-        "command and control", "c2", "beacon", "c&c", "dga",
-        "domain generation", "dns query", "covert channel", "cobalt strike",
-        "https beacon", "ja3",
+        "command and control",
+        "c2",
+        "beacon",
+        "c&c",
+        "dga",
+        "domain generation",
+        "dns query",
+        "covert channel",
+        "cobalt strike",
+        "https beacon",
+        "ja3",
     ],
     "TA0040": [
-        "impact", "ransom", "encrypt", "wipe", "destroy", "disrupt",
-        "defacement", "miner", "cryptomine", "xmrig", "ddos", "syn flood",
-        "wire transfer", "$250", "bec",
+        "impact",
+        "ransom",
+        "encrypt",
+        "wipe",
+        "destroy",
+        "disrupt",
+        "defacement",
+        "miner",
+        "cryptomine",
+        "xmrig",
+        "ddos",
+        "syn flood",
+        "wire transfer",
+        "$250",
+        "bec",
     ],
 }
 
@@ -169,6 +317,7 @@ def extract_tactics_from_text(text: str) -> set[str]:
 # ---------------------------------------------------------------------------
 # Accuracy evaluation
 # ---------------------------------------------------------------------------
+
 
 class MitreAccuracyResult:
     def __init__(self) -> None:
@@ -260,6 +409,7 @@ def evaluate_mitre_accuracy(threshold: float = 0.80) -> MitreAccuracyResult:
 # pytest tests
 # ---------------------------------------------------------------------------
 
+
 class TestMitreAccuracy(unittest.TestCase):
     """Offline MITRE tactic accuracy evaluation across the synthetic dataset."""
 
@@ -273,8 +423,7 @@ class TestMitreAccuracy(unittest.TestCase):
         self.assertGreaterEqual(
             result.accuracy,
             0.80,
-            f"MITRE tactic accuracy {result.accuracy:.1%} is below the 80% threshold.\n"
-            + result.to_json()[:4000],
+            f"MITRE tactic accuracy {result.accuracy:.1%} is below the 80% threshold.\n" + result.to_json()[:4000],
         )
 
     def test_dataset_minimum_size(self) -> None:
@@ -282,8 +431,7 @@ class TestMitreAccuracy(unittest.TestCase):
         self.assertGreaterEqual(
             len(SYNTHETIC_INCIDENTS_DATA),
             200,
-            f"Eval dataset has only {len(SYNTHETIC_INCIDENTS_DATA)} incidents; "
-            f"need ≥200 for Phase-1C.",
+            f"Eval dataset has only {len(SYNTHETIC_INCIDENTS_DATA)} incidents; need ≥200 for Phase-1C.",
         )
 
     def test_each_incident_has_expected_tactics(self) -> None:
@@ -291,12 +439,14 @@ class TestMitreAccuracy(unittest.TestCase):
             title = inc["title"]
             tactic_ids = inc["expected_tactics"]
             self.assertGreater(
-                len(tactic_ids), 0,
+                len(tactic_ids),
+                0,
                 f"Incident '{title[:60]}' has no expected tactic IDs.",
             )
             for t in tactic_ids:
                 self.assertIn(
-                    t, _TACTIC_NAMES,
+                    t,
+                    _TACTIC_NAMES,
                     f"Unknown tactic ID '{t}' in incident '{title[:60]}'.",
                 )
 
@@ -311,12 +461,17 @@ class TestMitreAccuracy(unittest.TestCase):
 
     def test_response_class_values_valid(self) -> None:
         valid = {
-            "isolate_host", "disable_account", "block_indicator",
-            "rollback_change", "escalate", "monitor",
+            "isolate_host",
+            "disable_account",
+            "block_indicator",
+            "rollback_change",
+            "escalate",
+            "monitor",
         }
         for inc in SYNTHETIC_INCIDENTS_DATA:
             self.assertIn(
-                inc["response_class"], valid,
+                inc["response_class"],
+                valid,
                 f"Bad response_class: {inc['response_class']}",
             )
 
@@ -326,7 +481,8 @@ class TestMitreAccuracy(unittest.TestCase):
         for inc in SYNTHETIC_INCIDENTS_DATA:
             all_tactics.update(inc["expected_tactics"])
         self.assertGreaterEqual(
-            len(all_tactics & set(_TACTIC_NAMES)), 10,
+            len(all_tactics & set(_TACTIC_NAMES)),
+            10,
             f"Only {len(all_tactics)} tactics covered: {sorted(all_tactics)}",
         )
 

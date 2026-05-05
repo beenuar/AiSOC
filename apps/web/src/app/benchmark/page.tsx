@@ -8,7 +8,7 @@ import { ComparisonTable } from '@/components/benchmark/ComparisonTable';
 export const metadata: Metadata = {
   title: 'Public eval harness — AiSOC',
   description:
-    'A reproducible regression harness over the AiSOC substrate. 200 deterministic synthetic incidents and four CI gates: one real measurement (alert reduction) and three substrate self-consistency checks. The page documents what each metric measures and what it does not.',
+    'A reproducible regression harness over the AiSOC substrate. Four CI gates over a 200-incident synthetic dataset (MITRE / completeness / response quality) plus a 1,000-alert noisy stream (alert reduction). One real measurement (alert reduction) and three substrate self-consistency checks. The page documents what each metric measures and what it does not.',
   alternates: { canonical: '/benchmark' },
   openGraph: {
     title: 'AiSOC public eval harness',
@@ -43,17 +43,20 @@ export default function BenchmarkPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
               Reproducible
             </span>
-            <span className="text-xs text-gray-500">Runs on every commit to main</span>
+            <span className="text-xs text-gray-500">Runs on every PR targeting main / develop</span>
           </div>
           <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
             Public eval harness
           </h1>
           <p className="mt-4 max-w-3xl text-lg text-gray-400">
             A deterministic regression harness over the AiSOC substrate &mdash;
-            the keyword extractors, the fusion pipeline, the report and
-            response templates, and the offline judges that grade them. The
-            dataset, the harness, and the CI gate are in the repo. The numbers
-            on this page reproduce in roughly 25 milliseconds on a laptop.
+            the keyword extractors, the in-harness fusion grouping (a faithful
+            re-implementation of the production Tier 1/2/3 logic in{' '}
+            <code className="text-gray-300">services/fusion</code>, minus the
+            DB-backed dedup and ML scoring), the report and response
+            templates, and the offline judges that grade them. The dataset,
+            the harness, and the CI gate are in the repo. The numbers on this
+            page reproduce in roughly 25&nbsp;ms on a laptop.
           </p>
 
           <div className="mt-5 max-w-3xl rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-4 text-sm text-amber-100/80">
@@ -151,10 +154,15 @@ export default function BenchmarkPage() {
               <p className="mt-2 text-gray-300">
                 A 1,000-alert noisy stream with duplicates, near-duplicates,
                 rule-storms, and benign chatter is fabricated deterministically,
-                then passed through the actual fusion pipeline (Tier 1 / 2 / 3
-                merge windows, score floor). The reduction ratio is whatever
-                the real code emits. This is a legitimate measurement of the
-                fusion logic, and a fusion regression will move the number.
+                then passed through{' '}
+                <code className="text-gray-300">fuse_alerts</code> &mdash; an
+                in-harness re-implementation of the same Tier 1 / 2 / 3 merge
+                windows and score floor that the production fusion service
+                runs. The grouping logic is identical; the harness skips the
+                DB-backed deduplicator and ML scorer that ride on top in
+                production. The reduction ratio is whatever the harness code
+                emits. This is a legitimate measurement of the grouping logic,
+                and a regression in those rules will move the number.
               </p>
             </div>
 

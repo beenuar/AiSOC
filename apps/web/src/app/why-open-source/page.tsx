@@ -25,7 +25,7 @@ const PILLARS = [
   {
     label: 'Public eval harness',
     href: '/benchmark',
-    body: 'A 200-incident eval suite runs on every commit. Four CI gates: one real measurement (alert reduction) and three substrate self-consistency checks (MITRE tactic, completeness, response quality). The harness, the dataset, the rubric, and historical results are in the repo. The benchmark page documents what each metric measures and what it does not.',
+    body: 'A 200-incident eval suite runs on every PR targeting main / develop. Four CI gates: one real measurement (alert reduction, against a separately generated 1,000-alert noisy stream) and three substrate self-consistency checks (MITRE tactic, completeness, response quality, against the 200-incident dataset). The harness, the dataset, the rubric, and historical results are in the repo. The benchmark page documents what each metric measures and what it does not.',
   },
   {
     label: 'MIT, end-to-end',
@@ -79,7 +79,7 @@ const CONTRASTS: readonly Contrast[] = [
     points: [
       'Agent runs on the buyer infrastructure. Incident data, by default, does not leave the buyer network.',
       'Every prompt, response, tool call, and decision is written to the Investigation Ledger and replayable per case.',
-      'Substrate behaviour is gated in CI on every commit. The dataset, harness, rubric, and historical numbers are in the repo and reproducible. The benchmark page is explicit about which metrics measure the substrate and which would need an online LLM-as-judge run to be called agent accuracy.',
+      'Substrate behaviour is gated in CI on every PR targeting main / develop. The dataset, harness, rubric, and historical numbers are in the repo and reproducible. The benchmark page is explicit about which metrics measure the substrate and which would need an online LLM-as-judge run to be called agent accuracy.',
       'MIT, no CLA. Forks are permanent.',
     ],
     accent: true,

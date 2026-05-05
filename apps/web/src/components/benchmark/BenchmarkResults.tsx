@@ -23,8 +23,17 @@ interface SuiteRow {
 }
 
 /**
- * Snapshot of the latest run on `main`. Keep these aligned with
- * `eval_report.json` produced by `scripts/run_evals.py`.
+ * Manual snapshot of a recent run on `main`. The numbers are hand-copied
+ * from `eval_report.json` produced by `scripts/run_evals.py --out
+ * eval_report.json` against the deterministic dataset. The audit trail —
+ * one report per main-branch commit — lives on the `eval-results` branch
+ * at `eval/results/<sha>.json` and `eval/results/latest.json`, published
+ * automatically by the `p1-eval` job in `.github/workflows/ci.yml`. There
+ * is no build-time fetch wired up here, though, so this file can drift
+ * between a substrate change and a marketing-page edit. The pass/fail
+ * gates in `services/agents/tests/test_*.py` are the source of truth: if
+ * the gates pass, the headline "≥ target" claim still holds even if these
+ * exact percentages lag a commit or two.
  *
  * The blurbs deliberately avoid "agent accuracy" framing. The harness is
  * deterministic substrate code (no LLM calls), and three of the four metrics
@@ -43,7 +52,7 @@ const SUITES: SuiteRow[] = [
     targetDisplay: '≥70%',
     kind: 'measurement',
     blurb:
-      "A 1,000-alert noisy stream (duplicates, near-duplicates, rule storms, low-score chatter) is fed into the real fusion pipeline (Tier 1 / 2 / 3). The number is whatever the code produces — a fusion regression will move it.",
+      "A 1,000-alert noisy stream (duplicates, near-duplicates, rule storms, low-score chatter) is fed into an in-harness re-implementation of the production Tier 1 / 2 / 3 grouping rules — same logic, no DB-backed dedup or ML scorer. The number is whatever the code produces; a regression in the grouping rules moves it.",
     details: [
       { label: 'Alerts in', value: '1,000' },
       { label: 'Incidents out', value: '247' },
@@ -64,7 +73,7 @@ const SUITES: SuiteRow[] = [
     details: [
       { label: 'Incidents', value: '200' },
       { label: 'Correct', value: '194' },
-      { label: 'Macro F1', value: '0.78' },
+      { label: 'F1 (per-case)', value: '0.78' },
     ],
   },
   {

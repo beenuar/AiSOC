@@ -2,6 +2,7 @@
 Tool: MITRE ATT&CK framework lookups.
 Provides context for tactics, techniques, and suggested mitigations.
 """
+
 import structlog
 
 logger = structlog.get_logger()

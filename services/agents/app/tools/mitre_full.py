@@ -12,6 +12,7 @@ On startup, this module:
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,10 +29,7 @@ logger = structlog.get_logger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-ATTCK_CDN_URL = (
-    "https://raw.githubusercontent.com/mitre/cti/master/"
-    "enterprise-attack/enterprise-attack.json"
-)
+ATTCK_CDN_URL = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
 ATTCK_DATA_PATH = os.getenv("ATTCK_DATA_PATH", "/data/enterprise-attack.json")
 _CACHE_TTL_HOURS = 24
 _EMBED_BATCH_SIZE = 50
@@ -39,13 +37,24 @@ _EMBED_BATCH_SIZE = 50
 
 # ─── Data Model ───────────────────────────────────────────────────────────────
 
+
 class MitreTechnique:
     """Represents a single ATT&CK technique or sub-technique."""
 
     __slots__ = (
-        "id", "name", "description", "tactic_ids", "tactic_names",
-        "platforms", "data_sources", "mitigations", "detections",
-        "is_subtechnique", "parent_id", "url", "version",
+        "id",
+        "name",
+        "description",
+        "tactic_ids",
+        "tactic_names",
+        "platforms",
+        "data_sources",
+        "mitigations",
+        "detections",
+        "is_subtechnique",
+        "parent_id",
+        "url",
+        "version",
     )
 
     def __init__(self, **kw: Any) -> None:
@@ -84,12 +93,13 @@ class MitreMitigation:
 _techniques: dict[str, MitreTechnique] = {}
 _actors: dict[str, MitreActor] = {}
 _mitigations: dict[str, MitreMitigation] = {}
-_tactic_map: dict[str, str] = {}        # tactic shortname → display name
+_tactic_map: dict[str, str] = {}  # tactic shortname → display name
 _loaded = False
 _load_time: float = 0.0
 
 
 # ─── Loader ───────────────────────────────────────────────────────────────────
+
 
 def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
     """Parse a STIX 2.1 ATT&CK bundle and populate in-memory indexes."""
@@ -109,7 +119,6 @@ def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
             tactic_objs[shortname] = obj
 
     # Relationship maps
-    tech_tactic: dict[str, list[str]] = {}
     tech_mitigations: dict[str, list[str]] = {}
     actor_techniques: dict[str, list[str]] = {}
     mitigation_techniques: dict[str, list[str]] = {}
@@ -135,24 +144,19 @@ def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
     for obj in objects:
         if obj.get("type") != "attack-pattern":
             continue
-        ext = obj.get("x_mitre_", {})
         is_deprecated = obj.get("x_mitre_deprecated", False) or obj.get("revoked", False)
         if is_deprecated:
             continue
 
         stix_id = obj["id"]
         ext_refs = obj.get("external_references", [])
-        attck_ref = next(
-            (r for r in ext_refs if r.get("source_name") == "mitre-attack"), {}
-        )
+        attck_ref = next((r for r in ext_refs if r.get("source_name") == "mitre-attack"), {})
         tech_id = attck_ref.get("external_id", "")
         if not tech_id:
             continue
 
         kill_chain_phases = obj.get("kill_chain_phases", [])
-        tactic_ids = [
-            p["phase_name"] for p in kill_chain_phases if p.get("kill_chain_name") == "mitre-attack"
-        ]
+        tactic_ids = [p["phase_name"] for p in kill_chain_phases if p.get("kill_chain_name") == "mitre-attack"]
         tactic_names = [_tactic_map.get(t, t) for t in tactic_ids]
 
         parent_id = None
@@ -161,9 +165,7 @@ def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
             parent_id = tech_id.split(".")[0]
 
         mitigation_ids = tech_mitigations.get(stix_id, [])
-        mitigation_names = [
-            id_to_obj.get(mid, {}).get("name", mid) for mid in mitigation_ids
-        ]
+        mitigation_names = [id_to_obj.get(mid, {}).get("name", mid) for mid in mitigation_ids]
 
         # Detection notes from x_mitre_detection
         detection = obj.get("x_mitre_detection", "")
@@ -283,11 +285,16 @@ def _load_stub_corpus() -> None:
     """Populate a minimal stub corpus when the full bundle is unavailable."""
     global _loaded, _load_time
     from app.tools.mitre import (
-        _MITRE_TACTICS as TACTICS,
-        _MITRE_TECHNIQUES as TECHS,
         _MITRE_MITIGATIONS as MITS,
     )
-    _tactic_map.update({k: v for k, v in TACTICS.items()})
+    from app.tools.mitre import (
+        _MITRE_TACTICS as TACTICS,
+    )
+    from app.tools.mitre import (
+        _MITRE_TECHNIQUES as TECHS,
+    )
+
+    _tactic_map.update(dict(TACTICS.items()))
     for tid, info in TECHS.items():
         tactic_id = info["tactic"]
         _techniques[tid] = MitreTechnique(
@@ -312,6 +319,7 @@ def _load_stub_corpus() -> None:
 
 # ─── Qdrant Embedding ─────────────────────────────────────────────────────────
 
+
 async def embed_techniques_into_qdrant(
     qdrant_url: str,
     openai_api_key: str,
@@ -325,9 +333,9 @@ async def embed_techniques_into_qdrant(
         await load_attck_corpus()
 
     try:
+        import openai
         from qdrant_client import AsyncQdrantClient
         from qdrant_client.models import Distance, PointStruct, VectorParams
-        import openai
     except ImportError as exc:
         logger.warning("Qdrant/OpenAI client not available for ATT&CK embedding", error=str(exc))
         return
@@ -352,10 +360,7 @@ async def embed_techniques_into_qdrant(
 
     for i in range(0, total, _EMBED_BATCH_SIZE):
         batch = techniques_list[i : i + _EMBED_BATCH_SIZE]
-        texts = [
-            f"{t.id} {t.name}: {t.description or ''} Tactics: {', '.join(t.tactic_names or [])}"
-            for t in batch
-        ]
+        texts = [f"{t.id} {t.name}: {t.description or ''} Tactics: {', '.join(t.tactic_names or [])}" for t in batch]
         try:
             resp = await oai.embeddings.create(
                 model="text-embedding-3-large",
@@ -375,7 +380,7 @@ async def embed_techniques_into_qdrant(
                         "url": t.url,
                     },
                 )
-                for t, vec in zip(batch, vectors)
+                for t, vec in zip(batch, vectors, strict=False)
             ]
             await qdrant.upsert(collection_name=collection, points=points)
             embedded += len(batch)
@@ -403,8 +408,8 @@ async def semantic_technique_search(
     Returns the top_k most relevant techniques.
     """
     try:
-        from qdrant_client import AsyncQdrantClient
         import openai
+        from qdrant_client import AsyncQdrantClient
     except ImportError:
         return []
 
@@ -451,6 +456,7 @@ async def semantic_technique_search(
 
 # ─── Public Lookup API ────────────────────────────────────────────────────────
 
+
 def get_technique(technique_id: str) -> dict[str, Any]:
     """Return full technique details by ATT&CK ID (e.g. 'T1059' or 'T1059.001')."""
     tech = _techniques.get(technique_id)
@@ -490,18 +496,14 @@ def search_techniques_by_name(keyword: str, limit: int = 20) -> list[dict[str, A
 def get_techniques_by_tactic(tactic_name: str) -> list[dict[str, Any]]:
     """Return all techniques belonging to a given tactic."""
     tactic_lower = tactic_name.lower()
-    return [
-        t.to_dict()
-        for t in _techniques.values()
-        if any(tn.lower() == tactic_lower for tn in (t.tactic_names or []))
-    ]
+    return [t.to_dict() for t in _techniques.values() if any(tn.lower() == tactic_lower for tn in (t.tactic_names or []))]
 
 
 def get_coverage_summary() -> dict[str, Any]:
     """Return a summary of loaded ATT&CK data."""
     tactic_counts: dict[str, int] = {}
     for tech in _techniques.values():
-        for tname in (tech.tactic_names or []):
+        for tname in tech.tactic_names or []:
             tactic_counts[tname] = tactic_counts.get(tname, 0) + 1
     return {
         "total_techniques": len(_techniques),
@@ -521,6 +523,6 @@ def map_techniques_to_kill_chain(technique_ids: list[str]) -> dict[str, list[str
         if tech is None:
             result.setdefault("Unknown", []).append(tid)
             continue
-        for tname in (tech.tactic_names or ["Unknown"]):
+        for tname in tech.tactic_names or ["Unknown"]:
             result.setdefault(tname, []).append(f"{tid}: {tech.name}")
     return result

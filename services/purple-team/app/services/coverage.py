@@ -1,4 +1,5 @@
 """ATT&CK coverage computation from execution history."""
+
 from __future__ import annotations
 
 import logging
@@ -93,11 +94,7 @@ def build_coverage_matrix(
 
     total_techniques = len(by_technique)
     tested = sum(1 for ts in by_technique.values() if ts)
-    detected_techniques = sum(
-        1
-        for tid, ts in by_technique.items()
-        if any(t.get("detected") for t in ts)
-    )
+    detected_techniques = sum(1 for tid, ts in by_technique.items() if any(t.get("detected") for t in ts))
     overall = (tested / total_techniques) if total_techniques else 0.0
 
     tactics = [t for t in TACTIC_ORDER if t in tactic_techniques]
@@ -107,7 +104,7 @@ def build_coverage_matrix(
 
     return {
         "tactics": tactics,
-        "techniques": {k: v for k, v in tactic_techniques.items()},
+        "techniques": dict(tactic_techniques),
         "summary": {
             "total_techniques": total_techniques,
             "tested_techniques": tested,
