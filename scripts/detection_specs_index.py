@@ -2,10 +2,18 @@
 AiSOC Detection Pack v1 - Combined Specification Index
 ======================================================
 
-Imports the rule tables from `detection_specs.py` and `detection_specs_part2.py`
-and exposes a single `ALL_SPECS` list grouped by category.
+Imports the rule tables from `detection_specs.py`, `detection_specs_part2.py`,
+and the `detection_specs_part3_*.py` expansion modules, then exposes a single
+`CATEGORIES` mapping plus an `all_specs()` iterator.
 
 The category names map directly onto subdirectories under `detections/`.
+
+Tier mapping:
+* `detection_specs.py` + `detection_specs_part2.py` — original 200 hand-curated
+  native specs.
+* `detection_specs_part3_*.py` — 600 additional native specs generated through
+  the compact `S()` builder (see `detection_specs_part3_helpers.py`). These
+  follow the same fixture + MITRE quality gate as the originals.
 """
 
 from __future__ import annotations
@@ -20,14 +28,19 @@ from detection_specs_part2 import (  # type: ignore[import-not-found]
     ENDPOINT,
     NETWORK,
 )
+from detection_specs_part3_application import APPLICATION_EXTRA  # type: ignore[import-not-found]
+from detection_specs_part3_cloud import CLOUD_EXTRA  # type: ignore[import-not-found]
+from detection_specs_part3_endpoint import ENDPOINT_EXTRA  # type: ignore[import-not-found]
+from detection_specs_part3_identity import IDENTITY_EXTRA  # type: ignore[import-not-found]
+from detection_specs_part3_network import NETWORK_EXTRA  # type: ignore[import-not-found]
 
 
 CATEGORIES: dict[str, list[dict]] = {
-    "cloud": CLOUD,
-    "identity": IDENTITY,
-    "endpoint": ENDPOINT,
-    "network": NETWORK,
-    "application": APPLICATION,
+    "cloud": [*CLOUD, *CLOUD_EXTRA],
+    "identity": [*IDENTITY, *IDENTITY_EXTRA],
+    "endpoint": [*ENDPOINT, *ENDPOINT_EXTRA],
+    "network": [*NETWORK, *NETWORK_EXTRA],
+    "application": [*APPLICATION, *APPLICATION_EXTRA],
     "data-exfil": DATA_EXFIL,
 }
 
