@@ -89,7 +89,8 @@ Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source:
 
 AiSOC bundles the components a SOC normally pieces together from separate vendors:
 
-- **Ingest** events from any connector (CrowdStrike, Splunk, AWS, Okta, Sentinel) into a Kafka spine.
+- **Connect data sources in three clicks** — a click-and-connect catalog (Microsoft Entra, Azure Activity, Defender XDR, GCP Cloud Audit, GCP SCC, Microsoft 365 audit, Google Workspace, Cloudflare, GitHub, plus the original CrowdStrike / Splunk / AWS Security Hub / Okta / Microsoft Sentinel set) renders a schema-driven form per connector, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
+- **Ingest** events from any connector into a Kafka spine.
 - **Correlate** them in real time with deduplication, ML scoring, and Sigma/YARA detection.
 - **Enrich** every signal with threat intelligence from TAXII 2.1, MISP, OTX, and CISA KEV.
 - **Reason** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.

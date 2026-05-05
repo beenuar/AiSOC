@@ -7,6 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Click-and-connect cloud connector platform
+
+This pass turns connectors from a hardcoded, code-edit-only feature into a
+runtime, schema-driven, click-and-connect surface — and lights up nine new
+cloud / SaaS / VCS sources (Microsoft Entra, Azure Activity, Defender XDR,
+GCP Cloud Audit, GCP SCC, Microsoft 365 audit, Google Workspace, Cloudflare,
+GitHub) on top of the original CrowdStrike / Splunk / AWS Security Hub /
+Okta / Microsoft Sentinel set.
+
+#### Added
+
+- **`CredentialVault`** (`services/api/app/security/credential_vault.py`,
+  `services/connectors/app/security/credential_vault.py`) — Fernet
+  (AES-128-CBC + HMAC-SHA256) wrapper for `auth_config` JSON, keyed off the
+  new `AISOC_CREDENTIAL_KEY` env var. Supports `MultiFernet` rotation via
+  `AISOC_CREDENTIAL_KEY_ROTATION_FROM`. The `services/connectors`
+  read-path mirror decrypts only; writes always go through the API
+  service. Documented in [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
+- **Self-describing connector schemas** (`services/connectors/app/connectors/base.py`)
+  — `BaseConnector` gained a `Field` / `OAuthHints` / `ConnectorSchema`
+  trio and an abstract `schema()` classmethod. Each connector class is now
+  the source of truth for its own `name`, `connector_category`, fields
+  (text / secret / select / textarea / oauth), default poll interval, and
+  hosted-OAuth roadmap hints. The hardcoded dict in
+  `services/connectors/app/api/router.py` is gone — schema responses come
+  from the registry built in `services/connectors/app/connectors/__init__.py`.
+- **`/api/v1/connectors` CRUD endpoints**
+  (`services/api/app/api/v1/endpoints/connectors.py`,
+  `services/api/app/schemas/connector.py`) — `GET /catalog`, `POST /test`,
+  `GET / POST / PATCH / DELETE /instances`, `POST /instances/{id}/test`.
+  Tenant-scoped via the existing auth dependency, secrets encrypted on
+  write through the vault, and proxied to the connectors microservice for
+  schema lookups and live `Test connection` calls.
+- **`ConnectorScheduler`** (`services/connectors/app/scheduler.py`) —
+  APScheduler in-process inside `services/connectors`, started in the
+  FastAPI lifespan. One job per enabled instance, polls
+  `fetch_alerts(since_seconds=300)` every 5 min by default
+  (`connector_config.poll_interval_seconds` overrides per instance),
+  decrypts via the read-path vault, normalizes events through the
+  connector's `normalize()` method, and pushes the batch to
+  `services/ingest/v1/ingest/batch` via the new `IngestClient`. Set
+  `AISOC_CONNECTORS_DISABLE_SCHEDULER=1` to skip wiring the scheduler in
+  tests.
+- **Nine new connectors** in `services/connectors/app/connectors/`:
+  `azure_entra` (Microsoft Graph audit logs), `azure_activity` (ARM
+  Activity Log via Resource Graph + blast-radius `_HIGH_BLAST_RADIUS_VERBS`
+  list), `azure_defender` (Microsoft Graph Security alerts),
+  `gcp_cloud_audit` (Cloud Logging API with hand-rolled RS256 JWT
+  signing for service-account auth), `gcp_scc` (Security Command Center
+  findings, same JWT signer), `m365_audit` (Office 365 Management
+  Activity API, sharing the Azure AD app from `azure_entra`),
+  `google_workspace` (Reports API with domain-wide delegation),
+  `cloudflare` (Audit Logs), and `github` (Org Audit Log + Code Scanning
+  alerts). Every connector ships unit tests covering schema contract,
+  normalization, and `test_connection()` happy/sad paths
+  (`services/connectors/tests/test_*_connectors.py`,
+  `test_schemas.py`, `test_scheduler.py`).
+- **Frontend click-and-connect wizard**
+  (`apps/web/src/components/connectors/AddConnectorModal.tsx`,
+  `ConnectorInstanceList.tsx`, rewired
+  `ConnectorsView.tsx`, typed client in `apps/web/src/lib/api.ts`) —
+  two-step modal: (1) catalog grid grouped by category, (2)
+  schema-driven form with `text` / `secret` / `select` / `textarea`
+  fields, an inline `Test connection` button, and a `Save & enable`
+  action. `framer-motion` for transitions, `react-hot-toast` for
+  feedback. Existing connector cards now render from the live API via
+  SWR.
+- **Marketplace + plugin manifests** —
+  `plugins/{azure-entra, azure-activity, azure-defender, gcp-cloud-audit,
+  gcp-scc, m365-audit, google-workspace, cloudflare, github}/plugin.yaml`
+  carry the new `schema()` shape so `scripts/build_marketplace.py` can
+  surface them in the in-app Marketplace, and
+  `apps/web/public/marketplace/index.json` is regenerated via
+  `pnpm marketplace:sync`.
+- **Documentation** — `apps/docs/docs/connectors/index.md` (catalog
+  landing with a connector walkthrough and category taxonomy), nine
+  per-connector setup walkthroughs (prereqs, scopes, screenshots),
+  `apps/docs/docs/operations/credentials.md` (vault threat model, key
+  rotation procedure, hosted-OAuth roadmap), and a new `Connectors`
+  section in `apps/docs/sidebars.ts`.
+
+#### Changed
+
+- **`services/api/app/core/config.py`** — added `AISOC_CREDENTIAL_KEY`,
+  `AISOC_CREDENTIAL_KEY_ROTATION_FROM`, `CONNECTORS_SERVICE_URL`,
+  `CONNECTORS_SERVICE_TIMEOUT_SECONDS`. Documented in `.env.example`.
+- **`services/api/app/main.py`** — the new `/api/v1/connectors` router is
+  mounted alongside the existing v1 router set.
+- **`services/connectors/app/api/router.py`** — schema responses lookup
+  the registry instead of returning a hardcoded dict; new
+  `POST /connectors/{connector_id}/test` endpoint runs an
+  unauthenticated dry-run `test_connection()` for the wizard's
+  pre-save Test step.
+- **`services/connectors/app/main.py`** — the FastAPI lifespan now wires
+  the scheduler, with `AISOC_CONNECTORS_DISABLE_SCHEDULER` honored for
+  tests and CI.
+
+#### Why this matters
+
+Before this pass: adding a connector meant editing Python in three places,
+shipping a release, and reading docs to discover the auth fields. Secrets
+sat in plain JSON in Postgres. After this pass: connectors are runtime
+data; secrets are encrypted with a key the operator controls; rotation
+is a documented procedure; the wizard's `Test connection` round-trip
+catches bad credentials before they're saved; and the per-connector docs
+each give an analyst a 5-minute path from "I have a tenant" to "alerts
+are flowing into the console."
+
+---
+
 ### Eval harness v1.4 — synthetic telemetry + per-template macros
 
 This pass addresses two questions raised on the public launch thread about

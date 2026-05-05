@@ -12,6 +12,7 @@ public, reproducible eval harness on every PR targeting `main` / `develop`.
 
 ## Capabilities
 
+- **Click-and-connect cloud connectors** — pick from a 14-connector catalog (Microsoft Entra, Azure Activity, Defender XDR, GCP Cloud Audit, GCP SCC, Microsoft 365 audit, Google Workspace, Cloudflare, GitHub, plus the original CrowdStrike / Splunk / AWS Security Hub / Okta / Microsoft Sentinel set), fill a schema-driven form, click `Test connection` for a live auth round-trip, and `Save & enable`. Secrets are encrypted at the application layer with a Fernet [`CredentialVault`](./operations/credentials) before they hit Postgres; an in-process APScheduler polls each enabled instance and pushes normalized OCSF events through to the ingest spine. Setup walkthroughs: [docs/connectors](./connectors).
 - **Investigation Ledger** — every prompt, response, evidence citation, and tool call the agent emits is logged step-by-step and replayable on each case.
 - **Public eval harness** — alert reduction (a real measurement on a fixed noisy stream) plus MITRE-tactic, investigation-completeness, and response-quality substrate self-consistency gates. Reproducible with one command and run in CI on every PR. The [eval harness page](./benchmark) documents what each suite does and does not measure.
 - **Ambient Copilot** — context-aware next-action suggestions on every alert, case, rule, and playbook page; one click runs the right agent tool with the right payload.
@@ -55,6 +56,8 @@ See the full [Architecture](./architecture) page for the detailed service map an
 ## Quick Links
 
 - [Quick Start](./quickstart) — `pnpm aisoc:demo`, under 5 minutes to a live investigation
+- [Connectors](./connectors) — click-and-connect catalog with 14 cloud / SaaS / SIEM / EDR / VCS sources
+- [Operations: Credentials](./operations/credentials) — `CredentialVault` threat model, key rotation, hosted-OAuth roadmap
 - [Public eval harness](./benchmark) — alert reduction (real measurement) plus MITRE / completeness / response-quality substrate self-consistency gates
 - [MCP Integration](./integrations/mcp) — connect Claude / Cursor / Continue / Cody
 - [Architecture](./architecture) — service map and data flow

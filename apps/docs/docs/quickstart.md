@@ -171,6 +171,38 @@ The mobile **Responder PWA** lives at
 [http://localhost:3000/responder](http://localhost:3000/responder) — install
 it on your phone via "Add to Home Screen" and sign in with a passkey.
 
+### 8. Connect your first source in 5 minutes
+
+The seeded demo data is enough to fly the UI through; pointing AiSOC at a
+live source takes about five minutes per connector and zero code changes:
+
+1. Generate a vault key and put it in `.env` —
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+   then set `AISOC_CREDENTIAL_KEY=<that-string>`. In dev the API will
+   bootstrap an ephemeral key if you skip this; in prod the API refuses
+   to start without one. Full threat model and rotation procedure:
+   [Operations: Credentials](./operations/credentials).
+2. Restart the `api` and `connectors` services so they pick up the key.
+3. In the console, click **Connectors** → **Add connector**, pick a
+   source from the catalog (Microsoft Entra, GCP Cloud Audit, GitHub, …
+   — full list at [docs/connectors](./connectors)), and fill out the
+   schema-driven form.
+4. Click **Test connection**. The wizard runs a live auth round-trip
+   against the vendor API before saving — bad credentials never hit the
+   database.
+5. Click **Save & enable**. The in-process scheduler picks up the
+   instance within 30 seconds, polls every 5 minutes by default, and
+   pushes normalized OCSF events to the ingest spine. Watch the
+   **Connectors** page for `events_added` to start ticking up; watch
+   `/alerts` for them to flow through fusion and detection.
+
+Each per-connector page (e.g.
+[Microsoft Entra](./connectors/azure-entra),
+[GCP Cloud Audit](./connectors/gcp-cloud-audit),
+[GitHub](./connectors/github)) walks through the cloud-side prereqs
+(Azure AD app, GCP service account, GitHub fine-grained PAT) with exact
+permissions / scopes / role assignments and a troubleshooting section.
+
 ### Console Tour
 
 | Page | URL | Description |
@@ -193,6 +225,8 @@ it on your phone via "Add to Home Screen" and sign in with a passkey.
 ## Next Steps
 
 - [Architecture deep-dive](./architecture)
+- [Connect your first source](./connectors)
+- [Operations: Credentials](./operations/credentials) — vault, key rotation, hosted-OAuth roadmap
 - [Concepts: Cases & Investigation Ledger](./concepts/cases)
 - [Write your first detection rule](./concepts/detections)
 - [Build a playbook](./concepts/playbooks)

@@ -42,8 +42,59 @@ step against a case and replayable in the UI), the **Ambient Copilot**
 playbooks), the **Responder PWA** (passkey-only mobile route at
 `/responder/*` with VAPID Web Push), the **public eval harness** (one
 real measurement plus three substrate self-consistency gates, run in CI),
-and the **MCP server** (`@aisoc/mcp`, exposes 11 tools to Claude / Cursor /
-Continue / Cody).
+the **MCP server** (`@aisoc/mcp`, exposes 11 tools to Claude / Cursor /
+Continue / Cody), and the **click-and-connect connector platform** (next
+section).
+
+## Connector polling and credential vault
+
+```
+Browser (Add connector wizard)
+    │
+    │ POST /api/v1/connectors  { type, auth_config, connector_config }
+    ▼
+services/api  ─── CredentialVault.encrypt() ───▶ vault:v1:<base64>
+    │
+    │ INSERT INTO connectors(auth_config_encrypted, ...)
+    ▼
+PostgreSQL  ◄────────────────────────────────────────────────────┐
+    │                                                            │
+    │ every 30s reload                                            │
+    ▼                                                             │
+services/connectors                                               │
+   ConnectorScheduler (APScheduler, in-process)                   │
+       │                                                          │
+       │  per-instance job @ poll_interval_seconds (default 300s) │
+       ▼                                                          │
+   _poll_one(instance)                                            │
+       │                                                          │
+       │ 1. CredentialVault.decrypt() ── reads same key as API ──┘
+       │ 2. construct connector class from registry
+       │ 3. await connector.fetch_alerts(since_seconds=300)
+       │ 4. [connector.normalize(e) for e in raw_events]
+       │ 5. await ingest_client.push_events(tenant_id, normalized)
+       │ 6. record_poll_success(events_added, elapsed_ms)
+       ▼
+services/ingest  POST /v1/ingest/batch  X-Tenant-ID: <uuid>
+       │
+       ▼
+   Kafka spine ──▶ Fusion · UEBA · Detections (existing pipeline)
+```
+
+The `services/api` service holds the **encrypt** authority for the vault
+and is the only writer to `connectors.auth_config_encrypted`.
+`services/connectors` ships a vendored read-path `decrypt_dict()` that
+pairs to the same `AISOC_CREDENTIAL_KEY` so the scheduler can decrypt
+per-poll without owning the write path. Key rotation is supported via
+`MultiFernet` and the `AISOC_CREDENTIAL_KEY_ROTATION_FROM` env var; the
+[Operations: Credentials](./operations/credentials) page documents the
+full rotation procedure, threat model, and hosted-OAuth roadmap.
+
+The wizard's `Test connection` button skips the vault entirely — it
+forwards the raw form values to a stateless `POST /connectors/{id}/test`
+endpoint on the connectors microservice, which constructs the connector
+in memory and calls `test_connection()`. Bad credentials never touch the
+database.
 
 ## Monorepo Layout
 

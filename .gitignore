@@ -76,6 +76,7 @@ eval_mitre_accuracy_report.json
 
 # Local progress tracking (per AGENTS.md preference, not committed)
 PROGRESS.md
+PR_TRIAGE.md
 
 # Detection-import upstream clones (populated by tools.detection_import)
 .import-cache/

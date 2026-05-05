@@ -94,19 +94,109 @@ before/after delta in the PR body.
 
 ## Adding New Connectors
 
-Connectors are one of the most valuable contributions. To add a new connector:
+Connectors are runtime data. There is no Dockerfile to build, no
+`docker-compose.yml` entry to add, and no separate microservice to ship —
+adding a connector means subclassing `BaseConnector`, declaring a `schema()`,
+adding a marketplace manifest, and writing tests. The
+[connector platform doc](apps/docs/docs/connectors/index.md) explains the
+end-to-end click-and-connect flow; this section covers the contributor
+mechanics.
 
-1. Create a new directory under `integrations/connectors/<name>/`
-2. Implement the connector following the pattern in `integrations/connectors/crowdstrike/`
-3. Required files:
-   - `main.py` — Entry point
-   - `connector.py` — Connector class implementing `BaseConnector`
-   - `Dockerfile` — Container build file
-   - `README.md` — Connector documentation
-4. Add connector config to `docker-compose.yml`
-5. Write integration tests
+### 1. Subclass `BaseConnector`
 
-Existing connectors you can use as references: `crowdstrike`, `aws-security-hub`, `microsoft-sentinel`, `splunk`, `okta`.
+Add a new file under `services/connectors/app/connectors/<name>.py` and
+subclass `BaseConnector` from
+[`services/connectors/app/connectors/base.py`](services/connectors/app/connectors/base.py).
+Implement four things:
+
+```python
+from .base import BaseConnector, ConnectorSchema, Field, OAuthHints
+
+class MyConnector(BaseConnector):
+    connector_category = "saas"  # one of: edr, siem, cloud, iam, saas, vcs, network
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            name="my-connector",
+            label="My Connector",
+            description="What this connector pulls and from where.",
+            category=cls.connector_category,
+            fields=[
+                Field(name="api_url", type="text", label="API URL", required=True),
+                Field(name="api_token", type="secret", label="API token", required=True, secret=True),
+            ],
+            oauth=OAuthHints(supported_in_hosted=False),
+            default_poll_interval_seconds=300,
+        )
+
+    async def test_connection(self) -> dict:
+        ...  # one cheap auth-checking call; return {"ok": bool, "message": str, ...}
+
+    async def fetch_alerts(self, since_seconds: int = 300) -> list[dict]:
+        ...  # raw vendor JSON, no normalization
+
+    def normalize(self, raw_event: dict) -> dict:
+        ...  # OCSF-aligned shape; severity ∈ {"info","low","medium","high"}
+```
+
+Field types are `text`, `secret`, `select` (with `options`), `textarea`,
+and `oauth`. Mark **anything sensitive** with `secret=True` — the
+frontend will render those fields as masked inputs and the API service
+will encrypt them via the [`CredentialVault`](apps/docs/docs/operations/credentials.md)
+before they hit Postgres.
+
+### 2. Register in the connector registry
+
+Add your class to the `_CONNECTOR_CLASSES` tuple and `__all__` in
+[`services/connectors/app/connectors/__init__.py`](services/connectors/app/connectors/__init__.py).
+The registry powers `/connectors/schemas` and the wizard's catalog grid —
+no other wiring required.
+
+### 3. Add a marketplace plugin manifest
+
+Drop a `plugins/<connector-id>/plugin.yaml` mirroring your `schema()`. See
+existing entries (`plugins/azure-entra/plugin.yaml`,
+`plugins/cloudflare/plugin.yaml`, etc.) for the exact shape. Run:
+
+```bash
+pnpm marketplace:sync   # builds marketplace/index.json + syncs to apps/web/public
+```
+
+### 4. Write tests
+
+`services/connectors/tests/test_<name>.py` with at minimum:
+
+- A schema-contract test (asserts `schema().name`, required fields, secret
+  markers, hosted-OAuth advertising).
+- `normalize()` unit tests covering every severity rule you implement —
+  use real attacker-shaped fixtures (BEC, role grants, defense evasion).
+- A `respx`-mocked `test_connection()` covering success + auth-failure
+  paths.
+- A `respx`-mocked `fetch_alerts()` roundtrip that asserts your
+  normalization produces a well-formed OCSF event.
+
+The bundled test suite already runs against 100+ tests across 9 connectors
+— look at `test_azure_connectors.py`, `test_gcp_connectors.py`, and
+`test_saas_connectors.py` for the shape.
+
+### 5. Docs
+
+Add `apps/docs/docs/connectors/<connector-id>.md` with prereqs, exact
+permissions/scopes, secret rotation walkthrough, severity heuristics
+table (mirrors what's in your `normalize()`), and a troubleshooting
+section. Add the new page to `apps/docs/sidebars.ts` under the
+`Connectors` category.
+
+### Reference connectors
+
+The 14 in-tree connectors are ordered roughly from simplest auth to most
+complex: `crowdstrike`, `okta`, `cloudflare` (API token), `splunk`,
+`aws_security_hub` (IAM keys), `azure_entra`, `azure_activity`,
+`azure_defender`, `m365_audit` (AAD app), `gcp_cloud_audit`, `gcp_scc`,
+`google_workspace` (service account JSON + JWT signing), `github`
+(fine-grained PAT), `microsoft_sentinel`. Pick the one whose auth model
+matches yours and copy from there.
 
 ## Community Marketplace
 
