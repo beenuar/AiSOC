@@ -60,42 +60,134 @@ DETECTION_CATEGORIES = {
     "data-exfil",
 }
 
-# Skip these top-level dirs under detections/ when walking - they are
-# not curated rules.
-DETECTION_SKIP_DIRS = {"fixtures", "sigma-imports", "community"}
+# Top-level dirs under detections/ that are NOT native rule directories
+# but contain rules in some tier (we walk these separately).
+DETECTION_NATIVE_SKIP = {
+    "fixtures",
+    "community",
+    "sigma-imports",
+    "car-imports",
+    "splunk-imports",
+    "chronicle-imports",
+}
+
+# Imported detection tiers: directory name -> source name used in the
+# `provenance.source` field of the rule (and the `source` we project
+# into the marketplace item).
+IMPORTED_TIER_DIRS: dict[str, str] = {
+    "sigma-imports": "sigmahq",
+    "car-imports": "mitre-car",
+    "splunk-imports": "splunk-security-content",
+    "chronicle-imports": "chronicle-detection-rules",
+}
 
 MITRE_RE = re.compile(r"mitre\.attack\.(t\d{4}(?:\.\d{3})?)", re.IGNORECASE)
 MITRE_LOOSE_RE = re.compile(r"mitre\.(t\d{4}(?:\.\d{3})?)", re.IGNORECASE)
+MITRE_BARE_RE = re.compile(r"^t\d{4}(?:\.\d{3})?$", re.IGNORECASE)
 
 
-def extract_mitre(tags: Iterable[str]) -> list[str]:
-    """Extract uppercase MITRE technique IDs from a tag list.
+def normalise_tags(raw: Any) -> list[str]:
+    """Flatten the ``tags`` block into a list of dotted strings.
 
-    Accepts both the strict ``mitre.attack.tXXXX[.YYY]`` form and the
-    looser ``mitre.tXXXX[.YYY]`` form that some playbooks use.
+    Native rules emit ``['mitre.attack.t1234', 'tlp.white']``. The detection
+    importers emit a dict shape: ``{'mitre': ['T1234'], 'categories': ['endpoint']}``.
+    Downstream code expects strings, so we project the dict shape into the
+    same dotted form (``mitre.attack.t1234``, ``categories.endpoint``).
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(t) for t in raw if isinstance(t, str)]
+    if isinstance(raw, dict):
+        out: list[str] = []
+        for key, values in raw.items():
+            if not isinstance(values, list):
+                continue
+            for v in values:
+                if not isinstance(v, str):
+                    continue
+                if str(key).lower() == "mitre":
+                    out.append(f"mitre.attack.{v.lower()}")
+                else:
+                    out.append(f"{key}.{v}")
+        return out
+    return []
+
+
+def extract_mitre(tags: Iterable[Any]) -> list[str]:
+    """Extract uppercase MITRE technique IDs from a tag block.
+
+    Accepts:
+      * the strict ``mitre.attack.tXXXX[.YYY]`` form,
+      * the looser ``mitre.tXXXX[.YYY]`` form that some playbooks use,
+      * bare ``T1234`` IDs as emitted by the detection importers under
+        ``tags.mitre``.
+
+    The argument may be a list of strings *or* a dict like
+    ``{'mitre': ['T1234'], 'categories': ['endpoint']}``.
     """
     out: list[str] = []
-    for tag in tags or []:
+
+    def _add(tid: str) -> None:
+        u = tid.upper()
+        if u not in out:
+            out.append(u)
+
+    if isinstance(tags, dict):
+        # Fast path for the importer shape — just consume tags['mitre'].
+        for v in tags.get("mitre") or []:
+            if isinstance(v, str) and MITRE_BARE_RE.match(v):
+                _add(v)
+
+    iterable = tags if isinstance(tags, (list, tuple)) else normalise_tags(tags)
+    for tag in iterable or []:
         if not isinstance(tag, str):
             continue
         m = MITRE_RE.search(tag) or MITRE_LOOSE_RE.search(tag)
         if m:
-            tid = m.group(1).upper()
-            if tid not in out:
-                out.append(tid)
+            _add(m.group(1))
+            continue
+        if MITRE_BARE_RE.match(tag):
+            _add(tag)
     return out
 
 
 def detection_files() -> list[Path]:
+    """Walk only the native detection tier (``detections/<category>/``)."""
     files: list[Path] = []
     if not DETECTIONS_DIR.exists():
         return files
     for child in sorted(DETECTIONS_DIR.iterdir()):
-        if not child.is_dir() or child.name in DETECTION_SKIP_DIRS:
+        if not child.is_dir() or child.name in DETECTION_NATIVE_SKIP:
             continue
         for f in sorted(child.rglob("*.yaml")):
             files.append(f)
     return files
+
+
+def imported_detection_files() -> list[tuple[Path, str, bool]]:
+    """Return (path, source_name, is_quarantined) for every imported rule.
+
+    Walks the tier directories declared in :data:`IMPORTED_TIER_DIRS`.
+    Rules nested under a ``_quarantine/`` directory are returned with
+    ``is_quarantined=True`` so the marketplace can surface them as
+    "imported, requires translation" instead of pretending they execute.
+    """
+    out: list[tuple[Path, str, bool]] = []
+    if not DETECTIONS_DIR.exists():
+        return out
+    for tier_dir, source_name in IMPORTED_TIER_DIRS.items():
+        root = DETECTIONS_DIR / tier_dir
+        if not root.exists():
+            continue
+        for f in sorted(root.rglob("*.yaml")):
+            try:
+                rel = f.relative_to(root).parts
+            except ValueError:
+                continue
+            quarantined = bool(rel) and rel[0] == "_quarantine"
+            out.append((f, source_name, quarantined))
+    return out
 
 
 def playbook_files() -> list[Path]:
@@ -142,7 +234,13 @@ def community_plugin_manifests() -> list[Path]:
     return out
 
 
-def build_detection_item(path: Path, *, source: str) -> dict[str, Any] | None:
+def build_detection_item(
+    path: Path,
+    *,
+    source: str,
+    tier: str,
+    quarantined: bool = False,
+) -> dict[str, Any] | None:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -150,10 +248,23 @@ def build_detection_item(path: Path, *, source: str) -> dict[str, Any] | None:
         return None
     if not isinstance(data, dict):
         return None
-    tags = list(data.get("tags") or [])
-    mitre = extract_mitre(tags)
+    raw_tags = data.get("tags")
+    mitre = extract_mitre(raw_tags or [])
+    tags = normalise_tags(raw_tags)
     category = data.get("category") or path.parent.name
-    return {
+    enabled = data.get("enabled")
+    if quarantined:
+        # Quarantine directory layout has the category two levels below the
+        # tier root (e.g. sigma-imports/_quarantine/cloud/foo.yaml).
+        if not data.get("category"):
+            try:
+                rel = path.relative_to(DETECTIONS_DIR).parts
+                if len(rel) >= 4 and rel[1] == "_quarantine":
+                    category = rel[2]
+            except ValueError:
+                pass
+
+    item: dict[str, Any] = {
         "id": data.get("id") or path.stem,
         "type": "detection",
         "name": data.get("name") or data.get("id") or path.stem,
@@ -166,13 +277,34 @@ def build_detection_item(path: Path, *, source: str) -> dict[str, Any] | None:
         "mitre_techniques": mitre,
         "log_source": (data.get("log_source") or {}).get("product"),
         "playbook": data.get("playbook"),
-        "verified": source == "core",
+        "verified": tier == "stable",
         "source": source,
+        "tier": tier,
+        "enabled": False if (quarantined or enabled is False) else True,
         "path": str(path.relative_to(REPO_ROOT)),
     }
+    if quarantined:
+        item["quarantine_reason"] = data.get("quarantine_reason") or (
+            "imported rule; upstream query language not directly executable "
+            "by the AiSOC engine yet"
+        )
+    provenance = data.get("provenance")
+    if isinstance(provenance, dict):
+        item["provenance"] = {
+            "source": provenance.get("source"),
+            "source_id": provenance.get("source_id"),
+            "source_commit": provenance.get("source_commit"),
+            "license": provenance.get("license"),
+            "license_url": provenance.get("license_url"),
+            "imported_at": provenance.get("imported_at"),
+            "upstream_path": provenance.get("upstream_path"),
+        }
+    return item
 
 
-def build_playbook_item(path: Path, *, source: str) -> dict[str, Any] | None:
+def build_playbook_item(
+    path: Path, *, source: str, tier: str
+) -> dict[str, Any] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -180,8 +312,9 @@ def build_playbook_item(path: Path, *, source: str) -> dict[str, Any] | None:
         return None
     if not isinstance(data, dict):
         return None
-    tags = list(data.get("tags") or [])
-    mitre = extract_mitre(tags)
+    raw_tags = data.get("tags")
+    mitre = extract_mitre(raw_tags or [])
+    tags = normalise_tags(raw_tags)
     trigger_block = data.get("trigger") or {}
     trigger = trigger_block.get("on") if isinstance(trigger_block, dict) else None
     severities = (
@@ -208,13 +341,17 @@ def build_playbook_item(path: Path, *, source: str) -> dict[str, Any] | None:
         "steps": len(data.get("steps") or []),
         "category": path.parent.name,
         "mitre_techniques": mitre,
-        "verified": source == "core",
+        "verified": tier == "stable",
         "source": source,
+        "tier": tier,
+        "enabled": True,
         "path": str(path.relative_to(REPO_ROOT)),
     }
 
 
-def build_plugin_item(path: Path, *, source: str) -> dict[str, Any] | None:
+def build_plugin_item(
+    path: Path, *, source: str, tier: str | None = None
+) -> dict[str, Any] | None:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -222,7 +359,7 @@ def build_plugin_item(path: Path, *, source: str) -> dict[str, Any] | None:
         return None
     if not isinstance(data, dict):
         return None
-    tags = list(data.get("tags") or [])
+    tags = normalise_tags(data.get("tags"))
     plugin_dir = path.parent
     has_python = (plugin_dir / "plugin.py").exists()
     has_go = (plugin_dir / "go" / "main.go").exists()
@@ -231,6 +368,24 @@ def build_plugin_item(path: Path, *, source: str) -> dict[str, Any] | None:
         sdks.append("python")
     if has_go:
         sdks.append("go")
+
+    # Resolve tier. A plugin manifest can self-declare ``tier:`` to mark
+    # itself as ``beta`` or ``community``. Otherwise we infer from source
+    # and how complete the implementation is. Manifest-only plugins (no
+    # plugin.py + no go/main.go) get demoted to ``beta`` so we don't pass
+    # off scaffolds as production-ready.
+    declared_tier = (data.get("tier") or "").strip().lower() or None
+    if declared_tier in {"stable", "beta", "community"}:
+        resolved_tier = declared_tier
+    elif tier is not None:
+        resolved_tier = tier
+    elif source == "community":
+        resolved_tier = "community"
+    elif not (has_python or has_go):
+        resolved_tier = "beta"
+    else:
+        resolved_tier = "stable"
+
     return {
         "id": data.get("id") or plugin_dir.name,
         "type": "plugin",
@@ -245,38 +400,56 @@ def build_plugin_item(path: Path, *, source: str) -> dict[str, Any] | None:
         "min_aisoc_version": data.get("min_aisoc_version"),
         "sdks": sdks,
         "mitre_techniques": [],
-        "verified": source == "core",
+        "verified": resolved_tier == "stable",
         "source": source,
+        "tier": resolved_tier,
         "path": str(path.relative_to(REPO_ROOT)),
     }
 
 
 def collect_items() -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+
+    # Detections — native (stable) tier
     for f in detection_files():
-        item = build_detection_item(f, source="core")
+        item = build_detection_item(f, source="core", tier="stable")
         if item:
             items.append(item)
+
+    # Detections — imported tiers (one per upstream corpus)
+    for f, src_name, quarantined in imported_detection_files():
+        item = build_detection_item(
+            f, source=src_name, tier="imported", quarantined=quarantined
+        )
+        if item:
+            items.append(item)
+
+    # Detections — community tier
     for f in community_detection_files():
-        item = build_detection_item(f, source="community")
+        item = build_detection_item(f, source="community", tier="community")
         if item:
             items.append(item)
+
+    # Playbooks
     for f in playbook_files():
-        item = build_playbook_item(f, source="core")
+        item = build_playbook_item(f, source="core", tier="stable")
         if item:
             items.append(item)
     for f in community_playbook_files():
-        item = build_playbook_item(f, source="community")
+        item = build_playbook_item(f, source="community", tier="community")
         if item:
             items.append(item)
+
+    # Plugins
     for f in plugin_manifests():
         item = build_plugin_item(f, source="core")
         if item:
             items.append(item)
     for f in community_plugin_manifests():
-        item = build_plugin_item(f, source="community")
+        item = build_plugin_item(f, source="community", tier="community")
         if item:
             items.append(item)
+
     return items
 
 
@@ -311,18 +484,51 @@ def categories_block(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def coverage_block(items: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute MITRE ATT&CK coverage across detections + playbooks."""
-    techniques: dict[str, int] = {}
+def _tier_breakdown(items: list[dict[str, Any]]) -> dict[str, int]:
+    """Count items per tier (stable, beta, imported, community)."""
+    counts: dict[str, int] = {}
     for item in items:
+        tier = item.get("tier") or "stable"
+        counts[tier] = counts.get(tier, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _detection_tier_breakdown(items: list[dict[str, Any]]) -> dict[str, int]:
+    """Count detection items per tier — the main 'are we Wazuh-scale' headline."""
+    counts: dict[str, int] = {}
+    for item in items:
+        if item.get("type") != "detection":
+            continue
+        tier = item.get("tier") or "stable"
+        counts[tier] = counts.get(tier, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def coverage_block(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute MITRE ATT&CK coverage across detections + playbooks.
+
+    Returns aggregate counts per technique plus a per-tier breakdown so the
+    UI can render a stacked coverage matrix (native vs imported vs community)
+    rather than a single flat number.
+    """
+    techniques: dict[str, int] = {}
+    by_tier: dict[str, dict[str, int]] = {}
+    for item in items:
+        tier = item.get("tier") or "stable"
         for tid in item.get("mitre_techniques") or []:
             techniques[tid] = techniques.get(tid, 0) + 1
+            tier_map = by_tier.setdefault(tier, {})
+            tier_map[tid] = tier_map.get(tid, 0) + 1
+
     return {
         "techniques": dict(sorted(techniques.items())),
         "unique_techniques": len(techniques),
         "total_with_mitre": sum(
             1 for i in items if i.get("mitre_techniques")
         ),
+        "by_tier": {
+            tier: dict(sorted(tids.items())) for tier, tids in by_tier.items()
+        },
     }
 
 
@@ -344,6 +550,11 @@ def build_index() -> dict[str, Any]:
             "plugins": sum(1 for i in items if i["type"] == "plugin"),
             "verified": sum(1 for i in items if i.get("verified")),
             "community": sum(1 for i in items if i.get("source") == "community"),
+            "by_tier": _tier_breakdown(items),
+            "detections_by_tier": _detection_tier_breakdown(items),
+            "quarantined": sum(
+                1 for i in items if i.get("quarantine_reason")
+            ),
         },
         "mitre_coverage": coverage_block(items),
         "items": items,

@@ -21,7 +21,26 @@ export interface MarketplaceItem {
   rating_count?: number;
   // provenance
   verified?: boolean;
-  source?: 'core' | 'community';
+  source?:
+    | 'core'
+    | 'community'
+    | 'sigmahq'
+    | 'mitre-car'
+    | 'splunk-security-content'
+    | 'chronicle-detection-rules'
+    | string;
+  tier?: 'stable' | 'beta' | 'imported' | 'community';
+  enabled?: boolean;
+  quarantine_reason?: string;
+  provenance?: {
+    source?: string | null;
+    source_id?: string | null;
+    source_commit?: string | null;
+    license?: string | null;
+    license_url?: string | null;
+    imported_at?: string | null;
+    upstream_path?: string | null;
+  };
   path?: string;
   // playbook-specific
   trigger?: string;
@@ -44,6 +63,7 @@ interface MitreCoverage {
   techniques: Record<string, number>;
   unique_techniques: number;
   total_with_mitre: number;
+  by_tier?: Record<string, Record<string, number>>;
 }
 
 interface MarketplaceStats {
@@ -53,6 +73,9 @@ interface MarketplaceStats {
   plugins: number;
   verified: number;
   community: number;
+  by_tier?: Record<string, number>;
+  detections_by_tier?: Record<string, number>;
+  quarantined?: number;
 }
 
 interface MarketplaceIndex {
@@ -375,6 +398,12 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
 type SortOption = 'name' | 'install_count' | 'rating' | 'newest';
 type SourceFilter = 'all' | 'core' | 'community';
 type SdkFilter = 'all' | 'python' | 'go' | 'both';
+// stable = native AiSOC content, hand-authored with fixture tests
+// beta   = working but not fully covered (e.g. Tier-2 plugin stubs)
+// imported = upstream content (SigmaHQ, Splunk Security Content, Chronicle, MITRE CAR)
+//            parsed and provenance-tagged but not fixture-tested per AiSOC's bar
+// community = third-party contributions
+type TierFilter = 'all' | 'stable' | 'beta' | 'imported' | 'community';
 
 // Fetch the installed-set, but treat 401/404 as "not signed in / API offline"
 // so the marketplace stays usable in static demos and unauthenticated previews.
@@ -512,6 +541,10 @@ export function MarketplaceView() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [sdkFilter, setSdkFilter] = useState<SdkFilter>('all');
+  // Default to stable so that a working `cloudflare-waf` doesn't look identical
+  // to a 5,937-rule pile of imported Sigma content. Users opt in to imported
+  // content explicitly via the chip.
+  const [tierFilter, setTierFilter] = useState<TierFilter>('stable');
   const [mitreFilter, setMitreFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -540,6 +573,25 @@ export function MarketplaceView() {
     return Array.from(set).sort();
   }, [data]);
 
+  // Counts per tier so chips can show "Stable (865)" etc. — helps users
+  // understand at a glance that imported content dwarfs native content.
+  const tierCounts = useMemo(() => {
+    const counts: Record<TierFilter, number> = {
+      all: 0,
+      stable: 0,
+      beta: 0,
+      imported: 0,
+      community: 0,
+    };
+    if (!data?.items) return counts;
+    counts.all = data.items.length;
+    for (const it of data.items) {
+      const tier = (it.tier ?? 'stable') as TierFilter;
+      if (tier in counts) counts[tier]++;
+    }
+    return counts;
+  }, [data]);
+
   const items = useMemo(() => {
     if (!data?.items) return [];
 
@@ -548,6 +600,13 @@ export function MarketplaceView() {
       if (severityFilter !== 'all' && item.severity !== severityFilter) return false;
       if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
       if (sourceFilter !== 'all' && (item.source ?? 'core') !== sourceFilter) return false;
+      if (tierFilter !== 'all') {
+        // Items with no explicit tier are treated as `stable` so existing
+        // hand-curated content (Cloudflare WAF, native detection rules)
+        // surfaces by default without requiring a backfill of every entry.
+        const itemTier = item.tier ?? 'stable';
+        if (itemTier !== tierFilter) return false;
+      }
       if (mitreFilter !== 'all' && !(item.mitre_techniques ?? []).includes(mitreFilter)) return false;
       if (sdkFilter !== 'all') {
         if (item.type !== 'plugin') return false;
@@ -604,6 +663,7 @@ export function MarketplaceView() {
     categoryFilter,
     sourceFilter,
     sdkFilter,
+    tierFilter,
     mitreFilter,
     sortBy,
     sortOrder,
@@ -638,6 +698,9 @@ export function MarketplaceView() {
     setCategoryFilter('all');
     setSourceFilter('all');
     setSdkFilter('all');
+    // Reset tier to its default (`stable`) rather than `all` so users land
+    // back on the curated view, not on 6,000+ rules.
+    setTierFilter('stable');
     setMitreFilter('all');
   };
 
@@ -723,7 +786,7 @@ export function MarketplaceView() {
                 typeFilter === t ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
               )}
             >
-              {t === 'all' ? 'All' : `${TYPE_ICONS[t]} ${t.charAt(0).toUpperCase() + t.slice(1)}s`}
+              {t === 'all' ? 'All' : `${t.charAt(0).toUpperCase() + t.slice(1)}s`}
             </button>
           ))}
         </div>
@@ -742,6 +805,32 @@ export function MarketplaceView() {
               {s === 'all' ? 'All sources' : s}
             </button>
           ))}
+        </div>
+
+        {/* Tier filter — defaults to `stable` so working integrations and
+            hand-authored detections don't get drowned in imported Sigma
+            content. Users opt into imported/beta/community explicitly. */}
+        <div
+          className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1"
+          title="Stable = native AiSOC content. Imported = upstream rules (SigmaHQ, Splunk, Chronicle, CAR), parseable but not fixture-tested. Beta = working but partial. Community = third-party."
+        >
+          {(['all', 'stable', 'beta', 'imported', 'community'] as const).map((t) => {
+            const count = tierCounts[t];
+            const label = t === 'all' ? 'All tiers' : t.charAt(0).toUpperCase() + t.slice(1);
+            return (
+              <button
+                key={t}
+                onClick={() => setTierFilter(t)}
+                className={clsx(
+                  'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  tierFilter === t ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                )}
+              >
+                {label}
+                {count > 0 && <span className="ml-1 text-zinc-500">({count})</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 

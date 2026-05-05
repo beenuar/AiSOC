@@ -20,14 +20,15 @@ API contract change. The ``content_sha256`` field returned at install time
 gives the UI something stable to display and lets us evolve to a DB-backed
 store later.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -59,10 +60,7 @@ def _resolve_index_path() -> Path:
             return p
     raise HTTPException(
         status_code=503,
-        detail=(
-            "marketplace/index.json not found. Run "
-            "`pnpm marketplace:build` to generate it."
-        ),
+        detail=("marketplace/index.json not found. Run `pnpm marketplace:build` to generate it."),
     )
 
 
@@ -75,11 +73,7 @@ def _load_index() -> dict[str, Any]:
     path = _resolve_index_path()
     mtime = path.stat().st_mtime
     with _index_lock:
-        if (
-            _index_cache["data"] is None
-            or _index_cache["path"] != str(path)
-            or _index_cache["mtime"] != mtime
-        ):
+        if _index_cache["data"] is None or _index_cache["path"] != str(path) or _index_cache["mtime"] != mtime:
             try:
                 _index_cache["data"] = json.loads(path.read_text(encoding="utf-8"))
             except Exception as exc:
@@ -113,7 +107,7 @@ def _install_record(
         "version": item.get("version", "1.0.0"),
         "path": item.get("path"),
         "content_sha256": sha256,
-        "installed_at": datetime.now(timezone.utc).isoformat(),
+        "installed_at": datetime.now(UTC).isoformat(),
         "installed_by": user_email,
         "tenant_id": tenant_id,
     }
@@ -173,8 +167,8 @@ class MarketplaceItemSummary(BaseModel):
     name: str
     description: str = ""
     version: str = "1.0.0"
-    severity: Optional[str] = None
-    category: Optional[str] = None
+    severity: str | None = None
+    category: str | None = None
     source: str = "core"
     verified: bool = False
     sdks: list[str] = []
@@ -196,18 +190,16 @@ class MarketplaceListResponse(BaseModel):
 @router.get("", response_model=MarketplaceListResponse)
 async def list_marketplace(
     current_user: AuthUser,
-    type_filter: Optional[Literal["detection", "playbook", "plugin"]] = Query(
-        None, alias="type"
-    ),
-    mitre: Optional[str] = Query(
+    type_filter: Literal["detection", "playbook", "plugin"] | None = Query(None, alias="type"),
+    mitre: str | None = Query(
         None,
         description="MITRE ATT&CK technique ID, e.g. T1078 or T1078.004",
     ),
-    severity: Optional[str] = Query(None),
-    category: Optional[str] = Query(None),
-    source: Optional[Literal["core", "community"]] = Query(None),
-    sdk: Optional[Literal["python", "go", "both"]] = Query(None),
-    search: Optional[str] = Query(None, max_length=200),
+    severity: str | None = Query(None),
+    category: str | None = Query(None),
+    source: Literal["core", "community"] | None = Query(None),
+    sdk: Literal["python", "go", "both"] | None = Query(None),
+    search: str | None = Query(None, max_length=200),
 ) -> MarketplaceListResponse:
     """Return the marketplace index with the same filters the UI exposes."""
     idx = _load_index()
@@ -230,9 +222,7 @@ async def list_marketplace(
             if it.get("type") != "plugin":
                 continue
             sdks = it.get("sdks") or []
-            if sdk == "both" and not (
-                "python" in sdks and "go" in sdks
-            ):
+            if sdk == "both" and not ("python" in sdks and "go" in sdks):
                 continue
             if sdk in ("python", "go") and sdk not in sdks:
                 continue
@@ -252,11 +242,7 @@ async def list_marketplace(
 
     tenant_id = str(current_user.tenant_id)
     with _installed_lock:
-        installed_ids = [
-            key[2]
-            for key in _installed
-            if key[0] == tenant_id
-        ]
+        installed_ids = [key[2] for key in _installed if key[0] == tenant_id]
 
     return MarketplaceListResponse(
         total=len(items),
@@ -322,7 +308,7 @@ async def install_marketplace_item(
             # Idempotent: re-installing returns the existing record but
             # refreshes the sha (e.g. file edited since last install).
             existing["content_sha256"] = sha
-            existing["installed_at"] = datetime.now(timezone.utc).isoformat()
+            existing["installed_at"] = datetime.now(UTC).isoformat()
             return InstallResponse(
                 id=existing["id"],
                 type=existing["type"],
