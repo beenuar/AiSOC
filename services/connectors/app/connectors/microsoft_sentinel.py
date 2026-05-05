@@ -2,9 +2,10 @@
 Microsoft Sentinel connector.
 Fetches security incidents from Microsoft Sentinel via Azure REST API.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -65,7 +66,7 @@ class MicrosoftSentinelConnector(BaseConnector):
         if not self._access_token:
             await self._authenticate()
 
-        since = (datetime.now(timezone.utc) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         api_url = _SENTINEL_API.format(
             sub_id=self._subscription_id,
             rg=self._resource_group,

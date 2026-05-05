@@ -3,11 +3,12 @@ Qdrant vector storage for semantic threat intelligence search.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
+import structlog
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     Distance,
@@ -43,9 +44,7 @@ class QdrantStore:
             if col not in existing_names:
                 await self._client.create_collection(
                     collection_name=col,
-                    vectors_config=VectorParams(
-                        size=_EMBEDDING_DIM, distance=Distance.COSINE
-                    ),
+                    vectors_config=VectorParams(size=_EMBEDDING_DIM, distance=Distance.COSINE),
                 )
                 logger.info("Created Qdrant collection", collection=col)
 
@@ -68,6 +67,7 @@ class QdrantStore:
 
         # Qdrant expects integer IDs — use hash of value+type for stable IDs
         import hashlib
+
         points = [
             PointStruct(
                 id=abs(int(hashlib.md5(f"{ioc['type']}:{ioc['value']}".encode()).hexdigest(), 16)) % (2**63),
@@ -88,10 +88,11 @@ class QdrantStore:
         if not actors:
             return
 
-        texts = [f"{a.get('name','')} {a.get('description','')}" for a in actors]
+        texts = [f"{a.get('name', '')} {a.get('description', '')}" for a in actors]
         vectors = await self._embed(texts)
 
         import hashlib
+
         points = [
             PointStruct(
                 id=abs(int(hashlib.md5(actor.get("name", "").encode()).hexdigest(), 16)) % (2**63),
@@ -127,6 +128,7 @@ class QdrantStore:
         """Generate embeddings using fastembed or a stub."""
         try:
             from fastembed import TextEmbedding
+
             model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
             embeddings = list(model.embed(texts))
             # Pad/truncate to expected dimension

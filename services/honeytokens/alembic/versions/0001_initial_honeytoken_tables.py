@@ -4,11 +4,13 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-05-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+from alembic import op
 
 revision = "0001"
 down_revision = None
@@ -33,12 +35,8 @@ def upgrade() -> None:
         sa.Column("metadata", JSONB, nullable=False, server_default="{}"),
         sa.Column("status", sa.String(16), nullable=False, server_default="active"),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("created_by", sa.String(128), nullable=True),
     )
     op.create_index("ix_honeytokens_tenant_status", "honeytokens", ["tenant_id", "status"])
@@ -76,9 +74,7 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index(
-        "ix_honeytoken_triggers_triggered_at", "honeytoken_triggers", ["triggered_at"]
-    )
+    op.create_index("ix_honeytoken_triggers_triggered_at", "honeytoken_triggers", ["triggered_at"])
 
 
 def downgrade() -> None:

@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models for the Purple Team service."""
+
 from __future__ import annotations
 
 import uuid
@@ -18,9 +19,7 @@ class AtomicTest(Base):
 
     __tablename__ = "purple_team_atomic_tests"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 
     # ATT&CK reference
@@ -41,9 +40,7 @@ class AtomicTest(Base):
     # Raw YAML content
     raw_yaml: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class TestExecution(Base):
@@ -51,9 +48,7 @@ class TestExecution(Base):
 
     __tablename__ = "purple_team_executions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 
     # What was executed
@@ -86,9 +81,7 @@ class TestExecution(Base):
     # Who ran it
     executed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class TabletopSession(Base):
@@ -96,9 +89,7 @@ class TabletopSession(Base):
 
     __tablename__ = "purple_team_tabletop_sessions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 
     name: Mapped[str] = mapped_column(String(256), nullable=False)
@@ -111,14 +102,8 @@ class TabletopSession(Base):
     # Structured findings from the discussion
     findings: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
 
-    status: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default="active"
-    )  # active | completed | archived
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")  # active | completed | archived
 
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

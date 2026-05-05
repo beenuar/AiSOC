@@ -1,19 +1,19 @@
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.router import router
+from app.api.contextual import router as contextual_router
 from app.api.investigate import router as investigate_router
 from app.api.playbooks import router as playbook_router
-from app.api.contextual import router as contextual_router
+from app.api.router import router
 from app.core.telemetry import instrument_app
 from app.investigator import ledger as investigation_ledger
 from app.playbook import PlaybookStore
-from app.tools.mitre_full import load_attck_corpus, embed_techniques_into_qdrant
+from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 
 logger = structlog.get_logger()
 
@@ -93,13 +93,14 @@ instrument_app(app)
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
-app.include_router(playbook_router)     # prefix: /api/v1/playbooks
-app.include_router(contextual_router)   # prefix: /api/v1/contextual
+app.include_router(playbook_router)  # prefix: /api/v1/playbooks
+app.include_router(contextual_router)  # prefix: /api/v1/contextual
 
 
 @app.get("/health")
 async def health():
     from app.tools.mitre_full import get_coverage_summary
+
     summary = get_coverage_summary()
     return {
         "status": "healthy",

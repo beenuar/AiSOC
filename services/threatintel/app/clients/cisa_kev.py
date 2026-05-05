@@ -3,12 +3,13 @@ CISA Known Exploited Vulnerabilities (KEV) catalog client.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
 import httpx
+import structlog
 
 logger = structlog.get_logger(__name__)
 

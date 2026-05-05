@@ -35,6 +35,35 @@ jobs:
       - run: pnpm tsc --noEmit
 
   # ──────────────────────────────────────────────
+  # Vitest smoke tests for the Next.js web app
+  #   The web app used to have *zero* tests gated in CI — lint + typecheck
+  #   were the only signal. These smoke tests render the components a
+  #   reviewer cares about (Hero, ComparisonTable, Sidebar, TopBar,
+  #   MarketplaceView, CaseWorkspace) and assert on the wording we agreed
+  #   to keep honest (no "every commit", alert reduction tagged as a
+  #   measurement, etc.). They run with jsdom; no browser required.
+  # ──────────────────────────────────────────────
+  web-test:
+    name: Web — Vitest smoke tests
+    runs-on: ubuntu-latest
+    needs: web-lint
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  # ──────────────────────────────────────────────
   # Build the Next.js web app
   # ──────────────────────────────────────────────
   web-build:
@@ -100,10 +129,14 @@ jobs:
           python-version: '3.12'
       - name: Install Ruff & Mypy
         run: pip install ruff mypy
-      - name: Ruff lint
-        run: ruff check services/api services/actions services/fusion services/agents || true
-      - name: Ruff format check
-        run: ruff format --check services/api services/actions services/fusion services/agents || true
+      # All services share the repo-root `ruff.toml`. Linting and formatting
+      # cover every Python service, not just the original four — the gate
+      # used to soft-fail with `|| true`; that's gone, so this is the real
+      # signal.
+      - name: Ruff lint (all services)
+        run: ruff check services/
+      - name: Ruff format check (all services)
+        run: ruff format --check services/
 
   python-test:
     name: Python — Tests
@@ -134,7 +167,10 @@ jobs:
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
         run: pytest tests/ -v --tb=short
-      - name: Run agents unit tests (Pillar-1 eval suites)
+      - name: Run agents unit tests (Pillar-1 eval suites + audit helpers)
+        # `test_audit_helpers.py` imports `app.investigator.state` directly
+        # (it stubs out the package __init__ to avoid pulling in LangGraph),
+        # so it only needs stdlib + pydantic — already installed via API_DEPS.
         run: |
           pip install --quiet pytest pytest-asyncio
           cd services/agents
@@ -143,7 +179,100 @@ jobs:
             tests/test_alert_reduction.py \
             tests/test_investigation_completeness.py \
             tests/test_response_quality.py \
+            tests/test_audit_helpers.py \
             -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # Python micro-services unit tests
+  #   `services/fusion`, `services/honeytokens`, and `services/purple-team`
+  #   used to ship with no Python tests gated in CI at all — only ruff +
+  #   format check. These suites cover the *pure* helpers in each service
+  #   (alert fingerprinting/correlation keys, honeytoken generators,
+  #   ATT&CK coverage matrix builder) — they need pydantic/pydantic-settings
+  #   only, no Postgres, Redis, or Kafka. Real signal, fast.
+  # ──────────────────────────────────────────────
+  python-services-test:
+    name: Python — Service unit tests (fusion, honeytokens, purple-team)
+    runs-on: ubuntu-latest
+    needs: python-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install minimal deps
+        run: pip install --quiet pydantic pydantic-settings pytest
+      - name: Run fusion unit tests
+        working-directory: services/fusion
+        run: python -m pytest tests/ -v --tb=short
+      - name: Run honeytokens unit tests
+        working-directory: services/honeytokens
+        run: python -m pytest tests/ -v --tb=short
+      - name: Run purple-team unit tests
+        working-directory: services/purple-team
+        run: python -m pytest tests/ -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # SDK packages (Python)
+  #   The three Python SDKs ship as pip packages but never had a CI gate —
+  #   regressions could land silently. This job installs each in editable
+  #   mode and runs its bundled pytest suite. They're intentionally light
+  #   on dependencies (httpx, pydantic, click, pyyaml) so the job is fast.
+  # ──────────────────────────────────────────────
+  sdk-python-test:
+    name: SDK — Python (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install SDKs in editable mode (with dev extras)
+        # Each `[dev]` extra pins pytest + pytest-asyncio; pytest-httpx is
+        # only needed by `aisoc-sdk` (the typed client tests), so we add it
+        # explicitly rather than expanding the package extras.
+        run: |
+          pip install --quiet \
+            -e packages/plugin-sdk-py \
+            -e packages/sdk-py \
+            -e packages/aisoc-cli \
+            pytest pytest-asyncio pytest-httpx
+      - name: Run aisoc-plugin-sdk tests
+        run: pytest packages/plugin-sdk-py/tests/ -v --tb=short
+      - name: Run aisoc-sdk tests
+        run: pytest packages/sdk-py/tests/ -v --tb=short
+      - name: Run aisoc-cli tests
+        run: pytest packages/aisoc-cli/tests/ -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # SDK packages (TypeScript)
+  #   `@aisoc/sdk` is a typed openapi-fetch client with a self-contained
+  #   vitest suite (HTTP mocked, no real server). Same pnpm workspace
+  #   pattern as the MCP job — install once at the root, then filter.
+  # ──────────────────────────────────────────────
+  sdk-ts-test:
+    name: SDK — TypeScript (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm --filter @aisoc/sdk typecheck
+      - name: Test
+        run: pnpm --filter @aisoc/sdk test
+      - name: Build
+        run: pnpm --filter @aisoc/sdk build
 
   # ──────────────────────────────────────────────
   # Go services (enrichment, ingest, demo-producer)
@@ -171,7 +300,35 @@ jobs:
       - name: Test
         run: |
           cd services/${{ matrix.service }}
-          go test ./... -count=1 || true
+          go test ./... -count=1
+
+  # ──────────────────────────────────────────────
+  # Go SDK (`packages/plugin-sdk-go`)
+  #   Lives outside `services/` so the matrix above doesn't pick it up.
+  #   Has `client_test.go`, `loader_test.go`, `registry_test.go` already —
+  #   they were never gated. Build + vet + test, no soft-fails.
+  # ──────────────────────────────────────────────
+  sdk-go-test:
+    name: SDK — Go (build, vet, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: packages/plugin-sdk-go/go.sum
+      - name: Build
+        run: |
+          cd packages/plugin-sdk-go
+          go build ./...
+      - name: Vet
+        run: |
+          cd packages/plugin-sdk-go
+          go vet ./...
+      - name: Test
+        run: |
+          cd packages/plugin-sdk-go
+          go test ./... -count=1
 
   # ──────────────────────────────────────────────
   # Pillar-1 Eval Gate: 4-suite eval harness (200-incident synthetic dataset)

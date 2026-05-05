@@ -3,13 +3,13 @@ TAXII 2.1 client for fetching STIX bundles from threat intelligence feeds.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import json
-import structlog
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -76,9 +76,7 @@ class TaxiiClient:
 
                 root = api_root.strip("/") if api_root else ""
                 root_segment = f"/{root}" if root else ""
-                url = (
-                    f"{self._base_url}{root_segment}/collections/{collection_id}/objects/"
-                )
+                url = f"{self._base_url}{root_segment}/collections/{collection_id}/objects/"
                 try:
                     resp = await client.get(url, params=params)
                     resp.raise_for_status()

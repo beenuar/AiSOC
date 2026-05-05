@@ -31,6 +31,7 @@ VALID_EVENT_TYPES = {"detected", "acknowledged", "resolved", "closed"}
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
+
 class SLAConfigOut(BaseModel):
     id: uuid.UUID
     severity: str
@@ -73,6 +74,7 @@ class SLAEventOut(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/metrics")
 async def get_sla_metrics(
     current_user: Annotated[AuthUser, Depends(require_permission("sla:read"))],
@@ -89,11 +91,7 @@ async def get_sla_config(
     db: TenantDBSession,
 ) -> list[SLAConfigOut]:
     """Return per-severity SLA configuration for the tenant."""
-    rows = await db.execute(
-        select(TenantSLAConfig).where(
-            TenantSLAConfig.tenant_id == current_user.tenant_id
-        )
-    )
+    rows = await db.execute(select(TenantSLAConfig).where(TenantSLAConfig.tenant_id == current_user.tenant_id))
     return rows.scalars().all()  # type: ignore[return-value]
 
 
@@ -161,7 +159,9 @@ async def record_sla_event(
         event_type=body.event_type,
         occurred_at=body.occurred_at or datetime.utcnow(),
         actor_id=current_user.id,
-        metadata=body.metadata,
+        # ORM attr is `metadata_` (DB column is still `metadata`) — `metadata`
+        # itself is reserved on Declarative `Base`.
+        metadata_=body.metadata,
     )
     db.add(event)
     await db.commit()

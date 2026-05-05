@@ -1,6 +1,7 @@
 """
 Endpoint action executors: isolate host, quarantine file, kill process.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

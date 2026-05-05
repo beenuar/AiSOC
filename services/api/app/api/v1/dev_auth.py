@@ -11,6 +11,7 @@ data the UI sees actually belongs to the user that the API hands back.
 Production safety: this module reads ``ENV`` at call time and refuses to
 return a demo user unless ``ENV in {development, dev, local, demo}``.
 """
+
 from __future__ import annotations
 
 import os

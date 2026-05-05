@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.services.coverage import TACTIC_ORDER, build_coverage_matrix
 
 
@@ -41,9 +40,7 @@ class TestBuildCoverageMatrix:
         assert result["summary"]["total_techniques"] == 0
 
     def test_single_passing_execution_with_detection(self) -> None:
-        result = build_coverage_matrix(
-            [_exec("T1078", "initial-access", status="success", detected=True)]
-        )
+        result = build_coverage_matrix([_exec("T1078", "initial-access", status="success", detected=True)])
         techs = result["techniques"]["initial-access"]
         assert len(techs) == 1
         t = techs[0]

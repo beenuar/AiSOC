@@ -3,11 +3,13 @@ STIX 2.1 object parser — converts STIX objects to normalized IOC/actor dicts.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import hashlib
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -88,26 +90,29 @@ class StixParser:
 
         # Extract values from STIX pattern  e.g. [ipv4-addr:value = '1.2.3.4']
         import re
+
         # Simple regex extraction
         for match in re.finditer(r"\[(\S+):(\S+)\s*=\s*'([^']+)'\]", pattern):
             obj_type, prop, value = match.groups()
             ioc_type = self._map_stix_type(obj_type, prop)
             if not ioc_type:
                 continue
-            iocs.append({
-                "type": ioc_type,
-                "value": value,
-                "labels": labels,
-                "name": name,
-                "confidence": confidence,
-                "valid_from": valid_from,
-                "valid_until": valid_until,
-                "stix_id": obj.get("id"),
-                "source": "stix",
-                "source_ref": obj.get("id", ""),
-                "tags": labels,
-                "tlp": self._extract_marking(obj),
-            })
+            iocs.append(
+                {
+                    "type": ioc_type,
+                    "value": value,
+                    "labels": labels,
+                    "name": name,
+                    "confidence": confidence,
+                    "valid_from": valid_from,
+                    "valid_until": valid_until,
+                    "stix_id": obj.get("id"),
+                    "source": "stix",
+                    "source_ref": obj.get("id", ""),
+                    "tags": labels,
+                    "tlp": self._extract_marking(obj),
+                }
+            )
         return iocs
 
     def _observable_to_ioc(self, obj: dict[str, Any]) -> dict[str, Any] | None:
@@ -165,22 +170,24 @@ class StixParser:
         actors = []
         for obj in self._objects:
             if obj.get("type") in ("threat-actor", "intrusion-set"):
-                actors.append({
-                    "stix_id": obj.get("id"),
-                    "type": obj.get("type"),
-                    "name": obj.get("name", ""),
-                    "description": obj.get("description", ""),
-                    "aliases": obj.get("aliases", []),
-                    "goals": obj.get("goals", []),
-                    "labels": obj.get("labels", []),
-                    "sophistication": obj.get("sophistication", ""),
-                    "resource_level": obj.get("resource_level", ""),
-                    "primary_motivation": obj.get("primary_motivation", ""),
-                    "first_seen": obj.get("first_seen", ""),
-                    "last_seen": obj.get("last_seen", ""),
-                    "source": "stix",
-                    "tlp": self._extract_marking(obj),
-                })
+                actors.append(
+                    {
+                        "stix_id": obj.get("id"),
+                        "type": obj.get("type"),
+                        "name": obj.get("name", ""),
+                        "description": obj.get("description", ""),
+                        "aliases": obj.get("aliases", []),
+                        "goals": obj.get("goals", []),
+                        "labels": obj.get("labels", []),
+                        "sophistication": obj.get("sophistication", ""),
+                        "resource_level": obj.get("resource_level", ""),
+                        "primary_motivation": obj.get("primary_motivation", ""),
+                        "first_seen": obj.get("first_seen", ""),
+                        "last_seen": obj.get("last_seen", ""),
+                        "source": "stix",
+                        "tlp": self._extract_marking(obj),
+                    }
+                )
         return actors
 
     # ─── Relationships ────────────────────────────────────────────────────────
@@ -194,15 +201,17 @@ class StixParser:
             rel_type = obj.get("relationship_type", "")
             if rel_type not in (_REL_USES, _REL_INDICATES, _REL_ATTRIBUTED_TO, _REL_TARGETS, _REL_MITIGATES):
                 continue
-            rels.append({
-                "stix_id": obj.get("id"),
-                "rel_type": rel_type,
-                "source_ref": obj.get("source_ref", ""),
-                "target_ref": obj.get("target_ref", ""),
-                "description": obj.get("description", ""),
-                "start_time": obj.get("start_time", ""),
-                "stop_time": obj.get("stop_time", ""),
-            })
+            rels.append(
+                {
+                    "stix_id": obj.get("id"),
+                    "rel_type": rel_type,
+                    "source_ref": obj.get("source_ref", ""),
+                    "target_ref": obj.get("target_ref", ""),
+                    "description": obj.get("description", ""),
+                    "start_time": obj.get("start_time", ""),
+                    "stop_time": obj.get("stop_time", ""),
+                }
+            )
         return rels
 
     # ─── Helpers ──────────────────────────────────────────────────────────────

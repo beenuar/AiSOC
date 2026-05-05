@@ -1,8 +1,9 @@
 """Case management ORM models."""
+
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,9 +53,7 @@ class Case(Base):
     lessons_learned: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -62,9 +61,7 @@ class Case(Base):
     )
 
     tasks: Mapped[list["CaseTask"]] = relationship("CaseTask", back_populates="case", lazy="noload")
-    timeline: Mapped[list["CaseTimeline"]] = relationship(
-        "CaseTimeline", back_populates="case", lazy="noload"
-    )
+    timeline: Mapped[list["CaseTimeline"]] = relationship("CaseTimeline", back_populates="case", lazy="noload")
 
 
 class CaseTask(Base):
@@ -79,9 +76,7 @@ class CaseTask(Base):
     assigned_to_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     case: Mapped["Case"] = relationship("Case", back_populates="tasks")
 
@@ -97,8 +92,6 @@ class CaseTimeline(Base):
     event_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     is_automated: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
 
     case: Mapped["Case"] = relationship("Case", back_populates="timeline")

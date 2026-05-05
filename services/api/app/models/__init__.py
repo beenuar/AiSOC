@@ -1,4 +1,5 @@
 """ORM models package - imports all models for Alembic and SQLAlchemy."""
+
 from app.db.database import Base
 from app.models.alert import Alert
 from app.models.case import Case, CaseTask, CaseTimeline

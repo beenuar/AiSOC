@@ -2,19 +2,25 @@
 
 All resolvers authenticate via the same ``get_current_user`` dependency
 used by the REST layer, and use the shared SQLAlchemy ``AsyncSession``.
+The session is RLS-scoped via ``get_tenant_db`` (see ``schema.py``), so
+Postgres enforces tenant isolation. Resolvers also apply explicit
+``where(tenant_id == user.tenant_id)`` filters as defense-in-depth.
+
 Playbook data is fetched from the agents service (HTTP proxy – same as
 the REST /playbooks endpoints).
 """
+
 from __future__ import annotations
 
 import math
 import os
-from typing import Optional
+import uuid
 
 import httpx
 import strawberry
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 from strawberry.types import Info
 
 from app.graphql.types import (
@@ -45,10 +51,24 @@ def _db(info: Info) -> AsyncSession:
     return info.context["db"]
 
 
-def _tenant_id(info: Info):  # noqa: ANN201
-    """Return the current user's tenant UUID (or None for superusers)."""
+def _tenant_id(info: Info) -> uuid.UUID | None:
+    """Return the current user's tenant UUID (or None for unauthenticated)."""
     user = info.context.get("user")
     return getattr(user, "tenant_id", None)
+
+
+def _scope(stmt: Select, info: Info, model) -> Select:
+    """Apply ``where(model.tenant_id == user.tenant_id)`` to ``stmt``.
+
+    Acts as defense-in-depth alongside Postgres RLS. If the user has no
+    tenant_id (unauthenticated, which should not reach here), an empty
+    UUID is used so the query returns no rows rather than leaking.
+    """
+    tid = _tenant_id(info)
+    if tid is None:
+        # Block — no anonymous access to tenant data
+        return stmt.where(model.tenant_id == uuid.UUID("00000000-0000-0000-0000-000000000000"))
+    return stmt.where(model.tenant_id == tid)
 
 
 def _orm_to_alert(row: Alert) -> AlertType:
@@ -152,13 +172,16 @@ async def _proxy_get(path: str, params: dict | None = None):  # noqa: ANN201
 
 @strawberry.type
 class Query:
-
     # ── Alerts ────────────────────────────────────────────────────────────────
 
-    @strawberry.field(description="Fetch a single alert by ID.")
-    async def alert(self, info: Info, id: strawberry.ID) -> Optional[AlertType]:
+    @strawberry.field(description="Fetch a single alert by ID (tenant-scoped).")
+    async def alert(self, info: Info, id: strawberry.ID) -> AlertType | None:
         db = _db(info)
-        row = await db.get(Alert, id)
+        tid = _tenant_id(info)
+        if tid is None:
+            return None
+        result = await db.execute(select(Alert).where(Alert.id == id, Alert.tenant_id == tid))
+        row = result.scalar_one_or_none()
         return _orm_to_alert(row) if row else None
 
     @strawberry.field(description="Paginated list of alerts with optional filters.")
@@ -167,12 +190,12 @@ class Query:
         info: Info,
         page: int = 1,
         page_size: int = 25,
-        severity: Optional[str] = None,
-        status: Optional[str] = None,
-        search: Optional[str] = None,
+        severity: str | None = None,
+        status: str | None = None,
+        search: str | None = None,
     ) -> AlertPage:
         db = _db(info)
-        q = select(Alert)
+        q = _scope(select(Alert), info, Alert)
 
         if severity:
             q = q.where(Alert.severity == severity)
@@ -198,10 +221,14 @@ class Query:
 
     # ── Cases ─────────────────────────────────────────────────────────────────
 
-    @strawberry.field(description="Fetch a single case by ID.")
-    async def case(self, info: Info, id: strawberry.ID) -> Optional[CaseType]:
+    @strawberry.field(description="Fetch a single case by ID (tenant-scoped).")
+    async def case(self, info: Info, id: strawberry.ID) -> CaseType | None:
         db = _db(info)
-        row = await db.get(Case, id)
+        tid = _tenant_id(info)
+        if tid is None:
+            return None
+        result = await db.execute(select(Case).where(Case.id == id, Case.tenant_id == tid))
+        row = result.scalar_one_or_none()
         return _orm_to_case(row) if row else None
 
     @strawberry.field(description="Paginated list of cases with optional filters.")
@@ -210,12 +237,12 @@ class Query:
         info: Info,
         page: int = 1,
         page_size: int = 25,
-        status: Optional[str] = None,
-        priority: Optional[str] = None,
-        search: Optional[str] = None,
+        status: str | None = None,
+        priority: str | None = None,
+        search: str | None = None,
     ) -> CasePage:
         db = _db(info)
-        q = select(Case)
+        q = _scope(select(Case), info, Case)
 
         if status:
             q = q.where(Case.status == status)
@@ -247,11 +274,11 @@ class Query:
         info: Info,
         page: int = 1,
         page_size: int = 25,
-        severity: Optional[str] = None,
-        status: Optional[str] = None,
+        severity: str | None = None,
+        status: str | None = None,
     ) -> DetectionRulePage:
         db = _db(info)
-        q = select(DetectionRule)
+        q = _scope(select(DetectionRule), info, DetectionRule)
 
         if severity:
             q = q.where(DetectionRule.severity == severity)
@@ -281,10 +308,10 @@ class Query:
         info: Info,
         page: int = 1,
         page_size: int = 25,
-        enabled: Optional[bool] = None,
+        enabled: bool | None = None,
     ) -> ConnectorPage:
         db = _db(info)
-        q = select(Connector)
+        q = _scope(select(Connector), info, Connector)
 
         if enabled is not None:
             q = q.where(Connector.is_enabled == enabled)
@@ -359,23 +386,27 @@ class Query:
         from datetime import UTC, datetime, timedelta
 
         db = _db(info)
-
-        total_alerts = (await db.execute(select(func.count()).select_from(Alert))).scalar_one()
-        open_cases = (
-            await db.execute(
-                select(func.count()).select_from(Case).where(Case.status.in_(["open", "in_progress"]))
+        tid = _tenant_id(info)
+        if tid is None:
+            return SocStatsType(
+                total_alerts=0,
+                open_cases=0,
+                critical_alerts=0,
+                alerts_last_24h=0,
+                mean_time_to_detect_hours=None,
+                mean_time_to_respond_hours=None,
             )
+
+        total_alerts = (await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid))).scalar_one()
+        open_cases = (
+            await db.execute(select(func.count()).select_from(Case).where(Case.tenant_id == tid, Case.status.in_(["open", "in_progress"])))
         ).scalar_one()
         critical_alerts = (
-            await db.execute(
-                select(func.count()).select_from(Alert).where(Alert.severity == "critical")
-            )
+            await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid, Alert.severity == "critical"))
         ).scalar_one()
         cutoff = datetime.now(UTC) - timedelta(hours=24)
         alerts_24h = (
-            await db.execute(
-                select(func.count()).select_from(Alert).where(Alert.created_at >= cutoff)
-            )
+            await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid, Alert.created_at >= cutoff))
         ).scalar_one()
 
         return SocStatsType(

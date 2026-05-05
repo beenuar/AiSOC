@@ -10,10 +10,10 @@ The seed is idempotent — running it twice produces the same dataset and never
 duplicates rows. Demo IDs are kept in sync with `app/api/v1/dev_auth.py` so the
 auth bypass and the seeded data agree on who "demo@aisoc.local" is.
 """
+
 from __future__ import annotations
 
 import asyncio
-import os
 import random
 import sys
 import uuid
@@ -107,8 +107,7 @@ _SYNTHETIC_INCIDENTS: list[tuple[str, list[str], list[str], str]] = [
         "APT credential harvesting campaign targeting {user}",
         ["TA0006", "TA0003"],
         ["T1110.001", "T1547.001"],
-        "Brute-force spray from {ip} against {user}. Successful login established persistence "
-        "via registry Run key. IoCs match APT28 TTPs.",
+        "Brute-force spray from {ip} against {user}. Successful login established persistence via registry Run key. IoCs match APT28 TTPs.",
     ),
     (
         "Insider threat: bulk download of PII by {user}",
@@ -121,8 +120,7 @@ _SYNTHETIC_INCIDENTS: list[tuple[str, list[str], list[str], str]] = [
         "Supply chain compromise: malicious npm package on {host}",
         ["TA0001", "TA0002"],
         ["T1195.001", "T1059.007"],
-        "Compromised npm package `event-stream` installed by CI pipeline on {host}. "
-        "Post-install hook executed reverse shell to {ip}.",
+        "Compromised npm package `event-stream` installed by CI pipeline on {host}. Post-install hook executed reverse shell to {ip}.",
     ),
     (
         "Kerberoasting and lateral movement from {host}",
@@ -156,8 +154,7 @@ _SYNTHETIC_INCIDENTS: list[tuple[str, list[str], list[str], str]] = [
         "Identity provider compromise: SAML golden-ticket on {user}",
         ["TA0006", "TA0007"],
         ["T1606.002", "T1087.002"],
-        "Forged SAML assertion detected. Attacker pivoted to Azure AD as {user}. "
-        "Account enumeration across O365 tenant followed.",
+        "Forged SAML assertion detected. Attacker pivoted to Azure AD as {user}. Account enumeration across O365 tenant followed.",
     ),
     (
         "Cryptominer dropped via vulnerable Docker socket on {host}",
@@ -184,50 +181,43 @@ _SYNTHETIC_INCIDENTS: list[tuple[str, list[str], list[str], str]] = [
         "Active Directory DCSync from non-DC host {host}",
         ["TA0006", "TA0004"],
         ["T1003.006", "T1078.002"],
-        "Replication rights abused from workstation {host}. All domain NTLM hashes replicated. "
-        "Matches skeleton key attack preparation.",
+        "Replication rights abused from workstation {host}. All domain NTLM hashes replicated. Matches skeleton key attack preparation.",
     ),
     (
         "Container escape via privileged pod on {host}",
         ["TA0004", "TA0007"],
         ["T1611", "T1082"],
-        "Kubernetes privileged pod created by rogue service account. "
-        "cgroup escape to host namespace. Node file system accessed from pod.",
+        "Kubernetes privileged pod created by rogue service account. cgroup escape to host namespace. Node file system accessed from pod.",
     ),
     (
         "Firmware implant detected on {host} UEFI partition",
         ["TA0003", "TA0005"],
         ["T1542.001", "T1027.002"],
-        "UEFI secure-boot violation alert. Unknown module in firmware image. "
-        "Matches MosaicRegressor UEFI implant signatures.",
+        "UEFI secure-boot violation alert. Unknown module in firmware image. Matches MosaicRegressor UEFI implant signatures.",
     ),
     (
         "Watering-hole attack: internal wiki delivering drive-by exploit",
         ["TA0001", "TA0002"],
         ["T1189", "T1203"],
-        "Internal Confluence page injected with malicious JS. "
-        "Visitor {user} on {host} exploited via CVE-2024-1234 browser vulnerability.",
+        "Internal Confluence page injected with malicious JS. Visitor {user} on {host} exploited via CVE-2024-1234 browser vulnerability.",
     ),
     (
         "Malicious USB autorun on air-gapped {host}",
         ["TA0001", "TA0009"],
         ["T1091", "T1005"],
-        "USB device inserted on air-gapped system {host}. "
-        "AutoRun executed Python stager. Sensitive documents staged for exfiltration.",
+        "USB device inserted on air-gapped system {host}. AutoRun executed Python stager. Sensitive documents staged for exfiltration.",
     ),
     (
         "OAuth consent phishing targeting {user}'s Microsoft account",
         ["TA0001", "TA0006"],
         ["T1528", "T1550.001"],
-        "Malicious OAuth app granted Mail.Read and Files.Read.All to {user}. "
-        "Inbox rules created to forward emails silently to attacker.",
+        "Malicious OAuth app granted Mail.Read and Files.Read.All to {user}. Inbox rules created to forward emails silently to attacker.",
     ),
     (
         "Memory-only implant (fileless) executed in {host} process",
         ["TA0002", "TA0005"],
         ["T1055.012", "T1620"],
-        "Process hollowing detected: svchost.exe replaced with Cobalt Strike beacon. "
-        "No disk artefacts. IoC matches CS watermark 0x5A4D.",
+        "Process hollowing detected: svchost.exe replaced with Cobalt Strike beacon. No disk artefacts. IoC matches CS watermark 0x5A4D.",
     ),
     (
         "DNS tunnelling for data exfiltration from {host}",
@@ -239,13 +229,22 @@ _SYNTHETIC_INCIDENTS: list[tuple[str, list[str], list[str], str]] = [
 ]
 
 _HOSTS = [
-    "WIN-FIN-DB01", "WIN-PROD-WEB02", "MAC-SARAH-LT", "LIN-K8S-NODE-03",
-    "WIN-HR-DESKTOP", "DC01.corp.aisoc.dev", "WIN-DEVOPS-LT",
+    "WIN-FIN-DB01",
+    "WIN-PROD-WEB02",
+    "MAC-SARAH-LT",
+    "LIN-K8S-NODE-03",
+    "WIN-HR-DESKTOP",
+    "DC01.corp.aisoc.dev",
+    "WIN-DEVOPS-LT",
 ]
 
 _USERS = [
-    "alice@aisoc.dev", "bob@aisoc.dev", "carol@aisoc.dev", "dave@aisoc.dev",
-    "svc-backup@aisoc.dev", "eve@aisoc.dev",
+    "alice@aisoc.dev",
+    "bob@aisoc.dev",
+    "carol@aisoc.dev",
+    "dave@aisoc.dev",
+    "svc-backup@aisoc.dev",
+    "eve@aisoc.dev",
 ]
 
 
@@ -255,17 +254,12 @@ def _random_ip() -> str:
 
 def _pick_techniques(k: int = 2) -> list[dict]:
     chosen = _rng.sample(_TECHNIQUES, k=k)
-    return [
-        {"tactic": t[1], "tactic_id": t[0], "technique": t[3], "technique_id": t[2]}
-        for t in chosen
-    ]
+    return [{"tactic": t[1], "tactic_id": t[0], "technique": t[3], "technique_id": t[2]} for t in chosen]
 
 
 def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
     severity = _rng.choices(_SEVERITIES, weights=[15, 30, 35, 20])[0]
-    status = _rng.choices(
-        _STATUSES, weights=[40, 20, 15, 20, 5]
-    )[0]
+    status = _rng.choices(_STATUSES, weights=[40, 20, 15, 20, 5])[0]
     src_name, src_cat = _rng.choice(_SOURCES)
     host = _rng.choice(_HOSTS)
     user = _rng.choice(_USERS)
@@ -328,14 +322,16 @@ def _make_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_ids: list[u
     return Case(
         tenant_id=tenant_id,
         case_number=f"CASE-{1000 + idx:04d}",
-        title=_rng.choice([
-            "Coordinated brute-force campaign across SaaS apps",
-            "Possible data exfiltration via cloud storage",
-            "Endpoint compromise — finance workstation",
-            "Suspected insider threat — HR records access",
-            "Ransomware precursor — staging activity detected",
-            "Phishing wave targeting engineering team",
-        ]),
+        title=_rng.choice(
+            [
+                "Coordinated brute-force campaign across SaaS apps",
+                "Possible data exfiltration via cloud storage",
+                "Endpoint compromise — finance workstation",
+                "Suspected insider threat — HR records access",
+                "Ransomware precursor — staging activity detected",
+                "Phishing wave targeting engineering team",
+            ]
+        ),
         description="Auto-generated demo case. Multiple alerts correlated by entity and ATT&CK technique.",
         status=status,
         priority=severity,
@@ -417,9 +413,7 @@ async def _ensure_user(session, tenant: Tenant) -> User:
 
 
 async def _seed_connectors(session, tenant: Tenant) -> int:
-    result = await session.execute(
-        select(Connector).where(Connector.tenant_id == tenant.id)
-    )
+    result = await session.execute(select(Connector).where(Connector.tenant_id == tenant.id))
     if result.scalars().first() is not None:
         return 0
     rows = _make_connectors(tenant.id)
@@ -441,14 +435,8 @@ def _make_synthetic_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_i
     description = desc_tpl.format(host=host, user=user, ip=ip)
 
     # Build ATT&CK arrays from the scenario's explicit tactic/technique lists
-    tactics = [
-        {"id": t_id, "name": next((t[1] for t in _TECHNIQUES if t[0] == t_id), t_id)}
-        for t_id in tactic_ids
-    ]
-    techniques = [
-        {"id": t_id, "name": next((t[3] for t in _TECHNIQUES if t[2] == t_id), t_id)}
-        for t_id in technique_ids
-    ]
+    tactics = [{"id": t_id, "name": next((t[1] for t in _TECHNIQUES if t[0] == t_id), t_id)} for t_id in tactic_ids]
+    techniques = [{"id": t_id, "name": next((t[3] for t in _TECHNIQUES if t[2] == t_id), t_id)} for t_id in technique_ids]
 
     severity = _rng.choices(_SEVERITIES, weights=[25, 40, 25, 10])[0]
     status = _rng.choices(
@@ -491,7 +479,7 @@ async def _seed_alerts_and_cases(session, tenant: Tenant, *, alert_count: int = 
 
     now = datetime.now(UTC)
     alerts: list[Alert] = []
-    for i in range(alert_count):
+    for _ in range(alert_count):
         when = now - timedelta(minutes=_rng.randint(1, 60 * 24 * 14))
         alerts.append(_make_alert(tenant.id, when))
     session.add_all(alerts)

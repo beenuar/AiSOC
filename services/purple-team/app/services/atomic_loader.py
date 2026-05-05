@@ -1,8 +1,8 @@
 """Load and parse Atomic Red Team YAML test definitions."""
+
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 

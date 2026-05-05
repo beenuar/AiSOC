@@ -1,6 +1,7 @@
 """
 Executor registry: maps ActionType to executor implementation.
 """
+
 from app.executors.endpoint import IsolateHostExecutor, KillProcessExecutor, QuarantineFileExecutor
 from app.executors.network import BlockDomainExecutor, BlockIPExecutor
 from app.executors.notification import CreateTicketExecutor, NotifySlackExecutor

@@ -36,9 +36,12 @@ type Config struct {
 // Load reads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
-		HTTPPort:        mustGetEnvInt("HTTP_PORT", 8080),
-		KafkaBrokers:    getEnv("KAFKA_BROKERS", "localhost:9092"),
-		KafkaTopic:      getEnv("KAFKA_TOPIC", "aisoc.raw_events"),
+		HTTPPort: mustGetEnvInt("HTTP_PORT", 8080),
+		// Canonical env var is ``KAFKA_BOOTSTRAP_SERVERS`` (matches
+		// ``.env.example`` and docker-compose). ``KAFKA_BROKERS`` is honored
+		// as a back-compat alias for older deployments.
+		KafkaBrokers: getEnvFallback("KAFKA_BOOTSTRAP_SERVERS", "KAFKA_BROKERS", "localhost:9092"),
+		KafkaTopic:   getEnv("KAFKA_TOPIC", "aisoc.raw_events"),
 		RedisAddr:       getEnv("REDIS_ADDR", "localhost:6379"),
 		DatabaseDSN:     getEnv("DATABASE_DSN", ""),
 		AttckDataPath:   getEnv("ATTCK_DATA_PATH", "/data/enterprise-attack.json"),
@@ -69,6 +72,18 @@ func Load() (*Config, error) {
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// getEnvFallback returns the first non-empty env var from primary, then
+// alternate, otherwise the fallback. Used for backward-compatible env aliases.
+func getEnvFallback(primary, alternate, fallback string) string {
+	if v := os.Getenv(primary); v != "" {
+		return v
+	}
+	if v := os.Getenv(alternate); v != "" {
 		return v
 	}
 	return fallback

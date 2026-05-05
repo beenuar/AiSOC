@@ -1,4 +1,5 @@
 """Honeytokens service — FastAPI application entry point."""
+
 from __future__ import annotations
 
 import logging
@@ -13,11 +14,11 @@ from app.core.config import settings
 # ---------------------------------------------------------------------------
 try:
     from opentelemetry import trace
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
     _resource = Resource.create({SERVICE_NAME: settings.service_name})
     _provider = TracerProvider(resource=_resource)

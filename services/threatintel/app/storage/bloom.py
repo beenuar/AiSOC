@@ -7,19 +7,19 @@ expensive storage writes.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import math
-import structlog
-from typing import Optional
 
 import mmh3
 import redis.asyncio as aioredis
+import structlog
 
 logger = structlog.get_logger(__name__)
 
 _DEFAULT_CAPACITY = 10_000_000  # 10M IOCs
-_DEFAULT_ERROR_RATE = 0.001     # 0.1% false-positive rate
+_DEFAULT_ERROR_RATE = 0.001  # 0.1% false-positive rate
 _BLOOM_KEY = "threatintel:bloom:iocs"
 
 

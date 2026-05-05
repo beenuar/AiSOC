@@ -7,29 +7,31 @@ parse/normalize the data, and hand off to ThreatIntelPipeline.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING, Any
 
-from app.clients.taxii import TaxiiClient
+import structlog
+
+from app.clients.cisa_kev import CisaKevClient
 from app.clients.misp import MispClient
 from app.clients.otx import OtxClient
-from app.clients.cisa_kev import CisaKevClient
+from app.clients.taxii import TaxiiClient
 from app.parsers.stix import StixParser
 
 if TYPE_CHECKING:
     from app.feeds.pipeline import ThreatIntelPipeline
-    from app.config import Settings
 
 logger = structlog.get_logger(__name__)
 
 
 # ─── TAXII Feed Handler ───────────────────────────────────────────────────────
 
+
 async def handle_taxii_feed(
     client: TaxiiClient,
-    pipeline: "ThreatIntelPipeline",
+    pipeline: ThreatIntelPipeline,
     api_root: str,
     collection_id: str,
 ) -> None:
@@ -68,9 +70,10 @@ async def handle_taxii_feed(
 
 # ─── MISP Feed Handler ────────────────────────────────────────────────────────
 
+
 async def handle_misp_feed(
     client: MispClient,
-    pipeline: "ThreatIntelPipeline",
+    pipeline: ThreatIntelPipeline,
     since_hours: int = 24,
 ) -> None:
     """
@@ -94,9 +97,10 @@ async def handle_misp_feed(
 
 # ─── OTX Feed Handler ─────────────────────────────────────────────────────────
 
+
 async def handle_otx_feed(
     client: OtxClient,
-    pipeline: "ThreatIntelPipeline",
+    pipeline: ThreatIntelPipeline,
 ) -> None:
     """
     Fetch subscribed OTX pulses and extract IOC indicators.
@@ -119,9 +123,10 @@ async def handle_otx_feed(
 
 # ─── CISA KEV Feed Handler ────────────────────────────────────────────────────
 
+
 async def handle_cisa_kev_feed(
     client: CisaKevClient,
-    pipeline: "ThreatIntelPipeline",
+    pipeline: ThreatIntelPipeline,
 ) -> None:
     """
     Fetch CISA KEV catalog and ingest vulnerability IOCs.

@@ -1,4 +1,5 @@
 """Configuration for the AiSOC Threat Intelligence service."""
+
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings
@@ -36,8 +37,6 @@ class Settings(BaseSettings):
     # Kafka
     KAFKA_BOOTSTRAP_SERVERS: str = "redpanda:9092"
     KAFKA_TOPIC_THREAT_INTEL: str = "aisoc.threat_intel"
-    # Legacy alias
-    KAFKA_BROKERS: str = "redpanda:9092"
     KAFKA_TOPIC_IOC: str = "aisoc.ioc_enrichments"
 
     # TAXII 2.1
@@ -45,7 +44,7 @@ class Settings(BaseSettings):
     TAXII_USERNAME: str = ""
     TAXII_PASSWORD: str = ""
     TAXII_API_ROOT: str = ""
-    TAXII_COLLECTION_IDS: str = ""   # comma-separated collection IDs
+    TAXII_COLLECTION_IDS: str = ""  # comma-separated collection IDs
 
     # MISP
     MISP_URL: str = ""
@@ -64,10 +63,10 @@ class Settings(BaseSettings):
     OPENCTI_TOKEN: str = ""
 
     # Poll intervals (seconds)
-    TAXII_POLL_INTERVAL: int = 900      # 15 min
-    MISP_POLL_INTERVAL: int = 1800      # 30 min
-    OTX_POLL_INTERVAL: int = 1800       # 30 min
-    CISA_KEV_POLL_INTERVAL: int = 86400 # 24 h
+    TAXII_POLL_INTERVAL: int = 900  # 15 min
+    MISP_POLL_INTERVAL: int = 1800  # 30 min
+    OTX_POLL_INTERVAL: int = 1800  # 30 min
+    CISA_KEV_POLL_INTERVAL: int = 86400  # 24 h
     # Legacy alias
     CISA_POLL_INTERVAL: int = 86400
 

@@ -2,6 +2,7 @@
 Alert and Incident models for the Fusion service.
 These are Pydantic models used for message processing (not ORM).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -108,7 +109,7 @@ class FusedAlert(BaseModel):
     enrichments: dict[str, Any] = Field(default_factory=dict)
 
     # ML scores — populated by MLScorer
-    anomaly_score: float = 0.0   # 0.0 = normal, 1.0 = highly anomalous (Isolation Forest)
+    anomaly_score: float = 0.0  # 0.0 = normal, 1.0 = highly anomalous (Isolation Forest)
     priority_score: float = 0.0  # 0.0–1.0 priority rank (LightGBM ranker)
 
     fused_at: datetime = Field(default_factory=datetime.utcnow)

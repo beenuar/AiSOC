@@ -1,19 +1,20 @@
 """FastAPI routes for the Honeytokens service."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, desc, update
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
 from app.models.honeytoken import Honeytoken, HoneytokenTrigger
 from app.services.alerting import send_alert
-from app.services.generator import generate_token, TOKEN_GENERATORS
+from app.services.generator import TOKEN_GENERATORS, generate_token
 
 router = APIRouter(prefix="/api/v1/honeytokens", tags=["honeytokens"])
 
@@ -117,12 +118,7 @@ async def list_tokens(
     token_type: str | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
 ) -> list[TokenOut]:
-    q = (
-        select(Honeytoken)
-        .where(Honeytoken.tenant_id == tenant_id)
-        .order_by(desc(Honeytoken.created_at))
-        .limit(limit)
-    )
+    q = select(Honeytoken).where(Honeytoken.tenant_id == tenant_id).order_by(desc(Honeytoken.created_at)).limit(limit)
     if status:
         q = q.where(Honeytoken.status == status)
     if token_type:
@@ -178,7 +174,7 @@ async def webhook_trigger(body: WebhookTriggerPayload, db: DB) -> dict:
     if not token:
         raise HTTPException(status_code=404, detail="Token not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     trigger = HoneytokenTrigger(
         honeytoken_id=token.id,
@@ -211,7 +207,7 @@ async def webhook_trigger(body: WebhookTriggerPayload, db: DB) -> dict:
 
     if alert_sent:
         trigger.alert_sent = True
-        trigger.alert_sent_at = datetime.now(timezone.utc)
+        trigger.alert_sent_at = datetime.now(UTC)
         await db.commit()
 
     return {

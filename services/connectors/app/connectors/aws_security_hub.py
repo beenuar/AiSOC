@@ -2,9 +2,10 @@
 AWS Security Hub connector.
 Fetches findings from AWS Security Hub via boto3.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -26,13 +27,14 @@ class AWSSecurityHubConnector(BaseConnector):
     def _get_client(self):
         try:
             import boto3
+
             kwargs: dict[str, Any] = {"region_name": self._region}
             if self._access_key and self._secret_key:
                 kwargs["aws_access_key_id"] = self._access_key
                 kwargs["aws_secret_access_key"] = self._secret_key
             return boto3.client("securityhub", **kwargs)
-        except ImportError:
-            raise RuntimeError("boto3 is required for AWS Security Hub connector. Install it with: pip install boto3")
+        except ImportError as exc:
+            raise RuntimeError("boto3 is required for AWS Security Hub connector. Install it with: pip install boto3") from exc
 
     async def test_connection(self) -> dict[str, Any]:
         try:
@@ -44,7 +46,7 @@ class AWSSecurityHubConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         client = self._get_client()
-        since = (datetime.now(timezone.utc) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         findings = []
         paginator = client.get_paginator("get_findings")

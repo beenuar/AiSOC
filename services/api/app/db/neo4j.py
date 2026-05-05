@@ -2,21 +2,22 @@
 Neo4j driver singleton for AiSOC graph layer.
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
 
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession
+from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
 from neo4j.exceptions import ServiceUnavailable
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_driver: Optional[AsyncDriver] = None
+_driver: AsyncDriver | None = None
 
 
 async def init_neo4j() -> None:
@@ -43,7 +44,7 @@ async def init_neo4j() -> None:
             return
         except ServiceUnavailable:
             if attempt < 4:
-                wait = 2 ** attempt
+                wait = 2**attempt
                 logger.warning("Neo4j not ready, retrying", attempt=attempt + 1, wait=wait)
                 await asyncio.sleep(wait)
             else:

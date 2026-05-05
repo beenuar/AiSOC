@@ -12,6 +12,7 @@ POST   /plugins/discover          – re-scan AISOC_PLUGINS_DIR
 
 MIT License — AiSOC (open-source AI Security Operations Center)
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Any
@@ -19,18 +20,19 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.api.v1.deps import AuthUser, CurrentUser, require_permission
+from app.api.v1.deps import AuthUser, require_permission
 from app.services.plugin_manager import (
     LoadedPlugin,
     PluginError,
-    get_plugin_manager,
     PluginManager,
+    get_plugin_manager,
 )
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
 
 # ── Response schemas ──────────────────────────────────────────────────────────
+
 
 class PluginManifestOut(BaseModel):
     id: str
@@ -90,6 +92,7 @@ def _mgr() -> PluginManager:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=list[PluginOut])
 async def list_plugins(

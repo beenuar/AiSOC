@@ -29,14 +29,16 @@ Page → action matrix (kept in sync with ``ContextualActions.tsx``):
 Falls back to a deterministic synthetic response if ``OPENAI_API_KEY`` is
 unset, so the demo path never breaks.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException
@@ -52,6 +54,7 @@ router = APIRouter(prefix="/api/v1/contextual", tags=["contextual"])
 # Request / response shapes
 # ---------------------------------------------------------------------------
 
+
 class ContextualActionRequest(BaseModel):
     """A single contextual ambient-copilot call.
 
@@ -61,9 +64,7 @@ class ContextualActionRequest(BaseModel):
     answer based on ``entity_id`` alone.
     """
 
-    page: str = Field(
-        ..., description="One of: alerts, cases, detections, playbooks"
-    )
+    page: str = Field(..., description="One of: alerts, cases, detections, playbooks")
     action: str = Field(..., description="Action key. See /actions for the catalogue.")
     entity_id: str = Field(..., description="ID of the alert / case / rule / playbook.")
     entity: dict[str, Any] | None = Field(
@@ -350,6 +351,7 @@ def _build_messages(req: ContextualActionRequest) -> tuple[str, str]:
 # LLM dispatch
 # ---------------------------------------------------------------------------
 
+
 async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
     """Invoke the configured LLM. Returns (markdown, tokens_used).
 
@@ -360,23 +362,18 @@ async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
         return _fallback_response(system, user), 0
 
     try:
-        from langchain_openai import ChatOpenAI
         from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_openai import ChatOpenAI
     except ImportError as exc:
         logger.warning("contextual.llm.import_failed", error=str(exc))
         return _fallback_response(system, user), 0
 
     llm = ChatOpenAI(model=model, temperature=0.2)
-    response = await llm.ainvoke(
-        [SystemMessage(content=system), HumanMessage(content=user)]
-    )
+    response = await llm.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
     text = response.content if isinstance(response.content, str) else str(response.content)
     tokens = 0
     if hasattr(response, "response_metadata"):
-        tokens = (
-            response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
-            or 0
-        )
+        tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
     return text, tokens
 
 
@@ -391,8 +388,8 @@ async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
         return
 
     try:
-        from langchain_openai import ChatOpenAI
         from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_openai import ChatOpenAI
     except ImportError:
         text = _fallback_response(system, user)
         for i in range(0, len(text), 8):
@@ -400,9 +397,7 @@ async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
         return
 
     llm = ChatOpenAI(model=model, temperature=0.2, streaming=True)
-    async for chunk in llm.astream(
-        [SystemMessage(content=system), HumanMessage(content=user)]
-    ):
+    async for chunk in llm.astream([SystemMessage(content=system), HumanMessage(content=user)]):
         if hasattr(chunk, "content") and chunk.content:
             yield chunk.content if isinstance(chunk.content, str) else str(chunk.content)
 
@@ -429,13 +424,11 @@ def _fallback_response(system: str, user: str) -> str:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/actions", response_model=ContextualActionsCatalogue, summary="List supported contextual actions")
 async def list_actions() -> ContextualActionsCatalogue:
     return ContextualActionsCatalogue(
-        pages={
-            page: [ContextualActionDescriptor(**item) for item in items]
-            for page, items in _ACTION_CATALOGUE.items()
-        }
+        pages={page: [ContextualActionDescriptor(**item) for item in items] for page, items in _ACTION_CATALOGUE.items()}
     )
 
 
@@ -481,7 +474,7 @@ async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
         model=model,
         elapsed_ms=elapsed_ms,
         fallback=fallback,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
     # Structured log so contextual usage is queryable in observability tooling

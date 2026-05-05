@@ -2,24 +2,39 @@
 """
 AiSOC Detection Rule Validator
 ================================
-Validates all YAML detection rules under detections/ for:
+Validates all YAML detection rules under ``detections/`` for:
+
   - Valid YAML syntax
-  - Required fields (id, name, severity, detection)
-  - Severity is one of: low | medium | high | critical
-  - Category is one of: network | endpoint | cloud | identity | application | data-exfil
-  - No duplicate `id` values across all rules
-  - id prefix matches the category directory
-  - Each rule has matching positive + negative fixtures under detections/fixtures/
-  - Fixture-replay: positive fixture must satisfy match_when, negative must not
+  - Required fields (``id``, ``name``, ``severity``, ``detection``)
+  - Severity is one of: ``low | medium | high | critical``
+  - Category is one of:
+    ``network | endpoint | cloud | identity | application | data-exfil``
+  - No duplicate ``id`` values across all tiers
+  - ``id`` prefix matches the rule's tier (``det-`` for native,
+    ``<source>-...`` for imported tiers)
+  - For native rules: matching positive + negative fixtures under
+    ``detections/fixtures/`` and successful fixture replay against the
+    canonical ``match_when`` spec
+  - For imported rules: a populated ``provenance`` block with the required
+    fields documented in ``tools/detection_import/README.md``
 
-Fixture replay uses the canonical `matches()` function from
-`generate_detections.py` against the structured `match_when` dict from the
-spec table, NOT a re-parse of the rendered YAML condition string. The YAML
-condition is purely a serialized artifact for human readability — the spec
-is the source of truth.
+Tiering
+-------
+* **native** — ``detections/{network,endpoint,cloud,identity,application,
+  data-exfil}/*.yaml``. Strict: fixtures + provenance optional.
+* **imported** — ``detections/{sigma,car,splunk,chronicle}-imports/<category>
+  /*.yaml`` (and ``.../_quarantine/<category>/*.yaml`` for rules that
+  parsed but cannot run as-is). Provenance required, fixtures optional.
+* **community** — ``detections/community/<category>/*.yaml``. Permissive;
+  provenance encouraged but not required.
 
-Exit code 0 = all rules valid
-Exit code 1 = one or more validation errors
+Exit codes
+----------
+* ``0`` — all rules valid
+* ``1`` — one or more validation errors
+
+Run ``python3 scripts/validate_detections.py --strict-fixtures`` to promote
+fixture warnings into hard failures (used by CI for native rules).
 """
 
 from __future__ import annotations
@@ -43,7 +58,6 @@ SCRIPTS_DIR = ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-# Canonical matcher and spec table — single source of truth for replay.
 from generate_detections import matches  # noqa: E402
 from detection_specs_index import all_specs  # noqa: E402
 
@@ -59,11 +73,45 @@ VALID_CATEGORIES = {
 
 REQUIRED_FIELDS = ["id", "name", "severity", "detection"]
 
+# Provenance fields required on every imported rule. License and
+# license_url should be present so we can prove the redistribution chain;
+# imported_by is the importer module so future audits can grep for the
+# tool that produced the file.
+REQUIRED_PROVENANCE_FIELDS = (
+    "source",
+    "source_id",
+    "source_commit",
+    "license",
+    "imported_at",
+    "imported_by",
+    "upstream_path",
+)
+
+# Each imported tier directory maps to (display name, expected id prefix).
+# The id prefix matches what ``tools.detection_import.common.stable_id``
+# produces for that tier. Bumping importer source names? Update these too.
+IMPORTED_TIERS: dict[str, dict[str, str]] = {
+    "sigma-imports": {
+        "name": "sigmahq",
+        "id_prefix": "sigmahq-sigma-",
+    },
+    "car-imports": {
+        "name": "mitre-car",
+        "id_prefix": "mitre-car-",
+    },
+    "splunk-imports": {
+        "name": "splunk-security-content",
+        "id_prefix": "splunk-security-content-",
+    },
+    "chronicle-imports": {
+        "name": "chronicle-detection-rules",
+        "id_prefix": "chronicle-detection-rules-",
+    },
+}
+
 
 # =============================================================================
-# Spec lookup — map (category, slug) → match_when dict from the canonical
-# spec tables so we can replay fixtures against the structured spec, not a
-# re-parsed YAML condition string.
+# Spec lookup — for native fixture replay only.
 # =============================================================================
 
 _SPEC_BY_KEY: dict[tuple[str, str], dict[str, Any]] = {
@@ -72,16 +120,105 @@ _SPEC_BY_KEY: dict[tuple[str, str], dict[str, Any]] = {
 
 
 # =============================================================================
+# Tier classification
+# =============================================================================
+
+
+def classify(path: Path) -> dict[str, Any]:
+    """Classify a rule file by tier from its on-disk path.
+
+    Returns a dict with keys:
+
+    * ``tier`` — ``"native" | "imported" | "community" | "unknown"``
+    * ``source`` — short source name for imported rules, else ``None``
+    * ``id_prefix`` — required id prefix for the tier, else ``None``
+    * ``category`` — the AiSOC category this rule belongs to (e.g.
+      ``cloud``), inferred from the directory layout
+    * ``is_quarantined`` — true if the rule lives under ``_quarantine/``
+    """
+    try:
+        rel_parts = path.relative_to(DETECTIONS_DIR).parts
+    except ValueError:
+        return {
+            "tier": "unknown",
+            "source": None,
+            "id_prefix": None,
+            "category": None,
+            "is_quarantined": False,
+        }
+
+    if not rel_parts:
+        return {
+            "tier": "unknown",
+            "source": None,
+            "id_prefix": None,
+            "category": None,
+            "is_quarantined": False,
+        }
+
+    head = rel_parts[0]
+
+    # Native: detections/<category>/<rule>.yaml
+    if head in VALID_CATEGORIES:
+        return {
+            "tier": "native",
+            "source": None,
+            "id_prefix": "det-",
+            "category": head,
+            "is_quarantined": False,
+        }
+
+    # Imported: detections/<source>-imports/[<_quarantine>/]<category>/<rule>.yaml
+    if head in IMPORTED_TIERS:
+        tier_meta = IMPORTED_TIERS[head]
+        is_quarantined = len(rel_parts) >= 2 and rel_parts[1] == "_quarantine"
+        if is_quarantined and len(rel_parts) >= 3:
+            category = rel_parts[2]
+        elif len(rel_parts) >= 2:
+            category = rel_parts[1]
+        else:
+            category = None
+        return {
+            "tier": "imported",
+            "source": tier_meta["name"],
+            "id_prefix": tier_meta["id_prefix"],
+            "category": category,
+            "is_quarantined": is_quarantined,
+        }
+
+    if head == "community":
+        category = rel_parts[1] if len(rel_parts) >= 2 else None
+        return {
+            "tier": "community",
+            "source": "community",
+            "id_prefix": None,
+            "category": category,
+            "is_quarantined": False,
+        }
+
+    return {
+        "tier": "unknown",
+        "source": None,
+        "id_prefix": None,
+        "category": None,
+        "is_quarantined": False,
+    }
+
+
+# =============================================================================
 # Validation
 # =============================================================================
 
 
 def validate_rule(
-    path: Path, seen_ids: dict[str, Path]
+    path: Path,
+    seen_ids: dict[str, Path],
+    classification: dict[str, Any],
 ) -> tuple[list[str], dict[str, Any] | None]:
     """Validate a single detection rule file.
 
-    Returns (errors, parsed_rule). If parsing failed, parsed_rule is None.
+    Returns ``(errors, parsed_rule)``. ``parsed_rule`` is ``None`` if YAML
+    parsing failed.
     """
     errors: list[str] = []
 
@@ -109,26 +246,36 @@ def validate_rule(
             f"{', '.join(sorted(VALID_SEVERITIES))}"
         )
 
-    category = rule.get("category")
-    if category and category not in VALID_CATEGORIES:
+    rule_category = rule.get("category")
+    if rule_category and rule_category not in VALID_CATEGORIES:
         errors.append(
-            f"Invalid category '{category}'; must be one of: "
+            f"Invalid category '{rule_category}'; must be one of: "
             f"{', '.join(sorted(VALID_CATEGORIES))}"
         )
 
-    category_dir = path.parent.name
-    if category and category != category_dir:
+    expected_category = classification["category"]
+    if (
+        rule_category
+        and expected_category
+        and rule_category != expected_category
+    ):
         errors.append(
-            f"Rule category '{category}' does not match directory '{category_dir}'"
+            f"Rule category '{rule_category}' does not match directory "
+            f"'{expected_category}'"
         )
 
-    rule_id = rule["id"]
-    if not str(rule_id).startswith("det-"):
-        errors.append(f"Rule id '{rule_id}' must start with 'det-'")
+    rule_id = str(rule["id"])
+    expected_prefix = classification["id_prefix"]
+    if expected_prefix and not rule_id.startswith(expected_prefix):
+        errors.append(
+            f"Rule id '{rule_id}' must start with '{expected_prefix}' "
+            f"(tier: {classification['tier']})"
+        )
 
     if rule_id in seen_ids:
         errors.append(
-            f"Duplicate id '{rule_id}' — already defined in {seen_ids[rule_id]}"
+            f"Duplicate id '{rule_id}' — already defined in "
+            f"{seen_ids[rule_id]}"
         )
     else:
         seen_ids[rule_id] = path
@@ -136,10 +283,31 @@ def validate_rule(
     detection = rule.get("detection")
     if not isinstance(detection, dict):
         errors.append(
-            "'detection' field must be a YAML mapping with 'condition' or 'keywords'"
+            "'detection' field must be a YAML mapping with 'condition', "
+            "'keywords', or a tier-specific block (e.g. 'splunk_spl', "
+            "'chronicle_yaral')"
         )
 
+    if classification["tier"] == "imported":
+        errors.extend(_validate_provenance(rule))
+
     return errors, rule
+
+
+def _validate_provenance(rule: dict[str, Any]) -> list[str]:
+    """Validate the ``provenance`` block on an imported rule."""
+    errors: list[str] = []
+    provenance = rule.get("provenance")
+    if not isinstance(provenance, dict):
+        return [
+            "Imported rule is missing required 'provenance' block "
+            "(see tools/detection_import/README.md)"
+        ]
+    for field in REQUIRED_PROVENANCE_FIELDS:
+        value = provenance.get(field)
+        if value in (None, ""):
+            errors.append(f"provenance.{field} is required and must be non-empty")
+    return errors
 
 
 def replay_fixture(
@@ -147,12 +315,13 @@ def replay_fixture(
 ) -> list[str]:
     """Replay positive + negative fixtures against the canonical spec.
 
-    Looks up the spec for this rule by (category, slug), then evaluates
-    the structured `match_when` dict against the on-disk fixtures using
-    the same `matches()` function the runtime engine would use.
+    Native tier only. Looks up the spec for this rule by ``(category,
+    slug)``, then evaluates the structured ``match_when`` dict against the
+    on-disk fixtures using the same ``matches()`` function the runtime
+    engine would use.
 
-    Returns a list of error messages. If `strict` is False, missing fixtures
-    or missing specs degrade to soft warnings.
+    Returns a list of error messages. If ``strict`` is ``False``, missing
+    fixtures or missing specs degrade to soft warnings (``WARN: ...``).
     """
     errors: list[str] = []
     slug = rule_path.stem
@@ -166,9 +335,13 @@ def replay_fixture(
     if pos_missing or neg_missing:
         msg_parts = []
         if pos_missing:
-            msg_parts.append(f"missing positive fixture {pos_path.relative_to(ROOT)}")
+            msg_parts.append(
+                f"missing positive fixture {pos_path.relative_to(ROOT)}"
+            )
         if neg_missing:
-            msg_parts.append(f"missing negative fixture {neg_path.relative_to(ROOT)}")
+            msg_parts.append(
+                f"missing negative fixture {neg_path.relative_to(ROOT)}"
+            )
         msg = "; ".join(msg_parts)
         if strict:
             errors.append(msg)
@@ -187,7 +360,7 @@ def replay_fixture(
 
     match_when = spec.get("match_when")
     if not match_when:
-        return errors  # nothing to replay
+        return errors
 
     try:
         with open(pos_path) as f:
@@ -224,20 +397,47 @@ def main() -> int:
     total = 0
     failed = 0
     fixture_warnings = 0
+    tier_counts: dict[str, int] = {
+        "native": 0,
+        "imported": 0,
+        "community": 0,
+        "unknown": 0,
+    }
+    quarantine_count = 0
 
     for path in yaml_files:
-        # Skip auto-imported sigma rules — those are validated separately.
-        if "sigma-imports" in path.parts:
-            continue
         rel = path.relative_to(ROOT)
+
+        # Skip the meta/index files at the top of detections/, e.g.
+        # detections/coverage.yaml, that aren't rule files. Those live
+        # directly under detections/ with no category dir.
+        try:
+            rel_under = path.relative_to(DETECTIONS_DIR)
+        except ValueError:
+            continue
+        if len(rel_under.parts) < 2:
+            continue
+        if rel_under.parts[0] == "fixtures":
+            continue
+
+        classification = classify(path)
+        tier = classification["tier"]
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+        if classification["is_quarantined"]:
+            quarantine_count += 1
+
         total += 1
 
-        errors, rule = validate_rule(path, seen_ids)
+        errors, rule = validate_rule(path, seen_ids, classification)
         rule_failed = bool(errors)
 
-        # Fixture replay only for category rules (skip top-level files)
         replay_errors: list[str] = []
-        if rule and not rule_failed and path.parent.name in VALID_CATEGORIES:
+        if (
+            rule
+            and not rule_failed
+            and tier == "native"
+            and path.parent.name in VALID_CATEGORIES
+        ):
             replay_errors = replay_fixture(path, rule, strict=strict)
 
         warnings = [e for e in replay_errors if e.startswith("WARN:")]
@@ -249,20 +449,31 @@ def main() -> int:
 
         if rule_failed:
             failed += 1
-            print(f"\nFAIL  {rel}")
+            print(f"\nFAIL  [{tier}] {rel}")
             for e in errors:
                 print(f"    - {e}")
         else:
             warn_suffix = f" ({len(warnings)} warn)" if warnings else ""
-            print(f"PASS  {rel}{warn_suffix}")
+            quarantine_suffix = "  [quarantined]" if classification["is_quarantined"] else ""
+            print(f"PASS  [{tier}] {rel}{warn_suffix}{quarantine_suffix}")
             for w in warnings:
                 print(f"    {w}")
 
-    print(f"\n{'─' * 50}")
+    print(f"\n{'─' * 60}")
     print(
         f"Validated {total} rules — {total - failed} passed, {failed} failed, "
         f"{fixture_warnings} fixture warnings"
     )
+    print(
+        "  Tiers: "
+        + ", ".join(
+            f"{tier}={count}"
+            for tier, count in sorted(tier_counts.items())
+            if count > 0
+        )
+    )
+    if quarantine_count:
+        print(f"  Quarantined (parsed-but-disabled): {quarantine_count}")
 
     return 1 if failed > 0 else 0
 

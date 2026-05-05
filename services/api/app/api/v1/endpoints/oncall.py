@@ -9,13 +9,14 @@ is the *current* snapshot per user so:
 * push fan-out can target a specific user instead of an entire topic,
 * the agent can respect "do not disturb" when an analyst snoozes.
 """
+
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -69,11 +70,7 @@ async def list_oncall(
     ``busy`` (so the next-best person is one tap away), and finally everyone
     else for context.
     """
-    stmt = (
-        select(OnCallStatus, User)
-        .join(User, User.id == OnCallStatus.user_id)
-        .where(OnCallStatus.tenant_id == user.tenant_id)
-    )
+    stmt = select(OnCallStatus, User).join(User, User.id == OnCallStatus.user_id).where(OnCallStatus.tenant_id == user.tenant_id)
     if status_filter:
         if status_filter not in _STATUS_VALUES:
             raise HTTPException(

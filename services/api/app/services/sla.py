@@ -11,23 +11,19 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.sla import AlertSLAEvent, TenantSLAConfig
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-async def _get_sla_configs(
-    db: AsyncSession, tenant_id: uuid.UUID
-) -> dict[str, dict[str, int]]:
+
+async def _get_sla_configs(db: AsyncSession, tenant_id: uuid.UUID) -> dict[str, dict[str, int]]:
     """Return {severity: {mttd_target, mttr_target, mttc_target}} for the tenant."""
-    rows = await db.execute(
-        select(TenantSLAConfig).where(TenantSLAConfig.tenant_id == tenant_id)
-    )
+    rows = await db.execute(select(TenantSLAConfig).where(TenantSLAConfig.tenant_id == tenant_id))
     configs = rows.scalars().all()
     return {
         c.severity: {
@@ -87,6 +83,7 @@ def _compute_durations(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 async def compute_sla_metrics(
     db: AsyncSession,
     tenant_id: uuid.UUID,
@@ -113,9 +110,9 @@ async def compute_sla_metrics(
     per_severity: dict[str, dict[str, Any]] = {}
     default_targets = {
         "critical": {"mttd_target": 15, "mttr_target": 60, "mttc_target": 120},
-        "high":     {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
-        "medium":   {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
-        "low":      {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
+        "high": {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
+        "medium": {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
+        "low": {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
     }
 
     for sev in ["critical", "high", "medium", "low"]:

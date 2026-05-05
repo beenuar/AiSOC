@@ -1,19 +1,14 @@
 name: Validate Playbook Pack
 
+# Runs on every PR / push to main+develop, no path filter.
+# Same reasoning as validate-detections: the playbook validator is fast and
+# catches schema drift introduced by refactors that don't touch playbooks/**
+# directly (e.g. edits to services/agents/app/playbook/models.py).
 on:
   push:
-    paths:
-      - "playbooks/**"
-      - "services/agents/app/playbook/models.py"
-      - "scripts/validate_playbooks.py"
-      - "scripts/generate_playbooks.py"
-      - ".github/workflows/validate-playbooks.yml"
+    branches: [main, develop]
   pull_request:
-    paths:
-      - "playbooks/**"
-      - "services/agents/app/playbook/models.py"
-      - "scripts/validate_playbooks.py"
-      - "scripts/generate_playbooks.py"
+    branches: [main, develop]
 
 jobs:
   validate:

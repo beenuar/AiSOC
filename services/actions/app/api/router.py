@@ -1,15 +1,16 @@
 """
 Action Execution Service REST API.
 """
+
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, HTTPException
 
-from app.models.action import ActionRequest, ActionResult, ActionStatus, ActionType
+from app.models.action import ActionRequest, ActionStatus, ActionType
 from app.services.blast_radius import BlastRadiusGate
 from app.services.executor_registry import EXECUTOR_REGISTRY
 

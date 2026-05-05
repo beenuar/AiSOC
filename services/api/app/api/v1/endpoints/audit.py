@@ -2,6 +2,7 @@
 
 GET /api/v1/audit        — paginated, filterable audit trail
 """
+
 import uuid
 from typing import Annotated
 
@@ -61,9 +62,7 @@ async def list_audit_events(
         q = q.where(AuditLog.actor_id == actor_id)
     if search:
         term = f"%{search}%"
-        q = q.where(
-            AuditLog.action.ilike(term) | AuditLog.actor_email.ilike(term)
-        )
+        q = q.where(AuditLog.action.ilike(term) | AuditLog.actor_email.ilike(term))
 
     count_q = select(func.count()).select_from(q.subquery())
     total_result = await db.execute(count_q)

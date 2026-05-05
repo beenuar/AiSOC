@@ -1,9 +1,10 @@
 """FastAPI routes for the Purple Team service."""
+
 from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.models.purple_team import AtomicTest, Base, TabletopSession, TestExecution
+from app.models.purple_team import AtomicTest, TabletopSession, TestExecution
 from app.services.atomic_loader import load_atomics
 from app.services.caldera_client import CalderaClient
 from app.services.coverage import build_coverage_matrix
@@ -250,7 +251,7 @@ async def run_caldera_operation(body: CalderaRunRequest) -> TestExecution:
             test_name=body.operation_name,
             caldera_operation_id=op.get("id"),
             status="running",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             executed_by=body.executed_by,
         )
         session.add(execution)
@@ -288,9 +289,7 @@ async def list_executions(
 )
 async def report_detection(execution_id: uuid.UUID, body: ReportDetectionRequest) -> TestExecution:
     async with _async_session() as session:
-        result = await session.execute(
-            select(TestExecution).where(TestExecution.id == execution_id)
-        )
+        result = await session.execute(select(TestExecution).where(TestExecution.id == execution_id))
         ex = result.scalar_one_or_none()
         if ex is None:
             raise HTTPException(status_code=404, detail="Execution not found")
@@ -309,9 +308,7 @@ async def report_detection(execution_id: uuid.UUID, body: ReportDetectionRequest
 @router.get("/api/v1/purple-team/coverage", tags=["Coverage"])
 async def get_coverage(tenant_id: uuid.UUID) -> dict:
     async with _async_session() as session:
-        result = await session.execute(
-            select(TestExecution).where(TestExecution.tenant_id == tenant_id)
-        )
+        result = await session.execute(select(TestExecution).where(TestExecution.tenant_id == tenant_id))
         executions = result.scalars().all()
 
     rows = [
@@ -330,9 +327,7 @@ async def get_coverage(tenant_id: uuid.UUID) -> dict:
 # ---------------------------------------------------------------------------
 # Tabletop simulator
 # ---------------------------------------------------------------------------
-@router.post(
-    "/api/v1/purple-team/tabletop", response_model=TabletopOut, tags=["Tabletop"]
-)
+@router.post("/api/v1/purple-team/tabletop", response_model=TabletopOut, tags=["Tabletop"])
 async def create_tabletop(body: TabletopCreateRequest) -> TabletopSession:
     async with _async_session() as session:
         ts = TabletopSession(
@@ -349,9 +344,7 @@ async def create_tabletop(body: TabletopCreateRequest) -> TabletopSession:
         return ts
 
 
-@router.get(
-    "/api/v1/purple-team/tabletop", response_model=list[TabletopOut], tags=["Tabletop"]
-)
+@router.get("/api/v1/purple-team/tabletop", response_model=list[TabletopOut], tags=["Tabletop"])
 async def list_tabletops(
     tenant_id: uuid.UUID,
     status: str | None = Query(None),
@@ -372,9 +365,7 @@ async def list_tabletops(
 )
 async def get_tabletop(session_id: uuid.UUID) -> TabletopSession:
     async with _async_session() as session:
-        result = await session.execute(
-            select(TabletopSession).where(TabletopSession.id == session_id)
-        )
+        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id))
         ts = result.scalar_one_or_none()
         if ts is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -388,9 +379,7 @@ async def get_tabletop(session_id: uuid.UUID) -> TabletopSession:
 )
 async def add_finding(session_id: uuid.UUID, body: TabletopAddFindingRequest) -> TabletopSession:
     async with _async_session() as session:
-        result = await session.execute(
-            select(TabletopSession).where(TabletopSession.id == session_id)
-        )
+        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id))
         ts = result.scalar_one_or_none()
         if ts is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -401,11 +390,11 @@ async def add_finding(session_id: uuid.UUID, body: TabletopAddFindingRequest) ->
                 "finding": body.finding,
                 "severity": body.severity,
                 "owner": body.owner,
-                "added_at": datetime.now(timezone.utc).isoformat(),
+                "added_at": datetime.now(UTC).isoformat(),
             }
         )
         ts.findings = findings
-        ts.updated_at = datetime.now(timezone.utc)
+        ts.updated_at = datetime.now(UTC)
         await session.commit()
         await session.refresh(ts)
         return ts
@@ -418,14 +407,12 @@ async def add_finding(session_id: uuid.UUID, body: TabletopAddFindingRequest) ->
 )
 async def complete_tabletop(session_id: uuid.UUID) -> TabletopSession:
     async with _async_session() as session:
-        result = await session.execute(
-            select(TabletopSession).where(TabletopSession.id == session_id)
-        )
+        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id))
         ts = result.scalar_one_or_none()
         if ts is None:
             raise HTTPException(status_code=404, detail="Session not found")
         ts.status = "completed"
-        ts.updated_at = datetime.now(timezone.utc)
+        ts.updated_at = datetime.now(UTC)
         await session.commit()
         await session.refresh(ts)
         return ts

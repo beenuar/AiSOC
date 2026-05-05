@@ -1,4 +1,5 @@
 """Alembic migration environment for UEBA service."""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,9 +7,8 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import create_async_engine
-
 from app.models.ueba import Base
+from sqlalchemy.ext.asyncio import create_async_engine
 
 config = context.config
 

@@ -7,14 +7,13 @@ connectors, etc.) and maps it to SOC 2 controls.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditLog
 from app.models.compliance import ComplianceControl, ComplianceEvidence
-
 
 # Map SOC 2 control_ids → evidence collection functions
 _CONTROL_COLLECTORS: dict[str, str] = {
@@ -36,13 +35,11 @@ async def auto_collect_evidence(
 ) -> list[ComplianceEvidence]:
     """Collect evidence for all controls in a framework from platform data."""
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     thirty_days_ago = now - timedelta(days=30)
 
     # Fetch all controls for framework
-    controls_result = await db.execute(
-        select(ComplianceControl).where(ComplianceControl.framework == framework)
-    )
+    controls_result = await db.execute(select(ComplianceControl).where(ComplianceControl.framework == framework))
     controls = controls_result.scalars().all()
 
     # Count audit log events for the tenant in last 30 days
@@ -83,7 +80,9 @@ async def auto_collect_evidence(
         },
         "CC6.2": {
             "title": f"User provisioning audit trail — {access_events} events (30d)",
-            "description": "New user access requests are authorized before credentials are issued. RBAC role assignment events confirm process.",
+            "description": (
+                "New user access requests are authorized before credentials are issued. RBAC role assignment events confirm process."
+            ),
             "status": "collected" if access_events > 0 else "review",
         },
         "CC6.3": {
@@ -163,9 +162,7 @@ async def get_soc2_summary(
     """Return a summary of SOC 2 readiness for a tenant."""
 
     # Get all controls
-    controls_result = await db.execute(
-        select(ComplianceControl).where(ComplianceControl.framework == "soc2")
-    )
+    controls_result = await db.execute(select(ComplianceControl).where(ComplianceControl.framework == "soc2"))
     controls = controls_result.scalars().all()
     total_controls = len(controls)
 
@@ -174,9 +171,7 @@ async def get_soc2_summary(
 
     # Get latest evidence per control for this tenant
     evidence_result = await db.execute(
-        select(ComplianceEvidence)
-        .where(ComplianceEvidence.tenant_id == tenant_id)
-        .order_by(ComplianceEvidence.collected_at.desc())
+        select(ComplianceEvidence).where(ComplianceEvidence.tenant_id == tenant_id).order_by(ComplianceEvidence.collected_at.desc())
     )
     all_evidence = evidence_result.scalars().all()
 
@@ -195,7 +190,5 @@ async def get_soc2_summary(
         "review": statuses.count("review"),
         "approved": statuses.count("approved"),
         "rejected": statuses.count("rejected"),
-        "pct": round(
-            (statuses.count("collected") + statuses.count("approved")) / total_controls * 100
-        ),
+        "pct": round((statuses.count("collected") + statuses.count("approved")) / total_controls * 100),
     }

@@ -2,6 +2,7 @@
 Blast-radius gate: evaluates action risk before execution.
 Enforces approval workflows for high-risk actions.
 """
+
 from __future__ import annotations
 
 import structlog

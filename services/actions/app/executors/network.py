@@ -2,6 +2,7 @@
 Network action executors: block IP, block domain.
 These are simulation stubs — integrate with your firewall/EDR/SIEM APIs.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

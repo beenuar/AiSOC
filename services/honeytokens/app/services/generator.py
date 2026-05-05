@@ -1,4 +1,5 @@
 """Honeytoken generator — creates plausible-looking tokens of various types."""
+
 from __future__ import annotations
 
 import base64
@@ -7,7 +8,7 @@ import os
 import secrets
 import string
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.core.config import settings
@@ -80,7 +81,7 @@ def generate_token(
 
     token_data = TOKEN_GENERATORS[token_type]()
     ttl = ttl_days if ttl_days is not None else settings.token_ttl_days
-    expires_at = datetime.now(timezone.utc) + timedelta(days=ttl)
+    expires_at = datetime.now(UTC) + timedelta(days=ttl)
 
     return {
         "id": uuid.uuid4(),

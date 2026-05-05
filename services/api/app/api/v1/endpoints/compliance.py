@@ -133,9 +133,7 @@ async def _get_framework_data(
 ) -> tuple[list[ComplianceControl], dict[uuid.UUID, list[ComplianceEvidence]]]:
     """Fetch controls and grouped evidence for a framework."""
     ctrl_result = await db.execute(
-        select(ComplianceControl)
-        .where(ComplianceControl.framework == framework)
-        .order_by(ComplianceControl.control_id)
+        select(ComplianceControl).where(ComplianceControl.framework == framework).order_by(ComplianceControl.control_id)
     )
     controls = ctrl_result.scalars().all()
 
@@ -224,8 +222,7 @@ async def list_frameworks(
 ) -> list[FrameworkInfo]:
     """Return all supported compliance frameworks with control counts."""
     result = await db.execute(
-        select(ComplianceControl.framework, func.count(ComplianceControl.id).label("cnt"))
-        .group_by(ComplianceControl.framework)
+        select(ComplianceControl.framework, func.count(ComplianceControl.id).label("cnt")).group_by(ComplianceControl.framework)
     )
     counts = {row.framework: row.cnt for row in result}
 
@@ -251,9 +248,7 @@ async def get_soc2_dashboard(
     db: TenantDBSession,
 ) -> SOC2Response:
     """Return SOC 2 evidence dashboard for the current tenant."""
-    controls, ev_by_control = await _get_framework_data(
-        db, current_user.tenant_id, "soc2"
-    )
+    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, "soc2")
     controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control)
     summary = await get_soc2_summary(db, current_user.tenant_id)
 
@@ -285,9 +280,7 @@ async def export_soc2_evidence(
     db: TenantDBSession,
 ) -> dict:
     """Export SOC 2 evidence as structured JSON for PDF generation."""
-    controls, ev_by_control = await _get_framework_data(
-        db, current_user.tenant_id, "soc2"
-    )
+    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, "soc2")
     controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control, max_evidence=3)
     summary = await get_soc2_summary(db, current_user.tenant_id)
 
@@ -341,9 +334,7 @@ async def get_framework_dashboard(
     """Return compliance dashboard for the given framework."""
     _validate_framework(framework)
 
-    controls, ev_by_control = await _get_framework_data(
-        db, current_user.tenant_id, framework
-    )
+    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, framework)
     controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control)
     summary_dict = _compute_summary(controls_with_evidence)
 
@@ -364,9 +355,7 @@ async def get_framework_heatmap(
     """Return heatmap data (category × status counts) for the given framework."""
     _validate_framework(framework)
 
-    controls, ev_by_control = await _get_framework_data(
-        db, current_user.tenant_id, framework
-    )
+    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, framework)
     controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control)
 
     # Build category × status matrix
@@ -381,11 +370,7 @@ async def get_framework_heatmap(
 
     statuses = ["approved", "collected", "review", "rejected", "missing"]
 
-    cells = [
-        HeatmapCell(category=cat, status=st, count=cell_map.get((cat, st), 0))
-        for cat in categories_ordered
-        for st in statuses
-    ]
+    cells = [HeatmapCell(category=cat, status=st, count=cell_map.get((cat, st), 0)) for cat in categories_ordered for st in statuses]
 
     return HeatmapResponse(
         framework=framework,
@@ -405,9 +390,7 @@ async def collect_framework_evidence(
     """Trigger automatic evidence collection for the given framework."""
     _validate_framework(framework)
 
-    collected = await auto_collect_evidence(
-        db, current_user.tenant_id, framework=framework
-    )
+    collected = await auto_collect_evidence(db, current_user.tenant_id, framework=framework)
     await db.commit()
 
     return {
@@ -427,9 +410,7 @@ async def export_framework_evidence(
     """Export compliance evidence for the given framework as structured JSON."""
     _validate_framework(framework)
 
-    controls, ev_by_control = await _get_framework_data(
-        db, current_user.tenant_id, framework
-    )
+    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, framework)
     controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control, max_evidence=3)
     summary_dict = _compute_summary(controls_with_evidence)
 

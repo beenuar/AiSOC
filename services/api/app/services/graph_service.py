@@ -2,12 +2,12 @@
 Graph service: entity node management, attack-path queries, blast-radius traversal.
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import logging
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from app.db.neo4j import get_session
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # ─── Entity Upsert Helpers ────────────────────────────────────────────────────
+
 
 async def upsert_host(
     host_id: str,
@@ -33,7 +34,7 @@ async def upsert_host(
         "ip_address": ip_address,
         "os": os,
         "criticality": criticality,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
         **(extra or {}),
     }
     cypher = """
@@ -61,7 +62,7 @@ async def upsert_user(
         "email": email,
         "department": department,
         "risk_score": risk_score,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }
     cypher = """
     MERGE (u:User {id: $id})
@@ -88,7 +89,7 @@ async def upsert_alert_node(
         "tenant_id": tenant_id,
         "title": title,
         "severity": severity,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
     async with get_session() as s:
@@ -124,7 +125,7 @@ async def upsert_alert_node(
             )
 
         # Link to MITRE Techniques
-        for technique_id in (mitre_techniques or []):
+        for technique_id in mitre_techniques or []:
             await s.run(
                 """
                 MATCH (a:Alert {id: $alert_id})
@@ -134,11 +135,11 @@ async def upsert_alert_node(
                 """,
                 alert_id=alert_id,
                 technique_id=technique_id,
-                ts=datetime.now(timezone.utc).isoformat(),
+                ts=datetime.now(UTC).isoformat(),
             )
 
         # Link to IOCs
-        for ioc_val in (ioc_values or []):
+        for ioc_val in ioc_values or []:
             await s.run(
                 """
                 MATCH (a:Alert {id: $alert_id})
@@ -149,7 +150,7 @@ async def upsert_alert_node(
                 alert_id=alert_id,
                 ioc_val=ioc_val,
                 tenant_id=tenant_id,
-                ts=datetime.now(timezone.utc).isoformat(),
+                ts=datetime.now(UTC).isoformat(),
             )
 
 
@@ -166,7 +167,7 @@ async def upsert_case_node(
         "tenant_id": tenant_id,
         "title": title,
         "severity": severity,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
     async with get_session() as s:
@@ -176,7 +177,7 @@ async def upsert_case_node(
             props=case_props,
         )
 
-        for alert_id in (alert_ids or []):
+        for alert_id in alert_ids or []:
             await s.run(
                 """
                 MATCH (c:Case {id: $case_id})
@@ -204,7 +205,7 @@ async def upsert_ioc(
         "malicious": malicious,
         "confidence": confidence,
         "tags": tags or [],
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }
     async with get_session() as s:
         await s.run(
@@ -215,6 +216,7 @@ async def upsert_ioc(
 
 
 # ─── Query Helpers ────────────────────────────────────────────────────────────
+
 
 async def get_attack_path(case_id: str, tenant_id: str, max_depth: int = 6) -> dict[str, Any]:
     """
@@ -268,7 +270,8 @@ async def _attack_path_fallback(case_id: str, tenant_id: str) -> dict[str, Any]:
         # Get case
         r = await s.run(
             "MATCH (c:Case {id: $id, tenant_id: $tid}) RETURN c",
-            id=case_id, tid=tenant_id,
+            id=case_id,
+            tid=tenant_id,
         )
         rec = await r.single()
         if not rec:
@@ -380,9 +383,7 @@ async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hop
     }
 
 
-async def _blast_radius_fallback(
-    entity_id: str, entity_type: str, tenant_id: str, hops: int
-) -> dict[str, Any]:
+async def _blast_radius_fallback(entity_id: str, entity_type: str, tenant_id: str, hops: int) -> dict[str, Any]:
     """Simple 2-hop blast radius without APOC."""
     label_map = {"host": "Host", "user": "User", "ioc": "IOC", "alert": "Alert"}
     label = label_map.get(entity_type.lower(), "Host")

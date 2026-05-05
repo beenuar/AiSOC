@@ -22,13 +22,12 @@ Configuration (env vars):
 from __future__ import annotations
 
 import hashlib
-import hmac
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode
 
 import httpx
 import jwt as _jwt
@@ -49,8 +48,8 @@ _JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
 def _issue_jwt(claims: dict[str, Any]) -> str:
     payload = {
         **claims,
-        "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=_JWT_EXPIRE_MINUTES),
+        "iat": datetime.now(UTC),
+        "exp": datetime.now(UTC) + timedelta(minutes=_JWT_EXPIRE_MINUTES),
     }
     return _jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
 
@@ -89,6 +88,7 @@ def _pop_state(state: str) -> dict[str, str] | None:
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
+
 
 @router.get("/login")
 async def oidc_login(request: Request, redirect: str = "/") -> Response:
@@ -129,6 +129,7 @@ async def oidc_login(request: Request, redirect: str = "/") -> Response:
         verifier = secrets.token_urlsafe(64)
         challenge = hashlib.sha256(verifier.encode()).digest()
         import base64
+
         challenge_b64 = base64.urlsafe_b64encode(challenge).rstrip(b"=").decode()
         params["code_challenge"] = challenge_b64
         params["code_challenge_method"] = "S256"
@@ -211,19 +212,20 @@ async def oidc_callback(
                 userinfo = ui_resp.json()
 
     merged = {**claims, **userinfo}
-    token = _issue_jwt({
-        "sub": merged.get("sub", ""),
-        "email": merged.get("email", ""),
-        "name": merged.get("name", ""),
-        "picture": merged.get("picture", ""),
-        "provider": "oidc",
-        "iss_upstream": issuer,
-    })
+    token = _issue_jwt(
+        {
+            "sub": merged.get("sub", ""),
+            "email": merged.get("email", ""),
+            "name": merged.get("name", ""),
+            "picture": merged.get("picture", ""),
+            "provider": "oidc",
+            "iss_upstream": issuer,
+        }
+    )
 
     redirect_url = state_data.get("redirect", "/")
     response = RedirectResponse(url=redirect_url, status_code=302)
-    response.set_cookie("aisoc_token", token, httponly=True, samesite="lax",
-                        secure=request.url.scheme == "https")
+    response.set_cookie("aisoc_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
     response.delete_cookie("oidc_state")
     return response
 
@@ -245,13 +247,15 @@ async def oidc_userinfo(request: Request) -> JSONResponse:
     except _jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
 
-    return JSONResponse({
-        "sub": claims.get("sub"),
-        "email": claims.get("email"),
-        "name": claims.get("name"),
-        "picture": claims.get("picture"),
-        "provider": claims.get("provider"),
-    })
+    return JSONResponse(
+        {
+            "sub": claims.get("sub"),
+            "email": claims.get("email"),
+            "name": claims.get("name"),
+            "picture": claims.get("picture"),
+            "provider": claims.get("provider"),
+        }
+    )
 
 
 @router.get("/logout")

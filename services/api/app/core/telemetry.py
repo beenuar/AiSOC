@@ -21,13 +21,14 @@ Usage:
   with tracer.start_as_current_span("my-op") as span:
       span.set_attribute("case.id", case_id)
 """
+
 from __future__ import annotations
 
 import logging
 import os
 
 from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
@@ -56,6 +57,7 @@ def _build_exporter(exporter_name: str):
     if name == "jaeger":
         try:
             from opentelemetry.exporter.jaeger.thrift import JaegerExporter  # type: ignore
+
             return JaegerExporter(
                 agent_host_name=os.getenv("JAEGER_HOST", "jaeger"),
                 agent_port=int(os.getenv("JAEGER_PORT", "6831")),
@@ -66,14 +68,14 @@ def _build_exporter(exporter_name: str):
 
     if name == "otlp":
         try:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter  # type: ignore
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+                OTLPSpanExporter,  # type: ignore
+            )
+
             endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
             return OTLPSpanExporter(endpoint=endpoint, insecure=True)
         except ImportError:
-            logger.warning(
-                "opentelemetry-exporter-otlp-proto-grpc not installed; "
-                "install it or set OTEL_EXPORTER=console"
-            )
+            logger.warning("opentelemetry-exporter-otlp-proto-grpc not installed; install it or set OTEL_EXPORTER=console")
             return None
 
     # "none" or unknown → no exporter
@@ -112,6 +114,7 @@ def instrument_app(app) -> None:  # noqa: ANN001
     # FastAPI
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # type: ignore
+
         FastAPIInstrumentor.instrument_app(app)
         logger.debug("FastAPI auto-instrumented")
     except ImportError:
@@ -120,6 +123,7 @@ def instrument_app(app) -> None:  # noqa: ANN001
     # SQLAlchemy (engine-level spans)
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor  # type: ignore
+
         SQLAlchemyInstrumentor().instrument()
         logger.debug("SQLAlchemy auto-instrumented")
     except ImportError:
@@ -128,6 +132,7 @@ def instrument_app(app) -> None:  # noqa: ANN001
     # httpx (outbound HTTP calls — plugin invocations, enrichment calls, etc.)
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # type: ignore
+
         HTTPXClientInstrumentor().instrument()
         logger.debug("httpx auto-instrumented")
     except ImportError:

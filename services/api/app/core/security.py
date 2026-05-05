@@ -1,12 +1,13 @@
 """
 Security utilities: JWT tokens, password hashing, RBAC, API key generation
 """
+
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+from jose import jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -15,40 +16,70 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "platform_admin": ["*"],
+    # ``admin`` is the role string handed out by the dev-mode demo user
+    # (see ``app.api.v1.dev_auth``) and by some legacy seed scripts. It
+    # must resolve to the same privileges as ``platform_admin`` so that
+    # ``require_permission(...)`` does not silently deny while
+    # identity-only deps silently allow — that inconsistency was the
+    # source of the P0.3 audit finding.
+    "admin": ["*"],
     "tenant_admin": [
-        "alerts:read", "alerts:write", "alerts:delete",
-        "cases:read", "cases:write", "cases:delete",
-        "playbooks:read", "playbooks:write", "playbooks:execute",
-        "connectors:read", "connectors:write", "connectors:delete",
-        "users:read", "users:write",
-        "rules:read", "rules:write",
-        "reports:read", "reports:write",
+        "alerts:read",
+        "alerts:write",
+        "alerts:delete",
+        "cases:read",
+        "cases:write",
+        "cases:delete",
+        "playbooks:read",
+        "playbooks:write",
+        "playbooks:execute",
+        "connectors:read",
+        "connectors:write",
+        "connectors:delete",
+        "users:read",
+        "users:write",
+        "rules:read",
+        "rules:write",
+        "reports:read",
+        "reports:write",
         "threat_intel:read",
-        "settings:read", "settings:write",
+        "settings:read",
+        "settings:write",
     ],
     "soc_lead": [
-        "alerts:read", "alerts:write",
-        "cases:read", "cases:write",
-        "playbooks:read", "playbooks:execute",
+        "alerts:read",
+        "alerts:write",
+        "cases:read",
+        "cases:write",
+        "playbooks:read",
+        "playbooks:execute",
         "connectors:read",
         "users:read",
-        "rules:read", "rules:write",
-        "reports:read", "reports:write",
+        "rules:read",
+        "rules:write",
+        "reports:read",
+        "reports:write",
         "threat_intel:read",
     ],
     "soc_analyst": [
-        "alerts:read", "alerts:write",
-        "cases:read", "cases:write",
-        "playbooks:read", "playbooks:execute",
+        "alerts:read",
+        "alerts:write",
+        "cases:read",
+        "cases:write",
+        "playbooks:read",
+        "playbooks:execute",
         "connectors:read",
         "threat_intel:read",
         "reports:read",
     ],
     "threat_hunter": [
         "alerts:read",
-        "cases:read", "cases:write",
-        "threat_intel:read", "threat_intel:write",
-        "rules:read", "rules:write",
+        "cases:read",
+        "cases:write",
+        "threat_intel:read",
+        "threat_intel:write",
+        "rules:read",
+        "rules:write",
         "reports:read",
     ],
     "viewer": [
@@ -58,8 +89,10 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "threat_intel:read",
     ],
     "api_service": [
-        "alerts:read", "alerts:write",
-        "cases:read", "cases:write",
+        "alerts:read",
+        "alerts:write",
+        "cases:read",
+        "cases:write",
         "threat_intel:read",
     ],
 }
@@ -103,9 +136,9 @@ def generate_api_key() -> tuple[str, str, str]:
         - prefix    – first 12 chars for display / lookup     (e.g. ``aisoc_abc123``)
         - hashed_key – SHA-256 hex digest stored in the DB
     """
-    token = secrets.token_hex(24)          # 48 hex chars = 192 bits entropy
+    token = secrets.token_hex(24)  # 48 hex chars = 192 bits entropy
     raw_key = f"aisoc_{token}"
-    prefix = raw_key[:12]                  # "aisoc_" + first 6 hex chars
+    prefix = raw_key[:12]  # "aisoc_" + first 6 hex chars
     hashed_key = hashlib.sha256(raw_key.encode()).hexdigest()
     return raw_key, prefix, hashed_key
 
@@ -118,9 +151,9 @@ def hash_api_key(raw_key: str) -> str:
 def verify_ed25519_signature(public_key_bytes: bytes, message: bytes, signature: bytes) -> None:
     """Verify an Ed25519 signature. Raises ValueError on failure."""
     try:
+        from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
         from cryptography.hazmat.primitives.serialization import load_pem_public_key
-        from cryptography.exceptions import InvalidSignature
 
         pub_key = load_pem_public_key(public_key_bytes)
         if not isinstance(pub_key, Ed25519PublicKey):

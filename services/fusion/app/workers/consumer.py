@@ -2,12 +2,11 @@
 Kafka consumer worker: reads raw alerts, runs them through the fusion engine,
 and publishes fused results back to Kafka.
 """
-import asyncio
+
 import json
 
-from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from aiokafka.errors import KafkaError
 import structlog
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from app.core.config import settings
 from app.models.alert import FusionDecision, RawAlert

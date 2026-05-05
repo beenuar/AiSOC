@@ -2,9 +2,10 @@
 CrowdStrike Falcon connector.
 Fetches detections from the CrowdStrike Falcon API.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -53,7 +54,7 @@ class CrowdStrikeConnector(BaseConnector):
         if not self._access_token:
             await self._authenticate()
 
-        since = (datetime.now(timezone.utc) - timedelta(seconds=since_seconds)).isoformat()
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).isoformat()
         headers = {"Authorization": f"Bearer {self._access_token}"}
 
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -92,17 +93,18 @@ class CrowdStrikeConnector(BaseConnector):
         severity_map = {1: "low", 2: "medium", 3: "high", 4: "critical"}
         severity = severity_map.get(raw.get("max_severity", 2), "medium")
 
+        behaviors = raw.get("behaviors") or [{}]
+        title = behaviors[0].get("display_name", "CrowdStrike Detection")
+
         return {
             "source": self.connector_id,
             "external_id": raw.get("detection_id", ""),
-            "title": raw.get("behaviors", [{}])[0].get("display_name", "CrowdStrike Detection") if raw.get("behaviors") else "CrowdStrike Detection",
+            "title": title,
             "description": f"CrowdStrike detection on {raw.get('device', {}).get('hostname', 'unknown')}",
             "severity": severity,
             "src_ip": raw.get("device", {}).get("external_ip"),
             "hostname": raw.get("device", {}).get("hostname"),
-            "mitre_techniques": [
-                b.get("technique_id", "") for b in raw.get("behaviors", []) if b.get("technique_id")
-            ],
+            "mitre_techniques": [b.get("technique_id", "") for b in raw.get("behaviors", []) if b.get("technique_id")],
             "raw_event": raw,
             "created_at": raw.get("created_timestamp"),
         }

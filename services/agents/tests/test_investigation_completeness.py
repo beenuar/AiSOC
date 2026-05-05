@@ -32,6 +32,7 @@ See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 Run:
     pytest services/agents/tests/test_investigation_completeness.py -v
 """
+
 from __future__ import annotations
 
 import json
@@ -41,7 +42,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 _TESTS_DIR = Path(__file__).parent
 _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
 
@@ -49,8 +49,7 @@ _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
 def _load_dataset() -> list[dict[str, Any]]:
     if not _DATASET_PATH.exists():
         raise FileNotFoundError(
-            f"Synthetic incidents dataset missing at {_DATASET_PATH}. "
-            f"Run `python3 scripts/generate_eval_incidents.py` to regenerate."
+            f"Synthetic incidents dataset missing at {_DATASET_PATH}. Run `python3 scripts/generate_eval_incidents.py` to regenerate."
         )
     with _DATASET_PATH.open() as f:
         return json.load(f)
@@ -173,7 +172,8 @@ class TestInvestigationCompleteness(unittest.TestCase):
         """Every incident in the eval dataset must declare evidence_keywords."""
         missing = [i["id"] for i in SYNTHETIC_INCIDENTS_DATA if not i.get("evidence_keywords")]
         self.assertEqual(
-            missing, [],
+            missing,
+            [],
             f"{len(missing)} incidents missing evidence_keywords (sample: {missing[:5]})",
         )
 
@@ -186,7 +186,8 @@ class TestInvestigationCompleteness(unittest.TestCase):
             f"{result.full_coverage_pct * 100:.1f}%)"
         )
         self.assertGreaterEqual(
-            result.mean, 0.85,
+            result.mean,
+            0.85,
             f"Mean completeness {result.mean:.3f} below 0.85 floor.",
         )
 
@@ -194,7 +195,8 @@ class TestInvestigationCompleteness(unittest.TestCase):
         """At least 60% of incidents should achieve full evidence coverage."""
         result = evaluate_completeness()
         self.assertGreaterEqual(
-            result.full_coverage_pct, 0.60,
+            result.full_coverage_pct,
+            0.60,
             f"Only {result.full_coverage_pct * 100:.1f}% of incidents fully covered.",
         )
 
@@ -203,15 +205,21 @@ class TestInvestigationCompleteness(unittest.TestCase):
         result = evaluate_completeness(keep_per_incident=True)
         zeroed = [r for r in (result.per_incident or []) if r["completeness"] == 0.0]
         self.assertEqual(
-            zeroed, [],
+            zeroed,
+            [],
             f"{len(zeroed)} incidents had zero evidence coverage (sample: {zeroed[:3]})",
         )
 
 
 if __name__ == "__main__":
     result = evaluate_completeness()
-    print(json.dumps({
-        "incidents": result.incidents,
-        "mean_completeness": round(result.mean, 4),
-        "full_coverage_pct": round(result.full_coverage_pct, 4),
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "incidents": result.incidents,
+                "mean_completeness": round(result.mean, 4),
+                "full_coverage_pct": round(result.full_coverage_pct, 4),
+            },
+            indent=2,
+        )
+    )

@@ -1,4 +1,5 @@
 """Thin async client for the Caldera REST API."""
+
 from __future__ import annotations
 
 import logging
@@ -32,9 +33,7 @@ class CalderaClient:
 
     async def get_ability(self, ability_id: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(
-                f"{self.base_url}/api/v2/abilities/{ability_id}", headers=self._headers
-            )
+            r = await c.get(f"{self.base_url}/api/v2/abilities/{ability_id}", headers=self._headers)
             r.raise_for_status()
             return r.json()
 
@@ -46,9 +45,7 @@ class CalderaClient:
 
     async def get_operation(self, operation_id: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(
-                f"{self.base_url}/api/v2/operations/{operation_id}", headers=self._headers
-            )
+            r = await c.get(f"{self.base_url}/api/v2/operations/{operation_id}", headers=self._headers)
             r.raise_for_status()
             return r.json()
 
@@ -67,9 +64,7 @@ class CalderaClient:
             "state": "running",
         }
         async with httpx.AsyncClient(timeout=15) as c:
-            r = await c.post(
-                f"{self.base_url}/api/v2/operations", json=payload, headers=self._headers
-            )
+            r = await c.post(f"{self.base_url}/api/v2/operations", json=payload, headers=self._headers)
             r.raise_for_status()
             return r.json()
 

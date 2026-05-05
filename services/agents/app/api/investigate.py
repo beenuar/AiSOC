@@ -9,6 +9,7 @@ Endpoints:
   GET  /api/v1/investigations/{run_id}/report.pdf  → weasyprint PDF
   WS   /api/v1/investigations/{run_id}/stream  → SSE-style step stream
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSoc
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from app.investigator import InvestigatorOrchestrator, InvestigatorState
+from app.investigator import InvestigatorOrchestrator
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["investigations"])
@@ -46,6 +47,7 @@ _orch = InvestigatorOrchestrator()
 # Request / Response schemas
 # ---------------------------------------------------------------------------
 
+
 class InvestigateRequest(BaseModel):
     alert_summary: str
     raw_alert: dict[str, Any] = {}
@@ -62,6 +64,7 @@ class InvestigateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Realtime broadcast helper
 # ---------------------------------------------------------------------------
+
 
 async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> None:
     """Forward an agent step event to the realtime service (best-effort)."""
@@ -87,6 +90,7 @@ async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> Non
 # ---------------------------------------------------------------------------
 # Background task: runs investigation and streams steps to realtime service
 # ---------------------------------------------------------------------------
+
 
 async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> None:
     audit_log: list[dict[str, Any]] = []
@@ -114,33 +118,43 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
 
             elif event.get("type") == "done":
                 state_data = event.get("state", {})
-                _runs[run_id].update({
-                    "status": "completed",
-                    "report_md": state_data.get("report_md", ""),
-                    "report_html": state_data.get("report_html", ""),
-                    "audit_log": audit_log,
-                    "recon": state_data.get("recon", {}),
-                    "forensic": state_data.get("forensic", {}),
-                    "responder": state_data.get("responder", {}),
-                    "completed_at": datetime.utcnow().isoformat(),
-                    "error": None,
-                })
-                await _emit_event(run_id, req.tenant_id, {
-                    "kind": "completed",
-                    "agent": "orchestrator",
-                    "summary": "Investigation completed",
-                    "data": {"status": "completed"},
-                })
+                _runs[run_id].update(
+                    {
+                        "status": "completed",
+                        "report_md": state_data.get("report_md", ""),
+                        "report_html": state_data.get("report_html", ""),
+                        "audit_log": audit_log,
+                        "recon": state_data.get("recon", {}),
+                        "forensic": state_data.get("forensic", {}),
+                        "responder": state_data.get("responder", {}),
+                        "completed_at": datetime.utcnow().isoformat(),
+                        "error": None,
+                    }
+                )
+                await _emit_event(
+                    run_id,
+                    req.tenant_id,
+                    {
+                        "kind": "completed",
+                        "agent": "orchestrator",
+                        "summary": "Investigation completed",
+                        "data": {"status": "completed"},
+                    },
+                )
 
             elif event.get("type") == "error":
                 err_msg = event.get("error", "Unknown error")
                 _runs[run_id].update({"status": "failed", "error": err_msg})
-                await _emit_event(run_id, req.tenant_id, {
-                    "kind": "error",
-                    "agent": "orchestrator",
-                    "summary": err_msg,
-                    "data": {"status": "failed"},
-                })
+                await _emit_event(
+                    run_id,
+                    req.tenant_id,
+                    {
+                        "kind": "error",
+                        "agent": "orchestrator",
+                        "summary": err_msg,
+                        "data": {"status": "failed"},
+                    },
+                )
 
     except Exception as exc:  # noqa: BLE001
         logger.error("investigation_bg_task failed", run_id=run_id, error=str(exc))
@@ -150,6 +164,7 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @router.post("/cases/{case_id}/investigate", response_model=InvestigateResponse)
 async def launch_investigation(
@@ -232,12 +247,12 @@ async def get_report_pdf(run_id: str):
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="aisoc-report-{run_id}.pdf"'},
         )
-    except ImportError:
+    except ImportError as exc:
         # weasyprint not installed — return the HTML with a PDF content-type note
         raise HTTPException(
             status_code=501,
             detail="PDF generation requires weasyprint. Install with: pip install weasyprint",
-        )
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
 
@@ -272,12 +287,16 @@ async def stream_investigation(ws: WebSocket, run_id: str):
 
                 status = run.get("status", "running")
                 if status in ("completed", "failed"):
-                    await ws.send_text(json.dumps({
-                        "type": "done" if status == "completed" else "error",
-                        "case_id": case_id,
-                        "status": status,
-                        "error": run.get("error"),
-                    }))
+                    await ws.send_text(
+                        json.dumps(
+                            {
+                                "type": "done" if status == "completed" else "error",
+                                "case_id": case_id,
+                                "status": status,
+                                "error": run.get("error"),
+                            }
+                        )
+                    )
                     break
                 await asyncio.sleep(0.5)
         else:

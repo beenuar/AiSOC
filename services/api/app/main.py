@@ -1,27 +1,33 @@
 """AiSOC Core API - FastAPI Application Entry Point."""
+
+import hmac
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Security, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.api.v1.router import api_router
 from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
-from app.core.config import settings
-from app.middleware.audit_middleware import AuditMiddleware
-from app.middleware.demo_mode import DemoModeMiddleware
+from app.core.config import settings, warn_if_insecure_defaults
 from app.core.logging import configure_logging
 from app.core.telemetry import instrument_app
 from app.db.database import engine
-from app.db.neo4j import init_neo4j, close_neo4j
+from app.db.neo4j import close_neo4j, init_neo4j
 from app.graphql.schema import graphql_router
+from app.middleware.audit_middleware import AuditMiddleware
+from app.middleware.demo_mode import DemoModeMiddleware
 from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
+
+_DEV_ENVIRONMENTS = {"development", "dev", "local", "demo", "test"}
+_metrics_bearer = HTTPBearer(auto_error=False)
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +49,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown tasks."""
     configure_logging()
     logger.info("AiSOC API starting up", version=settings.VERSION, environment=settings.ENVIRONMENT)
+
+    # Surface insecure defaults (placeholder SECRET_KEY, missing METRICS_TOKEN
+    # outside dev, plugin trust mode disabled outside dev) at the top of the
+    # log stream so operators see them before anything else.
+    warn_if_insecure_defaults(settings)
 
     # Create all database tables (dev only; use Alembic migrations in prod)
     if settings.ENVIRONMENT == "development":
@@ -79,10 +90,7 @@ def create_application() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
         title="AiSOC Platform API",
-        description=(
-            "AiSOC — open-source AI Security Operations Center. "
-            "Autonomous threat detection, investigation, and response."
-        ),
+        description=("AiSOC — open-source AI Security Operations Center. Autonomous threat detection, investigation, and response."),
         version=settings.VERSION,
         docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
         redoc_url="/api/redoc" if settings.ENVIRONMENT != "production" else None,
@@ -163,7 +171,43 @@ async def health_check() -> dict:
     }
 
 
+def _metrics_environment_is_dev() -> bool:
+    return (settings.ENVIRONMENT or "").strip().lower() in _DEV_ENVIRONMENTS
+
+
 @app.get("/metrics", tags=["system"])
-async def metrics() -> Response:
-    """Prometheus metrics endpoint."""
+async def metrics(
+    creds: HTTPAuthorizationCredentials | None = Security(_metrics_bearer),
+) -> Response:
+    """Prometheus metrics endpoint.
+
+    Auth gate:
+
+    * If ``settings.METRICS_TOKEN`` is set, callers MUST present
+      ``Authorization: Bearer <METRICS_TOKEN>``. Comparison uses
+      ``hmac.compare_digest`` to avoid timing leaks.
+    * If ``METRICS_TOKEN`` is empty, the endpoint is open **only** in a
+      development-class environment. In any other environment we refuse
+      the scrape with a 401 so operators don't accidentally ship an
+      unauthenticated metrics endpoint to the open internet.
+    """
+    token = (settings.METRICS_TOKEN or "").strip()
+
+    if token:
+        presented = (creds.credentials if creds else "") or ""
+        if not hmac.compare_digest(presented, token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid metrics token",
+                headers={"WWW-Authenticate": 'Bearer realm="metrics"'},
+            )
+    elif not _metrics_environment_is_dev():
+        # Production-ish environment with no token configured: refuse rather
+        # than expose internal counters anonymously.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="metrics endpoint requires METRICS_TOKEN outside development",
+            headers={"WWW-Authenticate": 'Bearer realm="metrics"'},
+        )
+
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

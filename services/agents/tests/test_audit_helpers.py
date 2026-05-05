@@ -10,6 +10,7 @@ can be imported without dragging in LangGraph or any LLM client (the package's
 ``__init__.py`` eagerly imports the orchestrator which depends on those). The
 state module itself only uses stdlib + pydantic + ``app.models.state``.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -52,9 +53,7 @@ def test_stable_hash_is_deterministic_across_dict_orderings() -> None:
 def test_log_llm_prompt_records_hash_and_metadata() -> None:
     state = _make_state()
     prompt = "Classify this alert: brute-force on user@example.com"
-    h = state.log_llm_prompt(
-        agent="recon", prompt=prompt, model="gpt-4o-mini", purpose="recon-extract"
-    )
+    h = state.log_llm_prompt(agent="recon", prompt=prompt, model="gpt-4o-mini", purpose="recon-extract")
     assert len(state.audit_log) == 1
     entry = state.audit_log[0]
     assert isinstance(entry, AuditEntry)

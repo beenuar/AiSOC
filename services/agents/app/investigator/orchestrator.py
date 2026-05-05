@@ -8,12 +8,13 @@ The state dict is threaded through every node unchanged apart from the
 node's own additions. An error in any node marks the state as "failed"
 and short-circuits to END.
 """
+
 from __future__ import annotations
 
-import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 from langgraph.graph import END, START, StateGraph
@@ -30,6 +31,7 @@ logger = structlog.get_logger()
 
 try:
     from app.core.telemetry import get_tracer as _get_tracer
+
     _tracer = _get_tracer("aisoc.investigator")
 except Exception:
     _tracer = trace.get_tracer("aisoc.investigator")
@@ -38,6 +40,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Error-wrapper: catches exceptions in any node and marks state as failed
 # ---------------------------------------------------------------------------
+
 
 def _safe_node(fn):
     """Wrap an async node so exceptions are captured in state instead of crashing the graph.
@@ -72,6 +75,7 @@ def _safe_node(fn):
 # ---------------------------------------------------------------------------
 # Guard: skip remaining nodes if state is already failed/completed
 # ---------------------------------------------------------------------------
+
 
 async def _guard(state_dict: dict[str, Any]) -> str:
     """Conditional edge: 'continue' or 'end'."""
@@ -118,6 +122,7 @@ def _build_graph():
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 class InvestigatorOrchestrator:
     """High-level wrapper around the compiled LangGraph."""
@@ -264,16 +269,8 @@ class InvestigatorOrchestrator:
                     new_entries = state.audit_log[emitted_count:]
                     for offset, entry in enumerate(new_entries):
                         seq = emitted_count + offset
-                        kind_val = (
-                            entry.kind.value
-                            if hasattr(entry.kind, "value")
-                            else str(entry.kind)
-                        )
-                        ts_str = (
-                            entry.timestamp.isoformat()
-                            if hasattr(entry.timestamp, "isoformat")
-                            else str(entry.timestamp)
-                        )
+                        kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
+                        ts_str = entry.timestamp.isoformat() if hasattr(entry.timestamp, "isoformat") else str(entry.timestamp)
                         # Persist before emitting so subscribers can deep-link
                         if tenant_uuid is not None:
                             await ledger.record_event(

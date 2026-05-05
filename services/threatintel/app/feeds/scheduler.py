@@ -6,11 +6,12 @@ pipes normalized IOCs through the deduplication + storage pipeline.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
 from typing import TYPE_CHECKING
 
+import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -29,7 +30,7 @@ class FeedScheduler:
     feeds (CISA KEV once a day) can coexist without contention.
     """
 
-    def __init__(self, pipeline: "ThreatIntelPipeline") -> None:
+    def __init__(self, pipeline: ThreatIntelPipeline) -> None:
         self._pipeline = pipeline
         self._scheduler = AsyncIOScheduler()
 

@@ -5,6 +5,7 @@ The api service acts as a gateway that forwards playbook CRUD and run
 requests to the agents service.  This keeps the public API contract in
 one place while the engine lives in services/agents.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,7 +13,6 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
 
@@ -37,6 +37,7 @@ async def _proxy(method: str, path: str, **kwargs) -> Any:
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
+
 
 @router.get("", summary="List playbooks")
 async def list_playbooks(enabled_only: bool = False):

@@ -10,6 +10,7 @@ Endpoints:
   POST   /api/v1/playbooks/{id}/run     → execute a playbook against a context
   GET    /api/v1/playbooks/runs/{run_id} → get a run result
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +24,6 @@ from app.playbook import (
     PlaybookEngine,
     PlaybookRun,
     PlaybookStore,
-    RunStatus,
 )
 
 logger = logging.getLogger("aisoc.api.playbooks")
@@ -37,6 +37,7 @@ _runs: dict[str, PlaybookRun] = {}
 # Request / Response helpers
 # ---------------------------------------------------------------------------
 
+
 class RunRequest(BaseModel):
     context: dict[str, Any] = {}
     dry_run: bool = False
@@ -45,6 +46,7 @@ class RunRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
+
 
 @router.get("", summary="List all playbooks")
 async def list_playbooks(enabled_only: bool = False) -> list[dict]:
@@ -88,6 +90,7 @@ async def delete_playbook(playbook_id: str) -> None:
 # Execution
 # ---------------------------------------------------------------------------
 
+
 async def _execute(playbook: Playbook, context: dict[str, Any], dry_run: bool, run_holder: list) -> None:
     """Background task: run the playbook and store the result."""
     engine = PlaybookEngine()
@@ -107,19 +110,15 @@ async def run_playbook(
     if not pb:
         raise HTTPException(status_code=404, detail="Playbook not found")
 
-    # We need a run_id before background task completes; pre-register it
-    import uuid
-    run_id_holder: list[str] = []
-
     # Create a placeholder run immediately so the caller can poll it
-    from app.playbook.engine import PlaybookRun as _PR, RunStatus as _RS
+    from app.playbook.engine import PlaybookRun as _PR
+    from app.playbook.engine import RunStatus as _RS
+
     placeholder = _PR(pb, body.context)
     placeholder.status = _RS.PENDING
     _runs[placeholder.run_id] = placeholder
 
-    background_tasks.add_task(
-        _execute_and_update, pb, body.context, body.dry_run, placeholder.run_id
-    )
+    background_tasks.add_task(_execute_and_update, pb, body.context, body.dry_run, placeholder.run_id)
 
     return {
         "run_id": placeholder.run_id,
@@ -129,9 +128,7 @@ async def run_playbook(
     }
 
 
-async def _execute_and_update(
-    playbook: Playbook, context: dict[str, Any], dry_run: bool, run_id: str
-) -> None:
+async def _execute_and_update(playbook: Playbook, context: dict[str, Any], dry_run: bool, run_id: str) -> None:
     """Background task: overwrite placeholder with real run."""
     engine = PlaybookEngine()
     pr = await engine.run(playbook, context, dry_run=dry_run)

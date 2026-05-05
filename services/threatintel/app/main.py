@@ -7,14 +7,15 @@ into OpenSearch, Qdrant, and Neo4j.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
+import structlog
 from aiokafka import AIOKafkaProducer
 from fastapi import FastAPI
 from neo4j import AsyncGraphDatabase
@@ -63,6 +64,7 @@ actors_ingested = Counter("threatintel_actors_ingested_total", "Total actors ing
 
 # ─── Application lifespan ─────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("ThreatIntel service starting…")
@@ -73,16 +75,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ── OpenSearch ────────────────────────────────────────────────────────────
     os_client = AsyncOpenSearch(
         hosts=[{"host": settings.OPENSEARCH_HOST, "port": settings.OPENSEARCH_PORT}],
-        http_auth=(settings.OPENSEARCH_USER, settings.OPENSEARCH_PASSWORD)
-        if settings.OPENSEARCH_USER
-        else None,
+        http_auth=(settings.OPENSEARCH_USER, settings.OPENSEARCH_PASSWORD) if settings.OPENSEARCH_USER else None,
         use_ssl=False,
     )
 
     # ── Qdrant ────────────────────────────────────────────────────────────────
-    qdrant_client = AsyncQdrantClient(
-        host=settings.QDRANT_HOST, port=settings.QDRANT_PORT
-    )
+    qdrant_client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
 
     # ── Neo4j ─────────────────────────────────────────────────────────────────
     neo4j_driver = AsyncGraphDatabase.driver(
@@ -94,9 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     kafka_producer = None
     if settings.KAFKA_BOOTSTRAP_SERVERS:
         try:
-            kafka_producer = AIOKafkaProducer(
-                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS
-            )
+            kafka_producer = AIOKafkaProducer(bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS)
             await kafka_producer.start()
         except Exception as exc:
             logger.warning("Kafka producer unavailable", error=str(exc))
@@ -131,14 +127,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         password=settings.TAXII_PASSWORD,
     )
 
-    misp_client = MispClient(
-        url=settings.MISP_URL,
-        api_key=settings.MISP_API_KEY,
-    ) if settings.MISP_URL else None
+    misp_client = (
+        MispClient(
+            url=settings.MISP_URL,
+            api_key=settings.MISP_API_KEY,
+        )
+        if settings.MISP_URL
+        else None
+    )
 
-    otx_client = OtxClient(
-        api_key=settings.OTX_API_KEY,
-    ) if settings.OTX_API_KEY else None
+    otx_client = (
+        OtxClient(
+            api_key=settings.OTX_API_KEY,
+        )
+        if settings.OTX_API_KEY
+        else None
+    )
 
     kev_client = CisaKevClient()
 
@@ -230,9 +234,7 @@ async def health() -> dict:
     return {
         "status": "ok",
         "redis": redis_ok,
-        "scheduler": app.state.scheduler._scheduler.running
-        if hasattr(app.state, "scheduler")
-        else False,
+        "scheduler": app.state.scheduler._scheduler.running if hasattr(app.state, "scheduler") else False,
     }
 
 
@@ -245,7 +247,5 @@ async def search_iocs(
 ) -> dict:
     """Search stored IOCs."""
     pipeline: ThreatIntelPipeline = app.state.pipeline
-    iocs = await pipeline._os.search_iocs(
-        value=value, ioc_type=ioc_type, source=source, limit=limit
-    )
+    iocs = await pipeline._os.search_iocs(value=value, ioc_type=ioc_type, source=source, limit=limit)
     return {"total": len(iocs), "iocs": iocs}

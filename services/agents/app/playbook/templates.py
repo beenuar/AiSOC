@@ -4,6 +4,7 @@
 These are imported by PlaybookStore.seed_defaults() and can also be
 referenced from the marketplace/index.json.
 """
+
 from __future__ import annotations
 
 STARTER_PLAYBOOKS: list[dict] = [
@@ -36,7 +37,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 2 ─ Ransomware Response
     {
         "id": "tpl-ransomware-response",
@@ -78,7 +78,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 3 ─ Credential Stuffing
     {
         "id": "tpl-cred-stuffing",
@@ -110,7 +109,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 4 ─ Insider Threat Investigation
     {
         "id": "tpl-insider-threat",
@@ -145,7 +143,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 5 ─ Malware IOC Enrichment
     {
         "id": "tpl-malware-ioc-enrich",
@@ -177,7 +174,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 6 ─ Cloud Misconfiguration Alert
     {
         "id": "tpl-cloud-misconfig",
@@ -212,7 +208,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 7 ─ Lateral Movement Detection
     {
         "id": "tpl-lateral-movement",
@@ -244,7 +239,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 8 ─ Data Exfiltration Alert
     {
         "id": "tpl-data-exfil",
@@ -285,7 +279,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 9 ─ Zero-Day Exploit
     {
         "id": "tpl-zero-day",
@@ -326,7 +319,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 10 ─ BEC (Business Email Compromise)
     {
         "id": "tpl-bec",
@@ -361,7 +353,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 11 ─ Supply Chain Alert
     {
         "id": "tpl-supply-chain",
@@ -396,7 +387,6 @@ STARTER_PLAYBOOKS: list[dict] = [
         "author": "AiSOC",
         "enabled": True,
     },
-
     # 12 ─ Auto-close Informational
     {
         "id": "tpl-auto-close-info",

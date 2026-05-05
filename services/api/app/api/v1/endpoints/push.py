@@ -19,13 +19,14 @@ to ``REALTIME_BASE_URL``. The gateway:
 * Forwards the JSON body unchanged so we don't have to keep two schemas in
   sync.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, HTTPException, status
 
 from app.api.v1.deps import AuthUser
 from app.core.config import settings
@@ -119,7 +120,7 @@ async def unsubscribe(
 @router.post("/test")
 async def test_notify(
     user: AuthUser,
-    body: Annotated[dict[str, Any] | None, Body(default=None)] = None,
+    body: Annotated[dict[str, Any] | None, Body()] = None,
 ) -> dict[str, Any]:
     """Send a test notification to the authenticated user's devices.
 

@@ -29,11 +29,11 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt as _jwt
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 logger = logging.getLogger(__name__)
@@ -50,13 +50,14 @@ _JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
 def _issue_jwt(claims: dict[str, Any]) -> str:
     payload = {
         **claims,
-        "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=_JWT_EXPIRE_MINUTES),
+        "iat": datetime.now(UTC),
+        "exp": datetime.now(UTC) + timedelta(minutes=_JWT_EXPIRE_MINUTES),
     }
     return _jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
 
 
 # ─── SAML settings builder ────────────────────────────────────────────────────
+
 
 def _saml_settings() -> dict[str, Any]:
     sp_acs = os.getenv("SAML_SP_ACS_URL", "http://localhost:8000/auth/saml/acs")
@@ -102,6 +103,7 @@ def _saml_settings() -> dict[str, Any]:
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
+
 @router.get("/login")
 async def saml_login(request: Request, redirect: str = "/") -> Response:
     """Initiate SAML SSO — redirect to IdP."""
@@ -143,12 +145,16 @@ async def saml_acs(request: Request) -> Response:
         attrs = auth.get_attributes()
         name_id = auth.get_nameid()
 
-        token = _issue_jwt({
-            "sub": name_id,
-            "email": _first(attrs.get("email") or attrs.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress", [name_id])),
-            "name": _first(attrs.get("displayName") or attrs.get("http://schemas.microsoft.com/identity/claims/displayname", [])),
-            "provider": "saml",
-        })
+        email_claim = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+        name_claim = "http://schemas.microsoft.com/identity/claims/displayname"
+        token = _issue_jwt(
+            {
+                "sub": name_id,
+                "email": _first(attrs.get("email") or attrs.get(email_claim, [name_id])),
+                "name": _first(attrs.get("displayName") or attrs.get(name_claim, [])),
+                "provider": "saml",
+            }
+        )
 
         relay_state = (await request.form()).get("RelayState", "/")
         response = RedirectResponse(url=str(relay_state), status_code=302)
@@ -207,6 +213,7 @@ async def saml_logout(request: Request) -> Response:
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _first(lst: list[str]) -> str:
     return lst[0] if lst else ""

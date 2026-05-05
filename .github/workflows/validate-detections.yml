@@ -1,19 +1,15 @@
 name: Validate Detection Rules
 
+# Runs on every PR / push to main+develop, no path filter.
+# Keeping a path filter let regressions ride in on PRs that touched neighbouring
+# code without bumping a detections/** path — e.g. a refactor that breaks the
+# YAML loader. The validator stays fast (~30s for 6,900+ rules), so the cost of
+# running it always is negligible compared to that risk.
 on:
   push:
-    paths:
-      - "detections/**"
-      - "scripts/validate_detections.py"
-      - "scripts/generate_detections.py"
-      - "scripts/detection_specs*.py"
-      - ".github/workflows/validate-detections.yml"
+    branches: [main, develop]
   pull_request:
-    paths:
-      - "detections/**"
-      - "scripts/validate_detections.py"
-      - "scripts/generate_detections.py"
-      - "scripts/detection_specs*.py"
+    branches: [main, develop]
 
 jobs:
   validate:

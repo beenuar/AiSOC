@@ -1,6 +1,7 @@
 """
 Action models for the Action Execution Service.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -38,10 +39,10 @@ class ActionStatus(str, Enum):
 
 
 class BlastRadius(str, Enum):
-    MINIMAL = "minimal"    # Notification-only, no infra changes
-    LOW = "low"            # Reversible, limited scope
-    MEDIUM = "medium"      # Affects single resource, reversible
-    HIGH = "high"          # Affects multiple resources or users
+    MINIMAL = "minimal"  # Notification-only, no infra changes
+    LOW = "low"  # Reversible, limited scope
+    MEDIUM = "medium"  # Affects single resource, reversible
+    HIGH = "high"  # Affects multiple resources or users
     CRITICAL = "critical"  # Broad impact, potential service disruption
 
 
@@ -72,6 +73,7 @@ APPROVAL_REQUIRED_ACTIONS = {
 
 class ActionRequest(BaseModel):
     """Request to execute an action."""
+
     id: UUID = Field(default_factory=uuid4)
     incident_id: UUID
     tenant_id: UUID
@@ -86,6 +88,7 @@ class ActionRequest(BaseModel):
 
 class ActionResult(BaseModel):
     """Result of an executed action."""
+
     action_id: UUID
     status: ActionStatus
     blast_radius: BlastRadius

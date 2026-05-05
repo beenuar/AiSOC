@@ -48,12 +48,8 @@ mypy = "^1.10.0"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP"]
+# Ruff config lives in the repo-root `ruff.toml` so the CI gate is consistent
+# across services. Don't add `[tool.ruff]` here — it would shadow the root.
 
 [tool.mypy]
 python_version = "3.11"

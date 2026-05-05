@@ -1,14 +1,15 @@
 """Alembic migration environment for Honeytokens service."""
+
 from __future__ import annotations
 
 import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
+from app.models.honeytoken import Base
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.models.honeytoken import Base
+from alembic import context
 
 config = context.config
 

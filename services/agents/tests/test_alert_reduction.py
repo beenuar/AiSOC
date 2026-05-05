@@ -1,10 +1,10 @@
 """
 Pillar-1 Evaluation: Alert Reduction Ratio — Real Measurement
 ==============================================================
-Anvilogic publicly claims a 90% alert-reduction figure. We measure ours
-honestly, offline, against a deterministic 1000-alert noisy stream that
-intentionally includes near-duplicates, host/user variations, time-windowed
-bursts, and benign chatter.
+Closed-source AI SOC vendors publicly claim alert-reduction figures around
+90%. We measure ours honestly, offline, against a deterministic 1000-alert
+noisy stream that intentionally includes near-duplicates, host/user
+variations, time-windowed bursts, and benign chatter.
 
 Unlike the other three pillar-1 suites (which are substrate self-consistency
 gates over deterministic templates), this suite is a REAL MEASUREMENT: the
@@ -30,6 +30,7 @@ See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 Run:
     pytest services/agents/tests/test_alert_reduction.py -v
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -38,10 +39,10 @@ import unittest
 from dataclasses import dataclass
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Synthetic alert generator (deterministic)
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Alert:
@@ -64,24 +65,49 @@ class Alert:
 
 
 _RULES = [
-    "rule.brute_force.ssh", "rule.brute_force.rdp", "rule.brute_force.smb",
-    "rule.malware.ransom_note", "rule.lolbas.certutil", "rule.lolbas.bitsadmin",
-    "rule.recon.smb_enum", "rule.lateral.psexec", "rule.persistence.run_key",
-    "rule.cloud.iam_anomaly", "rule.cloud.s3_public", "rule.dns.tunnel",
-    "rule.network.beacon", "rule.exfil.large_upload", "rule.endpoint.lsass_dump",
-    "rule.identity.impossible_travel", "rule.identity.password_spray",
-    "rule.app.sql_injection", "rule.app.ssrf", "rule.benign.scanner",
-    "rule.benign.healthcheck", "rule.benign.backup_window",
+    "rule.brute_force.ssh",
+    "rule.brute_force.rdp",
+    "rule.brute_force.smb",
+    "rule.malware.ransom_note",
+    "rule.lolbas.certutil",
+    "rule.lolbas.bitsadmin",
+    "rule.recon.smb_enum",
+    "rule.lateral.psexec",
+    "rule.persistence.run_key",
+    "rule.cloud.iam_anomaly",
+    "rule.cloud.s3_public",
+    "rule.dns.tunnel",
+    "rule.network.beacon",
+    "rule.exfil.large_upload",
+    "rule.endpoint.lsass_dump",
+    "rule.identity.impossible_travel",
+    "rule.identity.password_spray",
+    "rule.app.sql_injection",
+    "rule.app.ssrf",
+    "rule.benign.scanner",
+    "rule.benign.healthcheck",
+    "rule.benign.backup_window",
 ]
 
 _HOSTS = [
-    "WIN-PROD-WEB02", "WIN-FIN-DB01", "LIN-K8S-NODE01", "LIN-EDGE-VPN02",
-    "MAC-CFO-LAPTOP", "WIN-DC-PRIMARY", "WIN-EXCHANGE-01", "AWS-EC2-PROD-API",
+    "WIN-PROD-WEB02",
+    "WIN-FIN-DB01",
+    "LIN-K8S-NODE01",
+    "LIN-EDGE-VPN02",
+    "MAC-CFO-LAPTOP",
+    "WIN-DC-PRIMARY",
+    "WIN-EXCHANGE-01",
+    "AWS-EC2-PROD-API",
 ]
 
 _USERS = [
-    "alice@aisoc.dev", "bob@aisoc.dev", "carol@aisoc.dev", "svc-deploy@aisoc.dev",
-    "admin@aisoc.dev", "cfo@aisoc.dev", "system",
+    "alice@aisoc.dev",
+    "bob@aisoc.dev",
+    "carol@aisoc.dev",
+    "svc-deploy@aisoc.dev",
+    "admin@aisoc.dev",
+    "cfo@aisoc.dev",
+    "system",
 ]
 
 _SEVERITIES_BY_RULE: dict[str, str] = {
@@ -141,9 +167,9 @@ def generate_noisy_alert_stream(count: int = 1000) -> list[Alert]:
 
     # Parent-cluster sizing: small number of clusters for big duplication ratios.
     # E.g. 25 pure-duplicate parents in a 1000-alert stream means ~10 dupes each.
-    n_pure_parents = max(5, count // 40)        # 25 in 1000
-    n_near_parents = max(5, count // 30)        # 33 in 1000
-    n_storm_parents = max(3, count // 60)       # 16 in 1000
+    n_pure_parents = max(5, count // 40)  # 25 in 1000
+    n_near_parents = max(5, count // 30)  # 33 in 1000
+    n_storm_parents = max(3, count // 60)  # 16 in 1000
 
     for i in range(count):
         bucket = _h(i, "bucket") % 100  # 0..99
@@ -210,6 +236,7 @@ def generate_noisy_alert_stream(count: int = 1000) -> list[Alert]:
 # Fusion logic
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FusedIncident:
     rule_id: str
@@ -271,11 +298,7 @@ def fuse_alerts(
     for inc in incidents:
         if merged:
             last = merged[-1]
-            if (
-                last.rule_id == inc.rule_id
-                and last.host == inc.host
-                and (inc.first_ts - last.last_ts) <= host_window_s
-            ):
+            if last.rule_id == inc.rule_id and last.host == inc.host and (inc.first_ts - last.last_ts) <= host_window_s:
                 last.member_alert_ids.extend(inc.member_alert_ids)
                 last.score = max(last.score, inc.score)
                 last.last_ts = max(last.last_ts, inc.last_ts)
@@ -345,20 +368,20 @@ def compute_reduction(alerts: list[Alert], incidents: list[FusedIncident]) -> di
 # pytest tests
 # ---------------------------------------------------------------------------
 
+
 class TestAlertReduction(unittest.TestCase):
     """Pillar-1 alert-reduction ratio honestly measured."""
 
     def test_reduction_meets_target(self) -> None:
-        """Reduction should be ≥ 70% — Anvilogic claims 90%, our public floor is 70%."""
+        """Reduction should be ≥ 70% — closed-source vendors claim ~90%, our public floor is 70%."""
         alerts = generate_noisy_alert_stream(count=1000)
         incidents = fuse_alerts(alerts)
         metrics = compute_reduction(alerts, incidents)
-        print(f"\n[eval] alert reduction: {metrics['reduction_pct']} "
-              f"({metrics['alerts_in']} → {metrics['incidents_out']})")
+        print(f"\n[eval] alert reduction: {metrics['reduction_pct']} ({metrics['alerts_in']} → {metrics['incidents_out']})")
         self.assertGreaterEqual(
-            metrics["reduction"], 0.70,
-            f"Alert reduction {metrics['reduction_pct']} below 70% target.\n"
-            f"{json.dumps(metrics, indent=2)}",
+            metrics["reduction"],
+            0.70,
+            f"Alert reduction {metrics['reduction_pct']} below 70% target.\n{json.dumps(metrics, indent=2)}",
         )
 
     def test_no_critical_alerts_dropped_as_noise(self) -> None:
@@ -369,9 +392,9 @@ class TestAlertReduction(unittest.TestCase):
         surviving = {m for inc in incidents for m in inc.member_alert_ids}
         missing = critical_ids - surviving
         self.assertEqual(
-            len(missing), 0,
-            f"{len(missing)} critical alerts dropped during fusion (sample: "
-            f"{list(missing)[:5]})",
+            len(missing),
+            0,
+            f"{len(missing)} critical alerts dropped during fusion (sample: {list(missing)[:5]})",
         )
 
     def test_deterministic_run(self) -> None:
@@ -379,7 +402,8 @@ class TestAlertReduction(unittest.TestCase):
         a1 = generate_noisy_alert_stream(count=500)
         a2 = generate_noisy_alert_stream(count=500)
         self.assertEqual(
-            [a.__dict__ for a in a1], [a2_.__dict__ for a2_ in a2],
+            [a.__dict__ for a in a1],
+            [a2_.__dict__ for a2_ in a2],
         )
 
     def test_storm_collapse(self) -> None:
@@ -389,7 +413,8 @@ class TestAlertReduction(unittest.TestCase):
         storm_incidents = [i for i in incidents if i.host.startswith("<storm:")]
         # We expect at least a couple of storms in 1000 alerts
         self.assertGreaterEqual(
-            len(storm_incidents), 1,
+            len(storm_incidents),
+            1,
             "Expected at least 1 storm-incident in a 1000-alert deterministic stream.",
         )
 

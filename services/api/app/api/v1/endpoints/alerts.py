@@ -1,4 +1,5 @@
 """Alert management endpoints."""
+
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -6,7 +7,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
@@ -103,20 +103,12 @@ async def list_alerts(
         filters.append(Alert.assigned_to_id == current_user.user_id)
 
     # Count
-    count_result = await db.execute(
-        select(func.count()).select_from(Alert).where(and_(*filters))
-    )
+    count_result = await db.execute(select(func.count()).select_from(Alert).where(and_(*filters)))
     total = count_result.scalar_one()
 
     # Fetch
     offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Alert)
-        .where(and_(*filters))
-        .order_by(Alert.created_at.desc())
-        .offset(offset)
-        .limit(page_size)
-    )
+    result = await db.execute(select(Alert).where(and_(*filters)).order_by(Alert.created_at.desc()).offset(offset).limit(page_size))
     alerts = result.scalars().all()
 
     return AlertListResponse(
@@ -136,8 +128,6 @@ async def get_alert_stats(
     """Get alert statistics for the dashboard."""
     from datetime import timedelta
 
-    from sqlalchemy import case as sa_case
-
     tenant_filter = Alert.tenant_id == current_user.tenant_id
 
     # Total count
@@ -145,31 +135,23 @@ async def get_alert_stats(
     total = total_result.scalar_one()
 
     # By severity
-    sev_result = await db.execute(
-        select(Alert.severity, func.count()).where(tenant_filter).group_by(Alert.severity)
-    )
+    sev_result = await db.execute(select(Alert.severity, func.count()).where(tenant_filter).group_by(Alert.severity))
     by_severity = {row[0]: row[1] for row in sev_result.all()}
 
     # By status
-    status_result = await db.execute(
-        select(Alert.status, func.count()).where(tenant_filter).group_by(Alert.status)
-    )
+    status_result = await db.execute(select(Alert.status, func.count()).where(tenant_filter).group_by(Alert.status))
     by_status = {row[0]: row[1] for row in status_result.all()}
 
     # New last 24h
     cutoff = datetime.now(UTC) - timedelta(hours=24)
-    new_24h_result = await db.execute(
-        select(func.count()).select_from(Alert).where(
-            and_(tenant_filter, Alert.created_at >= cutoff)
-        )
-    )
+    new_24h_result = await db.execute(select(func.count()).select_from(Alert).where(and_(tenant_filter, Alert.created_at >= cutoff)))
     new_last_24h = new_24h_result.scalar_one()
 
     # Critical open
     crit_result = await db.execute(
-        select(func.count()).select_from(Alert).where(
-            and_(tenant_filter, Alert.severity == "critical", Alert.status.in_(["new", "triaging", "in_progress"]))
-        )
+        select(func.count())
+        .select_from(Alert)
+        .where(and_(tenant_filter, Alert.severity == "critical", Alert.status.in_(["new", "triaging", "in_progress"])))
     )
     critical_open = crit_result.scalar_one()
 
@@ -189,9 +171,7 @@ async def get_alert(
     db: DBSession,
 ) -> AlertResponse:
     """Get a single alert by ID."""
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
@@ -206,9 +186,7 @@ async def update_alert(
     db: DBSession,
 ) -> AlertResponse:
     """Update alert status, priority, tags, assignment, or case link."""
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
@@ -246,9 +224,7 @@ async def escalate_alert(
     """Escalate an alert (raises severity by one level)."""
     severity_ladder = ["info", "low", "medium", "high", "critical"]
 
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
@@ -256,11 +232,7 @@ async def escalate_alert(
     current_idx = severity_ladder.index(alert.severity) if alert.severity in severity_ladder else 2
     new_severity = severity_ladder[min(current_idx + 1, len(severity_ladder) - 1)]
 
-    await db.execute(
-        update(Alert).where(Alert.id == alert_id).values(
-            severity=new_severity, updated_at=datetime.now(UTC)
-        )
-    )
+    await db.execute(update(Alert).where(Alert.id == alert_id).values(severity=new_severity, updated_at=datetime.now(UTC)))
     await db.commit()
     await db.refresh(alert)
 
@@ -297,16 +269,10 @@ async def snooze_alert(
             )
         snoozed_until = datetime.now(UTC) + timedelta(minutes=body.duration_minutes or 0)
 
-    result = await db.execute(
-        select(Alert).where(
-            Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id
-        )
-    )
+    result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
     if alert is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
 
     await db.execute(
         update(Alert)

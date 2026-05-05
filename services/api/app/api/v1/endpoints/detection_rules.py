@@ -1,12 +1,12 @@
 """Detection rule management endpoints."""
+
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, or_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.detection_rule import DetectionRule
@@ -76,7 +76,7 @@ async def list_rules(
     filters = [
         or_(
             DetectionRule.tenant_id == current_user.tenant_id,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin == True),
+            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
         )
     ]
     if not include_builtin:
@@ -86,9 +86,7 @@ async def list_rules(
     if rule_language:
         filters.append(DetectionRule.rule_language == rule_language)
 
-    result = await db.execute(
-        select(DetectionRule).where(and_(*filters)).order_by(DetectionRule.name)
-    )
+    result = await db.execute(select(DetectionRule).where(and_(*filters)).order_by(DetectionRule.name))
     rules = result.scalars().all()
     return [DetectionRuleResponse.model_validate(r) for r in rules]
 
@@ -204,11 +202,11 @@ async def delete_rule(
 
 # ─── Rule Execution Endpoint ──────────────────────────────────────────────────
 
+
 class ExecuteRuleRequest(BaseModel):
     """Payload for ad-hoc rule execution."""
-    events: list[dict[str, Any]] = Field(
-        ..., description="Events to test the rule against", max_length=1000
-    )
+
+    events: list[dict[str, Any]] = Field(..., description="Events to test the rule against", max_length=1000)
 
 
 class ExecuteRuleResponse(BaseModel):
@@ -290,17 +288,13 @@ async def execute_detection_rule(
 
 # ─── Hunt Endpoint ────────────────────────────────────────────────────────────
 
+
 class HuntRequest(BaseModel):
     """Payload for threat hunting across events."""
-    rule_ids: list[uuid.UUID] | None = Field(
-        None, description="Specific rule IDs to hunt with; omit to use all active rules"
-    )
-    rule_language: str | None = Field(
-        None, description="Filter rules by language (sigma, yara, kql, eql)"
-    )
-    events: list[dict[str, Any]] = Field(
-        ..., description="Events to hunt through", max_length=5000
-    )
+
+    rule_ids: list[uuid.UUID] | None = Field(None, description="Specific rule IDs to hunt with; omit to use all active rules")
+    rule_language: str | None = Field(None, description="Filter rules by language (sigma, yara, kql, eql)")
+    events: list[dict[str, Any]] = Field(..., description="Events to hunt through", max_length=5000)
 
 
 class HuntResponse(BaseModel):
@@ -332,7 +326,7 @@ async def hunt(
     filters = [
         or_(
             DetectionRule.tenant_id == current_user.tenant_id,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin == True),
+            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
         ),
         DetectionRule.status == "active",
     ]

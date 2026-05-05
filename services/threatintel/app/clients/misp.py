@@ -3,13 +3,14 @@ MISP client for fetching threat intelligence events and attributes.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -45,9 +46,7 @@ class MispClient:
         limit: int = 500,
     ) -> list[dict[str, Any]]:
         """Fetch MISP events published within the last N hours."""
-        since_ts = int(
-            (datetime.now(timezone.utc) - timedelta(hours=since_hours)).timestamp()
-        )
+        since_ts = int((datetime.now(UTC) - timedelta(hours=since_hours)).timestamp())
         params = {
             "timestamp": since_ts,
             "limit": limit,
@@ -78,9 +77,7 @@ class MispClient:
 
     async def get_event(self, event_id: str) -> dict[str, Any] | None:
         """Fetch a single MISP event by ID."""
-        async with httpx.AsyncClient(
-            headers=self._headers, verify=self._verify_ssl, timeout=30.0
-        ) as client:
+        async with httpx.AsyncClient(headers=self._headers, verify=self._verify_ssl, timeout=30.0) as client:
             try:
                 resp = await client.get(f"{self._base_url}/events/{event_id}")
                 resp.raise_for_status()

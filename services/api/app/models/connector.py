@@ -1,4 +1,5 @@
 """Connector ORM model."""
+
 import uuid
 from datetime import UTC, datetime
 
@@ -26,9 +27,7 @@ class Connector(Base):
     events_ingested: Mapped[int] = mapped_column(default=0)
     error_count: Mapped[int] = mapped_column(default=0)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

@@ -7,6 +7,7 @@ Responsibilities:
   • Map findings to MITRE ATT&CK techniques
   • Identify potential threat-actor clusters
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -14,8 +15,8 @@ import time
 from typing import Any
 
 import structlog
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 from .state import InvestigatorState, ReconFindings, StepKind
 from .tools import enrich_ioc, extract_iocs, map_to_mitre, sha256_of
@@ -46,7 +47,8 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     Records the LLM prompt and response into the audit ledger so the
     reasoning trace is replayable.
     """
-    import os, json
+    import json
+    import os
 
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0)
@@ -75,10 +77,7 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         latency_ms = int((time.monotonic() - t0) * 1000)
         tokens = 0
         if hasattr(response, "response_metadata"):
-            tokens = (
-                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
-                or 0
-            )
+            tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
         state.log_llm_response(
             agent="ReconAgent",
             response=content if isinstance(content, str) else str(content),
@@ -89,7 +88,8 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         )
         # Extract JSON from the response
         import re
-        json_match = re.search(r'\{[\s\S]*\}', content)
+
+        json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001

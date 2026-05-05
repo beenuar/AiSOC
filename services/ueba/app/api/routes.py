@@ -1,20 +1,19 @@
 """UEBA REST API routes."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, desc
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.models.ueba import UEBAAnomaly, EntityBaseline, PeerGroup
-from app.services.baseline import BaselineService
+from app.models.ueba import EntityBaseline, PeerGroup, UEBAAnomaly
 from app.services.scoring import ScoringService
-from app.services.peer_group import PeerGroupService
 
 router = APIRouter(prefix="/api/v1/ueba", tags=["ueba"])
 
@@ -36,6 +35,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
+
 
 class ScoreEventRequest(BaseModel):
     tenant_id: uuid.UUID
@@ -82,6 +82,7 @@ class BaselineOut(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.post("/score", response_model=AnomalyOut | None, status_code=200)
 async def score_event(body: ScoreEventRequest, db: DB) -> AnomalyOut | None:
     """Score a single event and return the anomaly record if anomalous."""
@@ -109,7 +110,7 @@ async def list_anomalies(
     hours: int = Query(24, ge=1, le=720),
     limit: int = Query(50, ge=1, le=500),
 ) -> list[AnomalyOut]:
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    since = datetime.now(UTC) - timedelta(hours=hours)
     q = (
         select(UEBAAnomaly)
         .where(UEBAAnomaly.tenant_id == tenant_id, UEBAAnomaly.detected_at >= since)
@@ -145,12 +146,7 @@ async def list_baselines(
     entity_type: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[BaselineOut]:
-    q = (
-        select(EntityBaseline)
-        .where(EntityBaseline.tenant_id == tenant_id)
-        .order_by(desc(EntityBaseline.updated_at))
-        .limit(limit)
-    )
+    q = select(EntityBaseline).where(EntityBaseline.tenant_id == tenant_id).order_by(desc(EntityBaseline.updated_at)).limit(limit)
     if entity_type:
         q = q.where(EntityBaseline.entity_type == entity_type)
     result = await db.execute(q)
@@ -162,9 +158,7 @@ async def list_peer_groups(
     db: DB,
     tenant_id: uuid.UUID = Query(...),
 ) -> list[dict]:
-    result = await db.execute(
-        select(PeerGroup).where(PeerGroup.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(PeerGroup).where(PeerGroup.tenant_id == tenant_id))
     return [
         {
             "id": pg.id,

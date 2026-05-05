@@ -1,0 +1,44 @@
+# Repo-wide ruff configuration.
+#
+# Per-service `[tool.ruff]` blocks were consolidated here so the CI gate
+# (`ruff check services/api services/actions services/fusion services/agents`)
+# behaves the same way locally and in `.github/workflows/ci.yml`.
+
+line-length = 140
+target-version = "py311"
+
+[lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+
+# UP042 (`class X(str, Enum)` → `enum.StrEnum`) is a Python 3.11+ stylistic
+# preference, not a correctness rule. The `(str, Enum)` pattern serializes
+# the same way through Pydantic v2 / SQLAlchemy / json.dumps and migrating
+# every existing model would create churn for no behavioral gain.
+ignore = ["UP042"]
+
+[lint.flake8-bugbear]
+# FastAPI's canonical dependency-injection pattern is
+# `param: T = Depends(...)` / `Query(...)` / `Security(...)`. Add them to the
+# bugbear allow-list so B008 keeps firing on real mistakes (e.g. `= dict()`).
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
+
+[lint.per-file-ignores]
+# SQLAlchemy declarative models use string forward references inside
+# `Mapped[...]` (e.g., `Mapped["Tenant"]`). These resolve via the
+# ORM registry at runtime; ruff's F821 fires anyway because it only
+# does static name resolution.
+"services/api/app/models/**/*.py" = ["F821"]
+
+# Test fixtures intentionally bind names they don't reference (e.g. a
+# helper that builds a plugin on disk for side effects only).
+"services/*/tests/**/*.py" = ["B008"]

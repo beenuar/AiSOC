@@ -18,17 +18,26 @@ GET    /community/playbooks                 – browse community playbooks
 POST   /community/playbooks/{id}/install    – install playbook
 PUT    /community/playbooks/{id}/curate     – admin: approve/reject playbook
 """
+
 from __future__ import annotations
 
 import base64
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser, CurrentUser, require_permission
@@ -65,7 +74,7 @@ class CommunityPluginOut(BaseModel):
     rating_count: int = 0
     verified: bool = False
     submitted_at: str
-    approved_at: Optional[str] = None
+    approved_at: str | None = None
 
 
 class CommunityPluginListOut(BaseModel):
@@ -75,12 +84,12 @@ class CommunityPluginListOut(BaseModel):
 
 class ReviewAction(BaseModel):
     action: str = Field(..., pattern="^(approve|reject)$")
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class RatingIn(BaseModel):
     score: int = Field(..., ge=1, le=5)
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class CommunityDetectionOut(BaseModel):
@@ -93,7 +102,7 @@ class CommunityDetectionOut(BaseModel):
     install_count: int = 0
     logsource: dict[str, Any] = {}
     submitted_at: str
-    content: Optional[str] = None
+    content: str | None = None
 
 
 class CommunityPlaybookOut(BaseModel):
@@ -105,7 +114,7 @@ class CommunityPlaybookOut(BaseModel):
     status: PublishStatus = PublishStatus.PENDING
     install_count: int = 0
     submitted_at: str
-    definition: Optional[dict[str, Any]] = None
+    definition: dict[str, Any] | None = None
 
 
 # ── Plugin endpoints ──────────────────────────────────────────────────────────
@@ -143,11 +152,11 @@ async def publish_plugin(
         try:
             verify_ed25519_signature(registered_pub_key, tarball, signature)
             verified = True
-        except Exception:
+        except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid Ed25519 signature",
-            )
+            ) from exc
 
     plugin_id = manifest.get("id", str(uuid.uuid4()))
     entry = {
@@ -164,7 +173,7 @@ async def publish_plugin(
         "rating_count": 0,
         "verified": verified,
         "submitted_by": current_user.id,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
         "approved_at": None,
         "tarball_sha256": hashlib.sha256(tarball).hexdigest(),
         "_tarball": tarball,
@@ -176,9 +185,9 @@ async def publish_plugin(
 
 @router.get("/plugins", response_model=CommunityPluginListOut)
 async def list_community_plugins(
-    status_filter: Optional[str] = Query(None, alias="status"),
-    plugin_type: Optional[str] = Query(None),
-    tags: Optional[str] = Query(None, description="Comma-separated tags"),
+    status_filter: str | None = Query(None, alias="status"),
+    plugin_type: str | None = Query(None),
+    tags: str | None = Query(None, description="Comma-separated tags"),
     sort: str = Query("install_count", pattern="^(install_count|rating|submitted_at|name)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
@@ -270,7 +279,7 @@ async def review_community_plugin(
 
     if review.action == "approve":
         p["status"] = PublishStatus.APPROVED
-        p["approved_at"] = datetime.now(timezone.utc).isoformat()
+        p["approved_at"] = datetime.now(UTC).isoformat()
     else:
         p["status"] = PublishStatus.REJECTED
         p["review_notes"] = review.notes
@@ -314,7 +323,7 @@ async def publish_detection(
         "install_count": 0,
         "rating": 0.0,
         "rating_count": 0,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
         "sigma_yaml": content,
     }
     _community_detections[detection_id] = entry
@@ -326,10 +335,10 @@ async def publish_detection(
 async def list_community_detections(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = Query(None),
-    logsource_category: Optional[str] = Query(None),
-    logsource_product: Optional[str] = Query(None),
-    level: Optional[str] = Query(None),
+    search: str | None = Query(None),
+    logsource_category: str | None = Query(None),
+    logsource_product: str | None = Query(None),
+    level: str | None = Query(None),
     sort_by: str = Query("install_count", pattern="^(install_count|rating|name)$"),
 ) -> dict[str, Any]:
     """Browse community Sigma detection rules with pagination and filtering."""
@@ -341,10 +350,9 @@ async def list_community_detections(
     if search:
         q = search.lower()
         items = [
-            d for d in items
-            if q in d.get("name", "").lower()
-            or q in d.get("description", "").lower()
-            or any(q in t.lower() for t in d.get("tags", []))
+            d
+            for d in items
+            if q in d.get("name", "").lower() or q in d.get("description", "").lower() or any(q in t.lower() for t in d.get("tags", []))
         ]
     if logsource_category:
         items = [d for d in items if d.get("logsource_category") == logsource_category]
@@ -415,7 +423,7 @@ async def submit_playbook(
         "install_count": 0,
         "rating": 0.0,
         "rating_count": 0,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
         "definition": definition,
     }
     _community_playbooks[playbook_id] = entry
@@ -427,7 +435,7 @@ async def submit_playbook(
 async def list_community_playbooks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = Query(None),
+    search: str | None = Query(None),
     sort_by: str = Query("install_count", pattern="^(install_count|rating|name)$"),
 ) -> dict[str, Any]:
     """Browse approved community playbooks with optional search and sort."""
@@ -436,10 +444,9 @@ async def list_community_playbooks(
     if search:
         q = search.lower()
         items = [
-            p for p in items
-            if q in p.get("name", "").lower()
-            or q in p.get("description", "").lower()
-            or any(q in t.lower() for t in p.get("tags", []))
+            p
+            for p in items
+            if q in p.get("name", "").lower() or q in p.get("description", "").lower() or any(q in t.lower() for t in p.get("tags", []))
         ]
 
     if sort_by == "name":
@@ -492,6 +499,7 @@ async def curate_community_playbook(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get_registered_pub_key(user_id: str) -> Optional[bytes]:
+
+def _get_registered_pub_key(user_id: str) -> bytes | None:
     """Retrieve user's registered Ed25519 public key (stub — wire to DB)."""
     return None

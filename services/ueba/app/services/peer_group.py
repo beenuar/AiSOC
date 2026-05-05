@@ -4,11 +4,11 @@ Entities are grouped by an externally-supplied ``peer_group_id`` (e.g. derived
 from HR department, role, or subnet).  The service maintains aggregate statistics
 for each group and computes how far an individual event deviates from group norms.
 """
+
 from __future__ import annotations
 
 import math
 import uuid
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,5 +101,5 @@ class PeerGroupService:
         if not z_scores:
             return None
 
-        rss = math.sqrt(sum(z ** 2 for z in z_scores))
+        rss = math.sqrt(sum(z**2 for z in z_scores))
         return min(rss, 10.0)

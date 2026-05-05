@@ -1,6 +1,7 @@
 """
 Enrichment Agent: bulk-enriches all pending IOCs via the enrichment microservice.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -33,21 +34,14 @@ async def run_enrichment(state: InvestigationState) -> InvestigationState:
         if threat_class in ("malicious", "suspicious"):
             malicious_count += 1
             score = result.get("malicious_score", 0)
-            state.add_finding(
-                f"IOC '{ioc_value}' classified as {threat_class} "
-                f"(malicious_score={score})"
-            )
+            state.add_finding(f"IOC '{ioc_value}' classified as {threat_class} (malicious_score={score})")
 
     state.ioc_enrichments = enriched
 
     if malicious_count > 0:
-        state.add_finding(
-            f"Enrichment complete: {malicious_count}/{len(results)} IOCs are malicious/suspicious"
-        )
+        state.add_finding(f"Enrichment complete: {malicious_count}/{len(results)} IOCs are malicious/suspicious")
     else:
-        state.add_finding(
-            f"Enrichment complete: {len(results)} IOCs enriched, none flagged as malicious"
-        )
+        state.add_finding(f"Enrichment complete: {len(results)} IOCs enriched, none flagged as malicious")
 
     logger.info(
         "Enrichment complete",

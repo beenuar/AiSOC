@@ -26,11 +26,10 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 
+from app.core.config import settings
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-
-from app.core.config import settings
 
 log = logging.getLogger(__name__)
 

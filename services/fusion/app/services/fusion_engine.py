@@ -1,6 +1,7 @@
 """
 Core fusion engine: orchestrates deduplication → correlation → ML scoring.
 """
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -60,9 +61,7 @@ class FusionEngine:
         # --- Step 2: Correlation ---
         correlated, incident = await self._correlator.correlate(alert)
 
-        decision = (
-            FusionDecision.CORRELATED if correlated else FusionDecision.NEW_INCIDENT
-        )
+        decision = FusionDecision.CORRELATED if correlated else FusionDecision.NEW_INCIDENT
 
         fused = FusedAlert(
             id=alert.id,

@@ -1,18 +1,18 @@
 """Case management endpoints."""
+
 import os
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
-from app.models.case import Case, CaseTask, CaseTimeline
+from app.models.case import Case, CaseTimeline
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
 
@@ -121,15 +121,11 @@ async def list_cases(
     if assigned_to_me:
         filters.append(Case.assigned_to_id == current_user.user_id)
 
-    count_result = await db.execute(
-        select(func.count()).select_from(Case).where(and_(*filters))
-    )
+    count_result = await db.execute(select(func.count()).select_from(Case).where(and_(*filters)))
     total = count_result.scalar_one()
 
     offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Case).where(and_(*filters)).order_by(Case.created_at.desc()).offset(offset).limit(page_size)
-    )
+    result = await db.execute(select(Case).where(and_(*filters)).order_by(Case.created_at.desc()).offset(offset).limit(page_size))
     cases = result.scalars().all()
 
     return CaseListResponse(
@@ -185,9 +181,7 @@ async def get_case(
     db: DBSession,
 ) -> CaseResponse:
     """Get a case by ID."""
-    result = await db.execute(
-        select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
     case = result.scalar_one_or_none()
     if case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
@@ -202,9 +196,7 @@ async def update_case(
     db: DBSession,
 ) -> CaseResponse:
     """Update a case."""
-    result = await db.execute(
-        select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
     case = result.scalar_one_or_none()
     if case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
@@ -223,14 +215,16 @@ async def update_case(
         await db.execute(update(Case).where(Case.id == case_id).values(**updates))
 
         # Add timeline event
-        db.add(CaseTimeline(
-            case_id=case_id,
-            tenant_id=current_user.tenant_id,
-            event_type="case_updated",
-            content=f"Case updated by {current_user.email}: {', '.join(updates.keys())}",
-            user_id=current_user.user_id,
-            event_metadata={"changed_fields": list(updates.keys())},
-        ))
+        db.add(
+            CaseTimeline(
+                case_id=case_id,
+                tenant_id=current_user.tenant_id,
+                event_type="case_updated",
+                content=f"Case updated by {current_user.email}: {', '.join(updates.keys())}",
+                user_id=current_user.user_id,
+                event_metadata={"changed_fields": list(updates.keys())},
+            )
+        )
         await db.commit()
         await db.refresh(case)
 
@@ -246,9 +240,7 @@ async def add_timeline_event(
 ) -> TimelineEventResponse:
     """Add a comment or event to the case timeline."""
     # Verify case exists for this tenant
-    result = await db.execute(
-        select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
@@ -287,6 +279,7 @@ async def get_timeline(
 # Pillar-1: AI Investigation
 # ---------------------------------------------------------------------------
 
+
 class InvestigateRequest(BaseModel):
     alert_summary: str = ""
     raw_alert: dict[str, Any] = {}
@@ -311,9 +304,7 @@ async def investigate_case(
     Proxies to the agents service Pillar-1 orchestrator.
     """
     # Verify case ownership
-    result = await db.execute(
-        select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
     case = result.scalar_one_or_none()
     if case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
@@ -339,15 +330,17 @@ async def investigate_case(
         raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
 
     # Record timeline entry
-    db.add(CaseTimeline(
-        case_id=case_id,
-        tenant_id=current_user.tenant_id,
-        event_type="ai_investigation_started",
-        content=f"AI investigation started (run_id={data.get('run_id')})",
-        user_id=current_user.user_id,
-        is_automated=True,
-        event_metadata={"run_id": data.get("run_id")},
-    ))
+    db.add(
+        CaseTimeline(
+            case_id=case_id,
+            tenant_id=current_user.tenant_id,
+            event_type="ai_investigation_started",
+            content=f"AI investigation started (run_id={data.get('run_id')})",
+            user_id=current_user.user_id,
+            is_automated=True,
+            event_metadata={"run_id": data.get("run_id")},
+        )
+    )
     await db.commit()
 
     return InvestigateResponse(**data)
@@ -379,6 +372,7 @@ async def get_case_report_md(
 ) -> Any:
     """Proxy: download Markdown incident report from the agents service."""
     from fastapi.responses import PlainTextResponse
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.md")
@@ -398,6 +392,7 @@ async def get_case_report_html(
 ) -> Any:
     """Proxy: download HTML incident report from the agents service."""
     from fastapi.responses import HTMLResponse
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.html")
@@ -417,6 +412,7 @@ async def get_case_report_pdf(
 ) -> Any:
     """Proxy: download PDF incident report (rendered by weasyprint in agents service)."""
     from fastapi.responses import Response as FastAPIResponse
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.pdf")

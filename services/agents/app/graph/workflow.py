@@ -2,6 +2,7 @@
 LangGraph workflow: wires Triage → Enrichment → Investigation agents.
 Uses a simple sequential StateGraph (can be extended with conditional edges).
 """
+
 from __future__ import annotations
 
 import structlog
@@ -24,6 +25,7 @@ def _from_dict(d: dict) -> InvestigationState:
 
 
 # ---- Node wrappers (LangGraph uses dict state, we wrap our Pydantic model) ----
+
 
 async def triage_node(state: dict) -> dict:
     s = _from_dict(state)

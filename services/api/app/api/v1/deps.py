@@ -20,8 +20,8 @@ activates the RLS policies defined in ``migrations/002_rls.sql``.
     async def list_cases(db: TenantDBSession, user: AuthUser):
         ...
 """
+
 import uuid
-from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -40,7 +40,7 @@ from app.api.v1.dev_auth import (
 )
 from app.core.security import decode_token, has_permission, hash_api_key
 from app.db.database import get_db
-from app.models.tenant import ApiKey, Tenant, User
+from app.models.tenant import ApiKey, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -77,11 +77,7 @@ class CurrentUser:
     def require_permission(self, permission: str) -> None:
         if self.scopes is not None:
             # API-key path: check explicit scopes list
-            allowed = (
-                "*" in self.scopes
-                or permission in self.scopes
-                or f"{permission.split(':')[0]}:*" in self.scopes
-            )
+            allowed = "*" in self.scopes or permission in self.scopes or f"{permission.split(':')[0]}:*" in self.scopes
             if not allowed:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -102,14 +98,11 @@ class CurrentUser:
         no rows in ``user_roles`` (e.g. fresh tenants not yet migrated).
         """
         if self.scopes is not None:
-            return (
-                "*" in self.scopes
-                or permission in self.scopes
-                or f"{permission.split(':')[0]}:*" in self.scopes
-            )
+            return "*" in self.scopes or permission in self.scopes or f"{permission.split(':')[0]}:*" in self.scopes
 
         # Query RBAC tables
-        from app.models.rbac import Permission as PermModel, Role, RolePermission, UserRole  # noqa: PLC0415
+        from app.models.rbac import Permission as PermModel  # noqa: PLC0415
+        from app.models.rbac import Role, RolePermission, UserRole
 
         result = await db.execute(
             select(PermModel.name)
@@ -121,11 +114,7 @@ class CurrentUser:
         db_perms: list[str] = [row[0] for row in result.all()]
 
         if db_perms:
-            return (
-                "*" in db_perms
-                or permission in db_perms
-                or f"{permission.split(':')[0]}:*" in db_perms
-            )
+            return "*" in db_perms or permission in db_perms or f"{permission.split(':')[0]}:*" in db_perms
 
         # Fallback to static map
         return has_permission(self.role, permission)
@@ -165,11 +154,7 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
         )
 
     # Update last_used_at in background (fire-and-forget style — don't await)
-    await db.execute(
-        update(ApiKey)
-        .where(ApiKey.id == api_key.id)
-        .values(last_used_at=datetime.now(UTC))
-    )
+    await db.execute(update(ApiKey).where(ApiKey.id == api_key.id).values(last_used_at=datetime.now(UTC)))
 
     # Fetch the owning user for context (user_id may be NULL for service keys)
     role = "api_service"
@@ -274,8 +259,10 @@ def require_permission(permission: str):
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 AuthUser = Annotated[CurrentUser, Depends(get_current_user)]
 
+
 # Re-export TenantDBSession for convenience so endpoints can import from one place
 # Actual implementation lives in app.db.rls to avoid circular imports.
 def _get_tenant_db_session() -> "Annotated[AsyncSession, ...]":  # pragma: no cover
     from app.db.rls import TenantDBSession as _T  # noqa: PLC0415
+
     return _T

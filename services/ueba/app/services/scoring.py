@@ -3,18 +3,16 @@
 Combines per-feature z-scores into a composite risk score and classifies
 events as low / medium / high / critical anomalies.
 """
+
 from __future__ import annotations
 
 import math
 import uuid
-from datetime import datetime, timezone
-from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.ueba import UEBAAnomaly, PeerGroup
+from app.models.ueba import UEBAAnomaly
 from app.services.baseline import BaselineService
 from app.services.peer_group import PeerGroupService
 
@@ -56,9 +54,7 @@ class ScoringService:
         """Score an event.  Returns a persisted ``UEBAAnomaly`` if anomalous, else None."""
 
         # 1. Score against personal baseline
-        scored = await self._baseline.score_features(
-            tenant_id, entity_type, entity_id, features
-        )
+        scored = await self._baseline.score_features(tenant_id, entity_type, entity_id, features)
         composite = _composite_score(scored)
 
         # 2. Update baseline with this event
@@ -67,9 +63,7 @@ class ScoringService:
         # 3. Peer-group deviation
         peer_dev: float | None = None
         if peer_group_id:
-            peer_dev = await self._peer.deviation_score(
-                tenant_id, peer_group_id, features
-            )
+            peer_dev = await self._peer.deviation_score(tenant_id, peer_group_id, features)
             # Blend peer deviation into composite
             if peer_dev is not None:
                 composite = (composite + peer_dev) / 2

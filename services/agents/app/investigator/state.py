@@ -2,6 +2,7 @@
 Extended state model for the multi-agent investigator pipeline.
 Extends the existing InvestigationState with per-agent outputs and audit log.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -12,8 +13,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
-
-from app.models.state import InvestigationState  # re-use base model
 
 
 def _stable_hash(payload: Any) -> str:
@@ -53,7 +52,7 @@ class AuditEntry(BaseModel):
     kind: StepKind
     agent: str
     summary: str
-    input_hash: str | None = None   # sha256 of serialised input
+    input_hash: str | None = None  # sha256 of serialised input
     output_hash: str | None = None  # sha256 of serialised output
     duration_ms: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -126,7 +125,7 @@ class InvestigatorState(BaseModel):
     audit_log: list[AuditEntry] = Field(default_factory=list)
 
     # Control
-    status: str = "pending"   # pending | running | completed | failed
+    status: str = "pending"  # pending | running | completed | failed
     error: str | None = None
     iteration: int = 0
     max_iterations: int = 6
@@ -137,9 +136,7 @@ class InvestigatorState(BaseModel):
     # ---------- helpers ----------
 
     def log(self, kind: StepKind, agent: str, summary: str, **meta: Any) -> None:
-        self.audit_log.append(
-            AuditEntry(kind=kind, agent=agent, summary=summary, metadata=meta)
-        )
+        self.audit_log.append(AuditEntry(kind=kind, agent=agent, summary=summary, metadata=meta))
 
     def log_entry(self, entry: AuditEntry) -> None:
         """Append a fully-formed entry (used when caller has computed hashes)."""
@@ -300,5 +297,5 @@ class InvestigatorState(BaseModel):
         return self.model_dump(mode="json")
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "InvestigatorState":
+    def from_dict(cls, d: dict[str, Any]) -> InvestigatorState:
         return cls.model_validate(d)

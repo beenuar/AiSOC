@@ -19,11 +19,12 @@ Endpoints:
 
 All endpoints respect tenant RLS via ``TenantDBSession``.
 """
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -193,9 +194,7 @@ async def list_runs(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> list[RunSummary]:
     """List recent investigation runs for the caller's tenant."""
-    q = select(InvestigationRun).where(
-        InvestigationRun.tenant_id == current_user.tenant_id
-    )
+    q = select(InvestigationRun).where(InvestigationRun.tenant_id == current_user.tenant_id)
     if case_id:
         q = q.where(InvestigationRun.case_id == case_id)
     if status_filter:
@@ -216,19 +215,9 @@ async def get_run(
     """Run summary plus count of attached events and artifacts."""
     run = await _fetch_run(db, run_id, current_user.tenant_id)
 
-    event_count = (
-        await db.execute(
-            select(func.count(InvestigationEvent.id)).where(
-                InvestigationEvent.run_id == run_id
-            )
-        )
-    ).scalar_one()
+    event_count = (await db.execute(select(func.count(InvestigationEvent.id)).where(InvestigationEvent.run_id == run_id))).scalar_one()
     artifact_count = (
-        await db.execute(
-            select(func.count(InvestigationArtifact.id)).where(
-                InvestigationArtifact.run_id == run_id
-            )
-        )
+        await db.execute(select(func.count(InvestigationArtifact.id)).where(InvestigationArtifact.run_id == run_id))
     ).scalar_one()
 
     base = _run_to_summary(run)
@@ -297,12 +286,7 @@ async def replay_run(
     bound should fall back to the paginated ``/events`` endpoint.
     """
     await _fetch_run(db, run_id, current_user.tenant_id)
-    q = (
-        select(InvestigationEvent)
-        .where(InvestigationEvent.run_id == run_id)
-        .order_by(InvestigationEvent.seq.asc())
-        .limit(max_events)
-    )
+    q = select(InvestigationEvent).where(InvestigationEvent.run_id == run_id).order_by(InvestigationEvent.seq.asc()).limit(max_events)
     events = (await db.execute(q)).scalars().all()
     return [_event_to_out(e) for e in events]
 
@@ -399,11 +383,7 @@ async def list_artifacts(
     db: TenantDBSession,
 ) -> list[ArtifactSummary]:
     await _fetch_run(db, run_id, current_user.tenant_id)
-    q = (
-        select(InvestigationArtifact)
-        .where(InvestigationArtifact.run_id == run_id)
-        .order_by(InvestigationArtifact.created_at.asc())
-    )
+    q = select(InvestigationArtifact).where(InvestigationArtifact.run_id == run_id).order_by(InvestigationArtifact.created_at.asc())
     arts = (await db.execute(q)).scalars().all()
     return [
         ArtifactSummary(

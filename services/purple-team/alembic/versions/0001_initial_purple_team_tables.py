@@ -4,11 +4,13 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-05-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+from alembic import op
 
 revision = "0001"
 down_revision = None
@@ -36,14 +38,10 @@ def upgrade() -> None:
         sa.Column("executor", sa.String(32), nullable=False),
         sa.Column("input_arguments", JSONB, nullable=False, server_default="{}"),
         sa.Column("raw_yaml", JSONB, nullable=False, server_default="{}"),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
     op.create_index("ix_atomic_tests_tenant_id", "purple_team_atomic_tests", ["tenant_id"])
-    op.create_index(
-        "ix_atomic_tests_technique_id", "purple_team_atomic_tests", ["technique_id"]
-    )
+    op.create_index("ix_atomic_tests_technique_id", "purple_team_atomic_tests", ["technique_id"])
     op.create_index(
         "ix_atomic_tests_tenant_technique",
         "purple_team_atomic_tests",
@@ -74,17 +72,11 @@ def upgrade() -> None:
         sa.Column("alert_id", sa.String(64), nullable=True),
         sa.Column("detection_latency_seconds", sa.Float, nullable=True),
         sa.Column("executed_by", sa.String(128), nullable=True),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
     op.create_index("ix_executions_tenant_id", "purple_team_executions", ["tenant_id"])
-    op.create_index(
-        "ix_executions_technique_id", "purple_team_executions", ["technique_id"]
-    )
-    op.create_index(
-        "ix_executions_created_at", "purple_team_executions", ["created_at"]
-    )
+    op.create_index("ix_executions_technique_id", "purple_team_executions", ["technique_id"])
+    op.create_index("ix_executions_created_at", "purple_team_executions", ["created_at"])
 
     op.create_table(
         "purple_team_tabletop_sessions",
@@ -102,16 +94,10 @@ def upgrade() -> None:
         sa.Column("findings", JSONB, nullable=False, server_default="[]"),
         sa.Column("status", sa.String(16), nullable=False, server_default="active"),
         sa.Column("created_by", sa.String(128), nullable=True),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index(
-        "ix_tabletop_sessions_tenant_id", "purple_team_tabletop_sessions", ["tenant_id"]
-    )
+    op.create_index("ix_tabletop_sessions_tenant_id", "purple_team_tabletop_sessions", ["tenant_id"])
 
 
 def downgrade() -> None:

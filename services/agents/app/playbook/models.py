@@ -1,4 +1,5 @@
 """Playbook data models — Pydantic v2."""
+
 from __future__ import annotations
 
 import uuid
@@ -10,19 +11,21 @@ from pydantic import BaseModel, Field
 
 class StepType(str, Enum):
     """Supported step action types."""
-    ENRICH = "enrich"           # Call enrichment service
-    INVESTIGATE = "investigate" # Trigger AI investigator
-    NOTIFY = "notify"           # Send notification (Slack, email, webhook)
-    BLOCK_IP = "block_ip"       # Call firewall/EDR action
+
+    ENRICH = "enrich"  # Call enrichment service
+    INVESTIGATE = "investigate"  # Trigger AI investigator
+    NOTIFY = "notify"  # Send notification (Slack, email, webhook)
+    BLOCK_IP = "block_ip"  # Call firewall/EDR action
     ISOLATE_HOST = "isolate_host"
     CREATE_TICKET = "create_ticket"
     CLOSE_CASE = "close_case"
-    HTTP = "http"               # Generic outbound HTTP call
-    CONDITION = "condition"     # Branching / gate
+    HTTP = "http"  # Generic outbound HTTP call
+    CONDITION = "condition"  # Branching / gate
 
 
 class StepCondition(BaseModel):
     """Optional condition guard that must be true before this step runs."""
+
     field: str = Field(..., description="JSONPath into run context, e.g. 'verdict'")
     operator: Literal["eq", "ne", "gt", "lt", "contains", "exists"] = "eq"
     value: Any = None
@@ -30,6 +33,7 @@ class StepCondition(BaseModel):
 
 class PlaybookStep(BaseModel):
     """A single step in a playbook."""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str
     type: StepType
@@ -45,6 +49,7 @@ class PlaybookStep(BaseModel):
 
 class Playbook(BaseModel):
     """A complete playbook definition."""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     description: str = ""

@@ -1,9 +1,8 @@
 """
 Connectors service REST API.
 """
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, HTTPException

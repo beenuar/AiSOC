@@ -7,6 +7,7 @@ Responsibilities:
   • Identify forensic artefacts (file paths, registry keys, network artefacts)
   • Produce a confidence-scored forensic summary
 """
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,8 @@ import time
 from typing import Any
 
 import structlog
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 from .state import ForensicFindings, InvestigatorState, StepKind
 from .tools import sha256_of
@@ -50,7 +51,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
     llm = ChatOpenAI(model=model, temperature=0)
 
     enrichment_snippet = json.dumps(
-        {k: v for k, v in list(state.enrichment_cache.items())[:10]},
+        dict(list(state.enrichment_cache.items())[:10]),
         indent=2,
     )[:3000]
 
@@ -83,10 +84,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
         latency_ms = int((time.monotonic() - t0) * 1000)
         tokens = 0
         if hasattr(response, "response_metadata"):
-            tokens = (
-                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
-                or 0
-            )
+            tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
         state.log_llm_response(
             agent="ForensicAgent",
             response=content if isinstance(content, str) else str(content),
@@ -95,7 +93,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
             tokens_used=tokens,
             latency_ms=latency_ms,
         )
-        json_match = re.search(r'\{[\s\S]*\}', content)
+        json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001

@@ -1,12 +1,12 @@
 """Connector management endpoints."""
+
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import and_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.connector import Connector
@@ -56,9 +56,7 @@ async def list_connectors(
     db: DBSession,
 ) -> list[ConnectorResponse]:
     """List all connectors for the tenant."""
-    result = await db.execute(
-        select(Connector).where(Connector.tenant_id == current_user.tenant_id).order_by(Connector.created_at)
-    )
+    result = await db.execute(select(Connector).where(Connector.tenant_id == current_user.tenant_id).order_by(Connector.created_at))
     connectors = result.scalars().all()
     return [ConnectorResponse.model_validate(c) for c in connectors]
 
@@ -112,11 +110,7 @@ async def update_connector(
     db: DBSession,
 ) -> ConnectorResponse:
     """Update a connector's configuration or state."""
-    result = await db.execute(
-        select(Connector).where(
-            Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id
-        )
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id))
     connector = result.scalar_one_or_none()
     if connector is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
@@ -143,11 +137,7 @@ async def delete_connector(
     db: DBSession,
 ) -> None:
     """Delete a connector."""
-    result = await db.execute(
-        select(Connector).where(
-            Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id
-        )
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id))
     connector = result.scalar_one_or_none()
     if connector is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
@@ -162,18 +152,16 @@ async def test_connector(
     db: DBSession,
 ) -> dict:
     """Test connectivity for a connector (stub - to be implemented per connector type)."""
-    result = await db.execute(
-        select(Connector).where(
-            Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id
-        )
-    )
+    result = await db.execute(select(Connector).where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id))
     connector = result.scalar_one_or_none()
     if connector is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
 
     # Update health check timestamp
     await db.execute(
-        update(Connector).where(Connector.id == connector_id).values(
+        update(Connector)
+        .where(Connector.id == connector_id)
+        .values(
             last_health_check=datetime.now(UTC),
             health_status="healthy",
         )

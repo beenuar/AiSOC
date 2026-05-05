@@ -3,12 +3,13 @@ AlienVault OTX (Open Threat Exchange) client.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
 import httpx
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -51,9 +52,7 @@ class OtxClient:
         pulses: list[dict[str, Any]] = []
         page = 1
 
-        async with httpx.AsyncClient(
-            headers=self._headers, timeout=60.0
-        ) as client:
+        async with httpx.AsyncClient(headers=self._headers, timeout=60.0) as client:
             while True:
                 params: dict[str, Any] = {"limit": limit, "page": page}
                 if modified_since:
@@ -89,18 +88,20 @@ class OtxClient:
             ioc_type = self._map_indicator_type(ind.get("type", ""))
             if not ioc_type:
                 continue
-            iocs.append({
-                "type": ioc_type,
-                "value": ind.get("indicator", ""),
-                "description": ind.get("description", ""),
-                "tags": pulse.get("tags", []),
-                "source": "otx",
-                "source_ref": f"otx:{pulse_id}",
-                "pulse_name": pulse_name,
-                "tlp": pulse.get("tlp", "white"),
-                "malware_families": pulse.get("malware_families", []),
-                "attack_ids": pulse.get("attack_ids", []),
-            })
+            iocs.append(
+                {
+                    "type": ioc_type,
+                    "value": ind.get("indicator", ""),
+                    "description": ind.get("description", ""),
+                    "tags": pulse.get("tags", []),
+                    "source": "otx",
+                    "source_ref": f"otx:{pulse_id}",
+                    "pulse_name": pulse_name,
+                    "tlp": pulse.get("tlp", "white"),
+                    "malware_families": pulse.get("malware_families", []),
+                    "attack_ids": pulse.get("attack_ids", []),
+                }
+            )
         return iocs
 
     @staticmethod

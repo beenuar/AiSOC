@@ -2,6 +2,7 @@
 Triage Agent: first responder that classifies severity, extracts IOCs,
 maps MITRE techniques, and decides whether automated response is safe.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -12,14 +13,30 @@ from app.tools.mitre import map_techniques_to_kill_chain
 logger = structlog.get_logger()
 
 _CRITICAL_KEYWORDS = {
-    "ransomware", "lateral movement", "credential dump", "domain admin",
-    "exfiltration", "mimikatz", "cobalt strike", "c2", "beacon",
-    "rootkit", "supply chain", "zero-day", "data breach",
+    "ransomware",
+    "lateral movement",
+    "credential dump",
+    "domain admin",
+    "exfiltration",
+    "mimikatz",
+    "cobalt strike",
+    "c2",
+    "beacon",
+    "rootkit",
+    "supply chain",
+    "zero-day",
+    "data breach",
 }
 
 _HIGH_KEYWORDS = {
-    "phishing", "malware", "exploit", "privilege escalation",
-    "brute force", "suspicious login", "anomaly", "backdoor",
+    "phishing",
+    "malware",
+    "exploit",
+    "privilege escalation",
+    "brute force",
+    "suspicious login",
+    "anomaly",
+    "backdoor",
 }
 
 

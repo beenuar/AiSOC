@@ -1,4 +1,5 @@
 """First-touch alerting for honeytoken triggers."""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +7,7 @@ import hmac
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 import httpx
 

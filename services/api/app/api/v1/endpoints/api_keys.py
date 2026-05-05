@@ -21,6 +21,7 @@ VALID SCOPES
 
 MIT License — AiSOC (open-source AI Security Operations Center)
 """
+
 from __future__ import annotations
 
 import uuid
@@ -41,15 +42,28 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 VALID_SCOPES: frozenset[str] = frozenset(
     [
-        "alerts:read", "alerts:write", "alerts:delete",
-        "cases:read", "cases:write", "cases:delete",
-        "playbooks:read", "playbooks:write", "playbooks:execute",
-        "connectors:read", "connectors:write", "connectors:delete",
-        "plugins:read", "plugins:execute", "plugins:admin",
-        "rules:read", "rules:write",
+        "alerts:read",
+        "alerts:write",
+        "alerts:delete",
+        "cases:read",
+        "cases:write",
+        "cases:delete",
+        "playbooks:read",
+        "playbooks:write",
+        "playbooks:execute",
+        "connectors:read",
+        "connectors:write",
+        "connectors:delete",
+        "plugins:read",
+        "plugins:execute",
+        "plugins:admin",
+        "rules:read",
+        "rules:write",
         "users:read",
-        "threat_intel:read", "threat_intel:write",
-        "reports:read", "reports:write",
+        "threat_intel:read",
+        "threat_intel:write",
+        "reports:read",
+        "reports:write",
         "*",
     ]
 )
@@ -65,6 +79,7 @@ def _validate_scopes(scopes: list[str]) -> None:
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
+
 
 class CreateApiKeyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Human-readable name")
@@ -103,6 +118,7 @@ class UpdateApiKeyRequest(BaseModel):
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
+
 def _api_key_to_out(ak: ApiKey) -> ApiKeyOut:
     return ApiKeyOut(
         id=ak.id,
@@ -117,6 +133,7 @@ def _api_key_to_out(ak: ApiKey) -> ApiKeyOut:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("", response_model=CreateApiKeyResponse, status_code=status.HTTP_201_CREATED)
 async def create_api_key(
@@ -143,6 +160,7 @@ async def create_api_key(
     expires_at = None
     if body.expires_in_days is not None:
         from datetime import timedelta
+
         expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days)
 
     api_key = ApiKey(
@@ -176,11 +194,7 @@ async def list_api_keys(
     current_user: AuthUser,
 ) -> list[ApiKeyOut]:
     """List all API keys for the current tenant (raw keys are never returned)."""
-    result = await db.execute(
-        select(ApiKey)
-        .where(ApiKey.tenant_id == current_user.tenant_id)
-        .order_by(ApiKey.created_at.desc())
-    )
+    result = await db.execute(select(ApiKey).where(ApiKey.tenant_id == current_user.tenant_id).order_by(ApiKey.created_at.desc()))
     return [_api_key_to_out(ak) for ak in result.scalars().all()]
 
 
@@ -191,9 +205,7 @@ async def get_api_key(
     current_user: AuthUser,
 ) -> ApiKeyOut:
     """Get metadata for a specific API key."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
     ak = result.scalar_one_or_none()
     if ak is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
@@ -208,9 +220,7 @@ async def update_api_key(
     current_user: Annotated[Any, require_permission("users:write")],
 ) -> ApiKeyOut:
     """Update an API key's name, scopes, or expiry."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
     ak = result.scalar_one_or_none()
     if ak is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
@@ -229,6 +239,7 @@ async def update_api_key(
 
     if body.expires_in_days is not None:
         from datetime import timedelta
+
         ak.expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days)
 
     await db.commit()
@@ -243,9 +254,7 @@ async def revoke_api_key(
     current_user: Annotated[Any, require_permission("users:write")],
 ) -> None:
     """Revoke (deactivate) an API key. The key can no longer be used for authentication."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
     ak = result.scalar_one_or_none()
     if ak is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")

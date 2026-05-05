@@ -2,9 +2,9 @@
 Alert correlation engine: groups related alerts into incidents using entity and
 MITRE ATT&CK context stored in Redis.
 """
-import json
+
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import redis.asyncio as aioredis
 import structlog
@@ -98,9 +98,7 @@ class Correlator:
         )
         return incident
 
-    async def _merge_alert(
-        self, incident: IncidentSummary, alert: RawAlert
-    ) -> IncidentSummary:
+    async def _merge_alert(self, incident: IncidentSummary, alert: RawAlert) -> IncidentSummary:
         incident.alert_count += 1
         incident.alert_ids.append(str(alert.id))
         incident.severity = _max_severity(incident.severity, alert.severity)

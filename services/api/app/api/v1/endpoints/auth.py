@@ -1,12 +1,11 @@
 """Authentication endpoints: login, refresh, logout."""
-import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.config import settings
@@ -51,9 +50,7 @@ class UserMeResponse(BaseModel):
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: DBSession) -> TokenResponse:
     """Authenticate with email/password, return JWT tokens."""
-    result = await db.execute(
-        select(User).where(User.email == request.email, User.is_active == True)
-    )
+    result = await db.execute(select(User).where(User.email == request.email, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(request.password, user.hashed_password):
@@ -64,9 +61,7 @@ async def login(request: LoginRequest, db: DBSession) -> TokenResponse:
         )
 
     # Update last login
-    await db.execute(
-        update(User).where(User.id == user.id).values(last_login=datetime.now(UTC))
-    )
+    await db.execute(update(User).where(User.id == user.id).values(last_login=datetime.now(UTC)))
 
     token_data = {
         "sub": str(user.id),
@@ -87,18 +82,14 @@ async def login(request: LoginRequest, db: DBSession) -> TokenResponse:
 async def refresh_token(request: RefreshRequest, db: DBSession) -> TokenResponse:
     """Refresh access token using a valid refresh token."""
     try:
-        from jose import JWTError
-
         payload = decode_token(request.refresh_token)
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
         user_id = payload.get("sub")
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-        ) from e
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from e
 
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id), User.is_active == True))
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id), User.is_active.is_(True)))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")

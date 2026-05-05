@@ -3,6 +3,7 @@ Tool wrappers used by every investigator agent.
 Each tool is a plain async callable that can be registered with LangChain/LangGraph
 tool-calling or invoked directly.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -23,6 +24,7 @@ _TIMEOUT = 10.0
 # ---------------------------------------------------------------------------
 # Enrichment tool
 # ---------------------------------------------------------------------------
+
 
 async def enrich_ioc(ioc_value: str, ioc_type: str) -> dict[str, Any]:
     """
@@ -45,6 +47,7 @@ async def enrich_ioc(ioc_value: str, ioc_type: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Case / alert lookup
 # ---------------------------------------------------------------------------
+
 
 async def fetch_case(case_id: str, api_token: str = "") -> dict[str, Any]:
     """Fetch full case details from the AiSOC API."""
@@ -116,6 +119,7 @@ def map_to_mitre(text: str) -> list[str]:
 # Utility helpers
 # ---------------------------------------------------------------------------
 
+
 def sha256_of(obj: Any) -> str:
     serialised = json.dumps(obj, sort_keys=True, default=str)
     return hashlib.sha256(serialised.encode()).hexdigest()
@@ -130,12 +134,8 @@ def extract_iocs(text: str) -> list[dict[str, str]]:
 
     iocs: list[dict[str, str]] = []
 
-    ip_pattern = re.compile(
-        r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
-    )
-    domain_pattern = re.compile(
-        r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b"
-    )
+    ip_pattern = re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b")
+    domain_pattern = re.compile(r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b")
     sha256_pattern = re.compile(r"\b[0-9a-fA-F]{64}\b")
     url_pattern = re.compile(r"https?://[^\s\"'<>]+")
 

@@ -3,6 +3,7 @@ Detection rule execution engine.
 Supports: Sigma (pySigma), YARA, KQL (simulated), EQL (simulated).
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,6 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -30,6 +30,7 @@ class RuleLanguage(str, Enum):
 @dataclass
 class RuleMatch:
     """A single rule match result."""
+
     rule_id: str
     rule_name: str
     rule_language: str
@@ -45,6 +46,7 @@ class RuleMatch:
 @dataclass
 class HuntResult:
     """Result from a threat hunt across events."""
+
     hunt_id: str
     tenant_id: str
     rules_evaluated: int
@@ -58,6 +60,7 @@ class HuntResult:
 
 # ─── Sigma Runner ─────────────────────────────────────────────────────────────
 
+
 def _run_sigma(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
     """
     Execute a Sigma rule against a list of events.
@@ -65,9 +68,8 @@ def _run_sigma(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict]
     Returns (matched_events, error_message).
     """
     try:
-        from sigma.rule import SigmaRule
         from sigma.backends.opensearch import OpensearchLuceneBackend
-        from sigma.collection import SigmaCollection
+        from sigma.rule import SigmaRule
 
         sigma_rule = SigmaRule.from_yaml(rule_body)
         backend = OpensearchLuceneBackend()
@@ -97,6 +99,7 @@ def _sigma_fallback(rule_body: str, events: list[dict[str, Any]]) -> list[dict[s
     """
     try:
         import yaml
+
         rule = yaml.safe_load(rule_body)
         detection = rule.get("detection", {})
 
@@ -122,7 +125,8 @@ def _eval_sigma_detection(detection: dict, flat_event: dict[str, Any]) -> bool:
         if isinstance(sel_def, dict):
             match = True
             for field_name, field_val in sel_def.items():
-                field_lower = field_name.lower().rstrip("|contains|startswith|endswith")
+                # Strip Sigma modifier suffixes (e.g. `cmdline|contains` -> `cmdline`).
+                field_lower = field_name.lower().split("|", 1)[0]
                 ev_val = str(flat_event.get(field_lower, "")).lower()
                 if isinstance(field_val, list):
                     hit = any(str(v).lower() in ev_val for v in field_val)
@@ -159,6 +163,7 @@ def _eval_condition(condition: str, selections: dict[str, bool]) -> bool:
 
 # ─── YARA Runner ──────────────────────────────────────────────────────────────
 
+
 def _run_yara(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
     """
     Execute a YARA rule against event payloads.
@@ -166,6 +171,7 @@ def _run_yara(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict],
     """
     try:
         import yara
+
         compiled = yara.compile(source=rule_body)
         matched = []
         for event in events:
@@ -197,6 +203,7 @@ def _event_to_bytes(event: dict[str, Any]) -> bytes:
 
 
 # ─── KQL / EQL Runner (simulated) ─────────────────────────────────────────────
+
 
 def _run_kql(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
     """
@@ -239,6 +246,7 @@ def _run_eql(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], 
 
 # ─── Lucene Query Matcher ─────────────────────────────────────────────────────
 
+
 def _lucene_match(query: str, event: dict[str, Any]) -> bool:
     """Simple Lucene query evaluator for field:value pairs."""
     flat = _flatten_dict(event)
@@ -260,6 +268,7 @@ def _flatten_dict(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
 
 
 # ─── Main Execute Function ────────────────────────────────────────────────────
+
 
 def execute_rule(
     rule_id: str,
@@ -334,6 +343,7 @@ def _severity_score(severity: str) -> float:
 
 # ─── Hunt Runner ─────────────────────────────────────────────────────────────
 
+
 async def run_hunt(
     tenant_id: str,
     rules: list[dict[str, Any]],
@@ -367,14 +377,16 @@ async def run_hunt(
         if result.matched:
             rules_matched += 1
             matched_events.extend(result.match_details.get("matched_events", []))
-            match_summary.append({
-                "rule_id": result.rule_id,
-                "rule_name": result.rule_name,
-                "severity": result.severity,
-                "match_count": len(result.match_details.get("matched_events", [])),
-                "score": result.score,
-                "execution_time_ms": result.execution_time_ms,
-            })
+            match_summary.append(
+                {
+                    "rule_id": result.rule_id,
+                    "rule_name": result.rule_name,
+                    "severity": result.severity,
+                    "match_count": len(result.match_details.get("matched_events", [])),
+                    "score": result.score,
+                    "execution_time_ms": result.execution_time_ms,
+                }
+            )
 
     elapsed_ms = (time.monotonic() - start) * 1000
 

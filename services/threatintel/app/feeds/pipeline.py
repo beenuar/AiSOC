@@ -10,17 +10,19 @@ Handles the full lifecycle for each normalized IOC/actor batch:
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
+from typing import Any
+
 import structlog
-from datetime import datetime, timezone
-from typing import Any, Optional
 
 from app.storage.bloom import RedisBloomFilter
+from app.storage.neo4j import Neo4jStore
 from app.storage.opensearch import OpenSearchStore
 from app.storage.qdrant import QdrantStore
-from app.storage.neo4j import Neo4jStore
 
 logger = structlog.get_logger(__name__)
 
@@ -66,7 +68,7 @@ class ThreatIntelPipeline:
         duplicates = 0
 
         for ioc in iocs:
-            bloom_key = f"{ioc.get('type','?')}:{ioc.get('value','?')}"
+            bloom_key = f"{ioc.get('type', '?')}:{ioc.get('value', '?')}"
             if await self._bloom.contains(bloom_key):
                 duplicates += 1
             else:
@@ -151,14 +153,16 @@ class ThreatIntelPipeline:
         source: str,
     ) -> None:
         """Emit Kafka messages for downstream consumers."""
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         for item in items:
-            payload = json.dumps({
-                "event_type": event_type,
-                "source": source,
-                "timestamp": ts,
-                "data": item,
-            }).encode()
+            payload = json.dumps(
+                {
+                    "event_type": event_type,
+                    "source": source,
+                    "timestamp": ts,
+                    "data": item,
+                }
+            ).encode()
             try:
                 await self._kafka.send(self._kafka_topic, value=payload)
             except Exception as exc:

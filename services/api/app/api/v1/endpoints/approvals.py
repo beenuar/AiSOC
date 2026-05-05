@@ -13,6 +13,7 @@ Endpoints
 * ``POST   /approvals``           Create one (called by the agent service).
 * ``POST   /approvals/{id}/decide`` Approve or deny.
 """
+
 from __future__ import annotations
 
 import logging
@@ -154,9 +155,7 @@ async def get_approval(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found")
     return ApprovalResponse.model_validate(row)
 
 
@@ -220,9 +219,7 @@ async def decide_approval(
         )
     ).scalar_one_or_none()
     if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found")
 
     new_status = "approved" if body.decision == "approve" else "denied"
 
@@ -279,9 +276,7 @@ async def _notify_realtime(row: AgentApproval, *, event: str) -> None:
             "risk_level": row.risk_level,
             "status": row.status,
             "decision_comment": row.decision_comment,
-            "notify_user_ids": (
-                [str(row.required_user_id)] if row.required_user_id else None
-            ),
+            "notify_user_ids": ([str(row.required_user_id)] if row.required_user_id else None),
         },
     }
 

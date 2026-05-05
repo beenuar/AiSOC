@@ -19,6 +19,7 @@ defined in migrations/002_rls.sql.
 For compatibility, ``get_current_user`` also exposes a helper
 ``set_rls_context(session, tenant_id)`` that can be called manually.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -29,7 +30,7 @@ from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import get_current_user, CurrentUser
+from app.api.v1.deps import CurrentUser, get_current_user
 from app.db.database import AsyncSessionLocal
 
 

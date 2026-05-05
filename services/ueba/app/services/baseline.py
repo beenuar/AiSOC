@@ -4,12 +4,12 @@ Maintains a rolling Welford online-statistics baseline per entity.
 On each call to ``update_baseline`` the running mean and variance are
 updated without having to re-read the full window of historical events.
 """
+
 from __future__ import annotations
 
 import math
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,10 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.ueba import EntityBaseline
 
-
 # ---------------------------------------------------------------------------
 # Welford online statistics helpers
 # ---------------------------------------------------------------------------
+
 
 def _welford_update(
     stats: dict[str, dict[str, float]],
@@ -74,6 +74,7 @@ def compute_z_score(
 # DB-backed baseline service
 # ---------------------------------------------------------------------------
 
+
 class BaselineService:
     def __init__(self, session: AsyncSession) -> None:
         self._db = session
@@ -93,7 +94,7 @@ class BaselineService:
         )
         row = result.scalar_one_or_none()
         if row is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             row = EntityBaseline(
                 tenant_id=tenant_id,
                 entity_type=entity_type,
@@ -121,7 +122,7 @@ class BaselineService:
             stats = _welford_update(stats, feature, value)
 
         baseline.feature_stats = stats
-        baseline.window_end = datetime.now(timezone.utc)
+        baseline.window_end = datetime.now(UTC)
         await self._db.flush()
         return baseline
 

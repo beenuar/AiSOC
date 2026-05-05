@@ -30,20 +30,19 @@ Anomalies are published to ``ueba.anomalies``:
     "detected_at":    "2026-05-03T12:00:01Z"
   }
 """
+
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.services.scoring import ScoringService
 from app.services.peer_group import PeerGroupService
+from app.services.scoring import ScoringService
 
 LOG = logging.getLogger(__name__)
 
@@ -127,7 +126,10 @@ class UEBAKafkaConsumer:
             )
             LOG.info(
                 "Anomaly emitted: entity=%s/%s score=%.2f risk=%s",
-                entity_type, entity_id, anomaly.anomaly_score, anomaly.risk_level,
+                entity_type,
+                entity_id,
+                anomaly.anomaly_score,
+                anomaly.risk_level,
             )
 
     async def run(self) -> None:

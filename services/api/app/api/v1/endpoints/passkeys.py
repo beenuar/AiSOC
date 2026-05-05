@@ -30,6 +30,7 @@ Security notes
 * On success we issue the same JWT pair as ``/auth/login`` so the rest of
   the API surface is unaware of the auth method.
 """
+
 from __future__ import annotations
 
 import base64
@@ -45,8 +46,8 @@ from sqlalchemy import and_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.config import settings
-from app.db.rls import TenantDBSession
 from app.core.security import create_access_token, create_refresh_token
+from app.db.rls import TenantDBSession
 from app.models.responder import PasskeyChallenge, PasskeyCredential
 from app.models.tenant import User
 
@@ -137,10 +138,7 @@ def _import_webauthn() -> Any:
     except ImportError as exc:  # pragma: no cover - exercised in CI when missing
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Passkey (WebAuthn) support is not installed on this server. "
-                "Install the `webauthn` Python package."
-            ),
+            detail=("Passkey (WebAuthn) support is not installed on this server. Install the `webauthn` Python package."),
         ) from exc
 
 
@@ -205,21 +203,21 @@ async def passkey_register_begin(
 
     # Pull existing credential IDs so the browser hides them in the picker.
     existing_rows = (
-        await db.execute(
-            select(PasskeyCredential.credential_id).where(
-                PasskeyCredential.user_id == user.user_id,
-                PasskeyCredential.revoked_at.is_(None),
+        (
+            await db.execute(
+                select(PasskeyCredential.credential_id).where(
+                    PasskeyCredential.user_id == user.user_id,
+                    PasskeyCredential.revoked_at.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    user_row = (
-        await db.execute(select(User).where(User.id == user.user_id))
-    ).scalar_one_or_none()
+    user_row = (await db.execute(select(User).where(User.id == user.user_id))).scalar_one_or_none()
     if user_row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     options = webauthn.generate_registration_options(
         rp_id=settings.PASSKEY_RP_ID,
@@ -227,9 +225,7 @@ async def passkey_register_begin(
         user_id=str(user.user_id).encode("utf-8"),
         user_name=user_row.email,
         user_display_name=user_row.username or user_row.email,
-        exclude_credentials=[
-            {"id": _b64url_decode(cid), "type": "public-key"} for cid in existing_rows
-        ],
+        exclude_credentials=[{"id": _b64url_decode(cid), "type": "public-key"} for cid in existing_rows],
     )
 
     options_json = json.loads(webauthn.options_to_json(options))
@@ -261,9 +257,7 @@ async def passkey_register_finish(
     """Verify the attestation response and persist the new credential."""
     webauthn, _ = _import_webauthn()
 
-    challenge_row = await _consume_challenge(
-        db, encoded=body.challenge, purpose="register"
-    )
+    challenge_row = await _consume_challenge(db, encoded=body.challenge, purpose="register")
     if challenge_row.user_id != user.user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -339,13 +333,17 @@ async def passkey_authenticate_begin(
         if user_row is not None:
             target_user = user_row
             cred_rows = (
-                await db.execute(
-                    select(PasskeyCredential).where(
-                        PasskeyCredential.user_id == user_row.id,
-                        PasskeyCredential.revoked_at.is_(None),
+                (
+                    await db.execute(
+                        select(PasskeyCredential).where(
+                            PasskeyCredential.user_id == user_row.id,
+                            PasskeyCredential.revoked_at.is_(None),
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             allow_credentials = [
                 {
                     "id": _b64url_decode(c.credential_id),
@@ -413,9 +411,7 @@ async def passkey_authenticate_finish(
         )
     ).scalar_one_or_none()
     if user_row is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive")
 
     try:
         verified = webauthn.verify_authentication_response(
@@ -436,9 +432,7 @@ async def passkey_authenticate_finish(
 
     cred_row.sign_count = int(verified.new_sign_count)
     cred_row.last_used_at = _now()
-    await db.execute(
-        update(User).where(User.id == user_row.id).values(last_login=_now())
-    )
+    await db.execute(update(User).where(User.id == user_row.id).values(last_login=_now()))
     await db.commit()
 
     token_data = {
@@ -465,25 +459,25 @@ async def list_my_credentials(
 ) -> CredentialsListResponse:
     """List the current user's active passkeys."""
     rows = (
-        await db.execute(
-            select(PasskeyCredential)
-            .where(
-                and_(
-                    PasskeyCredential.user_id == user.user_id,
-                    PasskeyCredential.revoked_at.is_(None),
+        (
+            await db.execute(
+                select(PasskeyCredential)
+                .where(
+                    and_(
+                        PasskeyCredential.user_id == user.user_id,
+                        PasskeyCredential.revoked_at.is_(None),
+                    )
                 )
+                .order_by(PasskeyCredential.created_at.desc())
             )
-            .order_by(PasskeyCredential.created_at.desc())
         )
-    ).scalars().all()
-    return CredentialsListResponse(
-        items=[PasskeyCredentialOut.model_validate(r) for r in rows]
+        .scalars()
+        .all()
     )
+    return CredentialsListResponse(items=[PasskeyCredentialOut.model_validate(r) for r in rows])
 
 
-@router.delete(
-    "/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_credential(
     credential_id: uuid.UUID,
     user: AuthUser,

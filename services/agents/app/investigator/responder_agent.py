@@ -6,6 +6,7 @@ Responsibilities:
   • Estimate effort and risk
   • All actions are DRY-RUN only — no live execution occurs here
 """
+
 from __future__ import annotations
 
 import json
@@ -14,8 +15,8 @@ import time
 from typing import Any
 
 import structlog
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 from .state import InvestigatorState, ResponderPlan, StepKind
 from .tools import sha256_of
@@ -54,8 +55,7 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
         f"Confidence: {state.forensic.confidence:.0%}\n"
         f"MITRE: {state.recon.mitre_techniques}\n"
         f"Threat actors: {state.recon.threat_actors}\n\n"
-        f"Timeline (last 5):\n"
-        + json.dumps(state.forensic.timeline[-5:], indent=2)
+        f"Timeline (last 5):\n" + json.dumps(state.forensic.timeline[-5:], indent=2)
     )
 
     messages = [
@@ -80,10 +80,7 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
         latency_ms = int((time.monotonic() - t0) * 1000)
         tokens = 0
         if hasattr(response, "response_metadata"):
-            tokens = (
-                response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
-                or 0
-            )
+            tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
         state.log_llm_response(
             agent="ResponderAgent",
             response=content if isinstance(content, str) else str(content),
@@ -92,7 +89,7 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
             tokens_used=tokens,
             latency_ms=latency_ms,
         )
-        json_match = re.search(r'\{[\s\S]*\}', content)
+        json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
             return json.loads(json_match.group())
     except Exception as exc:  # noqa: BLE001
@@ -156,8 +153,7 @@ async def run_responder(state_dict: dict[str, Any]) -> dict[str, Any]:
     state.log(
         StepKind.RESPONDER,
         "ResponderAgent",
-        f"Generated {len(state.responder.recommended_actions)} recommended actions "
-        f"(risk={state.responder.risk_level}, dry_run=True)",
+        f"Generated {len(state.responder.recommended_actions)} recommended actions (risk={state.responder.risk_level}, dry_run=True)",
         duration_ms=elapsed_ms,
         input_hash=sha256_of(state.forensic.model_dump()),
         output_hash=sha256_of(state.responder.model_dump()),

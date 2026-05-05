@@ -10,6 +10,7 @@ The store is a singleton; mount it at app startup:
 
     store = PlaybookStore.default()   # loads from data/playbooks/
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .models import Playbook, PlaybookStep, StepType
+from .models import Playbook
 
 logger = logging.getLogger("aisoc.playbook.store")
 
@@ -40,15 +41,11 @@ class PlaybookStore:
         store_dir: Path | None = None,
         pack_root: Path | None = None,
     ) -> None:
-        self._dir = store_dir or Path(
-            os.getenv("PLAYBOOK_STORE_DIR", str(_DEFAULT_STORE_DIR))
-        )
+        self._dir = store_dir or Path(os.getenv("PLAYBOOK_STORE_DIR", str(_DEFAULT_STORE_DIR)))
         self._dir.mkdir(parents=True, exist_ok=True)
         # Optional canonical pack tree (playbooks/packs/v1/<category>/<slug>.playbook.json).
         # Loaded read-only — mutations always go to self._dir/index.json.
-        self._pack_root = pack_root or Path(
-            os.getenv("PLAYBOOK_PACK_ROOT", str(_DEFAULT_PACK_ROOT))
-        )
+        self._pack_root = pack_root or Path(os.getenv("PLAYBOOK_PACK_ROOT", str(_DEFAULT_PACK_ROOT)))
         self._manifest_path = self._dir / "index.json"
         self._playbooks: dict[str, Playbook] = {}
         self._load()
@@ -60,7 +57,7 @@ class PlaybookStore:
     _instance: PlaybookStore | None = None
 
     @classmethod
-    def default(cls) -> "PlaybookStore":
+    def default(cls) -> PlaybookStore:
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -194,6 +191,7 @@ class PlaybookStore:
         if self._playbooks:
             return 0
         from .templates import STARTER_PLAYBOOKS
+
         count = 0
         for pb_dict in STARTER_PLAYBOOKS:
             pb = Playbook.model_validate(pb_dict)

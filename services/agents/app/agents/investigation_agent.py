@@ -2,6 +2,7 @@
 Investigation Agent: synthesizes findings from triage and enrichment,
 generates a structured investigation report with recommended actions.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -21,11 +22,7 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
     state.iteration_count += 1
 
     # Analyze enrichment results for threat patterns
-    malicious_iocs = {
-        k: v
-        for k, v in state.ioc_enrichments.items()
-        if v.get("threat_classification") in ("malicious", "suspicious")
-    }
+    malicious_iocs = {k: v for k, v in state.ioc_enrichments.items() if v.get("threat_classification") in ("malicious", "suspicious")}
 
     # Analyze MITRE techniques for attack stage
     attack_stages = set()
@@ -35,10 +32,7 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
 
     # --- Generate narrative findings ---
     if malicious_iocs:
-        state.add_finding(
-            f"CONFIRMED THREAT: {len(malicious_iocs)} malicious IOC(s) identified. "
-            f"Immediate containment recommended."
-        )
+        state.add_finding(f"CONFIRMED THREAT: {len(malicious_iocs)} malicious IOC(s) identified. Immediate containment recommended.")
 
     if attack_stages:
         state.add_finding(
@@ -77,8 +71,7 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
     # --- Exfiltration detection ---
     if "Exfiltration" in attack_stages or "Command and Control" in attack_stages:
         state.add_finding(
-            "CRITICAL: Evidence of C2 or exfiltration stage detected. "
-            "Recommend immediate network isolation and forensic acquisition."
+            "CRITICAL: Evidence of C2 or exfiltration stage detected. Recommend immediate network isolation and forensic acquisition."
         )
         state.proposed_actions.append(
             ProposedAction(
@@ -92,9 +85,7 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
         )
 
     state.status = AgentStatus.COMPLETED
-    state.add_finding(
-        f"Investigation complete. Total proposed actions: {len(state.proposed_actions)}"
-    )
+    state.add_finding(f"Investigation complete. Total proposed actions: {len(state.proposed_actions)}")
 
     logger.info(
         "Investigation complete",

@@ -4,11 +4,12 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-05-03
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 revision = "0001"
 down_revision = None

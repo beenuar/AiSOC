@@ -3,13 +3,14 @@ OpenSearch storage layer for threat intelligence IOCs and actors.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import hashlib
-import structlog
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from opensearchpy import AsyncOpenSearch, helpers
 
 logger = structlog.get_logger(__name__)
@@ -76,7 +77,7 @@ class OpenSearchStore:
         if not iocs:
             return 0
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         actions = []
         for ioc in iocs:
             doc_id = _stable_id(ioc.get("type", ""), ioc.get("value", ""), ioc.get("source", ""))
@@ -85,12 +86,14 @@ class OpenSearchStore:
                 "ingested_at": now,
                 "last_seen": now,
             }
-            actions.append({
-                "_op_type": "index",
-                "_index": _IOC_INDEX,
-                "_id": doc_id,
-                "_source": doc,
-            })
+            actions.append(
+                {
+                    "_op_type": "index",
+                    "_index": _IOC_INDEX,
+                    "_id": doc_id,
+                    "_source": doc,
+                }
+            )
 
         success, errors = await helpers.async_bulk(self._os, actions, raise_on_error=False)
         if errors:
@@ -102,16 +105,18 @@ class OpenSearchStore:
         if not actors:
             return 0
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         actions = []
         for actor in actors:
             doc_id = _stable_id("actor", actor.get("name", ""), actor.get("source", "stix"))
-            actions.append({
-                "_op_type": "index",
-                "_index": _ACTOR_INDEX,
-                "_id": doc_id,
-                "_source": {**actor, "ingested_at": now},
-            })
+            actions.append(
+                {
+                    "_op_type": "index",
+                    "_index": _ACTOR_INDEX,
+                    "_id": doc_id,
+                    "_source": {**actor, "ingested_at": now},
+                }
+            )
 
         success, _ = await helpers.async_bulk(self._os, actions, raise_on_error=False)
         return success

@@ -20,6 +20,7 @@ Design notes
   string tenant id (e.g. ``"default"``); we resolve it to the canonical UUID
   by looking it up in the ``tenants`` table on first write per run.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -27,7 +28,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import asyncpg
 import structlog
@@ -35,17 +36,15 @@ import structlog
 logger = structlog.get_logger()
 
 
-_POOL: Optional[asyncpg.Pool] = None
+_POOL: asyncpg.Pool | None = None
 
 
 def _normalise_dsn(url: str) -> str:
     """Convert SQLAlchemy-style DSNs to plain Postgres ones for asyncpg."""
-    return url.replace("postgresql+asyncpg://", "postgresql://").replace(
-        "postgres+asyncpg://", "postgresql://"
-    )
+    return url.replace("postgresql+asyncpg://", "postgresql://").replace("postgres+asyncpg://", "postgresql://")
 
 
-async def get_pool() -> Optional[asyncpg.Pool]:
+async def get_pool() -> asyncpg.Pool | None:
     """Lazy-init a connection pool. Returns None if no DATABASE_URL is set."""
     global _POOL
     if _POOL is not None:
@@ -77,9 +76,7 @@ async def close_pool() -> None:
         _POOL = None
 
 
-async def _resolve_tenant_id(
-    conn: asyncpg.Connection, tenant_ref: str
-) -> Optional[uuid.UUID]:
+async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.UUID | None:
     """Look up the canonical tenant UUID. Accepts a UUID string, slug, or name.
 
     Returns None if no matching tenant exists. Callers should fall back to
@@ -105,9 +102,7 @@ async def _resolve_tenant_id(
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
     """Match the API service's set_rls_context — required so the audit-log
     immutability trigger and tenant policies allow our INSERTs."""
-    await conn.execute(
-        "SELECT set_config('app.tenant_id', $1, true)", str(tenant_id)
-    )
+    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(tenant_id))
 
 
 async def start_run(
@@ -118,7 +113,7 @@ async def start_run(
     alert_summary: str,
     raw_alert: dict[str, Any] | None,
     model_used: str | None = None,
-) -> Optional[uuid.UUID]:
+) -> uuid.UUID | None:
     """Insert a new ``investigation_runs`` row. Returns the resolved tenant
     UUID on success (caller can cache it for subsequent writes), None on
     failure."""
@@ -177,7 +172,7 @@ async def record_event(
     output_hash: str | None = None,
     duration_ms: int = 0,
     timestamp: datetime | None = None,
-) -> Optional[uuid.UUID]:
+) -> uuid.UUID | None:
     """Append an immutable event row. Returns the new event id, or None."""
     pool = await get_pool()
     if pool is None:
@@ -230,7 +225,7 @@ async def record_artifact(
     kind: str,
     content: str,
     event_id: uuid.UUID | None = None,
-) -> Optional[uuid.UUID]:
+) -> uuid.UUID | None:
     """Persist a large blob (LLM transcript, full report) inline.
 
     For now we store inline ``TEXT`` rather than offloading to S3 — the

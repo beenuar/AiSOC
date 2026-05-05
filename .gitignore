@@ -74,6 +74,9 @@ eval_mitre_accuracy_report.json
 .gocache/
 *.tsbuildinfo
 
+# Detection-import upstream clones (populated by tools.detection_import)
+.import-cache/
+
 # Docusaurus generated cache (apps/docs)
 apps/docs/.docusaurus/
 apps/docs/build/

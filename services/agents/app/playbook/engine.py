@@ -9,6 +9,7 @@ Design goals:
 - Emits events to the realtime service so the UI can stream progress.
 - Zero external dependencies beyond httpx + stdlib.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +36,7 @@ _API_URL = os.getenv("API_URL", "http://api:8000")
 # Run status
 # ---------------------------------------------------------------------------
 
+
 class RunStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -54,6 +56,7 @@ class StepStatus(str, Enum):
 # ---------------------------------------------------------------------------
 # Run record
 # ---------------------------------------------------------------------------
+
 
 class StepResult(dict):  # thin dict subclass for JSON serialisation
     pass
@@ -93,6 +96,7 @@ class PlaybookRun:
 # Condition evaluation
 # ---------------------------------------------------------------------------
 
+
 def _resolve_field(context: dict[str, Any], field: str) -> Any:
     """Resolve a dot-path field from context, e.g. 'alert.severity'."""
     parts = field.split(".")
@@ -129,6 +133,7 @@ def _evaluate_condition(condition: StepCondition, context: dict[str, Any]) -> bo
 # ---------------------------------------------------------------------------
 # Step handlers
 # ---------------------------------------------------------------------------
+
 
 async def _handle_enrich(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
     ioc = step.params.get("ioc") or context.get("ioc") or context.get("src_ip", "")
@@ -221,6 +226,7 @@ _HANDLERS = {
 # Realtime event helper
 # ---------------------------------------------------------------------------
 
+
 async def _emit(run_id: str, event_type: str, payload: dict, http: httpx.AsyncClient) -> None:
     try:
         await http.post(
@@ -236,6 +242,7 @@ async def _emit(run_id: str, event_type: str, payload: dict, http: httpx.AsyncCl
 # ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
+
 
 class PlaybookEngine:
     """Executes playbooks step-by-step, emitting realtime events."""
@@ -275,9 +282,7 @@ class PlaybookEngine:
                     condition_passed = _evaluate_condition(step.condition, pr.context)
 
                 if not condition_passed:
-                    pr.step_results.append(
-                        {"step_id": step.id, "name": step.name, "status": StepStatus.SKIPPED}
-                    )
+                    pr.step_results.append({"step_id": step.id, "name": step.name, "status": StepStatus.SKIPPED})
                     # Branching: use next_false if set
                     if step.next_false and step.next_false in step_index:
                         current_idx = step_index[step.next_false]
@@ -292,9 +297,7 @@ class PlaybookEngine:
                         current_idx = step_index[branch_id]
                     else:
                         current_idx += 1
-                    pr.step_results.append(
-                        {"step_id": step.id, "name": step.name, "status": StepStatus.SUCCESS, "branch": branch_id}
-                    )
+                    pr.step_results.append({"step_id": step.id, "name": step.name, "status": StepStatus.SUCCESS, "branch": branch_id})
                     continue
 
                 await _emit(pr.run_id, "step.started", {"step": step.name, "type": step.type}, http)
@@ -321,15 +324,13 @@ class PlaybookEngine:
                         elapsed = time.perf_counter() - t0
                         logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
                         if attempt <= step.retry_max:
-                            await asyncio.sleep(min(2 ** attempt, 30))
+                            await asyncio.sleep(min(2**attempt, 30))
                         else:
                             step_status = StepStatus.FAILED
                             result = {"error": str(exc), "_elapsed_ms": round(elapsed * 1000)}
                             break
 
-                pr.step_results.append(
-                    {"step_id": step.id, "name": step.name, "status": step_status, "result": result}
-                )
+                pr.step_results.append({"step_id": step.id, "name": step.name, "status": step_status, "result": result})
                 # Merge result into context for downstream steps
                 pr.context.update({f"_step_{step.id}": result})
                 # Also flatten top-level keys without underscore prefix for convenience
@@ -337,11 +338,16 @@ class PlaybookEngine:
                     if not k.startswith("_"):
                         pr.context.setdefault(k, v)
 
-                await _emit(pr.run_id, "step.done", {
-                    "step": step.name,
-                    "status": step_status,
-                    "result_keys": list(result.keys()),
-                }, http)
+                await _emit(
+                    pr.run_id,
+                    "step.done",
+                    {
+                        "step": step.name,
+                        "status": step_status,
+                        "result_keys": list(result.keys()),
+                    },
+                    http,
+                )
 
                 if step_status == StepStatus.FAILED and step.on_failure == "abort":
                     pr.status = RunStatus.FAILED

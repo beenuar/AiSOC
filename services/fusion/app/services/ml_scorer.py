@@ -13,10 +13,10 @@ feedback accumulates. They fall back to heuristics if not yet trained.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
 import asyncio
-import json
 import math
 from datetime import datetime
 from typing import Any
@@ -70,6 +70,7 @@ def _featurize(alert: RawAlert) -> list[float]:
 # Heuristic fallbacks (used when ML models aren't trained yet)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _heuristic_anomaly(alert: RawAlert) -> float:
     """Simple heuristic anomaly score: more IOC fields = potentially more anomalous."""
     score = 0.0
@@ -88,13 +89,15 @@ def _heuristic_priority(alert: RawAlert) -> float:
     """Simple heuristic priority score based on severity and IOC density."""
     sev = _SEVERITY_MAP.get(alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity), 2)
     base = sev / 4.0
-    ioc_bonus = sum([
-        0.1 if alert.src_ip else 0.0,
-        0.05 if alert.hostname else 0.0,
-        0.05 if alert.username else 0.0,
-        0.1 if alert.file_hash else 0.0,
-        0.05 if alert.mitre_techniques else 0.0,
-    ])
+    ioc_bonus = sum(
+        [
+            0.1 if alert.src_ip else 0.0,
+            0.05 if alert.hostname else 0.0,
+            0.05 if alert.username else 0.0,
+            0.1 if alert.file_hash else 0.0,
+            0.05 if alert.mitre_techniques else 0.0,
+        ]
+    )
     return min(base + ioc_bonus, 1.0)
 
 
@@ -115,8 +118,8 @@ class MLScorer:
     """
 
     def __init__(self) -> None:
-        self._iso_forest = None       # sklearn IsolationForest
-        self._lgbm_ranker = None      # lightgbm LGBMRanker
+        self._iso_forest = None  # sklearn IsolationForest
+        self._lgbm_ranker = None  # lightgbm LGBMRanker
         self._iso_trained = False
         self._lgbm_trained = False
 
@@ -138,16 +141,12 @@ class MLScorer:
             self._feature_buffer.append(features)
 
         if self._iso_trained and self._iso_forest is not None:
-            anomaly_score = await asyncio.get_event_loop().run_in_executor(
-                None, self._predict_anomaly, features
-            )
+            anomaly_score = await asyncio.get_event_loop().run_in_executor(None, self._predict_anomaly, features)
         else:
             anomaly_score = _heuristic_anomaly(alert)
 
         if self._lgbm_trained and self._lgbm_ranker is not None:
-            priority_score = await asyncio.get_event_loop().run_in_executor(
-                None, self._predict_priority, features
-            )
+            priority_score = await asyncio.get_event_loop().run_in_executor(None, self._predict_priority, features)
         else:
             priority_score = _heuristic_priority(alert)
 
@@ -178,12 +177,8 @@ class MLScorer:
             features = list(self._feature_buffer)
             feedback = list(self._feedback_buffer)
 
-        iso_result = await asyncio.get_event_loop().run_in_executor(
-            None, self._train_isolation_forest, features
-        )
-        lgbm_result = await asyncio.get_event_loop().run_in_executor(
-            None, self._train_lgbm_ranker, features, feedback
-        )
+        iso_result = await asyncio.get_event_loop().run_in_executor(None, self._train_isolation_forest, features)
+        lgbm_result = await asyncio.get_event_loop().run_in_executor(None, self._train_lgbm_ranker, features, feedback)
 
         return {
             "isolation_forest": iso_result,
@@ -210,6 +205,7 @@ class MLScorer:
         """Run IsolationForest prediction synchronously."""
         try:
             import numpy as np
+
             X = np.array(features).reshape(1, -1)
             # decision_function: negative = anomaly, normalize to [0,1]
             raw = self._iso_forest.decision_function(X)[0]
@@ -225,6 +221,7 @@ class MLScorer:
         """Run LightGBM ranker prediction synchronously."""
         try:
             import numpy as np
+
             X = np.array(features).reshape(1, -1)
             raw = self._lgbm_ranker.predict(X)[0]
             # Normalize to [0,1] via sigmoid
@@ -269,8 +266,8 @@ class MLScorer:
         if len(feedback) < _MIN_FEEDBACK_FOR_RANKER:
             return {"status": "skipped", "reason": f"need {_MIN_FEEDBACK_FOR_RANKER} feedback items, have {len(feedback)}"}
         try:
-            import numpy as np
             import lightgbm as lgb
+            import numpy as np
 
             # Build training set from feedback + heuristic features
             X_rows = []
@@ -320,10 +317,8 @@ class MLScorer:
             n_features = len(self._feature_buffer)
             n_feedback = len(self._feedback_buffer)
 
-        should_iso = (not self._iso_trained and n_features >= _MIN_SAMPLES_FOR_TRAINING) or \
-                     (self._iso_trained and n_features % 500 == 0)
-        should_lgbm = (not self._lgbm_trained and n_feedback >= _MIN_FEEDBACK_FOR_RANKER) or \
-                      (self._lgbm_trained and n_feedback % 100 == 0)
+        should_iso = (not self._iso_trained and n_features >= _MIN_SAMPLES_FOR_TRAINING) or (self._iso_trained and n_features % 500 == 0)
+        should_lgbm = (not self._lgbm_trained and n_feedback >= _MIN_FEEDBACK_FOR_RANKER) or (self._lgbm_trained and n_feedback % 100 == 0)
 
         if should_iso or should_lgbm:
             asyncio.create_task(self._retrain_background(should_iso, should_lgbm))

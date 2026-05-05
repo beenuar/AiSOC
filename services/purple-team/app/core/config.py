@@ -1,13 +1,12 @@
 """Purple Team service configuration."""
+
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="PURPLE_TEAM_", env_file=".env", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="PURPLE_TEAM_", env_file=".env", extra="ignore")
 
     # Database
     database_url: str = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"
@@ -21,9 +20,7 @@ class Settings(BaseSettings):
     art_atomics_path: str = "/opt/atomic-red-team/atomics"
 
     # ATT&CK STIX bundle URL (for coverage mapping)
-    attack_stix_url: str = (
-        "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
-    )
+    attack_stix_url: str = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
 
     # OTel
     otel_endpoint: str = "http://localhost:4317"

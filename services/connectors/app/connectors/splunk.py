@@ -2,6 +2,7 @@
 Splunk connector.
 Runs saved searches and fetches notable events from Splunk SIEM.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -38,7 +39,8 @@ class SplunkConnector(BaseConnector):
                     params={"output_mode": "json"},
                 )
                 resp.raise_for_status()
-                return {"success": True, "connector": self.connector_id, "version": resp.json().get("entry", [{}])[0].get("content", {}).get("version")}
+                version = resp.json().get("entry", [{}])[0].get("content", {}).get("version")
+                return {"success": True, "connector": self.connector_id, "version": version}
             except Exception as exc:
                 return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
@@ -60,6 +62,7 @@ class SplunkConnector(BaseConnector):
 
             # Wait for completion (simple polling)
             import asyncio
+
             for _ in range(10):
                 status_resp = await client.get(
                     f"{self._base_url}/services/search/jobs/{sid}",

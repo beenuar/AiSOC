@@ -37,10 +37,10 @@ See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 Run:
     pytest services/agents/tests/test_response_quality.py -v
 """
+
 from __future__ import annotations
 
 import json
-import re
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,8 +53,7 @@ _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
 def _load_dataset() -> list[dict[str, Any]]:
     if not _DATASET_PATH.exists():
         raise FileNotFoundError(
-            f"Synthetic incidents dataset missing at {_DATASET_PATH}. "
-            f"Run `python3 scripts/generate_eval_incidents.py` to regenerate."
+            f"Synthetic incidents dataset missing at {_DATASET_PATH}. Run `python3 scripts/generate_eval_incidents.py` to regenerate."
         )
     with _DATASET_PATH.open() as f:
         return json.load(f)
@@ -103,8 +102,7 @@ _PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     "block_indicator": {
         "action": "block_indicator",
         "summary": (
-            "Block the malicious indicator (IP/domain/hash) at the perimeter "
-            "and EDR. Hunt for prior contacts across the environment."
+            "Block the malicious indicator (IP/domain/hash) at the perimeter and EDR. Hunt for prior contacts across the environment."
         ),
         "steps": [
             "Block the indicator at firewall, proxy, and DNS sinkhole.",
@@ -115,10 +113,7 @@ _PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "investigate": {
         "action": "investigate",
-        "summary": (
-            "Open an investigation case, gather additional context, and "
-            "monitor the host for further activity."
-        ),
+        "summary": ("Open an investigation case, gather additional context, and monitor the host for further activity."),
         "steps": [
             "Open a case and assign a triage analyst.",
             "Pull additional telemetry from EDR, network, and identity logs.",
@@ -127,10 +122,7 @@ _PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "rotate_credentials": {
         "action": "rotate_credentials",
-        "summary": (
-            "Rotate the credentials of the affected identity, revoke API "
-            "tokens, and audit recent access."
-        ),
+        "summary": ("Rotate the credentials of the affected identity, revoke API tokens, and audit recent access."),
         "steps": [
             "Rotate the credentials and API tokens of the affected identity.",
             "Revoke active sessions and OAuth grants.",
@@ -139,10 +131,7 @@ _PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "revoke_token": {
         "action": "revoke_token",
-        "summary": (
-            "Revoke the compromised access token, audit recent API calls, "
-            "and block the source IP if required."
-        ),
+        "summary": ("Revoke the compromised access token, audit recent API calls, and block the source IP if required."),
         "steps": [
             "Revoke the compromised access token immediately.",
             "Audit recent API calls made with the token.",
@@ -167,9 +156,7 @@ _PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     "escalate": {
         "action": "escalate",
         "summary": (
-            "Escalate to senior incident commander and engage the "
-            "appropriate response team. Contain blast radius while "
-            "awaiting decision."
+            "Escalate to senior incident commander and engage the appropriate response team. Contain blast radius while awaiting decision."
         ),
         "steps": [
             "Escalate to the on-call senior incident commander.",
@@ -181,8 +168,7 @@ _PLAN_TEMPLATES: dict[str, dict[str, Any]] = {
     "monitor": {
         "action": "monitor",
         "summary": (
-            "Place the affected entity under enhanced monitoring, log "
-            "additional telemetry, and re-evaluate after the watch window."
+            "Place the affected entity under enhanced monitoring, log additional telemetry, and re-evaluate after the watch window."
         ),
         "steps": [
             "Place the affected entity under enhanced monitoring.",
@@ -232,15 +218,40 @@ def synthesize_response_plan(incident: dict[str, Any]) -> dict[str, Any]:
 
 
 _ACTION_VERBS = {
-    "isolate", "block", "disable", "reset", "revoke", "rotate", "snapshot",
-    "quarantine", "contain", "audit", "hunt", "monitor", "patch", "remove",
-    "kill", "remediate", "roll back", "rollback", "escalate", "page",
+    "isolate",
+    "block",
+    "disable",
+    "reset",
+    "revoke",
+    "rotate",
+    "snapshot",
+    "quarantine",
+    "contain",
+    "audit",
+    "hunt",
+    "monitor",
+    "patch",
+    "remove",
+    "kill",
+    "remediate",
+    "roll back",
+    "rollback",
+    "escalate",
+    "page",
     "restore",
 }
 
 _CONTAINMENT_VERBS = {
-    "isolate", "block", "disable", "revoke", "rotate", "quarantine", "contain",
-    "roll back", "rollback", "escalate",
+    "isolate",
+    "block",
+    "disable",
+    "revoke",
+    "rotate",
+    "quarantine",
+    "contain",
+    "roll back",
+    "rollback",
+    "escalate",
 }
 
 _RESPONSE_CLASS_VERBS: dict[str, set[str]] = {
@@ -278,32 +289,20 @@ def judge_response_plan(plan: dict[str, Any], incident: dict[str, Any]) -> dict[
     if severity in ("high", "critical"):
         severity_aware = 1.0 if any(v in text for v in _CONTAINMENT_VERBS) else 0.0
     else:
-        severity_aware = (
-            1.0 if any(v in text for v in {"investigate", "monitor", "audit", "hunt"}) else 0.0
-        )
+        severity_aware = 1.0 if any(v in text for v in {"investigate", "monitor", "audit", "hunt"}) else 0.0
 
     # 3. mitre_aligned
-    mitre_pool = (incident.get("expected_tactics") or []) + (
-        incident.get("expected_techniques") or []
-    )
-    mitre_aligned = (
-        1.0
-        if any(m.lower() in text for m in mitre_pool)
-        else 0.0
-    )
+    mitre_pool = (incident.get("expected_tactics") or []) + (incident.get("expected_techniques") or [])
+    mitre_aligned = 1.0 if any(m.lower() in text for m in mitre_pool) else 0.0
 
     # 4. evidence_grounded
     evidence_kws = incident.get("evidence_keywords") or []
-    evidence_grounded = (
-        1.0 if any(kw.lower() in text for kw in evidence_kws) else 0.0
-    )
+    evidence_grounded = 1.0 if any(kw.lower() in text for kw in evidence_kws) else 0.0
 
     # 5. actionable
     actionable = 1.0 if any(v in text for v in _ACTION_VERBS) else 0.0
 
-    score = (
-        action_aligned + severity_aware + mitre_aligned + evidence_grounded + actionable
-    ) / 5.0
+    score = (action_aligned + severity_aware + mitre_aligned + evidence_grounded + actionable) / 5.0
 
     return {
         "action_aligned": action_aligned,
@@ -379,7 +378,8 @@ class TestResponseQuality(unittest.TestCase):
             f"actionable: {result.crit_mean('actionable'):.2f}"
         )
         self.assertGreaterEqual(
-            result.mean_score, 0.80,
+            result.mean_score,
+            0.80,
             f"Mean response-quality score {result.mean_score:.3f} below 0.80 floor.",
         )
 
@@ -388,7 +388,8 @@ class TestResponseQuality(unittest.TestCase):
         result = evaluate_response_quality(keep_per_incident=True)
         not_actionable = [r for r in (result.per_incident or []) if r["actionable"] == 0.0]
         self.assertEqual(
-            not_actionable, [],
+            not_actionable,
+            [],
             f"{len(not_actionable)} plans had no actionable verb (sample: {not_actionable[:3]}).",
         )
 
@@ -405,7 +406,8 @@ class TestResponseQuality(unittest.TestCase):
                 if not row or row["severity_aware"] != 1.0:
                     bad.append(inc["id"])
         self.assertEqual(
-            bad, [],
+            bad,
+            [],
             f"{len(bad)} high/critical incidents had no containment verb (sample: {bad[:3]}).",
         )
 
@@ -413,15 +415,21 @@ class TestResponseQuality(unittest.TestCase):
         """≥ 90% of incidents must produce a plan whose action matches the response class."""
         result = evaluate_response_quality()
         self.assertGreaterEqual(
-            result.crit_mean("action_aligned"), 0.90,
+            result.crit_mean("action_aligned"),
+            0.90,
             f"Only {result.crit_mean('action_aligned') * 100:.1f}% of plans aligned with response_class.",
         )
 
 
 if __name__ == "__main__":
     result = evaluate_response_quality()
-    print(json.dumps({
-        "incidents": result.incidents,
-        "mean_score": round(result.mean_score, 4),
-        "criteria": {k: round(result.crit_mean(k), 4) for k in result.crit_sum},
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "incidents": result.incidents,
+                "mean_score": round(result.mean_score, 4),
+                "criteria": {k: round(result.crit_mean(k), 4) for k in result.crit_sum},
+            },
+            indent=2,
+        )
+    )

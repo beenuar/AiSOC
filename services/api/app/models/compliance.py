@@ -1,13 +1,24 @@
 """SQLAlchemy models for compliance framework tables."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMPTZ, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import TIMESTAMP
 
 from app.db.database import Base
+
+
+# Aliased for readability; on Postgres this renders as TIMESTAMPTZ.
+# (The PG dialect never exported a `TIMESTAMPTZ` symbol — that's just SQL
+# syntax. The correct way to get a tz-aware column is `TIMESTAMP(timezone=True)`.)
+TIMESTAMPTZ = TIMESTAMP(timezone=True)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 class ComplianceControl(Base):
@@ -19,7 +30,7 @@ class ComplianceControl(Base):
     category: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, default=_utcnow)
 
 
 class ComplianceEvidence(Base):
@@ -32,7 +43,7 @@ class ComplianceEvidence(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="collected")
-    collected_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, default=datetime.utcnow)
+    collected_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, default=_utcnow)
     collected_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False, default=_utcnow)

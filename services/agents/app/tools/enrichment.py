@@ -1,6 +1,7 @@
 """
 Tool: IOC enrichment via the enrichment microservice.
 """
+
 import httpx
 import structlog
 

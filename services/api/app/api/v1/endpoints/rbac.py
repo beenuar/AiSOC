@@ -7,8 +7,9 @@ Requires:
   - ``roles:write`` to create / update / delete roles and assign users
   - ``users:write`` to assign / revoke roles from users
 """
+
 import uuid
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -114,14 +115,16 @@ async def list_roles(
     out: list[RoleOut] = []
     for role in roles:
         perms = [PermissionOut.model_validate(rp.permission) for rp in role.role_permissions]
-        out.append(RoleOut(
-            id=role.id,
-            tenant_id=role.tenant_id,
-            name=role.name,
-            description=role.description,
-            is_system=role.is_system,
-            permissions=perms,
-        ))
+        out.append(
+            RoleOut(
+                id=role.id,
+                tenant_id=role.tenant_id,
+                name=role.name,
+                description=role.description,
+                is_system=role.is_system,
+                permissions=perms,
+            )
+        )
     return out
 
 
@@ -133,9 +136,7 @@ async def create_role(
 ) -> RoleOut:
     """Create a custom role for the current tenant."""
     # Check name uniqueness
-    existing = await db.execute(
-        select(Role).where(Role.tenant_id == current_user.tenant_id, Role.name == body.name)
-    )
+    existing = await db.execute(select(Role).where(Role.tenant_id == current_user.tenant_id, Role.name == body.name))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Role '{body.name}' already exists")
 
@@ -272,16 +273,12 @@ async def assign_role(
     role = await _get_role_or_404(db, body.role_id, current_user.tenant_id)
 
     # Ensure the target user belongs to this tenant
-    user_res = await db.execute(
-        select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id)
-    )
+    user_res = await db.execute(select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id))
     if user_res.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found in tenant")
 
     # Upsert
-    existing = await db.execute(
-        select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role.id)
-    )
+    existing = await db.execute(select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role.id))
     if existing.scalar_one_or_none() is not None:
         return UserRoleOut(user_id=user_id, role_id=role.id, role_name=role.name)
 
@@ -299,9 +296,7 @@ async def revoke_role(
     db: TenantDBSession,
 ) -> None:
     """Revoke a role from a user."""
-    await db.execute(
-        delete(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
-    )
+    await db.execute(delete(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id))
     await db.commit()
 
 
@@ -311,9 +306,7 @@ async def revoke_role(
 
 
 async def _get_role_or_404(db: AsyncSession, role_id: uuid.UUID, tenant_id: uuid.UUID) -> Role:
-    result = await db.execute(
-        select(Role).where(Role.id == role_id, Role.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(Role).where(Role.id == role_id, Role.tenant_id == tenant_id))
     role = result.scalar_one_or_none()
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")

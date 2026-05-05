@@ -1,4 +1,5 @@
 """Tenant and user management endpoints."""
+
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -6,7 +7,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.security import get_password_hash
@@ -79,7 +79,9 @@ async def update_tenant_settings(
 ) -> TenantResponse:
     """Update tenant settings."""
     await db.execute(
-        update(Tenant).where(Tenant.id == current_user.tenant_id).values(
+        update(Tenant)
+        .where(Tenant.id == current_user.tenant_id)
+        .values(
             settings=request.settings,
             updated_at=datetime.now(UTC),
         )
@@ -96,9 +98,7 @@ async def list_users(
     db: DBSession,
 ) -> list[UserResponse]:
     """List all users in the current tenant."""
-    result = await db.execute(
-        select(User).where(User.tenant_id == current_user.tenant_id).order_by(User.created_at)
-    )
+    result = await db.execute(select(User).where(User.tenant_id == current_user.tenant_id).order_by(User.created_at))
     users = result.scalars().all()
     return [UserResponse.model_validate(u) for u in users]
 
@@ -139,9 +139,7 @@ async def update_user(
     db: DBSession,
 ) -> UserResponse:
     """Update a user."""
-    result = await db.execute(
-        select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

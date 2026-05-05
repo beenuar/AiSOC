@@ -2,20 +2,22 @@
 Graph API endpoints: attack paths, blast radius, entity neighbors, MITRE coverage.
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-from typing import Any, Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import get_current_user, CurrentUser
+from app.api.v1.deps import CurrentUser, get_current_user
 from app.services import graph_service
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
 
 # ─── Request / Response Schemas ───────────────────────────────────────────────
+
 
 class GraphNode(BaseModel):
     id: str
@@ -97,6 +99,7 @@ class UpsertCaseGraphRequest(BaseModel):
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/attack-path/{case_id}",
     response_model=AttackPathResponse,
@@ -121,7 +124,7 @@ async def get_attack_path(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Graph query failed: {exc}",
-        )
+        ) from exc
 
     if not data["nodes"]:
         raise HTTPException(
@@ -165,7 +168,7 @@ async def get_blast_radius(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Graph query failed: {exc}",
-        )
+        ) from exc
 
     return BlastRadiusResponse(**data)
 
@@ -191,7 +194,7 @@ async def get_entity_neighbors(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Graph query failed: {exc}",
-        )
+        ) from exc
 
     return EntityNeighborsResponse(**data)
 
@@ -213,7 +216,7 @@ async def get_mitre_coverage(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Graph query failed: {exc}",
-        )
+        ) from exc
 
     return [
         MitreCoverageItem(
@@ -227,6 +230,7 @@ async def get_mitre_coverage(
 
 
 # ─── Write Endpoints ──────────────────────────────────────────────────────────
+
 
 @router.post(
     "/entities/host",

@@ -4,32 +4,46 @@ Usage in main.py::
 
     from app.graphql.schema import graphql_router
     app.include_router(graphql_router, prefix="/graphql")
+
+Tenant isolation
+----------------
+The context factory uses ``get_tenant_db`` so every GraphQL transaction
+runs with ``app.current_tenant_id`` set, activating Postgres RLS.
+Resolvers also apply explicit ``where(tenant_id == user.tenant_id)``
+filters as defense-in-depth in case a model is not yet covered by RLS.
+
+GraphiQL exposure
+-----------------
+GraphiQL is enabled only when ``ENVIRONMENT == "development"``. In any
+other environment the introspection UI is disabled to reduce attack
+surface.
 """
+
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import strawberry
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from strawberry.fastapi import GraphQLRouter
 
-from app.api.v1.deps import get_current_user
-from app.db.database import get_db
+from app.api.v1.deps import CurrentUser, get_current_user
+from app.core.config import settings
+from app.db.rls import get_tenant_db
 from app.graphql.query import Query
-
 
 # ─── Context factory ──────────────────────────────────────────────────────────
 
 
 async def get_graphql_context(
-    db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_tenant_db),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Build the per-request context dict injected into every resolver.
 
-    The ``db`` session and authenticated ``user`` are available via
-    ``info.context["db"]`` and ``info.context["user"]``.
+    The ``db`` session is RLS-scoped to the user's tenant, and the
+    authenticated ``user`` is available via ``info.context["user"]``.
     """
     return {"db": db, "user": user}
 
@@ -40,8 +54,16 @@ schema = strawberry.Schema(query=Query)
 
 # ─── FastAPI router ───────────────────────────────────────────────────────────
 
+# GraphiQL is only enabled in development. Production-like environments get a
+# pure JSON endpoint with no introspection UI.
+#
+# strawberry-graphql >= 0.231 replaced the old ``graphiql: bool`` kwarg with
+# ``graphql_ide: GraphQL_IDE | None`` (where ``"graphiql"`` is the default and
+# ``None`` disables the IDE entirely). We pin to that newer API.
+_graphql_ide: str | None = "graphiql" if settings.ENVIRONMENT.lower() == "development" else None
+
 graphql_router = GraphQLRouter(
     schema,
     context_getter=get_graphql_context,
-    # GraphiQL is always available; disable in production by passing graphiql=False
+    graphql_ide=_graphql_ide,
 )

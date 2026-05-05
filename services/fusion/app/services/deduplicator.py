@@ -1,7 +1,6 @@
 """
 Alert deduplication using fingerprinting and a Redis sliding-window cache.
 """
-from datetime import datetime
 
 import redis.asyncio as aioredis
 import structlog

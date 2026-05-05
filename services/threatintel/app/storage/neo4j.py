@@ -6,11 +6,12 @@ knowledge graph for attack path and blast-radius queries.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
+
 from __future__ import annotations
 
-import structlog
 from typing import Any
 
+import structlog
 from neo4j import AsyncDriver
 
 logger = structlog.get_logger(__name__)

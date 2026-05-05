@@ -6,18 +6,15 @@ it never blocks the hot path.
 
 Non-authenticated requests and GET/HEAD/OPTIONS are silently skipped.
 """
+
 from __future__ import annotations
 
 import re
 import uuid
-from typing import Callable
 
+from app.db.database import AsyncSessionLocal
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-
-from app.core.config import settings
-from app.db.database import AsyncSessionLocal
-
 
 _MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -61,6 +58,7 @@ def _extract_jwt_claims(request: Request) -> tuple[uuid.UUID | None, uuid.UUID |
     token = auth.split(" ", 1)[1]
     try:
         import jwt  # noqa: PLC0415
+
         payload = jwt.decode(token, options={"verify_signature": False})
         user_id = uuid.UUID(payload["sub"]) if payload.get("sub") else None
         tenant_id = uuid.UUID(payload["tenant_id"]) if payload.get("tenant_id") else None
@@ -100,6 +98,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
             async with AsyncSessionLocal() as db:
                 from app.models.audit import AuditLog  # noqa: PLC0415
+
                 forwarded = request.headers.get("x-forwarded-for")
                 actor_ip = (forwarded.split(",")[0].strip() if forwarded else None) or (
                     str(request.client.host) if request.client else None
