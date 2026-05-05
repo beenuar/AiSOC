@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-remove-suffix",
+  "event_type": "exec",
+  "process_path": "head-/profiles"
+}

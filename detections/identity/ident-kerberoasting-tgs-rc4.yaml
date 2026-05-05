@@ -1,0 +1,24 @@
+id: det-identity-091
+name: 'Kerberoasting: TGS Request With RC4_HMAC'
+description: 'AiSOC v1 curated detection. Triggers on the identity signal described by ''Kerberoasting:
+  TGS Request With RC4_HMAC''. Watch the 1 documented false-positive case before tuning.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1558.003
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: kerberos
+detection:
+  condition: |
+    event_id == 4769
+    AND ticket_encryption_type == "0x17"
+false_positives:
+- Legacy app (must be ticketed)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

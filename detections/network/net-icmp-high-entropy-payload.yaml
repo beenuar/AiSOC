@@ -1,0 +1,25 @@
+id: det-network-078
+name: ICMP Echo With High-Entropy Payload
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'ICMP Echo With High-Entropy
+  Payload'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1095
+- tlp.white
+category: network
+log_source:
+  product: firewall
+  service: netflow
+detection:
+  condition: |
+    event_type == "icmp"
+    AND payload_entropy > 7.5
+    AND payload_size_bytes > 64
+false_positives:
+- MTU diagnostic
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

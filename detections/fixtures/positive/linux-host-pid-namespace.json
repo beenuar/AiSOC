@@ -1,0 +1,4 @@
+{
+  "event_type": "container_create",
+  "pid_mode": "host"
+}

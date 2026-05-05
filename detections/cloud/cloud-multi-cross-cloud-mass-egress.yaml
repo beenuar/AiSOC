@@ -1,0 +1,26 @@
+id: det-cloud-186
+name: Multi-Cloud Cross-Cloud Mass Egress Burst
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Multi-Cloud Cross-Cloud
+  Mass Egress Burst'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1567
+- tlp.white
+category: cloud
+log_source:
+  product: multi-cloud
+  service: netflow
+detection:
+  condition: |
+    src_cloud IN ["aws", "azure", "gcp"]
+    AND dst_cloud IN ["aws", "azure", "gcp"]
+    AND src_cloud_neq_dst_cloud == true
+    AND bytes_out_per_minute > 1073741824
+false_positives:
+- Approved cross-cloud replication pipeline
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

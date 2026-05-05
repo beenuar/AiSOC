@@ -1,0 +1,25 @@
+id: det-identity-100
+name: 'Pass-The-Ticket Indicator: TGT Source IP Mismatch'
+description: 'AiSOC v1 curated detection. Triggers on the identity signal described by ''Pass-The-Ticket
+  Indicator: TGT Source IP Mismatch''. Watch the 1 documented false-positive case before tuning.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1550.003
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: kerberos
+detection:
+  condition: |
+    event_id == 4624
+    AND logon_type == 3
+    AND ticket_source_ip_neq_session_ip == true
+false_positives:
+- NAT / proxy environment
+playbook: tpl-lateral-movement
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

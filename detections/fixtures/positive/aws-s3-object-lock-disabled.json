@@ -1,0 +1,4 @@
+{
+  "event_name": "PutObjectLockConfiguration",
+  "retention_disabled": true
+}

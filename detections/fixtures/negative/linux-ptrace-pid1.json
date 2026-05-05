@@ -1,0 +1,4 @@
+{
+  "syscall": "not-ptrace",
+  "target_pid": 1
+}

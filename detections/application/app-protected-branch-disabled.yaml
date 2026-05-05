@@ -1,0 +1,23 @@
+id: det-application-057
+name: Branch Protection Disabled On Protected Branch
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Branch Protection
+  Disabled On Protected Branch'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.004
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: repo
+detection:
+  condition: |
+    event_type IN ["protected_branch.policy_override", "protected_branch.destroy"]
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-supply-chain
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

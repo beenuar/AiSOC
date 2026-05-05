@@ -1,0 +1,25 @@
+id: det-network-048
+name: HTTPS Connection To IP Without SNI
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'HTTPS Connection
+  To IP Without SNI'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1573.002
+- tlp.white
+category: network
+log_source:
+  product: proxy
+  service: tls
+detection:
+  condition: |
+    event_type == "tls_session"
+    AND sni_present == false
+    AND destination_is_internal == false
+false_positives:
+- IoT device with broken TLS stack
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

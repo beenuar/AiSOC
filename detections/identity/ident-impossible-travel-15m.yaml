@@ -1,0 +1,26 @@
+id: det-identity-045
+name: 'Impossible Travel: Two Successful Logins <15m, >1000km'
+description: 'AiSOC v1 curated detection. Triggers on the identity signal described by ''Impossible Travel:
+  Two Successful Logins <15m, >1000km''. Watch the 2 documented false-positive cases before tuning.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND geo_distance_km > 1000
+    AND minutes_between < 15
+false_positives:
+- Corporate VPN (egress IP changes)
+- Mobile-data roaming
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

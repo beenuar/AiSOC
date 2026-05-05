@@ -1,0 +1,4 @@
+{
+  "event_type": "not-container_create",
+  "image_name": "prefix-docker:dind-suffix"
+}

@@ -1,0 +1,24 @@
+id: det-cloud-106
+name: Entra ID App Granted Directory.ReadWrite.All
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Entra ID App Granted
+  Directory.ReadWrite.All'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    operation_name == "Update application"
+    AND permissions_added CONTAINS_ANY ["Directory.ReadWrite.All", "RoleManagement.ReadWrite.Directory"]
+false_positives:
+- Approved IAM tooling
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

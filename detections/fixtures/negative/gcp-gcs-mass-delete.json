@@ -1,0 +1,4 @@
+{
+  "events_per_minute": 1100.0,
+  "method_name": "not-storage.objects.delete"
+}

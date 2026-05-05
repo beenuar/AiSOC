@@ -1,0 +1,6 @@
+{
+  "event_type": "not-dns_response",
+  "qtype": "CNAME",
+  "target": "head-.herokudns.com",
+  "target_resolves": false
+}

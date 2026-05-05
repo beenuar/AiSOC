@@ -1,0 +1,4 @@
+{
+  "fd_path": "/proc/self/fd/-tail",
+  "syscall": "execveat"
+}

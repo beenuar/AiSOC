@@ -1,0 +1,4 @@
+{
+  "action": "not-app_installed",
+  "scopes": "prefix-chat:write.public-suffix"
+}

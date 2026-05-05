@@ -1,0 +1,6 @@
+{
+  "auth_type": "NTLMv2",
+  "event_id": 4624,
+  "src_host_trusted": false,
+  "user_priv": true
+}

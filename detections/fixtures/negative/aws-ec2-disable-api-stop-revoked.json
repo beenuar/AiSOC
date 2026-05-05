@@ -1,0 +1,5 @@
+{
+  "attribute": "disableApiStop",
+  "event_name": "not-ModifyInstanceAttribute",
+  "value": false
+}

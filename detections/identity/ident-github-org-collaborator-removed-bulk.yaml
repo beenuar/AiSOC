@@ -1,0 +1,24 @@
+id: det-identity-155
+name: GitHub Org Bulk Member Removed
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'GitHub Org Bulk
+  Member Removed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1531
+- tlp.white
+category: identity
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    action == "org.remove_member"
+    AND events_per_minute > 20
+false_positives:
+- Approved bulk offboarding
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

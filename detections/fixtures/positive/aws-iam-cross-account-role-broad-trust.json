@@ -1,0 +1,5 @@
+{
+  "event_name": "CreateRole",
+  "trust_principal": "head-:root",
+  "trust_principal_external": true
+}

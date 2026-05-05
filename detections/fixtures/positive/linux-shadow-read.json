@@ -1,0 +1,5 @@
+{
+  "actor_uid_neq": 0,
+  "path": "/etc/shadow",
+  "syscall": "openat"
+}

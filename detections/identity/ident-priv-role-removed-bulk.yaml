@@ -1,0 +1,25 @@
+id: det-identity-076
+name: Privileged Role Removed From Many Users In Burst
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Privileged Role
+  Removed From Many Users In Burst'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1531
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: audit
+detection:
+  condition: |
+    event_type == "role_revoke"
+    AND role_priv == true
+    AND events_per_minute > 10
+false_positives:
+- Approved cleanup project
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

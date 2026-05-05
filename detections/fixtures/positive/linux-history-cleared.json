@@ -1,0 +1,5 @@
+{
+  "flags": "prefix-O_TRUNC-suffix",
+  "path": "head-/.bash_history",
+  "syscall": "openat"
+}

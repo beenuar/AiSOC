@@ -1,0 +1,4 @@
+{
+  "event_type": "client.create",
+  "events_per_minute_per_actor": 105.0
+}

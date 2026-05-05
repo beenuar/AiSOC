@@ -1,0 +1,24 @@
+id: det-identity-114
+name: Okta App Assigned With Federated External Domain
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta App Assigned
+  With Federated External Domain'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: audit
+detection:
+  condition: |
+    event_type == "application.federated.user.assign"
+    AND external_domain == true
+false_positives:
+- Approved partner integration
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

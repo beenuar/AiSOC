@@ -1,0 +1,25 @@
+id: det-endpoint-178
+name: Likely Cryptominer Process Detected
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Likely Cryptominer
+  Process Detected'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1496
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH_ANY ["/xmrig", "/minerd", "/cpuminer"]
+false_positives:
+- Authorised red-team or penetration test
+- Authorized stress-test
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

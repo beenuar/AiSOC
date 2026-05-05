@@ -1,0 +1,4 @@
+{
+  "action": "not-snapshot.transfer",
+  "destination_account_external": true
+}

@@ -1,0 +1,26 @@
+id: det-identity-098
+name: Privileged Account NTLM Logon From Untrusted Host
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Privileged Account
+  NTLM Logon From Untrusted Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.002
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: ntlm
+detection:
+  condition: |
+    event_id == 4624
+    AND auth_type == "NTLMv2"
+    AND user_priv == true
+    AND src_host_trusted == false
+false_positives:
+- Documented break-glass procedure
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

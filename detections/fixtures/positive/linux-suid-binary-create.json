@@ -1,0 +1,5 @@
+{
+  "mode_octal": "prefix-4-suffix",
+  "path_not": "/usr/bin-tail",
+  "syscall": "fchmod"
+}

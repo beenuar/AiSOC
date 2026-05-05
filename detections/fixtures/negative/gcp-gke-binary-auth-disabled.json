@@ -1,0 +1,4 @@
+{
+  "binary_authorization": false,
+  "method_name": "clusters.update-x"
+}

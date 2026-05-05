@@ -1,0 +1,4 @@
+{
+  "circuit_purpose": "HS_CLIENT_INTRO",
+  "event_type": "tor_circuit_intro"
+}

@@ -1,0 +1,7 @@
+{
+  "cidr": "0.0.0.0/0",
+  "event_name": "AuthorizeSecurityGroupIngress",
+  "from_port": 3389,
+  "ip_protocol": "tcp",
+  "to_port": 3389
+}

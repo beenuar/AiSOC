@@ -1,0 +1,5 @@
+{
+  "actor_uid_neq": 0,
+  "cmd": "BPF_PROG_LOAD",
+  "syscall": "not-bpf"
+}

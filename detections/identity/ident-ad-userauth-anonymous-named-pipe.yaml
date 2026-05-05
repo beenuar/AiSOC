@@ -1,0 +1,25 @@
+id: det-identity-084
+name: AD Anonymous Logon Allowed Via Null Session
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'AD Anonymous Logon
+  Allowed Via Null Session'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.001
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: auth
+detection:
+  condition: |
+    event_id == 4624
+    AND logon_type == 3
+    AND user_name == "ANONYMOUS LOGON"
+false_positives:
+- Legacy app (must be ticketed)
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

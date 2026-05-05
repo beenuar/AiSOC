@@ -1,0 +1,26 @@
+id: det-cloud-166
+name: Kubernetes cluster-admin ClusterRoleBinding For Non-System Subject
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Kubernetes cluster-admin
+  ClusterRoleBinding For Non-System Subject'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    verb == "create"
+    AND object_resource == "clusterrolebindings"
+    AND role_ref_name == "cluster-admin"
+    AND subject_namespace_not == "kube-system"
+false_positives:
+- Bootstrap of new cluster
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

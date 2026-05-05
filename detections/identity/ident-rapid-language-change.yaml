@@ -1,0 +1,24 @@
+id: det-identity-063
+name: User Login Locale Switched Rapidly
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'User Login Locale
+  Switched Rapidly'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND locale_changes_in_session > 2
+false_positives:
+- Shared/kiosk machine
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

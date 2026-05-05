@@ -1,0 +1,5 @@
+{
+  "agent": "sccm",
+  "event_type": "not-agent_install",
+  "source_signed_by_known_publisher": false
+}

@@ -1,0 +1,5 @@
+{
+  "event_type": "not-policy_update",
+  "scope_priv": true,
+  "session_timeout_minutes_increased": true
+}

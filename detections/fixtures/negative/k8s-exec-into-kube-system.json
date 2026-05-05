@@ -1,0 +1,4 @@
+{
+  "event_type": "not-pod_exec",
+  "namespace": "kube-system"
+}

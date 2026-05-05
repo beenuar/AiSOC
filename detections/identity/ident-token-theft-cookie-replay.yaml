@@ -1,0 +1,25 @@
+id: det-identity-101
+name: Session Cookie Replayed From New Geo Within 1h
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Session Cookie
+  Replayed From New Geo Within 1h'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1539
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: session
+detection:
+  condition: |
+    event_type == "session_continuation"
+    AND geo_changed == true
+    AND minutes_between < 60
+false_positives:
+- Mobile-tethering carrier IP change
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

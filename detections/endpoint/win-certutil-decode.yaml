@@ -1,0 +1,25 @@
+id: det-endpoint-086
+name: certutil.exe Used To Decode Encoded File
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'certutil.exe Used
+  To Decode Encoded File'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1140
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "certutil.exe"
+    AND process_command_line CONTAINS_ANY ["-decode", "-decodehex", "-urlcache -split -f"]
+false_positives:
+- Approved patch / maintenance window activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

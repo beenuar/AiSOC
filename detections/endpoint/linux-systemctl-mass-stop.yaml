@@ -1,0 +1,26 @@
+id: det-endpoint-181
+name: Multiple Critical Services Stopped In Quick Burst
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Multiple Critical
+  Services Stopped In Quick Burst'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1489
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH "/systemctl"
+    AND argv CONTAINS_ANY ["stop", "disable"]
+    AND stops_5min > 5
+false_positives:
+- Approved patch / maintenance window activity
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

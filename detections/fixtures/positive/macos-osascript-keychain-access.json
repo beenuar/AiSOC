@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-security 2>&1-suffix",
+  "event_type": "exec",
+  "process_path": "head-/osascript"
+}

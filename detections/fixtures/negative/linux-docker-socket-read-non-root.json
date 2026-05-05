@@ -1,0 +1,5 @@
+{
+  "actor_uid_neq": 0,
+  "path": "/var/run/docker.sock",
+  "syscall": "not-connect"
+}

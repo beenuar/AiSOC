@@ -1,0 +1,5 @@
+{
+  "event_type": "dns_query",
+  "external_resolver": true,
+  "query": "wpad.local"
+}

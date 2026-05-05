@@ -1,0 +1,24 @@
+id: det-network-073
+name: Kerberos Service Ticket Issued With RC4 Encryption
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Kerberos Service
+  Ticket Issued With RC4 Encryption'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1558.003
+- tlp.white
+category: network
+log_source:
+  product: windows
+  service: kerberos
+detection:
+  condition: |
+    event_id == 4769
+    AND ticket_encryption_type == "0x17"
+false_positives:
+- Legacy app forced RC4 (allow-listed)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

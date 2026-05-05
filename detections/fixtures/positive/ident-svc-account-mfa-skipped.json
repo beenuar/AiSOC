@@ -1,0 +1,6 @@
+{
+  "event_type": "auth_success",
+  "mfa_used": false,
+  "policy_requires_mfa": true,
+  "user_type": "service_account"
+}

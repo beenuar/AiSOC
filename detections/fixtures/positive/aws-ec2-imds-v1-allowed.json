@@ -1,0 +1,4 @@
+{
+  "event_name": "RunInstances",
+  "imds_v1_allowed": true
+}

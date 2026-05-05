@@ -1,0 +1,5 @@
+{
+  "object_resource": "pods",
+  "privileged": true,
+  "verb": "not-create"
+}

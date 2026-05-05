@@ -1,0 +1,5 @@
+{
+  "operation_name": "roleAssignments/write-x",
+  "role": "Owner",
+  "scope_root": true
+}

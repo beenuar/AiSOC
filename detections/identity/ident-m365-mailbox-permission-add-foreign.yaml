@@ -1,0 +1,24 @@
+id: det-identity-146
+name: M365 Mailbox Permission Granted To External User
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'M365 Mailbox Permission
+  Granted To External User'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: identity
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "Add-MailboxPermission"
+    AND trustee_external == true
+false_positives:
+- Approved partner integration
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,24 @@
+id: det-identity-117
+name: Okta Mass User Deactivation
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta Mass User
+  Deactivation'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1531
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: audit
+detection:
+  condition: |
+    event_type == "user.lifecycle.deactivate"
+    AND events_per_minute > 25
+false_positives:
+- Bulk offboarding
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

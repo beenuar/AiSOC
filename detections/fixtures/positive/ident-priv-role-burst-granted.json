@@ -1,0 +1,5 @@
+{
+  "event_type": "role_grant",
+  "events_per_minute": 110.0,
+  "role_priv": true
+}

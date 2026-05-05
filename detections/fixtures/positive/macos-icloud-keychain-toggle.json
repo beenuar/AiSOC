@@ -1,0 +1,5 @@
+{
+  "argv": "com.apple.security AccountSettings Keychain",
+  "event_type": "exec",
+  "process_path": "head-/defaults"
+}

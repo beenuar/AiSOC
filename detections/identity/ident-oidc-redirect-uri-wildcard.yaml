@@ -1,0 +1,24 @@
+id: det-identity-140
+name: OIDC Client Configured With Wildcard Redirect URI
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'OIDC Client Configured
+  With Wildcard Redirect URI'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1539
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: oidc
+detection:
+  condition: |
+    event_type == "client.update"
+    AND redirect_uri CONTAINS "*"
+false_positives:
+- Approved local-dev client
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

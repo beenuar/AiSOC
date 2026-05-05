@@ -1,0 +1,24 @@
+id: det-identity-142
+name: Google Workspace App Password Issued To Priv User
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Google Workspace
+  App Password Issued To Priv User'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556.006
+- tlp.white
+category: identity
+log_source:
+  product: google-workspace
+  service: admin
+detection:
+  condition: |
+    event_name == "GENERATE_APP_PASSWORD"
+    AND user_priv == true
+false_positives:
+- Legacy MAPI client (must be ticketed)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

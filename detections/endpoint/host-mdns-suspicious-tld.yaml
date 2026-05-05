@@ -1,0 +1,24 @@
+id: det-endpoint-277
+name: mDNS Query For Non-.local Suffix
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'mDNS Query For
+  Non-.local Suffix'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1018
+- tlp.white
+category: endpoint
+log_source:
+  product: endpoint
+  service: dns
+detection:
+  condition: |
+    event_type == "mdns_query"
+    AND query ENDSWITH_ANY [".com", ".net", ".io"]
+false_positives:
+- Misbehaving consumer-grade IoT device
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

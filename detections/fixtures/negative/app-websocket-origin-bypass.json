@@ -1,0 +1,4 @@
+{
+  "event_type": "not-ws_upgrade",
+  "origin_matches_allowed_list": false
+}

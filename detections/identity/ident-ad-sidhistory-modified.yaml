@@ -1,0 +1,24 @@
+id: det-identity-089
+name: AD sIDHistory Attribute Modified
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'AD sIDHistory Attribute
+  Modified'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.002
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: audit
+detection:
+  condition: |
+    event_id == 4738
+    AND attribute_modified == "sIDHistory"
+false_positives:
+- Approved domain migration
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

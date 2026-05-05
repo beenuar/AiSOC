@@ -1,0 +1,24 @@
+id: det-identity-106
+name: Okta Admin App Assigned To Many Users In Burst
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta Admin App
+  Assigned To Many Users In Burst'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: audit
+detection:
+  condition: |
+    event_type == "application.user_membership.add"
+    AND events_per_minute > 25
+false_positives:
+- Bulk app rollout
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

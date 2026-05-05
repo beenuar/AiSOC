@@ -1,0 +1,5 @@
+{
+  "event_type": "not-exec",
+  "kext_signed": false,
+  "process_path": "head-/kextload"
+}

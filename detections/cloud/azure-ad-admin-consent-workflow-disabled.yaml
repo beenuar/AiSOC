@@ -1,0 +1,24 @@
+id: det-cloud-111
+name: Entra ID Admin Consent Workflow Disabled
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Entra ID Admin Consent
+  Workflow Disabled'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    operation_name == "Set Company Information"
+    AND admin_consent_workflow == false
+false_positives:
+- Tenant config refactor
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

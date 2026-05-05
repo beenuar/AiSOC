@@ -1,0 +1,4 @@
+{
+  "event_name": "SetTopicAttributes",
+  "policy_principal": "*"
+}

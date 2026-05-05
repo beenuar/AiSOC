@@ -1,0 +1,4 @@
+{
+  "argv": "prefix-histfile=/dev/null-suffix",
+  "syscall": "not-execve"
+}

@@ -1,0 +1,5 @@
+{
+  "event_type": "dns_query",
+  "subdomain_entropy": 104.0,
+  "subdomain_length": 116.0
+}

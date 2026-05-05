@@ -1,0 +1,5 @@
+{
+  "environment": "prod",
+  "event_type": "not-image_pull",
+  "image_registry": "docker.io"
+}

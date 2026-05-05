@@ -1,0 +1,5 @@
+{
+  "count_5min": 150.0,
+  "event_type": "dns_query",
+  "qtype": "ANY"
+}

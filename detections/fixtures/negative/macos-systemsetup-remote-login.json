@@ -1,0 +1,5 @@
+{
+  "argv": "-setremotelogin on",
+  "event_type": "not-exec",
+  "process_path": "head-/systemsetup"
+}

@@ -1,0 +1,24 @@
+id: det-application-055
+name: Docker Daemon Started With --insecure-registry Flag
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Docker Daemon
+  Started With --insecure-registry Flag'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1195.002
+- tlp.white
+category: application
+log_source:
+  product: docker
+  service: dockerd
+detection:
+  condition: |
+    event_type == "daemon_config"
+    AND insecure_registries_count > 0
+false_positives:
+- Internal mirror without TLS (deprecated, must be ticketed)
+playbook: tpl-supply-chain
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-cap_setuid-suffix",
+  "exe": "head-/setcap",
+  "syscall": "not-execve"
+}

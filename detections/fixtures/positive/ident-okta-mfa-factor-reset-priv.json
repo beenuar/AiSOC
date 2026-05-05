@@ -1,0 +1,4 @@
+{
+  "event_type": "user.mfa.factor.reset_all",
+  "target_user_priv": true
+}

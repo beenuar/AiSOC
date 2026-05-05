@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-install-suffix",
+  "event_type": "not-exec",
+  "process_path": "head-/profiles"
+}

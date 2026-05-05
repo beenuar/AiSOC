@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-boot-args=-suffix",
+  "event_type": "exec",
+  "process_path": "head-/nvram"
+}

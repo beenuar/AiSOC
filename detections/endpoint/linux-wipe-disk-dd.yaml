@@ -1,0 +1,25 @@
+id: det-endpoint-180
+name: dd Writing /dev/zero To Block Device
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'dd Writing /dev/zero
+  To Block Device'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1561.002
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH "/dd"
+    AND argv CONTAINS_ALL ["if=/dev/zero", "of=/dev/"]
+false_positives:
+- Authorised disk wipe
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

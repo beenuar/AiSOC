@@ -1,0 +1,26 @@
+id: det-endpoint-176
+name: Large Archive Created In /tmp
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Large Archive Created
+  In /tmp'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1074.001
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "openat"
+    AND path STARTSWITH "/tmp/"
+    AND path ENDSWITH_ANY [".tar", ".tar.gz", ".zip", ".7z"]
+    AND size_bytes > 524288000
+false_positives:
+- Sanctioned local backup
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

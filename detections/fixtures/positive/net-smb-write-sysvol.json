@@ -1,0 +1,5 @@
+{
+  "event_type": "smb_write",
+  "share_name": "SYSVOL",
+  "src_role_neq": "domain-controller"
+}

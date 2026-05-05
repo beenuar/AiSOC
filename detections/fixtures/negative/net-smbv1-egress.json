@@ -1,0 +1,4 @@
+{
+  "dialect": "SMB 1.0",
+  "event_type": "not-smb_negotiate"
+}

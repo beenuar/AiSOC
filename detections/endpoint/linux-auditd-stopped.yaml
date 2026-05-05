@@ -1,0 +1,24 @@
+id: det-endpoint-146
+name: auditd Service Stopped
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'auditd Service
+  Stopped'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.012
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: syslog
+detection:
+  condition: |
+    unit == "auditd"
+    AND active_state == "inactive"
+false_positives:
+- Approved patch / maintenance window activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

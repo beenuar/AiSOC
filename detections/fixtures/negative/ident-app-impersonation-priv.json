@@ -1,0 +1,5 @@
+{
+  "act_as_user_priv": true,
+  "event_type": "not-oauth_action",
+  "scope": "prefix-full_access-suffix"
+}

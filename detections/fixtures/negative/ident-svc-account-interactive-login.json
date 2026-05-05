@@ -1,0 +1,5 @@
+{
+  "event_type": "not-auth_success",
+  "is_interactive": true,
+  "user_type": "service_account"
+}

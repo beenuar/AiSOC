@@ -1,0 +1,24 @@
+id: det-network-044
+name: HTTP User-Agent Matches PowerShell Default
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'HTTP User-Agent
+  Matches PowerShell Default'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1071.001
+- tlp.white
+category: network
+log_source:
+  product: proxy
+  service: http
+detection:
+  condition: |
+    event_type == "http_request"
+    AND user_agent CONTAINS "WindowsPowerShell"
+false_positives:
+- Sanctioned automation/IaC pipeline
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

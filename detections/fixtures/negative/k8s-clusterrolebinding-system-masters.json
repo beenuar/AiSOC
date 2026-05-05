@@ -1,0 +1,4 @@
+{
+  "event_type": "not-create_clusterrolebinding",
+  "subject_group": "system:masters"
+}

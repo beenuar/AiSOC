@@ -1,0 +1,4 @@
+{
+  "event_type": "llmnr",
+  "self_response_for_external_query": true
+}

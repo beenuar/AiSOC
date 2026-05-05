@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "src_role": "workstation",
+  "user_agent": "curl/-tail"
+}

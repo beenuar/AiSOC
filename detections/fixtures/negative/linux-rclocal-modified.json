@@ -1,0 +1,4 @@
+{
+  "path": "/etc/rc.local",
+  "syscall": "not-openat"
+}

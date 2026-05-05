@@ -1,0 +1,6 @@
+{
+  "event_id": 13,
+  "target_object": "prefix-\\windows defender\\-suffix",
+  "value_data": "1",
+  "value_name": "DisableAntiSpyware"
+}

@@ -1,0 +1,25 @@
+id: det-identity-120
+name: Auth0 Management API Key Created
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Auth0 Management
+  API Key Created'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: auth0
+  service: audit
+detection:
+  condition: |
+    event_type == "Successful API Operation"
+    AND operation == "client_grants.create"
+    AND scope CONTAINS "manage"
+false_positives:
+- Approved automation
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

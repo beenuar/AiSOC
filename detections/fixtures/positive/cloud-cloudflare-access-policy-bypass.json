@@ -1,0 +1,4 @@
+{
+  "action": "access_policy.create",
+  "decision": "bypass"
+}

@@ -1,0 +1,5 @@
+{
+  "auth_type": "NTLMv2",
+  "event_id": 8005.0,
+  "workstation_neq_source_address": true
+}

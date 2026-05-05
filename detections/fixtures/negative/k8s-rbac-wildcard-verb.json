@@ -1,0 +1,5 @@
+{
+  "object_resource": "roles",
+  "rule_verbs": "prefix-*-suffix",
+  "verb": "__benign__"
+}

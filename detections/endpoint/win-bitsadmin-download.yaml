@@ -1,0 +1,25 @@
+id: det-endpoint-085
+name: bitsadmin.exe Downloading File
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'bitsadmin.exe Downloading
+  File'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1197
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "bitsadmin.exe"
+    AND process_command_line CONTAINS_ANY ["/transfer", "http"]
+false_positives:
+- Microsoft auto-update workflow
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

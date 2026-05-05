@@ -1,0 +1,24 @@
+id: det-application-065
+name: ServiceNow Bulk Record Export
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'ServiceNow Bulk
+  Record Export'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: application
+log_source:
+  product: servicenow
+  service: audit
+detection:
+  condition: |
+    event_type == "record_export"
+    AND row_count > 50000
+false_positives:
+- Approved reporting workflow
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

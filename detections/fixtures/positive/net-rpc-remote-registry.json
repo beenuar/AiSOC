@@ -1,0 +1,6 @@
+{
+  "event_type": "rpc_call",
+  "interface": "winreg",
+  "operation": "BaseRegSetValue",
+  "src_role": "workstation"
+}

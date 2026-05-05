@@ -1,0 +1,5 @@
+{
+  "path": "/tmp/.tar",
+  "size_bytes": 524288100.0,
+  "syscall": "not-openat"
+}

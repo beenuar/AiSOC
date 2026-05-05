@@ -1,0 +1,4 @@
+{
+  "domain": "head-.onion",
+  "event_type": "not-dns_query"
+}

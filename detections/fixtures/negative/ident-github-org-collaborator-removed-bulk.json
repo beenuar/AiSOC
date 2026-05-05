@@ -1,0 +1,4 @@
+{
+  "action": "not-org.remove_member",
+  "events_per_minute": 120.0
+}

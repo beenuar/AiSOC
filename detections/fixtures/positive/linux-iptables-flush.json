@@ -1,0 +1,5 @@
+{
+  "argv": "prefix--F-suffix",
+  "exe": "head-/iptables",
+  "syscall": "execve"
+}

@@ -1,0 +1,5 @@
+{
+  "destination_port": 51820,
+  "event_type": "flow",
+  "src_role": "workstation"
+}

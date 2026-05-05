@@ -1,0 +1,25 @@
+id: det-endpoint-129
+name: ISO File Mounted From User Temp
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'ISO File Mounted
+  From User Temp'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1204.002
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 11
+    AND target_filename ENDSWITH ".iso"
+    AND target_filename CONTAINS_ANY ["\temp\", "\downloads\"]
+false_positives:
+- Software install workflow
+playbook: tpl-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,6 @@
+{
+  "current_state": "approve",
+  "event_type": "mfa_state_change",
+  "previous_state": "deny",
+  "seconds_between": -40.0
+}

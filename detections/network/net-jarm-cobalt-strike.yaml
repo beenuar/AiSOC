@@ -1,0 +1,24 @@
+id: det-network-051
+name: JARM Fingerprint Matches Known Cobalt Strike Profile
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'JARM Fingerprint
+  Matches Known Cobalt Strike Profile'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1573.002
+- tlp.white
+category: network
+log_source:
+  product: proxy
+  service: tls
+detection:
+  condition: |
+    event_type == "tls_session"
+    AND jarm IN ["07d14d16d21d21d07c42d41d00041d24a458a375eef0c576d23a7bab9a9fb1", "07d19d12d21d21d00042d43d00043d4f51b7c8b9af6b1c7c2a3d4e5f6a7b8c9"]
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

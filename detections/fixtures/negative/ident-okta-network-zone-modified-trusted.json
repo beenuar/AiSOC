@@ -1,0 +1,5 @@
+{
+  "event_type": "not-zone.update",
+  "trusted": true,
+  "zone_type": "IP"
+}

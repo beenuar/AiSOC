@@ -1,0 +1,26 @@
+id: det-endpoint-091
+name: ProcDump Used Against lsass.exe
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'ProcDump Used Against
+  lsass.exe'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1003.001
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "procdump.exe"
+    AND process_command_line CONTAINS_ANY ["lsass", "-ma lsass"]
+false_positives:
+- DFIR responder running a documented playbook
+- Microsoft support memory capture
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

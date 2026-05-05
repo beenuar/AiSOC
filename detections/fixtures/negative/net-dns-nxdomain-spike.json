@@ -1,0 +1,6 @@
+{
+  "count_5min": 300.0,
+  "event_type": "not-dns_response",
+  "rcode": "NXDOMAIN",
+  "src_role": "endpoint"
+}

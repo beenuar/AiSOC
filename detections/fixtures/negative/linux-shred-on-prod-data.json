@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-/var/lib-suffix",
+  "exe": "head-/shred",
+  "syscall": "not-execve"
+}

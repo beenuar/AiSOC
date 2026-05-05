@@ -1,0 +1,4 @@
+{
+  "path": "/etc/systemd/system/.timer",
+  "syscall": "not-openat"
+}

@@ -1,0 +1,5 @@
+{
+  "actor_eq_target": true,
+  "event_type": "not-role_grant",
+  "role_priv": true
+}

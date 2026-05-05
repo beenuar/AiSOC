@@ -1,0 +1,25 @@
+id: det-network-058
+name: GRE Tunnel Initiated By Non-Network Host
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'GRE Tunnel Initiated
+  By Non-Network Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1572
+- tlp.white
+category: network
+log_source:
+  product: proxy
+  service: netflow
+detection:
+  condition: |
+    event_type == "flow"
+    AND protocol_number == 47
+    AND src_role IN ["workstation", "server"]
+false_positives:
+- Approved overlay agent
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

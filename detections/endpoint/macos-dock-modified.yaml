@@ -1,0 +1,24 @@
+id: det-endpoint-225
+name: com.apple.dock Modified By Non-System Process
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'com.apple.dock
+  Modified By Non-System Process'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1547.005
+- tlp.white
+category: endpoint
+log_source:
+  product: macos
+  service: endpointsecurity
+detection:
+  condition: |
+    event_type == "ES_EVENT_TYPE_NOTIFY_WRITE"
+    AND path ENDSWITH "/Preferences/com.apple.dock.plist"
+false_positives:
+- MDM workflow
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

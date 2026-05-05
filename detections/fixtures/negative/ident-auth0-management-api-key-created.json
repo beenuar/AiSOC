@@ -1,0 +1,5 @@
+{
+  "event_type": "not-Successful API Operation",
+  "operation": "client_grants.create",
+  "scope": "prefix-manage-suffix"
+}

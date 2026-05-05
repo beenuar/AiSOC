@@ -1,0 +1,5 @@
+{
+  "argv": "prefix--l-suffix",
+  "exe": "head-/nc",
+  "syscall": "execve"
+}

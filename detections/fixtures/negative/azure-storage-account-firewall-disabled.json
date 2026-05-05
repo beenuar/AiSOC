@@ -1,0 +1,4 @@
+{
+  "default_action": "Allow",
+  "operation_name": "storageAccounts/write-x"
+}

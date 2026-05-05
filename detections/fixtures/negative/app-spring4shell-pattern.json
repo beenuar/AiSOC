@@ -1,0 +1,4 @@
+{
+  "body": "prefix-class.module.classloader-suffix",
+  "event_type": "not-http_request"
+}

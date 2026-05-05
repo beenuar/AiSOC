@@ -1,0 +1,4 @@
+{
+  "exe": "head-/insmod",
+  "syscall": "not-execve"
+}

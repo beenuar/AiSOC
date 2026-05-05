@@ -1,0 +1,25 @@
+id: det-identity-075
+name: OAuth App Acting As Privileged User
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'OAuth App Acting
+  As Privileged User'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: oauth
+detection:
+  condition: |
+    event_type == "oauth_action"
+    AND act_as_user_priv == true
+    AND scope CONTAINS_ANY ["full_access", "admin", "*.write"]
+false_positives:
+- Approved IaaS automation
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

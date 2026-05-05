@@ -1,0 +1,24 @@
+id: det-network-076
+name: LDAP Signing Disabled On Domain Controller
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'LDAP Signing Disabled
+  On Domain Controller'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1557.001
+- tlp.white
+category: network
+log_source:
+  product: windows
+  service: ldap
+detection:
+  condition: |
+    event_id == 2889
+    AND ldap_signing_required == false
+false_positives:
+- Vendor agent that doesn't sign (deprecated)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

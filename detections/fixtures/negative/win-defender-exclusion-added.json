@@ -1,0 +1,4 @@
+{
+  "event_name": "not-AddPreference",
+  "exclusion_path": "prefix-\\users\\-suffix"
+}

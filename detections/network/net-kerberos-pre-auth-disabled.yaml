@@ -1,0 +1,24 @@
+id: det-network-074
+name: Kerberos Account With Pre-Auth Disabled Used
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Kerberos Account
+  With Pre-Auth Disabled Used'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1558.004
+- tlp.white
+category: network
+log_source:
+  product: windows
+  service: kerberos
+detection:
+  condition: |
+    event_id == 4768
+    AND preauth_required == false
+false_positives:
+- Legacy SCM service account (must be ticketed)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,4 @@
+{
+  "behaviors": "prefix-new_device-suffix",
+  "event_type": "user.session.start"
+}

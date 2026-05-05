@@ -1,0 +1,25 @@
+id: det-endpoint-075
+name: vssadmin Used To Enumerate And Delete Shadow Copies
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'vssadmin Used To
+  Enumerate And Delete Shadow Copies'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1490
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "vssadmin.exe"
+    AND process_command_line CONTAINS_ALL ["delete", "shadows"]
+false_positives:
+- Routine backup/disaster-recovery exercise
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-login items-suffix",
+  "event_type": "exec",
+  "process_path": "head-/osascript"
+}

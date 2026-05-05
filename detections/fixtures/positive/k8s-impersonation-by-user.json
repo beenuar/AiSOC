@@ -1,0 +1,4 @@
+{
+  "impersonated_user": "system:masters",
+  "verb": "prefix-impersonate-suffix"
+}

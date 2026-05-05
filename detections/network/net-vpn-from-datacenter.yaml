@@ -1,0 +1,24 @@
+id: det-network-060
+name: Corporate VPN Login Originating From Datacenter ASN
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Corporate VPN Login
+  Originating From Datacenter ASN'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078.004
+- tlp.white
+category: network
+log_source:
+  product: vpn
+  service: auth
+detection:
+  condition: |
+    event_type == "vpn_auth"
+    AND src_asn_type == "hosting"
+false_positives:
+- Mobile carrier identified as hosting (false positive)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

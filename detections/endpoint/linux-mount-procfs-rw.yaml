@@ -1,0 +1,25 @@
+id: det-endpoint-169
+name: /proc Re-Mounted With Read-Write
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by '/proc Re-Mounted
+  With Read-Write'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1611
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "mount"
+    AND target STARTSWITH "/proc"
+    AND options CONTAINS "rw"
+false_positives:
+- Container debugging procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

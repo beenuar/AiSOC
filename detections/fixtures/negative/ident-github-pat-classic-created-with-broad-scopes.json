@@ -1,0 +1,4 @@
+{
+  "action": "not-personal_access_token.create",
+  "scopes": "repo workflow admin:org"
+}

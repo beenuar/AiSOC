@@ -1,0 +1,5 @@
+{
+  "event_id": 2.0,
+  "process_command_line": "scrobj.dll /i:",
+  "process_name": "head-regsvr32.exe"
+}

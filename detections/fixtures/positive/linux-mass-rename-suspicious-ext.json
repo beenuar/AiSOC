@@ -1,0 +1,5 @@
+{
+  "new_name": "head-.locked",
+  "rename_count_60s": 150.0,
+  "syscall": "renameat2"
+}

@@ -1,0 +1,5 @@
+{
+  "event_type": "not-mfa_challenge",
+  "events_per_minute": 105.0,
+  "totp_clock_skew_seconds": 160.0
+}

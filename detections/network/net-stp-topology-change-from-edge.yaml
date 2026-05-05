@@ -1,0 +1,24 @@
+id: det-network-080
+name: STP Topology Change Advertised By Edge Port
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'STP Topology Change
+  Advertised By Edge Port'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1498
+- tlp.white
+category: network
+log_source:
+  product: switch
+  service: stp
+detection:
+  condition: |
+    event_type == "stp_tcn"
+    AND ingress_port_role == "edge"
+false_positives:
+- Approved network change
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

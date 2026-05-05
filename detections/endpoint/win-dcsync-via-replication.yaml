@@ -1,0 +1,25 @@
+id: det-endpoint-101
+name: DCSync Replication Right Used By Non-DC Account
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'DCSync Replication
+  Right Used By Non-DC Account'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1003.006
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: security
+detection:
+  condition: |
+    event_id == 4662
+    AND object_properties CONTAINS "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2"
+    AND account_is_dc == false
+false_positives:
+- AD migration tool with replication granted
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

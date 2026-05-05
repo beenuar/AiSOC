@@ -1,0 +1,6 @@
+{
+  "destination_port": 5985,
+  "destination_role": "domain-controller",
+  "event_type": "not-flow",
+  "src_role": "workstation"
+}

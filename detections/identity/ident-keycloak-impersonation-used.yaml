@@ -1,0 +1,23 @@
+id: det-identity-136
+name: Keycloak User Impersonation Used
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Keycloak User Impersonation
+  Used'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: keycloak
+  service: audit
+detection:
+  condition: |
+    event_type == "IMPERSONATE"
+false_positives:
+- DFIR responder running a documented playbook
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

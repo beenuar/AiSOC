@@ -1,0 +1,4 @@
+{
+  "event_type": "pod_exec",
+  "namespace": "kube-system"
+}

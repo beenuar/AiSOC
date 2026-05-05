@@ -1,0 +1,5 @@
+{
+  "argv": "-d com.apple.quarantine",
+  "event_type": "not-exec",
+  "process_path": "head-/xattr"
+}

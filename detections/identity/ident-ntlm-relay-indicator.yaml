@@ -1,0 +1,25 @@
+id: det-identity-097
+name: NTLM Authentication With Mismatched WorkstationName
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'NTLM Authentication
+  With Mismatched WorkstationName'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1557.001
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: ntlm
+detection:
+  condition: |
+    event_id == 8004
+    AND auth_type == "NTLMv2"
+    AND workstation_neq_source_address == true
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

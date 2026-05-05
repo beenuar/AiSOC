@@ -1,0 +1,5 @@
+{
+  "exe": "__benign__",
+  "path": "/usr/liblibnss_",
+  "syscall": "not-openat"
+}

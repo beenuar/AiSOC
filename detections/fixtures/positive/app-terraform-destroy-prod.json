@@ -1,0 +1,5 @@
+{
+  "command": "destroy",
+  "event_type": "terraform_run",
+  "workspace": "prod"
+}

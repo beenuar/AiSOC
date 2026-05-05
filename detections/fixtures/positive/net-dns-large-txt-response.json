@@ -1,0 +1,5 @@
+{
+  "event_type": "dns_response",
+  "qtype": "TXT",
+  "response_size_bytes": 612.0
+}

@@ -1,0 +1,5 @@
+{
+  "append_count_5min": 103.0,
+  "path": "head-/.ssh/authorized_keys",
+  "syscall": "not-openat"
+}

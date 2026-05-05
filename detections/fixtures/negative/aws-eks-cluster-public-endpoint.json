@@ -1,0 +1,5 @@
+{
+  "endpoint_public_access": true,
+  "event_name": "__benign__",
+  "public_access_cidrs": "prefix-0.0.0.0/0-suffix"
+}

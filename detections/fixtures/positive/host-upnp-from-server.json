@@ -1,0 +1,4 @@
+{
+  "event_type": "ssdp_egress",
+  "source_subnet_role": "server"
+}

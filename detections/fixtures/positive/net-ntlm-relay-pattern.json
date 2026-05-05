@@ -1,0 +1,4 @@
+{
+  "challenge_reused_across_hosts": true,
+  "event_type": "ntlm_auth"
+}

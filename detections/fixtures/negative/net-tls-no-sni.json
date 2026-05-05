@@ -1,0 +1,5 @@
+{
+  "destination_is_internal": false,
+  "event_type": "not-tls_session",
+  "sni_present": false
+}

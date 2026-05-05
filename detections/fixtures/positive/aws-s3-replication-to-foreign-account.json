@@ -1,0 +1,4 @@
+{
+  "destination_account_external": true,
+  "event_name": "PutBucketReplication"
+}

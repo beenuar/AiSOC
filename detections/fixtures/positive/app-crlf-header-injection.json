@@ -1,0 +1,4 @@
+{
+  "any_header_value": "prefix-%0d%0a-suffix",
+  "event_type": "http_request"
+}

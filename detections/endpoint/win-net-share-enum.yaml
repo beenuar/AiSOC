@@ -1,0 +1,24 @@
+id: det-endpoint-110
+name: net view Used To Enumerate File Shares
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'net view Used To
+  Enumerate File Shares'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1135
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_command_line CONTAINS_ANY ["net view \\", "net.exe share"]
+false_positives:
+- IT routine inventory
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

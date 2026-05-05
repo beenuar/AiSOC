@@ -1,0 +1,5 @@
+{
+  "event_name": "SetDefaultPolicyVersion",
+  "policy_action": "*",
+  "policy_resource": "*"
+}

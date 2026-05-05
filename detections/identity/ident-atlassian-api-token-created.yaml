@@ -1,0 +1,23 @@
+id: det-identity-159
+name: Atlassian Org API Token Created
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Atlassian Org API
+  Token Created'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: atlassian
+  service: audit
+detection:
+  condition: |
+    action == "api_token_created"
+false_positives:
+- Sanctioned automation/IaC pipeline
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,25 @@
+id: det-identity-102
+name: OAuth Refresh Token Replayed From Different IP
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'OAuth Refresh Token
+  Replayed From Different IP'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1550
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: oauth
+detection:
+  condition: |
+    event_type == "token_refresh"
+    AND src_ip_changed == true
+    AND geo_distance_km > 500
+false_positives:
+- Roaming user
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

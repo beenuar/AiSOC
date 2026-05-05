@@ -1,0 +1,24 @@
+id: det-endpoint-274
+name: Suspicious LLMNR Reply Pattern (Responder-Like)
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Suspicious LLMNR
+  Reply Pattern (Responder-Like)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1557.001
+- tlp.white
+category: endpoint
+log_source:
+  product: endpoint
+  service: agent
+detection:
+  condition: |
+    event_type == "llmnr"
+    AND self_response_for_external_query == true
+false_positives:
+- Lab environment
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

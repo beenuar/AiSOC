@@ -1,0 +1,25 @@
+id: det-identity-043
+name: Credential Stuffing Pattern Against Login Endpoint
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Credential Stuffing
+  Pattern Against Login Endpoint'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1110.004
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_failure"
+    AND user_agent_in_known_botnet_list == true
+    AND tries_per_minute > 50
+false_positives:
+- Load test (must be ticketed)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

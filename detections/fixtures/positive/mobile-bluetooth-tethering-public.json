@@ -1,0 +1,5 @@
+{
+  "event_type": "compliance",
+  "geofence_in_restricted_zone": true,
+  "tethering_enabled": true
+}

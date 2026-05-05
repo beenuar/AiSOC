@@ -1,0 +1,25 @@
+id: det-endpoint-182
+name: Mass File Rename To Ransom Marker Extension
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Mass File Rename
+  To Ransom Marker Extension'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1486
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "renameat2"
+    AND new_name ENDSWITH_ANY [".locked", ".enc", ".ryuk", ".lockbit"]
+    AND rename_count_60s > 50
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

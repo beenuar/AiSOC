@@ -1,0 +1,4 @@
+{
+  "event_type": "dhcp",
+  "leases_per_minute_per_relay": 300.0
+}

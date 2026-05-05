@@ -1,0 +1,4 @@
+{
+  "operation": "TenantSettingsModified",
+  "sharing_capability": "ExternalUserAndGuestSharing"
+}

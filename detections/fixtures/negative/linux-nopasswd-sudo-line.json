@@ -1,0 +1,5 @@
+{
+  "file_content": "prefix-NOPASSWD-suffix",
+  "path": "prefix-/etc/sudoers-suffix",
+  "syscall": "not-openat"
+}

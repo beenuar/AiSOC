@@ -1,0 +1,4 @@
+{
+  "any_header_value": "prefix-${jndi:ldap://-suffix",
+  "event_type": "http_request"
+}

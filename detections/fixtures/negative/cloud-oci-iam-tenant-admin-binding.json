@@ -1,0 +1,5 @@
+{
+  "compartment": "tenancy",
+  "event_name": "not-AddUserToGroup",
+  "group": "Administrators"
+}

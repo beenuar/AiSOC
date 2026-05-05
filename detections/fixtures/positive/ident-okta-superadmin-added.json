@@ -1,0 +1,4 @@
+{
+  "event_type": "user.account.privilege.grant",
+  "role": "SUPER_ADMIN"
+}

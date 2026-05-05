@@ -1,0 +1,24 @@
+id: det-application-042
+name: CRLF Sequence In HTTP Header Value
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'CRLF Sequence
+  In HTTP Header Value'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    event_type == "http_request"
+    AND any_header_value CONTAINS_ANY ["%0d%0a", "\r\n"]
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

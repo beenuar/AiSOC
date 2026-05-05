@@ -1,0 +1,4 @@
+{
+  "event_name": "AddPreference",
+  "exclusion_path": "prefix-\\users\\-suffix"
+}

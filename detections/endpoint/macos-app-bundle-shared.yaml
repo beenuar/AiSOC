@@ -1,0 +1,25 @@
+id: det-endpoint-202
+name: Custom .app Bundle Written To /Users/Shared
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Custom .app Bundle
+  Written To /Users/Shared'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1574.002
+- tlp.white
+category: endpoint
+log_source:
+  product: macos
+  service: endpointsecurity
+detection:
+  condition: |
+    event_type == "ES_EVENT_TYPE_NOTIFY_WRITE"
+    AND path STARTSWITH "/Users/Shared/"
+    AND path ENDSWITH ".app/Contents/MacOS/main"
+false_positives:
+- Multi-user enterprise app
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

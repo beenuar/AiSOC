@@ -1,0 +1,4 @@
+{
+  "path": "prefix-/etc/rsyslog.d/-suffix",
+  "syscall": "unlinkat"
+}

@@ -1,0 +1,4 @@
+{
+  "auth_method": "PAP",
+  "event_type": "not-radius_auth"
+}

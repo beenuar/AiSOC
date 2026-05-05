@@ -1,0 +1,4 @@
+{
+  "app_type": "radius",
+  "event_type": "not-application.lifecycle.create"
+}

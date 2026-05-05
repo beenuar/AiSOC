@@ -1,0 +1,4 @@
+{
+  "event_type": "auth_success",
+  "user_agent": "prefix-python-requests-suffix"
+}

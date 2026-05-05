@@ -1,0 +1,25 @@
+id: det-endpoint-078
+name: PowerShell Command Line Contains AMSI Bypass String
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'PowerShell Command
+  Line Contains AMSI Bypass String'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- mitre.attack.t1059.001
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_command_line CONTAINS_ANY ["amsiUtils", "amsiInitFailed", "amsiContext"]
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

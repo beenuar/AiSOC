@@ -1,0 +1,25 @@
+id: det-endpoint-160
+name: setuid Capability Granted To New Binary
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'setuid Capability
+  Granted To New Binary'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1548.001
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH "/setcap"
+    AND argv CONTAINS "cap_setuid"
+false_positives:
+- Sanctioned automation/IaC pipeline
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

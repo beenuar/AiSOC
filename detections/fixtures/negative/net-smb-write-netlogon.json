@@ -1,0 +1,4 @@
+{
+  "event_type": "not-smb_write",
+  "share_name": "NETLOGON"
+}

@@ -1,0 +1,24 @@
+id: det-identity-060
+name: Login With Headless / Bot User Agent
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Login With Headless
+  / Bot User Agent'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND user_agent CONTAINS_ANY ["python-requests", "curl/", "headless", "phantomjs", "selenium"]
+false_positives:
+- Internal API client (must be ticketed)
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,5 @@
+{
+  "access": "open",
+  "count_5min_per_user": 120.0,
+  "event_type": "not-shared_link.create"
+}

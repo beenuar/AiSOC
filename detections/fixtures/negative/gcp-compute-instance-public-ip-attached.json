@@ -1,0 +1,5 @@
+{
+  "external_ip_attached": true,
+  "label_internal": true,
+  "method_name": "instances.insert-x"
+}

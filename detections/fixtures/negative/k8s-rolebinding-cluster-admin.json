@@ -1,0 +1,4 @@
+{
+  "event_type": "not-create_rolebinding",
+  "role_ref_name": "cluster-admin"
+}

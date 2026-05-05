@@ -1,0 +1,5 @@
+{
+  "applies_to_everyone": true,
+  "event_type": "policy.lifecycle.activate",
+  "factor_required": false
+}

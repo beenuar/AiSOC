@@ -1,0 +1,5 @@
+{
+  "event_type": "token_refresh",
+  "geo_distance_km": 600.0,
+  "src_ip_changed": true
+}

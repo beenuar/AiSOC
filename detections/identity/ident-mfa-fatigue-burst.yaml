@@ -1,0 +1,24 @@
+id: det-identity-048
+name: MFA Fatigue Burst Against Single User
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'MFA Fatigue Burst
+  Against Single User'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1621
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "mfa_challenge"
+    AND user_challenges_per_minute > 5
+false_positives:
+- Genuine push-loop after device swap
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

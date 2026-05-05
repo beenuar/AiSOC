@@ -1,0 +1,25 @@
+id: det-endpoint-226
+name: systemsetup Enabled Remote Login (SSH)
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'systemsetup Enabled
+  Remote Login (SSH)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1021.004
+- tlp.white
+category: endpoint
+log_source:
+  product: macos
+  service: endpointsecurity
+detection:
+  condition: |
+    event_type == "exec"
+    AND process_path ENDSWITH "/systemsetup"
+    AND argv CONTAINS_ALL ["-setremotelogin", "on"]
+false_positives:
+- IT remote support
+playbook: tpl-lateral-movement
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

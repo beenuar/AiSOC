@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "parent_process": "head-acrord32.exe",
+  "process_name": "head-cmd.exe"
+}

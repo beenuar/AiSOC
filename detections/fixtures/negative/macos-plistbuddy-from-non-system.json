@@ -1,0 +1,5 @@
+{
+  "event_type": "not-exec",
+  "process_path": "head-/PlistBuddy",
+  "responsible_signing_id": "__benign__"
+}

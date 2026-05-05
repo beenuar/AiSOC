@@ -1,0 +1,4 @@
+{
+  "event_name": "not-ModifyDBInstance",
+  "iam_database_authentication_enabled": false
+}

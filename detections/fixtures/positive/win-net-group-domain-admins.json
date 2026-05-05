@@ -1,0 +1,4 @@
+{
+  "event_id": 1,
+  "process_command_line": "net group domain admins"
+}

@@ -1,0 +1,25 @@
+id: det-identity-059
+name: Session Timeout Extended For Privileged Group
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Session Timeout
+  Extended For Privileged Group'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: policy
+detection:
+  condition: |
+    event_type == "policy_update"
+    AND session_timeout_minutes_increased == true
+    AND scope_priv == true
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,4 @@
+{
+  "event_type": "not-apiserver_start",
+  "flag_anonymous_auth": true
+}

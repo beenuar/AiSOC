@@ -1,0 +1,5 @@
+{
+  "actor_authenticated": false,
+  "event_type": "not-graphql_op",
+  "op_type": "mutation"
+}

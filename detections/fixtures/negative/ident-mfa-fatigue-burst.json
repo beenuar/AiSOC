@@ -1,0 +1,4 @@
+{
+  "event_type": "not-mfa_challenge",
+  "user_challenges_per_minute": 105.0
+}

@@ -1,0 +1,24 @@
+id: det-identity-145
+name: M365 Inbox Rule Forwards To External Address
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'M365 Inbox Rule
+  Forwards To External Address'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.003
+- tlp.white
+category: identity
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "New-InboxRule"
+    AND forward_external == true
+false_positives:
+- Approved alias
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

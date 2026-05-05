@@ -1,0 +1,5 @@
+{
+  "method_name": "head-firewalls.insert",
+  "port_any": true,
+  "source_ranges": "prefix-0.0.0.0/0-suffix"
+}

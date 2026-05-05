@@ -1,0 +1,4 @@
+{
+  "event_type": "not-create_pod",
+  "host_ipc": true
+}

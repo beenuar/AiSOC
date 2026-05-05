@@ -1,0 +1,5 @@
+{
+  "csp_header_present": false,
+  "environment": "prod",
+  "event_type": "http_response"
+}

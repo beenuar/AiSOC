@@ -1,0 +1,5 @@
+{
+  "app_signed_by_known_publisher": false,
+  "event_type": "not-permission_grant",
+  "permission": "ACCESSIBILITY"
+}

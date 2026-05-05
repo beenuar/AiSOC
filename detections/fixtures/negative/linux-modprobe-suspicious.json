@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-/tmp/-suffix",
+  "exe": "head-/modprobe",
+  "syscall": "not-execve"
+}

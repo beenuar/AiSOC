@@ -1,0 +1,5 @@
+{
+  "host_network": true,
+  "object_resource": "pods",
+  "verb": "not-create"
+}

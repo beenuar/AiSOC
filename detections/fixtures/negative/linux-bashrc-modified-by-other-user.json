@@ -1,0 +1,5 @@
+{
+  "actor_uid_neq_owner_uid": true,
+  "path": "head-/.bashrc",
+  "syscall": "not-openat"
+}

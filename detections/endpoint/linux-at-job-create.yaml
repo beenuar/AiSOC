@@ -1,0 +1,24 @@
+id: det-endpoint-135
+name: at Job Created
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'at Job Created'.
+  Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1053.001
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH "/at"
+false_positives:
+- IT scheduled task workflow
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

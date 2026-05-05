@@ -1,0 +1,5 @@
+{
+  "environment": "prod",
+  "event_type": "container_start",
+  "user_uid": 0
+}

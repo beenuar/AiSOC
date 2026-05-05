@@ -1,0 +1,24 @@
+id: det-endpoint-272
+name: Network Interface Set To Promiscuous Mode
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Network Interface
+  Set To Promiscuous Mode'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1040
+- tlp.white
+category: endpoint
+log_source:
+  product: endpoint
+  service: agent
+detection:
+  condition: |
+    event_type == "interface_state"
+    AND promiscuous == true
+false_positives:
+- Sanctioned packet capture
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,4 @@
+{
+  "event_name": "not-CreateVpcPeeringConnection",
+  "peer_account_external": true
+}

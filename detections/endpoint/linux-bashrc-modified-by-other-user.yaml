@@ -1,0 +1,26 @@
+id: det-endpoint-138
+name: ~/.bashrc Modified By Other User
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by '~/.bashrc Modified
+  By Other User'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1546.004
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "openat"
+    AND path ENDSWITH "/.bashrc"
+    AND actor_uid_neq_owner_uid == true
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Configuration mgmt managed dotfiles
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

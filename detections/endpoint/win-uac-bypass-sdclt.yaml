@@ -1,0 +1,25 @@
+id: det-endpoint-072
+name: UAC Bypass Via sdclt.exe
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'UAC Bypass Via
+  sdclt.exe'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1548.002
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "sdclt.exe"
+    AND child_process ENDSWITH_ANY ["cmd.exe", "powershell.exe"]
+false_positives:
+- Backup utility usage
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

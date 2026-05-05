@@ -1,0 +1,25 @@
+id: det-identity-051
+name: Authentication Attempt Against Disabled User
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Authentication
+  Attempt Against Disabled User'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_failure"
+    AND result == "user_disabled"
+false_positives:
+- Lingering session token
+- Failed deprovision
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

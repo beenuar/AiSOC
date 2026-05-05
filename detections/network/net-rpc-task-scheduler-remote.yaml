@@ -1,0 +1,25 @@
+id: det-network-068
+name: RPC Task Scheduler Create From Workstation
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'RPC Task Scheduler
+  Create From Workstation'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1053.005
+- tlp.white
+category: network
+log_source:
+  product: firewall
+  service: rpc
+detection:
+  condition: |
+    event_type == "rpc_call"
+    AND interface == "atsvc"
+    AND src_role == "workstation"
+false_positives:
+- IT remote support tool
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

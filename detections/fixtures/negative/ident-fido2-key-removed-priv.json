@@ -1,0 +1,5 @@
+{
+  "event_type": "not-factor_remove",
+  "factor_type": "fido2",
+  "user_priv": true
+}

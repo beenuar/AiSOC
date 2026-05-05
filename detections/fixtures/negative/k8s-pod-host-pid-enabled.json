@@ -1,0 +1,5 @@
+{
+  "host_pid": true,
+  "object_resource": "pods",
+  "verb": "not-create"
+}

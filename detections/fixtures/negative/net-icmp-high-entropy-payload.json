@@ -1,0 +1,5 @@
+{
+  "event_type": "not-icmp",
+  "payload_entropy": 107.5,
+  "payload_size_bytes": 164.0
+}

@@ -1,0 +1,5 @@
+{
+  "exe": "__benign__",
+  "path": "prefix-/var/log/wtmp-suffix",
+  "syscall": "openat"
+}

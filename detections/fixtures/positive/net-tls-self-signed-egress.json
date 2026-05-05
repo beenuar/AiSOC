@@ -1,0 +1,5 @@
+{
+  "cert_self_signed": true,
+  "destination_is_internal": false,
+  "event_type": "tls_session"
+}

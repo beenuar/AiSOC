@@ -1,0 +1,25 @@
+id: det-identity-047
+name: Privileged User Login From Anonymising VPN
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Privileged User
+  Login From Anonymising VPN'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1090.003
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND src_ip_anonymous_vpn == true
+    AND user_priv == true
+false_positives:
+- Approved BYOD-VPN policy
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

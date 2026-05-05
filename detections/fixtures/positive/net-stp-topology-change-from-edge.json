@@ -1,0 +1,4 @@
+{
+  "event_type": "stp_tcn",
+  "ingress_port_role": "edge"
+}

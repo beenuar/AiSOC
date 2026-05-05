@@ -1,0 +1,5 @@
+{
+  "exe": "__benign__",
+  "path": "prefix-/etc/systemd/system/-suffix",
+  "syscall": "not-openat"
+}

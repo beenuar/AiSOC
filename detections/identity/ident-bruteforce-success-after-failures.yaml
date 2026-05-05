@@ -1,0 +1,25 @@
+id: det-identity-044
+name: Successful Login After 50+ Recent Failures
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Successful Login
+  After 50+ Recent Failures'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1110.001
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND user_failures_last_15m > 50
+false_positives:
+- Forgot-password flow
+- Helpdesk reset
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

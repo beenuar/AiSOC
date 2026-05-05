@@ -1,0 +1,5 @@
+{
+  "event_type": "zone.update",
+  "trusted": true,
+  "zone_type": "IP"
+}

@@ -1,0 +1,25 @@
+id: det-endpoint-144
+name: Multiple Authorized Keys Appended In Short Window
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Multiple Authorized
+  Keys Appended In Short Window'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.004
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "openat"
+    AND path ENDSWITH "/.ssh/authorized_keys"
+    AND append_count_5min > 3
+false_positives:
+- Bulk team onboarding via Ansible
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

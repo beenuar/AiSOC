@@ -1,0 +1,24 @@
+id: det-identity-104
+name: SAML Assertion Replayed Within Window
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'SAML Assertion
+  Replayed Within Window'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1550
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: saml
+detection:
+  condition: |
+    event_type == "saml_consume"
+    AND assertion_id_seen_recently == true
+false_positives:
+- IdP retry due to relay-state confusion
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

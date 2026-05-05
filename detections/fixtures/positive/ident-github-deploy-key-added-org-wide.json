@@ -1,0 +1,4 @@
+{
+  "action": "deploy_key.add",
+  "distinct_repos_per_actor_per_hour": 110.0
+}

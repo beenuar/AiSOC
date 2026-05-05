@@ -1,0 +1,25 @@
+id: det-network-077
+name: LDAP Search Pattern Matches BloodHound Collection
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'LDAP Search Pattern
+  Matches BloodHound Collection'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1087.002
+- tlp.white
+category: network
+log_source:
+  product: windows
+  service: ldap
+detection:
+  condition: |
+    event_type == "ldap_search"
+    AND filter CONTAINS_ANY ["objectCategory=group", "objectClass=user", "trustedDomain"]
+    AND search_count_5min > 100
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

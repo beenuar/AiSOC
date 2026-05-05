@@ -1,0 +1,4 @@
+{
+  "event_name": "not-PutBucketPolicy",
+  "policy_principal": "*"
+}

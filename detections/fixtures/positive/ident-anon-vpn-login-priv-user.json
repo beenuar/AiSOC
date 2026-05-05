@@ -1,0 +1,5 @@
+{
+  "event_type": "auth_success",
+  "src_ip_anonymous_vpn": true,
+  "user_priv": true
+}

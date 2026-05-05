@@ -1,0 +1,4 @@
+{
+  "operation_name": "head-blobServices/containers/write",
+  "public_access": "Container"
+}

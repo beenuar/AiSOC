@@ -1,0 +1,4 @@
+{
+  "event_name": "login_failure",
+  "type": "suspicious_login"
+}

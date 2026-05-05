@@ -1,0 +1,6 @@
+{
+  "body": "prefix-__schema-suffix",
+  "environment": "prod",
+  "event_type": "http_request",
+  "uri": "/graphql"
+}

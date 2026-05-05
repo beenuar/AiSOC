@@ -1,0 +1,4 @@
+{
+  "event_name": "DeactivateMFADevice",
+  "target_user_priv": true
+}

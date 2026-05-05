@@ -1,0 +1,4 @@
+{
+  "event_type": "saml_consume",
+  "issuer_in_trusted_list": false
+}

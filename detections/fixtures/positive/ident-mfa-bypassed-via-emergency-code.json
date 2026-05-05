@@ -1,0 +1,4 @@
+{
+  "event_type": "auth_success",
+  "mfa_factor": "backup_code"
+}

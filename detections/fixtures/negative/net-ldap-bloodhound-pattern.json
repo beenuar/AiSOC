@@ -1,0 +1,5 @@
+{
+  "event_type": "not-ldap_search",
+  "filter": "prefix-objectCategory=group-suffix",
+  "search_count_5min": 200.0
+}

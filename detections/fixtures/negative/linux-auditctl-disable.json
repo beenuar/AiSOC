@@ -1,0 +1,5 @@
+{
+  "argv": "prefix--D-suffix",
+  "exe": "head-/auditctl",
+  "syscall": "not-execve"
+}

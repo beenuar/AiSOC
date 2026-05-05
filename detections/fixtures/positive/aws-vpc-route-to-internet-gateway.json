@@ -1,0 +1,5 @@
+{
+  "destination_cidr": "0.0.0.0/0",
+  "event_name": "CreateRoute",
+  "target_type": "internet-gateway"
+}

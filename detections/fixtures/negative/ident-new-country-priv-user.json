@@ -1,0 +1,5 @@
+{
+  "country_first_seen_for_user": true,
+  "event_type": "not-auth_success",
+  "user_priv": true
+}

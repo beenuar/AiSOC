@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "parent_process": "head-winword.exe",
+  "process_name": "head-mshta.exe"
+}

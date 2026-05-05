@@ -1,0 +1,5 @@
+{
+  "argv": "reset All",
+  "event_type": "not-exec",
+  "process_path": "head-/tccutil"
+}

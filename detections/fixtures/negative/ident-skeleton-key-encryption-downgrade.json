@@ -1,0 +1,6 @@
+{
+  "domain_controller": true,
+  "encryption_type": "DES",
+  "event_id": 4625.0,
+  "logon_type": 3
+}

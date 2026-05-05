@@ -1,0 +1,6 @@
+{
+  "destination_port": 443,
+  "event_type": "not-tls_session",
+  "sanctioned_doh": false,
+  "sni": "head-dns.adguard.com"
+}

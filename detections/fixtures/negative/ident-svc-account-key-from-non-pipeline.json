@@ -1,0 +1,5 @@
+{
+  "event_type": "not-auth_success",
+  "src_in_pipeline_cidr": false,
+  "user_type": "service_account"
+}

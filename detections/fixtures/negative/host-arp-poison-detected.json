@@ -1,0 +1,4 @@
+{
+  "duplicate_macs_for_gateway": true,
+  "event_type": "not-arp_anomaly"
+}

@@ -1,0 +1,23 @@
+id: det-cloud-087
+name: AWS KMS Key Policy Allows Principal '*'
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS KMS Key Policy
+  Allows Principal '*''.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1552.001
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: kms
+detection:
+  condition: |
+    event_name == "PutKeyPolicy"
+    AND policy_principal == "*"
+false_positives: []
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

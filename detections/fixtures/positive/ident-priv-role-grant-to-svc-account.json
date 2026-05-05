@@ -1,0 +1,5 @@
+{
+  "event_type": "role_grant",
+  "role_priv": true,
+  "target_user_type": "service_account"
+}

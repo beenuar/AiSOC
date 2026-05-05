@@ -1,0 +1,24 @@
+id: det-endpoint-273
+name: ARP Cache Poisoning Indicators On Host
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'ARP Cache Poisoning
+  Indicators On Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1557.002
+- tlp.white
+category: endpoint
+log_source:
+  product: endpoint
+  service: agent
+detection:
+  condition: |
+    event_type == "arp_anomaly"
+    AND duplicate_macs_for_gateway == true
+false_positives:
+- Failover NIC
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

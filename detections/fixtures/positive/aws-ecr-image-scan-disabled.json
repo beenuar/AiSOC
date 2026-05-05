@@ -1,0 +1,4 @@
+{
+  "event_name": "PutImageScanningConfiguration",
+  "scan_on_push": false
+}

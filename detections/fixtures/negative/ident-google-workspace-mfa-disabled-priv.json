@@ -1,0 +1,5 @@
+{
+  "event_name": "not-ENFORCE_STRONG_AUTHENTICATION",
+  "user_priv": true,
+  "value": false
+}

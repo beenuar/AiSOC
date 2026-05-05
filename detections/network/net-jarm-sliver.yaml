@@ -1,0 +1,24 @@
+id: det-network-052
+name: JARM Fingerprint Matches Known Sliver Profile
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'JARM Fingerprint
+  Matches Known Sliver Profile'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1573.002
+- tlp.white
+category: network
+log_source:
+  product: proxy
+  service: tls
+detection:
+  condition: |
+    event_type == "tls_session"
+    AND jarm IN ["3fd3fd0003fd3fd03fd3fd3fd3fd3fd3a458a375eef0c576d23a7bab9a9fb1"]
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

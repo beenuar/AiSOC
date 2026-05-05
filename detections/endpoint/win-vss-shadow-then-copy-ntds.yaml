@@ -1,0 +1,25 @@
+id: det-endpoint-095
+name: VSS Shadow Created Then NTDS.dit Copied
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'VSS Shadow Created
+  Then NTDS.dit Copied'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1003.003
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 11
+    AND target_filename ENDSWITH "ntds.dit"
+    AND creator_process ENDSWITH_ANY ["copy.exe", "robocopy.exe", "powershell.exe"]
+false_positives:
+- Routine backup/disaster-recovery exercise
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

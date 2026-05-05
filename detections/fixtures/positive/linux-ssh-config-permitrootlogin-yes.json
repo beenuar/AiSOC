@@ -1,0 +1,5 @@
+{
+  "path": "/etc/ssh/sshd_config",
+  "syscall": "openat",
+  "value": "prefix-PermitRootLogin yes-suffix"
+}

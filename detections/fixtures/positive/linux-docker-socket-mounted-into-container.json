@@ -1,0 +1,4 @@
+{
+  "event_type": "container_create",
+  "host_path": "/var/run/docker.sock"
+}

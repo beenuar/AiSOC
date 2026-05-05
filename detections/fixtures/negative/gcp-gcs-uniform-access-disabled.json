@@ -1,0 +1,4 @@
+{
+  "method_name": "storage.buckets.update-x",
+  "uniform_bucket_level_access": false
+}

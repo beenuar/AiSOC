@@ -1,0 +1,25 @@
+id: det-identity-050
+name: Account Locked Out 3+ Times In 1 Hour
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Account Locked
+  Out 3+ Times In 1 Hour'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1110
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "account_locked"
+    AND lockouts_per_hour >= 3
+false_positives:
+- Stuck mobile credential
+- Confirmed test/tuning activity
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

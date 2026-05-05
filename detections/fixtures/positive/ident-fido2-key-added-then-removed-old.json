@@ -1,0 +1,5 @@
+{
+  "event_type": "factor_swap",
+  "old_factor_age_days": 130.0,
+  "session_seconds": 500.0
+}

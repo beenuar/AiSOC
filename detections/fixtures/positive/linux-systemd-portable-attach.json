@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-attach-suffix",
+  "exe": "head-/portablectl",
+  "syscall": "execve"
+}

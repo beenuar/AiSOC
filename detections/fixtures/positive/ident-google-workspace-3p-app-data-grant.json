@@ -1,0 +1,4 @@
+{
+  "event_name": "AUTHORIZE",
+  "scope": "prefix-https://www.googleapis.com/auth/drive-suffix"
+}

@@ -1,0 +1,24 @@
+id: det-identity-093
+name: 'Golden Ticket Indicator: TGT Lifetime > 10h'
+description: 'AiSOC v1 curated detection. Triggers on the identity signal described by ''Golden Ticket
+  Indicator: TGT Lifetime > 10h''. Watch the 1 documented false-positive case before tuning.'
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1558.001
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: kerberos
+detection:
+  condition: |
+    event_id == 4768
+    AND ticket_lifetime_hours > 10
+false_positives:
+- Approved long-life ticket policy
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

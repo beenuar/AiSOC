@@ -1,0 +1,4 @@
+{
+  "event_name": "UpdateAssumeRolePolicy",
+  "trust_principal": "*"
+}

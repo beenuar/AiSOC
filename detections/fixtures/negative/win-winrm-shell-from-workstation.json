@@ -1,0 +1,5 @@
+{
+  "destination_role": "domain-controller",
+  "event_id": 2.0,
+  "process_command_line": "prefix-enter-pssession-suffix"
+}

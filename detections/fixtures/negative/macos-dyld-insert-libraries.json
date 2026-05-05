@@ -1,0 +1,4 @@
+{
+  "env_dyld_insert_libraries": "/tmp/-tail",
+  "event_type": "not-exec"
+}
