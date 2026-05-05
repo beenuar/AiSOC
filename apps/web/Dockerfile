@@ -20,6 +20,20 @@ COPY apps/web ./apps/web
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# ─── Build-time rewrite targets ─────────────────────────────────────────────
+# Next.js bakes rewrite destinations into .next/routes-manifest.json at
+# build time, so these args MUST be provided to docker build (e.g. via
+# `args:` in docker-compose.demo.yml's `web.build:` block) when targeting
+# anything other than a single-host localhost dev setup. Defaults match the
+# Compose stack's Docker DNS so a no-arg `docker build` still yields a
+# working image inside the demo network.
+ARG API_URL=http://api:8000
+ARG AGENTS_URL=http://agents:8084
+ARG REALTIME_URL=http://realtime:4000
+ENV API_URL=${API_URL}
+ENV AGENTS_URL=${AGENTS_URL}
+ENV REALTIME_URL=${REALTIME_URL}
+
 # Use pnpm's default symlinked node_modules — same layout as local dev,
 # so tsup/tsc bin shims resolve correctly inside each workspace package.
 RUN pnpm install --no-frozen-lockfile

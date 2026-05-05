@@ -216,6 +216,14 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      # Next.js bakes rewrite destinations into routes-manifest.json at
+      # `next build` time, not at `next start`. These args MUST match the
+      # Docker DNS hostnames the runtime environment resolves to, otherwise
+      # the proxy layer ECONNREFUSEs to localhost from inside the container.
+      args:
+        API_URL: http://api:8000
+        AGENTS_URL: http://agents:8084
+        REALTIME_URL: http://realtime:4000
     container_name: aisoc-demo-web
     pull_policy: missing
     depends_on:
