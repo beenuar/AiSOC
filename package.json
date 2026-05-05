@@ -25,6 +25,9 @@
     "demo:produce": "go run ./services/demo-producer",
     "demo:produce:fast": "go run ./services/demo-producer --rate 8 --batch 10",
     "detections:validate": "python3 scripts/validate_detections.py",
+    "playbooks:validate": "python3 scripts/validate_playbooks.py",
+    "playbooks:lint": "python3 scripts/lint_playbooks.py",
+    "eval:run": "python3 scripts/run_evals.py",
     "marketplace:build": "python3 scripts/build_marketplace.py",
     "marketplace:check": "python3 scripts/build_marketplace.py --check",
     "marketplace:sync": "python3 scripts/build_marketplace.py && cp marketplace/index.json apps/web/public/marketplace/index.json && echo 'marketplace/index.json built and synced to apps/web/public/'",
@@ -32,7 +35,10 @@
     "aisoc:doctor": "tsx scripts/aisoc-doctor.ts",
     "aisoc:demo": "tsx scripts/aisoc-demo.ts",
     "aisoc:demo:down": "docker compose -f docker-compose.demo.yml down -v",
-    "aisoc:demo:logs": "docker compose -f docker-compose.demo.yml logs -f"
+    "aisoc:demo:logs": "docker compose -f docker-compose.demo.yml logs -f",
+    "demo:public": "bash scripts/demo-public.sh",
+    "demo:public:tunnel-only": "bash scripts/demo-public.sh --skip-stack",
+    "demo:public:setup": "bash infra/cloudflare/tunnel.sh"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

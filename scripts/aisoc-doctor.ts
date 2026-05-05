@@ -161,18 +161,22 @@ async function checkDocker() {
     return;
   }
 
-  const expectedServices = [
-    "aisoc-api",
-    "aisoc-agents",
-    "aisoc-web",
-    "aisoc-postgres",
-    "aisoc-redis",
-    "aisoc-realtime",
+  // The doctor runs against either the full stack (`aisoc-*`) or the
+  // smaller demo stack (`aisoc-demo-*`). We accept either prefix for the
+  // core services so `pnpm aisoc:demo` users don't see false FAILs.
+  const expectedRoles = [
+    "api",
+    "agents",
+    "web",
+    "postgres",
+    "redis",
+    "realtime",
   ];
-  for (const svc of expectedServices) {
-    const found = services.find((s: any) => s.Name === svc);
+  for (const role of expectedRoles) {
+    const candidates = [`aisoc-${role}`, `aisoc-demo-${role}`];
+    const found = services.find((s: any) => candidates.includes(s.Name));
     if (!found) {
-      record(`container ${svc}`, "FAIL", "not running");
+      record(`container ${role}`, "FAIL", `not running (looked for ${candidates.join(" or ")})`);
       continue;
     }
     const healthy =
@@ -180,9 +184,9 @@ async function checkDocker() {
       found.Health === "" /* no healthcheck */ ||
       found.State === "running";
     record(
-      `container ${svc}`,
+      `container ${role}`,
       healthy ? "OK" : "FAIL",
-      `state=${found.State}${found.Health ? ` health=${found.Health}` : ""}`
+      `${found.Name} state=${found.State}${found.Health ? ` health=${found.Health}` : ""}`
     );
   }
 }
@@ -214,8 +218,11 @@ async function checkApi() {
   }
   record("GET /health", "OK", JSON.stringify(health).slice(0, 80));
 
-  // Demo data: at least one alert
-  const alerts = await fetchJson("http://localhost:8000/v1/alerts?limit=1");
+  // Demo data: at least one alert. The API is mounted at `/api/v1`
+  // (services/api/app/api/v1/router.py), not `/v1` — using the wrong
+  // prefix here used to produce a permanent false FAIL after a clean
+  // `pnpm aisoc:demo`.
+  const alerts = await fetchJson("http://localhost:8000/api/v1/alerts?limit=1");
   if (!alerts) {
     record(
       "demo data seeded",
