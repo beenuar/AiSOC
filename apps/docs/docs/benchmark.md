@@ -1,7 +1,7 @@
 ---
 sidebar_position: 4
 title: Public Eval Harness
-description: AiSOC's open, deterministic regression harness. 200 synthetic incidents drawn from 55 distinct templates with backing telemetry (Sysmon, M365, CloudTrail, Okta, Linux auditd, …). Per-case and per-template CI gates over the substrate. Honest about what it measures — and what it doesn't.
+description: AiSOC's open, deterministic regression harness. 200 synthetic incidents drawn from 55 distinct templates with backing telemetry (Sysmon, M365, CloudTrail, Azure sign-in, Linux auditd, …). Per-case and per-template CI gates over the substrate. Honest about what it measures — and what it doesn't.
 ---
 
 # AiSOC Public Eval Harness
@@ -20,9 +20,9 @@ description: AiSOC's open, deterministic regression harness. 200 synthetic incid
 > **What's new (v1.4):**
 >
 > 1. Every synthetic incident now ships with a backing **synthetic telemetry
->    corpus** — Sysmon / Windows-Security / M365 audit / CloudTrail / Okta /
->    Azure sign-in / Linux auditd / journald / EDR / firewall / DNS / VPN / DB
->    audit events — written to
+>    corpus** — Sysmon / Windows Security / M365 audit / Azure sign-in /
+>    CloudTrail / Linux auditd / journald / EDR / DNS / web access /
+>    Kubernetes audit / GitHub audit / VPN / DB audit events — written to
 >    [`synthetic_telemetry.jsonl`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/synthetic_telemetry.jsonl).
 >    Connector and Sigma PRs now have something concrete to wire against. See
 >    [Synthetic telemetry corpus](#5-synthetic-telemetry-corpus) below.
@@ -94,9 +94,9 @@ These numbers move with the codebase. The current snapshot lives at
 ### Per-case vs. per-template metrics
 
 The 200-case dataset is built by drawing each case from one of **55 distinct
-templates** (Sysmon process-injection, M365 admin-impersonation, CloudTrail
-GuardDuty findings, Okta MFA-bombing, Linux auditd reverse-shell, …) and
-swapping the `{user}/{host}/{ip}/{campaign}` slot in each one. That gives the
+templates** (Sysmon process hollowing, M365 OAuth-consent phish, CloudTrail
+EC2 IMDS credential theft, Azure AD impossible travel, Linux SUID abuse, …)
+and swapping the `{user}/{host}/{ip}/{campaign}` slot in each one. That gives the
 substrate a wider blast radius to regress against without inflating the
 generator. Two metrics are reported for every scoring suite:
 
@@ -274,16 +274,16 @@ without having to make up their own. The corpus currently covers 14 sources:
 | `windows_security`    | Windows Security log (logon, privilege use, account changes)      | `Computer`, `TargetUserName`, `EventID`        |
 | `m365_audit`          | Microsoft 365 unified audit log                                   | `UserId`, `Operation`, `Workload`, `ClientIP`  |
 | `azure_signin`        | Azure AD / Entra sign-in log                                      | `userPrincipalName`, `appDisplayName`, `ipAddress` |
-| `okta`                | Okta system log                                                   | `actor.alternateId`, `eventType`, `outcome`    |
-| `cloudtrail`          | AWS CloudTrail management events                                  | `eventName`, `userIdentity`, `sourceIPAddress` |
-| `linux_auditd`        | Linux auditd records (execve, syscall)                            | `host`, `auid`, `exe`, `proctitle`             |
-| `linux_journald`      | Linux journald / syslog                                           | `_HOSTNAME`, `MESSAGE`, `SYSLOG_IDENTIFIER`    |
-| `edr`                 | Generic EDR detection (CrowdStrike / SentinelOne shape)           | `device.hostname`, `process.command_line`      |
-| `firewall`            | Perimeter firewall (deny / allow / threat)                        | `src_ip`, `dst_ip`, `action`, `rule`           |
-| `dns`                 | DNS resolver / sinkhole                                           | `query`, `client_ip`, `response_code`          |
-| `vpn`                 | VPN concentrator (auth and tunnel events)                         | `username`, `client_ip`, `assigned_ip`         |
-| `db_audit`            | Database audit trail (Postgres / Oracle / SQL Server shapes)      | `db_user`, `client_host`, `statement`          |
-| `idp`                 | Generic IdP / federated auth                                      | `actor`, `event`, `target`                     |
+| `cloudtrail`          | AWS CloudTrail management events                                  | `eventName`, `userIdentity`, `awsRegion`       |
+| `linux_auditd`        | Linux auditd records (execve, syscall)                            | `type`, `syscall`, `auid`, `exe`               |
+| `linux_journald`      | Linux journald / syslog                                           | `_SYSTEMD_UNIT`, `MESSAGE`, `_HOSTNAME`        |
+| `edr`                 | Generic EDR detection (CrowdStrike / SentinelOne shape)           | `rule`, `severity`, `device.hostname`          |
+| `dns`                 | DNS resolver / sinkhole                                           | `query_name`, `query_type`, `client_ip`        |
+| `web_access`          | Web access / WAF / proxy log                                      | `http_method`, `url`, `status_code`            |
+| `k8s_audit`           | Kubernetes audit log (`audit.k8s.io/v1`)                          | `verb`, `objectRef.resource`, `user.username`  |
+| `github_audit`        | GitHub audit log (org / repo / app events)                        | `action`, `actor`, `repo`                      |
+| `vpn`                 | VPN concentrator (auth and tunnel events)                         | `action`, `user`, `client_ip`                  |
+| `db_audit`            | Database audit trail (Postgres / Oracle / SQL Server shapes)      | `user`, `operation`, `query`                   |
 
 Each event has its `{user}/{host}/{ip}/{campaign}` placeholders resolved
 against the parent incident, so an event for `INC-EVAL-044` carries the same

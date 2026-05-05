@@ -140,16 +140,18 @@ the v5.2 eval harness:
 - **Synthetic telemetry corpus**
   (`services/agents/tests/eval_data/synthetic_telemetry.jsonl`,
   `scripts/generate_eval_incidents.py`) — 361 backing events spanning 14
-  log sources (Sysmon, Windows Security, M365 audit, Azure sign-in, Okta,
-  CloudTrail, Linux auditd, journald, EDR, firewall, DNS, VPN, DB audit,
-  IdP), wired to all 200 incidents. Each event is a templated dictionary
-  with `{user}/{host}/{ip}/{campaign}` placeholders resolved against the
-  incident it backs, and carries the fields a real connector pivots on
-  (process tree, principal, source IP, log source, event ID).
+  log sources (Sysmon, Windows Security, M365 audit, Azure sign-in,
+  CloudTrail, Linux auditd, journald, EDR, DNS, web access, Kubernetes
+  audit, GitHub audit, VPN, DB audit), wired to all 200 incidents. Each
+  event is a templated dictionary with `{user}/{host}/{ip}/{campaign}`
+  placeholders resolved against the incident it backs, and carries the
+  fields a real connector pivots on (process tree, principal, source IP,
+  log source, event ID).
 - **Telemetry event factories + recursive resolver**
   (`scripts/generate_eval_incidents.py`) — `_sysmon`, `_winsec`, `_m365`,
-  `_cloudtrail`, `_okta`, `_auditd`, `_journald`, etc. produce base event
-  shapes; a recursive resolver walks nested dicts and substitutes incident
+  `_azure_signin`, `_cloudtrail`, `_auditd`, `_journald`, `_edr`, `_dns`,
+  `_web`, `_k8s`, `_github`, `_vpn`, `_db` produce base event shapes; a
+  recursive resolver walks nested dicts and substitutes incident
   context. The 55 templates in `_TEMPLATES` each now carry a
   `template_id`, a `template_index`, and a tuple of telemetry events.
 - **Schema + coverage gate** (`services/agents/tests/test_synthetic_telemetry.py`)
