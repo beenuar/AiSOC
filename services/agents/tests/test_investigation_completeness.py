@@ -19,13 +19,17 @@ SELF-CONSISTENCY GATE that detects regressions in the report-writer or the
 dataset, NOT a measurement of whether a real LLM agent actually writes a
 complete report on adversarial / blind data.
 
-The metric we publish is:
+The metrics we publish are:
 
-    completeness = (mentioned evidence keywords) / (total evidence keywords)
+    completeness        = (mentioned evidence keywords) / (total)
+    per_template_mean   = unweighted mean of completeness across the
+                          ~55 distinct incident templates
 
-We assert mean completeness ≥ 0.85 across 200 incidents (the simulator
-gives us a hard *lower bound* — if it falls below the floor the source
-data or the writer is broken).
+We assert mean completeness ≥ 0.85 across 200 cases AND
+per-template macro mean ≥ 0.80 across distinct templates. The
+per-template gate is the regression-signal-preserving metric: with
+~55 templates × ~3-4 duplicates, a single broken template moves
+per-case mean by ~0.5% but per-template mean by ~1.8%.
 
 See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 
@@ -139,6 +143,46 @@ class CompletenessResult:
     def full_coverage_pct(self) -> float:
         return self.full_coverage / self.incidents if self.incidents else 0.0
 
+    def per_template_summary(self) -> dict[str, Any]:
+        """Aggregate completeness by `template_id`.
+
+        With ~55 templates each cycled ~3-4×, per-case mean is dominated by
+        the multiplier; per-template mean treats each unique scenario equally
+        so a single broken template surfaces as a ~1.8% drop instead of ~0.5%.
+        """
+        if not self.per_incident:
+            return {
+                "templates": [],
+                "template_count": 0,
+                "template_macro_mean": 0.0,
+                "failing_templates": [],
+            }
+        buckets: dict[str, dict[str, Any]] = {}
+        for row in self.per_incident:
+            tpl = row.get("template_id") or "unknown"
+            b = buckets.setdefault(tpl, {"sum": 0.0, "count": 0})
+            b["sum"] += row.get("completeness", 0.0)
+            b["count"] += 1
+        templates: list[dict[str, Any]] = []
+        for tpl, b in buckets.items():
+            mean = b["sum"] / b["count"] if b["count"] else 0.0
+            templates.append(
+                {
+                    "template_id": tpl,
+                    "cases": b["count"],
+                    "completeness": round(mean, 4),
+                }
+            )
+        templates.sort(key=lambda t: (t["completeness"], -t["cases"]))
+        macro = sum(t["completeness"] for t in templates) / len(templates) if templates else 0.0
+        failing = [t for t in templates if t["completeness"] < 0.80]
+        return {
+            "templates": templates,
+            "template_count": len(templates),
+            "template_macro_mean": round(macro, 4),
+            "failing_templates": failing,
+        }
+
 
 def evaluate_completeness(
     dataset: list[dict[str, Any]] | None = None,
@@ -156,7 +200,14 @@ def evaluate_completeness(
         if scored["completeness"] >= 1.0:
             result.full_coverage += 1
         if keep_per_incident and result.per_incident is not None:
-            result.per_incident.append({"id": inc.get("id"), **scored})
+            result.per_incident.append(
+                {
+                    "id": inc.get("id"),
+                    "template_id": inc.get("template_id"),
+                    "template_index": inc.get("template_index"),
+                    **scored,
+                }
+            )
     return result
 
 
@@ -210,15 +261,47 @@ class TestInvestigationCompleteness(unittest.TestCase):
             f"{len(zeroed)} incidents had zero evidence coverage (sample: {zeroed[:3]})",
         )
 
+    def test_per_template_completeness(self) -> None:
+        """Per-template macro completeness must be ≥ 0.80.
+
+        Equal-weighting templates ensures one broken scenario can't be
+        averaged into oblivion by 3-4 duplicate cases. A 0.80 floor is
+        intentionally stricter than the per-case 0.85 because each template
+        contributes ~1/55 of the macro average.
+        """
+        result = evaluate_completeness(keep_per_incident=True)
+        summary = result.per_template_summary()
+        print(
+            f"\n[eval] per-template completeness: "
+            f"{summary['template_macro_mean']:.3f} "
+            f"({summary['template_count']} templates, "
+            f"{len(summary['failing_templates'])} below 0.80)"
+        )
+        self.assertGreaterEqual(
+            summary["template_count"],
+            50,
+            f"Only {summary['template_count']} distinct templates in dataset; expected ≥50.",
+        )
+        self.assertGreaterEqual(
+            summary["template_macro_mean"],
+            0.80,
+            "Per-template completeness below 0.80.\n"
+            f"Failing templates: {summary['failing_templates']}",
+        )
+
 
 if __name__ == "__main__":
-    result = evaluate_completeness()
+    result = evaluate_completeness(keep_per_incident=True)
+    summary = result.per_template_summary()
     print(
         json.dumps(
             {
                 "incidents": result.incidents,
                 "mean_completeness": round(result.mean, 4),
                 "full_coverage_pct": round(result.full_coverage_pct, 4),
+                "template_count": summary["template_count"],
+                "template_macro_mean": summary["template_macro_mean"],
+                "failing_templates": [t["template_id"] for t in summary["failing_templates"]],
             },
             indent=2,
         )

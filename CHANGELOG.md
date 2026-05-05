@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Eval harness v1.4 — synthetic telemetry + per-template macros
+
+This pass addresses two questions raised on the public launch thread about
+the v5.2 eval harness:
+
+1. **"Any interest in shipping synthetic telemetry (M365 audit, CloudTrail,
+   Sysmon) backing each incident?"** — Yes. A companion
+   `synthetic_telemetry.jsonl` corpus is now generated alongside
+   `synthetic_incidents.json` and gives connector and Sigma PRs a concrete
+   contract to wire against without provisioning a real tenant.
+2. **"INC-EVAL-044, 099, and 154 are the same template with `{user}/{host}`
+   swapped — what does the multiplier buy vs. the dilution in regression
+   signal?"** — The multiplier still buys breadth for connector regressions,
+   but the eval suites now report a per-template macro alongside the
+   per-case mean so a single broken template (~4 cases) moves the regression
+   signal by ~1.8% rather than ~0.5%, and the failing template IDs are
+   surfaced inline.
+
+#### Added
+
+- **Synthetic telemetry corpus**
+  (`services/agents/tests/eval_data/synthetic_telemetry.jsonl`,
+  `scripts/generate_eval_incidents.py`) — 361 backing events spanning 14
+  log sources (Sysmon, Windows Security, M365 audit, Azure sign-in, Okta,
+  CloudTrail, Linux auditd, journald, EDR, firewall, DNS, VPN, DB audit,
+  IdP), wired to all 200 incidents. Each event is a templated dictionary
+  with `{user}/{host}/{ip}/{campaign}` placeholders resolved against the
+  incident it backs, and carries the fields a real connector pivots on
+  (process tree, principal, source IP, log source, event ID).
+- **Telemetry event factories + recursive resolver**
+  (`scripts/generate_eval_incidents.py`) — `_sysmon`, `_winsec`, `_m365`,
+  `_cloudtrail`, `_okta`, `_auditd`, `_journald`, etc. produce base event
+  shapes; a recursive resolver walks nested dicts and substitutes incident
+  context. The 55 templates in `_TEMPLATES` each now carry a
+  `template_id`, a `template_index`, and a tuple of telemetry events.
+- **Schema + coverage gate** (`services/agents/tests/test_synthetic_telemetry.py`)
+  — five new assertions: every incident has ≥ 1 backing event, every
+  expected source is present, every event carries the source-specific
+  pivot fields a real connector needs, all placeholders resolve, and no
+  single template dominates the source distribution.
+- **Per-template macros on every scoring suite**
+  (`services/agents/tests/test_mitre_accuracy.py`,
+  `test_investigation_completeness.py`, `test_response_quality.py`,
+  `scripts/run_evals.py`) — each result now carries a
+  `per_template_summary()` (mean, median, min, max, count, failing IDs)
+  alongside the per-case mean, plus a new test gating macro accuracy ≥
+  0.80 for MITRE / completeness and ≥ 0.75 for response-plan quality. A
+  template-distribution-balance test asserts no single template accounts
+  for > 5% of incidents (currently 0.5–2.0% each).
+- **`run_evals.py` output expansion** — each suite headline now prints
+  the per-case mean *and* the per-template macro with the failing
+  template IDs inline; the human-readable summary appends a synthetic-
+  telemetry footer (event count, source count, incident coverage, file
+  path); `--json` output adds `per_template` and `telemetry` blocks.
+
+#### Changed
+
+- **Incident schema** — `synthetic_incidents.json` entries now include
+  `template_id` (e.g. `m365_admin_impersonation`) and `template_index`
+  fields. Existing fields are unchanged. Regenerated deterministically
+  from the seeded RNG.
+- **`apps/docs/docs/benchmark.md`** — added a "What's new (v1.4)"
+  section, a "Per-case vs. per-template metrics" section explaining the
+  ~0.5% vs ~1.8% sensitivity argument with worked examples, and a new
+  "Synthetic telemetry corpus" section documenting the 14 sources, the
+  pivot fields, the placeholder resolver, and the five schema/coverage
+  checks. The "Help us harden the harness" call-outs now include adding
+  a connector + Sigma rule against the corpus and adding a new template
+  with backing telemetry. The "What this is not" section is updated to
+  call out that the corpus is hand-shaped (not captured from a live
+  tenant) and that the per-template macro is the non-tautological signal
+  on top of the otherwise self-consistent gates.
+- **`README.md`** — capability bullet rewritten to call out five suites
+  (was four), 55 distinct templates, per-case + per-template macros, and
+  the synthetic-telemetry coverage gate. The comparison table flags the
+  eval harness as having a synthetic-telemetry corpus + per-template
+  macros. Step 5b (`Run the public eval harness`) documents the new
+  `python scripts/generate_eval_incidents.py` workflow for regenerating
+  the dataset and the corpus together.
+- **Eval signature on completeness + response-quality runs** — calls
+  from `run_evals.py` now use `keep_per_incident=True` so the per-
+  template summary is computable. Default behaviour unchanged for
+  existing direct callers.
+
+#### Why this matters
+
+The v5.2 harness gave deterministic numbers but two real concerns existed:
+duplicates could mask a broken template behind 199 working duplicates, and
+there was no concrete telemetry shape for connector contributors to wire
+against. v1.4 closes both: the per-template macro is the dilution-resistant
+regression signal that surfaces template-class breaks, and the synthetic
+telemetry corpus is the connector-development contract.
+
+---
+
 ### Honesty + scale pass (P0–P4 of the post-gimmick improvement plan)
 
 This is a "fix the foundations" pass: tighten security defaults, drop

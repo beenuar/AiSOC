@@ -2,8 +2,8 @@
 Pillar-1 Evaluation: MITRE ATT&CK Tactic — Substrate Self-Consistency Gate
 ==========================================================================
 This test gates the substrate's tactic extractor against the synthetic
-incident scenarios in `eval_data/synthetic_incidents.json` (200 cases as of
-v6.0).
+incident scenarios in `eval_data/synthetic_incidents.json` (200 cases
+spanning 55 distinct templates as of v6.1).
 
 It runs OFFLINE (no LLM calls, no DB) using a keyword-based tactic
 extractor over the same synthetic descriptions that were generated to
@@ -12,7 +12,15 @@ recall / F1 numbers are a SUBSTRATE SELF-CONSISTENCY GATE — they detect
 regressions in the extractor or the dataset relative to each other, NOT a
 real LLM-agent tactic-detection accuracy score on adversarial / blind data.
 
-The test asserts ≥80% accuracy as a regression floor.
+Two regression floors are enforced:
+
+* per-case  accuracy  ≥ 80% (200 cases — the headline figure)
+* per-template accuracy ≥ 80% (55 templates, equally weighted) — exists
+  because the substrate has no per-host code paths, so cycling templates
+  3-4× would otherwise let a single broken template hide behind the
+  averages (≈ 0.5% per-case dilution vs ≈ 1.8% per-template signal). When a
+  template breaks, the per-template number drops sharply and the
+  `failing_templates` list in the report names it directly.
 
 See `apps/docs/docs/benchmark.md` for what each suite actually measures
 and how it differs from a third-party leaderboard score.
@@ -344,6 +352,48 @@ class MitreAccuracyResult:
         p, r = self.precision, self.recall
         return (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
 
+    def per_template_summary(self) -> dict[str, Any]:
+        """Aggregate accuracy by `template_id` so duplicate scenarios cannot
+        average a broken template into oblivion.
+
+        Returns a dict with:
+          * `templates`: per-template accuracy (sorted, worst first)
+          * `template_count`: number of distinct templates
+          * `template_macro_accuracy`: equally weighted across templates
+          * `failing_templates`: templates with <80% accuracy
+        """
+        buckets: dict[str, dict[str, Any]] = {}
+        for row in self.details:
+            tpl = row.get("template_id") or "unknown"
+            bucket = buckets.setdefault(tpl, {"correct": 0, "total": 0})
+            bucket["total"] += 1
+            if row["correct"]:
+                bucket["correct"] += 1
+
+        templates: list[dict[str, Any]] = []
+        for tpl, b in buckets.items():
+            acc = b["correct"] / b["total"] if b["total"] else 0.0
+            templates.append(
+                {
+                    "template_id": tpl,
+                    "cases": b["total"],
+                    "correct": b["correct"],
+                    "accuracy": round(acc, 4),
+                }
+            )
+        templates.sort(key=lambda t: (t["accuracy"], -t["cases"]))
+
+        macro = (
+            sum(t["accuracy"] for t in templates) / len(templates) if templates else 0.0
+        )
+        failing = [t for t in templates if t["accuracy"] < 0.80]
+        return {
+            "templates": templates,
+            "template_count": len(templates),
+            "template_macro_accuracy": round(macro, 4),
+            "failing_templates": failing,
+        }
+
     def to_json(self) -> str:
         return json.dumps(
             {
@@ -354,6 +404,7 @@ class MitreAccuracyResult:
                 "precision": round(self.precision, 4),
                 "recall": round(self.recall, 4),
                 "f1": round(self.f1, 4),
+                "per_template": self.per_template_summary(),
                 "details": self.details,
             },
             indent=2,
@@ -392,6 +443,9 @@ def evaluate_mitre_accuracy(threshold: float = 0.80) -> MitreAccuracyResult:
 
         result.details.append(
             {
+                "incident_id": inc.get("id"),
+                "template_id": inc.get("template_id"),
+                "template_index": inc.get("template_index"),
                 "incident": title[:80],
                 "expected": sorted(expected_set),
                 "predicted": sorted(predicted),
@@ -484,6 +538,67 @@ class TestMitreAccuracy(unittest.TestCase):
             len(all_tactics & set(_TACTIC_NAMES)),
             10,
             f"Only {len(all_tactics)} tactics covered: {sorted(all_tactics)}",
+        )
+
+    def test_per_template_accuracy(self) -> None:
+        """Macro-average accuracy across distinct `template_id`s must be ≥80%.
+
+        This is the regression-signal gate: with 200 cases drawn from 55
+        templates, a single broken template moves per-case accuracy by only
+        ~0.5% (3-4 / 200) but moves per-template accuracy by ~1.8% (1 / 55).
+        Equal-weighting templates ensures the substrate cannot regress on a
+        whole class of behavior and hide behind the duplicates.
+        """
+        result = evaluate_mitre_accuracy()
+        summary = result.per_template_summary()
+        print(
+            f"\n[eval] MITRE per-template macro accuracy: "
+            f"{summary['template_macro_accuracy'] * 100:.1f}% "
+            f"({summary['template_count']} distinct templates, "
+            f"{len(summary['failing_templates'])} below 80%)"
+        )
+        self.assertGreaterEqual(
+            summary["template_count"],
+            50,
+            f"Only {summary['template_count']} distinct templates in dataset; expected ≥50.",
+        )
+        self.assertGreaterEqual(
+            summary["template_macro_accuracy"],
+            0.80,
+            "Per-template MITRE accuracy below 80%.\n"
+            f"Failing templates: {summary['failing_templates']}",
+        )
+
+    def test_each_incident_has_template_id(self) -> None:
+        """Every incident must carry the `template_id` it was generated from."""
+        for inc in SYNTHETIC_INCIDENTS_DATA:
+            self.assertIn("template_id", inc, f"Missing template_id on {inc.get('id')}")
+            self.assertTrue(
+                isinstance(inc["template_id"], str) and inc["template_id"],
+                f"Empty template_id on {inc.get('id')}",
+            )
+            self.assertIn(
+                "template_index",
+                inc,
+                f"Missing template_index on {inc.get('id')}",
+            )
+
+    def test_template_distribution_balanced(self) -> None:
+        """No single template may account for >5% of the dataset.
+
+        Keeps the per-case headline number from being dominated by any one
+        template if the cycle changes.
+        """
+        counts: dict[str, int] = {}
+        for inc in SYNTHETIC_INCIDENTS_DATA:
+            tpl = inc["template_id"]
+            counts[tpl] = counts.get(tpl, 0) + 1
+        worst = max(counts.items(), key=lambda kv: kv[1])
+        self.assertLessEqual(
+            worst[1],
+            max(4, int(len(SYNTHETIC_INCIDENTS_DATA) * 0.05)),
+            f"Template '{worst[0]}' appears {worst[1]} times "
+            f"(>{int(len(SYNTHETIC_INCIDENTS_DATA) * 0.05)} = 5% of dataset).",
         )
 
 

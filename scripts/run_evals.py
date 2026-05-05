@@ -11,6 +11,18 @@ Suites:
     3. Investigation completeness     (services/agents/tests/test_investigation_completeness.py)
     4. Response-plan quality          (services/agents/tests/test_response_quality.py)
 
+Each substrate suite reports two metrics:
+
+  * **Per-case mean**     – classic average across all 200 incidents.
+  * **Per-template macro** – equal-weight average across the ~55 distinct
+    incident templates.  Because each template is cycled 3-4× through
+    `{user}/{host}/{ip}/{campaign}` permutations, a single broken template
+    moves per-case mean by ~0.5% but per-template macro by ~1.5-1.8% — so
+    the macro is the regression-signal-preserving metric we gate on.
+
+The runner also dumps the synthetic-telemetry coverage summary so connector
+and Sigma-rule PRs can pin against a stable corpus.
+
 Usage:
     python3 scripts/run_evals.py                  # human-readable + writes report
     python3 scripts/run_evals.py --json           # JSON to stdout
@@ -56,12 +68,25 @@ _TARGETS = {
     "response_quality": 0.80,
 }
 
+# Per-template macro floors (kept slightly below per-case floors because each
+# template contributes ~1/55 of the macro vs. ~1/200 of the per-case mean).
+_TEMPLATE_TARGETS = {
+    "mitre_accuracy": 0.80,
+    "investigation_completeness": 0.80,
+    "response_quality": 0.75,
+}
+
+_TELEMETRY_PATH = (
+    _AGENTS_ROOT / "tests" / "eval_data" / "synthetic_telemetry.jsonl"
+)
+
 
 def _run_mitre() -> dict:
     t0 = time.perf_counter()
     res = evaluate_mitre_accuracy(threshold=_TARGETS["mitre_accuracy"])
     dur = (time.perf_counter() - t0) * 1000
-    return {
+    tpl = res.per_template_summary() if hasattr(res, "per_template_summary") else None
+    out: dict = {
         "metric": "accuracy",
         "value": round(res.accuracy, 4),
         "target": _TARGETS["mitre_accuracy"],
@@ -75,6 +100,19 @@ def _run_mitre() -> dict:
             "f1": round(res.f1, 4),
         },
     }
+    if tpl:
+        macro = tpl.get("template_macro_accuracy", 0.0)
+        target = _TEMPLATE_TARGETS["mitre_accuracy"]
+        out["per_template"] = {
+            "metric": "macro_accuracy",
+            "value": round(macro, 4),
+            "target": target,
+            "passed": macro >= target,
+            "template_count": tpl.get("template_count", 0),
+            "failing_templates": [t["template_id"] for t in tpl.get("failing_templates", [])],
+        }
+        out["passed"] = out["passed"] and out["per_template"]["passed"]
+    return out
 
 
 def _run_alert_reduction(stream_size: int = 1000) -> dict:
@@ -101,9 +139,9 @@ def _run_alert_reduction(stream_size: int = 1000) -> dict:
 
 def _run_completeness() -> dict:
     t0 = time.perf_counter()
-    res = evaluate_completeness()
+    res = evaluate_completeness(keep_per_incident=True)
     dur = (time.perf_counter() - t0) * 1000
-    return {
+    out: dict = {
         "metric": "mean_keyword_coverage",
         "value": round(res.mean, 4),
         "target": _TARGETS["investigation_completeness"],
@@ -115,13 +153,26 @@ def _run_completeness() -> dict:
             "fully_covered_pct": round(res.full_coverage_pct, 4),
         },
     }
+    tpl = res.per_template_summary()
+    macro = tpl.get("template_macro_mean", 0.0)
+    target = _TEMPLATE_TARGETS["investigation_completeness"]
+    out["per_template"] = {
+        "metric": "macro_completeness",
+        "value": round(macro, 4),
+        "target": target,
+        "passed": macro >= target,
+        "template_count": tpl.get("template_count", 0),
+        "failing_templates": [t["template_id"] for t in tpl.get("failing_templates", [])],
+    }
+    out["passed"] = out["passed"] and out["per_template"]["passed"]
+    return out
 
 
 def _run_response_quality() -> dict:
     t0 = time.perf_counter()
-    res = evaluate_response_quality()
+    res = evaluate_response_quality(keep_per_incident=True)
     dur = (time.perf_counter() - t0) * 1000
-    return {
+    out: dict = {
         "metric": "mean_rubric_score",
         "value": round(res.mean_score, 4),
         "target": _TARGETS["response_quality"],
@@ -131,6 +182,54 @@ def _run_response_quality() -> dict:
             "incidents": res.incidents,
             "criteria": {k: round(res.crit_mean(k), 4) for k in res.crit_sum},
         },
+    }
+    tpl = res.per_template_summary()
+    macro = tpl.get("template_macro_score", 0.0)
+    target = _TEMPLATE_TARGETS["response_quality"]
+    out["per_template"] = {
+        "metric": "macro_score",
+        "value": round(macro, 4),
+        "target": target,
+        "passed": macro >= target,
+        "template_count": tpl.get("template_count", 0),
+        "failing_templates": [t["template_id"] for t in tpl.get("failing_templates", [])],
+    }
+    out["passed"] = out["passed"] and out["per_template"]["passed"]
+    return out
+
+
+def _summarise_telemetry() -> dict:
+    """Summarise the synthetic-telemetry corpus produced alongside the dataset.
+
+    Returned shape stays small (no per-event payloads) so the eval report
+    remains diff-friendly. If the JSONL is missing, returns a stub so the
+    runner stays usable for hosts that strip out telemetry artefacts.
+    """
+    if not _TELEMETRY_PATH.exists():
+        return {"present": False, "events": 0, "sources": {}, "incidents_with_telemetry": 0}
+    sources: dict[str, int] = {}
+    incidents: set[str] = set()
+    total = 0
+    for line in _TELEMETRY_PATH.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        total += 1
+        src = evt.get("source", "unknown")
+        sources[src] = sources.get(src, 0) + 1
+        inc_id = evt.get("incident_id")
+        if inc_id:
+            incidents.add(inc_id)
+    return {
+        "present": True,
+        "events": total,
+        "sources": dict(sorted(sources.items())),
+        "incidents_with_telemetry": len(incidents),
+        "path": str(_TELEMETRY_PATH.relative_to(_REPO_ROOT)),
     }
 
 
@@ -159,6 +258,7 @@ def main() -> None:
             "investigation_completeness": _run_completeness(),
             "response_quality": _run_response_quality(),
         },
+        "telemetry": _summarise_telemetry(),
     }
     summary["all_passed"] = all(s["passed"] for s in summary["suites"].values())
 
@@ -168,16 +268,42 @@ def main() -> None:
         print(json.dumps(summary, indent=2))
     else:
         print()
-        print("=" * 76)
+        print("=" * 78)
         print("  AiSOC Pillar-1 Eval - 200-incident synthetic benchmark")
-        print("=" * 76)
+        print("=" * 78)
         for name, suite in summary["suites"].items():
             mark = "PASS" if suite["passed"] else "FAIL"
             print(
                 f"  [{mark}] {name:<28} {suite['metric']:<22} "
                 f"{suite['value']:.3f}  (target >= {suite['target']:.2f})"
             )
-        print("=" * 76)
+            tpl = suite.get("per_template")
+            if tpl:
+                tpl_mark = "PASS" if tpl["passed"] else "FAIL"
+                fail_count = len(tpl.get("failing_templates", []))
+                fail_note = f" ({fail_count} failing templates)" if fail_count else ""
+                print(
+                    f"         per-template macro       "
+                    f"{tpl['value']:.3f}  (target >= {tpl['target']:.2f}, "
+                    f"n={tpl.get('template_count', 0)} templates) [{tpl_mark}]"
+                    f"{fail_note}"
+                )
+                if fail_count:
+                    failing = ", ".join(tpl["failing_templates"][:5])
+                    suffix = "..." if fail_count > 5 else ""
+                    print(f"           regressions: {failing}{suffix}")
+        print("-" * 78)
+        tele = summary["telemetry"]
+        if tele.get("present"):
+            print(
+                f"  Synthetic telemetry: {tele['events']} events across "
+                f"{len(tele['sources'])} sources, "
+                f"{tele['incidents_with_telemetry']} incidents wired up "
+                f"({tele['path']})"
+            )
+        else:
+            print("  Synthetic telemetry: <not generated>")
+        print("=" * 78)
         verdict = "ALL GATES PASSED" if summary["all_passed"] else "REGRESSION DETECTED"
         print(f"  {verdict}")
         try:

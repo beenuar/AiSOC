@@ -26,7 +26,7 @@ AiSOC is a single self-hostable stack that ingests security events, correlates t
 Three properties distinguish it from closed-source AI SOC vendors:
 
 1. **Agent decisions are logged.** The Investigation Ledger stores the LLM prompt, the response, the evidence cited, and the downstream tool calls for every step of every run. Replays are available later.
-2. **The substrate has a public eval harness in CI.** Four suites gate every PR targeting `main` / `develop`: a 200-incident synthetic dataset drives the MITRE-tactic, investigation-completeness, and response-quality gates, and a separately generated 1,000-alert noisy stream drives the alert-reduction gate. Alert reduction is a real measurement against that fixed stream; the other three are substrate self-consistency gates over deterministic templates. The [benchmark page](apps/docs/docs/benchmark.md) explains exactly which is which.
+2. **The substrate has a public eval harness in CI.** Five suites gate every PR targeting `main` / `develop`: a 200-incident synthetic dataset drawn from 55 distinct templates drives the MITRE-tactic, investigation-completeness, and response-quality gates (each reporting both a per-case mean and a per-template macro so a single broken template can't hide behind 199 working duplicates); a separately generated 1,000-alert noisy stream drives the alert-reduction gate; and a schema/coverage gate validates `synthetic_telemetry.jsonl` — the companion corpus of ~360 backing events across 14 log sources (Sysmon, Windows Security, M365 audit, Azure sign-in, Okta, CloudTrail, Linux auditd, journald, EDR, firewall, DNS, VPN, DB audit, IdP) that connector and Sigma PRs can wire against. Alert reduction is a real measurement against the fixed alert stream; the three rubric-based suites are substrate self-consistency gates over deterministic templates. The [benchmark page](apps/docs/docs/benchmark.md) explains exactly which is which.
 3. **It runs entirely on your infrastructure.** No callbacks to a vendor cloud and no data exfiltration for "model improvement."
 
 The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agents/). It is small enough to read end-to-end, swap models in, and patch.
@@ -41,7 +41,7 @@ The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agent
 | Self-hostable | yes | yes | enterprise-only | cloud-only |
 | Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes |
 | Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published |
-| Public substrate eval harness | CI-gated, reproducible | n/a | n/a | not published |
+| Public substrate eval harness | CI-gated, reproducible, with synthetic telemetry corpus + per-template macros | n/a | n/a | not published |
 | Detection content | 800 native + 6,000+ imported (Sigma / Splunk / Chronicle / CAR) | 1,200+ rules | 1,000+ apps | curated |
 | Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary |
 | Data residency | your infra | your infra | partial | vendor cloud |
@@ -474,19 +474,26 @@ If any check fails, the doctor tells you exactly what to fix before logging in.
 #### 5b. Run the public eval harness (optional)
 
 ```bash
-# Run all four substrate eval suites against the bundled 200-incident
-# dataset and write a machine-readable report. The dataset size is fixed by
+# Run all five substrate eval suites against the bundled 200-incident
+# dataset (55 distinct templates) and its companion synthetic_telemetry.jsonl
+# corpus, then write a machine-readable report. The dataset size is fixed by
 # services/agents/tests/eval_data/synthetic_incidents.json — there is no
 # --count flag.
 python scripts/run_evals.py --out eval_report.json
 
 # Or run a single eval gate
 pytest services/agents/tests/test_mitre_accuracy.py
+pytest services/agents/tests/test_synthetic_telemetry.py   # schema + coverage gate
+
+# Regenerate the dataset and the backing telemetry corpus from scratch
+# (e.g. after adding a template). Both files are written deterministically
+# from a seeded RNG.
+python scripts/generate_eval_incidents.py
 ```
 
-The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`, which the [public eval harness page](apps/docs/docs/benchmark.md) renders. The same harness runs in CI on every PR targeting `main` / `develop` — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`, which the [public eval harness page](apps/docs/docs/benchmark.md) renders. Each scoring suite reports both a per-case mean and a per-template macro across the 55 templates — the macro is the regression signal that doesn't dilute when the dataset is enlarged. The same harness runs in CI on every PR targeting `main` / `develop` — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-The harness runs deterministic substrate code (extractors, fusion, templates, judges) against synthetic data — it does not call the live LLM agent. Three of the four metrics are substrate self-consistency gates rather than agent accuracy scores. The [benchmark page](apps/docs/docs/benchmark.md) documents what each suite measures and what it does not.
+The harness runs deterministic substrate code (extractors, fusion, templates, judges) against synthetic data — it does not call the live LLM agent. Three of the four scoring metrics are substrate self-consistency gates rather than agent accuracy scores; the synthetic-telemetry suite is a schema/coverage gate, not a score. The [benchmark page](apps/docs/docs/benchmark.md) documents what each suite measures and what it does not.
 
 #### 6. Open
 
@@ -563,8 +570,8 @@ AiSOC/
 └── scripts/
     ├── aisoc-demo.ts     # One-shot demo orchestrator (powers `pnpm aisoc:demo`)
     ├── aisoc-doctor.ts   # Local health check
-    ├── run_evals.py      # Public eval harness
-    ├── generate_eval_incidents.py  # 200-incident synthetic generator
+    ├── run_evals.py      # Public eval harness (per-case + per-template macros, telemetry coverage)
+    ├── generate_eval_incidents.py  # 200-incident synthetic generator (55 templates) + synthetic_telemetry.jsonl
     ├── build_marketplace.py        # Build marketplace/index.json from detections+playbooks+plugins
     ├── validate_detections.py      # YAML schema validation for Sigma detections
     ├── validate_playbooks.py       # YAML schema validation for playbooks

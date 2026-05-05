@@ -30,7 +30,12 @@ Rubric (each criterion is 0-1, total /5):
 Quality score = mean rubric score across 200 incidents.
 
 We assert mean ≥ 0.80 (4/5 rubric criteria on average) as a substrate
-regression floor.
+regression floor, AND per-template macro mean ≥ 0.75 across the ~55
+distinct templates. The per-template gate is the regression-signal-
+preserving metric: with ~3-4 duplicates per template, a single broken
+template moves per-case mean by ~0.5% but per-template mean by ~1.5%
+(addressing the dilution concern raised in
+`docs/research/dataset-design-notes.md`).
 
 See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 
@@ -338,6 +343,46 @@ class ResponseQualityResult:
     def crit_mean(self, key: str) -> float:
         return self.crit_sum[key] / self.incidents if self.incidents else 0.0
 
+    def per_template_summary(self) -> dict[str, Any]:
+        """Aggregate response-quality scores by `template_id`.
+
+        Equal-weights each unique scenario so a broken template can't be
+        averaged into oblivion by 3-4 duplicate cases — same multiplier
+        math as in `test_mitre_accuracy` / `test_investigation_completeness`.
+        """
+        if not self.per_incident:
+            return {
+                "templates": [],
+                "template_count": 0,
+                "template_macro_score": 0.0,
+                "failing_templates": [],
+            }
+        buckets: dict[str, dict[str, Any]] = {}
+        for row in self.per_incident:
+            tpl = row.get("template_id") or "unknown"
+            b = buckets.setdefault(tpl, {"sum": 0.0, "count": 0})
+            b["sum"] += row.get("score", 0.0)
+            b["count"] += 1
+        templates: list[dict[str, Any]] = []
+        for tpl, b in buckets.items():
+            mean = b["sum"] / b["count"] if b["count"] else 0.0
+            templates.append(
+                {
+                    "template_id": tpl,
+                    "cases": b["count"],
+                    "score": round(mean, 4),
+                }
+            )
+        templates.sort(key=lambda t: (t["score"], -t["cases"]))
+        macro = sum(t["score"] for t in templates) / len(templates) if templates else 0.0
+        failing = [t for t in templates if t["score"] < 0.70]
+        return {
+            "templates": templates,
+            "template_count": len(templates),
+            "template_macro_score": round(macro, 4),
+            "failing_templates": failing,
+        }
+
 
 def evaluate_response_quality(
     dataset: list[dict[str, Any]] | None = None,
@@ -354,7 +399,14 @@ def evaluate_response_quality(
         for k in result.crit_sum:
             result.crit_sum[k] += rubric[k]
         if keep_per_incident and result.per_incident is not None:
-            result.per_incident.append({"id": inc.get("id"), **rubric})
+            result.per_incident.append(
+                {
+                    "id": inc.get("id"),
+                    "template_id": inc.get("template_id"),
+                    "template_index": inc.get("template_index"),
+                    **rubric,
+                }
+            )
     return result
 
 
@@ -420,15 +472,48 @@ class TestResponseQuality(unittest.TestCase):
             f"Only {result.crit_mean('action_aligned') * 100:.1f}% of plans aligned with response_class.",
         )
 
+    def test_per_template_quality(self) -> None:
+        """Per-template macro response-quality must be ≥ 0.75.
+
+        Equal-weighting templates ensures a single broken scenario can't be
+        averaged into oblivion by 3-4 duplicate cases. The 0.75 floor is
+        intentionally below the per-case 0.80 because each template
+        contributes ~1/55 of the macro average — a single template at
+        0 drags macro by ~1.5%, vs. ~0.5% per case.
+        """
+        result = evaluate_response_quality(keep_per_incident=True)
+        summary = result.per_template_summary()
+        print(
+            f"\n[eval] per-template response-quality: "
+            f"{summary['template_macro_score']:.3f} "
+            f"({summary['template_count']} templates, "
+            f"{len(summary['failing_templates'])} below 0.70)"
+        )
+        self.assertGreaterEqual(
+            summary["template_count"],
+            50,
+            f"Only {summary['template_count']} distinct templates in dataset; expected ≥50.",
+        )
+        self.assertGreaterEqual(
+            summary["template_macro_score"],
+            0.75,
+            "Per-template response-quality below 0.75.\n"
+            f"Failing templates: {summary['failing_templates']}",
+        )
+
 
 if __name__ == "__main__":
-    result = evaluate_response_quality()
+    result = evaluate_response_quality(keep_per_incident=True)
+    summary = result.per_template_summary()
     print(
         json.dumps(
             {
                 "incidents": result.incidents,
                 "mean_score": round(result.mean_score, 4),
                 "criteria": {k: round(result.crit_mean(k), 4) for k in result.crit_sum},
+                "template_count": summary["template_count"],
+                "template_macro_score": summary["template_macro_score"],
+                "failing_templates": [t["template_id"] for t in summary["failing_templates"]],
             },
             indent=2,
         )
