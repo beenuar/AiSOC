@@ -14,7 +14,7 @@ from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
 from app.models.case import Case, CaseTimeline
 
-_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
+_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8084")
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 

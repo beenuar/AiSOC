@@ -41,7 +41,7 @@ from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
 
-_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
+_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8084")
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
 

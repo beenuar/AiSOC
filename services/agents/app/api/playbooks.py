@@ -61,6 +61,35 @@ async def create_playbook(playbook: Playbook) -> dict:
     return created.model_dump()
 
 
+# ---------------------------------------------------------------------------
+# Run queries (declared BEFORE /{playbook_id} so FastAPI matches the literal
+# "/runs" prefix instead of treating "runs" as a playbook_id path param).
+# ---------------------------------------------------------------------------
+
+
+@router.get("/runs", summary="List recent playbook runs")
+async def list_runs(limit: int = 50) -> list[dict]:
+    recent = sorted(
+        _runs.values(),
+        key=lambda r: r.started_at or "",
+        reverse=True,
+    )[:limit]
+    return [r.to_dict() for r in recent]
+
+
+@router.get("/runs/{run_id}", summary="Get a playbook run result")
+async def get_run(run_id: str) -> dict:
+    pr = _runs.get(run_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Playbook run not found")
+    return pr.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# CRUD by id
+# ---------------------------------------------------------------------------
+
+
 @router.get("/{playbook_id}", summary="Get a playbook")
 async def get_playbook(playbook_id: str) -> dict:
     store = PlaybookStore.default()
@@ -135,21 +164,3 @@ async def _execute_and_update(playbook: Playbook, context: dict[str, Any], dry_r
     # Preserve the pre-allocated run_id
     pr.run_id = run_id
     _runs[run_id] = pr
-
-
-@router.get("/runs/{run_id}", summary="Get a playbook run result")
-async def get_run(run_id: str) -> dict:
-    pr = _runs.get(run_id)
-    if not pr:
-        raise HTTPException(status_code=404, detail="Playbook run not found")
-    return pr.to_dict()
-
-
-@router.get("/runs", summary="List recent playbook runs")
-async def list_runs(limit: int = 50) -> list[dict]:
-    recent = sorted(
-        _runs.values(),
-        key=lambda r: r.started_at or "",
-        reverse=True,
-    )[:limit]
-    return [r.to_dict() for r in recent]

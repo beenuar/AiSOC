@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 
-_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8000")
+_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8084")
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 

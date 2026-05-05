@@ -149,6 +149,11 @@ services:
       ENVIRONMENT: development
       LOG_LEVEL: info
       CORS_ORIGINS: http://localhost:3000
+      # The agents service listens on port 8084 inside the Docker network
+      # (see its Dockerfile + the agents service block below). Without this
+      # the api defaults to `http://agents:8000` and every playbook / case
+      # investigation request 503s with "All connection attempts failed".
+      AGENTS_SERVICE_URL: http://agents:8084
     networks:
       - aisoc-demo
     restart: unless-stopped
