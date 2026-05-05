@@ -11,9 +11,9 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
 [![Version](https://img.shields.io/badge/version-5.2.0-f59e0b?style=flat-square)](CHANGELOG.md)
 
-[Live demo](https://demo.aisoc.dev) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
+[How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
-<sub>The hosted demo is read-only and resets daily at 00:00&nbsp;UTC. To run AiSOC on your own data, follow the [quick start](#quick-start) or pick a [deployment target](#deployment-options).</sub>
+<sub>AiSOC is fully self-hostable. Follow the [quick start](#quick-start) or pick a [deployment target](#deployment-options) below.</sub>
 
 </div>
 
