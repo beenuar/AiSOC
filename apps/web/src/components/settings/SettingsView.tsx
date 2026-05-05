@@ -724,7 +724,7 @@ function IntegrationsPanel() {
     );
     try {
       if (!useFallback) {
-        await connectorsApi.update(connector.id, { enabled: next });
+        await connectorsApi.update(connector.id, { is_enabled: next });
       }
       toast.success(next ? 'Connector enabled' : 'Connector disabled');
       mutate();

@@ -581,6 +581,7 @@ export interface Connector {
   /** `true` when the connector is enabled (separate from runtime status). */
   enabled?: boolean;
   tenantId?: string;
+  category?: string;
   config?: Record<string, unknown>;
   lastSync?: string;
   /** Number of alerts ingested through this connector. */
@@ -597,28 +598,195 @@ export interface ConnectorsResponse {
   total: number;
 }
 
+/** A single config field surfaced by ``BaseConnector.schema()`` on the backend. */
+export interface ConnectorSchemaField {
+  name: string;
+  type: 'string' | 'secret' | 'select' | 'textarea' | 'boolean' | 'number';
+  label: string;
+  required?: boolean;
+  default?: string | number | boolean | null;
+  placeholder?: string;
+  help_text?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
+/** Forward-looking OAuth hints; rendered as "Hosted OAuth coming soon". */
+export interface ConnectorOAuthHints {
+  supported_in_hosted?: boolean;
+  authorize_url?: string;
+  token_url?: string;
+  scopes?: string[];
+}
+
+/** A catalog entry: one available connector type with its config schema. */
+export interface ConnectorCatalogEntry {
+  connector_id: string;
+  connector_name: string;
+  category: string;
+  description: string;
+  fields: ConnectorSchemaField[];
+  docs_url?: string;
+  oauth?: ConnectorOAuthHints;
+}
+
+export interface ConnectorCatalogResponse {
+  connectors: ConnectorCatalogEntry[];
+}
+
+/** Result of a "Test connection" call (pre-save or against a saved instance). */
+export interface ConnectorTestResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  latency_ms?: number;
+  latencyMs?: number;
+  details?: Record<string, unknown>;
+}
+
+/** Raw shape returned by the API for a connector instance row. */
+interface BackendConnectorResponse {
+  id: string;
+  tenant_id: string;
+  name: string;
+  connector_type: string;
+  category: string;
+  is_enabled: boolean;
+  connector_config: Record<string, unknown>;
+  health_status: string;
+  last_health_check: string | null;
+  last_sync: string | null;
+  events_ingested: number;
+  error_count: number;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Map the backend ``health_status`` enum (``healthy``/``unhealthy``/``unknown``)
+ * to the frontend ``ConnectorStatus`` (``active``/``inactive``/``error``/
+ * ``configuring``). The mapping also folds in ``is_enabled`` because a disabled
+ * connector should always render as ``inactive`` in the UI regardless of its
+ * last health check.
+ */
+function deriveConnectorStatus(row: BackendConnectorResponse): ConnectorStatus {
+  if (!row.is_enabled) return 'inactive';
+  switch (row.health_status) {
+    case 'healthy':
+      return 'active';
+    case 'unhealthy':
+    case 'error':
+      return 'error';
+    case 'unknown':
+    case '':
+      return 'configuring';
+    default:
+      return 'configuring';
+  }
+}
+
+function mapBackendConnector(row: BackendConnectorResponse): Connector {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.connector_type,
+    category: row.category,
+    status: deriveConnectorStatus(row),
+    enabled: row.is_enabled,
+    tenantId: row.tenant_id,
+    config: row.connector_config,
+    lastSync: row.last_sync ?? undefined,
+    alertCount: row.events_ingested,
+    alertsIngested: row.events_ingested,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export interface CreateConnectorPayload {
+  name: string;
+  connector_type: string;
+  category?: string;
+  auth_config?: Record<string, unknown>;
+  connector_config?: Record<string, unknown>;
+  tags?: string[];
+}
+
+export interface UpdateConnectorPayload {
+  name?: string;
+  is_enabled?: boolean;
+  auth_config?: Record<string, unknown>;
+  connector_config?: Record<string, unknown>;
+  tags?: string[];
+}
+
+export interface TestConnectorPayload {
+  connector_type: string;
+  auth_config?: Record<string, unknown>;
+  connector_config?: Record<string, unknown>;
+}
+
 export const connectorsApi = {
-  list: () => request<ConnectorsResponse>('/api/v1/connectors'),
+  /**
+   * List connector instances for the current tenant.
+   *
+   * The backend returns a raw ``list[ConnectorResponse]``; we wrap it in a
+   * ``ConnectorsResponse`` envelope and map each row from snake_case to the
+   * camelCase frontend shape so views never have to reach into raw API rows.
+   */
+  list: async (): Promise<ConnectorsResponse> => {
+    const rows = await request<BackendConnectorResponse[]>(
+      '/api/v1/connectors',
+    );
+    const connectors = rows.map(mapBackendConnector);
+    return { connectors, total: connectors.length };
+  },
 
-  get: (id: string) => request<Connector>(`/api/v1/connectors/${id}`),
+  /** Catalog of available connector types (one entry per registered class). */
+  catalog: () =>
+    request<ConnectorCatalogResponse>('/api/v1/connectors/catalog'),
 
-  create: (data: Partial<Connector>) =>
-    request<Connector>('/api/v1/connectors', {
+  get: async (id: string): Promise<Connector> => {
+    const row = await request<BackendConnectorResponse>(
+      `/api/v1/connectors/${id}`,
+    );
+    return mapBackendConnector(row);
+  },
+
+  create: async (data: CreateConnectorPayload): Promise<Connector> => {
+    const row = await request<BackendConnectorResponse>('/api/v1/connectors', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    });
+    return mapBackendConnector(row);
+  },
 
-  update: (id: string, data: Partial<Connector>) =>
-    request<Connector>(`/api/v1/connectors/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+  update: async (
+    id: string,
+    data: UpdateConnectorPayload,
+  ): Promise<Connector> => {
+    const row = await request<BackendConnectorResponse>(
+      `/api/v1/connectors/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
+    return mapBackendConnector(row);
+  },
 
+  /** Run "Test connection" against a saved instance. */
   test: (id: string) =>
-    request<{ success: boolean; message: string; latencyMs: number }>(
-      `/api/v1/connectors/${id}/test`,
-      { method: 'POST' },
-    ),
+    request<ConnectorTestResult>(`/api/v1/connectors/${id}/test`, {
+      method: 'POST',
+    }),
+
+  /** Run "Test connection" with un-saved credentials from the wizard. */
+  testInline: (payload: TestConnectorPayload) =>
+    request<ConnectorTestResult>('/api/v1/connectors/test', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   delete: (id: string) =>
     request<void>(`/api/v1/connectors/${id}`, { method: 'DELETE' }),
