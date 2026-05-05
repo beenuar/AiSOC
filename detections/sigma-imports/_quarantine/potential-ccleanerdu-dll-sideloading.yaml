@@ -1,0 +1,40 @@
+id: sigmahq-sigma-1fbc0671-5596-4e17-8682-f020a0b995dc
+name: Potential CCleanerDU.DLL Sideloading
+description: Detects potential DLL sideloading of "CCleanerDU.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://lab52.io/blog/2344-2/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \CCleanerDU.dll
+  filter_main_path:
+    Image|startswith:
+    - C:\Program Files\CCleaner\
+    - C:\Program Files (x86)\CCleaner\
+    Image|endswith:
+    - \CCleaner.exe
+    - \CCleaner64.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1fbc0671-5596-4e17-8682-f020a0b995dc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_ccleaner_du.yml
+falsepositives:
+- False positives could occur from other custom installation paths. Apply additional
+  filters accordingly.
+notes:
+  quarantine_reason: 'upstream status: test'

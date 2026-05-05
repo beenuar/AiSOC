@@ -1,0 +1,39 @@
+id: sigmahq-sigma-530a6faa-ff3d-4022-b315-50828e77eef5
+name: Anydesk Remote Access Software Service Installation
+description: Detects the installation of the anydesk software service. Which could
+  be an indication of anydesk abuse if you the software isn't already used.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://thedfirreport.com/2025/02/24/confluence-exploit-leads-to-lockbit-ransomware/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_provider:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection_service:
+  - ServiceName|contains|all:
+    - AnyDesk
+    - Service
+  - ImagePath|contains: AnyDesk
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 530a6faa-ff3d-4022-b315-50828e77eef5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_anydesk.yml
+falsepositives:
+- Legitimate usage of the anydesk tool
+notes:
+  quarantine_reason: 'upstream status: test'

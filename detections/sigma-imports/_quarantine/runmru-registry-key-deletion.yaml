@@ -1,0 +1,43 @@
+id: sigmahq-sigma-c11aecef-9c37-45a6-9c07-bc0782f963fd
+name: RunMRU Registry Key Deletion
+description: 'Detects deletion of the RunMRU registry key, which stores the history
+  of commands executed via the Run dialog.
+
+  In the clickfix techniques, the phishing lures instruct users to open a run dialog
+  through (Win + R) and execute malicious commands.
+
+  Adversaries may delete this key to cover their tracks after executing commands.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://www.zscaler.com/blogs/security-research/coldriver-updates-arsenal-baitswitch-and-simplefix
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \reg.exe
+  - OriginalFileName: reg.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' del'
+    - \Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c11aecef-9c37-45a6-9c07-bc0782f963fd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_delete_runmru.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

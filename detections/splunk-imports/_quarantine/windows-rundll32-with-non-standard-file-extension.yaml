@@ -1,0 +1,71 @@
+id: splunk-security-content-f52b55ce-41ad-4802-9909-fbd7cc8410a5
+name: Windows Rundll32 with Non-Standard File Extension
+description: 'This analytic identifies the instance of rundll32.exe process loading
+  a non-standard Windows modules file extension.
+
+  This behavior is not common and can be associated with malicious activities, such
+  as the Gh0st RAT backdoor. This technique is to evade possible detection by security
+  tools that monitors a suspicious dll loading activity.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.ghost_rat
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rrasm/22ad9f0e-4349-43e0-92b3-37f7a9c7ca41
+- https://s7d2.scene7.com/is/content/cylance/prod/cylance-web/en-us/resources/knowledge-center/resource-library/reports/Op_Dust_Storm_Report.pdf
+- https://www.sentinelone.com/blog/the-curious-case-of-gh0st-malware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Endpoint.Processes WHERE\n\n\
+    `process_rundll32`\n(\n    Processes.parent_process_path IN (\n        \"*:\\\\\
+    PerfLogs\\\\*\",\n        \"*:\\\\ProgramData\\\\*\",\n        \"*:\\\\Recycle.bin\\\
+    \\*\",\n        \"*:\\\\Users\\\\Administrator\\\\Music\\\\*\",\n        \"*:\\\
+    \\Users\\\\Public\\\\*\",\n        \"*:\\\\Windows\\\\Cursors\\\\*\",\n      \
+    \  \"*:\\\\Windows\\\\debug\\\\*\",\n        \"*:\\\\Windows\\\\fonts\\\\*\",\n\
+    \        \"*:\\\\Windows\\\\INF\\\\*\",\n        \"*:\\\\Windows\\\\Media\\\\\
+    *\",\n        \"*:\\\\Windows\\\\Prefetch\\\\*\",\n        \"*:\\\\Windows\\\\\
+    repair\\\\*\",\n        \"*:\\\\Windows\\\\Tasks\\\\*\",\n        \"*\\\\Temp\\\
+    \\*\"\n    )\n    OR\n    Processes.parent_process_name IN (\n        \"*cmd.exe*\"\
+    ,\n        \"*cscript.exe*\",\n        \"*mshta.exe*\",\n        \"*powershell.exe*\"\
+    ,\n        \"*pwsh.exe*\",\n        \"*regsvr32.exe*\",\n        \"*wscript.exe*\"\
+    \n    )\n)\nNOT Processes.process IN (\n        \"*.cpl*\",\n        \"*.dll*\"\
+    ,\n        \"*.drv*\",\n        \"*.inf*\",\n        \"*.mui*\",\n        \"*.ocx*\"\
+    \n    )\n\nBY Processes.action Processes.dest Processes.original_file_name\n \
+    \  Processes.parent_process_exec Processes.parent_process_guid\n   Processes.parent_process_id\
+    \ Processes.parent_process_path\n   Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n   Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_path Processes.user Processes.user_id\n   Processes.vendor_product\
+    \ Processes.parent_process_name\n   Processes.parent_process Processes.process_name\
+    \ Processes.process\n\n| `drop_dm_object_name(Processes)`\n\n| rex field=process\
+    \ \"^(?<cmd_base_process>[^\\s]+)\\s+\\\"?(?<cmd_base_first_param>[^,^\\\"^\\\
+    s]+).*?,(?<cmd_args>.*)$\"\n\n| rex field=cmd_base_first_param \"^(?<root>[^\\\
+    \\\\\\]+)\\\\\\\\(?<subdirs>[^\\\\\\\\]+)\"\n\n| eval folder_count = mvcount(split(cmd_base_first_param,\
+    \ \"\\\\\"))\n\n| where (\n            folder_count = 3\n            AND\n   \
+    \         NOT lower(subdirs) IN (\n                                    \"windows\"\
+    ,\n                                    \"program files\",\n                  \
+    \                  \"program files (x86)\"\n                                )\n\
+    \        )\n        OR\n        like(cmd_base_first_param, \"%:\\\\ProgramData\\\
+    \\%\")\n        OR\n        like(cmd_base_first_param, \"%:\\\\Users\\\\Public\\\
+    \\%\")\n        OR\n        like(cmd_base_first_param, \"%\\\\AppData\\\\Local\\\
+    \\Temp\\\\%\")\n        OR\n        like(cmd_base_first_param, \"%\\\\AppData\\\
+    \\Roaming\\\\%\")\n\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_rundll32_with_non_standard_file_extension_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f52b55ce-41ad-4802-9909-fbd7cc8410a5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rundll32_with_non_standard_file_extension.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

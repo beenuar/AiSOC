@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-wannacry-ransomware-via-sysmon
+name: wannacry_ransomware_via_sysmon
+description: wannacry_ransomware_via_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule wannacry_ransomware_via_sysmon {\n meta:\n    author = \"\
+    Florian Roth (rule), Tom U. @c_APT_ure (collection)\"\n    description = \"Detects\
+    \ WannaCry ransomware activity via Sysmon  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\
+    \ @c_APT_ure (collection).\"\n    reference = \"https://tdm.socprime.com/tdm/info/MDzDoSUuSPpn\"\
+    \n    version = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\") and ((re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\tasksche\\.exe`) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\mssecsvc\\.exe`) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\taskdl\\.exe`) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\@WanaDecryptor@.*`) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\taskhsvc\\.exe`) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\taskse\\.exe`) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\111\\.exe`) or re.regex($selection1.target.process.file.full_path, `.*\\\
+    \\lhdfrgui\\.exe`) or re.regex($selection1.target.process.file.full_path, `.*\\\
+    \\diskpart\\.exe`) or re.regex($selection1.target.process.file.full_path, `.*\\\
+    \\linuxnew\\.exe`) or re.regex($selection1.target.process.file.full_path, `.*\\\
+    \\wannacry\\.exe`)) or (re.regex($selection1.target.process.command_line, `.*vssadmin\
+    \ delete shadows.*`) or re.regex($selection1.target.process.command_line, `.*icacls\
+    \ .* /grant Everyone:F /T /C /Q.*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*bcdedit /set {default} recoveryenabled no.*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*wbadmin delete catalog -quiet.*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*@Please_Read_Me@\\.txt.*`))))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: wannacry_ransomware_via_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: wannacry_ransomware_via_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/wannacry_ransomware_via_sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

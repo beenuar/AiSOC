@@ -1,0 +1,52 @@
+id: sigmahq-sigma-a46c93b7-55ed-4d27-a41b-c259456c4746
+name: Linux Crypto Mining Pool Connections
+description: Detects process connections to a Monero crypto mining pool
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1496
+  categories:
+  - endpoint
+references:
+- https://www.poolwatch.io/coin/monero
+logsource:
+  product: linux
+  category: network_connection
+detection:
+  selection:
+    DestinationHostname:
+    - pool.minexmr.com
+    - fr.minexmr.com
+    - de.minexmr.com
+    - sg.minexmr.com
+    - ca.minexmr.com
+    - us-west.minexmr.com
+    - pool.supportxmr.com
+    - mine.c3pool.com
+    - xmr-eu1.nanopool.org
+    - xmr-eu2.nanopool.org
+    - xmr-us-east1.nanopool.org
+    - xmr-us-west1.nanopool.org
+    - xmr-asia1.nanopool.org
+    - xmr-jp1.nanopool.org
+    - xmr-au1.nanopool.org
+    - xmr.2miners.com
+    - xmr.hashcity.org
+    - xmr.f2pool.com
+    - xmrpool.eu
+    - pool.hashvault.pro
+    - moneroocean.stream
+    - monerocean.stream
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a46c93b7-55ed-4d27-a41b-c259456c4746
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/network_connection/net_connection_lnx_crypto_mining_indicators.yml
+falsepositives:
+- Legitimate use of crypto miners

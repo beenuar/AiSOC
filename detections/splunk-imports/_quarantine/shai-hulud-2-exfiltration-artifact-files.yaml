@@ -1,0 +1,50 @@
+id: splunk-security-content-9e7d3c0f-4a5b-6c8d-1e2f-3a4b5c6d7e8f
+name: Shai-Hulud 2 Exfiltration Artifact Files
+description: 'Detects creation of exfiltration artifact files associated with Shai-Hulud
+  2.0 npm supply
+
+  chain malware. The malware creates cloud.json, contents.json, environment.json,
+  truffleSecrets.json,
+
+  and actionsSecrets.json files containing harvested credentials from AWS, Azure,
+  GCP, GitHub secrets,
+
+  and environment variables. These files are staged before being pushed to attacker-controlled
+  repositories.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1074.001
+  - T1552.001
+  - T1195.002
+  categories:
+  - endpoint
+references:
+- https://www.wiz.io/blog/shai-hulud-2-0-ongoing-supply-chain-attack
+- https://securelist.com/shai-hulud-worm-infects-500-npm-packages-in-a-supply-chain-attack/117547/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\n\nfrom datamodel=Endpoint.Filesystem where\n\nFilesystem.file_name\
+    \ IN (\n  \"cloud.json\",\n  \"contents.json\",\n  \"environment.json\",\n  \"\
+    truffleSecrets.json\",\n  \"actionsSecrets.json\"\n)\n\nby Filesystem.action Filesystem.dest\
+    \ Filesystem.file_access_time Filesystem.file_create_time\n   Filesystem.file_hash\
+    \ Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path Filesystem.file_acl\
+    \ Filesystem.file_size Filesystem.process_guid Filesystem.process_id Filesystem.user\n\
+    \   Filesystem.vendor_product\n\n| `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `shai_hulud_2_exfiltration_artifact_files_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9e7d3c0f-4a5b-6c8d-1e2f-3a4b5c6d7e8f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/shai_hulud_2_exfiltration_artifact_files.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

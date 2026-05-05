@@ -1,0 +1,111 @@
+id: sigmahq-sigma-2617e7ed-adb7-40ba-b0f3-8f9945fe6c09
+name: Suspicious SYSTEM User Process Creation
+description: Detects a suspicious process creation as SYSTEM user (suspicious program
+  or command line parameter)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1134
+  - T1003
+  - T1027
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://tools.thehacker.recipes/mimikatz/modules
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    IntegrityLevel:
+    - System
+    - S-1-16-16384
+    User|contains:
+    - AUTHORI
+    - AUTORI
+  selection_special:
+  - Image|endswith:
+    - \calc.exe
+    - \cscript.exe
+    - \forfiles.exe
+    - \hh.exe
+    - \mshta.exe
+    - \ping.exe
+    - \wscript.exe
+  - CommandLine|re: net\s+user\s+
+  - CommandLine|contains:
+    - ' -NoP '
+    - ' -W Hidden '
+    - ' -decode '
+    - ' /decode '
+    - ' /urlcache '
+    - ' -urlcache '
+    - ' -e* JAB'
+    - ' -e* SUVYI'
+    - ' -e* SQBFAFgA'
+    - ' -e* aWV4I'
+    - ' -e* IAB'
+    - ' -e* PAA'
+    - ' -e* aQBlAHgA'
+    - vssadmin delete shadows
+    - reg SAVE HKLM
+    - ' -ma '
+    - Microsoft\Windows\CurrentVersion\Run
+    - .downloadstring(
+    - .downloadfile(
+    - ' /ticket:'
+    - 'dpapi::'
+    - event::clear
+    - event::drop
+    - id::modify
+    - 'kerberos::'
+    - 'lsadump::'
+    - 'misc::'
+    - 'privilege::'
+    - 'rpc::'
+    - 'sekurlsa::'
+    - 'sid::'
+    - 'token::'
+    - vault::cred
+    - vault::list
+    - ' p::d '
+    - ;iex(
+    - MiniDump
+  filter_main_ping:
+    CommandLine|contains|all:
+    - ping
+    - 127.0.0.1
+    - ' -n '
+  filter_vs:
+    Image|endswith: \PING.EXE
+    ParentCommandLine|contains: \DismFoDInstall.cmd
+  filter_config_mgr:
+    ParentImage|contains: :\Packages\Plugins\Microsoft.GuestConfiguration.ConfigurationforWindows\
+  filter_java:
+    ParentImage|contains:
+    - :\Program Files (x86)\Java\
+    - :\Program Files\Java\
+    ParentImage|endswith: \bin\javaws.exe
+    Image|contains:
+    - :\Program Files (x86)\Java\
+    - :\Program Files\Java\
+    Image|endswith: \bin\jp2launcher.exe
+    CommandLine|contains: ' -ma '
+  condition: all of selection* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2617e7ed-adb7-40ba-b0f3-8f9945fe6c09
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_system_user_anomaly.yml
+falsepositives:
+- Administrative activity
+- Scripts and administrative tools used in the monitored environment
+- Monitoring activity
+notes:
+  quarantine_reason: 'upstream status: test'

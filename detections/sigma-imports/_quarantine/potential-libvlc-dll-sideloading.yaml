@@ -1,0 +1,38 @@
+id: sigmahq-sigma-bf9808c4-d24f-44a2-8398-b65227d406b6
+name: Potential Libvlc.DLL Sideloading
+description: Detects potential DLL sideloading of "libvlc.dll", a DLL that is legitimately
+  used by "VLC.exe"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/23/c/earth-preta-updated-stealthy-strategies.html
+- https://hijacklibs.net/entries/3rd_party/vlc/libvlc.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \libvlc.dll
+  filter_main_vlc:
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\VideoLAN\VLC\
+    - C:\Program Files\VideoLAN\VLC\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bf9808c4-d24f-44a2-8398-b65227d406b6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_libvlc.yml
+falsepositives:
+- False positives are expected if VLC is installed in non-default locations
+notes:
+  quarantine_reason: 'upstream status: test'

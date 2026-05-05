@@ -1,0 +1,67 @@
+id: chronicle-detection-rules-process-memory-dump-via-rdrleakdiag
+name: process_memory_dump_via_rdrleakdiag
+description: process_memory_dump_via_rdrleakdiag
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule process_memory_dump_via_rdrleakdiag {\n\n  meta:\n    author = \"Cedric\
+    \ MAURUGEON, Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel, Nasreddine\
+    \ Bencherchali (Nextron Systems)\"\n    description = \"Detects the use of the\
+    \ Microsoft Windows Resource Leak Diagnostic tool rdrleakdiag.exe to dump process\
+    \ memory\"\n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_rdrleakdiag_process_dumping.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Process Memory Dump via RdrLeakDiag.exe\"\n    sigma_uuid\
+    \ = \"edadb1e5-5919-4e4c-8462-a9e643b02c4b\"\n    sigma_status = \"test\"\n  \
+    \  rule_id = \"mr_89eca7b6-5b7e-4bd1-978e-156bd00f5324\"\n    tactic = \"TA0006\"\
+    \n    technique = \"T1003.001\"\n    type = \"Detection\"\n    data_source = \"\
+    Windows Event Logs\"\n    platform = \"Windows\"\n    severity = \"High\"\n  \
+    \  priority = \"High\"\n    false_positives = \"Unlikely\"\n\n  events:\n    $process.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n    (\n        re.regex($process.target.process.file.full_path,\
+    \ `rdrleakdiag\\.exe$`) nocase or\n        $process.src.process.file.full_path\
+    \ = \"RdrLeakDiag.exe\" nocase\n    )\n    re.regex($process.target.process.command_line,\
+    \ `(/|full)memdmp`) nocase\n    re.regex($process.target.process.command_line,\
+    \ `/(o|p)`) nocase\n\n    $process.principal.hostname = $hostname\n\n  match:\n\
+    \    $hostname over 5m\n\n  outcome:\n    //example usage of specifying test user\
+    \ and hostname to adjust risk score\n    $risk_score = max(if($process.principal.user.userid\
+    \ = \"user\" and $process.principal.hostname = \"hostname\", 0, 15))\n    $principal_process_pid\
+    \ = array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specfic_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specfic_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specfic_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n    $log_type = array_distinct(strings.concat($process.metadata.log_type,\"\
+    /\",$process.metadata.product_event_type))\n\n  condition:\n    $process\n}"
+  chronicle_rule_name: process_memory_dump_via_rdrleakdiag
+provenance:
+  source: chronicle/detection-rules
+  source_id: process_memory_dump_via_rdrleakdiag
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/process_memory_dump_via_rdrleakdiag.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

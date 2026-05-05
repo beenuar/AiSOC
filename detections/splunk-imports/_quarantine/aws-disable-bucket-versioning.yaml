@@ -1,0 +1,41 @@
+id: splunk-security-content-657902a9-987d-4879-a1b2-e7a65512824b
+name: AWS Disable Bucket Versioning
+description: The following analytic detects when AWS S3 bucket versioning is suspended
+  by a user. It leverages AWS CloudTrail logs to identify `PutBucketVersioning` events
+  with the `VersioningConfiguration.Status` set to `Suspended`. This activity is significant
+  because disabling versioning can prevent recovery of deleted or modified data, which
+  is a common tactic in ransomware attacks. If confirmed malicious, this action could
+  lead to data loss and hinder recovery efforts, severely impacting data integrity
+  and availability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - cloud
+references:
+- https://invictus-ir.medium.com/ransomware-in-the-cloud-7f14805bbe82
+- https://bleemb.medium.com/data-exfiltration-with-native-aws-s3-features-c94ae4d13436
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName= PutBucketVersioning \"requestParameters.VersioningConfiguration.Status\"\
+    =Suspended\n  | rename user_name as user, requestParameters.bucketName as bucket_name\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY signature\
+    \ dest user\n       user_agent src vendor_account\n       vendor_region vendor_product\
+    \ bucket_name\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_disable_bucket_versioning_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 657902a9-987d-4879-a1b2-e7a65512824b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_disable_bucket_versioning.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-15904280-565c-4b73-9303-3291f964e7f9
+name: Potential Persistence Attempt Via ErrorHandler.Cmd
+description: 'Detects creation of a file named "ErrorHandler.cmd" in the "C:\WINDOWS\Setup\Scripts\"
+  directory which could be used as a method of persistence
+
+  The content of C:\WINDOWS\Setup\Scripts\ErrorHandler.cmd is read whenever some tools
+  under C:\WINDOWS\System32\oobe\ (e.g. Setup.exe) fail to run for any reason.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2022/01/16/beyond-good-ol-run-key-part-135/
+- https://github.com/last-byte/PersistenceSniper
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \WINDOWS\Setup\Scripts\ErrorHandler.cmd
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 15904280-565c-4b73-9303-3291f964e7f9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_errorhandler_persistence.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

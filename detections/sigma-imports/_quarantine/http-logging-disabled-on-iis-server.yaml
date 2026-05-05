@@ -1,0 +1,38 @@
+id: sigmahq-sigma-e8ebd53a-30c2-45bd-81bb-74befba07bdb
+name: HTTP Logging Disabled On IIS Server
+description: Detects changes to of the IIS server configuration in order to disable
+  HTTP logging for successful requests.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/iis/manage/provisioning-and-managing-iis/configure-logging-in-iis
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://learn.microsoft.com/en-us/iis/configuration/system.webserver/httplogging
+logsource:
+  product: windows
+  service: iis-configuration
+detection:
+  selection:
+    EventID: 29
+    Configuration: /system.webServer/httpLogging/@dontLog
+    NewValue: 'true'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e8ebd53a-30c2-45bd-81bb-74befba07bdb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/iis-configuration/win_iis_logging_http_disabled.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

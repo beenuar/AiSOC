@@ -1,0 +1,32 @@
+id: sigmahq-sigma-c8557060-9221-4448-8794-96320e6f3e74
+name: Windows PowerShell User Agent
+description: Detects Windows PowerShell Web Access
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://msdn.microsoft.com/powershell/reference/5.1/microsoft.powershell.utility/Invoke-WebRequest
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent|contains: ' WindowsPowerShell/'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c8557060-9221-4448-8794-96320e6f3e74
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_ua_powershell.yml
+falsepositives:
+- Administrative scripts that download files from the Internet
+- Administrative scripts that retrieve certain website contents
+notes:
+  quarantine_reason: 'upstream status: test'

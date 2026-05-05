@@ -1,0 +1,32 @@
+id: sigmahq-sigma-6cc2b61b-d97e-42ef-a9dd-8aa8dc951657
+name: Okta Unauthorized Access to App
+description: Detects when unauthorized access to app occurs.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    displayMessage: User attempted unauthorized access to app
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6cc2b61b-d97e-42ef-a9dd-8aa8dc951657
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_unauthorized_access_to_app.yml
+falsepositives:
+- User might of believe that they had access.
+notes:
+  quarantine_reason: 'upstream status: test'

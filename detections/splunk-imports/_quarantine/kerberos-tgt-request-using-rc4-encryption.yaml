@@ -1,0 +1,40 @@
+id: splunk-security-content-18916468-9c04-11ec-bdc6-acde48001122
+name: Kerberos TGT Request Using RC4 Encryption
+description: The following analytic detects a Kerberos Ticket Granting Ticket (TGT)
+  request using RC4-HMAC encryption (type 0x17) by leveraging Event 4768. This encryption
+  type is outdated and its presence may indicate an OverPass The Hash attack. Monitoring
+  this activity is crucial as it can signify credential theft, allowing adversaries
+  to authenticate to the Kerberos Distribution Center (KDC) using a stolen NTLM hash.
+  If confirmed malicious, this could enable unauthorized access to systems and resources,
+  potentially leading to lateral movement and further compromise within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1550
+  categories:
+  - endpoint
+references:
+- https://stealthbits.com/blog/how-to-detect-overpass-the-hash-attacks/
+- https://www.thehacker.recipes/ad/movement/kerberos/ptk
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4768
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4768 TicketEncryptionType=0x17 ServiceName!=*$\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY ServiceName\
+    \ src_ip dest\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `kerberos_tgt_request_using_rc4_encryption_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 18916468-9c04-11ec-bdc6-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/kerberos_tgt_request_using_rc4_encryption.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

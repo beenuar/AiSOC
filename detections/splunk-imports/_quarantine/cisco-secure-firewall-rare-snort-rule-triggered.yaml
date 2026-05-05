@@ -1,0 +1,42 @@
+id: splunk-security-content-e20313d2-7d63-4fcf-b2d9-d6e12c6c7bd7
+name: Cisco Secure Firewall - Rare Snort Rule Triggered
+description: This analytic identifies Snort signatures that have triggered only once
+  in the past 7 days across all Cisco Secure Firewall IntrusionEvent logs. While these
+  rules typically do not trigger in day-to-day network activity, their sudden appearance
+  may indicate early-stage compromise, previously unseen malware, or reconnaissance
+  activity against less commonly exposed services. Investigating these outliers can
+  provide valuable insight into new or low-noise adversary behaviors.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1598
+  - T1583.006
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent earliest=-7d\n| stats\
+    \ dc(_time) as TriggerCount min(_time) as firstTime max(_time) as lastTime\n \
+    \       values(signature) as signature\n        values(src) as src\n        values(dest)\
+    \ as dest\n        values(dest_port) as dest_port\n        values(transport) as\
+    \ transport\n        values(app) as app\n        values(rule) as rule\n      \
+    \  by signature_id class_desc MitreAttackGroups InlineResult InlineResultReason\n\
+    | where TriggerCount = 1\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___rare_snort_rule_triggered_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e20313d2-7d63-4fcf-b2d9-d6e12c6c7bd7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___rare_snort_rule_triggered.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

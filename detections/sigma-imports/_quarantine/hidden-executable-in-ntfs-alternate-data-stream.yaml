@@ -1,0 +1,38 @@
+id: sigmahq-sigma-b69888d4-380c-45ce-9cf9-d9ce46e67821
+name: Hidden Executable In NTFS Alternate Data Stream
+description: Detects the creation of an ADS (Alternate Data Stream) that contains
+  an executable by looking at a non-empty Imphash
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0xrawsec/status/1002478725605273600?s=21
+logsource:
+  product: windows
+  category: create_stream_hash
+  definition: 'Requirements: Sysmon or equivalent configured with Imphash logging'
+detection:
+  selection:
+    Hash|contains: IMPHASH=
+  filter_main_null:
+    Hash|contains: IMPHASH=00000000000000000000000000000000
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b69888d4-380c-45ce-9cf9-d9ce46e67821
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_stream_hash/create_stream_hash_ads_executable.yml
+falsepositives:
+- This rule isn't looking for any particular binary characteristics. As legitimate
+  installers and programs were seen embedding hidden binaries in their ADS. Some false
+  positives are expected from browser processes and similar.
+notes:
+  quarantine_reason: 'upstream status: test'

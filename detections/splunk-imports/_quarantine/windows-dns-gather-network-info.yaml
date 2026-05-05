@@ -1,0 +1,45 @@
+id: splunk-security-content-347e0892-e8f3-4512-afda-dc0e3fa996f3
+name: Windows DNS Gather Network Info
+description: The following analytic detects the use of the dnscmd.exe command to enumerate
+  DNS records. It leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process command-line executions. This activity is significant as it
+  may indicate an adversary gathering network information, a common precursor to more
+  targeted attacks. If confirmed malicious, this behavior could enable attackers to
+  map the network, identify critical assets, and plan subsequent actions, potentially
+  leading to data exfiltration or further compromise of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1590.002
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/3718487
+- https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ = \"dnscmd.exe\" Processes.process = \"* /enumrecords *\"\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_dns_gather_network_info_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 347e0892-e8f3-4512-afda-dc0e3fa996f3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_dns_gather_network_info.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

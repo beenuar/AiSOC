@@ -1,0 +1,85 @@
+id: chronicle-detection-rules-rdp-sensitive-settings-changed
+name: rdp_sensitive_settings_changed
+description: rdp_sensitive_settings_changed
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule rdp_sensitive_settings_changed {\n\n  meta:\n    author = \"Samir Bousseaden,\
+    \ David ANDRE, Roberto Rodriguez @Cyb3rWard0g, Nasreddine Bencherchali\"\n   \
+    \ description = \"Detects tampering of RDP Terminal Service/Server sensitive settings.\
+    \ Such as allowing unauthorized users access to a system via the 'fAllowUnsolicited'\
+    \ or enabling RDP via 'fDenyTSConnections'...etc\"\n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/registry/registry_set/registry_set_terminal_server_tampering.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"RDP Sensitive Settings Changed\"\n    rule_id = \"mr_4c75375c-7ebf-4f9f-9b30-7aaab63dba8d\"\
+    \n    sigma_uuid = \"3f6b7b62-61aa-45db-96bd-9c31b36b653c\"\n    sigma_status\
+    \ = \"test\"\n    tactic = \"TA0005\"\n    //tactic = \"TA0003\"\n    technique\
+    \ = \"T1112\"\n    type = \"Detection\"\n    data_source = \"Windows Registry\"\
+    \n    platform = \"Windows\"\n    severity = \"High\"\n    priority = \"High\"\
+    \n    false_positives = \"Some of the keys mentioned here could be modified by\
+    \ an administrator while setting group policy\"\n\n  events:\n    $reg.metadata.event_type\
+    \ = \"REGISTRY_MODIFICATION\"\n    (\n        (\n            (\n             \
+    \   strings.contains(strings.to_lower($reg.target.registry.registry_key), \"\\\
+    \\control\\\\terminal server\\\\\") or\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\windows nt\\\\terminal services\\\\\")\n            ) and\n          \
+    \  re.regex($reg.target.registry.registry_key, `\\\\Shadow$`) nocase and\n   \
+    \         (\n                $reg.target.registry.registry_value_data = \"DWORD\
+    \ (0x00000001)\" nocase or\n                $reg.target.registry.registry_value_data\
+    \ = \"DWORD (0x00000002)\" nocase or\n                $reg.target.registry.registry_value_data\
+    \ = \"DWORD (0x00000003)\" nocase or\n                $reg.target.registry.registry_value_data\
+    \ = \"DWORD (0x00000004)\" nocase\n            )\n        )\n        or\n    \
+    \    (\n            (\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\control\\\\terminal server\\\\\") or\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\windows nt\\\\terminal services\\\\\")\n            ) and\n          \
+    \  (\n                re.regex($reg.target.registry.registry_key, `\\\\DisableRemoteDesktopAntiAlias$`)\
+    \ nocase or\n                re.regex($reg.target.registry.registry_key, `\\\\\
+    DisableSecuritySettings$`) nocase or\n                re.regex($reg.target.registry.registry_key,\
+    \ `\\\\fAllowUnsolicited$`) nocase or\n                re.regex($reg.target.registry.registry_key,\
+    \ `\\\\fAllowUnsolicitedFullControl$`) nocase\n            ) and\n           \
+    \ $reg.target.registry.registry_value_data = \"DWORD (0x00000001)\" nocase\n \
+    \       )\n        or\n        (\n            strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\control\\\\terminal server\\\\initialprogram\") or\n            strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\control\\\\terminal server\\\\winstations\\\\rdp-tcp\\\\initialprogram\"\
+    ) or\n            strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\services\\\\termservice\\\\parameters\\\\servicedll\") or\n          \
+    \  strings.contains(strings.to_lower($reg.target.registry.registry_key), \"\\\\\
+    windows nt\\\\terminal services\\\\initialprogram\")\n        )\n    )\n    $reg.principal.hostname\
+    \ = $hostname\n\n  match:\n    $hostname over 5m\n\n  outcome:\n    //example\
+    \ usage of specifying test user and hostname to adjust risk score\n    $risk_score\
+    \ = max(if($reg.principal.user.userid = \"user\" and $reg.principal.hostname =\
+    \ \"hostname\", 0, 15))\n    $principal_hostname = array_distinct($reg.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($reg.principal.process.pid)\n   \
+    \ $principal_process_file_full_path = array_distinct($reg.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($reg.principal.process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($reg.principal.user.userid)\n   \
+    \ $target_registry_key = array_distinct($reg.target.registry.registry_key)\n \
+    \   $target_registry_value_data = array_distinct($reg.target.registry.registry_value_data)\n\
+    \    $log_type = array_distinct(strings.concat($reg.metadata.log_type,\"/\",$reg.metadata.product_event_type))\n\
+    \n  condition:\n    $reg\n}"
+  chronicle_rule_name: rdp_sensitive_settings_changed
+provenance:
+  source: chronicle/detection-rules
+  source_id: rdp_sensitive_settings_changed
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/rdp_sensitive_settings_changed.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

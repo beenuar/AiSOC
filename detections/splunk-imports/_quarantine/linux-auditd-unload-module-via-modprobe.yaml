@@ -1,0 +1,40 @@
+id: splunk-security-content-90964d6a-4b5f-409a-85bd-95e261e03fe9
+name: Linux Auditd Unload Module Via Modprobe
+description: The following analytic detects suspicious use of the `modprobe` command
+  to unload kernel modules, which may indicate an attempt to disable critical system
+  components or evade detection. The `modprobe` utility manages kernel modules, and
+  unauthorized unloading of modules can disrupt system security features, remove logging
+  capabilities, or conceal malicious activities. By monitoring for unusual or unauthorized
+  `modprobe` operations involving module unloading, this analytic helps identify potential
+  tampering with kernel functionality, enabling security teams to investigate and
+  address possible threats to system integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.006
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` execve_command = \"*modprobe*\" AND execve_command =\
+    \ \"*-r *\"\n  | rename host as dest\n  | rename comm as process_name\n  | rename\
+    \ exe as process\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY argc execve_command dest\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `linux_auditd_unload_module_via_modprobe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 90964d6a-4b5f-409a-85bd-95e261e03fe9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_unload_module_via_modprobe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

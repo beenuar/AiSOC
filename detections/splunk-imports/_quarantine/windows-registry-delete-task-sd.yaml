@@ -1,0 +1,51 @@
+id: splunk-security-content-ffeb7893-ff06-446f-815b-33ca73224e92
+name: Windows Registry Delete Task SD
+description: 'The following analytic detects a process attempting to delete a scheduled
+  task''s Security Descriptor (SD) from the registry path of that task.
+
+  It leverages the Endpoint.Registry data model to identify registry actions performed
+  by the SYSTEM user, specifically targeting deletions of the SD value.
+
+  This activity is significant as it may indicate an attempt to remove evidence of
+  a scheduled task for defense evasion.
+
+  If confirmed malicious, it suggests an attacker with privileged access trying to
+  hide their tracks, potentially compromising system integrity and security.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  - T1562
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/04/12/tarrask-malware-uses-scheduled-tasks-for-defense-evasion/
+- https://gist.github.com/MHaggis/5f7fd6745915166fc6da863d685e2728
+- https://gist.github.com/MHaggis/b246e2fae6213e762a6e694cabaf0c17
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Endpoint.Registry where\n\n\
+    Registry.registry_path IN (\"*\\\\Schedule\\\\TaskCache\\\\Tree\\\\*\")\nRegistry.user=\"\
+    SYSTEM\"\n(\n  Registry.registry_value_name=\"SD\"\n  OR\n  Registry.registry_key_name=\"\
+    SD\"\n)\nRegistry.action=deleted\n\nby Registry.action Registry.dest Registry.process_guid\n\
+    \   Registry.process_id Registry.registry_hive\n   Registry.registry_path Registry.registry_key_name\n\
+    \   Registry.registry_value_data Registry.registry_value_name\n   Registry.registry_value_type\
+    \ Registry.status Registry.user\n   Registry.vendor_product\n\n| `drop_dm_object_name(Registry)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_registry_delete_task_sd_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ffeb7893-ff06-446f-815b-33ca73224e92
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_registry_delete_task_sd.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,48 @@
+id: sigmahq-sigma-ada3bc4f-f0fd-42b9-ba91-e105e8af7342
+name: Server Side Template Injection Strings
+description: Detects SSTI attempts sent via GET requests in access logs
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1221
+  categories:
+  - application
+references:
+- https://book.hacktricks.xyz/pentesting-web/ssti-server-side-template-injection
+- https://github.com/payloadbox/ssti-payloads
+logsource:
+  category: webserver
+detection:
+  select_method:
+    cs-method: GET
+  keywords:
+  - ={{
+  - =%7B%7B
+  - =${
+  - =$%7B
+  - =<%=
+  - =%3C%25=
+  - =@(
+  - freemarker.template.utility.Execute
+  - .getClass().forName('javax.script.ScriptEngineManager')
+  - T(org.apache.commons.io.IOUtils)
+  filter:
+    sc-status: 404
+  condition: select_method and keywords and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ada3bc4f-f0fd-42b9-ba91-e105e8af7342
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_ssti_in_access_logs.yml
+falsepositives:
+- User searches in search boxes of the respective website
+- Internal vulnerability scanners can cause some serious FPs when used, if you experience
+  a lot of FPs due to this think of adding more filters such as "User Agent" strings
+  and more response codes
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: splunk-security-content-f64da023-b988-4775-8d57-38e512beb56e
+name: GetDomainComputer with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-DomainComputer`
+  commandlet using PowerShell Script Block Logging (EventCode=4104). This commandlet
+  is part of PowerView, a tool often used for enumerating domain computers within
+  Windows environments. The detection leverages script block text analysis to identify
+  this specific command. Monitoring this activity is crucial as it can indicate an
+  adversary's attempt to gather information about domain computers, which is a common
+  step in Active Directory reconnaissance. If confirmed malicious, this activity could
+  lead to further network enumeration and potential lateral movement within the domain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-DomainComputer/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-DomainComputer*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `getdomaincomputer_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f64da023-b988-4775-8d57-38e512beb56e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getdomaincomputer_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

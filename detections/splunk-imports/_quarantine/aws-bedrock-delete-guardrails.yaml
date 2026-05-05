@@ -1,0 +1,44 @@
+id: splunk-security-content-7a5e3d62-f743-11ee-9f6e-acde48001122
+name: AWS Bedrock Delete GuardRails
+description: The following analytic identifies attempts to delete AWS Bedrock GuardRails,
+  which are security controls designed to prevent harmful, biased, or inappropriate
+  AI outputs. It leverages AWS CloudTrail logs to detect when a user or service calls
+  the DeleteGuardrail API. This activity is significant as it may indicate an adversary
+  attempting to remove safety guardrails after compromising credentials, potentially
+  to enable harmful or malicious model outputs. Removing guardrails could allow attackers
+  to extract sensitive information, generate offensive content, or bypass security
+  controls designed to prevent prompt injection and other AI-specific attacks. If
+  confirmed malicious, this could represent a deliberate attempt to manipulate model
+  behavior for harmful purposes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html
+- https://docs.aws.amazon.com/bedrock/latest/APIReference/API_DeleteGuardrail.html
+- https://attack.mitre.org/techniques/T1562/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cloudtrail` eventSource=bedrock.amazonaws.com eventName=DeleteGuardrail
+    | rename user_name as user | stats count min(_time) as firstTime max(_time) as
+    lastTime values(requestParameters.guardrailIdentifier) as guardrailIds by src
+    user user_agent vendor_account vendor_product dest signature vendor_region | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `aws_bedrock_delete_guardrails_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7a5e3d62-f743-11ee-9f6e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_bedrock_delete_guardrails.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

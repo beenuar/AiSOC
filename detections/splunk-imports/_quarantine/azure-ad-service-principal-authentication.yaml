@@ -1,0 +1,42 @@
+id: splunk-security-content-5a2ec401-60bb-474e-b936-1e66e7aa4060
+name: Azure AD Service Principal Authentication
+description: The following analytic identifies authentication events of service principals
+  in Azure Active Directory. It leverages the `azure_monitor_aad` data source, specifically
+  targeting "Sign-in activity" within ServicePrincipalSignInLogs. This detection gathers
+  details such as sign-in frequency, timing, source IPs, and accessed resources. Monitoring
+  these events is significant for SOC teams to distinguish between normal application
+  authentication and potential anomalies, which could indicate compromised credentials
+  or malicious activities. If confirmed malicious, attackers could gain unauthorized
+  access to resources, leading to data breaches or further exploitation within the
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1078/004/
+- https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-sign-ins#service-principal-sign-ins
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` operationName=\"Sign-in activity\" category=ServicePrincipalSignInLogs\n\
+    \  | rename properties.* as *\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest user src\n       vendor_account vendor_product\
+    \ resourceDisplayName\n       resourceId signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_service_principal_authentication_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5a2ec401-60bb-474e-b936-1e66e7aa4060
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_service_principal_authentication.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

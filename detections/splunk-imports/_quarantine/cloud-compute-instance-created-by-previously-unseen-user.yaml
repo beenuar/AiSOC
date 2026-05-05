@@ -1,0 +1,42 @@
+id: splunk-security-content-37a0ec8d-827e-4d6d-8025-cedf31f3a149
+name: Cloud Compute Instance Created By Previously Unseen User
+description: The following analytic identifies the creation of cloud compute instances
+  by users who have not previously created them. It leverages data from the Change
+  data model, focusing on 'create' actions by users, and cross-references with a baseline
+  of known user activities. This activity is significant as it may indicate unauthorized
+  access or misuse of cloud resources by new or compromised accounts. If confirmed
+  malicious, attackers could deploy unauthorized compute instances, leading to potential
+  data exfiltration, increased costs, or further exploitation within the cloud environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count earliest(_time) as\
+    \ firstTime, latest(_time) as lastTime values(All_Changes.object) as dest FROM\
+    \ datamodel=Change\n  WHERE All_Changes.action=created\n  BY All_Changes.user\
+    \ All_Changes.vendor_region\n| `drop_dm_object_name(\"All_Changes\")`\n| lookup\
+    \ previously_seen_cloud_compute_creations_by_user user as user OUTPUTNEW firstTimeSeen,\
+    \ enough_data\n| eventstats max(enough_data) as enough_data\n| where enough_data=1\n\
+    | eval firstTimeSeenUser=min(firstTimeSeen)\n| where isnull(firstTimeSeenUser)\
+    \ OR firstTimeSeenUser > relative_time(now(), \"-24h@h\")\n| table firstTime,\
+    \ user, dest, count vendor_region\n| `security_content_ctime(firstTime)`\n| `cloud_compute_instance_created_by_previously_unseen_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 37a0ec8d-827e-4d6d-8025-cedf31f3a149
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/cloud_compute_instance_created_by_previously_unseen_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,70 @@
+id: chronicle-detection-rules-recon-successful-logon-enumeration-powershell-t1033-cisa-report
+name: recon_successful_logon_enumeration_powershell_T1033_cisa_report
+description: recon_successful_logon_enumeration_powershell_T1033_cisa_report
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule recon_successful_logon_enumeration_powershell_T1033_cisa_report {\n\n \
+    \ meta:\n    author = \"Google Cloud Security\"\n    description = \"Detects the\
+    \ use of powershell to enumerate successful logins on a specific host\"\n    rule_id\
+    \ = \"mr_db589a2e-0a06-46b5-8479-f8e120ec0405\"\n    rule_name = \"MITRE ATT&CK\
+    \ T1033 Recon Successful Logon Enumeration Powershell CISA Report\"\n    type\
+    \ = \"hunt\"\n    platform = \"Windows\"\n    data_source = \"microsoft sysmon\"\
+    \n    tactic = \"TA0007\"\n    mitre_attack_technique = \"T1033\"\n    reference\
+    \ = \"https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF\"\
+    \n    severity = \"Info\"\n    priority = \"Info\"\n\n  events:\n    (\n     \
+    \   $process.metadata.event_type = \"PROCESS_LAUNCH\" and\n        // cisa report\
+    \ referenced cmd /c and other wmic switches like /user and /password, these have\
+    \ been excluded to focus on the commands being issued since\n        // focused\
+    \ on event code 4624 but could be modified to look for other event codes if needed\n\
+    \        re.regex($process.target.process.command_line, `(|cmd.*/c).*Get-EventLog.*security.*-instanceid.*4624`)\
+    \ nocase\n    )\n    or\n    (\n        $process.metadata.event_type = \"STATUS_UPDATE\"\
+    \ and\n        re.regex($process.security_result.description, `Get-EventLog.*security.*-instanceid.*4624`)\
+    \ nocase\n    )\n    $process.principal.hostname = $hostname\n\n  match:\n   \
+    \ $hostname over 15m\n\n  outcome:\n    $risk_score = 15\n    $event_count = count_distinct($process.metadata.id)\n\
+    \    $security_result_description = array_distinct($process.security_result.description)\n\
+    \    // added to populate alert graph with additional context\n    // Commented\
+    \ out principal.hostname because it is already represented in graph as match variable.\
+    \ If match changes, can uncomment to add to results\n    //$principal_hostname\
+    \ = array_distinct($process.principal.hostname)\n    $principal_process_pid =\
+    \ array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n\n  condition:\n    $process\n\
+    }"
+  chronicle_rule_name: recon_successful_logon_enumeration_powershell_T1033_cisa_report
+provenance:
+  source: chronicle/detection-rules
+  source_id: recon_successful_logon_enumeration_powershell_T1033_cisa_report
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/recon_successful_logon_enumeration_powershell_T1033_cisa_report.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

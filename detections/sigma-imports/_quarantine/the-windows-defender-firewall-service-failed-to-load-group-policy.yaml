@@ -1,0 +1,31 @@
+id: sigmahq-sigma-7ec15688-fd24-4177-ba43-1a950537ee39
+name: The Windows Defender Firewall Service Failed To Load Group Policy
+description: Detects activity when The Windows Defender Firewall service failed to
+  load Group Policy
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd364427(v=ws.10)
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID: 2009
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7ec15688-fd24-4177-ba43-1a950537ee39
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/firewall_as/win_firewall_as_failed_load_gpo.yml
+notes:
+  quarantine_reason: 'upstream status: test'

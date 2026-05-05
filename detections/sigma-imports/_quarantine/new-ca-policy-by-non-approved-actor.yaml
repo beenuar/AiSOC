@@ -1,0 +1,34 @@
+id: sigmahq-sigma-0922467f-db53-4348-b7bf-dee8d0d348c6
+name: New CA Policy by Non-approved Actor
+description: Monitor and alert on conditional access changes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-infrastructure
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Add conditional access policy
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0922467f-db53-4348-b7bf-dee8d0d348c6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_aad_secops_new_ca_policy_addedby_bad_actor.yml
+falsepositives:
+- Misconfigured role permissions
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+notes:
+  quarantine_reason: 'upstream status: test'

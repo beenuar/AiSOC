@@ -1,0 +1,43 @@
+id: mitre-car-car-2021-05-007
+name: CertUtil Download With VerifyCtl and Split Arguments
+description: Certutil.exe may download a file from a remote destination using `-VerifyCtl`.
+  This behavior does require a URL to be passed on the command-line. In addition,
+  `-f` (force) and `-split` (Split embedded ASN.1 elements, and save to files) will
+  be used. It is not entirely common for `certutil.exe` to contact public IP space.
+  \ During triage, capture any files on disk and review. Review the reputation of
+  the remote IP or domain in question. Using `-VerifyCtl`, the file will either be
+  written to the current working directory or `%APPDATA%\..\LocalLow\Microsoft\CryptnetUrlCache\Content\<hash>`.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode – CertUtil download with VerifyCtl
+    type: Pseudocode
+    code: "processes = search Process:Create\ncertutil_downloads = filter processes\
+      \ where (\n  exe = \"C:\\Windows\\System32\\certutil.exe\" AND command_line\
+      \ = *verifyctl* AND command_line = *split*)\noutput certutil_downloads\n"
+  - name: Splunk code
+    type: Splunk
+    code: '| tstats count min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Processes
+      where Processes.process_name=certutil.exe Processes.process=*verifyctl* Processes.process=*split*
+      by Processes.dest Processes.user Processes.parent_process Processes.process_name
+      Processes.process Processes.process_id Processes.parent_process_id'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-05-007
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-05-007.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,57 @@
+id: sigmahq-sigma-2267fe65-0681-42ad-9a6d-46553d3f3480
+name: WSL Child Process Anomaly
+description: Detects uncommon or suspicious child processes spawning from a WSL process.
+  This could indicate an attempt to evade parent/child relationship detections or
+  persistence attempts via cron using WSL
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Wsl/
+- https://twitter.com/nas_bench/status/1535431474429808642
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith:
+    - \wsl.exe
+    - \wslhost.exe
+  selection_children_images:
+    Image|endswith:
+    - \calc.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  selection_children_paths:
+    Image|contains:
+    - \AppData\Local\Temp\
+    - C:\Users\Public\
+    - C:\Windows\Temp\
+    - C:\Temp\
+    - \Downloads\
+    - \Desktop\
+  condition: selection_parent and 1 of selection_children_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2267fe65-0681-42ad-9a6d-46553d3f3480
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wsl_child_processes_anomalies.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

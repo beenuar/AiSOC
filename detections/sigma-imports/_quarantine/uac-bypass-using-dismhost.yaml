@@ -1,0 +1,41 @@
+id: sigmahq-sigma-853e74f9-9392-4935-ad3b-2e8c040dae86
+name: UAC Bypass Using DismHost
+description: Detects the pattern of UAC Bypass using DismHost DLL hijacking (UACMe
+  63)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|contains|all:
+    - C:\Users\
+    - \AppData\Local\Temp\
+    - \DismHost.exe
+    IntegrityLevel:
+    - High
+    - System
+    - S-1-16-16384
+    - S-1-16-12288
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 853e74f9-9392-4935-ad3b-2e8c040dae86
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_dismhost.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

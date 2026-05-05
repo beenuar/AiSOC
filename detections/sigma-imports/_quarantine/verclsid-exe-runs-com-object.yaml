@@ -1,0 +1,44 @@
+id: sigmahq-sigma-d06be4b9-8045-428b-a567-740a26d9db25
+name: Verclsid.exe Runs COM Object
+description: Detects when verclsid.exe is used to run COM object via GUID
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Verclsid/
+- https://gist.github.com/NickTyrer/0598b60112eaafe6d07789f7964290d5
+- https://bohops.com/2018/08/18/abusing-the-com-registry-structure-part-2-loading-techniques-for-evasion-and-persistence/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \verclsid.exe
+  - OriginalFileName: verclsid.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - /S
+    - /C
+  filter_main_runtimebroker:
+    ParentImage|endswith: C:\Windows\System32\RuntimeBroker.exe
+    CommandLine|contains|all:
+    - verclsid.exe" /S /C {
+    - '} /I {'
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d06be4b9-8045-428b-a567-740a26d9db25
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_verclsid_runs_com.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

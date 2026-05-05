@@ -1,0 +1,39 @@
+id: sigmahq-sigma-49d9671b-0a0a-4c09-8280-d215bfd30662
+name: Application Terminated Via Wmic.EXE
+description: Detects calls to the "terminate" function via wmic in order to kill an
+  application
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://cyble.com/blog/lockfile-ransomware-using-proxyshell-attack-to-deploy-ransomware/
+- https://www.bitdefender.com/files/News/CaseStudies/study/377/Bitdefender-Whitepaper-WMI-creat4871-en-EN-GenericUse.pdf
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \WMIC.exe
+  - OriginalFileName: wmic.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - call
+    - terminate
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 49d9671b-0a0a-4c09-8280-d215bfd30662
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_terminate_application.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

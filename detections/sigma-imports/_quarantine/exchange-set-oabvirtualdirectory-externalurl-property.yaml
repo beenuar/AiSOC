@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9db37458-4df2-46a5-95ab-307e7f29e675
+name: Exchange Set OabVirtualDirectory ExternalUrl Property
+description: Rule to detect an adversary setting OabVirtualDirectory External URL
+  property to a script in Exchange Management log
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/OTR_Community/status/1371053369071132675
+logsource:
+  product: windows
+  service: msexchange-management
+detection:
+  keywords:
+    '|all':
+    - Set-OabVirtualDirectory
+    - ExternalUrl
+    - Page_Load
+    - script
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9db37458-4df2-46a5-95ab-307e7f29e675
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/msexchange/win_exchange_set_oabvirtualdirectory_externalurl.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

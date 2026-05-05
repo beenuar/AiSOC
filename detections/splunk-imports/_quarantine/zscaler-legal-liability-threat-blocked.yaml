@@ -1,0 +1,39 @@
+id: splunk-security-content-bbf55ebf-c416-4f62-94d9-4064f2a28014
+name: Zscaler Legal Liability Threat Blocked
+description: The following analytic identifies significant legal liability threats
+  blocked by the Zscaler web proxy. It uses web proxy logs to track destinations,
+  device owners, users, URL categories, and actions associated with legal liability.
+  By leveraging statistics on unique fields, it ensures a precise focus on these threats.
+  This activity is significant for SOC as it helps enforce legal compliance and risk
+  management. If confirmed malicious, it could indicate attempts to access legally
+  sensitive or restricted content, potentially leading to legal repercussions and
+  compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - application
+references:
+- https://help.zscaler.com/zia/nss-feed-output-format-web-logs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zscaler_proxy` urlclass=\"Legal Liability\"\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY action deviceowner user\n      \
+    \ urlcategory url src\n       dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | dedup urlcategory\n  | `zscaler_legal_liability_threat_blocked_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bbf55ebf-c416-4f62-94d9-4064f2a28014
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/zscaler_legal_liability_threat_blocked.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

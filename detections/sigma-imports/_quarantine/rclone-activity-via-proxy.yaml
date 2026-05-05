@@ -1,0 +1,34 @@
+id: sigmahq-sigma-2c03648b-e081-41a5-b9fb-7d854a915091
+name: Rclone Activity via Proxy
+description: Detects the use of rclone, a command-line program to manage files on
+  cloud storage, via its default user-agent string
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567.002
+  categories:
+  - network
+references:
+- https://rclone.org/
+- https://www.kroll.com/en/insights/publications/cyber/new-m365-business-email-compromise-attacks-with-rclone
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent|startswith: rclone/v
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2c03648b-e081-41a5-b9fb-7d854a915091
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_ua_rclone.yml
+falsepositives:
+- Valid requests with this exact user agent to that is used by legitimate scripts
+  or sysadmin operations
+notes:
+  quarantine_reason: 'upstream status: test'

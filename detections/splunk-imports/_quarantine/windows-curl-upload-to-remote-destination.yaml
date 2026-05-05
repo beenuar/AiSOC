@@ -1,0 +1,48 @@
+id: splunk-security-content-42f8f1a2-4228-11ec-aade-acde48001122
+name: Windows Curl Upload to Remote Destination
+description: The following analytic detects the use of Windows Curl.exe to upload
+  a file to a remote destination. It identifies command-line arguments such as `-T`,
+  `--upload-file`, `-d`, `--data`, and `-F` in process execution logs. This activity
+  is significant because adversaries may use Curl to exfiltrate data or upload malicious
+  payloads. If confirmed malicious, this could lead to data breaches or further compromise
+  of the system. Analysts should review parallel processes and network logs to determine
+  if the upload was successful and isolate the endpoint if necessary.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://everything.curl.dev/usingcurl/uploads
+- https://techcommunity.microsoft.com/t5/containers/tar-and-curl-come-to-windows/ba-p/382409
+- https://twitter.com/d1r4c/status/1279042657508081664?s=20
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime from datamodel=Endpoint.Processes where\n(Processes.process_name=curl.exe\
+    \ OR Processes.original_file_name=Curl.exe)\nProcesses.process IN (\n  \"*-T *\"\
+    ,\n  \"*--upload-file *\",\n  \"*-d *\",\n  \"*--data *\",\n  \"*-F *\"\n)\nby\
+    \ Processes.action Processes.dest Processes.original_file_name Processes.parent_process\
+    \ Processes.parent_process_exec\n   Processes.parent_process_guid Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid Processes.process_hash Processes.process_id\n\
+    \   Processes.process_integrity_level Processes.process_name Processes.process_path\
+    \ Processes.user Processes.user_id\n   Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_curl_upload_to_remote_destination_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 42f8f1a2-4228-11ec-aade-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_curl_upload_to_remote_destination.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

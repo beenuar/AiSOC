@@ -1,0 +1,40 @@
+id: sigmahq-sigma-9e1bef8d-0fff-46f6-8465-9aa54e128c1e
+name: Use Of Hidden Paths Or Files
+description: Detects calls to hidden files or files located in hidden directories
+  in NIX systems.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1564.001/T1564.001.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name|contains: /.
+  filter:
+    name|contains:
+    - /.cache/
+    - /.config/
+    - /.pyenv/
+    - /.rustup/toolchains
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e1bef8d-0fff-46f6-8465-9aa54e128c1e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_hidden_binary_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

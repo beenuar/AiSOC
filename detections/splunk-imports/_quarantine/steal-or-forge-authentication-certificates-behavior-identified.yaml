@@ -1,0 +1,48 @@
+id: splunk-security-content-87ac670e-bbfd-44ca-b566-44e9f835518d
+name: Steal or Forge Authentication Certificates Behavior Identified
+description: The following analytic identifies potential threats related to the theft
+  or forgery of authentication certificates. It detects when five or more analytics
+  from the Windows Certificate Services story trigger within a specified timeframe.
+  This detection leverages aggregated risk scores and event counts from the Risk data
+  model. This activity is significant as it may indicate an ongoing attack aimed at
+  compromising authentication mechanisms. If confirmed malicious, attackers could
+  gain unauthorized access to sensitive systems and data, potentially leading to severe
+  security breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://research.splunk.com/stories/windows_certificate_services/
+- https://attack.mitre.org/techniques/T1649/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.analyticstories=\"\
+    Windows Certificate Services\" All_Risk.risk_object_type=\"system\"\n  BY All_Risk.risk_object\
+    \ All_Risk.risk_object_type All_Risk.annotations.mitre_attack.mitre_tactic\n|\
+    \ `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 5\n| `steal_or_forge_authentication_certificates_behavior_identified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 87ac670e-bbfd-44ca-b566-44e9f835518d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/steal_or_forge_authentication_certificates_behavior_identified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

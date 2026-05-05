@@ -1,0 +1,41 @@
+id: splunk-security-content-2f1c5fd1-4b8a-4f5d-a0e9-7d6a8e2f5e1e
+name: Detect DNS Query to Decommissioned S3 Bucket
+description: This detection identifies DNS queries to domains that match previously
+  decommissioned S3 buckets. This activity is significant because attackers may attempt
+  to recreate deleted S3 buckets that were previously public to hijack them for malicious
+  purposes. If successful, this could allow attackers to host malicious content or
+  exfiltrate data through compromised bucket names that may still be referenced by
+  legitimate applications.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - network
+references:
+- https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html
+- https://labs.watchtowr.com/8-million-requests-later-we-made-the-solarwinds-supply-chain-attack-look-amateur/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Network_Resolution\n  WHERE DNS.message_type=QUERY\n\
+    \  BY DNS.answer DNS.answer_count DNS.query\n     DNS.query_count DNS.reply_code_id\
+    \ DNS.src\n     DNS.vendor_product\n| `drop_dm_object_name(\"DNS\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| eval bucket_domain = lower(query)\n| lookup\
+    \ decommissioned_buckets bucketName as bucket_domain OUTPUT bucketName as match\n\
+    | where isnotnull(match)\n| `detect_dns_query_to_decommissioned_s3_bucket_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2f1c5fd1-4b8a-4f5d-a0e9-7d6a8e2f5e1e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_dns_query_to_decommissioned_s3_bucket.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

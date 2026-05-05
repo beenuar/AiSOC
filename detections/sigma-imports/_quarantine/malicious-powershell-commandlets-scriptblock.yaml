@@ -1,0 +1,242 @@
+id: sigmahq-sigma-89819aa4-bbd6-46bc-88ec-c7f7fe30efa6
+name: Malicious PowerShell Commandlets - ScriptBlock
+description: Detects Commandlet names from well-known PowerShell exploitation frameworks
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1482
+  - T1087
+  - T1087.001
+  - T1087.002
+  - T1069.001
+  - T1069.002
+  - T1069
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=2921
+- https://github.com/S3cur3Th1sSh1t/PowerSharpPack/tree/master/PowerSharpBinaries
+- https://github.com/BC-SECURITY/Invoke-ZeroLogon/blob/111d17c7fec486d9bb23387e2e828b09a26075e4/Invoke-ZeroLogon.ps1
+- https://github.com/xorrior/RandomPS-Scripts/blob/848c919bfce4e2d67b626cbcf4404341cfe3d3b6/Get-DXWebcamVideo.ps1
+- https://github.com/rvrsh3ll/Misc-Powershell-Scripts/blob/6f23bb41f9675d7e2d32bacccff75e931ae00554/OfficeMemScraper.ps1
+- https://github.com/dafthack/DomainPasswordSpray/blob/b13d64a5834694aa73fd2aea9911a83027c465a7/DomainPasswordSpray.ps1
+- https://unit42.paloaltonetworks.com/threat-assessment-black-basta-ransomware/
+- https://research.nccgroup.com/2022/06/06/shining-the-light-on-black-basta/
+- https://github.com/calebstewart/CVE-2021-1675
+- https://github.com/BloodHoundAD/BloodHound/blob/0927441f67161cc6dc08a53c63ceb8e333f55874/Collectors/AzureHound.ps1
+- https://bloodhound.readthedocs.io/en/latest/data-collection/azurehound.html
+- https://github.com/HarmJ0y/DAMP
+- https://github.com/samratashok/nishang
+- https://github.com/DarkCoderSc/PowerRunAsSystem/
+- https://github.com/besimorhino/powercat
+- https://github.com/Kevin-Robertson/Powermad
+- https://github.com/adrecon/ADRecon
+- https://github.com/adrecon/AzureADRecon
+- https://github.com/The-Viper-One/Invoke-PowerDPAPI/
+- https://github.com/Arno0x/DNSExfiltrator/
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Add-Exfiltration
+    - Add-Persistence
+    - Add-RegBackdoor
+    - Add-RemoteRegBackdoor
+    - Add-ScrnSaveBackdoor
+    - ConvertTo-Rc4ByteStream
+    - Decrypt-Hash
+    - Disable-ADIDNSNode
+    - Do-Exfiltration
+    - Enable-ADIDNSNode
+    - Enabled-DuplicateToken
+    - Exploit-Jboss
+    - Export-ADRCSV
+    - Export-ADRExcel
+    - Export-ADRHTML
+    - Export-ADRJSON
+    - Export-ADRXML
+    - Find-Fruit
+    - Find-GPOLocation
+    - Find-TrustedDocuments
+    - Get-ADIDNSNodeAttribute
+    - Get-ADIDNSNodeOwner
+    - Get-ADIDNSNodeTombstoned
+    - Get-ADIDNSPermission
+    - Get-ADIDNSZone
+    - Get-ChromeDump
+    - Get-ClipboardContents
+    - Get-FoxDump
+    - Get-GPPPassword
+    - Get-IndexedItem
+    - Get-KerberosAESKey
+    - Get-Keystrokes
+    - Get-LSASecret
+    - Get-PassHashes
+    - Get-RegAlwaysInstallElevated
+    - Get-RegAutoLogon
+    - Get-RemoteBootKey
+    - Get-RemoteCachedCredential
+    - Get-RemoteLocalAccountHash
+    - Get-RemoteLSAKey
+    - Get-RemoteMachineAccountHash
+    - Get-RemoteNLKMKey
+    - Get-RickAstley
+    - Get-SecurityPackages
+    - Get-ServiceFilePermission
+    - Get-ServicePermission
+    - Get-ServiceUnquoted
+    - Get-SiteListPassword
+    - Get-System
+    - Get-TimedScreenshot
+    - Get-UnattendedInstallFile
+    - Get-Unconstrained
+    - Get-USBKeystrokes
+    - Get-VaultCredential
+    - Get-VulnAutoRun
+    - Get-VulnSchTask
+    - Grant-ADIDNSPermission
+    - Gupt-Backdoor
+    - Invoke-ACLScanner
+    - Invoke-ADRecon
+    - Invoke-ADSBackdoor
+    - Invoke-AgentSmith
+    - Invoke-AllChecks
+    - Invoke-ARPScan
+    - Invoke-AzureHound
+    - Invoke-BackdoorLNK
+    - Invoke-BadPotato
+    - Invoke-BetterSafetyKatz
+    - Invoke-BypassUAC
+    - Invoke-Carbuncle
+    - Invoke-Certify
+    - Invoke-ConPtyShell
+    - Invoke-CredentialInjection
+    - Invoke-DAFT
+    - Invoke-DCSync
+    - Invoke-DinvokeKatz
+    - Invoke-DllInjection
+    - Invoke-DNSUpdate
+    - Invoke-DNSExfiltrator
+    - Invoke-DomainPasswordSpray
+    - Invoke-DowngradeAccount
+    - Invoke-EgressCheck
+    - Invoke-Eyewitness
+    - Invoke-FakeLogonScreen
+    - Invoke-Farmer
+    - Invoke-Get-RBCD-Threaded
+    - Invoke-Gopher
+    - Invoke-Grouper
+    - Invoke-HandleKatz
+    - Invoke-ImpersonatedProcess
+    - Invoke-ImpersonateSystem
+    - Invoke-InteractiveSystemPowerShell
+    - Invoke-Internalmonologue
+    - Invoke-Inveigh
+    - Invoke-InveighRelay
+    - Invoke-KrbRelay
+    - Invoke-LdapSignCheck
+    - Invoke-Lockless
+    - Invoke-MalSCCM
+    - Invoke-Mimikatz
+    - Invoke-Mimikittenz
+    - Invoke-MITM6
+    - Invoke-NanoDump
+    - Invoke-NetRipper
+    - Invoke-Nightmare
+    - Invoke-NinjaCopy
+    - Invoke-OfficeScrape
+    - Invoke-OxidResolver
+    - Invoke-P0wnedshell
+    - Invoke-Paranoia
+    - Invoke-PortScan
+    - Invoke-PoshRatHttp
+    - Invoke-PostExfil
+    - Invoke-PowerDump
+    - Invoke-PowerDPAPI
+    - Invoke-PowerShellTCP
+    - Invoke-PowerShellWMI
+    - Invoke-PPLDump
+    - Invoke-PsExec
+    - Invoke-PSInject
+    - Invoke-PsUaCme
+    - Invoke-ReflectivePEInjection
+    - Invoke-ReverseDNSLookup
+    - Invoke-Rubeus
+    - Invoke-RunAs
+    - Invoke-SafetyKatz
+    - Invoke-SauronEye
+    - Invoke-SCShell
+    - Invoke-Seatbelt
+    - Invoke-ServiceAbuse
+    - Invoke-ShadowSpray
+    - Invoke-Sharp
+    - Invoke-Shellcode
+    - Invoke-SMBScanner
+    - Invoke-Snaffler
+    - Invoke-Spoolsample
+    - Invoke-SpraySinglePassword
+    - Invoke-SSHCommand
+    - Invoke-StandIn
+    - Invoke-StickyNotesExtract
+    - Invoke-SystemCommand
+    - Invoke-Tasksbackdoor
+    - Invoke-Tater
+    - Invoke-Thunderfox
+    - Invoke-ThunderStruck
+    - Invoke-TokenManipulation
+    - Invoke-Tokenvator
+    - Invoke-TotalExec
+    - Invoke-UrbanBishop
+    - Invoke-UserHunter
+    - Invoke-VoiceTroll
+    - Invoke-Whisker
+    - Invoke-WinEnum
+    - Invoke-winPEAS
+    - Invoke-WireTap
+    - Invoke-WmiCommand
+    - Invoke-WMIExec
+    - Invoke-WScriptBypassUAC
+    - Invoke-Zerologon
+    - MailRaider
+    - New-ADIDNSNode
+    - New-HoneyHash
+    - New-InMemoryModule
+    - New-SOASerialNumberArray
+    - Out-Minidump
+    - PowerBreach
+    - 'powercat '
+    - PowerUp
+    - PowerView
+    - Remove-ADIDNSNode
+    - Remove-Update
+    - Rename-ADIDNSNode
+    - Revoke-ADIDNSPermission
+    - Set-ADIDNSNode
+    - Show-TargetScreen
+    - Start-CaptureServer
+    - Start-Dnscat2
+    - Start-WebcamRecorder
+    - VolumeShadowCopyTools
+  filter_optional_amazon_ec2:
+    ScriptBlockText|contains:
+    - Get-SystemDriveInfo
+    - C:\ProgramData\Amazon\EC2-Windows\Launch\Module\
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 89819aa4-bbd6-46bc-88ec-c7f7fe30efa6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_malicious_commandlets.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

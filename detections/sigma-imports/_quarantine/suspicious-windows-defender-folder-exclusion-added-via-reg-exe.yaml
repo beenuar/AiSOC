@@ -1,0 +1,45 @@
+id: sigmahq-sigma-48917adc-a28e-4f5d-b729-11e75da8941f
+name: Suspicious Windows Defender Folder Exclusion Added Via Reg.EXE
+description: Detects the usage of "reg.exe" to add Defender folder exclusions. Qbot
+  has been seen using this technique to add exclusions for folders within AppData
+  and ProgramData.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/02/07/qbot-likes-to-move-it-move-it/
+- https://redcanary.com/threat-detection-report/threats/qbot/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \reg.exe
+    CommandLine|contains:
+    - SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths
+    - SOFTWARE\Microsoft\Microsoft Antimalware\Exclusions\Paths
+    CommandLine|contains|all:
+    - 'ADD '
+    - '/t '
+    - 'REG_DWORD '
+    - '/v '
+    - '/d '
+    - '0'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48917adc-a28e-4f5d-b729-11e75da8941f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_defender_exclusion.yml
+falsepositives:
+- Legitimate use
+notes:
+  quarantine_reason: 'upstream status: test'

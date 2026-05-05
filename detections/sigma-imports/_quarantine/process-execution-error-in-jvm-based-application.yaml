@@ -1,0 +1,37 @@
+id: sigmahq-sigma-d65f37da-a26a-48f8-8159-3dde96680ad2
+name: Process Execution Error In JVM Based Application
+description: Detects process execution related exceptions in JVM based apps, often
+  relates to RCE
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://www.wix.engineering/post/threat-and-vulnerability-hunting-with-application-server-error-logs
+logsource:
+  category: application
+  product: jvm
+  definition: 'Requirements: application error logs must be collected (with LOG_LEVEL=ERROR
+    and above)'
+detection:
+  keywords:
+  - Cannot run program
+  - java.lang.ProcessImpl
+  - java.lang.ProcessBuilder
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d65f37da-a26a-48f8-8159-3dde96680ad2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/jvm/java_rce_exploitation_attempt.yml
+falsepositives:
+- Application bugs
+notes:
+  quarantine_reason: 'upstream status: test'

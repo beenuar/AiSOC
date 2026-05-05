@@ -1,0 +1,54 @@
+id: splunk-security-content-6b813efd-8859-406f-b677-719458387fac
+name: Cisco Duo Policy Allow Tampered Devices
+description: 'The following analytic detects when a Duo policy is created or updated
+  to allow tampered or rooted devices, such as jailbroken smartphones,
+
+  to access protected resources. It identifies this behavior by searching Duo administrator
+  activity logs for policy changes where the allow_rooted_devices
+
+  setting is enabled. This is accomplished by filtering for policy creation or update
+  actions and parsing the policy description for the relevant configuration.
+
+  Allowing tampered devices poses a significant security risk, as these devices may
+  bypass built-in security controls, run unauthorized software, or be more
+
+  susceptible to compromise. For a Security Operations Center (SOC), identifying such
+  policy changes is critical because it may indicate either a
+
+  misconfiguration or a malicious attempt to weaken authentication requirements, potentially
+  enabling attackers to access sensitive systems with
+
+  compromised devices. The impact of this attack can include unauthorized access,
+  data breaches, and lateral movement within the environment,
+
+  making prompt detection and response essential to maintaining organizational security.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=policy_update OR action=policy_create\n\
+    \  | spath input=description\n  | search allow_rooted_devices=true\n  | rename\
+    \ object as user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY action actionlabel description\n       user admin_email\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `cisco_duo_policy_allow_tampered_devices_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6b813efd-8859-406f-b677-719458387fac
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_policy_allow_tampered_devices.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

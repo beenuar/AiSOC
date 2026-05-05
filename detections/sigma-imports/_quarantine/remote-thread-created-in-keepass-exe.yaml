@@ -1,0 +1,35 @@
+id: sigmahq-sigma-77564cc2-7382-438b-a7f6-395c2ae53b9a
+name: Remote Thread Created In KeePass.EXE
+description: Detects remote thread creation in "KeePass.exe" which could indicates
+  potential password dumping activity
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1555.005
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/uscert/ncas/alerts/aa20-259a
+- https://github.com/denandz/KeeFarce
+- https://github.com/GhostPack/KeeThief
+logsource:
+  product: windows
+  category: create_remote_thread
+detection:
+  selection:
+    TargetImage|endswith: \KeePass.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 77564cc2-7382-438b-a7f6-395c2ae53b9a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_remote_thread/create_remote_thread_win_keepass.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,46 @@
+id: splunk-security-content-875de3d7-09bc-4916-8c0a-0929f4ced3d8
+name: Azure AD Block User Consent For Risky Apps Disabled
+description: The following analytic detects when the risk-based step-up consent security
+  setting in Azure AD is disabled. It monitors Azure Active Directory logs for the
+  "Update authorization policy" operation, specifically changes to the "AllowUserConsentForRiskyApps"
+  setting. This activity is significant because disabling this feature can expose
+  the organization to OAuth phishing threats by allowing users to grant consent to
+  potentially malicious applications. If confirmed malicious, attackers could gain
+  unauthorized access to user data and sensitive information, leading to data breaches
+  and further compromise within the organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1562/
+- https://goodworkaround.com/2020/10/19/a-look-behind-the-azure-ad-permission-classifications-preview/
+- https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-risk-based-step-up-consent
+- https://learn.microsoft.com/en-us/defender-cloud-apps/investigate-risky-oauth
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad` operationName="Update authorization policy" | rename
+    properties.* as * | eval index_number = if(mvfind(''targetResources{}.modifiedProperties{}.displayName'',"AllowUserConsentForRiskyApps")
+    >= 0, mvfind(''targetResources{}.modifiedProperties{}.displayName'',"AllowUserConsentForRiskyApps"),
+    -1) | search index_number >= 0 | eval AllowUserConsentForRiskyApps = mvindex(''targetResources{}.modifiedProperties{}.newValue'',index_number)
+    | search AllowUserConsentForRiskyApps = "[true]" | rename userAgent as user_agent
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by dest
+    user src vendor_account vendor_product user_agent signature | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `azure_ad_block_user_consent_for_risky_apps_disabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 875de3d7-09bc-4916-8c0a-0929f4ced3d8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_block_user_consent_for_risky_apps_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

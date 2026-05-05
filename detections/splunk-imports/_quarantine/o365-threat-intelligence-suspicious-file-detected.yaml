@@ -1,0 +1,42 @@
+id: splunk-security-content-00958c7b-35db-4e7a-ad13-31550a7a7c64
+name: O365 Threat Intelligence Suspicious File Detected
+description: The following analytic identifies when a malicious file is detected within
+  the Microsoft Office 365 ecosystem through the Advanced Threat Protection engine.
+  Attackers may stage and execute malicious files from within the Microsoft Office
+  365 ecosystem. Any detections from built-in Office 365 capabilities should be monitored
+  and responded to appropriately. Certain premium Office 365 capabilities such as
+  Safe Attachment and Safe Links further enhance these detection and response functions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/threat-explorer-real-time-detections-about?view=o365-worldwide
+- https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/anti-malware-protection-for-spo-odfb-teams-about?view=o365-worldwide
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=ThreatIntelligence Operation=AtpDetection\n\
+    \  | eval dest=\"NA\"\n  | eval src=\"NA\"\n  | stats values(DetectionMethod)\
+    \ as category values(FileData.FileName) as file_name values(FileData.FilePath)\
+    \ as file_path values(FileData.FileSize) as file_size values(FileData.MalwareFamily)\
+    \ as signature count, min(_time) as firstTime, max(_time) as lastTime\n    BY\
+    \ Id, UserId, dest,\n       src, vendor_account, vendor_product\n  | rename Id\
+    \ as signature_id, UserId as user\n  | `security_content_ctime(firstTime)`\n \
+    \ | `security_content_ctime(lastTime)`\n  | `o365_threat_intelligence_suspicious_file_detected_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 00958c7b-35db-4e7a-ad13-31550a7a7c64
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_threat_intelligence_suspicious_file_detected.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

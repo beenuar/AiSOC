@@ -1,0 +1,34 @@
+id: sigmahq-sigma-7bd3902d-8b8b-4dd4-838a-c6862d40150d
+name: DNS HybridConnectionManager Service Bus
+description: Detects Azure Hybrid Connection Manager services querying the Azure service
+  bus service
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1554
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Cyb3rWard0g/status/1381642789369286662
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    QueryName|contains: servicebus.windows.net
+    Image|contains: HybridConnectionManager
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7bd3902d-8b8b-4dd4-838a-c6862d40150d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_hybridconnectionmgr_servicebus.yml
+falsepositives:
+- Legitimate use of Azure Hybrid Connection Manager and the Azure Service Bus service
+notes:
+  quarantine_reason: 'upstream status: test'

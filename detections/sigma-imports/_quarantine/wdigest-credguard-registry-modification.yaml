@@ -1,0 +1,38 @@
+id: sigmahq-sigma-1a2d6c47-75b0-45bd-b133-2c0be75349fd
+name: Wdigest CredGuard Registry Modification
+description: 'Detects potential malicious modification of the property value of IsCredGuardEnabled
+  from
+
+  HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest to disable Cred
+  Guard on a system.
+
+  This is usually used with UseLogonCredential to manipulate the caching credentials.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://teamhydra.blog/2020/08/25/bypassing-credential-guard/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \IsCredGuardEnabled
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a2d6c47-75b0-45bd-b133-2c0be75349fd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_disable_wdigest_credential_guard.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

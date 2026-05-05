@@ -1,0 +1,48 @@
+id: sigmahq-sigma-6c6c6282-7671-4fe9-a0ce-a2dcebdc342b
+name: Powershell XML Execute Command
+description: 'Adversaries may abuse PowerShell commands and scripts for execution.
+
+  PowerShell is a powerful interactive command-line interface and scripting environment
+  included in the Windows operating system. (Citation: TechNet PowerShell)
+
+  Adversaries can use PowerShell to perform a number of actions, including discovery
+  of information and execution of code'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1059.001/T1059.001.md#atomic-test-8---powershell-xml-requests
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_xml:
+    ScriptBlockText|contains|all:
+    - New-Object
+    - System.Xml.XmlDocument
+    - .Load
+  selection_exec:
+    ScriptBlockText|contains:
+    - 'IEX '
+    - 'Invoke-Expression '
+    - 'Invoke-Command '
+    - ICM -
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6c6c6282-7671-4fe9-a0ce-a2dcebdc342b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_xml_iex.yml
+falsepositives:
+- Legitimate administrative script
+notes:
+  quarantine_reason: 'upstream status: test'

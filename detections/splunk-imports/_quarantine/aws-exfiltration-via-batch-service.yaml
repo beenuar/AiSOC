@@ -1,0 +1,40 @@
+id: splunk-security-content-04455dd3-ced7-480f-b8e6-5469b99e98e2
+name: AWS Exfiltration via Batch Service
+description: The following analytic identifies the creation of AWS Batch jobs that
+  could potentially abuse the AWS Bucket Replication feature on S3 buckets. It leverages
+  AWS CloudTrail logs to detect the `JobCreated` event, analyzing job details and
+  their status. This activity is significant because attackers can exploit this feature
+  to exfiltrate data by creating malicious batch jobs. If confirmed malicious, this
+  could lead to unauthorized data transfer between S3 buckets, resulting in data breaches
+  and loss of sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1119
+  categories:
+  - cloud
+references:
+- https://hackingthe.cloud/aws/exploitation/s3-bucket-replication-exfiltration/
+- https://bleemb.medium.com/data-exfiltration-with-native-aws-s3-features-c94ae4d13436
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName = JobCreated\n  | fillnull\n  | rename user_name\
+    \ as user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY signature dest user\n       user_agent src vendor_account\n       vendor_region\
+    \ vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_exfiltration_via_batch_service_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 04455dd3-ced7-480f-b8e6-5469b99e98e2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_exfiltration_via_batch_service.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

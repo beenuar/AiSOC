@@ -1,0 +1,42 @@
+id: sigmahq-sigma-2ea44a60-cfda-11ea-87d0-0242ac130003
+name: Webshell ReGeorg Detection Via Web Logs
+description: Certain strings in the uri_query field when combined with null referer
+  and null user agent can indicate activity associated with the webshell ReGeorg.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - application
+references:
+- https://community.rsa.com/community/products/netwitness/blog/2019/02/19/web-shells-and-netwitness-part-3
+- https://github.com/sensepost/reGeorg
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-uri-query|contains:
+    - cmd=read
+    - connect&target
+    - cmd=connect
+    - cmd=disconnect
+    - cmd=forward
+  filter:
+    cs-referer: null
+    cs-user-agent: null
+    cs-method: POST
+  condition: selection and filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2ea44a60-cfda-11ea-87d0-0242ac130003
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_webshell_regeorg.yml
+falsepositives:
+- Web applications that use the same URL parameters as ReGeorg
+notes:
+  quarantine_reason: 'upstream status: test'

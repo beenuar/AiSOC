@@ -1,0 +1,38 @@
+id: sigmahq-sigma-586a8d6b-6bfe-4ad9-9d78-888cd2fe50c3
+name: Remote Service Activity via SVCCTL Named Pipe
+description: Detects remote service activity via remote access to the svcctl named
+  pipe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20230329155141/https://blog.menasec.net/2019/03/threat-hunting-26-remote-windows.html
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Audit Detailed File
+    Share" must be configured for Success/Failure
+detection:
+  selection:
+    EventID: 5145
+    ShareName: \\\\\*\\IPC$
+    RelativeTargetName: svcctl
+    AccessList|contains: WriteData
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 586a8d6b-6bfe-4ad9-9d78-888cd2fe50c3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_svcctl_remote_service.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

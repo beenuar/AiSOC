@@ -1,0 +1,34 @@
+id: sigmahq-sigma-b094d9fb-b1ad-4650-9f1a-fb7be9f1d34b
+name: Cisco Show Commands Input
+description: See what commands are being input into the device by other people, full
+  credentials can be in the history
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.003
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - show history
+  - show history all
+  - show logging
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b094d9fb-b1ad-4650-9f1a-fb7be9f1d34b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_input_capture.yml
+falsepositives:
+- Not commonly run by administrators, especially if remote logging is configured
+notes:
+  quarantine_reason: 'upstream status: test'

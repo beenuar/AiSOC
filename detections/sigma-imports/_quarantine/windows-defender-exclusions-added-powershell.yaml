@@ -1,0 +1,43 @@
+id: sigmahq-sigma-c1344fa2-323b-4d2e-9176-84b4d4821c88
+name: Windows Defender Exclusions Added - PowerShell
+description: Detects modifications to the Windows Defender configuration settings
+  using PowerShell to add exclusions
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/windows-defender-exclusions-added-via-powershell.html
+logsource:
+  category: ps_script
+  product: windows
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_args_exc:
+    ScriptBlockText|contains:
+    - ' -ExclusionPath '
+    - ' -ExclusionExtension '
+    - ' -ExclusionProcess '
+    - ' -ExclusionIpAddress '
+  selection_args_pref:
+    ScriptBlockText|contains:
+    - 'Add-MpPreference '
+    - 'Set-MpPreference '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c1344fa2-323b-4d2e-9176-84b4d4821c88
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_win_defender_exclusions_added.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

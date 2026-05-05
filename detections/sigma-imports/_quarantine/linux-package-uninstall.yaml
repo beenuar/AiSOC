@@ -1,0 +1,55 @@
+id: sigmahq-sigma-95d61234-7f56-465c-6f2d-b562c6fedbc4
+name: Linux Package Uninstall
+description: Detects linux package removal using builtin tools such as "yum", "apt",
+  "apt-get" or "dpkg".
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://sysdig.com/blog/mitre-defense-evasion-falco
+- https://www.tutorialspoint.com/how-to-install-a-software-on-linux-using-yum-command
+- https://linuxhint.com/uninstall_yum_package/
+- https://linuxhint.com/uninstall-debian-packages/
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection_yum:
+    Image|endswith: /yum
+    CommandLine|contains:
+    - erase
+    - remove
+  selection_apt:
+    Image|endswith:
+    - /apt
+    - /apt-get
+    CommandLine|contains:
+    - remove
+    - purge
+  selection_dpkg:
+    Image|endswith: /dpkg
+    CommandLine|contains:
+    - '--remove '
+    - ' -r '
+  selection_rpm:
+    Image|endswith: /rpm
+    CommandLine|contains: ' -e '
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 95d61234-7f56-465c-6f2d-b562c6fedbc4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_remove_package.yml
+falsepositives:
+- Administrator or administrator scripts might delete packages for several reasons
+  (debugging, troubleshooting).
+notes:
+  quarantine_reason: 'upstream status: test'

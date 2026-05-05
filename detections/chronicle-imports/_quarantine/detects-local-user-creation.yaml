@@ -1,0 +1,34 @@
+id: chronicle-detection-rules-detects-local-user-creation
+name: detects_local_user_creation
+description: detects_local_user_creation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detects_local_user_creation {\n meta:\n    author = \"Patrick\
+    \ Bareiss\"\n    description = \"Detects local user creation on windows servers,\
+    \ which shouldn't happen in an Active Directory environment. Apply this Sigma\
+    \ Use Case on your windows server logs and not on your DC logs.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/H9s4oY07BUtS\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"persistence, t1136\"\n\n  events:\n$selection.metadata.product_event_type\
+    \ = \"4720\"\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: detects_local_user_creation
+provenance:
+  source: chronicle/detection-rules
+  source_id: detects_local_user_creation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/detects_local_user_creation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

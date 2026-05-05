@@ -1,0 +1,47 @@
+id: chronicle-detection-rules-ad-privileged-users-or-groups-reconnaissance
+name: ad_privileged_users_or_groups_reconnaissance
+description: ad_privileged_users_or_groups_reconnaissance
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ad_privileged_users_or_groups_reconnaissance {\n meta:\n\
+    \    author = \"Samir Bousseaden\"\n    description = \"Detect priv users or groups\
+    \ recon based on 4661 eventid and known privileged users or groups SIDs  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/l4OAHS0HCL7v\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"discovery, t1087\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"4661\" and ($selection.principal.user.user_display_name = \"SAM_USER\" or\
+    \ $selection.principal.user.user_display_name = \"SAM_GROUP\") and ((re.regex($selection.target.registry.registry_value_data,\
+    \ `.*-512`) or re.regex($selection.target.registry.registry_value_data, `.*-502`)\
+    \ or re.regex($selection.target.registry.registry_value_data, `.*-500`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `.*-505`) or re.regex($selection.target.registry.registry_value_data, `.*-519`)\
+    \ or re.regex($selection.target.registry.registry_value_data, `.*-520`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `.*-544`) or re.regex($selection.target.registry.registry_value_data, `.*-551`)\
+    \ or re.regex($selection.target.registry.registry_value_data, `.*-555`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `.*admin.*`)) or (re.regex($selection.target.file.full_path, `.*-512`) or re.regex($selection.target.file.full_path,\
+    \ `.*-502`) or re.regex($selection.target.file.full_path, `.*-500`) or re.regex($selection.target.file.full_path,\
+    \ `.*-505`) or re.regex($selection.target.file.full_path, `.*-519`) or re.regex($selection.target.file.full_path,\
+    \ `.*-520`) or re.regex($selection.target.file.full_path, `.*-544`) or re.regex($selection.target.file.full_path,\
+    \ `.*-551`) or re.regex($selection.target.file.full_path, `.*-555`) or re.regex($selection.target.file.full_path,\
+    \ `.*admin.*`))))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: ad_privileged_users_or_groups_reconnaissance
+provenance:
+  source: chronicle/detection-rules
+  source_id: ad_privileged_users_or_groups_reconnaissance
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/ad_privileged_users_or_groups_reconnaissance.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,43 @@
+id: splunk-security-content-114c6bfe-9406-11ec-bcce-acde48001122
+name: Disabled Kerberos Pre-Authentication Discovery With Get-ADUser
+description: The following analytic detects the execution of the `Get-ADUser` PowerShell
+  cmdlet with parameters indicating a search for domain accounts with Kerberos Pre-Authentication
+  disabled. It leverages PowerShell Script Block Logging (EventCode=4104) to identify
+  this specific activity. This behavior is significant because discovering accounts
+  with Kerberos Pre-Authentication disabled can allow adversaries to perform offline
+  password cracking. If confirmed malicious, this activity could lead to unauthorized
+  access to user accounts, potentially compromising sensitive information and escalating
+  privileges within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558.004
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1558/004/
+- https://m0chan.github.io/2019/07/31/How-To-Attack-Kerberos-101.html
+- https://stealthbits.com/blog/cracking-active-directory-passwords-with-as-rep-roasting/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-ADUser*\" AND\
+    \ ScriptBlockText=\"*4194304*\")\n  | fillnull\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY dest signature signature_id\n     \
+    \  user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `disabled_kerberos_pre_authentication_discovery_with_get_aduser_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 114c6bfe-9406-11ec-bcce-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disabled_kerberos_pre_authentication_discovery_with_get_aduser.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

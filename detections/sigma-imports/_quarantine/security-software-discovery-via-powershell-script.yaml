@@ -1,0 +1,64 @@
+id: sigmahq-sigma-904e8e61-8edf-4350-b59c-b905fc8e810c
+name: Security Software Discovery Via Powershell Script
+description: 'Detects calls to "get-process" where the output is piped to a "where-object"
+  filter to search for security solution processes.
+
+  Adversaries may attempt to get a listing of security software, configurations, defensive
+  tools, and sensors that are installed on a system or in a cloud environment. This
+  may include things such as firewall rules and anti-virus'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1518.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1518.001/T1518.001.md#atomic-test-2---security-software-discovery---powershell
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_cmdlet:
+    ScriptBlockText|contains:
+    - get-process | \?
+    - get-process | where
+    - gps | \?
+    - gps | where
+  selection_field:
+    ScriptBlockText|contains:
+    - Company -like
+    - Description -like
+    - Name -like
+    - Path -like
+    - Product -like
+  selection_keywords:
+    ScriptBlockText|contains:
+    - \*avira\*
+    - \*carbonblack\*
+    - \*cylance\*
+    - \*defender\*
+    - \*kaspersky\*
+    - \*malware\*
+    - \*sentinel\*
+    - \*symantec\*
+    - \*virus\*
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 904e8e61-8edf-4350-b59c-b905fc8e810c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_get_process_security_software_discovery.yml
+falsepositives:
+- False positives might occur due to the nature of the ScriptBlock being ingested
+  as a big blob. Initial tuning is required.
+- As the "selection_cmdlet" is common in scripts the matching engine might slow down
+  the search. Change into regex or a more accurate string to avoid heavy resource
+  consumption if experienced
+notes:
+  quarantine_reason: 'upstream status: test'

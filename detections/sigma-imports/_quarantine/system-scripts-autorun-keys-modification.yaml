@@ -1,0 +1,44 @@
+id: sigmahq-sigma-e7a2fd40-3ae1-4a85-bf80-15cf624fb1b1
+name: System Scripts Autorun Keys Modification
+description: Detects modification of autostart extensibility point (ASEP) in registry.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md
+- https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns
+- https://gist.github.com/GlebSukhodolskiy/0fc5fa5f482903064b448890db1eaf9d
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  scripts_base:
+    TargetObject|contains: \Software\Policies\Microsoft\Windows\System\Scripts
+  scripts:
+    TargetObject|contains:
+    - \Startup
+    - \Shutdown
+    - \Logon
+    - \Logoff
+  filter:
+    Details: (Empty)
+  condition: scripts_base and scripts and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e7a2fd40-3ae1-4a85-bf80-15cf624fb1b1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_asep_reg_keys_modification_system_scripts.yml
+falsepositives:
+- Legitimate software automatically (mostly, during installation) sets up autorun
+  keys for legitimate reason
+- Legitimate administrator sets up autorun keys for legitimate reason
+notes:
+  quarantine_reason: 'upstream status: test'

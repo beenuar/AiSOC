@@ -1,0 +1,48 @@
+id: splunk-security-content-31702fc0-2682-11ec-85c3-acde48001122
+name: Sdelete Application Execution
+description: The following analytic detects the execution of the sdelete.exe application,
+  a Sysinternals tool often used by adversaries to securely delete files and remove
+  forensic evidence from a targeted host. This detection leverages data from Endpoint
+  Detection and Response (EDR) agents, focusing on process execution logs. Monitoring
+  this activity is crucial as sdelete.exe is not commonly used in regular operations
+  and its presence may indicate an attempt to cover malicious activities. If confirmed
+  malicious, this could lead to the loss of critical forensic data, hindering incident
+  response and investigation efforts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/956f50be-2c13-465a-ac00-6224c14c5f89/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process values(Processes.parent_process) as parent_process values(Processes.process_id)\
+    \ as process_id count min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        Processes.process_name=\"sdelete.exe\"\n        OR\n     \
+    \   Processes.original_file_name=\"sdelete.exe\"\n    )\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `sdelete_application_execution_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 31702fc0-2682-11ec-85c3-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/sdelete_application_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

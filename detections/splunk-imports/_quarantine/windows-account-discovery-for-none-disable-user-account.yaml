@@ -1,0 +1,44 @@
+id: splunk-security-content-eddbf5ba-b89e-47ca-995e-2d259804e55e
+name: Windows Account Discovery for None Disable User Account
+description: The following analytic detects the execution of the PowerView PowerShell
+  cmdlet Get-NetUser with the UACFilter parameter set to NOT_ACCOUNTDISABLE, indicating
+  an attempt to enumerate Active Directory user accounts that are not disabled. This
+  detection leverages PowerShell Script Block Logging (EventCode 4104) to identify
+  the specific script block text. Monitoring this activity is significant as it may
+  indicate reconnaissance efforts by an attacker to identify active user accounts
+  for further exploitation. If confirmed malicious, this activity could lead to unauthorized
+  access, privilege escalation, or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.001
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+- https://powersploit.readthedocs.io/en/stable/Recon/README/
+- https://book.hacktricks.xyz/windows-hardening/basic-powershell-for-pentesters/powerview
+- https://atomicredteam.io/discovery/T1087.001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  ScriptBlockText = \"*Get-NetUser*\" ScriptBlockText\
+    \ = \"*NOT_ACCOUNTDISABLE*\" ScriptBlockText = \"*-UACFilter*\"\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_account_discovery_for_none_disable_user_account_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: eddbf5ba-b89e-47ca-995e-2d259804e55e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_account_discovery_for_none_disable_user_account.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

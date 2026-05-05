@@ -1,0 +1,40 @@
+id: sigmahq-sigma-0b7163dc-7eee-4960-af17-c0cd517f92da
+name: Service Started/Stopped Via Wmic.EXE
+description: Detects usage of wmic to start or stop a service
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://sushant747.gitbooks.io/total-oscp-guide/content/privilege_escalation_windows.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: wmic.exe
+  - Image|endswith: \WMIC.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' service '
+    - ' call '
+    CommandLine|contains:
+    - stopservice
+    - startservice
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0b7163dc-7eee-4960-af17-c0cd517f92da
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_service_manipulation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

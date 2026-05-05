@@ -1,0 +1,79 @@
+id: chronicle-detection-rules-potential-remote-powershell-session-initiated
+name: potential_remote_powershell_session_initiated
+description: potential_remote_powershell_session_initiated
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule potential_remote_powershell_session_initiated {\n\n  meta:\n    author\
+    \ = \"Roberto Rodriguez @Cyb3rWard0g\"\n    description = \"Detects a process\
+    \ that initiated a network connection over ports 5985 or 5986 from a non-network\
+    \ service account. This could potentially indicates a remote PowerShell connection.\"\
+    \n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/network_connection/net_connection_win_susp_remote_powershell_session.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Potential Remote PowerShell Session Initiated\"\n    sigma_uuid\
+    \ = \"c539afac-c12a-46ed-b1bd-5a5567c9f045\"\n    sigma_status = \"test\"\n  \
+    \  rule_id = \"mr_7186feaf-ab01-4c41-b17f-994b08b5bc33\"\n    tactic = \"TA0008\"\
+    \n    technique = \"T1021.006\"\n    type = \"Hunt\"\n    data_source = \"Sysmon\"\
+    \n    platform = \"Windows\"\n    severity = \"High\"\n    priority = \"High\"\
+    \n    false_positives = \"Legitimate usage of remote PowerShell, e.g. remote administration\
+    \ and monitoring. Network Service user name of a not-covered localization\"\n\n\
+    \  events:\n    $net.metadata.event_type = \"NETWORK_CONNECTION\"\n    $net.metadata.product_event_type\
+    \ = \"3\"\n    $net.metadata.product_name = \"Microsoft-Windows-Sysmon\"\n   \
+    \ $net.metadata.vendor_name = \"Microsoft\"\n    (\n        $net.target.port =\
+    \ 5985 or\n        $net.target.port = 5986\n    )\n    //Parser extension added\
+    \ for Initiated/true field/value, not currently in Sysmon parser\n    //Initiated:\
+    \ 'true'\n    $net.additional.fields[\"Initiated\"] = \"true\"\n    net.ip_in_range_cidr($net.principal.ip,\
+    \ \"0.0.0.0/0\")\n    NOT (\n        strings.contains(strings.to_upper($net.principal.user.userid),\
+    \ \"NETWORK SERVICE\") or\n        strings.contains(strings.to_upper($net.principal.user.userid),\
+    \ \"NETZWERKDIENST\") or\n        strings.contains(strings.to_upper($net.principal.user.userid),\
+    \ \"SERVICIO DE RED\") or\n        strings.contains(strings.to_upper($net.principal.user.userid),\
+    \ \"SERVIZIO DI RETE\")\n        or\n        (\n            strings.contains(strings.to_upper($net.principal.user.userid),\
+    \ \"SERVICE R\") and\n            strings.contains(strings.to_upper($net.principal.user.userid),\
+    \ \"SEAU\")\n        )\n    )\n    NOT (\n        $net.principal.ip = \"::1\"\
+    \ or\n        $net.principal.ip = \"127.0.0.1\" or\n        $net.target.ip = \"\
+    ::1\" or\n        $net.target.ip = \"127.0.0.1\"\n    )\n    NOT (\n        $net.principal.process.file.full_path\
+    \ = \"C:\\\\Program Files\\\\Avast Software\\\\Avast\\\\AvastSvc.exe\" nocase\
+    \ or\n        $net.principal.process.file.full_path = \"C:\\\\Program Files (x86)\\\
+    \\Avast Software\\\\Avast\\\\AvastSvc.exe\" nocase\n    )\n\n    $net.principal.hostname\
+    \ = $hostname\n\n  match:\n    $hostname over 5m\n\n  outcome:\n    //example\
+    \ usage of specifying test user and hostname to adjust risk score\n    $risk_score\
+    \ = max(if($net.principal.user.userid = \"user\" and $net.principal.hostname =\
+    \ \"hostname\", 0, 15))\n    $principal_ip = array_distinct($net.principal.ip)\n\
+    \    $principal_port = array_distinct($net.principal.port)\n    $principal_process_pid\
+    \ = array_distinct($net.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($net.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($net.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($net.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($net.principal.process.product_specific_process_id)\n    $principal_process_parent_process_product_specific_process_id\
+    \ = array_distinct($net.principal.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($net.principal.user.userid)\n   \
+    \ $target_ip = array_distinct($net.target.ip)\n    $target_port = array_distinct($net.target.port)\n\
+    \n  condition:\n    $net\n}"
+  chronicle_rule_name: potential_remote_powershell_session_initiated
+provenance:
+  source: chronicle/detection-rules
+  source_id: potential_remote_powershell_session_initiated
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/potential_remote_powershell_session_initiated.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

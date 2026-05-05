@@ -1,0 +1,40 @@
+id: splunk-security-content-2f3a4092-548b-421c-9caa-84918e1787ef
+name: Windows App Layer Protocol Wermgr Connect To NamedPipe
+description: The following analytic detects the wermgr.exe process creating or connecting
+  to a named pipe. It leverages Sysmon EventCodes 17 and 18 to identify these actions.
+  This activity is significant because wermgr.exe, a legitimate Windows OS Problem
+  Reporting application, is often abused by malware such as Trickbot and Qakbot to
+  execute malicious code. If confirmed malicious, this behavior could indicate that
+  an attacker has injected code into wermgr.exe, potentially allowing them to communicate
+  covertly, escalate privileges, or persist within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/wermgr.exe-0F652BF7ADA772981E8AAB0D108FCC92.html
+- https://www.trellix.com/en-us/about/newsroom/stories/research/demystifying-qbot-malware.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN (17, 18) Image= "*\\wermgr.exe" EventType IN
+    ( "CreatePipe", "ConnectPipe") | stats  min(_time) as firstTime max(_time) as
+    lastTime count by dest dvc pipe_name process_exec process_guid process_id process_name
+    process_path signature signature_id user_id vendor_product Image PipeName | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_app_layer_protocol_wermgr_connect_to_namedpipe_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 2f3a4092-548b-421c-9caa-84918e1787ef
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_app_layer_protocol_wermgr_connect_to_namedpipe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

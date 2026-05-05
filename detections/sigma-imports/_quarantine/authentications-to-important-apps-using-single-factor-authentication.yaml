@@ -1,0 +1,35 @@
+id: sigmahq-sigma-f272fb46-25f2-422c-b667-45837994980f
+name: Authentications To Important Apps Using Single Factor Authentication
+description: Detect when authentications to important application(s) only required
+  single-factor authentication
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-gb/entra/architecture/security-operations-user-accounts
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    Status: Success
+    AppId: Insert Application ID use OR for multiple
+    AuthenticationRequirement: singleFactorAuthentication
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f272fb46-25f2-422c-b667-45837994980f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_auth_to_important_apps_using_single_factor_auth.yml
+falsepositives:
+- If this was approved by System Administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

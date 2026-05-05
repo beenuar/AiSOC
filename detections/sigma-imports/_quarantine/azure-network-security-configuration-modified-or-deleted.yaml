@@ -1,0 +1,42 @@
+id: sigmahq-sigma-d22b4df4-5a67-4859-a578-8c9a0b5af9df
+name: Azure Network Security Configuration Modified or Deleted
+description: Identifies when a network security configuration is modified or deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName:
+    - MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/WRITE
+    - MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/DELETE
+    - MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/SECURITYRULES/WRITE
+    - MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/SECURITYRULES/DELETE
+    - MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/JOIN/ACTION
+    - MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/PROVIDERS/MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/WRITE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d22b4df4-5a67-4859-a578-8c9a0b5af9df
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_network_security_modified_or_deleted.yml
+falsepositives:
+- Network Security Configuration being modified or deleted may be performed by a system
+  administrator. Verify whether the user identity, user agent, and/or hostname should
+  be making changes in your environment.
+- Network Security Configuration modified or deleted from unfamiliar users should
+  be investigated. If known behavior is causing false positives, it can be exempted
+  from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

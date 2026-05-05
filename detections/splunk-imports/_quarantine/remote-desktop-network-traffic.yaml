@@ -1,0 +1,42 @@
+id: splunk-security-content-272b8407-842d-4b3d-bead-a704584003d3
+name: Remote Desktop Network Traffic
+description: The following analytic detects unusual Remote Desktop Protocol (RDP)
+  traffic on TCP/3389 by filtering out known RDP sources and destinations, focusing
+  on atypical connections within the network. This detection leverages network traffic
+  data to identify potentially unauthorized RDP access. Monitoring this activity is
+  crucial for a SOC as unauthorized RDP access can indicate an attacker's attempt
+  to control networked systems, leading to data theft, ransomware deployment, or further
+  network compromise. If confirmed malicious, this activity could result in significant
+  data breaches or complete system and network control loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Network_Traffic\n  WHERE All_Traffic.dest_port=3389\n\
+    \    AND\n    All_Traffic.dest_category!=common_rdp_destination\n    AND\n   \
+    \ All_Traffic.src_category!=common_rdp_source\n    AND\n    All_Traffic.action=\"\
+    allowed\"\n  BY All_Traffic.src All_Traffic.dest All_Traffic.dest_port\n     All_Traffic.dest_ip\
+    \ All_Traffic.dvc All_Traffic.src_ip\n     All_Traffic.src_port All_Traffic.vendor_product\n\
+    | `drop_dm_object_name(\"All_Traffic\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `remote_desktop_network_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 272b8407-842d-4b3d-bead-a704584003d3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/remote_desktop_network_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

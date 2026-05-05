@@ -1,0 +1,55 @@
+id: splunk-security-content-ae8b3efc-2d2e-11ec-8b57-acde48001122
+name: ServicePrincipalNames Discovery with SetSPN
+description: The following analytic detects the use of `setspn.exe` to query the domain
+  for Service Principal Names (SPNs). This detection leverages Endpoint Detection
+  and Response (EDR) data, focusing on specific command-line arguments associated
+  with `setspn.exe`. Monitoring this activity is crucial as it often precedes Kerberoasting
+  or Silver Ticket attacks, which can lead to credential theft. If confirmed malicious,
+  an attacker could use the gathered SPNs to escalate privileges or persist within
+  the environment, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/win32/ad/service-principal-names
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/t1208-kerberoasting
+- https://strontic.github.io/xcyclopedia/library/setspn.exe-5C184D581524245DAD7A0A02B51FD2C2.html
+- https://attack.mitre.org/techniques/T1558/003/
+- https://social.technet.microsoft.com/wiki/contents/articles/717.service-principal-names-spn-setspn-syntax.aspx
+- https://web.archive.org/web/20220212163642/https://www.harmj0y.net/blog/powershell/kerberoasting-without-mimikatz/
+- https://blog.zsec.uk/paving-2-da-wholeset/
+- https://msitpros.com/?p=3113
+- https://adsecurity.org/?p=3466
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_setspn`\
+    \ (Processes.process=\"*-t*\"\n    AND\n    Processes.process=\"*-f*\")\n    OR\n\
+    \    (Processes.process=\"*-q*\"\n    AND\n    Processes.process=\"**/**\")\n\
+    \    OR\n    (Processes.process=\"*-q*\")\n    OR\n    (Processes.process=\"*-s*\"\
+    )\n  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `serviceprincipalnames_discovery_with_setspn_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ae8b3efc-2d2e-11ec-8b57-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/serviceprincipalnames_discovery_with_setspn.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

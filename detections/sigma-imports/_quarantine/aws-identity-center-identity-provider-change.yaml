@@ -1,0 +1,44 @@
+id: sigmahq-sigma-d3adb3ef-b7e7-4003-9092-1924c797db35
+name: AWS Identity Center Identity Provider Change
+description: 'Detects a change in the AWS Identity Center (FKA AWS SSO) identity provider.
+
+  A change in identity provider allows an attacker to establish persistent access
+  or escalate privileges via user impersonation.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/singlesignon/latest/userguide/app-enablement.html
+- https://docs.aws.amazon.com/singlesignon/latest/userguide/sso-info-in-cloudtrail.html
+- https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsiamidentitycentersuccessortoawssinglesign-on.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource:
+    - sso-directory.amazonaws.com
+    - sso.amazonaws.com
+    eventName:
+    - AssociateDirectory
+    - DisableExternalIdPConfigurationForDirectory
+    - DisassociateDirectory
+    - EnableExternalIdPConfigurationForDirectory
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3adb3ef-b7e7-4003-9092-1924c797db35
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_sso_idp_change.yml
+falsepositives:
+- Authorized changes to the AWS account's identity provider
+notes:
+  quarantine_reason: 'upstream status: test'

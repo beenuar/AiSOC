@@ -1,0 +1,70 @@
+id: mitre-car-car-2014-11-008
+name: Command Launched from WinLogon
+description: 'An adversary can use [accessibility features](https://attack.mitre.org/techniques/T1546/008)
+  (Ease of Access), such as StickyKeys or Utilman, to launch a command shell from
+  the logon screen and gain SYSTEM access. Since an adversary does not have physical
+  access to the machine, this technique must be run within [Remote Desktop](https://attack.mitre.org/techniques/T1021/001).
+  To prevent an adversary from getting to the login screen without first authenticating,
+  Network-Level Authentication (NLA) must be enabled. If a debugger is set up for
+  one of the accessibility features, then it will intercept the process launch of
+  the feature and instead execute a new command line. This analytic looks for instances
+  of `cmd.exe` or `powershell.exe` launched directly from the logon process, `winlogon.exe`.
+  It should be used in tandem with [CAR-2014-11-003](../CAR-2014-11-003), which detects
+  the accessibility programs in the command line.
+
+
+  Several accessibility programs can be run using the Ease of Access center
+
+
+  -   `sethc.exe` handles StickyKeys
+
+  -   `utilman.exe` is the Ease of Access menu
+
+  -   `osk.exe` runs the On-Screen Keyboard
+
+  -   `narrator.exe` reads screen text over audio
+
+  -   `magnify.exe` magnifies the view of the screen near the cursor'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'processes = search Process:Create
+
+      winlogon_cmd = filter processes where (parent_exe == "winlogon.exe" and exe
+      == "cmd.exe")
+
+      output winlogon_cmd'
+  - name: ''
+    type: Splunk
+    code: index=__your_sysmon_index__ EventCode=1 ParentImage="C:\\Windows\\*\\winlogon.exe"
+      Image="C:\\Windows\\*\\cmd.exe"
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (process_name == \"cmd.exe\" and parent_process_name\
+      \ == \"winlogon.exe\")"
+  - name: ''
+    type: LogPoint
+    code: norm_id=WindowsSysmon event_id=1 parent_image="C:\Windows\System32\winlogon.exe"
+      parent_image="C:\Windows\System32\cmd.exe"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-11-008
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-11-008.yaml
+notes:
+  car_status: needs_implementation

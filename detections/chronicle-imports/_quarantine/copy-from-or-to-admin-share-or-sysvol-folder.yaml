@@ -1,0 +1,87 @@
+id: chronicle-detection-rules-copy-from-or-to-admin-share-or-sysvol-folder
+name: copy_from_or_to_admin_share_or_sysvol_folder
+description: copy_from_or_to_admin_share_or_sysvol_folder
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule copy_from_or_to_admin_share_or_sysvol_folder {\n\n  meta:\n    author =\
+    \ \"Florian Roth (Nextron Systems), oscd.community, Teymur Kheirkhabarov @HeirhabarovT,\
+    \ Zach Stanford @svch0st, Nasreddine Bencherchali\"\n    description = \"Detects\
+    \ a copy command or a copy utility execution to or from an Admin share or remote\"\
+    \n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_susp_copy_lateral_movement.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Copy From Or To Admin Share Or Sysvol Folder\"\n    sigma_uuid\
+    \ = \"855bc8b5-2ae8-402e-a9ed-b889e6df1900\"\n    sigma_status = \"test\"\n  \
+    \  rule_id = \"mr_acc184c7-6291-47e2-b65d-c27d60abaa94\"\n    tactic = \"TA0008\"\
+    \n    technique = \"T1021.002\"\n    type = \"Detection\"\n    data_source = \"\
+    Sysmon\"\n    platform = \"Windows\"\n    severity = \"Medium\"\n    priority\
+    \ = \"Medium\"\n    false_positives = \"Administrative scripts\"\n\n  events:\n\
+    \    $process.metadata.event_type = \"PROCESS_LAUNCH\"\n    (\n        re.regex($process.target.process.command_line,\
+    \ `\\\\[a-zA-Z]*\\$`) or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"\\\\sysvol\\\\\")\n    )\n    and\n    (\n        (\n            re.regex($process.target.process.file.full_path,\
+    \ `\\\\robocopy\\.exe$`) nocase or\n            re.regex($process.target.process.file.full_path,\
+    \ `\\\\xcopy\\.exe$`) nocase or\n            $process.src.process.file.full_path\
+    \ = \"robocopy.exe\" nocase or\n            $process.src.process.file.full_path\
+    \ = \"xcopy.exe\" nocase\n        )\n        or\n        (\n            (\n  \
+    \              re.regex($process.target.process.file.full_path, `\\\\cmd\\.exe$`)\
+    \ nocase or\n                $process.src.process.file.full_path = \"cmd.exe\"\
+    \ nocase\n            )\n            and\n            strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"copy\")\n        )\n        or\n        (\n            (\n               \
+    \ strings.contains(strings.to_lower($process.target.process.file.full_path), \"\
+    \\\\powershell.exe\") or\n                strings.contains(strings.to_lower($process.target.process.file.full_path),\
+    \ \"\\\\pwsh.exe\") or\n                $process.src.process.file.full_path =\
+    \ \"powershell.exe\" nocase or\n                $process.src.process.file.full_path\
+    \ = \"pwsh.dll\" nocase\n            )\n            and\n            (\n     \
+    \           strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"copy-item\") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"copy \") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"cpi \") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \" cp \") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"move \") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"move-item\") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \" mi \") or\n                strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \" mv \")\n            )\n        )\n    )\n    $process.principal.hostname\
+    \ = $hostname\n\n  match:\n    $hostname over 5m\n\n  outcome:\n    //example\
+    \ usage of specifying test user and hostname to adjust risk score\n    $risk_score\
+    \ = max(if($process.principal.user.userid = \"user\" and $process.principal.hostname\
+    \ = \"hostname\", 0, 15))\n    $principal_process_pid = array_distinct($process.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($process.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($process.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($process.principal.process.file.full_path)\n\
+    \    $principal_process_product_specfic_process_id = array_distinct($process.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specfic_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specfic_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n    $log_type = array_distinct(strings.concat($process.metadata.log_type,\"\
+    /\",$process.metadata.product_event_type))\n\n  condition:\n    $process\n}"
+  chronicle_rule_name: copy_from_or_to_admin_share_or_sysvol_folder
+provenance:
+  source: chronicle/detection-rules
+  source_id: copy_from_or_to_admin_share_or_sysvol_folder
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/copy_from_or_to_admin_share_or_sysvol_folder.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,53 @@
+id: sigmahq-sigma-9fe55ea2-4cd6-4491-8a54-dd6871651b51
+name: HackTool - Evil-WinRm Execution - PowerShell Module
+description: Detects the execution of Evil-WinRM via PowerShell Module logs by leveraging
+  the hardcoded strings inside the utility.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/Hackplayers/evil-winrm/blob/7514b055d67ec19836e95c05bd63e7cc47c4c2aa/evil-winrm.rb
+- https://github.com/search?q=repo%3AHackplayers%2Fevil-winrm++shell.run%28&type=code
+logsource:
+  product: windows
+  category: ps_module
+detection:
+  selection_wsm:
+    ContextInfo|contains:
+    - :\Windows\System32\wsmprovhost.exe
+    - :\Windows\SysWOW64\wsmprovhost.exe
+  selection_payload_1:
+    Payload|contains:
+    - value="(get-location).path
+    - value="(get-item*).length
+    - 'Invoke-Binary '
+    - Donut-Loader -process_id*-donutfile
+    - Bypass-4MSI
+    - IEX ([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String($a))).replace('???','')
+  selection_payload_2:
+    Payload|contains|all:
+    - $servicios = Get-ItemProperty "registry::HKLM\System\CurrentControlSet\Services\"
+    - Where-Object {$_.imagepath -notmatch "system" -and $_.imagepath -ne $null }
+      | Select-Object pschildname,imagepath
+  selection_payload_3:
+    Payload|contains|all:
+    - $a +=  \"$($_.FullName.Replace('\\','/'))/\"}else{  $a += \"$($_.FullName.Replace('\\',
+      '/'))\" }
+    - $a=@();$
+  condition: selection_wsm and 1 of selection_payload_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9fe55ea2-4cd6-4491-8a54-dd6871651b51
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_hktl_evil_winrm_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

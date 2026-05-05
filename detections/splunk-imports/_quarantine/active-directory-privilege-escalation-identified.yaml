@@ -1,0 +1,48 @@
+id: splunk-security-content-583e8a68-f2f7-45be-8fc9-bf725f0e22fd
+name: Active Directory Privilege Escalation Identified
+description: The following analytic identifies potential privilege escalation activities
+  within an organization's Active Directory (AD) environment. It detects this activity
+  by correlating multiple analytics from the Active Directory Privilege Escalation
+  analytic story within a specified time frame. This is significant for a SOC as it
+  helps identify coordinated attempts to gain elevated privileges, which could indicate
+  a serious security threat. If confirmed malicious, this activity could allow attackers
+  to gain unauthorized access to sensitive systems and data, leading to potential
+  data breaches and further compromise of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/tactics/TA0004/
+- https://research.splunk.com/stories/active_directory_privilege_escalation/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.analyticstories=\"\
+    Active Directory Privilege Escalation\" All_Risk.risk_object_type=\"system\"\n\
+    \  BY All_Risk.risk_object All_Risk.risk_object_type All_Risk.annotations.mitre_attack.mitre_tactic\n\
+    | `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 4\n| `active_directory_privilege_escalation_identified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 583e8a68-f2f7-45be-8fc9-bf725f0e22fd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/active_directory_privilege_escalation_identified.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

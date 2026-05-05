@@ -1,0 +1,42 @@
+id: sigmahq-sigma-961e0abb-1b1e-4c84-a453-aafe56ad0d34
+name: Execution via stordiag.exe
+description: Detects the use of stordiag.exe to execute schtasks.exe systeminfo.exe
+  and fltmc.exe
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/stordiag.exe-1F08FC87C373673944F6A7E8B18CD845.html
+- https://twitter.com/eral4m/status/1451112385041911809
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \stordiag.exe
+    Image|endswith:
+    - \schtasks.exe
+    - \systeminfo.exe
+    - \fltmc.exe
+  filter:
+    ParentImage|startswith:
+    - c:\windows\system32\
+    - c:\windows\syswow64\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 961e0abb-1b1e-4c84-a453-aafe56ad0d34
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_stordiag_susp_child_process.yml
+falsepositives:
+- Legitimate usage of stordiag.exe.
+notes:
+  quarantine_reason: 'upstream status: test'

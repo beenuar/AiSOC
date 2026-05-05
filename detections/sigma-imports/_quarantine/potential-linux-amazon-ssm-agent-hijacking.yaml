@@ -1,0 +1,40 @@
+id: sigmahq-sigma-f9b3edc5-3322-4fc7-8aa3-245d646cc4b7
+name: Potential Linux Amazon SSM Agent Hijacking
+description: Detects potential Amazon SSM agent hijack attempts as outlined in the
+  Mitiga research report.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.mitiga.io/blog/mitiga-security-advisory-abusing-the-ssm-agent-as-a-remote-access-trojan
+- https://www.bleepingcomputer.com/news/security/amazons-aws-ssm-agent-can-be-used-as-post-exploitation-rat-malware/
+- https://www.helpnetsecurity.com/2023/08/02/aws-instances-attackers-access/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /amazon-ssm-agent
+    CommandLine|contains|all:
+    - '-register '
+    - '-code '
+    - '-id '
+    - '-region '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f9b3edc5-3322-4fc7-8aa3-245d646cc4b7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_ssm_agent_abuse.yml
+falsepositives:
+- Legitimate activity of system administrators
+notes:
+  quarantine_reason: 'upstream status: test'

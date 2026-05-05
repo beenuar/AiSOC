@@ -1,0 +1,38 @@
+id: sigmahq-sigma-53059bc0-1472-438b-956a-7508a94a91f0
+name: Disable System Firewall
+description: Detects disabling of system firewalls which could be used by adversaries
+  to bypass controls that limit usage of the network.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1686
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.004/T1562.004.md
+- https://firewalld.org/documentation/man-pages/firewall-cmd.html
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SERVICE_STOP
+    unit:
+    - firewalld
+    - iptables
+    - ufw
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 53059bc0-1472-438b-956a-7508a94a91f0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/service_stop/lnx_auditd_disable_system_firewall.yml
+falsepositives:
+- Admin activity
+notes:
+  quarantine_reason: 'upstream status: test'

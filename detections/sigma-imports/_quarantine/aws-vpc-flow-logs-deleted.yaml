@@ -1,0 +1,42 @@
+id: sigmahq-sigma-e386b9b5-af12-450e-afff-761730fb8a98
+name: AWS VPC Flow Logs Deleted
+description: 'Detects the deletion of one or more VPC Flow Logs in AWS Elastic Compute
+  Cloud (EC2) through the DeleteFlowLogs API call.
+
+  Adversaries may delete flow logs to evade detection or remove evidence of network
+  activity, hindering forensic investigations and visibility into malicious operations.'
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteFlowLogs.html
+- https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ec2/delete-flow-logs.html
+- https://www.elastic.co/docs/reference/security/prebuilt-rules/rules/integrations/aws/defense_evasion_ec2_flow_log_deletion
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_event_name:
+    eventName: DeleteFlowLogs
+  selection_status_success:
+    errorCode: Success
+  selection_status_null:
+    errorCode: null
+  condition: selection_event_name and 1 of selection_status_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e386b9b5-af12-450e-afff-761730fb8a98
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_vpc_flow_logs_deleted.yml
+falsepositives:
+- During maintenance operations or testing, authorized administrators may delete VPC
+  Flow Logs as part of routine network management or cleanup activities.
+notes:
+  quarantine_reason: 'upstream status: experimental'

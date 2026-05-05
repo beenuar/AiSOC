@@ -1,0 +1,45 @@
+id: sigmahq-sigma-676381a6-15ca-4d73-a9c8-6a22e970b90d
+name: Local Groups Discovery - Linux
+description: Detects enumeration of local system groups. Adversaries may attempt to
+  find local system groups and permission settings
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1069.001/T1069.001.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_1:
+    Image|endswith: /groups
+  selection_2:
+    Image|endswith:
+    - /cat
+    - /ed
+    - /head
+    - /less
+    - /more
+    - /nano
+    - /tail
+    - /vi
+    - /vim
+    CommandLine|contains: /etc/group
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 676381a6-15ca-4d73-a9c8-6a22e970b90d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_local_groups.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

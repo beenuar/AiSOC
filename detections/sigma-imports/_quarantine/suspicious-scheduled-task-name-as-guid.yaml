@@ -1,0 +1,44 @@
+id: sigmahq-sigma-ff2fff64-4cd6-4a2b-ba7d-e28a30bbe66b
+name: Suspicious Scheduled Task Name As GUID
+description: Detects creation of a scheduled task with a GUID like name
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/10/31/follina-exploit-leads-to-domain-compromise/
+- https://thedfirreport.com/2022/02/21/qbot-and-zerologon-lead-to-full-domain-compromise/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+    Image|endswith: \schtasks.exe
+    CommandLine|contains: '/Create '
+  selection_tn:
+    CommandLine|contains:
+    - /TN "{
+    - /TN '{
+    - /TN {
+  selection_end:
+    CommandLine|contains:
+    - '}"'
+    - '}'''
+    - '} '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ff2fff64-4cd6-4a2b-ba7d-e28a30bbe66b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_guid_task_name.yml
+falsepositives:
+- Legitimate software naming their tasks as GUIDs
+notes:
+  quarantine_reason: 'upstream status: test'

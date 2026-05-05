@@ -1,0 +1,32 @@
+id: sigmahq-sigma-f01d1f70-cd41-42ec-9c0b-26dd9c22bf29
+name: Process Deletion of Its Own Executable
+description: Detects the deletion of a process's executable by itself. This is usually
+  not possible without workarounds and may be used by malware to hide its traces.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/joaoviictorti/RustRedOps/tree/ce04369a246006d399e8c61d9fe0e6b34f988a49/Self_Deletion
+logsource:
+  product: windows
+  category: file_delete
+detection:
+  selection:
+    TargetFilename|fieldref: Image
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f01d1f70-cd41-42ec-9c0b-26dd9c22bf29
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_own_image.yml
+falsepositives:
+- Some false positives are to be expected from uninstallers.
+notes:
+  quarantine_reason: 'upstream status: test'

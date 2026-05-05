@@ -1,0 +1,35 @@
+id: sigmahq-sigma-130c9e58-28ac-4f83-8574-0a4cc913b97e
+name: Potential Winnti Dropper Activity
+description: Detects files dropped by Winnti as described in RedMimicry Winnti playbook
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://redmimicry.com/posts/redmimicry-winnti/#dropper
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith:
+    - \gthread-3.6.dll
+    - \sigcmm-2.4.dll
+    - \Windows\Temp\tmp.bat
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 130c9e58-28ac-4f83-8574-0a4cc913b97e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_redmimicry_winnti_filedrop.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

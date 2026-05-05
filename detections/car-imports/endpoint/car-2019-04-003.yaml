@@ -1,0 +1,55 @@
+id: mitre-car-car-2019-04-003
+name: Squiblydoo
+description: 'Squiblydoo is a specific usage of regsvr32.dll to load a COM scriptlet
+  directly from the internet and execute it in a way that bypasses application whitelisting.
+  It can be seen by looking for regsvr32.exe executions that load the scrobj.dll (which
+  execute the COM scriptlet) or, if that is too noisy, those that also load content
+  directly via HTTP or HTTPS.
+
+
+  Squiblydoo was first written up by Casey Smith at Red Canary, though that blog post
+  is no longer accessible.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- As usual, credit to Roberto Rodriguez and the [ThreatHunter Playbook](https://github.com/Cyb3rWard0g/ThreatHunter-Playbook/blob/master/playbooks/platforms/windows/05_defense_evasion/regsvr32/variants/bypass_whitelisting_regsvr32.md).
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: splunk
+    code: 'index=__your_sysmon_events__ EventCode=1 regsvr32.exe scrobj.dll | search
+      Image="*regsvr32.exe"
+
+      '
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (process_path == \"*regsvr32.exe\"\
+      \ and command_line == \"*scrobj.dll\")\n"
+  - name: ''
+    type: psuedocode
+    code: "processes = search Process:Create\nsquiblydoo_processes = filter processes\
+      \ where (\n  image_path == \"*regsvr32.exe\" and command_line == \"*scrobj.dll\"\
+      \n  )\noutput squiblydoo_processes\n"
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 image="*\regsvr32.exe" command="*scrobj.dll"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-04-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-04-003.yaml
+notes:
+  car_status: needs_implementation

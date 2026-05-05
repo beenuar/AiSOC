@@ -1,0 +1,45 @@
+id: sigmahq-sigma-24b6cf51-6122-469e-861a-22974e9c1e5b
+name: Potential SmadHook.DLL Sideloading
+description: Detects potential DLL sideloading of "SmadHook.dll", a DLL used by SmadAV
+  antivirus
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2023/malware-spotlight-camaro-dragons-tinynote-backdoor/
+- https://www.qurium.org/alerts/targeted-malware-against-crph/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith:
+    - \SmadHook32c.dll
+    - \SmadHook64c.dll
+  filter_main_legit_path:
+    Image:
+    - C:\Program Files (x86)\SMADAV\SmadavProtect32.exe
+    - C:\Program Files (x86)\SMADAV\SmadavProtect64.exe
+    - C:\Program Files\SMADAV\SmadavProtect32.exe
+    - C:\Program Files\SMADAV\SmadavProtect64.exe
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\SMADAV\
+    - C:\Program Files\SMADAV\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 24b6cf51-6122-469e-861a-22974e9c1e5b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_smadhook.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

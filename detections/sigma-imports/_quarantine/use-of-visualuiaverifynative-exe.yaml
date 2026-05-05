@@ -1,0 +1,37 @@
+id: sigmahq-sigma-b30a8bc5-e21b-4ca2-9420-0a94019ac56a
+name: Use of VisualUiaVerifyNative.exe
+description: VisualUiaVerifyNative.exe is a Windows SDK that can be used for AWL bypass
+  and is listed in Microsoft's recommended block rules.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/VisualUiaVerifyNative/
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/applications-that-can-bypass-wdac
+- https://bohops.com/2020/10/15/exploring-the-wdac-microsoft-recommended-block-rules-visualuiaverifynative/
+- https://github.com/MicrosoftDocs/windows-itpro-docs/commit/937db704b9148e9cee7c7010cad4d00ce9c4fdad
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \VisualUiaVerifyNative.exe
+  - OriginalFileName: VisualUiaVerifyNative.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b30a8bc5-e21b-4ca2-9420-0a94019ac56a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_visualuiaverifynative.yml
+falsepositives:
+- Legitimate testing of Microsoft UI parts.
+notes:
+  quarantine_reason: 'upstream status: test'

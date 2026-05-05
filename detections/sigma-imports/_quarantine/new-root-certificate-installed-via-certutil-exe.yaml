@@ -1,0 +1,42 @@
+id: sigmahq-sigma-d2125259-ddea-4c1c-9c22-977eb5b29cf0
+name: New Root Certificate Installed Via Certutil.EXE
+description: 'Detects execution of "certutil" with the "addstore" flag in order to
+  install a new certificate on the system.
+
+  Adversaries may install a root certificate on a compromised system to avoid warnings
+  when connecting to adversary controlled web servers.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1553.004/T1553.004.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \certutil.exe
+  - OriginalFileName: CertUtil.exe
+  selection_cli_add:
+    CommandLine|contains|windash: -addstore
+  selection_cli_store:
+    CommandLine|contains: root
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d2125259-ddea-4c1c-9c22-977eb5b29cf0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_certutil_certificate_installation.yml
+falsepositives:
+- Help Desk or IT may need to manually add a corporate Root CA on occasion. Need to
+  test if GPO push doesn't trigger FP
+notes:
+  quarantine_reason: 'upstream status: test'

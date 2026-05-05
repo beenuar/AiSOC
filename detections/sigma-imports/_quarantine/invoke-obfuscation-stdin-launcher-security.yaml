@@ -1,0 +1,46 @@
+id: sigmahq-sigma-0c718a5e-4284-4fb9-b4d9-b9a50b3a1974
+name: Invoke-Obfuscation STDIN+ Launcher - Security
+description: Detects Obfuscated use of stdin to execute PowerShell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|contains|all:
+    - cmd
+    - powershell
+  selection2:
+    ServiceFileName|contains:
+    - ${input}
+    - noexit
+  selection3:
+    ServiceFileName|contains:
+    - ' /c '
+    - ' /r '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0c718a5e-4284-4fb9-b4d9-b9a50b3a1974
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_invoke_obfuscation_stdin_services_security.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

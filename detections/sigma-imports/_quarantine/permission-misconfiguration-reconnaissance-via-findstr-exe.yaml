@@ -1,0 +1,51 @@
+id: sigmahq-sigma-47e4bab7-c626-47dc-967b-255608c9a920
+name: Permission Misconfiguration Reconnaissance Via Findstr.EXE
+description: 'Detects usage of findstr with the "EVERYONE" or "BUILTIN" keywords.
+
+  This was seen being used in combination with "icacls" and other utilities to spot
+  misconfigured files or folders permissions.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.006
+  categories:
+  - endpoint
+references:
+- https://www.absolomb.com/2018-01-26-Windows-Privilege-Escalation-Guide/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_findstr_img:
+  - Image|endswith:
+    - \find.exe
+    - \findstr.exe
+  - OriginalFileName:
+    - FIND.EXE
+    - FINDSTR.EXE
+  selection_findstr_cli:
+    CommandLine|contains:
+    - '"Everyone"'
+    - '''Everyone'''
+    - '"BUILTIN\\"'
+    - '''BUILTIN\'''
+  selection_special:
+    CommandLine|contains|all:
+    - 'icacls '
+    - 'findstr '
+    - Everyone
+  condition: all of selection_findstr_* or selection_special
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 47e4bab7-c626-47dc-967b-255608c9a920
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_findstr_recon_everyone.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

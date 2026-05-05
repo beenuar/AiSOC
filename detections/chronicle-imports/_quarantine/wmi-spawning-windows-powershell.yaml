@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-wmi-spawning-windows-powershell
+name: wmi_spawning_windows_powershell
+description: wmi_spawning_windows_powershell
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule wmi_spawning_windows_powershell {\n meta:\n    author = \"\
+    Markus Neis / @Karneades\"\n    description = \"Detects WMI spawning PowerShell\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/RALI6fJ1G8mm\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/04/03\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, defense_evasion, t1064\"\
+    \n\n  events:\n((re.regex($selection.principal.process.file.full_path, `.*\\\\\
+    wmiprvse\\.exe`) and re.regex($selection.target.process.file.full_path, `.*\\\\\
+    powershell\\.exe`) and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\")) and not (re.regex($selection.target.process.command_line, `.*&amp;.*`)))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: wmi_spawning_windows_powershell
+provenance:
+  source: chronicle/detection-rules
+  source_id: wmi_spawning_windows_powershell
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/wmi_spawning_windows_powershell.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

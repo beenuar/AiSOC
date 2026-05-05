@@ -1,0 +1,45 @@
+id: splunk-security-content-ac490de2-ee39-421c-b61b-1c4005dde427
+name: Windows SharePoint Spinstall0 GET Request
+description: The following analytic detects potential post-exploitation activity related
+  to the Microsoft SharePoint CVE-2025-53770 vulnerability. After successful exploitation
+  via the ToolPane.aspx endpoint, attackers typically deploy a webshell named "spinstall0.aspx"
+  in the SharePoint layouts directory. This detection identifies GET requests to this
+  webshell, which indicates active use of the backdoor for command execution, data
+  exfiltration, or credential/key extraction. Attackers commonly use these webshells
+  to extract encryption keys, authentication tokens, and other sensitive information
+  from the compromised SharePoint server.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1505.003
+  - T1552
+  categories:
+  - application
+references:
+- https://research.eye.security/sharepoint-under-siege/
+- https://www.cisa.gov/news-events/alerts/2025/07/20/microsoft-releases-guidance-exploitation-sharepoint-vulnerability-cve-2025-53770
+- https://msrc.microsoft.com/blog/2025/07/customer-guidance-for-sharepoint-vulnerability-cve-2025-53770/
+- https://splunkbase.splunk.com/app/3185
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.url=\"*/_layouts/15/spinstall0.aspx*\" Web.http_method=\"\
+    GET\"\n  BY Web.url Web.src Web.dest\n     Web.status Web.http_user_agent Web.url_length\n\
+    \     sourcetype\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_sharepoint_spinstall0_get_request_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ac490de2-ee39-421c-b61b-1c4005dde427
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/windows_sharepoint_spinstall0_get_request.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

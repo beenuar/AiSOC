@@ -1,0 +1,76 @@
+id: chronicle-detection-rules-ttp-windows-webserver-process-potential-webshell-execution
+name: ttp_windows_webserver_process_potential_webshell_execution
+description: ttp_windows_webserver_process_potential_webshell_execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ttp_windows_webserver_process_potential_webshell_execution {\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    rule_name = \"Potential Webshell\
+    \ Process Execution\"\n    description = \"Detects on the execution arguments\
+    \ associated with cmd.exe invocations originating from an active ASP.NET webshell.\"\
+    \n    severity = \"Medium\"\n    tactic = \"TA0003\"\n    technique = \"T1505.003\"\
+    \n    rule_id = \"mr_37c87ffe-d6ab-4fc6-a191-ad0da8f9ec98\"\n\n  events:\n   \
+    \ $e.metadata.event_type = \"PROCESS_LAUNCH\"\n    $e.principal.process.file.full_path\
+    \ = /(^|\\\\)(w3wp.exe|httpd.exe|tomcat.exe|tomcat\\d+\\.exe)$/ nocase\n    $e.target.process.command_line\
+    \ = /^\"[A-Za-z]:\\\\.{16}\\\\cmd\\.exe\" \\/c [^\"][^:]/ nocase\n    $e.target.process.command_line\
+    \ = /^\"c:\\\\windows\\\\system32\\\\cmd\\.exe\" \\/c/ nocase\n    //Tuning\n\
+    \    not $e.target.process.command_line = /^\"C:\\\\Windows\\\\system32\\\\cmd.exe\"\
+    \ \\/c ping / nocase\n    not $e.target.process.command_line = /^\"C:\\\\Windows\\\
+    \\System32\\\\cmd.exe\" \\/c ftp.exe / nocase\n    not $e.target.process.command_line\
+    \ = /^\"C:\\\\Windows\\\\system32\\\\cmd.exe\" \\/c az account get-access-token/\
+    \ nocase\n    not $e.target.process.command_line = /^\"C:\\\\Windows\\\\System32\\\
+    \\cmd.exe\" \\/c GoalBus.exe  \\/DBT:sql / nocase\n    not $e.target.process.command_line\
+    \ = /\"C:\\\\Windows\\\\System32\\\\cmd.exe\" \\/c Rscript \"D:\\\\\\\\Opti\\\\\
+    \\\\R\\\\\\\\\\\\R/ nocase\n    not $e.target.process.command_line = /^\"C:\\\\\
+    Windows\\\\system32\\\\cmd\\.exe\" \\/c timeout \\d+ \\/nobreak$/ nocase\n   \
+    \ not $e.target.process.command_line = /^\"C:\\\\Windows\\\\System32\\\\cmd\\\
+    .exe\" \\/c copy.*\\\\Department\\\\HR\\\\HR-Wellness\\\\APPS$/ nocase\n    not\
+    \ $e.target.process.command_line = /^\"C:\\\\Windows\\\\System32\\\\cmd.exe\"\
+    \ \\/C\\s+del\\s.*\\\\System5\\\\Web\\\\NDA\\\\TempUploadFiles\\\\/ nocase\n \
+    \   not $e.target.process.command_line = /^\"C:\\\\Windows\\\\System32\\\\cmd\\\
+    .exe\".*--footer-html \"[A-Z]:\\\\PublishedApp\\\\SystemProductRelease\\\\.*\\\
+    \\ProductReleasePDF\\\\/ nocase\n    not $e.target.process.command_line = /^\"\
+    C:\\\\Windows\\\\System32\\\\cmd.exe\"\\s+\\/c\\s+(rmdir|rename)\\s.*\"D:\\\\\
+    Domains\\\\Internal\\\\Deploy\\\\(Tools|Released)\\\\/ nocase\n    not $e.target.process.command_line\
+    \ = /^\"C:\\\\windows\\\\system32\\\\cmd.exe\"\\s+\\/C type\\s+.*\\\\CHARGEBACK\\\
+    \\(BILLING|RETAIL)\\\\[^\\\\]+\\\\TEMP\\\\header.txt/ nocase\n    not $e.principal.process.command_line\
+    \ = /w3wp.exe\\s*-ap\\s*\"EUSI\"\\s.*\\\\apppools\\\\EUSI\\\\EUSI\\.config\"/\
+    \ nocase\n\n  outcome:\n    $principal_hostname = $e.principal.hostname\n    $risk_score\
+    \ = 65\n    $vendor_name = array($e.metadata.vendor_name)\n    $product_name =\
+    \ $e.metadata.product_name\n    $victim_uid = $e.principal.asset.asset_id\n  \
+    \  $victim_name = $e.principal.asset.hostname\n    $victim_netid = array($e.principal.ip)\n\
+    \    $adversary_uid = $e.principal.user.userid\n    $adversary_name = $e.principal.user.user_display_name\n\
+    \    $adversary_netid = $e.principal.user.windows_sid\n    $tmp1 = max(\n    \
+    \    if($e.security_result.action != \"BLOCK\" and $e.security_result.action !=\
+    \ \"UNKNOWN_ACTION\", 2)\n    )\n    $tmp2 = max(\n        if($e.security_result.action\
+    \ = \"BLOCK\", 1)\n    )\n    $result = arrays.index_to_str(strings.split(\"attempted,failed,succeeded,succeeded\"\
+    ), $tmp1 + $tmp2)\n    $result_time = $e.metadata.event_timestamp.seconds\n  \
+    \  $event_count = 1\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: ttp_windows_webserver_process_potential_webshell_execution
+provenance:
+  source: chronicle/detection-rules
+  source_id: ttp_windows_webserver_process_potential_webshell_execution
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/sharepoint/ttp_windows_webserver_process_potential_webshell_execution.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

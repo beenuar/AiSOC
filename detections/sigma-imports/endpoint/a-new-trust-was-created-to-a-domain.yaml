@@ -1,0 +1,30 @@
+id: sigmahq-sigma-0255a820-e564-4e40-af2b-6ac61160335c
+name: A New Trust Was Created To A Domain
+description: Addition of domains is seldom and should be verified for legitimacy.
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4706
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4706
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0255a820-e564-4e40-af2b-6ac61160335c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_add_domain_trust.yml
+falsepositives:
+- Legitimate extension of domain structure

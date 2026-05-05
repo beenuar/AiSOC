@@ -1,0 +1,55 @@
+id: sigmahq-sigma-5bac7a56-da88-4c27-922e-c81e113b20cb
+name: Github Self-Hosted Runner Execution
+description: 'Detects GitHub self-hosted runners executing workflows on local infrastructure
+  that could be abused for persistence and code execution.
+
+  Shai-Hulud is an npm supply chain worm targeting CI/CD environments.
+
+  It installs runners on compromised systems to maintain access after credential theft,
+  leveraging their access to secrets and internal networks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1102.002
+  - T1071
+  categories:
+  - endpoint
+references:
+- https://about.gitlab.com/blog/gitlab-discovers-widespread-npm-supply-chain-attack/
+- https://securitylabs.datadoghq.com/articles/shai-hulud-2.0-npm-worm/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_worker_img:
+  - Image|endswith: \Runner.Worker.exe
+  - OriginalFileName: Runner.Worker.dll
+  selection_worker_cli:
+    CommandLine|contains: spawnclient
+  selection_listener_img:
+  - Image|endswith: \Runner.Listener.exe
+  - OriginalFileName: Runner.Listener.dll
+  selection_listener_cli:
+    CommandLine|contains:
+    - run
+    - configure
+  condition: all of selection_worker_* or all of selection_listener_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5bac7a56-da88-4c27-922e-c81e113b20cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_github_self_hosted_runner.yml
+falsepositives:
+- Legitimate GitHub self-hosted runner installations on designated CI/CD infrastructure
+- Authorized runner deployments by DevOps/Platform teams following change management
+- Scheduled runner updates or reconfigurations on existing build agents
+- Self-hosted runners that follow expected/known naming patterns
+- Installation via expected/known configuration management tools (reflected mostly
+  as parent process name)
+notes:
+  quarantine_reason: 'upstream status: test'

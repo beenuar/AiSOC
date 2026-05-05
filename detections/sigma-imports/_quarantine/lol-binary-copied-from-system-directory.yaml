@@ -1,0 +1,70 @@
+id: sigmahq-sigma-f5d19838-41b5-476c-98d8-ba8af4929ee2
+name: LOL-Binary Copied From System Directory
+description: Detects a suspicious copy operation that tries to copy a known LOLBIN
+  from system (System32, SysWOW64, WinSxS) directories to another on disk in order
+  to bypass detections based on locations.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://www.hybrid-analysis.com/sample/8da5b75b6380a41eee3a399c43dfe0d99eeefaa1fd21027a07b1ecaa4cd96fdd?environmentId=120
+- https://web.archive.org/web/20180331144337/https://www.fireeye.com/blog/threat-research/2018/03/sanny-malware-delivery-method-updated-in-recently-observed-attacks.html
+- https://thedfirreport.com/2023/08/28/html-smuggling-leads-to-domain-wide-ransomware/
+- https://www.virustotal.com/gui/file/14e722855605ba78dc1d21153f0e1be90e7528149f2cd2d7d6eba8ef27534bdc/behavior
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_tools_cmd:
+    Image|endswith: \cmd.exe
+    CommandLine|contains: 'copy '
+  selection_tools_pwsh:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    CommandLine|contains:
+    - copy-item
+    - ' copy '
+    - 'cpi '
+    - ' cp '
+  selection_tools_other:
+  - Image|endswith:
+    - \robocopy.exe
+    - \xcopy.exe
+  - OriginalFileName:
+    - robocopy.exe
+    - XCOPY.EXE
+  selection_target_path:
+    CommandLine|contains:
+    - \System32
+    - \SysWOW64
+    - \WinSxS
+  selection_target_lolbin:
+    CommandLine|contains:
+    - \bitsadmin.exe
+    - \calc.exe
+    - \certutil.exe
+    - \cmdl32.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \rundll32.exe
+    - \wscript.exe
+    - \ie4uinit.exe
+  condition: 1 of selection_tools_* and all of selection_target_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f5d19838-41b5-476c-98d8-ba8af4929ee2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_copy_system_dir_lolbin.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

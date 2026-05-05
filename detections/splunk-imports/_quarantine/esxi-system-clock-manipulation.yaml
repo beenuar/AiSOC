@@ -1,0 +1,39 @@
+id: splunk-security-content-910df401-b215-4675-88c5-2ad7b06d82a5
+name: ESXi System Clock Manipulation
+description: This detection identifies a significant change to the system clock on
+  an ESXi host, which may indicate an attempt to manipulate timestamps and evade detection
+  or forensic analysis
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.006
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*NTPClock*" AND Message="*system clock stepped*"
+    | rex field=_raw "stepped to (?<epoch_time>\d+\.\d+),.+delta\s(?<delta>\d+)\s"
+    | rex field=_raw "Z (?<dest>[\w\.]+)\s" | eval epoch_time=tonumber(epoch_time)
+    | eval delta=tonumber(delta) | eval event_time=round(_time, 0) | eval direction=if(epoch_time
+    < event_time, "backward", "forward") | eval original_time=if(direction=="backward",
+    epoch_time + delta, epoch_time - delta) | eval stepped_to_str=strftime(epoch_time,
+    "%Y-%m-%d %H:%M:%S") | eval original_time_str=strftime(original_time, "%Y-%m-%d
+    %H:%M:%S") | stats min(_time) as firstTime max(_time) as lastTime count by dest
+    direction original_time_str stepped_to_str epoch_time delta | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `esxi_system_clock_manipulation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 910df401-b215-4675-88c5-2ad7b06d82a5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_system_clock_manipulation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

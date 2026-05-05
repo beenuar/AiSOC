@@ -1,0 +1,43 @@
+id: splunk-security-content-244a77bb-3b2a-46f1-bf2c-b4f7cd29276d
+name: Cisco Secure Firewall - Possibly Compromised Host
+description: 'The following analytic highlights high-impact intrusion events assigned
+  by Cisco Secure Firewall.
+
+  This detection leverages Cisco Secure Firewall Threat Defense logs and specifically
+  the IntrusionEvent event type and `Impact` field assigned by Cisco Secure Firewall
+  looking for an impact score of 1 or 2. If confirmed malicious this may indicate
+  a potential compromised host.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  - T1059
+  - T1587.001
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent Impact IN (1,2)\n\
+    | stats count as TotalDetections values(signature_id) as signature_id\n      \
+    \  values(signature) as signature\n        values(rule) as rule\n        min(_time)\
+    \ as firstTime max(_time) as lastTime\n        by src dest dest_port transport\
+    \ Impact app impact_desc class_desc MitreAttackGroups InlineResult InlineResultReason\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___possibly_compromised_host_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 244a77bb-3b2a-46f1-bf2c-b4f7cd29276d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___possibly_compromised_host.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-508a9374-ad52-4789-b568-fc358def2c65
+name: Suspicious History File Operations
+description: Detects commandline operations on shell history files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.003/T1552.003.md
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains:
+    - .bash_history
+    - .zsh_history
+    - .zhistory
+    - .history
+    - .sh_history
+    - fish_history
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 508a9374-ad52-4789-b568-fc358def2c65
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_susp_histfile_operations.yml
+falsepositives:
+- Legitimate administrative activity
+- Legitimate software, cleaning hist file
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-89bb1f97-c7b9-40e8-b52b-7d6afbd67276
+name: Local Groups Discovery - MacOs
+description: Detects enumeration of local system groups
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1069.001/T1069.001.md
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_1:
+    Image|endswith: /dscacheutil
+    CommandLine|contains|all:
+    - -q
+    - group
+  selection_2:
+    Image|endswith: /cat
+    CommandLine|contains: /etc/group
+  selection_3:
+    Image|endswith: /dscl
+    CommandLine|contains|all:
+    - -list
+    - /groups
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 89bb1f97-c7b9-40e8-b52b-7d6afbd67276
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_local_groups.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

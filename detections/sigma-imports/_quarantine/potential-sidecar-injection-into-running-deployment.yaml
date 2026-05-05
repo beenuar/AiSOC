@@ -1,0 +1,46 @@
+id: sigmahq-sigma-ad9012a6-e518-4432-9890-f3b82b8fc71f
+name: Potential Sidecar Injection Into Running Deployment
+description: 'Detects attempts to inject a sidecar container into a running deployment.
+
+  A sidecar container is an additional container within a pod, that resides alongside
+  the main container.
+
+  One way to add containers to running resources like Deployments/DeamonSets/StatefulSets,
+  is via a "kubectl patch" operation.
+
+  By injecting a new container within a legitimate pod, an attacker can run their
+  code and hide their activity, instead of running their own separated pod in the
+  cluster.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1609
+  categories:
+  - endpoint
+references:
+- https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
+- https://microsoft.github.io/Threat-Matrix-for-Kubernetes/techniques/Sidecar%20Injection/
+logsource:
+  category: application
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    verb: patch
+    apiGroup: apps
+    objectRef.resource: deployments
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ad9012a6-e518-4432-9890-f3b82b8fc71f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_sidecar_injection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

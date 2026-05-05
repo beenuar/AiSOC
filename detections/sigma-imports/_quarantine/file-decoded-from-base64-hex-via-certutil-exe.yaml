@@ -1,0 +1,44 @@
+id: sigmahq-sigma-cc9cbe82-7bc0-4ef5-bc23-bbfb83947be7
+name: File Decoded From Base64/Hex Via Certutil.EXE
+description: Detects the execution of certutil with either the "decode" or "decodehex"
+  flags to decode base64 or hex encoded files. This can be abused by attackers to
+  decode an encoded payload before execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil
+- https://unit42.paloaltonetworks.com/new-babyshark-malware-targets-u-s-national-security-think-tanks/
+- https://news.sophos.com/en-us/2021/04/13/compromised-exchange-server-hosting-cryptojacker-targeting-other-exchange-servers/
+- https://twitter.com/JohnLaTwC/status/835149808817991680
+- https://learn.microsoft.com/en-us/archive/blogs/pki/basic-crl-checking-with-certutil
+- https://lolbas-project.github.io/lolbas/Binaries/Certutil/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \certutil.exe
+  - OriginalFileName: CertUtil.exe
+  selection_cli:
+    CommandLine|contains|windash:
+    - '-decode '
+    - '-decodehex '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cc9cbe82-7bc0-4ef5-bc23-bbfb83947be7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_certutil_decode.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

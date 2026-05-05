@@ -1,0 +1,40 @@
+id: splunk-security-content-4ab6862b-ce88-4223-96c0-f6da2cffb898
+name: Windows Obfuscated Files or Information via RAR SFX
+description: The following analytic detects the creation of RAR Self-Extracting (SFX)
+  files by monitoring the generation of file related to rar sfx .tmp file creation
+  during sfx installation. This method leverages a heuristic to identify RAR SFX archives
+  based on specific markers that indicate a combination of executable code and compressed
+  RAR data. By tracking such activity, the analytic helps pinpoint potentially unauthorized
+  or suspicious file creation events, which are often associated with malware packaging
+  or data exfiltration. Legitimate usage may include custom installers or compressed
+  file delivery.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027.013
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/-applocker-rules-as-defense-evasion-complete-analysis.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=11 TargetFilename IN (\"*__tmp_rar_sfx_access_check*\"\
+    )\n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY action\
+    \ dest file_name\n       file_path process_guid process_id\n       user user_id\
+    \ vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_obfuscated_files_or_information_via_rar_sfx_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4ab6862b-ce88-4223-96c0-f6da2cffb898
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_obfuscated_files_or_information_via_rar_sfx.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

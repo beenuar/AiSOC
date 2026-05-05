@@ -1,0 +1,37 @@
+id: sigmahq-sigma-295c9289-acee-4503-a571-8eacaef36b28
+name: Vulnerable HackSys Extreme Vulnerable Driver Load
+description: Detects the load of HackSys Extreme Vulnerable Driver which is an intentionally
+  vulnerable Windows driver developed for security enthusiasts to learn and polish
+  their exploitation skills at Kernel level and often abused by threat actors
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://github.com/hacksysteam/HackSysExtremeVulnerableDriver
+logsource:
+  product: windows
+  category: driver_load
+detection:
+  selection:
+  - ImageLoaded|endswith: \HEVD.sys
+  - Hashes|contains:
+    - IMPHASH=f26d0b110873a1c7d8c4f08fbeab89c5
+    - IMPHASH=c46ea2e651fd5f7f716c8867c6d13594
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 295c9289-acee-4503-a571-8eacaef36b28
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/driver_load/driver_load_win_vuln_hevd_driver.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

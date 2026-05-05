@@ -1,0 +1,65 @@
+id: splunk-security-content-9a5f4b3e-1d2b-4c6f-9a8e-3b7d2f5c1a6e
+name: Windows PsTools Recon Usage
+description: 'The following analytic identifies execution of Sysinternals PsTools
+  and Sysinternals Suit binaries that are commonly used for reconnaissance and information
+  gathering on
+
+  Windows endpoints.
+
+  PsTools (PsExec, PsFile, PsGetSid, PsInfo, PsPing, etc.) or Sysinternals Suit tools,
+  are frequently used by administrators for legitimate maintenance but are also leveraged
+  by threat actors to collect system, account, network and service information during
+  discovery and lateral movement.
+
+  This detection focuses on process execution and PE metadata telemetry (OriginalFileName).
+
+  If confirmed malicious, this activity can indicate targeted reconnaissance and foothold
+  escalation, enabling subsequent lateral movement or credential abuse.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  - T1046
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/sysinternals/downloads/pstools
+- https://github.com/CyberMonitor/APT_CyberCriminal_Campagin_Collections/raw/master/2015/2015.09.17.Operation_Iron_Tiger/wp-operation-iron-tiger.pdf
+- https://go.crowdstrike.com/rs/281-OBQ-266/images/Report2018OverwatchReport.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\n  from datamodel=Endpoint.Processes where\n\
+    \n  Processes.process_name IN (\n      \"PsGetsid.exe\",\n      \"PsGetsid64.exe\"\
+    ,\n      \"PsInfo.exe\",\n      \"PsInfo64.exe\",\n      \"pslist.exe\",\n   \
+    \   \"pslist64.exe\",\n      \"PsLoggedon.exe\",\n      \"PsLoggedon64.exe\",\n\
+    \      \"psloglist.exe\",\n      \"psloglist64.exe\",\n      \"PsPing.exe\",\n\
+    \      \"PsPing64.exe\",\n      \"PsService.exe\",\n      \"PsService64.exe\"\
+    ,\n      \"Tcpvcon.exe\",\n      \"Tcpvcon64.exe\",\n      \"Tcpvcon64a.exe\"\n\
+    \  )\n  OR\n  Processes.original_file_name IN (\n      \"PsGetSid.exe\",\n   \
+    \   \"Psinfo.exe\",\n      \"pslist.exe\",\n      \"psloggedon.exe\",\n      \"\
+    psloglist.exe\",\n      \"psping.exe\",\n      \"psservice.exe\",\n      \"Tcpvcon.exe\"\
+    \n  )\n\nby Processes.action Processes.dest Processes.original_file_name Processes.parent_process\
+    \ Processes.parent_process_exec\n   Processes.parent_process_guid Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid Processes.process_hash Processes.process_id\n\
+    \   Processes.process_integrity_level Processes.process_name Processes.process_path\
+    \ Processes.user Processes.user_id\n   Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_pstools_recon_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9a5f4b3e-1d2b-4c6f-9a8e-3b7d2f5c1a6e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_pstools_recon_usage.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

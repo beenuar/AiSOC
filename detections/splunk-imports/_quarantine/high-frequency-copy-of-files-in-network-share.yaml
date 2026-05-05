@@ -1,0 +1,44 @@
+id: splunk-security-content-40925f12-4709-11ec-bb43-acde48001122
+name: High Frequency Copy Of Files In Network Share
+description: The following analytic detects a high frequency of file copying or moving
+  within network shares, which may indicate potential data sabotage or exfiltration
+  attempts. It leverages Windows Security Event Logs (EventCode 5145) to monitor access
+  to specific file types and network shares. This activity is significant as it can
+  reveal insider threats attempting to transfer classified or internal files, potentially
+  leading to data breaches or evidence tampering. If confirmed malicious, this behavior
+  could result in unauthorized data access, data loss, or compromised sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1537
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1537/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5145 RelativeTargetName IN ("*.doc","*.docx","*.xls","*.xlsx","*.ppt","*.pptx","*.log","*.txt","*.db","*.7z","*.zip","*.rar","*.tar","*.gz","*.jpg","*.gif","*.png","*.bmp","*.pdf","*.rtf","*.key")
+    ObjectType=File ShareName IN ("\\\\*\\C$","\\\\*\\IPC$","\\\\*\\admin$") AccessMask=
+    "0x2" |  bucket _time span=5m | stats values(RelativeTargetName) as valRelativeTargetName,
+    values(ShareName) as valShareName, values(ObjectType) as valObjectType, values(AccessMask)
+    as valAccessmask, values(src_port) as valSrcPort, values(SourceAddress) as valSrcAddress
+    count as numShareName by dest, _time, EventCode, src_user, src_ip | eventstats
+    avg(numShareName) as avgShareName, stdev(numShareName) as stdShareName, count
+    as numSlots by dest, _time, EventCode, src_user |  eval upperThreshold=(avgShareName
+    + stdShareName *3) |  eval isOutlier=if(avgShareName > 20 and avgShareName >=
+    upperThreshold, 1, 0) |  search isOutlier=1  | `high_frequency_copy_of_files_in_network_share_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 40925f12-4709-11ec-bb43-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/high_frequency_copy_of_files_in_network_share.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

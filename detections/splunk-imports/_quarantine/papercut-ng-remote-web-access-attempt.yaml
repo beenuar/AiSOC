@@ -1,0 +1,64 @@
+id: splunk-security-content-9fcb214a-dc42-4ce7-a650-f1d2cab16a6a
+name: PaperCut NG Remote Web Access Attempt
+description: 'The following analytic detects potential exploitation attempts on publicly
+  accessible PaperCut NG servers.
+
+  It identifies connections from public IP addresses to the server, specifically monitoring
+  URI paths commonly used in proof-of-concept scripts for exploiting PaperCut NG vulnerabilities.
+
+  This detection leverages web traffic data from the `Web` datamodel, focusing on
+  specific URI paths and excluding internal IP ranges.
+
+  This activity is significant as it may indicate an attempt to exploit known vulnerabilities
+  in PaperCut NG, potentially leading to unauthorized access or control of the server.
+
+  If confirmed malicious, attackers could gain administrative access, leading to data
+  breaches or further network compromise.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.cisa.gov/news-events/alerts/2023/05/11/cisa-and-fbi-release-joint-advisory-response-active-exploitation-papercut-vulnerability
+- https://www.papercut.com/kb/Main/PO-1216-and-PO-1219
+- https://www.horizon3.ai/papercut-cve-2023-27350-deep-dive-and-indicators-of-compromise/
+- https://www.bleepingcomputer.com/news/security/hackers-actively-exploit-critical-rce-bug-in-papercut-servers/
+- https://www.huntress.com/blog/critical-vulnerabilities-in-papercut-print-management-software
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Web WHERE\n\nWeb.url IN (\n\
+    \  \"*/app?service=direct/1/PrinterDetails/printerOptionsTab.tab\"\n  \"*/app?service=direct/1/PrinterList/selectPrinter&sp=*\"\
+    ,\n  \"*/app?service=page/PrinterList\",\n  \"*/app?service=page/SetupCompleted\"\
+    \n)\nNOT src IN (\n              \"10.0.0.0/8\",\n              \"172.16.0.0/12\"\
+    ,\n              \"192.168.0.0/16\",\n              \"100.64.0.0/10\",\n     \
+    \         \"127.0.0.0/8\",\n              \"169.254.0.0/16\",\n              \"\
+    192.0.0.0/24\",\n              \"192.0.0.0/29\",\n              \"192.0.0.8/32\"\
+    ,\n              \"192.0.0.9/32\",\n              \"192.0.0.10/32\",\n       \
+    \       \"192.0.0.170/32\",\n              \"192.0.0.171/32\",\n             \
+    \ \"192.0.2.0/24\",\n              \"192.31.196.0/24\",\n              \"192.52.193.0/24\"\
+    ,\n              \"192.88.99.0/24\",\n              \"224.0.0.0/4\",\n       \
+    \       \"192.175.48.0/24\",\n              \"198.18.0.0/15\",\n             \
+    \ \"198.51.100.0/24\",\n              \"203.0.113.0/24\",\n              \"240.0.0.0/4\"\
+    ,\n              \"::1\"\n            )\nby Web.http_user_agent Web.http_method\n\
+    \   Web.url,Web.url_length Web.src\n   Web.dest Web.dest_port\n\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `papercut_ng_remote_web_access_attempt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9fcb214a-dc42-4ce7-a650-f1d2cab16a6a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/papercut_ng_remote_web_access_attempt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

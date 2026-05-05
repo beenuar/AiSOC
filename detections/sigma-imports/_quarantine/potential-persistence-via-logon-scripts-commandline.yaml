@@ -1,0 +1,34 @@
+id: sigmahq-sigma-21d856f9-9281-4ded-9377-51a1a6e2a432
+name: Potential Persistence Via Logon Scripts - CommandLine
+description: Detects the addition of a new LogonScript to the registry value "UserInitMprLogonScript"
+  for potential persistence
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1037.001
+  categories:
+  - endpoint
+references:
+- https://cocomelonc.github.io/persistence/2022/12/09/malware-pers-20.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: UserInitMprLogonScript
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 21d856f9-9281-4ded-9377-51a1a6e2a432
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_registry_logon_script.yml
+falsepositives:
+- Legitimate addition of Logon Scripts via the command line by administrators or third
+  party tools
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,84 @@
+id: chronicle-detection-rules-hacktool-winpeas-execution-patterns
+name: hacktool_winpeas_execution_patterns
+description: hacktool_winpeas_execution_patterns
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule hacktool_winpeas_execution_patterns {\n\n    meta:\n      author = \"Georg\
+    \ Lauenstein - suresecure GmbH\"\n      description = \"This detection rule identifies\
+    \ the execution of WinPEAS (Windows Privilege Escalation Awesome Script), a post-exploitation\
+    \ reconnaissance tool used to discover privilege escalation paths on Windows systems.\
+    \ WinPEAS performs a wide range of local enumeration checks, including service\
+    \ misconfigurations, permission issues, token privileges, and more. Its usage\
+    \ is commonly observed during red team assessments and by adversaries seeking\
+    \ to elevate privileges after gaining initial access. WinPEAS checks are well-documented\
+    \ in the HackTricks knowledge base.\"\n      rule_id = \"mr_9c9ad668-485a-4b10-b85d-36ba63546304\"\
+    \n      rule_name = \"Hacktool - WinPEAS Execution Patterns\"\n      tactic =\
+    \ \"TA0007\"\n      technique = \"T1082\"\n      references = \"https://github.com/carlospolop/PEASS-ng,\
+    \ https://book.hacktricks.wiki/en/windows-hardening/windows-local-privilege-escalation/index.html,\
+    \ https://www.microsoft.com/en-us/security/blog/2022-10-14/new-prestige-ransomware-impacts-organizations-in-ukraine-and-poland/,\
+    \ https://www.logpoint.com/wp-content/uploads/2023/02/emerging-threats-the-play-report.pdf\"\
+    \n      type = \"alert\"\n      platform = \"Windows, EDR\"\n      data_source\
+    \ = \"Microsoft Sysmon, Windows Event Logs\"\n      severity = \"Medium\"  //\
+    \ Adjust based on your risk assessment\n      priority = \"Medium\"  // Adjust\
+    \ based on your incident response process\n\n    events:\n      $winpeas_execution.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n      and\n        (\n          $winpeas_execution.src.process.file.full_path\
+    \ = /winPEAS.exe|winPEASany.exe|winPEASany_ofs.exe|winPEASx64.exe|winPEASx64_ofs.exe|winPEASx86.exe|winPEASx86_ofs.exe/\
+    \ nocase or\n          $winpeas_execution.target.process.file.full_path = /\\\\\
+    winPEAS\\.exe|\\\\winPEASany\\.exe|\\\\winPEASany_ofs\\.exe|\\\\winPEASx64\\.exe|\\\
+    \\winPEASx64_ofs\\.exe|\\\\winPEASx86\\.exe|\\\\winPEASx86_ofs\\.exe/ nocase or\n\
+    \          $winpeas_execution.target.process.command_line = /processinfo|servicesinfo|applicationsinfo|networkinfo|windowscreds|browserinfo|filesinfo|fileanalysis|eventsinfo/\
+    \ nocase\n\n          or\n            (\n              $winpeas_execution.target.process.command_line\
+    \ = /raw\\.githubusercontent\\.com/ nocase and\n              $winpeas_execution.target.process.command_line\
+    \ = /carlospolop/ nocase and\n              $winpeas_execution.target.process.command_line\
+    \ = /winPEAS\\.ps1/ nocase\n            )\n\n          or\n            (\n   \
+    \           $winpeas_execution.principal.process.command_line = / -linpeas$/ nocase\
+    \ or\n              $winpeas_execution.target.process.command_line = / -linpeas$/\
+    \ nocase\n            )\n        )\n\n      not\n        (\n          // Exclusion:\
+    \ Microsoft Defender Threat Protection Sensor Updates\n          $winpeas_execution.additional.fields[\"\
+    current_directory\"] = \"C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender Advanced\
+    \ Threat Protection\\\\Downloads\\\\\"\n        )\n\n      // Capture the hostname\
+    \ where the event occurred\n      $winpeas_execution.principal.hostname = $hostname\n\
+    \n    match:\n      $hostname over 10m\n\n    outcome:\n      $risk_score = max(65)\n\
+    \      $event_count = count_distinct($winpeas_execution.metadata.id)\n      $principal_process_pid\
+    \ = array_distinct($winpeas_execution.principal.process.pid)\n      $principal_process_command_line\
+    \ = array_distinct($winpeas_execution.principal.process.command_line)\n      $principal_process_file_sha256\
+    \ = array_distinct($winpeas_execution.principal.process.file.sha256)\n      $principal_process_file_full_path\
+    \ = array_distinct($winpeas_execution.principal.process.file.full_path)\n    \
+    \  $principal_process_product_specific_process_id = array_distinct($winpeas_execution.principal.process.product_specific_process_id)\n\
+    \      $principal_process_parent_process_product_specific_process_id = array_distinct($winpeas_execution.principal.process.parent_process.product_specific_process_id)\n\
+    \      $target_process_pid = array_distinct($winpeas_execution.target.process.pid)\n\
+    \      $target_process_command_line = array_distinct($winpeas_execution.target.process.command_line)\n\
+    \      $target_process_file_sha256 = array_distinct($winpeas_execution.target.process.file.sha256)\n\
+    \      $target_process_file_full_path = array_distinct($winpeas_execution.target.process.file.full_path)\n\
+    \      $target_process_product_specific_process_id = array_distinct($winpeas_execution.target.process.product_specific_process_id)\n\
+    \      $principal_user_userid = array_distinct($winpeas_execution.principal.user.userid)\n\
+    \n    condition:\n      $winpeas_execution\n}"
+  chronicle_rule_name: hacktool_winpeas_execution_patterns
+provenance:
+  source: chronicle/detection-rules
+  source_id: hacktool_winpeas_execution_patterns
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/hacktool_winpeas_execution_patterns.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

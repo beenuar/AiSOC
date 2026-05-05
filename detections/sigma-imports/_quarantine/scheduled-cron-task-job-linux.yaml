@@ -1,0 +1,35 @@
+id: sigmahq-sigma-6b14bac8-3e3a-4324-8109-42f0546a347f
+name: Scheduled Cron Task/Job - Linux
+description: Detects abuse of the cron utility to perform task scheduling for initial
+  or recurring execution of malicious code. Detection will focus on crontab jobs uploaded
+  from the tmp folder.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1053.003/T1053.003.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: crontab
+    CommandLine|contains: /tmp/
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6b14bac8-3e3a-4324-8109-42f0546a347f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_schedule_task_job_cron.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

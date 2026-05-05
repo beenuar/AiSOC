@@ -1,0 +1,62 @@
+id: splunk-security-content-b483804a-4cc0-49a4-9f00-ac29ba844d08
+name: Windows Process Executed From Removable Media
+description: This analytic is used to identify when a removable media device is attached
+  to a machine and then a process is executed from the same drive letter assigned
+  to the removable media device. Adversaries and Insider Threats may use removable
+  media devices for several malicious activities, including initial access, execution,
+  and exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1200
+  - T1025
+  - T1091
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1200/
+- https://www.cisa.gov/news-events/news/using-caution-usb-drives
+- https://www.bleepingcomputer.com/news/security/fbi-hackers-use-badusb-to-target-defense-firms-with-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_current_directory=*\n    AND\n    NOT Processes.process_current_directory\
+    \ IN (\"C:\\\\*\",\"*\\\\sysvol\\\\*\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product Processes.process_current_directory\n| `drop_dm_object_name(Processes)`\n\
+    | rex field=process_current_directory \"^(?<object_handle>[^\\\\\\]+\\\\\\)\"\n\
+    | where isnotnull(object_handle)\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | join dest,object_handle\n[\n| tstats `security_content_summariesonly` count\
+    \ values(Registry.action) as action values(Registry.process_guid) as process_guid\
+    \ values(Registry.process_id) as process_id values(Registry.registry_hive) as\
+    \ registry_hive values(Registry.registry_key_name) as registry_key_name values(Registry.registry_value_name)\
+    \ as registry_value_name values(Registry.registry_value_type) as registry_value_type\
+    \ values(Registry.status) as status values(Registry.user) as user values(Registry.vendor_product)\
+    \ as vendor_product FROM datamodel=Endpoint.Registry\n  WHERE Registry.registry_value_data=\"\
+    *:\\\\*\"\n    AND\n    Registry.registry_path=\"*USBSTOR*\"\n    AND\n    Registry.registry_path\
+    \ IN (\"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows Portable Devices\\\\Devices\\\
+    \\*\",\"HKLM\\\\System\\\\CurrentControlSet\\\\Enum\\\\SWD\\\\WPDBUSENUM\\\\*\"\
+    )\n  BY Registry.dest,Registry.registry_value_data, Registry.registry_path\n|\
+    \ `drop_dm_object_name(Registry)`\n| eval object_handle = registry_value_data,\
+    \ object_name = replace(mvindex(split(mvindex(split(registry_path, \"??\"),1),\"\
+    &amp;\"),2),\"PROD_\",\"\")\n    ]\n| `windows_process_executed_from_removable_media_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b483804a-4cc0-49a4-9f00-ac29ba844d08
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_process_executed_from_removable_media.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

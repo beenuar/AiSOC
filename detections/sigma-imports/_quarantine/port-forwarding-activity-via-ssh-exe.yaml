@@ -1,0 +1,35 @@
+id: sigmahq-sigma-327f48c1-a6db-4eb8-875a-f6981f1b0183
+name: Port Forwarding Activity Via SSH.EXE
+description: Detects port forwarding activity via SSH.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1021.001
+  - T1021.004
+  categories:
+  - endpoint
+references:
+- https://www.absolomb.com/2018-01-26-Windows-Privilege-Escalation-Guide/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \ssh.exe
+    CommandLine|contains|windash: ' -R '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 327f48c1-a6db-4eb8-875a-f6981f1b0183
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ssh_port_forward.yml
+falsepositives:
+- Administrative activity using a remote port forwarding to a local port
+notes:
+  quarantine_reason: 'upstream status: test'

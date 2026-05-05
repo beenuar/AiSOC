@@ -1,0 +1,35 @@
+id: sigmahq-sigma-c8e35e96-19ce-4f16-aeb6-fd5588dc5365
+name: Suspicious Named Error
+description: Detects suspicious DNS error messages that indicate a fatal or suspicious
+  error that could be caused by exploiting attempts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://github.com/ossec/ossec-hids/blob/1ecffb1b884607cb12e619f9ab3c04f530801083/etc/rules/named_rules.xml
+logsource:
+  product: linux
+  service: syslog
+detection:
+  keywords:
+  - ' dropping source port zero packet from '
+  - ' denied AXFR from '
+  - ' exiting (due to fatal error)'
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c8e35e96-19ce-4f16-aeb6-fd5588dc5365
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/syslog/lnx_syslog_susp_named.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,89 @@
+id: chronicle-detection-rules-okta-mismatch-between-source-and-response-for-verify-push-request
+name: okta_mismatch_between_source_and_response_for_verify_push_request
+description: okta_mismatch_between_source_and_response_for_verify_push_request
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule okta_mismatch_between_source_and_response_for_verify_push_request {\n\n\
+    \  meta:\n    author = \"Google Cloud Security\"\n    description = \"Okta Mismatch\
+    \ Between Source and Response for Verify Push Request\"\n    rule_id = \"mr_552008c0-c691-40b2-b7ce-5181570ba5c3\"\
+    \n    rule_name = \"Okta Mismatch Between Source And Response For Verify Push\
+    \ Request\"\n    reference = \"https://sec.okta.com/pushfatigueworkflows\"\n \
+    \   mitre_attack_tactic = \"Credential Access\"\n    mitre_attack_technique =\
+    \ \"Multi-Factor Authentication Request Generation\"\n    mitre_attack_url = \"\
+    https://attack.mitre.org/techniques/T1621\"\n    mitre_attack_version = \"v13.1\"\
+    \n    type = \"Alert\"\n    data_source = \"Okta\"\n    severity = \"Medium\"\n\
+    \    priority = \"Medium\"\n\n  events:\n    $push.metadata.product_name = \"\
+    Okta\"\n    $push.metadata.vendor_name = \"Okta\"\n    $push.metadata.event_type\
+    \ = \"USER_UNCATEGORIZED\"\n    $push.metadata.product_event_type = \"system.push.send_factor_verify_push\"\
+    \n    $push.security_result.description = /New Device=POSITIVE/\n    $push.security_result.description\
+    \ = /New IP=POSITIVE/\n    $push.security_result.action = \"ALLOW\"\n    $push.network.parent_session_id\
+    \ = $parent_session_id\n\n    $auth.metadata.product_name = \"Okta\"\n    $auth.metadata.vendor_name\
+    \ = \"Okta\"\n    $auth.metadata.event_type = \"USER_LOGIN\"\n    $auth.metadata.product_event_type\
+    \ = \"user.authentication.auth_via_mfa\"\n    $auth.security_result.detection_fields[\"\
+    factor\"] = \"OKTA_VERIFY_PUSH\"\n    $auth.security_result.action = \"ALLOW\"\
+    \n    $auth.network.parent_session_id = $parent_session_id\n\n    $push.metadata.event_timestamp.seconds\
+    \ <= $auth.metadata.event_timestamp.seconds\n\n  match:\n    $parent_session_id\
+    \ over 5m\n\n  outcome:\n    $risk_score = max(\n        // Baseline\n       \
+    \ 35 +\n        // If the IP Address is marked as suspicious IP address by Okta\
+    \ ThreatInsight\n        if($push.security_result.detection_fields[\"threatSuspected\"\
+    ] = \"true\", 30) +\n        // Based on Okta Behavior Detection pattern analysis\n\
+    \        if($push.security_result.description = /New Geo-Location=POSITIVE/, 10)\
+    \ +\n        if($push.security_result.description = /New Device=POSITIVE/, 20)\
+    \ +\n        if($push.security_result.description = /New IP=POSITIVE/, 5) +\n\
+    \        if($push.security_result.description = /New City=POSITIVE/, 5) +\n  \
+    \      if($push.security_result.description = /New State=POSITIVE/, 10) +\n  \
+    \      if($push.security_result.description = /New Country=POSITIVE/, 10) +\n\
+    \        if($push.security_result.description = /Velocity=POSITIVE/, 10) +\n \
+    \       // Unauthorized target geographies\n        if($push.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Cuba\", 20) +\n        if($push.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Iran\", 20) +\n        if($push.target.ip_geo_artifact.location.country_or_region\
+    \ = \"North Korea\", 20) +\n        if($push.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Russia\", 20) +\n        if($push.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Syria\", 20)\n    )\n    $mitre_attack_tactic = \"Credential Access\"\n\
+    \    $mitre_attack_technique = \"Multi-Factor Authentication Request Generation\"\
+    \n    $push_principal_ip_country = array_distinct($push.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $push_principal_ip_state = array_distinct($push.principal.ip_geo_artifact.location.state)\n\
+    \    $push_principal_ip_city = array_distinct($push.principal.location.city)\n\
+    \    $push_principal_user_email_addresses = array_distinct ($push.principal.user.email_addresses)\n\
+    \    $push_security_result_summary = array_distinct($push.security_result.summary)\n\
+    \    $push_target_user_email_addresses = array_distinct($push.target.user.email_addresses)\n\
+    \    $push_target_user_userid = array_distinct($push.target.user.userid)\n   \
+    \ $auth_target_user_agent = array_distinct($auth.network.http.user_agent)\n  \
+    \  $auth_principal_ip = array_distinct($auth.principal.ip)\n    $auth_principal_ip_country\
+    \ = array_distinct($auth.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $auth_principal_ip_state = array_distinct($auth.principal.ip_geo_artifact.location.state)\n\
+    \    $auth_principal_ip_city = array_distinct($auth.principal.location.city)\n\
+    \    $auth_principal_user_email_addresses = array_distinct ($auth.principal.user.email_addresses)\n\
+    \    $auth_security_result_summary = array_distinct($auth.security_result.summary)\n\
+    \    $auth_target_user_email_addresses = array_distinct($auth.target.user.email_addresses)\n\
+    \    $auth_target_user_userid = array_distinct($auth.target.user.userid)\n\n \
+    \ condition:\n    $push and $auth\n}"
+  chronicle_rule_name: okta_mismatch_between_source_and_response_for_verify_push_request
+provenance:
+  source: chronicle/detection-rules
+  source_id: okta_mismatch_between_source_and_response_for_verify_push_request
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/okta/okta_mismatch_between_source_and_response_for_verify_push_request.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

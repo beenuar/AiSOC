@@ -1,0 +1,39 @@
+id: splunk-security-content-711d9e8c-2cb0-45cf-8813-5f191ecb9b26
+name: O365 Safe Links Detection
+description: The following analytic detects when any Microsoft Safe Links alerting
+  is triggered. This behavior may indicate when user has interacted with a phishing
+  or otherwise malicious link within the Microsoft Office ecosystem.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/safe-links-about?view=o365-worldwide
+- https://attack.mitre.org/techniques/T1566/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Name=\"*a potentially malicious URL*\" Operation=AlertEntityGenerated\n\
+    \  | fromjson Data\n  | fillnull\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime values(ObjectId) as url values(od) as desc\n    BY AlertId, trc,\
+    \ Name,\n       ot, dest, vendor_account,\n       vendor_product, src\n  | rename\
+    \ Name as signature, AlertId as signature_id, trc as user, ot as action\n  | eval\
+    \ action = CASE(action == \"Allowed\", \"allowed\", action==\"BlockPageOverride\"\
+    , \"allowed\", true(),\"blocked\")\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_safe_links_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 711d9e8c-2cb0-45cf-8813-5f191ecb9b26
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_safe_links_detection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-724ea201-6514-4f38-9739-e5973c34f49a
+name: Bypass UAC Using SilentCleanup Task
+description: 'Detects the setting of the environement variable "windir" to a non default
+  value.
+
+  Attackers often abuse this variable in order to trigger a UAC bypass via the "SilentCleanup"
+  task.
+
+  The SilentCleanup task located in %windir%\system32\cleanmgr.exe is an auto-elevated
+  task that can be abused to elevate any file with administrator privileges without
+  prompting UAC.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1548.002/T1548.002.md#atomic-test-9---bypass-uac-using-silentcleanup-task
+- https://www.reddit.com/r/hacking/comments/ajtrws/bypassing_highest_uac_level_windows_810/
+- https://www.fortinet.com/blog/threat-research/enter-the-darkgate-new-cryptocurrency-mining-and-ransomware-campaign
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Environment\windir
+  filter_main_default:
+    Details: '%SystemRoot%'
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 724ea201-6514-4f38-9739-e5973c34f49a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_bypass_uac_using_silentcleanup_task.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

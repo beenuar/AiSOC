@@ -1,0 +1,45 @@
+id: chronicle-detection-rules-suspicious-double-extension
+name: suspicious_double_extension
+description: suspicious_double_extension
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_double_extension {\n meta:\n    author = \"Florian\
+    \ Roth (rule), @blu3_team (idea)\"\n    description = \"Detects suspicious use\
+    \ of an .exe extension after a non-executable file extension like .pdf.exe, a\
+    \ set of spaces or underlines to cloak the executable file in spear phishing campaigns\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/chS8s3XyvnA5\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/06/26\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"initial_access, t1193\"\n\n  events:\n\
+    ((re.regex($selection.target.process.file.full_path, `.*\\.doc\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\.docx\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\
+    .xls\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\.xlsx\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\.ppt\\.exe`)\
+    \ or re.regex($selection.target.process.file.full_path, `.*\\.pptx\\.exe`) or\
+    \ re.regex($selection.target.process.file.full_path, `.*\\.rtf\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\.pdf\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\
+    .txt\\.exe`) or re.regex($selection.target.process.file.full_path, `.*      \\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*______\\.exe`))\
+    \ and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: suspicious_double_extension
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_double_extension
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/suspicious_double_extension.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

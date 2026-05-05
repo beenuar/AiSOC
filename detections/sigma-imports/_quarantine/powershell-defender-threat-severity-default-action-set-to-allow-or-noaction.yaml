@@ -1,0 +1,60 @@
+id: sigmahq-sigma-1e8a9b4d-3c2a-4f9b-8d1e-7c6a5b4f3d2e
+name: PowerShell Defender Threat Severity Default Action Set to 'Allow' or 'NoAction'
+description: 'Detects the use of PowerShell to execute the ''Set-MpPreference'' cmdlet
+  to configure Windows Defender''s threat severity default action to ''Allow'' (value
+  ''6'') or ''NoAction'' (value ''9'').
+
+  This is a highly suspicious configuration change that effectively disables Defender''s
+  ability to automatically mitigate threats of a certain severity level.
+
+  An attacker might use this technique via the command line to bypass defenses before
+  executing payloads.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/defender/set-mppreference
+- https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/security-malware-windows-defender-threatseveritydefaultaction
+- https://research.splunk.com/endpoint/7215831c-8252-4ae3-8d43-db588e82f952
+- https://gist.github.com/Dump-GUY/8daef859f382b895ac6fd0cf094555d2
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_cmdlet:
+    CommandLine|contains: Set-MpPreference
+  selection_action:
+    CommandLine|contains:
+    - -LowThreatDefaultAction
+    - -ModerateThreatDefaultAction
+    - -HighThreatDefaultAction
+    - -SevereThreatDefaultAction
+    - '-ltdefac '
+    - '-mtdefac '
+    - '-htdefac '
+    - '-stdefac '
+  selection_value:
+    CommandLine|contains:
+    - Allow
+    - '6'
+    - NoAction
+    - '9'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1e8a9b4d-3c2a-4f9b-8d1e-7c6a5b4f3d2e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_defender_default_action_modified.yml
+falsepositives:
+- Highly unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

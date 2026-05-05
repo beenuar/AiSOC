@@ -1,0 +1,42 @@
+id: sigmahq-sigma-043c4b8b-3a54-4780-9682-081cb6b8185c
+name: Suspicious IIS Module Registration
+description: Detects a suspicious IIS module registration as described in Microsoft
+  threat report on IIS backdoors
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/07/26/malicious-iis-extensions-quietly-open-persistent-backdoors-into-servers/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \w3wp.exe
+  selection_cli_1:
+    CommandLine|contains: appcmd.exe add module
+  selection_cli_2:
+    CommandLine|contains: ' system.enterpriseservices.internal.publish'
+    Image|endswith: \powershell.exe
+  selection_cli_3:
+    CommandLine|contains|all:
+    - gacutil
+    - ' /I'
+  condition: selection_parent and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 043c4b8b-3a54-4780-9682-081cb6b8185c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_iis_susp_module_registration.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

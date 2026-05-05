@@ -1,0 +1,57 @@
+id: chronicle-detection-rules-logins-from-terminated-employees
+name: logins_from_terminated_employees
+description: logins_from_terminated_employees
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule logins_from_terminated_employees {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Allowed Logins from Terminated Employees\"\n\
+    \    rule_id = \"mr_69178541-285b-45cb-b723-e2b5d88f22d3\"\n    rule_name = \"\
+    Logins From Terminated Employees\"\n    assumptions = \"This rule requires a context\
+    \ data source such as AzureAD AD Context or Workday to demonstrate the correlation\
+    \ of context logs with event logs\"\n    type = \"alert\"\n    tags = \"user enrichment\"\
+    \n    data_source = \"microsoft windows events\"\n    tactic = \"TA0001\"\n  \
+    \  technique = \"T1078\"\n    severity = \"Medium\"\n    priority = \"Medium\"\
+    \n\n  events:\n    $login.metadata.event_type = \"USER_LOGIN\"\n    $login.security_result.action\
+    \ = \"ALLOW\"\n    $login.target.user.userid = $user\n    $login.target.user.termination_date.seconds\
+    \ > 0\n    $login.target.user.termination_date.seconds < $login.metadata.event_timestamp.seconds\n\
+    \n  match:\n    $user over 1d\n\n  outcome:\n    $risk_score = 65\n    $event_count\
+    \ = count_distinct($login.metadata.id)\n    $employee_last_login = max($login.target.user.termination_date.seconds)\n\
+    \    $total_distinct_ips = count_distinct($login.principal.ip)\n    // added to\
+    \ populate alert graph with additional context\n    $principal_hostname = array_distinct($login.principal.hostname)\n\
+    \    $target_hostname = array_distinct($login.target.hostname)\n    $principal_user_userid\
+    \ = array_distinct($login.principal.user.userid)\n    // Commented out target.user.userid\
+    \ because it is already represented in graph as match variable. If match changes,\
+    \ can uncomment to add to results\n    //$target_user_userid = array_distinct($login.target.user.userid)\n\
+    \    $principal_resource_name = array_distinct($login.principal.resource.name)\n\
+    \    $target_resource_name = array_distinct($login.target.resource.name)\n   \
+    \ $target_url = array_distinct($login.target.url)\n\n  condition:\n    $login\n\
+    }"
+  chronicle_rule_name: logins_from_terminated_employees
+provenance:
+  source: chronicle/detection-rules
+  source_id: logins_from_terminated_employees
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/authentication/logins_from_terminated_employees.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

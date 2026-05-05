@@ -1,0 +1,44 @@
+id: splunk-security-content-3b132a71-9335-4f33-9932-00bb4f6ac7e8
+name: Linux Deletion Of Cron Jobs
+description: The following analytic detects the deletion of cron jobs on a Linux machine.
+  It leverages filesystem event logs to identify when files within the "/etc/cron.*"
+  directory are deleted. This activity is significant because attackers or malware
+  may delete cron jobs to disable scheduled security tasks or evade detection mechanisms.
+  If confirmed malicious, this action could allow an attacker to disrupt system operations,
+  evade security measures, or facilitate further malicious activities such as data
+  wiping, as seen with the acidrain malware.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/labs/acidrain-a-modem-wiper-rains-down-on-europe/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.action=deleted\
+    \ Filesystem.file_path=\"/etc/cron.*\"\n  BY Filesystem.action Filesystem.dest\
+    \ Filesystem.file_access_time\n     Filesystem.file_create_time Filesystem.file_hash\
+    \ Filesystem.file_modify_time\n     Filesystem.file_name Filesystem.file_path\
+    \ Filesystem.file_acl\n     Filesystem.file_size Filesystem.process_guid Filesystem.process_id\n\
+    \     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_deletion_of_cron_jobs_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3b132a71-9335-4f33-9932-00bb4f6ac7e8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_deletion_of_cron_jobs.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

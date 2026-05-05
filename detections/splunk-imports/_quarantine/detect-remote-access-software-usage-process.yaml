@@ -1,0 +1,54 @@
+id: splunk-security-content-ffd5e001-2e34-48f4-97a2-26dc4bb08178
+name: Detect Remote Access Software Usage Process
+description: The following analytic detects the execution of known remote access software
+  within the environment. It leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process names and parent processes mapped to the Endpoint data
+  model. We then compare with with a list of known remote access software shipped
+  as a lookup file - remote_access_software. This activity is significant as adversaries
+  often use remote access tools like AnyDesk, GoToMyPC, LogMeIn, and TeamViewer to
+  maintain unauthorized access. If confirmed malicious, this could allow attackers
+  to control systems remotely, exfiltrate data, or deploy additional malware, posing
+  a severe threat to the organization's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1219/
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://thedfirreport.com/2022/11/28/emotet-strikes-again-lnk-file-leads-to-domain-wide-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(Processes.parent_process) as parent_process\n\
+    \  from datamodel=Endpoint.Processes\n  where\n  [| inputlookup remote_access_software\
+    \ where isutility=TRUE\n  | rename remote_utility AS Processes.process_name\n\
+    \  | fields Processes.process_name]\n  AND Processes.dest!=\"unknown\"\n  AND\
+    \ Processes.user!=\"unknown\"\n  by Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(Processes)`\n| lookup remote_access_software remote_utility\
+    \ AS process_name OUTPUT isutility description AS signature comment_reference\
+    \ AS desc category\n| search isutility = TRUE\n| `remote_access_software_usage_exceptions`\n\
+    | `detect_remote_access_software_usage_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ffd5e001-2e34-48f4-97a2-26dc4bb08178
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_remote_access_software_usage_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

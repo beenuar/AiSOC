@@ -1,0 +1,51 @@
+id: sigmahq-sigma-297241f3-8108-4b3a-8c15-2dda9f844594
+name: Suspicious Invocation of Shell via Rsync
+description: Detects the execution of a shell as sub process of "rsync" without the
+  expected command line flag "-e" being used, which could be an indication of exploitation
+  as described in CVE-2024-12084. This behavior is commonly associated with attempts
+  to execute arbitrary commands or escalate privileges, potentially leading to unauthorized
+  access or further exploitation.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1203
+  categories:
+  - endpoint
+references:
+- https://sysdig.com/blog/detecting-and-mitigating-cve-2024-12084-rsync-remote-code-execution/
+- https://gist.github.com/Neo23x0/a20436375a1e26524931dd8ea1a3af10
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    ParentImage|endswith:
+    - /rsync
+    - /rsyncd
+    Image|endswith:
+    - /ash
+    - /bash
+    - /csh
+    - /dash
+    - /ksh
+    - /sh
+    - /tcsh
+    - /zsh
+  filter_main_expected:
+    CommandLine|contains: ' -e '
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 297241f3-8108-4b3a-8c15-2dda9f844594
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_rsync_shell_spawn.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

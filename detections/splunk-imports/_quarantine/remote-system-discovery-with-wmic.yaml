@@ -1,0 +1,47 @@
+id: splunk-security-content-d82eced3-b1dc-42ab-859e-a2fc98827359
+name: Remote System Discovery with Wmic
+description: The following analytic detects the execution of `wmic.exe` with specific
+  command-line arguments used to discover remote systems within a domain. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on process names
+  and command-line executions. This activity is significant as it indicates potential
+  reconnaissance efforts by adversaries to map out network resources and Active Directory
+  structures. If confirmed malicious, this behavior could allow attackers to gain
+  situational awareness, identify critical systems, and plan further attacks, potentially
+  leading to unauthorized access and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+- https://docs.microsoft.com/en-us/windows/win32/wmisdk/wmic
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where (Processes.process_name="wmic.exe")
+    (Processes.process=*/NAMESPACE:\\\\root\\directory\\ldap* AND Processes.process=*ds_computer*
+    AND Processes.process="*GET ds_samaccountname*") by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `remote_system_discovery_with_wmic_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d82eced3-b1dc-42ab-859e-a2fc98827359
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/remote_system_discovery_with_wmic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

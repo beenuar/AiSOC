@@ -1,0 +1,50 @@
+id: sigmahq-sigma-5588576c-5898-4fac-bcdd-7475a60e8f43
+name: Suspicious DNS Query Indicating Kerberos Coercion via DNS Object SPN Spoofing
+  - Network
+description: 'Detects DNS queries containing patterns associated with Kerberos coercion
+  attacks via DNS object spoofing.
+
+  The pattern "1UWhRCAAAAA..BAAAA" is a base64-encoded signature that corresponds
+  to a marshaled CREDENTIAL_TARGET_INFORMATION structure.
+
+  Attackers can use this technique to coerce authentication from victim systems to
+  attacker-controlled hosts.
+
+  It is one of the strong indicators of a Kerberos coercion attack, where adversaries
+  manipulate DNS records
+
+  to spoof Service Principal Names (SPNs) and redirect authentication requests like
+  CVE-2025-33073.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1557.001
+  - T1187
+  categories:
+  - endpoint
+references:
+- https://www.synacktiv.com/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
+- https://googleprojectzero.blogspot.com/2021/10/using-kerberos-for-authentication-relay.html
+logsource:
+  product: zeek
+  service: dns
+detection:
+  selection:
+    query|contains|all:
+    - UWhRCA
+    - BAAAA
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5588576c-5898-4fac-bcdd-7475a60e8f43
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_dns_kerberos_coercion_via_dns_object_spn_spoofing.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

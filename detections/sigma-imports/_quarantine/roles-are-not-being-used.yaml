@@ -1,0 +1,33 @@
+id: sigmahq-sigma-8c6ec464-4ae4-43ac-936a-291da66ed13d
+name: Roles Are Not Being Used
+description: Identifies when a user has been assigned a privilege role and are not
+  using that role.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-how-to-configure-security-alerts#administrators-arent-using-their-privileged-roles
+logsource:
+  product: azure
+  service: pim
+detection:
+  selection:
+    riskEventType: redundantAssignmentAlertIncident
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8c6ec464-4ae4-43ac-936a-291da66ed13d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/privileged_identity_management/azure_pim_role_not_used.yml
+falsepositives:
+- Investigate if potential generic account that cannot be removed.
+notes:
+  quarantine_reason: 'upstream status: test'

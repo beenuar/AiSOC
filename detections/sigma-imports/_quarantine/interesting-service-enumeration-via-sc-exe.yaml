@@ -1,0 +1,42 @@
+id: sigmahq-sigma-e83e8899-c9b2-483b-b355-5decc942b959
+name: Interesting Service Enumeration Via Sc.EXE
+description: 'Detects the enumeration and query of interesting and in some cases sensitive
+  services on the system via "sc.exe".
+
+  Attackers often try to enumerate the services currently running on a system in order
+  to find different attack vectors.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references:
+- https://www.n00py.io/2021/05/dumping-plaintext-rdp-credentials-from-svchost-exe/
+- https://pentestlab.blog/tag/svchost/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \sc.exe
+  - OriginalFileName: sc.exe
+  selection_cli:
+    CommandLine|contains: query
+  selection_cmd:
+    CommandLine|contains: termservice
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e83e8899-c9b2-483b-b355-5decc942b959
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sc_query_interesting_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

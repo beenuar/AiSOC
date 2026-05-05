@@ -1,0 +1,32 @@
+id: sigmahq-sigma-19951c21-229d-4ccb-8774-b993c3ff3c5c
+name: Okta API Token Created
+description: Detects when a API token is created
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: system.api_token.create
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 19951c21-229d-4ccb-8774-b993c3ff3c5c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_api_token_created.yml
+falsepositives:
+- Legitimate creation of an API token by authorized users
+notes:
+  quarantine_reason: 'upstream status: test'

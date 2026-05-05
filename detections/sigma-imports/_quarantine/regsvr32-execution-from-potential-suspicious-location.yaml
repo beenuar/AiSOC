@@ -1,0 +1,44 @@
+id: sigmahq-sigma-9525dc73-0327-438c-8c04-13c0e037e9da
+name: Regsvr32 Execution From Potential Suspicious Location
+description: Detects execution of regsvr32 where the DLL is located in a potentially
+  suspicious location.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20171001085340/https://subt0x10.blogspot.com/2017/04/bypass-application-whitelisting-script.html
+- https://app.any.run/tasks/34221348-072d-4b70-93f3-aa71f6ebecad/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \regsvr32.exe
+  - OriginalFileName: REGSVR32.EXE
+  selection_cli:
+    CommandLine|contains:
+    - :\ProgramData\
+    - :\Temp\
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \AppData\Local\Temp\
+    - \AppData\Roaming\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9525dc73-0327-438c-8c04-13c0e037e9da
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_regsvr32_susp_exec_path_1.yml
+falsepositives:
+- Some installers might execute "regsvr32" with DLLs located in %TEMP% or in %PROGRAMDATA%.
+  Apply additional filters if necessary.
+notes:
+  quarantine_reason: 'upstream status: test'

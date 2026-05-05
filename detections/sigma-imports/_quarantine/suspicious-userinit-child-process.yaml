@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b655a06a-31c0-477a-95c2-3726b83d649d
+name: Suspicious Userinit Child Process
+description: Detects a suspicious child process of userinit
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1139811587760562176
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \userinit.exe
+  filter_main_netlogon:
+    CommandLine|contains: \netlogon\
+  filter_main_explorer:
+  - Image|endswith: \explorer.exe
+  - OriginalFileName: explorer.exe
+  - CommandLine: C:\Windows\Explorer.EXE
+  filter_main_null:
+    Image: null
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b655a06a-31c0-477a-95c2-3726b83d649d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_userinit_child.yml
+falsepositives:
+- Administrative scripts
+notes:
+  quarantine_reason: 'upstream status: test'

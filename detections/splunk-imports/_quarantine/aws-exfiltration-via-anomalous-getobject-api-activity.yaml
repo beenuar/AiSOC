@@ -1,0 +1,41 @@
+id: splunk-security-content-e4384bbf-5835-4831-8d85-694de6ad2cc6
+name: AWS Exfiltration via Anomalous GetObject API Activity
+description: The following analytic identifies anomalous GetObject API activity in
+  AWS, indicating potential data exfiltration attempts. It leverages AWS CloudTrail
+  logs and uses the `anomalydetection` command to detect unusual patterns in the frequency
+  of GetObject API calls by analyzing fields such as "count," "user_type," and "user_arn"
+  within a 10-minute window. This activity is significant as it may indicate unauthorized
+  data access or exfiltration from S3 buckets. If confirmed malicious, attackers could
+  exfiltrate sensitive data, leading to data breaches and compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1119
+  categories:
+  - cloud
+references:
+- https://labs.nettitude.com/blog/how-to-exfiltrate-aws-ec2-data/
+- https://help.splunk.com/en/splunk-enterprise/search/spl-search-reference/9.4/search-commands/anomalydetection
+- https://www.vectra.ai/blogpost/abusing-the-replicator-silently-exfiltrating-data-with-the-aws-s3-replication-service
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=GetObject\n  | bin _time span=10m\n  | rename\
+    \ user_name as user\n  | stats count values(requestParameters.bucketName) as bucketName\n\
+    \    BY signature dest user\n       user_agent src vendor_account\n       vendor_region\
+    \ vendor_product\n  | anomalydetection \"count\" \"user\" action=annotate\n  |\
+    \ search probable_cause=*\n  | `aws_exfiltration_via_anomalous_getobject_api_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e4384bbf-5835-4831-8d85-694de6ad2cc6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_exfiltration_via_anomalous_getobject_api_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

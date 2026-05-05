@@ -1,0 +1,34 @@
+id: sigmahq-sigma-730fc21b-eaff-474b-ad23-90fd265d4988
+name: Psexec Execution
+description: Detects user accept agreement execution in psexec commandline
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569
+  - T1021
+  categories:
+  - endpoint
+references:
+- https://www.fireeye.com/blog/threat-research/2020/10/kegtap-and-singlemalt-with-a-ransomware-chaser.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \psexec.exe
+  - OriginalFileName: psexec.c
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 730fc21b-eaff-474b-ad23-90fd265d4988
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_psexec_execution.yml
+falsepositives:
+- Administrative scripts.
+notes:
+  quarantine_reason: 'upstream status: test'

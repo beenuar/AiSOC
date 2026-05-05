@@ -1,0 +1,47 @@
+id: sigmahq-sigma-fa6a5a45-3ee2-4529-aa14-ee5edc9e29cb
+name: Suspicious Get Local Groups Information - PowerShell
+description: 'Detects the use of PowerShell modules and cmdlets to gather local group
+  information.
+
+  Adversaries may use local system permission groups to determine which groups exist
+  and which users belong to a particular group such as the local administrators group.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1069.001/T1069.001.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_localgroup:
+    ScriptBlockText|contains:
+    - 'get-localgroup '
+    - 'get-localgroupmember '
+  selection_wmi_module:
+    ScriptBlockText|contains:
+    - 'get-wmiobject '
+    - 'gwmi '
+    - 'get-ciminstance '
+    - 'gcim '
+  selection_wmi_class:
+    ScriptBlockText|contains: win32_group
+  condition: selection_localgroup or all of selection_wmi_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fa6a5a45-3ee2-4529-aa14-ee5edc9e29cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_local_group_reco.yml
+falsepositives:
+- Inventory scripts or admin tasks
+notes:
+  quarantine_reason: 'upstream status: test'

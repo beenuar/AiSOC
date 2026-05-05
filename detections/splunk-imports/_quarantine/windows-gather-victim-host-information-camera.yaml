@@ -1,0 +1,43 @@
+id: splunk-security-content-e4df4676-ea41-4397-b160-3ee0140dc332
+name: Windows Gather Victim Host Information Camera
+description: The following analytic detects a PowerShell script that enumerates camera
+  devices on the targeted host. This detection leverages PowerShell Script Block Logging,
+  specifically looking for commands querying Win32_PnPEntity for camera-related information.
+  This activity is significant as it is commonly observed in DCRat malware, which
+  collects camera data to send to its command-and-control server. If confirmed malicious,
+  this behavior could indicate an attempt to gather sensitive visual information from
+  the host, potentially leading to privacy breaches or further exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1592.001
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/405538
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.dcrat
+- https://www.mandiant.com/resources/analyzing-dark-crystal-rat-backdoor
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText= \"* Win32_PnPEntity *\"\
+    \ ScriptBlockText= \"*SELECT*\" ScriptBlockText= \"*WHERE*\" ScriptBlockText =\
+    \ \"*PNPClass*\" ScriptBlockText IN (\"*Image*\", \"*Camera*\")\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_gather_victim_host_information_camera_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e4df4676-ea41-4397-b160-3ee0140dc332
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_gather_victim_host_information_camera.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

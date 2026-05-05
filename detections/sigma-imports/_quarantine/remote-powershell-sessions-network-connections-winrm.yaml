@@ -1,0 +1,37 @@
+id: sigmahq-sigma-13acf386-b8c6-4fe0-9a6e-c4756b974698
+name: Remote PowerShell Sessions Network Connections (WinRM)
+description: Detects basic PowerShell Remoting (WinRM) by monitoring for network inbound
+  connections to ports 5985 OR 5986
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190511-RemotePwshExecution/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5156
+    DestPort:
+    - 5985
+    - 5986
+    LayerRTID: 44
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 13acf386-b8c6-4fe0-9a6e-c4756b974698
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_remote_powershell_session.yml
+falsepositives:
+- Legitimate use of remote PowerShell execution
+notes:
+  quarantine_reason: 'upstream status: test'

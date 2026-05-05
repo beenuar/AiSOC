@@ -1,0 +1,44 @@
+id: sigmahq-sigma-516376b4-05cd-4122-bae0-ad7641c38d48
+name: Mailbox Export to Exchange Webserver
+description: Detects a successful export of an Exchange mailbox to untypical directory
+  or with aspx name suffix which can be used to place a webshell or the needed role
+  assignment for it
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://blog.orange.tw/2021/08/proxylogon-a-new-attack-surface-on-ms-exchange-part-1.html
+logsource:
+  service: msexchange-management
+  product: windows
+detection:
+  export_command:
+    '|all':
+    - New-MailboxExportRequest
+    - ' -Mailbox '
+  export_params:
+  - -FilePath "\\\\
+  - .aspx
+  role_assignment:
+    '|all':
+    - New-ManagementRoleAssignment
+    - ' -Role "Mailbox Import Export"'
+    - ' -User '
+  condition: (export_command and export_params) or role_assignment
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 516376b4-05cd-4122-bae0-ad7641c38d48
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/msexchange/win_exchange_proxyshell_mailbox_export.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

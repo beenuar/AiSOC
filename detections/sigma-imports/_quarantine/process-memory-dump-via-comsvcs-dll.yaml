@@ -1,0 +1,64 @@
+id: sigmahq-sigma-646ea171-dded-4578-8a4d-65e9822892e3
+name: Process Memory Dump Via Comsvcs.DLL
+description: Detects a process memory dump via "comsvcs.dll" using rundll32, covering
+  multiple different techniques (ordinal, minidump function, etc.)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1036
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/shantanukhande/status/1229348874298388484
+- https://twitter.com/pythonresponder/status/1385064506049630211?s=21
+- https://twitter.com/Hexacorn/status/1224848930795552769
+- https://modexp.wordpress.com/2019/08/30/minidumpwritedump-via-com-services-dll/
+- https://twitter.com/SBousseaden/status/1167417096374050817
+- https://twitter.com/Wietze/status/1542107456507203586
+- https://github.com/Hackndo/lsassy/blob/14d8f8ae596ecf22b449bfe919829173b8a07635/lsassy/dumpmethod/comsvcs.py
+- https://www.youtube.com/watch?v=52tAmVLg1KM&t=2070s
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  - CommandLine|contains: rundll32
+  selection_cli_1:
+    CommandLine|contains|all:
+    - comsvcs
+    - full
+    CommandLine|contains:
+    - '#-'
+    - '#+'
+    - '#24'
+    - '24 '
+    - MiniDump
+    - '#65560'
+  selection_generic:
+    CommandLine|contains|all:
+    - '24'
+    - comsvcs
+    - full
+    CommandLine|contains:
+    - ' #'
+    - ',#'
+    - ', #'
+    - '"#'
+  condition: (selection_img and 1 of selection_cli_*) or selection_generic
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 646ea171-dded-4578-8a4d-65e9822892e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_process_dump_via_comsvcs.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

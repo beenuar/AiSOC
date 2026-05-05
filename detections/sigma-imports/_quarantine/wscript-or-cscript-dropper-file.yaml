@@ -1,0 +1,55 @@
+id: sigmahq-sigma-002bdb95-0cf1-46a6-9e08-d38c128a6127
+name: WScript or CScript Dropper - File
+description: Detects a file ending in jse, vbe, js, vba, vbs, wsf, wsh written by
+  cscript.exe or wscript.exe
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- WScript or CScript Dropper (cea72823-df4d-4567-950c-0b579eaf0846)
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \wscript.exe
+    - \cscript.exe
+    TargetFilename|contains:
+    - :\Perflogs\
+    - :\ProgramData\
+    - :\Temp\
+    - :\Tmp\
+    - :\Users\
+    - :\Windows\Temp\
+    - \AppData\Local\Temp
+    - \AppData\Roaming\Temp
+    - \Start Menu\Programs\Startup\
+    - \Temporary Internet
+    TargetFilename|endswith:
+    - .js
+    - .jse
+    - .vba
+    - .vbe
+    - .vbs
+    - .wsf
+    - .wsh
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 002bdb95-0cf1-46a6-9e08-d38c128a6127
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_cscript_wscript_dropper.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

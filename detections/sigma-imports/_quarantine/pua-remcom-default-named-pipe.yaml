@@ -1,0 +1,40 @@
+id: sigmahq-sigma-d36f87ea-c403-44d2-aa79-1a0ac7c24456
+name: PUA - RemCom Default Named Pipe
+description: Detects default RemCom pipe creation
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://drive.google.com/file/d/1lKya3_mLnR3UQuCoiYruO3qgu052_iS_/view
+- https://github.com/kavika13/RemCom
+logsource:
+  product: windows
+  category: pipe_created
+  definition: Note that you have to configure logging for Named Pipe Events in Sysmon
+    config (Event ID 17 and Event ID 18). The basic configuration is in popular sysmon
+    configuration (https://github.com/SwiftOnSecurity/sysmon-config), but it is worth
+    verifying. You can also use other repo, e.g. https://github.com/Neo23x0/sysmon-config,
+    https://github.com/olafhartong/sysmon-modular. How to test detection? You can
+    check powershell script from this site https://svch0st.medium.com/guide-to-named-pipes-and-hunting-for-cobalt-strike-pipes-dc46b2c5f575
+detection:
+  selection:
+    PipeName|contains: \RemCom
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d36f87ea-c403-44d2-aa79-1a0ac7c24456
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/pipe_created/pipe_created_pua_remcom_default_pipe.yml
+falsepositives:
+- Legitimate Administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

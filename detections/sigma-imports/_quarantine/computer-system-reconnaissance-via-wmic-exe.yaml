@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9d7ca793-f6bd-471c-8d0f-11e68b2f0d2f
+name: Computer System Reconnaissance Via Wmic.EXE
+description: Detects execution of wmic utility with the "computersystem" flag in order
+  to obtain information about the machine such as the domain, username, model, etc.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/09/07/profiling-dev-0270-phosphorus-ransomware-operations/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \wmic.exe
+  - OriginalFileName: wmic.exe
+  selection_cli:
+    CommandLine|contains: computersystem
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9d7ca793-f6bd-471c-8d0f-11e68b2f0d2f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_recon_computersystem.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

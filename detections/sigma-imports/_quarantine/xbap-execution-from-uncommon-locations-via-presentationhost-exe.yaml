@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d22e2925-cfd8-463f-96f6-89cec9d9bc5f
+name: XBAP Execution From Uncommon Locations Via PresentationHost.EXE
+description: Detects the execution of ".xbap" (Browser Applications) files via PresentationHost.EXE
+  from an uncommon location. These files can be abused to run malicious ".xbap" files
+  any bypass AWL
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Presentationhost/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \presentationhost.exe
+  - OriginalFileName: PresentationHost.exe
+  selection_cli:
+    CommandLine|contains: .xbap
+  filter_main_generic:
+    CommandLine|contains:
+    - ' C:\Windows\'
+    - ' C:\Program Files'
+  condition: all of selection* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d22e2925-cfd8-463f-96f6-89cec9d9bc5f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_presentationhost_uncommon_location_exec.yml
+falsepositives:
+- Legitimate ".xbap" being executed via "PresentationHost"
+notes:
+  quarantine_reason: 'upstream status: test'

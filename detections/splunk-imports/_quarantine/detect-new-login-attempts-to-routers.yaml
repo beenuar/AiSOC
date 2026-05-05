@@ -1,0 +1,38 @@
+id: splunk-security-content-bce3ed7c-9b1f-42a0-abdf-d8b123a34836
+name: Detect New Login Attempts to Routers
+description: The following analytic identifies new login attempts to routers. It leverages
+  authentication logs from the ES Assets and Identity Framework, focusing on assets
+  categorized as routers. The detection flags connections that have not been observed
+  in the past 30 days. This activity is significant because unauthorized access to
+  routers can lead to network disruptions or data interception. If confirmed malicious,
+  attackers could gain control over network traffic, potentially leading to data breaches
+  or further network compromise.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count earliest(_time) as\
+    \ earliest latest(_time) as latest FROM datamodel=Authentication\n  WHERE Authentication.dest_category=router\n\
+    \  BY Authentication.dest Authentication.user\n| eval isOutlier=if(earliest >=\
+    \ relative_time(now(), \"-30d@d\"), 1, 0)\n| where isOutlier=1\n| `security_content_ctime(earliest)`\n\
+    | `security_content_ctime(latest)`\n| `drop_dm_object_name(\"Authentication\"\
+    )`\n| `detect_new_login_attempts_to_routers_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bce3ed7c-9b1f-42a0-abdf-d8b123a34836
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/detect_new_login_attempts_to_routers.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

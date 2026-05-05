@@ -1,0 +1,36 @@
+id: sigmahq-sigma-3132570d-cab2-4561-9ea6-1743644b2290
+name: Kubernetes Events Deleted
+description: 'Detects when events are deleted in Kubernetes.
+
+  An adversary may delete Kubernetes events in an attempt to evade detection.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://microsoft.github.io/Threat-Matrix-for-Kubernetes/techniques/Delete%20K8S%20events/
+logsource:
+  category: application
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    verb: delete
+    objectRef.resource: events
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3132570d-cab2-4561-9ea6-1743644b2290
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_events_deleted.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b4dc61f5-6cce-468e-a608-b48b469feaa2
+name: DirLister Execution
+description: Detect the usage of "DirLister.exe" a utility for quickly listing folder
+  or drive contents. It was seen used by BlackCat ransomware to create a list of accessible
+  directories and files.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/40b77d63808dd4f4eafb83949805636735a1fd15/atomics/T1083/T1083.md
+- https://news.sophos.com/en-us/2022/07/14/blackcat-ransomware-attacks-not-merely-a-byproduct-of-bad-luck/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - OriginalFileName: DirLister.exe
+  - Image|endswith: \DirLister.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b4dc61f5-6cce-468e-a608-b48b469feaa2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dirlister_execution.yml
+falsepositives:
+- Legitimate use by users
+notes:
+  quarantine_reason: 'upstream status: test'

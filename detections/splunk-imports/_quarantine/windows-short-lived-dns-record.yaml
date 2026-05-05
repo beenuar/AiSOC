@@ -1,0 +1,45 @@
+id: splunk-security-content-d585e253-1859-4170-977d-09376c731f74
+name: Windows Short Lived DNS Record
+description: The following analytic identifies the creation and quick deletion of
+  a DNS object within 300 seconds in an Active Directory environment, indicative of
+  a potential attack abusing DNS. This detection leverages Windows Security Event
+  Codes 5136 and 5137, analyzing the duration between these events. This activity
+  is significant as temporary DNS entries allows attackers to cause unexpecting network
+  trafficking, leading to potential compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  - T1557.001
+  - T1187
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20250617122747/https://www.synacktiv.com/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
+- https://www.synacktiv.com/publications/relaying-kerberos-over-smb-using-krbrelayx
+- https://www.guidepointsecurity.com/blog/the-birth-and-death-of-loopyticket/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` ((EventCode=5137  ObjectClass=\"dnsNode\") OR\
+    \ (EventCode=5136 ObjectClass=\"dnsNode\" AttributeLDAPDisplayName=\"dNSTombstoned\"\
+    \ AttributeValue=\"TRUE\"))\n  | stats min(_time) as firstTime max(_time) as lastTime\
+    \ values(EventCode) as event_codes values(ObjectDN) as dns_record values(SubjectUserName)\
+    \ as user values(Computer) as dest\n    BY ObjectGUID\n  | where mvcount(event_codes)=2\n\
+    \  | eval time_diff=lastTime - firstTime\n  | where time_diff <= 300\n  | table\
+    \ firstTime, lastTime, dns_record, user, dest, time_diff, ObjectGUID\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_short_lived_dns_record_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d585e253-1859-4170-977d-09376c731f74
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_short_lived_dns_record.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,47 @@
+id: splunk-security-content-bef92f3f-7dc8-413a-8989-50581039e250
+name: Citrix ADC and Gateway CitrixBleed 2 Memory Disclosure
+description: 'This detection identifies potential exploitation attempts of CVE-2025-5777
+  (CitrixBleed 2), a memory disclosure vulnerability in Citrix NetScaler ADC and Gateway.
+
+  The vulnerability is triggered by sending POST requests with incomplete form data
+  to the /p/u/doAuthentication.do endpoint, causing the device to leak memory contents
+  including session tokens and authentication materials.
+
+  This search looks for POST requests to the vulnerable endpoint that may indicate
+  scanning or exploitation attempts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://support.citrix.com/support-home/kbsearch/article?articleNumber=CTX693420
+- https://www.netscaler.com/blog/news/critical-security-updates-for-netscaler-netscaler-gateway-and-netscaler-console/
+- https://github.com/mingshenhk/CitrixBleed-2-CVE-2025-5777-PoC-
+- https://horizon3.ai/attack-research/attack-blogs/cve-2025-5777-citrixbleed-2-write-up-maybe/
+- https://labs.watchtowr.com/how-much-more-must-we-bleed-citrix-netscaler-memory-disclosure-citrixbleed-2-cve-2025-5777/
+- https://github.com/projectdiscovery/nuclei-templates/blob/main/http/cves/2025/CVE-2025-5777.yaml
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime from\
+    \ datamodel=Web where\nWeb.url IN (\"*/p/u/doAuthentication.do*\")\nWeb.http_method=\"\
+    POST\"\nWeb.status=200\nby Web.http_user_agent, Web.status, Web.http_method,\n\
+    \   Web.url, Web.url_length, Web.src, Web.dest, sourcetype\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `citrix_adc_and_gateway_citrixbleed_2_memory_disclosure_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bef92f3f-7dc8-413a-8989-50581039e250
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/citrix_adc_and_gateway_citrixbleed_2_memory_disclosure.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

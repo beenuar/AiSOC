@@ -1,0 +1,45 @@
+id: mitre-car-car-2020-11-011
+name: Registry Edit from Screensaver
+description: Adversaries may use screensaver files to run malicious code. This analytic
+  triggers on suspicious edits to the screensaver registry keys, which dictate which
+  .scr file the screensaver runs.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - Screensaver
+    type: Pseudocode
+    code: "reg_events = search Registry:add or Registry:edit\nscr_reg_events = filter\
+      \ processes where (\n  key=\"*\\\\Software\\\\Policies\\\\Microsoft\\\\Windows\\\
+      \\Control Panel\\\\Desktop\\\\SCRNSAVE.EXE\" AND\noutput scr_reg_events\n"
+  - name: Splunk Search - Screensaver
+    type: Splunk
+    code: 'index=your_sysmon_index (EventCode=12 OR EventCode=13 OR EventCode=14)
+      TargetObject="*\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop\\SCRNSAVE.EXE"
+
+      '
+  - name: LogPoint Search - Screensaver
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id IN [12, 13, 14] target_object="*\Software\Policies\Microsoft\Windows\Control
+      Panel\Desktop\SCRNSAVE.EXE"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-011
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-011.yaml
+notes:
+  car_status: needs_implementation

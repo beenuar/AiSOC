@@ -1,0 +1,56 @@
+id: splunk-security-content-309d59dc-1e1b-49b2-9800-7cf18d12f7b7
+name: Linux Iptables Firewall Modification
+description: The following analytic detects suspicious command-line activity that
+  modifies the iptables firewall settings on a Linux machine. It leverages data from
+  Endpoint Detection and Response (EDR) agents, focusing on specific command patterns
+  that alter firewall rules to accept traffic on certain TCP ports. This activity
+  is significant as it can indicate malware, such as CyclopsBlink, modifying firewall
+  settings to allow communication with a Command and Control (C2) server. If confirmed
+  malicious, this could enable attackers to maintain persistent access and exfiltrate
+  data, posing a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.004
+  categories:
+  - endpoint
+references:
+- https://www.ncsc.gov.uk/files/Cyclops-Blink-Malware-Analysis-Report.pdf
+- https://www.trendmicro.com/en_us/research/22/c/cyclops-blink-sets-sights-on-asus-routers--.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n\nProcesses.process\
+    \ = \"*iptables *\"\nProcesses.process = \"* --dport *\"\nProcesses.process =\
+    \ \"* ACCEPT*\"\nProcesses.process = \"*&amp;&gt;/dev/null*\"\nProcesses.process\
+    \ = \"* tcp *\"\nNOT Processes.parent_process_path IN(\"/bin/*\", \"/lib/*\",\
+    \ \"/usr/bin/*\", \"/sbin/*\")\n\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n   Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process\n   Processes.process_exec Processes.process_guid Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_integrity_level Processes.process_name\
+    \ Processes.process_path\n   Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| rex field=Processes.process \"--dport (?<port>3269|636|989|994|995|8443)\"\
+    \n| stats values(Processes.process) as processes_exec\n        values(port) as\
+    \ ports\n        values(Processes.process_guid) as guids\n        values(Processes.process_id)\
+    \ as pids\n        dc(port) as port_count\n        count by Processes.process_name\
+    \ Processes.parent_process_name\n                 Processes.parent_process_id\
+    \ Processes.dest Processes.user\n                 Processes.parent_process_path\
+    \ Processes.process_path\n| where port_count >=3\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_iptables_firewall_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 309d59dc-1e1b-49b2-9800-7cf18d12f7b7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_iptables_firewall_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

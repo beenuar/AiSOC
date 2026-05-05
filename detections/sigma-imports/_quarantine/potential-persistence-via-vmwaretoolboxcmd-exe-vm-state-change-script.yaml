@@ -1,0 +1,39 @@
+id: sigmahq-sigma-7aa4e81a-a65c-4e10-9f81-b200eb229d7d
+name: Potential Persistence Via VMwareToolBoxCmd.EXE VM State Change Script
+description: Detects execution of the "VMwareToolBoxCmd.exe" with the "script" and
+  "set" flag to setup a specific script to run for a specific VM state
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2021/10/08/analyzing-and-detecting-a-vmtools-persistence-technique/
+- https://www.hexacorn.com/blog/2017/01/14/beyond-good-ol-run-key-part-53/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \VMwareToolBoxCmd.exe
+  - OriginalFileName: toolbox-cmd.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' script '
+    - ' set '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7aa4e81a-a65c-4e10-9f81-b200eb229d7d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vmware_toolbox_cmd_persistence.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

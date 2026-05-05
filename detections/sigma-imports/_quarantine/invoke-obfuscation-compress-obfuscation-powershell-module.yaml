@@ -1,0 +1,40 @@
+id: sigmahq-sigma-7034cbbb-cc55-4dc2-8dad-36c0b942e8f1
+name: Invoke-Obfuscation COMPRESS OBFUSCATION - PowerShell Module
+description: Detects Obfuscated Powershell via COMPRESS OBFUSCATION
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_4103:
+    Payload|contains|all:
+    - new-object
+    - text.encoding]::ascii
+    Payload|contains:
+    - system.io.compression.deflatestream
+    - system.io.streamreader
+    Payload|endswith: readtoend
+  condition: selection_4103
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7034cbbb-cc55-4dc2-8dad-36c0b942e8f1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_invoke_obfuscation_via_compress.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

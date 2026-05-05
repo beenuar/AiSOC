@@ -1,0 +1,37 @@
+id: sigmahq-sigma-bedfc8ad-d1c7-4e37-a20e-e2b0dbee759c
+name: HackTool - SharpEvtMute Execution
+description: Detects the use of SharpEvtHook, a tool that tampers with the Windows
+  event logs
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://github.com/bats3c/EvtMute
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+  - Image|endswith: \SharpEvtMute.exe
+  - Description: SharpEvtMute
+  - CommandLine|contains:
+    - '--Filter "rule '
+    - --Encoded --Filter \"
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bedfc8ad-d1c7-4e37-a20e-e2b0dbee759c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharpevtmute.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

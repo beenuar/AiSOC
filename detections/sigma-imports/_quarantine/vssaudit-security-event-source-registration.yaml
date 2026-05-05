@@ -1,0 +1,36 @@
+id: sigmahq-sigma-e9faba72-4974-4ab2-a4c5-46e25ad59e9b
+name: VSSAudit Security Event Source Registration
+description: Detects the registration of the security event source VSSAudit. It would
+  usually trigger when volume shadow copy operations happen.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1003.002/T1003.002.md#atomic-test-3---esentutlexe-sam-copy
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    AuditSourceName: VSSAudit
+    EventID:
+    - 4904
+    - 4905
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9faba72-4974-4ab2-a4c5-46e25ad59e9b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_vssaudit_secevent_source_registration.yml
+falsepositives:
+- Legitimate use of VSSVC. Maybe backup operations. It would usually be done by C:\Windows\System32\VSSVC.exe.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,50 @@
+id: splunk-security-content-62732736-6250-11eb-ae93-0242ac130002
+name: Suspicious Regsvr32 Register Suspicious Path
+description: The following analytic detects the use of Regsvr32.exe to register DLLs
+  from suspicious paths such as AppData, ProgramData, or Windows Temp directories.
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  process execution logs and command-line arguments. This activity is significant
+  because Regsvr32.exe can be abused to proxy execution of malicious code, bypassing
+  traditional security controls. If confirmed malicious, this could allow an attacker
+  to execute arbitrary code, potentially leading to system compromise, data exfiltration,
+  or further lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/010/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.010/T1218.010.md
+- https://lolbas-project.github.io/lolbas/Binaries/Regsvr32/
+- https://support.microsoft.com/en-us/topic/how-to-use-the-regsvr32-tool-and-troubleshoot-regsvr32-error-messages-a98d960a-7392-e6fe-d90a-3f4e0cb543e5
+- https://any.run/report/f29a7d2ecd3585e1e4208e44bcc7156ab5388725f1d29d03e7699da0d4598e7c/0826458b-5367-45cf-b841-c95a33a01718
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where `process_regsvr32`
+    Processes.process IN ("*\\appdata\\*", "*\\programdata\\*","*\\windows\\temp\\*")
+    NOT (Processes.process IN ("*.dll*", "*.ax*", "*.ocx*")) by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`|
+    `security_content_ctime(lastTime)` | `suspicious_regsvr32_register_suspicious_path_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 62732736-6250-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_regsvr32_register_suspicious_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

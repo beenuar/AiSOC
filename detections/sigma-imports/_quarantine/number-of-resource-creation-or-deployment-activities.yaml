@@ -1,0 +1,34 @@
+id: sigmahq-sigma-d2d901db-7a75-45a1-bc39-0cbf00812192
+name: Number Of Resource Creation Or Deployment Activities
+description: Number of VM creations or deployment activities occur in Azure via the
+  azureactivity log.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://github.com/Azure/Azure-Sentinel/blob/e534407884b1ec5371efc9f76ead282176c9e8bb/Detections/AzureActivity/Creating_Anomalous_Number_Of_Resources_detection.yaml
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  keywords:
+  - Microsoft.Compute/virtualMachines/write
+  - Microsoft.Resources/deployments/write
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d2d901db-7a75-45a1-bc39-0cbf00812192
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_creating_number_of_resources_detection.yml
+falsepositives:
+- Valid change
+notes:
+  quarantine_reason: 'upstream status: test'

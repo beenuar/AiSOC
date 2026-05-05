@@ -1,0 +1,65 @@
+id: mitre-car-car-2014-11-002
+name: Outlier Parents of Cmd
+description: 'Many programs create command prompts as part of their normal operation
+  including malware used by attackers. This analytic attempts to identify suspicious
+  programs spawning `cmd.exe` by looking for programs that do not normally create
+  `cmd.exe`.
+
+
+  While this analytic does not take the user into account, doing so could generate
+  further interesting results.
+
+  It is very common for some programs to spawn cmd.exe as a subprocess, for example
+  to run batch files or windows commands. However many process don’t routinely launch
+  a command prompt – for example Microsoft Outlook. A command prompt being launched
+  from a process that normally doesn’t launch command prompts could be the result
+  of malicious code being injected into that process, or of an attacker replacing
+  a legitimate program with a malicious one.
+
+
+
+  ### Output Description
+
+
+  The time and host the new process was started as well as its parent'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'processes = search Process:Create
+
+      cmd = filter processes where (exe == "cmd.exe")
+
+      cmd = from cmd select parent_exe
+
+      historic_cmd = filter cmd (where timestamp < now - 1 day AND timestamp > now
+      - 1 day)
+
+      current_cmd = filter cmd (where timestamp >= now - 1 day)
+
+      new_cmd = historic_cmd - current_cmd
+
+      output new_cmd
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-11-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-11-002.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-999bff6d-dc15-44c9-9f5c-e1051bfc86e1
+name: Nslookup PowerShell Download Cradle
+description: Detects a powershell download cradle using nslookup. This cradle uses
+  nslookup to extract payloads from DNS records.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Alh4zr3d/status/1566489367232651264
+logsource:
+  product: windows
+  category: ps_classic_start
+detection:
+  selection:
+    Data|contains|all:
+    - powershell
+    - nslookup
+    - '[1]'
+    Data|contains:
+    - -q=txt http
+    - -querytype=txt http
+    - -type=txt http
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 999bff6d-dc15-44c9-9f5c-e1051bfc86e1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_abuse_nslookup_with_dns_records.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

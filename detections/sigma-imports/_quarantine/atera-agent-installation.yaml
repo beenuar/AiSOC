@@ -1,0 +1,35 @@
+id: sigmahq-sigma-87261fb2-69d0-42fe-b9de-88c6b5f65a43
+name: Atera Agent Installation
+description: Detects successful installation of Atera Remote Monitoring & Management
+  (RMM) agent as recently found to be used by Conti operators
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.advintel.io/post/secret-backdoor-behind-conti-ransomware-operation-introducing-atera-agent
+logsource:
+  service: application
+  product: windows
+detection:
+  selection:
+    EventID: 1033
+    Provider_Name: MsiInstaller
+    Message|contains: AteraAgent
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 87261fb2-69d0-42fe-b9de-88c6b5f65a43
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/msiinstaller/win_software_atera_rmm_agent_install.yml
+falsepositives:
+- Legitimate Atera agent installation
+notes:
+  quarantine_reason: 'upstream status: test'

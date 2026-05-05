@@ -1,0 +1,37 @@
+id: sigmahq-sigma-68578b43-65df-4f81-9a9b-92f32711a951
+name: UAC Bypass Using Windows Media Player - File
+description: Detects the pattern of UAC Bypass using Windows Media Player osksupport.dll
+  (UACMe 32)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection1:
+    TargetFilename|startswith: C:\Users\
+    TargetFilename|endswith: \AppData\Local\Temp\OskSupport.dll
+  selection2:
+    Image: C:\Windows\system32\DllHost.exe
+    TargetFilename: C:\Program Files\Windows Media Player\osk.exe
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 68578b43-65df-4f81-9a9b-92f32711a951
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_wmp.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

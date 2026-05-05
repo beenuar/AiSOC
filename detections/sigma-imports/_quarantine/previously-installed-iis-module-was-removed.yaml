@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9e1a1fdf-ee58-40ce-8e15-b66ca5a80e1f
+name: Previously Installed IIS Module Was Removed
+description: Detects the removal of a previously installed IIS module.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/iis/manage/provisioning-and-managing-iis/configure-logging-in-iis
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://www.microsoft.com/en-us/security/blog/2022/07/26/malicious-iis-extensions-quietly-open-persistent-backdoors-into-servers/
+- https://learn.microsoft.com/en-us/iis/get-started/introduction-to-iis/iis-modules-overview
+logsource:
+  product: windows
+  service: iis-configuration
+detection:
+  selection:
+    EventID: 29
+    Configuration|contains: /system.webServer/modules/remove
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e1a1fdf-ee58-40ce-8e15-b66ca5a80e1f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/iis-configuration/win_iis_module_removed.yml
+falsepositives:
+- Legitimate administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

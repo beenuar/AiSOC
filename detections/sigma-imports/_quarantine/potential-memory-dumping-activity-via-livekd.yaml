@@ -1,0 +1,34 @@
+id: sigmahq-sigma-a85f7765-698a-4088-afa0-ecfbf8d01fa4
+name: Potential Memory Dumping Activity Via LiveKD
+description: Detects execution of LiveKD based on PE metadata or image name
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/livekd
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith:
+    - \livekd.exe
+    - \livekd64.exe
+  - OriginalFileName: livekd.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a85f7765-698a-4088-afa0-ecfbf8d01fa4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_livekd_execution.yml
+falsepositives:
+- Administration and debugging activity (must be investigated)
+notes:
+  quarantine_reason: 'upstream status: test'

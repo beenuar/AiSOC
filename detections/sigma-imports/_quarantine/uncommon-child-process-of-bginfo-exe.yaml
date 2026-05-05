@@ -1,0 +1,38 @@
+id: sigmahq-sigma-aaf46cdc-934e-4284-b329-34aa701e3771
+name: Uncommon Child Process Of BgInfo.EXE
+description: Detects uncommon child processes of "BgInfo.exe" which could be a sign
+  of potential abuse of the binary to proxy execution via external VBScript
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1218
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Bginfo/
+- https://oddvar.moe/2017/05/18/bypassing-application-whitelisting-with-bginfo/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith:
+    - \bginfo.exe
+    - \bginfo64.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aaf46cdc-934e-4284-b329-34aa701e3771
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bginfo_uncommon_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

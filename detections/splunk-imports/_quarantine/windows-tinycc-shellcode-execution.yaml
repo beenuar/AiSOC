@@ -1,0 +1,56 @@
+id: splunk-security-content-fdb6774e-e465-4912-86e3-63cf9ab91491
+name: Windows TinyCC Shellcode Execution
+description: 'Detects abuse of Tiny-C-Compiler (TinyCC) for shellcode execution, where
+  tcc.exe is renamed to masquerade as svchost.exe and used to compile and execute
+  C source files containing shellcode. This technique was observed in the Lotus Blossom
+  Chrysalis backdoor campaign, where attackers renamed tcc.exe to svchost.exe and
+  executed conf.c containing Metasploit block_api shellcode with the flags -nostdlib
+  -run.
+
+  TinyCC is a legitimate C compiler, but its ability to compile and execute code on-the-fly
+  makes it attractive to attackers seeking to evade detection. The combination of
+  a renamed compiler binary executing from non-standard locations with suspicious
+  flags is a strong indicator of malicious activity.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  - T1027
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1059/003/
+- https://attack.mitre.org/techniques/T1027/
+- https://www.rapid7.com/blog/post/tr-chrysalis-backdoor-dive-into-lotus-blossoms-toolkit/
+- https://github.com/phoenixthrush/Tiny-C-Compiler
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\n  from datamodel=Endpoint.Processes where\n  Processes.process_name\
+    \ IN (\"svchost.exe\", \"tcc.exe\")\n  Processes.process=\"* -nostdlib*\"\n  Processes.process=\"\
+    * -run*\"\n  Processes.process IN (\"*.c\", \"*conf.c*\")\n  NOT Processes.process_path\
+    \ IN (\n    \"*:\\\\Windows\\\\System32\\\\*\",\n    \"*:\\\\Windows\\\\SysWOW64\\\
+    \\*\"\n  )\n  by Processes.action Processes.dest Processes.user Processes.process\
+    \ Processes.parent_process\n     Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name\n     Processes.parent_process_path\
+    \ Processes.process_name Processes.process_id\n     Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n     Processes.process_integrity_level Processes.process_path\n\
+    \     Processes.original_file_name Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_tinycc_shellcode_execution_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fdb6774e-e465-4912-86e3-63cf9ab91491
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_tinycc_shellcode_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

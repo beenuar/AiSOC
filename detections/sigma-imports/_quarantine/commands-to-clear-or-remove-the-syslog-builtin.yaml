@@ -1,0 +1,39 @@
+id: sigmahq-sigma-e09eb557-96d2-4de9-ba2d-30f712a5afd3
+name: Commands to Clear or Remove the Syslog - Builtin
+description: Detects specific commands commonly used to remove or empty the syslog
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1565.001
+  categories:
+  - endpoint
+references:
+- https://www.virustotal.com/gui/file/fc614fb4bda24ae8ca2c44e812d12c0fab6dd7a097472a35dd12ded053ab8474
+logsource:
+  product: linux
+detection:
+  selection:
+  - rm /var/log/syslog
+  - rm -r /var/log/syslog
+  - rm -f /var/log/syslog
+  - rm -rf /var/log/syslog
+  - mv /var/log/syslog
+  - ' >/var/log/syslog'
+  - ' > /var/log/syslog'
+  falsepositives:
+  - /syslog.
+  condition: selection and not falsepositives
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e09eb557-96d2-4de9-ba2d-30f712a5afd3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/lnx_clear_syslog.yml
+falsepositives:
+- Log rotation
+notes:
+  quarantine_reason: 'upstream status: test'

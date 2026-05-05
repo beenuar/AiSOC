@@ -1,0 +1,39 @@
+id: sigmahq-sigma-a743ceba-c771-4d75-97eb-8a90f7f4844c
+name: UAC Bypass Using PkgMgr and DISM
+description: Detects the pattern of UAC Bypass using pkgmgr.exe and dism.exe (UACMe
+  23)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \pkgmgr.exe
+    Image|endswith: \dism.exe
+    IntegrityLevel:
+    - High
+    - System
+    - S-1-16-16384
+    - S-1-16-12288
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a743ceba-c771-4d75-97eb-8a90f7f4844c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_pkgmgr_dism.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

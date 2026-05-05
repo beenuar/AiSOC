@@ -1,0 +1,36 @@
+id: sigmahq-sigma-ff7139bc-fdb1-4437-92f2-6afefe8884cb
+name: OpenCanary - SSH Login Attempt
+description: Detects instances where an SSH service on an OpenCanary node has had
+  a login attempt.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1133
+  - T1021
+  - T1078
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 4002
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ff7139bc-fdb1-4437-92f2-6afefe8884cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_ssh_login_attempt.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

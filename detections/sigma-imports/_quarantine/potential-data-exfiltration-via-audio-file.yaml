@@ -1,0 +1,45 @@
+id: sigmahq-sigma-e4f93c99-396f-47c8-bb0f-201b1fa69034
+name: Potential Data Exfiltration Via Audio File
+description: Detects potential exfiltration attempt via audio file using PowerShell
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/gtworek/PSBits/blob/e97cbbb173b31cbc4d37244d3412de0a114dacfb/NoDLP/bin2wav.ps1
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_main:
+    ScriptBlockText|contains|all:
+    - '[System.Math]::'
+    - '[IO.FileMode]::'
+    - BinaryWriter
+  selection_header_wav:
+    ScriptBlockText|contains|all:
+    - '0x52'
+    - '0x49'
+    - '0x46'
+    - '0x57'
+    - '0x41'
+    - '0x56'
+    - '0x45'
+    - '0xAC'
+  condition: selection_main and 1 of selection_header_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e4f93c99-396f-47c8-bb0f-201b1fa69034
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_audio_exfiltration.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

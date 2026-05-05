@@ -1,0 +1,35 @@
+id: sigmahq-sigma-5d19eb78-5b5b-4ef2-a9f0-4bfa94d58a13
+name: Remote Access Tool - ScreenConnect File Transfer
+description: Detects file being transferred via ScreenConnect RMM
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://www.huntandhackett.com/blog/revil-the-usage-of-legitimate-remote-admin-tooling
+- https://github.com/SigmaHQ/sigma/pull/4467
+logsource:
+  service: application
+  product: windows
+detection:
+  selection:
+    Provider_Name: ScreenConnect
+    EventID: 201
+    Data|contains: Transferred files with action
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5d19eb78-5b5b-4ef2-a9f0-4bfa94d58a13
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/screenconnect/win_app_remote_access_tools_screenconnect_file_transfer.yml
+falsepositives:
+- Legitimate use of ScreenConnect
+notes:
+  quarantine_reason: 'upstream status: test'

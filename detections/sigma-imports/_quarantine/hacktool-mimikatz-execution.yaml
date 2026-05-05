@@ -1,0 +1,64 @@
+id: sigmahq-sigma-a642964e-bead-4bed-8910-1bb4d63e3b4d
+name: HackTool - Mimikatz Execution
+description: Detection well-known mimikatz command line arguments
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  - T1003.002
+  - T1003.004
+  - T1003.005
+  - T1003.006
+  categories:
+  - endpoint
+references:
+- https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+- https://tools.thehacker.recipes/mimikatz/modules
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_tools_name:
+    CommandLine|contains:
+    - DumpCreds
+    - mimikatz
+  selection_function_names:
+    CommandLine|contains:
+    - ::aadcookie
+    - ::detours
+    - ::memssp
+    - ::mflt
+    - ::ncroutemon
+    - ::ngcsign
+    - ::printnightmare
+    - ::skeleton
+    - ::preshutdown
+    - ::mstsc
+    - ::multirdp
+  selection_module_names:
+    CommandLine|contains:
+    - 'rpc::'
+    - 'token::'
+    - 'crypto::'
+    - 'dpapi::'
+    - 'sekurlsa::'
+    - 'kerberos::'
+    - 'lsadump::'
+    - 'privilege::'
+    - 'process::'
+    - 'vault::'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a642964e-bead-4bed-8910-1bb4d63e3b4d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_mimikatz_command_line.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

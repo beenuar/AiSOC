@@ -1,0 +1,38 @@
+id: sigmahq-sigma-1f2b5353-573f-4880-8e33-7d04dcf97744
+name: Sysmon Configuration Modification
+description: Detects when an attacker tries to hide from Sysmon by disabling or stopping
+  it
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md
+- https://talesfrominfosec.blogspot.com/2017/12/killing-sysmon-silently.html
+logsource:
+  product: windows
+  category: sysmon_status
+detection:
+  selection_stop:
+    State: Stopped
+  selection_conf:
+  - Sysmon config state changed
+  filter:
+    State: Started
+  condition: 1 of selection_* and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1f2b5353-573f-4880-8e33-7d04dcf97744
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/sysmon/sysmon_config_modification_status.yml
+falsepositives:
+- Legitimate administrative action
+notes:
+  quarantine_reason: 'upstream status: test'

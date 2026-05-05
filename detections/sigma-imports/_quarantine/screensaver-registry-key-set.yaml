@@ -1,0 +1,42 @@
+id: sigmahq-sigma-40b6e656-4e11-4c0c-8772-c1cc6dae34ce
+name: ScreenSaver Registry Key Set
+description: Detects registry key established after masqueraded .scr file execution
+  using Rundll32 through desk.cpl
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://twitter.com/VakninHai/status/1517027824984547329
+- https://twitter.com/pabraeken/status/998627081360695297
+- https://jstnk9.github.io/jstnk9/research/InstallScreenSaver-SCR-files
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    Image|endswith: \rundll32.exe
+  registry:
+    TargetObject|contains: \Control Panel\Desktop\SCRNSAVE.EXE
+    Details|endswith: .scr
+  filter:
+    Details|contains:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+  condition: selection and registry and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 40b6e656-4e11-4c0c-8772-c1cc6dae34ce
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_scr_file_executed_by_rundll32.yml
+falsepositives:
+- Legitimate use of screen saver
+notes:
+  quarantine_reason: 'upstream status: test'

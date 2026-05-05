@@ -1,0 +1,33 @@
+id: sigmahq-sigma-542b9912-c01f-4e3f-89a8-014c48cdca7d
+name: Azure Device No Longer Managed or Compliant
+description: Identifies when a device in azure is no longer managed or compliant
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/identity/monitoring-health/reference-audit-activities#core-directory
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    properties.message:
+    - Device no longer compliant
+    - Device no longer managed
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 542b9912-c01f-4e3f-89a8-014c48cdca7d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_device_no_longer_managed_or_compliant.yml
+falsepositives:
+- Administrator may have forgotten to review the device.
+notes:
+  quarantine_reason: 'upstream status: test'

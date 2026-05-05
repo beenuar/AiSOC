@@ -1,0 +1,38 @@
+id: sigmahq-sigma-dae8171c-5ec6-4396-b210-8466585b53e9
+name: SCM Database Privileged Operation
+description: Detects non-system users performing privileged operation os the SCM database
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190826-RemoteSCMHandle/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4674
+    ObjectType: SC_MANAGER OBJECT
+    ObjectName: servicesactive
+    PrivilegeList: SeTakeOwnershipPrivilege
+  filter:
+    SubjectLogonId: '0x3e4'
+    ProcessName|endswith: :\Windows\System32\services.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dae8171c-5ec6-4396-b210-8466585b53e9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_scm_database_privileged_operation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

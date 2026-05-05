@@ -1,0 +1,44 @@
+id: sigmahq-sigma-9577edbb-851f-4243-8c91-1d5b50c1a39b
+name: Atbroker Registry Change
+description: Detects creation/modification of Assistive Technology applications and
+  persistence with usage of 'at'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1547
+  categories:
+  - endpoint
+references:
+- http://www.hexacorn.com/blog/2016/07/22/beyond-good-ol-run-key-part-42/
+- https://lolbas-project.github.io/lolbas/Binaries/Atbroker/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - Software\Microsoft\Windows NT\CurrentVersion\Accessibility\ATs
+    - Software\Microsoft\Windows NT\CurrentVersion\Accessibility\Configuration
+  filter_atbroker:
+    Image: C:\Windows\system32\atbroker.exe
+    TargetObject|contains: \Microsoft\Windows NT\CurrentVersion\Accessibility\Configuration
+    Details: (Empty)
+  filter_uninstallers:
+    Image|startswith: C:\Windows\Installer\MSI
+    TargetObject|contains: Software\Microsoft\Windows NT\CurrentVersion\Accessibility\ATs
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9577edbb-851f-4243-8c91-1d5b50c1a39b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_susp_atbroker_change.yml
+falsepositives:
+- Creation of non-default, legitimate at usage
+notes:
+  quarantine_reason: 'upstream status: test'

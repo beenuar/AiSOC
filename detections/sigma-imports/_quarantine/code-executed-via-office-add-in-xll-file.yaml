@@ -1,0 +1,40 @@
+id: sigmahq-sigma-36fbec91-fa1b-4d5d-8df1-8d8edcb632ad
+name: Code Executed Via Office Add-in XLL File
+description: 'Adversaries may abuse Microsoft Office add-ins to obtain persistence
+  on a compromised system.
+
+  Office add-ins can be used to add functionality to Office programs'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1137.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1137.006/T1137.006.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - 'new-object '
+    - '-ComObject '
+    - .application
+    - .RegisterXLL
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 36fbec91-fa1b-4d5d-8df1-8d8edcb632ad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_office_comobject_registerxll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-40b19fa6-d835-400c-b301-41f3a2baacaf
+name: VolumeShadowCopy Symlink Creation Via Mklink
+description: Shadow Copies storage symbolic link creation using operating systems
+  utilities
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1003.002
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - mklink
+    - HarddiskVolumeShadowCopy
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 40b19fa6-d835-400c-b301-41f3a2baacaf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_mklink_shadow_copies_access_symlink.yml
+falsepositives:
+- Legitimate administrator working with shadow copies, access for backup purposes

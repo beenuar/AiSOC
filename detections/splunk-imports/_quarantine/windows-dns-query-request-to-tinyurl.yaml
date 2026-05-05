@@ -1,0 +1,47 @@
+id: splunk-security-content-b1ea79da-719c-437c-acaf-5c93f838f425
+name: Windows DNS Query Request To TinyUrl
+description: 'The following analytic detects a process located in a potentially suspicious
+  location making DNS queries to known URL shortening services, specifically tinyurl.
+
+  URL shorteners are frequently used by threat actors to obfuscate malicious destinations,
+  including phishing pages, malware distribution sites, or command-and-control (C2)
+  endpoints.
+
+  While tinyurl.com is a legitimate service, its use in enterprise environments—particularly
+  by non-browser processes or scripts—should be considered suspicious, especially
+  if correlated with subsequent outbound connections, file downloads, process file
+  path or credential prompts. Analysts should investigate the source process, execution
+  context, and destination domain to determine intent and risk.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://x.com/Unit42_Intel/status/1919418143476199869
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=22\nQueryName = \"tinyurl.com\"\nImage IN (\n \
+    \ \"*\\\\AppData\\\\*\",\n  \"*\\\\Perflogs\\\\*\",\n  \"*\\\\ProgramData\\\\\
+    *\",\n  \"*\\\\Temp\\\\*\",\n  \"*\\\\Users\\\\Public\\\\*\",\n  \"*\\\\Windows\\\
+    \\Tasks\\\\*\"\n  )\n| stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \  by answer answer_count dvc process_exec process_guid process_name query query_count\n\
+    \     reply_code_id signature signature_id src user_id vendor_product QueryName\
+    \ QueryResults QueryStatus\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_dns_query_request_to_tinyurl_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b1ea79da-719c-437c-acaf-5c93f838f425
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_dns_query_request_to_tinyurl.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

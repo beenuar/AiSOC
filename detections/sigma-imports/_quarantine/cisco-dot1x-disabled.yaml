@@ -1,0 +1,48 @@
+id: sigmahq-sigma-ef0ff092-a24a-4fbc-beea-06c08d53e085
+name: Cisco Dot1x Disabled
+description: 'Detects the manual disablement of IEEE 802.1X (dot1x) on a Cisco network
+  device interface.
+
+  Disabling dot1x bypasses Network Access Control (NAC) mechanisms, potentially allowing
+  unauthorized devices to gain access to the internal network.
+
+  This activity is a common technique used by attackers or malicious insiders to establish
+  persistence or perform lateral movement via rogue devices.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  - T1556.004
+  categories:
+  - endpoint
+references:
+- https://www.cisco.com/en/US/docs/ios-xml/ios/san/command/san-xe-3se-3850-cr-book_chapter_00.html#wp3394428680
+- https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/a1/sec-a1-xe-3se-3850-cr-book/sec-a1-xe-3se-3850-cr-book_chapter_010.html#wp3502072400
+- https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst2960/software/release/12-2_53_se/command/reference/2960ComRef/cli1.html#47220
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - access-session port-control force-authorized
+  - authentication port-control force-authorized
+  - dot1x port-control force-authorized
+  - no access-session port-control
+  - no authentication port-control
+  - no dot1x port-control
+  - no dot1x system-auth-control
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ef0ff092-a24a-4fbc-beea-06c08d53e085
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_dot1x_disabled.yml
+falsepositives:
+- Administrator troubleshooting connectivity issues
+notes:
+  quarantine_reason: 'upstream status: experimental'

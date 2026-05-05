@@ -1,0 +1,42 @@
+id: sigmahq-sigma-4b046706-5789-4673-b111-66f25fe99534
+name: Deleted Data Overwritten Via Cipher.EXE
+description: 'Detects usage of the "cipher" built-in utility in order to overwrite
+  deleted data from disk.
+
+  Adversaries may destroy data and files on specific systems or in large numbers on
+  a network to interrupt availability to systems, services, and network resources.
+
+  Data destruction is likely to render stored data irrecoverable by forensic techniques
+  through overwriting files or data on local and remote drives'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1485/T1485.md#atomic-test-3---overwrite-deleted-data-on-c-drive
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: CIPHER.EXE
+  - Image|endswith: \cipher.exe
+  selection_cli:
+    CommandLine|contains: ' /w:'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4b046706-5789-4673-b111-66f25fe99534
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cipher_overwrite_deleted_data.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-5f03babb-12db-4eec-8c82-7b4cb5580868
+name: Response File Execution Via Odbcconf.EXE
+description: Detects execution of "odbcconf" with the "-f" flag in order to load a
+  response file which might contain a malicious action.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.008
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/odbc/odbcconf-exe?view=sql-server-ver16
+- https://lolbas-project.github.io/lolbas/Binaries/Odbcconf/
+- https://www.cybereason.com/blog/threat-analysis-report-bumblebee-loader-the-high-road-to-enterprise-domain-control
+- https://www.hexacorn.com/blog/2020/08/23/odbcconf-lolbin-trifecta/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \odbcconf.exe
+  - OriginalFileName: odbcconf.exe
+  selection_cli:
+    CommandLine|contains|windash: ' -f '
+  selection_rsp_ext:
+    CommandLine|contains: .rsp
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5f03babb-12db-4eec-8c82-7b4cb5580868
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_odbcconf_response_file.yml
+falsepositives:
+- The rule is looking for any usage of response file, which might generate false positive
+  when this function is used legitimately. Investigate the contents of the ".rsp"
+  file to determine if it is malicious and apply additional filters if necessary.
+notes:
+  quarantine_reason: 'upstream status: test'

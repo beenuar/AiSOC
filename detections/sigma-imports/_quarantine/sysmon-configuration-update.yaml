@@ -1,0 +1,39 @@
+id: sigmahq-sigma-87911521-7098-470b-a459-9a57fc80bdfd
+name: Sysmon Configuration Update
+description: Detects updates to Sysmon's configuration. Attackers might update or
+  replace the Sysmon configuration with a bare bone one to avoid monitoring without
+  shutting down the service completely
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_pe:
+  - Image|endswith:
+    - \Sysmon64.exe
+    - \Sysmon.exe
+  - Description: System activity monitor
+  selection_cli:
+    CommandLine|contains|windash: -c
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 87911521-7098-470b-a459-9a57fc80bdfd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_sysmon_config_update.yml
+falsepositives:
+- Legitimate administrators might use this command to update Sysmon configuration.
+notes:
+  quarantine_reason: 'upstream status: test'

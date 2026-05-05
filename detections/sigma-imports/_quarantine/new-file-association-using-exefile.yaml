@@ -1,0 +1,33 @@
+id: sigmahq-sigma-44a22d59-b175-4f13-8c16-cbaef5b581ff
+name: New File Association Using Exefile
+description: Detects the abuse of the exefile handler in new file association. Used
+  for bypass of security products.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mrd0x/status/1461041276514623491
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: Classes\.
+    Details: exefile
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 44a22d59-b175-4f13-8c16-cbaef5b581ff
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_file_association_exefile.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

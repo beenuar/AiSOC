@@ -1,0 +1,43 @@
+id: sigmahq-sigma-95afc12e-3cbb-40c3-9340-84a032e596a3
+name: Service Registry Permissions Weakness Check
+description: 'Adversaries may execute their own malicious payloads by hijacking the
+  Registry entries used by services.
+
+  Adversaries may use flaws in the permissions for registry to redirect from the originally
+  specified executable to one that they control, in order to launch their own code
+  at Service start.
+
+  Windows stores local service configuration information in the Registry under HKLM\SYSTEM\CurrentControlSet\Services'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.011
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1574.011/T1574.011.md#atomic-test-1---service-registry-permissions-weakness
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/get-acl?view=powershell-7.4
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - get-acl
+    - REGISTRY::HKLM\SYSTEM\CurrentControlSet\Services\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 95afc12e-3cbb-40c3-9340-84a032e596a3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_get_acl_service.yml
+falsepositives:
+- Legitimate administrative script
+notes:
+  quarantine_reason: 'upstream status: test'

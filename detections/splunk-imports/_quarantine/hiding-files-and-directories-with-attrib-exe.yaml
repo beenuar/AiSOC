@@ -1,0 +1,44 @@
+id: splunk-security-content-6e5a3ae4-90a3-462d-9aa6-0119f638c0f1
+name: Hiding Files And Directories With Attrib exe
+description: The following analytic detects the use of the Windows binary attrib.exe
+  to hide files or directories by marking them with specific flags. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on command-line arguments
+  that include the "+h" flag. This activity is significant because hiding files can
+  be a tactic used by attackers to conceal malicious files or tools from users and
+  security software. If confirmed malicious, this behavior could allow an attacker
+  to persist in the environment undetected, potentially leading to further compromise
+  or data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) values(Processes.process)\
+    \ as process max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE\
+    \ Processes.process_name=attrib.exe (Processes.process=*+h*)\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `hiding_files_and_directories_with_attrib_exe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6e5a3ae4-90a3-462d-9aa6-0119f638c0f1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/hiding_files_and_directories_with_attrib_exe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

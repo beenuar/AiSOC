@@ -1,0 +1,39 @@
+id: sigmahq-sigma-759d0d51-bc99-4b5e-9add-8f5b2c8e7512
+name: Creation Of An User Account
+description: Detects the creation of a new user account. Such accounts may be used
+  for persistence that do not require persistent remote access tools to be deployed
+  on the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/security_guide/sec-understanding_audit_log_files
+- https://access.redhat.com/articles/4409591#audit-record-types-2
+- https://www.youtube.com/watch?v=VmvY5SQm5-Y&ab_channel=M45C07
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection_syscall_record_type:
+    type: SYSCALL
+    exe|endswith: /useradd
+  selection_add_user_record_type:
+    type: ADD_USER
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 759d0d51-bc99-4b5e-9add-8f5b2c8e7512
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/syscall/lnx_auditd_create_account.yml
+falsepositives:
+- Admin activity
+notes:
+  quarantine_reason: 'upstream status: test'

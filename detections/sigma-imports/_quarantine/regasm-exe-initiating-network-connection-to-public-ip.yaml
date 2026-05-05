@@ -1,0 +1,45 @@
+id: sigmahq-sigma-0531e43a-d77d-47c2-b89f-5fe50321c805
+name: RegAsm.EXE Initiating Network Connection To Public IP
+description: Detects "RegAsm.exe" initiating a network connection to public IP adresses
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.009
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/ec207948-4916-47eb-a0f4-4c6abb2e7668/
+- https://research.splunk.com/endpoint/07921114-6db4-4e2e-ae58-3ea8a52ae93f/
+- https://lolbas-project.github.io/lolbas/Binaries/Regasm/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    Image|endswith: \regasm.exe
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0531e43a-d77d-47c2-b89f-5fe50321c805
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_regasm_network_activity.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

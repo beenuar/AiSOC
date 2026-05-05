@@ -1,0 +1,49 @@
+id: splunk-security-content-80f3fc1b-705f-4080-bf08-f61bf013b900
+name: O365 Privileged Role Assigned To Service Principal
+description: The following analytic detects potential privilege escalation threats
+  in Azure Active Directory (AD). This detection is important because it identifies
+  instances where privileged roles that hold elevated permissions are assigned to
+  service principals. This prevents unauthorized access or malicious activities, which
+  occur when these non-human entities access Azure resources to exploit them. False
+  positives might occur since administrators can legitimately assign privileged roles
+  to service principals. This detection leverages the O365 Universal Audit Log data
+  source.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/003/
+- https://learn.microsoft.com/en-us/azure/active-directory/roles/permissions-reference
+- https://learn.microsoft.com/en-us/microsoft-365/admin/add-users/about-exchange-online-admin-role?view=o365-worldwide
+- https://posts.specterops.io/azure-privilege-escalation-via-service-principal-abuse-210ae2be2a5
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation
+    IN ("Add member to role.","Add eligible member to role.") | eval user = ObjectId,
+    src_user = case(match(mvindex(''Actor{}.ID'',-1),"User"),mvindex(''Actor{}.ID'',0),match(mvindex(''Actor{}.ID'',-1),"ServicePrincipal"),mvindex(''Actor{}.ID'',3),true(),mvindex(''Actor{}.ID'',0)),
+    object_name = mvindex(''ModifiedProperties{}.NewValue'', mvfind(''ModifiedProperties{}.Name'',"Role\.DisplayName")),
+    object_id = mvindex(''ModifiedProperties{}.NewValue'', mvfind(''ModifiedProperties{}.Name'',"Role\.TemplateId")),
+    signature = Operation, result = ResultStatus, category = mvindex(''Target{}.ID'',2)
+    | fillnull | stats count, min(_time) as firstTime, max(_time) as lastTime by src_user,
+    src, user, category, result, object_name, object_id, signature,vendor_account,
+    vendor_product, dest | lookup privileged_azure_ad_roles azuretemplateid as object_id
+    OUTPUT isprvilegedadrole | search isprvilegedadrole="TRUE" category!="User" |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `o365_privileged_role_assigned_to_service_principal_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 80f3fc1b-705f-4080-bf08-f61bf013b900
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_privileged_role_assigned_to_service_principal.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

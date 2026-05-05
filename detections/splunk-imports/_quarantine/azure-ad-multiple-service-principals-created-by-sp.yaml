@@ -1,0 +1,45 @@
+id: splunk-security-content-66cb378f-234d-4fe1-bb4c-e7878ff6b017
+name: Azure AD Multiple Service Principals Created by SP
+description: The following analytic detects when a single service principal in Azure
+  AD creates more than three unique OAuth applications within a 10-minute span. It
+  leverages Azure AD audit logs, specifically monitoring the 'Add service principal'
+  operation initiated by service principals. This behavior is significant as it may
+  indicate an attacker using a compromised or malicious service principal to rapidly
+  establish multiple service principals, potentially staging an attack. If confirmed
+  malicious, this activity could facilitate network infiltration or expansion, allowing
+  the attacker to gain unauthorized access and persist within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1136/003/
+- https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` operationName=\"Add service principal\" properties.initiatedBy.app.appId=*\n\
+    \  | rename properties.* as *\n  | bucket span=10m _time\n  | rename targetResources{}.displayName\
+    \ as displayName\n  | rename targetResources{}.type as type\n  | rename initiatedBy.app.displayName\
+    \ as src_user\n  | rename userAgent as user_agent\n  | fillnull\n  | stats count\
+    \ min(_time) as firstTime max(_time) as lastTime dc(displayName) as unique_apps\
+    \ values(displayName) as displayName values(dest) as dest values(src) as src values(user)\
+    \ as user values(user_agent) as user_agent\n    BY src_user vendor_account vendor_product\n\
+    \       signature\n  | where unique_apps > 3\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_multiple_service_principals_created_by_sp_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 66cb378f-234d-4fe1-bb4c-e7878ff6b017
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_multiple_service_principals_created_by_sp.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

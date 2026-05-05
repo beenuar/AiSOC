@@ -1,0 +1,57 @@
+id: sigmahq-sigma-39f1f9f2-9636-45de-98f6-a4046aa8e4b9
+name: Potential Webshell Creation On Static Website
+description: Detects the creation of files with certain extensions on a static web
+  site. This can be indicative of potential uploads of a web shell.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- PT ESC rule and personal experience
+- https://github.com/swisskyrepo/PayloadsAllTheThings/blob/c95a0a1a2855dc0cd7f7327614545fe30482a636/Upload%20Insecure%20Files/README.md
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection_wwwroot_path:
+    TargetFilename|contains: \inetpub\wwwroot\
+  selection_wwwroot_ext:
+    TargetFilename|contains:
+    - .ashx
+    - .asp
+    - .ph
+    - .soap
+  selection_htdocs_path:
+    TargetFilename|contains:
+    - \www\
+    - \htdocs\
+    - \html\
+  selection_htdocs_ext:
+    TargetFilename|contains: .ph
+  filter_main_temp:
+    TargetFilename|contains:
+    - \AppData\Local\Temp\
+    - \Windows\Temp\
+  filter_main_system:
+    Image: System
+  filter_main_legitimate:
+    TargetFilename|contains: \xampp
+  condition: (all of selection_wwwroot_* or all of selection_htdocs_*) and not 1 of
+    filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39f1f9f2-9636-45de-98f6-a4046aa8e4b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_webshell_creation_detect.yml
+falsepositives:
+- Legitimate administrator or developer creating legitimate executable files in a
+  web application folder
+notes:
+  quarantine_reason: 'upstream status: test'

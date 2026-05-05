@@ -1,0 +1,33 @@
+id: sigmahq-sigma-14701da0-4b0f-4ee6-9c95-2ffb4e73bb9a
+name: Okta User Account Locked Out
+description: Detects when an user account is locked out.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1531
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    displayMessage: Max sign in attempts exceeded
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 14701da0-4b0f-4ee6-9c95-2ffb4e73bb9a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_user_account_locked_out.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

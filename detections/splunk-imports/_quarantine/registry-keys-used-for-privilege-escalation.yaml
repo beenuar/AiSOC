@@ -1,0 +1,44 @@
+id: splunk-security-content-c9f4b923-f8af-4155-b697-1354f5bcbc5e
+name: Registry Keys Used For Privilege Escalation
+description: The following analytic detects modifications to registry keys under "Image
+  File Execution Options" that can be used for privilege escalation. It leverages
+  data from the Endpoint.Registry data model, specifically monitoring changes to registry
+  paths and values like GlobalFlag and Debugger. This activity is significant because
+  attackers can use these modifications to intercept executable calls and attach malicious
+  binaries to legitimate system binaries. If confirmed malicious, this could allow
+  attackers to execute arbitrary code with elevated privileges, leading to potential
+  system compromise and persistent access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.012
+  categories:
+  - endpoint
+references:
+- https://blog.malwarebytes.com/101/2015/12/an-introduction-to-image-file-execution-options/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE ((Registry.registry_path="*Microsoft\\Windows
+    NT\\CurrentVersion\\Image File Execution Options*") AND (Registry.registry_value_name=GlobalFlag
+    OR Registry.registry_value_name=Debugger)) by Registry.action Registry.dest Registry.process_guid
+    Registry.process_id Registry.registry_hive Registry.registry_path Registry.registry_key_name
+    Registry.registry_value_data Registry.registry_value_name Registry.registry_value_type
+    Registry.status Registry.user Registry.vendor_product | `drop_dm_object_name(Registry)`
+    | where isnotnull(registry_value_data) | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `registry_keys_used_for_privilege_escalation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c9f4b923-f8af-4155-b697-1354f5bcbc5e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/registry_keys_used_for_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

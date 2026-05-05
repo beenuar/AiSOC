@@ -1,0 +1,39 @@
+id: sigmahq-sigma-79609c82-a488-426e-abcf-9f341a39365d
+name: All Rules Have Been Deleted From The Windows Firewall Configuration
+description: Detects when a all the rules have been deleted from the Windows Defender
+  Firewall configuration
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd364427(v=ws.10)
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID:
+    - 2033
+    - 2059
+  filter_main_svchost:
+    ModifyingApplication|endswith: :\Windows\System32\svchost.exe
+  filter_optional_msmpeng:
+    ModifyingApplication|contains|all:
+    - :\ProgramData\Microsoft\Windows Defender\Platform\
+    - \MsMpEng.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 79609c82-a488-426e-abcf-9f341a39365d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/firewall_as/win_firewall_as_delete_all_rules.yml
+notes:
+  quarantine_reason: 'upstream status: test'

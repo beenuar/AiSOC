@@ -1,0 +1,41 @@
+id: splunk-security-content-4d28013d-3a0f-4d65-a33f-4e8009fee0ae
+name: O365 Email Security Feature Changed
+description: The following analytic identifies when specific O365 advanced security
+  settings are altered within the Office 365 tenant. If an attacker successfully disables
+  O365 security settings, they can operate within the tenant with reduced risk of
+  detection. This can lead to unauthorized data access, data exfiltration, account
+  compromise, or other malicious activities without leaving a detailed audit trail.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/fundamentals/security-defaults
+- https://attack.mitre.org/techniques/T1562/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=Exchange AND Operation IN (\"Set-*\"\
+    ,\"Disable-*\",\"New-*\",\"Remove-*\") Operation IN (\"*AntiPhish*\",\"*SafeLink*\"\
+    ,\"*SafeAttachment*\",\"*Malware*\")\n  | rename Id as object_id, UserId as user,\
+    \ Operation as signature, ObjectId as object\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest user src\n       vendor_account\
+    \ vendor_product signature\n       object_id object\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_email_security_feature_changed_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4d28013d-3a0f-4d65-a33f-4e8009fee0ae
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_security_feature_changed.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,104 @@
+id: sigmahq-sigma-02d1d718-dd13-41af-989d-ea85c7fab93f
+name: Rare Remote Thread Creation By Uncommon Source Image
+description: Detects uncommon processes creating remote threads.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- Personal research, statistical analysis
+- https://lolbas-project.github.io
+logsource:
+  product: windows
+  category: create_remote_thread
+detection:
+  selection:
+    SourceImage|endswith:
+    - \bash.exe
+    - \cscript.exe
+    - \cvtres.exe
+    - \defrag.exe
+    - \dialer.exe
+    - \dnx.exe
+    - \esentutl.exe
+    - \excel.exe
+    - \expand.exe
+    - \find.exe
+    - \findstr.exe
+    - \forfiles.exe
+    - \gpupdate.exe
+    - \hh.exe
+    - \installutil.exe
+    - \lync.exe
+    - \makecab.exe
+    - \mDNSResponder.exe
+    - \monitoringhost.exe
+    - \msbuild.exe
+    - \mshta.exe
+    - \mspaint.exe
+    - \outlook.exe
+    - \ping.exe
+    - \provtool.exe
+    - \python.exe
+    - \regsvr32.exe
+    - \robocopy.exe
+    - \runonce.exe
+    - \sapcimc.exe
+    - \smartscreen.exe
+    - \spoolsv.exe
+    - \tstheme.exe
+    - \userinit.exe
+    - \vssadmin.exe
+    - \vssvc.exe
+    - \w3wp.exe
+    - \winscp.exe
+    - \winword.exe
+    - \wmic.exe
+    - \wscript.exe
+  filter_main_conhost:
+    SourceImage:
+    - C:\Windows\System32\Defrag.exe
+    - C:\Windows\System32\makecab.exe
+    TargetImage: C:\Windows\System32\conhost.exe
+  filter_main_provtol_svchost:
+    SourceImage: C:\Windows\System32\provtool.exe
+    TargetImage: C:\Windows\System32\svchost.exe
+  filter_main_provtool_system:
+    SourceImage: C:\Windows\System32\provtool.exe
+    TargetImage: System
+  filter_main_userinit:
+    SourceImage: C:\Windows\System32\userinit.exe
+    TargetImage: C:\Windows\explorer.exe
+  filter_main_winword:
+    SourceImage|endswith: \WINWORD.EXE
+    TargetImage|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+  filter_main_ms_office:
+    SourceImage|startswith:
+    - C:\Program Files\Microsoft Office\
+    - C:\Program Files (x86)\Microsoft Office\
+    TargetImage: System
+  filter_optional_explorer_vmtools:
+    SourceImage|endswith: \SysWOW64\explorer.exe
+    TargetImage:
+    - C:\Program Files (x86)\VMware\VMware Tools\vmtoolsd.exe
+    - C:\Program Files\VMware\VMware Tools\vmtoolsd.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 02d1d718-dd13-41af-989d-ea85c7fab93f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_remote_thread/create_remote_thread_win_susp_relevant_source_image.yml
+falsepositives:
+- This rule is best put in testing first in order to create a baseline that reflects
+  the data in your environment.
+notes:
+  quarantine_reason: 'upstream status: test'

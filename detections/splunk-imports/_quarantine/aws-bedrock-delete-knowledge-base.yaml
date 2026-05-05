@@ -1,0 +1,42 @@
+id: splunk-security-content-8b4e3d62-f743-11ee-9f6e-acde48001123
+name: AWS Bedrock Delete Knowledge Base
+description: The following analytic identifies attempts to delete AWS Bedrock Knowledge
+  Bases, which are resources that store and manage domain-specific information for
+  AI models. It monitors AWS CloudTrail logs for DeleteKnowledgeBase API calls. This
+  activity could indicate an adversary attempting to remove knowledge bases after
+  compromising credentials, potentially to disrupt business operations or remove traces
+  of data access. Deleting knowledge bases could impact model performance, remove
+  critical business context, or be part of a larger attack to degrade AI capabilities.
+  If confirmed malicious, this could represent a deliberate attempt to cause service
+  disruption or data loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - cloud
+references:
+- https://www.sumologic.com/blog/defenders-guide-to-aws-bedrock/
+- https://attack.mitre.org/techniques/T1562/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cloudtrail` eventSource=bedrock.amazonaws.com eventName=DeleteKnowledgeBase
+    | rename user_name as user | stats count min(_time) as firstTime max(_time) as
+    lastTime values(requestParameters.knowledgeBaseId) as knowledgeBaseIds by src
+    user user_agent vendor_account vendor_product dest signature vendor_region | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `aws_bedrock_delete_knowledge_base_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 8b4e3d62-f743-11ee-9f6e-acde48001123
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_bedrock_delete_knowledge_base.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

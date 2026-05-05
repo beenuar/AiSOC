@@ -1,0 +1,45 @@
+id: sigmahq-sigma-9fc51a3c-81b3-4fa7-b35f-7c02cf10fd2d
+name: Usage Of Web Request Commands And Cmdlets
+description: Detects the use of various web request commands with commandline tools
+  and Windows PowerShell cmdlets (including aliases) via CommandLine
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://4sysops.com/archives/use-powershell-to-download-a-file-with-http-https-and-ftp/
+- https://blog.jourdant.me/post/3-ways-to-download-files-with-powershell
+- https://learn.microsoft.com/en-us/powershell/module/bitstransfer/add-bitsfile?view=windowsserver2019-ps
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - '[System.Net.WebRequest]::create'
+    - 'curl '
+    - Invoke-RestMethod
+    - Invoke-WebRequest
+    - ' irm '
+    - 'iwr '
+    - Resume-BitsTransfer
+    - Start-BitsTransfer
+    - 'wget '
+    - WinHttp.WinHttpRequest
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9fc51a3c-81b3-4fa7-b35f-7c02cf10fd2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_web_request_cmd_and_cmdlets.yml
+falsepositives:
+- Use of Get-Command and Get-Help modules to reference Invoke-WebRequest and Start-BitsTransfer.
+notes:
+  quarantine_reason: 'upstream status: test'

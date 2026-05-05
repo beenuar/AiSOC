@@ -1,0 +1,43 @@
+id: splunk-security-content-86f66f44-94d9-412d-a71d-5d8ed0fef72e
+name: Windows DNS Query Request by Telegram Bot API
+description: The following analytic detects the execution of a DNS query by a process
+  to the associated Telegram API domain, which could indicate access via a Telegram
+  bot commonly used by malware for command and control (C2) communications. By monitoring
+  DNS queries related to Telegram's infrastructure, the detection identifies potential
+  attempts to establish covert communication channels between a compromised system
+  and external malicious actors. This behavior is often observed in cyberattacks where
+  Telegram bots are used to receive commands or exfiltrate data, making it a key indicator
+  of suspicious or malicious activity within a network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  - T1102.002
+  categories:
+  - network
+references:
+- https://www.splunk.com/en_us/blog/security/threat-advisory-telegram-crypto-botnet-strt-ta01.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=22  query = \"api.telegram.org\" process_name !=\
+    \ \"telegram.exe\"\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY answer answer_count dvc\n       process_exec process_guid process_name\n\
+    \       query query_count reply_code_id\n       signature signature_id src\n \
+    \      user_id vendor_product QueryName\n       QueryResults QueryStatus\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_dns_query_request_by_telegram_bot_api_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 86f66f44-94d9-412d-a71d-5d8ed0fef72e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/windows_dns_query_request_by_telegram_bot_api.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

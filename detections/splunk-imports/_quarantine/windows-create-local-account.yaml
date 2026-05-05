@@ -1,0 +1,40 @@
+id: splunk-security-content-3fb2e8e3-7bc0-4567-9722-c5ab9f8595eb
+name: Windows Create Local Account
+description: The following analytic detects the creation of a new local user account
+  on a Windows system. It leverages Windows Security Audit logs, specifically event
+  ID 4720, to identify this activity. Monitoring the creation of local accounts is
+  crucial for a SOC as it can indicate unauthorized access or lateral movement within
+  the network. If confirmed malicious, this activity could allow an attacker to establish
+  persistence, escalate privileges, or gain unauthorized access to sensitive systems
+  and data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/03/21/apt35-automates-initial-access-using-proxyshell/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  values(All_Changes.result_id)\
+    \ as result_id\n  count min(_time) as firstTime\n        max(_time) as lastTime\n\
+    from datamodel=Change where\nAll_Changes.result_id=4720\nby All_Changes.user All_Changes.dest\
+    \ All_Changes.result All_Changes.action\n| `drop_dm_object_name(\"All_Changes\"\
+    )`\n| `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | `windows_create_local_account_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3fb2e8e3-7bc0-4567-9722-c5ab9f8595eb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_create_local_account.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

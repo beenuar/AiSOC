@@ -1,0 +1,39 @@
+id: splunk-security-content-a2f4cc7f-6503-4078-b206-f83a29f408a7
+name: Windows Steal Authentication Certificates CS Backup
+description: The following analytic identifies the backup of the Active Directory
+  Certificate Services (AD CS) store, detected via Event ID 4876. This event is logged
+  when a backup is performed using the CertSrv.msc UI or the CertUtil.exe -BackupDB
+  command. Monitoring this activity is crucial as unauthorized backups can indicate
+  an attempt to steal authentication certificates, which are critical for secure communications.
+  If confirmed malicious, this activity could allow an attacker to impersonate users,
+  escalate privileges, or access sensitive information, severely compromising the
+  security of the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4876\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY dest, name, action,\n       Caller_Domain\
+    \ ,Caller_User_Name\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_steal_authentication_certificates_cs_backup_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a2f4cc7f-6503-4078-b206-f83a29f408a7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_steal_authentication_certificates_cs_backup.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

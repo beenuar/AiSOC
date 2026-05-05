@@ -1,0 +1,45 @@
+id: sigmahq-sigma-f9df325d-d7bc-4a32-8a1a-2cc61dcefc63
+name: Third Party Software DLL Sideloading
+description: Detects DLL sideloading of DLLs that are part of third party software
+  (zoom, discord....etc)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection_lenovo:
+    ImageLoaded|endswith: \commfunc.dll
+  filter_lenovo:
+  - ImageLoaded|contains: \AppData\local\Google\Chrome\Application\
+  - ImageLoaded|startswith:
+    - C:\Program Files\Lenovo\Communications Utility\
+    - C:\Program Files (x86)\Lenovo\Communications Utility\
+  selection_toshiba:
+    ImageLoaded|endswith: \tosbtkbd.dll
+  filter_toshiba:
+    ImageLoaded|startswith:
+    - C:\Program Files\Toshiba\Bluetooth Toshiba Stack\
+    - C:\Program Files (x86)\Toshiba\Bluetooth Toshiba Stack\
+  condition: (selection_lenovo and not filter_lenovo) or (selection_toshiba and not
+    filter_toshiba)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f9df325d-d7bc-4a32-8a1a-2cc61dcefc63
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_third_party.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

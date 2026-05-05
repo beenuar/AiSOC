@@ -1,0 +1,41 @@
+id: sigmahq-sigma-480e7e51-e797-47e3-8d72-ebfce65b6d8d
+name: Python Spawning Pretty TTY on Windows
+description: Detects python spawning a pretty tty
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://www.volexity.com/blog/2022/06/02/zero-day-exploitation-of-atlassian-confluence/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith:
+    - python.exe
+    - python3.exe
+    - python2.exe
+  selection_cli_1:
+    CommandLine|contains|all:
+    - import pty
+    - .spawn(
+  selection_cli_2:
+    CommandLine|contains: from pty import spawn
+  condition: selection_img and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 480e7e51-e797-47e3-8d72-ebfce65b6d8d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_python_pty_spawn.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

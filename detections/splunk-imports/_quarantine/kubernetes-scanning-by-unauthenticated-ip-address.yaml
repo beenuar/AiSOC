@@ -1,0 +1,43 @@
+id: splunk-security-content-f9cadf4e-df22-4f4e-a08f-9d3344c2165d
+name: Kubernetes Scanning by Unauthenticated IP Address
+description: The following analytic identifies potential scanning activities within
+  a Kubernetes environment by unauthenticated IP addresses. It leverages Kubernetes
+  audit logs to detect multiple unauthorized access attempts (HTTP 403 responses)
+  from the same source IP. This activity is significant as it may indicate an attacker
+  probing for vulnerabilities or attempting to exploit known issues. If confirmed
+  malicious, such scanning could lead to unauthorized access, data breaches, or further
+  exploitation of the Kubernetes infrastructure, compromising the security and integrity
+  of the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` \"user.groups{}\"=\"system:unauthenticated\" \"responseStatus.code\"\
+    =403\n  | iplocation sourceIPs{}\n  | stats count values(userAgent) as userAgent\
+    \ values(user.username) as user.username values(user.groups{}) as user.groups{}\
+    \ values(verb) as verb values(requestURI) as requestURI values(responseStatus.code)\
+    \ as responseStatus.code values(responseStatus.message) as responseStatus.message\
+    \ values(responseStatus.reason) as responseStatus.reason values(responseStatus.status)\
+    \ as responseStatus.status\n    BY sourceIPs{} Country City\n  | where count >\
+    \ 5\n  | rename sourceIPs{} as src_ip, user.username as user\n  | `kubernetes_scanning_by_unauthenticated_ip_address_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f9cadf4e-df22-4f4e-a08f-9d3344c2165d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_scanning_by_unauthenticated_ip_address.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

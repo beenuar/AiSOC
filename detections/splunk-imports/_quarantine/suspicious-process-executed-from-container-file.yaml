@@ -1,0 +1,49 @@
+id: splunk-security-content-d8120352-3b62-411c-8cb6-7b47584dd5e8
+name: Suspicious Process Executed From Container File
+description: The following analytic identifies a suspicious process executed from
+  within common container/archive file types such as ZIP, ISO, IMG, and others. It
+  leverages data from Endpoint Detection and Response (EDR) agents, focusing on process
+  names and command-line executions. This activity is significant as it is a common
+  technique used by adversaries to execute scripts or evade defenses. If confirmed
+  malicious, this behavior could allow attackers to execute arbitrary code, escalate
+  privileges, or persist within the environment, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  - T1036.008
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/tracking-evolution-gootloader-operations
+- https://www.crowdstrike.com/blog/weaponizing-disk-image-files-analysis/
+- https://attack.mitre.org/techniques/T1204/002/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count values(Processes.process_name)
+    as process_name min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Processes
+    where Processes.process IN ("*.ZIP\\*","*.ISO\\*","*.IMG\\*","*.CAB\\*","*.TAR\\*","*.GZ\\*","*.RAR\\*","*.7Z\\*")
+    AND Processes.action="allowed" by Processes.action Processes.dest Processes.original_file_name
+    Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid
+    Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path
+    Processes.process Processes.process_exec Processes.process_guid Processes.process_hash
+    Processes.process_id Processes.process_integrity_level Processes.process_name
+    Processes.process_path Processes.user Processes.user_id Processes.vendor_product
+    | `drop_dm_object_name(Processes)` | regex process="(?i).*(ZIP|ISO|IMG|CAB|TAR|GZ|RAR|7Z)\\\\.+\.(BAT|BIN|CAB|CMD|COM|CPL|EX_|EXE|GADGET|INF1|INS|INX||HTM|HTML|ISU|JAR|JOB|JS|JSE|LNK|MSC|MSI|MSP|MST|PAF|PIF|PS1|REG|RGS|SCR|SCT|SHB|SHS|U3P|VB|VBE|VBS|VBSCRIPT|WS|WSF|WSH)\"?$"
+    | rex field=process "(?i).+\\\\(?<file_name>[^\\\]+\.(ZIP|ISO|IMG|CAB|TAR|GZ|RAR|7Z))\\\\((.+\\\\)+)?(?<process_name>.+\.(BAT|BIN|CAB|CMD|COM|CPL|EX_|EXE|GADGET|INF1|INS|INX||HTM|HTML|ISU|JAR|JOB|JS|JSE|LNK|MSC|MSI|MSP|MST|PAF|PIF|PS1|REG|RGS|SCR|SCT|SHB|SHS|U3P|VB|VBE|VBS|VBSCRIPT|WS|WSF|WSH))\"?$"|
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `suspicious_process_executed_from_container_file_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d8120352-3b62-411c-8cb6-7b47584dd5e8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_process_executed_from_container_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-unauthenticated-file-read-in-cisco-asa-cisco-firepower-cve20203452-via-web
+name: unauthenticated_file_read_in_cisco_asa__cisco_firepower_cve20203452_via_web
+description: unauthenticated_file_read_in_cisco_asa__cisco_firepower_cve20203452_via_web
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule unauthenticated_file_read_in_cisco_asa__cisco_firepower_cve20203452_via_web\
+    \ {\n meta:\n    author = \"Roman Ranskyi\"\n    description = \"Detects CVE-2020-3452,\
+    \ path traversal exploitation attempt against Cisco ASA & Cisco Firepower. Need\
+    \ to watch internal and external exploitation attempts. For more generic path\
+    \ traversal detection need to take away selection_patterns part.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/A4uayJwRAGGA\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"webserver\"\n   \
+    \ mitre = \"initial_access, t1190\"\n\n  events:\n((re.regex($selection_traversal.target.url,\
+    \ `.*\\.\\./.*`) or re.regex($selection_traversal.target.url, `.*/\\.\\..*`) or\
+    \ re.regex($selection_traversal.target.url, `.*=\\.\\.&.*`)) and re.regex($selection_traversal.target.url,\
+    \ `.*CSCOE.*`))\n\n  condition:\n    $selection_traversal\n}"
+  chronicle_rule_name: unauthenticated_file_read_in_cisco_asa__cisco_firepower_cve20203452_via_web
+provenance:
+  source: chronicle/detection-rules
+  source_id: unauthenticated_file_read_in_cisco_asa__cisco_firepower_cve20203452_via_web
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/proactive_exploit_detection/webserver/unauthenticated_file_read_in_cisco_asa___cisco_firepower_cve_2020_3452__via_web.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

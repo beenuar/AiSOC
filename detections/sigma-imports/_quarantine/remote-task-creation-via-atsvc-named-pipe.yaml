@@ -1,0 +1,38 @@
+id: sigmahq-sigma-f6de6525-4509-495a-8a82-1f8b0ed73a00
+name: Remote Task Creation via ATSVC Named Pipe
+description: Detects remote task creation via at.exe or API interacting with ATSVC
+  namedpipe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.002
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20230409194125/https://blog.menasec.net/2019/03/threat-hunting-25-scheduled-tasks-for.html
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Audit Detailed File
+    Share" must be configured for Success/Failure
+detection:
+  selection:
+    EventID: 5145
+    ShareName: \\\\\*\\IPC$
+    RelativeTargetName: atsvc
+    AccessList|contains: WriteData
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f6de6525-4509-495a-8a82-1f8b0ed73a00
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_atsvc_task.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

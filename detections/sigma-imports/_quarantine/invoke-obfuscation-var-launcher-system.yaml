@@ -1,0 +1,41 @@
+id: sigmahq-sigma-8ca7004b-e620-4ecb-870e-86129b5b8e75
+name: Invoke-Obfuscation VAR+ Launcher - System
+description: Detects Obfuscated use of Environment Variables to execute PowerShell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains|all:
+    - cmd
+    - '"set'
+    - -f
+    ImagePath|contains:
+    - /c
+    - /r
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8ca7004b-e620-4ecb-870e-86129b5b8e75
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_var_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

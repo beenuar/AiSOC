@@ -1,0 +1,38 @@
+id: sigmahq-sigma-821bcf4d-46c7-4b87-bc57-9509d3ba7c11
+name: Root Account Enable Via Dsenableroot
+description: Detects attempts to enable the root account via "dsenableroot"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1078.001
+  - T1078.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/b27a3cb25025161d49ac861cb216db68c46a3537/atomics/T1078.003/T1078.003.md
+- https://github.com/elastic/detection-rules/blob/4312d8c9583be524578a14fe6295c3370b9a9307/rules/macos/persistence_enable_root_account.toml
+- https://ss64.com/osx/dsenableroot.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /dsenableroot
+  filter_main_disable:
+    CommandLine|contains: ' -d '
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 821bcf4d-46c7-4b87-bc57-9509d3ba7c11
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_dsenableroot_enable_root_account.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

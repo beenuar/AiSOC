@@ -1,0 +1,37 @@
+id: sigmahq-sigma-396ae3eb-4174-4b9b-880e-dc0364d78a19
+name: Potential Persistence Via Outlook LoadMacroProviderOnBoot Setting
+description: Detects the modification of Outlook setting "LoadMacroProviderOnBoot"
+  which if enabled allows the automatic loading of any configured VBA project/module
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1137
+  - T1008
+  - T1546
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=53
+- https://www.linkedin.com/pulse/outlook-backdoor-using-vba-samir-b-/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Outlook\LoadMacroProviderOnBoot
+    Details|contains: '0x00000001'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 396ae3eb-4174-4b9b-880e-dc0364d78a19
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_outlook_enable_load_macro_provider_on_boot.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

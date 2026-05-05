@@ -1,0 +1,39 @@
+id: sigmahq-sigma-ea5c131b-380d-49f9-aeb3-920694da4d4b
+name: Suspicious Unsigned Thor Scanner Execution
+description: Detects loading and execution of an unsigned thor scanner binary.
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \thor.exe
+    - \thor64.exe
+    ImageLoaded|endswith:
+    - \thor.exe
+    - \thor64.exe
+  filter_main:
+    Signed: 'true'
+    SignatureStatus: valid
+    Signature: Nextron Systems GmbH
+  condition: selection and not filter_main
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ea5c131b-380d-49f9-aeb3-920694da4d4b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_thor_unsigned_execution.yml
+falsepositives:
+- Other legitimate binaries named "thor.exe" that aren't published by Nextron Systems

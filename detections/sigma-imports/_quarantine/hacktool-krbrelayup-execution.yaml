@@ -1,0 +1,50 @@
+id: sigmahq-sigma-12827a56-61a4-476a-a9cb-f3068f191073
+name: HackTool - KrbRelayUp Execution
+description: Detects KrbRelayUp used to perform a universal no-fix local privilege
+  escalation in Windows domain environments where LDAP signing is not enforced
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  - T1550.003
+  categories:
+  - endpoint
+references:
+- https://github.com/Dec0ne/KrbRelayUp
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \KrbRelayUp.exe
+  - OriginalFileName: KrbRelayUp.exe
+  selection_cli_1:
+    CommandLine|contains|all:
+    - ' relay '
+    - ' -Domain '
+    - ' -ComputerName '
+  selection_cli_2:
+    CommandLine|contains|all:
+    - ' krbscm '
+    - ' -sc '
+  selection_cli_3:
+    CommandLine|contains|all:
+    - ' spawn '
+    - ' -d '
+    - ' -cn '
+    - ' -cp '
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 12827a56-61a4-476a-a9cb-f3068f191073
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_krbrelayup.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-b5746143-59d6-4603-8d06-acbd60e166ee
+name: Uncommon Child Process Of AddinUtil.EXE
+description: Detects uncommon child processes of the Add-In deployment cache updating
+  utility (AddInutil.exe) which could be a sign of potential abuse of the binary to
+  proxy execution via a custom Addins.Store payload.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://www.blue-prints.blog/content/blog/posts/lolbin/addinutil-lolbas.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \addinutil.exe
+  filter_main_werfault:
+    Image|endswith:
+    - :\Windows\System32\conhost.exe
+    - :\Windows\System32\werfault.exe
+    - :\Windows\SysWOW64\werfault.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b5746143-59d6-4603-8d06-acbd60e166ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_addinutil_uncommon_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

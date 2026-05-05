@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-terminal-service-process-spawn
+name: terminal_service_process_spawn
+description: terminal_service_process_spawn
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule terminal_service_process_spawn {\n meta:\n    author = \"\
+    Florian Roth\"\n    description = \"Detects a process spawned by the terminal\
+    \ service server process (this could be an indicator for an exploitation of CVE-2019-0708)\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/FKzDvmj7GHii\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/05/22\"\n    product = \"windows\"\n    category\
+    \ = \"process_creation\"\n    mitre = \"car.2013-07-002\"\n\n  events:\n((re.regex($selection.principal.process.command_line,\
+    \ `.*\\\\svchost\\.exe.*termsvcs`) and ($selection.metadata.product_event_type\
+    \ = \"4688\" or $selection.metadata.product_event_type = \"1\")) and not (re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\rdpclip\\.exe`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: terminal_service_process_spawn
+provenance:
+  source: chronicle/detection-rules
+  source_id: terminal_service_process_spawn
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/proactive_exploit_detection/process_creation/terminal_service_process_spawn.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

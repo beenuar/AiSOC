@@ -1,0 +1,73 @@
+id: chronicle-detection-rules-apt28-zekapabzebrocycannon-implant-sysmonfirewallproxy-part2
+name: apt28_zekapabzebrocycannon_implant_sysmonfirewallproxy_part2
+description: apt28_zekapabzebrocycannon_implant_sysmonfirewallproxy_part2
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule apt28_zekapabzebrocycannon_implant_sysmonfirewallproxy_part2\
+    \ {\n meta:\n    author = \"Roman Ranskyi\"\n    description = \"Part-2 of APT28\
+    \ detection pack. (Part-1 https://tdm.socprime.com/tdm/info/1385/)  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/khIafFH3bPdX\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, t1085, t1064, Defense Evasion,\
+    \ t1064, t1085, Persistence, t1060, Discovery, t1012, Command And Control, t1043,\
+    \ t1071, tool.zekapab, tool.zebrocy, tool.cannon\"\n\n  events:\n((((((((((((($selectionSysmon3_emanueledelucia.target.url\
+    \ = \"https://beatguitar.com/n2qqsy/hpse0/sy/yasfy8/msayzp/lw.sip/?n=vxl0bnijnmttnsficoq=\"\
+    \ or $selectionSysmon3_emanueledelucia.target.url = \"beatguitar.com\" or $selectionSysmon3_emanueledelucia.target.ip\
+    \ = \"185.99.133.72\") or ($selectionSysmon3_emanueledelucia.metadata.product_event_type\
+    \ = \"1\" and $selectionSysmon3_emanueledelucia.target.file.md5 = \"549726b8bfb1919a343ac764d48fdc81\"\
+    )) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"1\" and\
+    \ $selectionSysmon3_emanueledelucia.target.file.md5 = \"43d7ffd611932cf51d7150b176ecfc29\"\
+    )) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"3\" and\
+    \ $selectionSysmon3_emanueledelucia.target.ip = \"185.99.133.72\")) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type\
+    \ = \"13\" and $selectionSysmon3_emanueledelucia.target.registry.registry_key\
+    \ = \"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\UIMgr\")) or\
+    \ ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"1\" and $selectionSysmon3_emanueledelucia.target.file.md5\
+    \ = \"02c46f30f4c68a442cf7e13bebe8d3f8\")) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type\
+    \ = \"1\" and $selectionSysmon3_emanueledelucia.target.file.md5 = \"1aedaa67e7613594c135177f2973e2c7\"\
+    )) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"1\" and\
+    \ $selectionSysmon3_emanueledelucia.target.file.md5 = \"602d2901d55c2720f955503456ac2f68\"\
+    )) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"1\" and\
+    \ $selectionSysmon3_emanueledelucia.target.file.md5 = \"602d2901d55c2720f955503456ac2f68\"\
+    )) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"1\" and\
+    \ ($selectionSysmon3_emanueledelucia.target.file.md5 = \"3eaf97b9c6b44f0447f2bd1c7acb8c96\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"6bc5f53d4082f12dd83aca45bae81e64\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"333d2b9e99b36fb42f9e79a2833fad9c\"\
+    )) or $selectionSysmon3_emanueledelucia.target.ip = \"89.37.226.123\" or $selectionSysmon3_emanueledelucia.target.url\
+    \ = \"/advance/portable_version/service.php\") or ($selectionSysmon3_emanueledelucia.metadata.product_event_type\
+    \ = \"1\" and ($selectionSysmon3_emanueledelucia.target.file.md5 = \"84352ccad3cfa152d98cf76b08623b92\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"fe0da70a592d25ddbfbd47b22f88542f\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"4384c701308a9d3aa92f49615ec74b2d\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"26b213343bac2b4c69a261a2f5c00e89\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"47a026d93ae8e0cc292e8d7a71ddc89e\"\
+    ))) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type = \"11\"\
+    \ and ($selectionSysmon3_emanueledelucia.target.file.full_path = \"C:\\\\Users\\\
+    \\Public\\\\dset.ini\" or $selectionSysmon3_emanueledelucia.target.file.full_path\
+    \ = \"C:\\\\Users\\\\Public\\\\boot.ini\" or $selectionSysmon3_emanueledelucia.target.file.full_path\
+    \ = \"C:\\\\Users\\\\Public\\\\kla.bin\" or $selectionSysmon3_emanueledelucia.target.file.full_path\
+    \ = \"C:\\\\Users\\\\Public\\\\officeexcp.bin\" or $selectionSysmon3_emanueledelucia.target.file.full_path\
+    \ = \"C:\\\\Users\\\\Public\\\\dset.ini\"))) or ($selectionSysmon3_emanueledelucia.metadata.product_event_type\
+    \ = \"1\" and ($selectionSysmon3_emanueledelucia.target.file.md5 = \"ea553c3de3fffbfa047e8e0eb2557b8b\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"8da56a4b1a5ff8e4643421a5fefb5dc4\"\
+    \ or $selectionSysmon3_emanueledelucia.target.file.md5 = \"a225d457c3396e647ffc710cd1edd4c74dc57152\"\
+    )))\n\n  condition:\n    $selectionSysmon3_emanueledelucia\n}"
+  chronicle_rule_name: apt28_zekapabzebrocycannon_implant_sysmonfirewallproxy_part2
+provenance:
+  source: chronicle/detection-rules
+  source_id: apt28_zekapabzebrocycannon_implant_sysmonfirewallproxy_part2
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/sysmon/apt28_zekapab_zebrocy_cannon_implant__sysmon_firewall_proxy___part_2.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

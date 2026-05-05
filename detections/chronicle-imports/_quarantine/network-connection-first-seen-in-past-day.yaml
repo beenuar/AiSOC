@@ -1,0 +1,71 @@
+id: chronicle-detection-rules-network-connection-first-seen-in-past-day
+name: network_connection_first_seen_in_past_day
+description: network_connection_first_seen_in_past_day
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule network_connection_first_seen_in_past_day {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Detect network connection to an ip\
+    \ address that was only seen for the first time in the past 24 hours\"\n    rule_id\
+    \ = \"mr_c3c9e4d3-eaa5-4f5b-9c64-70ce93247c51\"\n    rule_name = \"Network Connection\
+    \ First Seen In Past Day\"\n    type = \"alert\"\n    tags = \"first last seen\"\
+    \n    data_source = \"microsoft windows , gcp firewall, microsoft sysmon, crowdstrike,\
+    \ gcp scc, zeek\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \    $network.metadata.event_type = \"NETWORK_CONNECTION\"\n    $network.target.ip\
+    \ = $ip\n    //Target IP is not part of RFC1918 space, can modify as needed\n\
+    \    not net.ip_in_range_cidr ($network.target.ip, \"10.0.0.0/24\")\n    not net.ip_in_range_cidr\
+    \ ($network.target.ip, \"172.16.0.0/20\")\n    not net.ip_in_range_cidr ($network.target.ip,\
+    \ \"192.168.0.0/16\")\n\n    //derived from events ingested by Chronicle\n   \
+    \ $entity.graph.entity.artifact.ip  = $ip\n    $entity.graph.metadata.entity_type\
+    \ = \"IP_ADDRESS\"\n    $entity.graph.metadata.source_type = \"DERIVED_CONTEXT\"\
+    \n    $entity.graph.entity.artifact.first_seen_time.seconds > 0\n\n    //calculate\
+    \ the different between current time and the first time the ip was listed as seen\
+    \ in the entity graph\n    86400 > timestamp.current_seconds() - $entity.graph.entity.artifact.first_seen_time.seconds\n\
+    \n  match:\n    $ip over 24h\n\n  outcome:\n    $risk_score = 35\n    $event_count\
+    \ = count_distinct($network.metadata.id)\n    //added to populate alert graph\
+    \ with additional context\n    $principal_ip = array_distinct($network.principal.ip)\n\
+    \    // Commented out target.ip because it is already represented in graph as\
+    \ match variable. If match changes, can uncomment to add to results\n    //$target_ip\
+    \ = array_distinct($network.target.ip)\n    $principal_process_pid = array_distinct($network.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($network.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($network.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($network.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($network.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($network.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($network.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($network.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($network.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($network.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($network.target.process.product_specific_process_id)\n    $target_process_parent_process_product_specific_process_id\
+    \ = array_distinct($network.target.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($network.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($network.target.user.userid)\n\n  condition:\n\
+    \    $network and $entity\n}"
+  chronicle_rule_name: network_connection_first_seen_in_past_day
+provenance:
+  source: chronicle/detection-rules
+  source_id: network_connection_first_seen_in_past_day
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/network_connection_first_seen_in_past_day.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

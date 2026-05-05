@@ -1,0 +1,34 @@
+id: sigmahq-sigma-0d7a9363-af70-4e7b-a3b7-1a176b7fbe84
+name: Exports Registry Key To an Alternate Data Stream
+description: Exports the target Registry key and hides it in the specified alternate
+  data stream.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Regedit/
+- https://gist.github.com/api0cradle/cdd2d0d0ec9abb686f0e89306e277b8f
+logsource:
+  product: windows
+  category: create_stream_hash
+detection:
+  selection:
+    Image|endswith: \regedit.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0d7a9363-af70-4e7b-a3b7-1a176b7fbe84
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_stream_hash/create_stream_hash_regedit_export_to_ads.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,55 @@
+id: splunk-security-content-50998483-bb15-457b-a870-965080d9e3d3
+name: Windows AD Replication Request Initiated from Unsanctioned Location
+description: The following analytic identifies unauthorized Active Directory replication
+  requests initiated from non-domain controller locations. It leverages EventCode
+  4662 to detect when a computer account with replication permissions creates a handle
+  to domainDNS, filtering out known domain controller IP addresses. This activity
+  is significant as it may indicate a DCSync attack, where an attacker with privileged
+  access can request password hashes for any or all users within the domain. If confirmed
+  malicious, this could lead to unauthorized access to sensitive information and potential
+  full domain compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.006
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=1729
+- https://www.linkedin.com/pulse/mimikatz-dcsync-event-log-detections-john-dwyer
+- https://github.com/SigmaHQ/sigma/blob/0.22-699-g29a5c6278/rules/windows/builtin/security/win_security_dcsync.yml
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4662 ObjectType IN (\"%{19195a5b-6da0-11d0-afd3-00c04fd930c9}\"\
+    ,\n  \"domainDNS\") AND Properties IN (\"*Replicating Directory Changes All*\"\
+    ,\"*Manage Replication Topology*\",\"*Remove Replica In Domain*\",\"*{1131f6ad-9c07-11d1-f79f-00c04fc2dcd2}*\"\
+    ,\"*{9923a32a-3607-11d2-b9be-0000f87a36b2}*\",\"*{1131f6ac-9c07-11d1-f79f-00c04fc2dcd2}*\"\
+    )\n  AND AccessMask=\"0x100\" AND (SubjectUserSid=\"NT AUT*\" OR SubjectUserSid=\"\
+    S-1-5-18\"\n  OR SubjectDomainName=\"Window Manager\" OR SubjectUserName=\"*$\"\
+    )\n| stats min(_time)\n    as attack_time, count by SubjectDomainName, SubjectUserName,\
+    \ Computer, Logon_ID, ObjectName, ObjectServer, ObjectType, OperationType, status\n\
+    | rename SubjectDomainName\n    as Target_Domain, SubjectUserName as user, Logon_ID\
+    \ as TargetLogonId\n| appendpipe\n    [| map search=\"search `wineventlog_security`\
+    \ EventCode=4624 TargetLogonId=$TargetLogonId$\"]\n| stats min(attack_time) as\
+    \ _time, values(TargetUserSid)\n    as TargetUserSid, values(Target_Domain) as\
+    \ Target_Domain, values(user) as user,\n    values(Computer) as Computer, values(status)\
+    \ as status, values(src_category) as\n    src_category, values(src_ip) as src_ip\
+    \ values(action) as action values(authentication_method) as authentication_method\
+    \ values(dest) as dest values(signature) as signature values(signature_id) as\
+    \ signature_id by TargetLogonId\n| search NOT src_category=\"domain_controller\"\
+    \n| `windows_ad_replication_request_initiated_from_unsanctioned_location_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 50998483-bb15-457b-a870-965080d9e3d3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_replication_request_initiated_from_unsanctioned_location.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

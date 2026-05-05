@@ -1,0 +1,44 @@
+id: sigmahq-sigma-5cc2cda8-f261-4d88-a2de-e9e193c86716
+name: Suspicious Processes Spawned by WinRM
+description: Detects suspicious processes including shells spawnd from WinRM host
+  process
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \wsmprovhost.exe
+    Image|endswith:
+    - \cmd.exe
+    - \sh.exe
+    - \bash.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wsl.exe
+    - \schtasks.exe
+    - \certutil.exe
+    - \whoami.exe
+    - \bitsadmin.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5cc2cda8-f261-4d88-a2de-e9e193c86716
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrm_susp_child_process.yml
+falsepositives:
+- Legitimate WinRM usage
+notes:
+  quarantine_reason: 'upstream status: test'

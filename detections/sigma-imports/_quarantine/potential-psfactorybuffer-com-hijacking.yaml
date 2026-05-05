@@ -1,0 +1,40 @@
+id: sigmahq-sigma-243380fa-11eb-4141-af92-e14925e77c1b
+name: Potential PSFactoryBuffer COM Hijacking
+description: Detects changes to the PSFactory COM InProcServer32 registry. This technique
+  was used by RomCom to create persistence storing a malicious DLL.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546.015
+  categories:
+  - endpoint
+references:
+- https://blogs.blackberry.com/en/2023/06/romcom-resurfaces-targeting-ukraine
+- https://strontic.github.io/xcyclopedia/library/clsid_C90250F3-4D7D-4991-9B69-A5C5BC1C2AE6.html
+- https://www.virustotal.com/gui/file/6d3ab9e729bb03ae8ae3fcd824474c5052a165de6cb4c27334969a542c7b261d/detection
+- https://www.trendmicro.com/en_us/research/23/e/void-rabisu-s-use-of-romcom-backdoor-shows-a-growing-shift-in-th.html
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \CLSID\{c90250f3-4d7d-4991-9b69-a5c5bc1c2ae6}\InProcServer32\(Default)
+  filter_main:
+    Details:
+    - '%windir%\System32\ActXPrxy.dll'
+    - C:\Windows\System32\ActXPrxy.dll
+  condition: selection and not filter_main
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 243380fa-11eb-4141-af92-e14925e77c1b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_comhijack_psfactorybuffer.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

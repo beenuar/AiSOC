@@ -1,0 +1,40 @@
+id: sigmahq-sigma-84bae5d4-b518-4ae0-b331-6d4afd34d00f
+name: MacOS Network Service Scanning
+description: Detects enumeration of local or remote network services.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1046/T1046.md
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_1:
+    Image|endswith:
+    - /nc
+    - /netcat
+  selection_2:
+    Image|endswith:
+    - /nmap
+    - /telnet
+  filter:
+    CommandLine|contains: l
+  condition: (selection_1 and not filter) or selection_2
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84bae5d4-b518-4ae0-b331-6d4afd34d00f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_network_service_scanning.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

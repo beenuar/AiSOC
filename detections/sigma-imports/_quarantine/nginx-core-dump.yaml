@@ -1,0 +1,33 @@
+id: sigmahq-sigma-59ec40bb-322e-40ab-808d-84fa690d7e56
+name: Nginx Core Dump
+description: Detects a core dump of a crashing Nginx worker process, which could be
+  a signal of a serious problem or exploitation attempts.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1499.004
+  categories:
+  - endpoint
+references:
+- https://docs.nginx.com/nginx/admin-guide/monitoring/debugging/#enabling-core-dumps
+- https://www.x41-dsec.de/lab/advisories/x41-2021-002-nginx-resolver-copy/
+logsource:
+  service: nginx
+detection:
+  keywords:
+  - exited on signal 6 (core dumped)
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 59ec40bb-322e-40ab-808d-84fa690d7e56
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/product/nginx/web_nginx_core_dump.yml
+falsepositives:
+- Serious issues with a configuration or plugin
+notes:
+  quarantine_reason: 'upstream status: test'

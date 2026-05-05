@@ -1,0 +1,39 @@
+id: sigmahq-sigma-d3c3861d-c504-4c77-ba55-224ba82d0118
+name: New Network Trace Capture Started Via Netsh.EXE
+description: Detects the execution of netsh with the "trace" flag in order to start
+  a network capture
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1040
+  categories:
+  - endpoint
+references:
+- https://blogs.msdn.microsoft.com/canberrapfe/2012/03/30/capture-a-network-trace-without-installing-anything-capture-a-network-trace-of-a-reboot/
+- https://klausjochem.me/2016/02/03/netsh-the-cyber-attackers-tool-of-choice/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \netsh.exe
+  - OriginalFileName: netsh.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - trace
+    - start
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3c3861d-c504-4c77-ba55-224ba82d0118
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_netsh_packet_capture.yml
+falsepositives:
+- Legitimate administration activity
+notes:
+  quarantine_reason: 'upstream status: test'

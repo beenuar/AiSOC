@@ -1,0 +1,54 @@
+id: sigmahq-sigma-10c14723-61c7-4c75-92ca-9af245723ad2
+name: HackTool - Potential Impacket Lateral Movement Activity
+description: Detects wmiexec/dcomexec/atexec/smbexec from Impacket framework
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1047
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://github.com/SecureAuthCorp/impacket/blob/8b1a99f7c715702eafe3f24851817bb64721b156/examples/wmiexec.py
+- https://github.com/SecureAuthCorp/impacket/blob/8b1a99f7c715702eafe3f24851817bb64721b156/examples/atexec.py
+- https://github.com/SecureAuthCorp/impacket/blob/8b1a99f7c715702eafe3f24851817bb64721b156/examples/smbexec.py
+- https://github.com/SecureAuthCorp/impacket/blob/8b1a99f7c715702eafe3f24851817bb64721b156/examples/dcomexec.py
+- https://www.elastic.co/guide/en/security/current/suspicious-cmd-execution-via-wmi.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_other:
+    ParentImage|endswith:
+    - \wmiprvse.exe
+    - \mmc.exe
+    - \explorer.exe
+    - \services.exe
+    CommandLine|contains|all:
+    - cmd.exe
+    - /Q
+    - /c
+    - \\\\127.0.0.1\\
+    - '&1'
+  selection_atexec:
+    ParentCommandLine|contains:
+    - svchost.exe -k netsvcs
+    - taskeng.exe
+    CommandLine|contains|all:
+    - cmd.exe
+    - /C
+    - Windows\Temp\
+    - '&1'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 10c14723-61c7-4c75-92ca-9af245723ad2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_impacket_lateral_movement.yml
+falsepositives:
+- Unknown

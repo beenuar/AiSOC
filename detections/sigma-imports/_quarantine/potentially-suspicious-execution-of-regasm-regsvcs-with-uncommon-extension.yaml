@@ -1,0 +1,48 @@
+id: sigmahq-sigma-e9f8f8cc-07cc-4e81-b724-f387db9175e4
+name: Potentially Suspicious Execution Of Regasm/Regsvcs With Uncommon Extension
+description: Detects potentially suspicious execution of the Regasm/Regsvcs utilities
+  with an uncommon extension.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.009
+  categories:
+  - endpoint
+references:
+- https://www.fortiguard.com/threat-signal-report/4718?s=09
+- https://lolbas-project.github.io/lolbas/Binaries/Regasm/
+- https://lolbas-project.github.io/lolbas/Binaries/Regsvcs/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \Regsvcs.exe
+    - \Regasm.exe
+  - OriginalFileName:
+    - RegSvcs.exe
+    - RegAsm.exe
+  selection_extension:
+    CommandLine|contains:
+    - .dat
+    - .gif
+    - .jpeg
+    - .jpg
+    - .png
+    - .txt
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9f8f8cc-07cc-4e81-b724-f387db9175e4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_regasm_regsvcs_uncommon_extension_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

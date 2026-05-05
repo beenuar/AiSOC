@@ -1,0 +1,50 @@
+id: splunk-security-content-e733a326-59d2-446d-b8db-14a17151aa68
+name: Detect Spike in S3 Bucket deletion
+description: The following analytic identifies a spike in API activity related to
+  the deletion of S3 buckets in your AWS environment. It leverages AWS CloudTrail
+  logs to detect anomalies by comparing current deletion activity against a historical
+  baseline. This activity is significant as unusual spikes in S3 bucket deletions
+  could indicate malicious actions such as data exfiltration or unauthorized data
+  destruction. If confirmed malicious, this could lead to significant data loss, disruption
+  of services, and potential exposure of sensitive information. Immediate investigation
+  is required to determine the legitimacy of the activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1530
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=DeleteBucket [search `cloudtrail` eventName=DeleteBucket\n\
+    \  | spath output=arn path=userIdentity.arn\n  | stats count as apiCalls\n   \
+    \ BY arn\n  | inputlookup s3_deletion_baseline append=t\n  | fields - latestCount\n\
+    \  | stats values(*) as *\n    BY arn\n  | rename apiCalls as latestCount\n  |\
+    \ eval newAvgApiCalls=avgApiCalls + (latestCount-avgApiCalls)/720\n  | eval newStdevApiCalls=sqrt(((pow(stdevApiCalls,\
+    \ 2)*719 + (latestCount-newAvgApiCalls)*(latestCount-avgApiCalls))/720))\n  |\
+    \ eval avgApiCalls=coalesce(newAvgApiCalls, avgApiCalls), stdevApiCalls=coalesce(newStdevApiCalls,\
+    \ stdevApiCalls), numDataPoints=if(isnull(latestCount), numDataPoints, numDataPoints+1)\n\
+    \  | table arn, latestCount, numDataPoints, avgApiCalls, stdevApiCalls\n  | outputlookup\
+    \ s3_deletion_baseline\n  | eval dataPointThreshold = 15, deviationThreshold =\
+    \ 3\n  | eval isSpike=if((latestCount > avgApiCalls+deviationThreshold*stdevApiCalls)\
+    \ AND numDataPoints > dataPointThreshold, 1, 0)\n  | where isSpike=1\n  | rename\
+    \ arn as userIdentity.arn\n  | table userIdentity.arn]\n  | spath output=user\
+    \ userIdentity.arn\n  | spath output=bucketName path=requestParameters.bucketName\n\
+    \  | stats values(bucketName) as bucketName, count as numberOfApiCalls, dc(eventName)\
+    \ as uniqueApisCalled\n    BY user\n  | `detect_spike_in_s3_bucket_deletion_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e733a326-59d2-446d-b8db-14a17151aa68
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_spike_in_s3_bucket_deletion.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

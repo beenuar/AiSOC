@@ -1,0 +1,36 @@
+id: sigmahq-sigma-09570ae5-889e-43ea-aac0-0e1221fb3d95
+name: Remove Exported Mailbox from Exchange Webserver
+description: Detects removal of an exported Exchange mailbox which could be to cover
+  tracks from ProxyShell exploit
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://github.com/rapid7/metasploit-framework/blob/1416b5776d963f21b7b5b45d19f3e961201e0aed/modules/exploits/windows/http/exchange_proxyshell_rce.rb#L430
+logsource:
+  service: msexchange-management
+  product: windows
+detection:
+  keywords:
+    '|all':
+    - Remove-MailboxExportRequest
+    - ' -Identity '
+    - ' -Confirm "False"'
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 09570ae5-889e-43ea-aac0-0e1221fb3d95
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/msexchange/win_exchange_proxyshell_remove_mailbox_export.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

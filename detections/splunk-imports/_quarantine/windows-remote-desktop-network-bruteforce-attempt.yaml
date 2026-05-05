@@ -1,0 +1,46 @@
+id: splunk-security-content-908bf0d5-0983-4afd-b6a4-e9eb5d361a7d
+name: Windows Remote Desktop Network Bruteforce Attempt
+description: The following analytic identifies potential Remote Desktop Protocol (RDP)
+  brute force attacks by monitoring network traffic for RDP application activity.
+  This query detects potential RDP brute force attacks by identifying source IPs that
+  have made more than 10 connection attempts to the same RDP port on a host within
+  a one-hour window. The results are presented in a table that includes the source
+  and destination IPs, destination port, number of attempts, and the times of the
+  first and last connection attempts, helping to prioritize IPs based on the intensity
+  of activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  categories:
+  - network
+references:
+- https://www.zscaler.com/blogs/security-research/ransomware-delivered-using-rdp-brute-force-attack
+- https://www.reliaquest.com/blog/rdp-brute-force-attacks/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count, min(_time) as firstTime,\
+    \ max(_time) as lastTime values(Al_Traffic.src_port) as src_port FROM datamodel=Network_Traffic\n\
+    \  WHERE (\n        All_Traffic.app=rdp\n        OR\n        All_Traffic.dest_port=3389\n\
+    \    )\n  BY All_Traffic.action All_Traffic.app All_Traffic.dest\n     All_Traffic.dest_ip\
+    \ All_Traffic.dest_port All_Traffic.direction\n     All_Traffic.dvc All_Traffic.protocol\
+    \ All_Traffic.protocol_version\n     All_Traffic.src All_Traffic.src_ip All_Traffic.transport\n\
+    \     All_Traffic.user All_Traffic.vendor_product\n| `drop_dm_object_name(\"All_Traffic\"\
+    )`\n| eval duration=lastTime-firstTime\n| where count > 10 AND duration < 3600\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_remote_desktop_network_bruteforce_attempt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 908bf0d5-0983-4afd-b6a4-e9eb5d361a7d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/windows_remote_desktop_network_bruteforce_attempt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

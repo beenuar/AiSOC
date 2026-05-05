@@ -1,0 +1,33 @@
+id: sigmahq-sigma-58af08eb-f9e1-43c8-9805-3ad9b0482bd8
+name: Invalid PIM License
+description: Identifies when an organization doesn't have the proper license for PIM
+  and is out of compliance.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-how-to-configure-security-alerts#the-organization-doesnt-have-microsoft-entra-premium-p2-or-microsoft-entra-id-governance
+logsource:
+  product: azure
+  service: pim
+detection:
+  selection:
+    riskEventType: invalidLicenseAlertIncident
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 58af08eb-f9e1-43c8-9805-3ad9b0482bd8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/privileged_identity_management/azure_pim_invalid_license.yml
+falsepositives:
+- Investigate if licenses have expired.
+notes:
+  quarantine_reason: 'upstream status: test'

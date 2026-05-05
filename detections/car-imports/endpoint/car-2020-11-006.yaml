@@ -1,0 +1,50 @@
+id: mitre-car-car-2020-11-006
+name: Local Permission Group Discovery
+description: Cyber actors frequently enumerate local or domain permissions groups.
+  The net utility is usually used for this purpose. This analytic looks for any instances
+  of net.exe, which is not normally used for benign purposes, although system administrator
+  actions may trigger false positives.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - net.exe instances
+    type: Pseudocode
+    code: "processes = search Process:Create\nnet_processes = filter processes where\
+      \ (\n  exe = \"net.exe\" AND (\n  command_line=\"*net* user*\" OR\n  command_line=\"\
+      *net* group*\" OR\n  command_line=\"*net* localgroup*\" OR\n  command_line=\"\
+      *get-localgroup*\" OR\n  command_line=\"*get-ADPrincipalGroupMembership*\" )\n\
+      output net_processes\n"
+  - name: Splunk Search - net.exe instances
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) Image="C:\\Windows\\System32\\net.exe"
+      AND (CommandLine="* user*" OR CommandLine="* group*" OR CommandLine="* localgroup*"
+      OR CommandLine="*get-localgroup*" OR CommandLine="*get-ADPrincipalGroupMembership*")
+
+      '
+  - name: LogPoint Search - net.exe instances
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 image="C:\Windows\System32\net.exe" (command="*
+      user*" OR command="* group*" OR command="* localgroup*" OR command="*get-localgroup*"
+      OR command="*get-ADPrincipalGroupMembership*")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-006
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-006.yaml
+notes:
+  car_status: needs_implementation

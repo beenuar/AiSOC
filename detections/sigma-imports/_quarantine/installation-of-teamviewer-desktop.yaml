@@ -1,0 +1,32 @@
+id: sigmahq-sigma-9711de76-5d4f-4c50-a94f-21e4e8f8384d
+name: Installation of TeamViewer Desktop
+description: TeamViewer_Desktop.exe is create during install
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1219/T1219.md#atomic-test-1---teamviewer-files-detected-test-on-windows
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: \TeamViewer_Desktop.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9711de76-5d4f-4c50-a94f-21e4e8f8384d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_install_teamviewer_desktop.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

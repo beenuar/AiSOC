@@ -1,0 +1,45 @@
+id: sigmahq-sigma-f0e53e89-8d22-46ea-9db5-9d4796ee2f8a
+name: Exports Registry Key To a File
+description: Detects the export of the target Registry key to a file.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1012
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Regedit/
+- https://gist.github.com/api0cradle/cdd2d0d0ec9abb686f0e89306e277b8f
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \regedit.exe
+  - OriginalFileName: REGEDIT.EXE
+  selection_cli:
+    CommandLine|contains|windash: ' -E '
+  filter_1:
+    CommandLine|contains:
+    - hklm
+    - hkey_local_machine
+  filter_2:
+    CommandLine|endswith:
+    - \system
+    - \sam
+    - \security
+  condition: all of selection_* and not all of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f0e53e89-8d22-46ea-9db5-9d4796ee2f8a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_regedit_export_keys.yml
+falsepositives:
+- Legitimate export of keys
+notes:
+  quarantine_reason: 'upstream status: test'

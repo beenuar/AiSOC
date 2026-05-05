@@ -1,0 +1,48 @@
+id: splunk-security-content-9c8e4f2a-7d3b-4e5c-8a9f-1b6d4e8c3f5a
+name: Cisco ASA - New Local User Account Created
+description: 'This analytic detects creation of new user accounts on Cisco ASA devices
+  via CLI or ASDM.
+
+  Adversaries may create unauthorized user accounts to establish persistence, maintain
+  backdoor access, or elevate privileges on network infrastructure devices. These
+  rogue accounts can provide attackers with continued access even after initial compromise
+  vectors are remediated.
+
+  The detection monitors for ASA message ID 502101, which is generated whenever a
+  new user account is created on the device, capturing details including the username,
+  privilege level, and the administrator who created the account.
+
+  Investigate unexpected account creations, especially those with elevated privileges
+  (level 15), accounts created outside business hours, accounts with suspicious or
+  generic names, or accounts created by non-administrative users.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  - T1078.003
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/asa-syslog/syslog-messages-500000-to-520025.html#con_4773963
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (502101)\n| fillnull\n| stats count earliest(_time)\
+    \ as firstTime\n        latest(_time) as lastTime\n        values(action) as action\n\
+    \        values(message_id) as message_id\n        values(result) as result\n\
+    \        values(privilege_level) as privilege_level\n  by host user\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_asa___new_local_user_account_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9c8e4f2a-7d3b-4e5c-8a9f-1b6d4e8c3f5a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___new_local_user_account_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

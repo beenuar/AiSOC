@@ -1,0 +1,40 @@
+id: sigmahq-sigma-53bb4f7f-48a8-4475-ac30-5a82ddfdf6fc
+name: Potential MFA Bypass Using Legacy Client Authentication
+description: Detects successful authentication from potential clients using legacy
+  authentication via user agent strings. This could be a sign of MFA bypass using
+  a password spray attack.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1110
+  categories:
+  - cloud
+references:
+- https://web.archive.org/web/20230217071802/https://blooteem.com/march-2022
+- https://www.microsoft.com/en-us/security/blog/2021/10/26/protect-your-business-from-password-sprays-with-microsoft-dart-recommendations/
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    Status: Success
+    userAgent|contains:
+    - BAV2ROPC
+    - CBAinPROD
+    - CBAinTAR
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 53bb4f7f-48a8-4475-ac30-5a82ddfdf6fc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_suspicious_signin_bypassing_mfa.yml
+falsepositives:
+- Known Legacy Accounts
+notes:
+  quarantine_reason: 'upstream status: test'

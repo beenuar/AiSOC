@@ -1,0 +1,47 @@
+id: sigmahq-sigma-993c2665-e6ef-40e3-a62a-e1a97686af79
+name: Certificate Use With No Strong Mapping
+description: 'Detects a user certificate that was valid but could not be mapped to
+  a user in a strong way (such as via explicit mapping, key trust mapping, or a SID)
+
+  This could be a sign of exploitation of the elevation of privilege vulnerabilities
+  (CVE-2022-34691, CVE-2022-26931, CVE-2022-26923) that can occur when the KDC allows
+  certificate spoofing by not requiring a strong mapping.
+
+  Events where the AccountName and CN of the Subject do not match, or where the CN
+  ends in a dollar sign indicating a machine, may indicate certificate spoofing.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://support.microsoft.com/en-us/topic/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers-ad2c23b0-15d8-4340-a468-4d4f3b188f16
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name:
+    - Kerberos-Key-Distribution-Center
+    - Microsoft-Windows-Kerberos-Key-Distribution-Center
+    EventID:
+    - 39
+    - 41
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 993c2665-e6ef-40e3-a62a-e1a97686af79
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_kerberos_key_distribution_center/win_system_kdcsvc_cert_use_no_strong_mapping.yml
+falsepositives:
+- If prevalent in the environment, filter on events where the AccountName and CN of
+  the Subject do not reference the same user
+- If prevalent in the environment, filter on CNs that end in a dollar sign indicating
+  it is a machine name
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-921aa10f-2e74-4cca-9498-98f9ca4d6fdf
+name: Registry Modification Attempt Via VBScript
+description: 'Detects attempts to modify the registry using VBScript''s CreateObject("Wscript.shell")
+  and RegWrite methods via common LOLBINs.
+
+  It could be an attempt to modify the registry for persistence without using straightforward
+  methods like regedit.exe, reg.exe, or PowerShell.
+
+  Threat Actors may use this technique to evade detection by security solutions that
+  monitor for direct registry modifications through traditional tools.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  - T1059.005
+  categories:
+  - endpoint
+references:
+- https://www.linkedin.com/posts/mauricefielenbach_livingofftheland-redteam-persistence-activity-7344801774182051843-TE00/
+- https://www.nextron-systems.com/2025/07/29/detecting-the-most-popular-mitre-persistence-method-registry-run-keys-startup-folder/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - CreateObject
+    - Wscript.shell
+    - .RegWrite
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 921aa10f-2e74-4cca-9498-98f9ca4d6fdf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vbscript_registry_modification.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

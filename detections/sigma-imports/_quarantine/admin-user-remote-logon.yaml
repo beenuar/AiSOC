@@ -1,0 +1,40 @@
+id: sigmahq-sigma-0f63e1ef-1eb9-4226-9d54-8927ca08520a
+name: Admin User Remote Logon
+description: Detect remote login by Administrator user (depending on internal pattern).
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078.001
+  - T1078.002
+  - T1078.003
+  categories:
+  - endpoint
+references:
+- https://car.mitre.org/wiki/CAR-2016-04-005
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Identifiable administrators usernames (pattern or special
+    unique character. ex: "Admin-*"), internal policy mandating use only as secondary
+    account'
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 10
+    AuthenticationPackageName: Negotiate
+    TargetUserName|startswith: Admin
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0f63e1ef-1eb9-4226-9d54-8927ca08520a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_admin_rdp_login.yml
+falsepositives:
+- Legitimate administrative activity.
+notes:
+  quarantine_reason: 'upstream status: test'

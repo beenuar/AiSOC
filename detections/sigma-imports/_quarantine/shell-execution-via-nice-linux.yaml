@@ -1,0 +1,41 @@
+id: sigmahq-sigma-093d68c7-762a-42f4-9f46-95e79142571a
+name: Shell Execution via Nice - Linux
+description: Detects the use of the "nice" utility to execute a shell. Such behavior
+  may be associated with privilege escalation, unauthorized command execution, or
+  to break out from restricted environments.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/nice/#shell
+- https://www.elastic.co/guide/en/security/current/linux-restricted-shell-breakout-via-linux-binary-s.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /nice
+    CommandLine|endswith:
+    - /bin/bash
+    - /bin/dash
+    - /bin/fish
+    - /bin/sh
+    - /bin/zsh
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 093d68c7-762a-42f4-9f46-95e79142571a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_nice_shell_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-5e51acb2-bcbe-435b-99c6-0e3cd5e2aa59
+name: Cisco Stage Data
+description: Various protocols maybe used to put data on the device for exfil or infil
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1074
+  - T1105
+  - T1560.001
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - tftp
+  - rcp
+  - puts
+  - copy
+  - configure replace
+  - archive tar
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5e51acb2-bcbe-435b-99c6-0e3cd5e2aa59
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_moving_data.yml
+falsepositives:
+- Generally used to copy configs or IOS images
+notes:
+  quarantine_reason: 'upstream status: test'

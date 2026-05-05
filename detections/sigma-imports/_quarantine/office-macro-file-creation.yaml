@@ -1,0 +1,48 @@
+id: sigmahq-sigma-91174a41-dc8f-401b-be89-7bfc140612a0
+name: Office Macro File Creation
+description: Detects the creation of a new office macro files on the systems
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1566.001/T1566.001.md
+- https://learn.microsoft.com/en-us/deployoffice/compat/office-file-format-reference
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith:
+    - .docm
+    - .dotm
+    - .xlsm
+    - .xltm
+    - .potm
+    - .pptm
+  filter_main_office:
+    Image|startswith:
+    - C:\Program Files\Microsoft Office\
+    - C:\Program Files (x86)\Microsoft Office\
+    Image|endswith:
+    - \WINWORD.EXE
+    - \EXCEL.EXE
+    - \POWERPNT.EXE
+    TargetFilename|contains: \~$
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 91174a41-dc8f-401b-be89-7bfc140612a0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_macro_files_created.yml
+falsepositives:
+- Very common in environments that rely heavily on macro documents
+notes:
+  quarantine_reason: 'upstream status: test'

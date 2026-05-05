@@ -1,0 +1,42 @@
+id: sigmahq-sigma-4e762605-34a8-406d-b72e-c1a089313320
+name: Potential Fake Instance Of Hxtsr.EXE Executed
+description: 'HxTsr.exe is a Microsoft compressed executable file called Microsoft
+  Outlook Communications.
+
+  HxTsr.exe is part of Outlook apps, because it resides in a hidden "WindowsApps"
+  subfolder of "C:\Program Files".
+
+  Any instances of hxtsr.exe not in this folder may be malware camouflaging itself
+  as HxTsr.exe'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: \hxtsr.exe
+  filter_main_hxtsr:
+    Image|contains: :\program files\windowsapps\microsoft.windowscommunicationsapps_
+    Image|endswith: \hxtsr.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4e762605-34a8-406d-b72e-c1a089313320
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hxtsr_masquerading.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

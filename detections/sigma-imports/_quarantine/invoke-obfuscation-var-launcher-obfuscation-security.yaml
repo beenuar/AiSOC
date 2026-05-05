@@ -1,0 +1,47 @@
+id: sigmahq-sigma-4c54ba8f-73d2-4d40-8890-d9cf1dca3d30
+name: Invoke-Obfuscation VAR++ LAUNCHER OBFUSCATION - Security
+description: Detects Obfuscated Powershell via VAR++ LAUNCHER
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|contains|all:
+    - '&&set'
+    - cmd
+    - /c
+    - -f
+    ServiceFileName|contains:
+    - '{0}'
+    - '{1}'
+    - '{2}'
+    - '{3}'
+    - '{4}'
+    - '{5}'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4c54ba8f-73d2-4d40-8890-d9cf1dca3d30
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_invoke_obfuscation_via_var_services_security.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

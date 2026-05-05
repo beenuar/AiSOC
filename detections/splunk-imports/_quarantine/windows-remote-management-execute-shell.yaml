@@ -1,0 +1,46 @@
+id: splunk-security-content-28b80028-851d-4b8d-88a5-375ba115418a
+name: Windows Remote Management Execute Shell
+description: The following analytic detects the execution of winrshost.exe initiating
+  CMD or PowerShell processes as part of a potential payload execution. winrshost.exe
+  is associated with Windows Remote Management (WinRM) and is typically used for remote
+  execution. By monitoring for this behavior, the detection identifies instances where
+  winrshost.exe is leveraged to run potentially malicious commands or payloads via
+  CMD or PowerShell. This behavior may indicate exploitation of remote management
+  tools for unauthorized access or lateral movement within a compromised environment,
+  signaling a potential security incident.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/winrshost.exe-6790044CEB4BA5BE6AA8161460D990FD.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=\"\
+    winrshost.exe\"\n    AND\n    Processes.process_name IN (\"cmd.exe\",\"*powershell*\"\
+    , \"pwsh.exe\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_remote_management_execute_shell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 28b80028-851d-4b8d-88a5-375ba115418a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_remote_management_execute_shell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

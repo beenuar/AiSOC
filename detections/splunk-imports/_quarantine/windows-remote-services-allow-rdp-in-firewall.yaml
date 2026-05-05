@@ -1,0 +1,50 @@
+id: splunk-security-content-9170cb54-ea15-41e1-9dfc-9f3363ce9b02
+name: Windows Remote Services Allow Rdp In Firewall
+description: The following analytic detects modifications to the Windows firewall
+  to enable Remote Desktop Protocol (RDP) on a targeted machine. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on command-line executions
+  involving "netsh.exe" to allow TCP port 3389. This activity is significant as it
+  may indicate an adversary attempting to gain remote access to a compromised host,
+  a common tactic for lateral movement. If confirmed malicious, this could allow attackers
+  to remotely control the system, leading to potential data exfiltration or further
+  network compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/a6f2ffe2-e6e2-4396-ae2e-04ea0143f2d8/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as cmdline values(Processes.parent_process_name) as parent_process values(Processes.process_name)\
+    \ count min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        Processes.process_name = \"netsh.exe\"\n        OR\n     \
+    \   Processes.original_file_name= \"netsh.exe\"\n    )\n    AND Processes.process\
+    \ = \"*firewall*\" AND Processes.process = \"*add*\" AND Processes.process = \"\
+    *protocol=TCP*\" AND Processes.process = \"*localport=3389*\" AND Processes.process\
+    \ = \"*action=allow*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_remote_services_allow_rdp_in_firewall_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9170cb54-ea15-41e1-9dfc-9f3363ce9b02
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_remote_services_allow_rdp_in_firewall.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

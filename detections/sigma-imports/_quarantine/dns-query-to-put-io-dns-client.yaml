@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8b69fd42-9dad-4674-abef-7fdef43ef92a
+name: DNS Query To Put.io - DNS Client
+description: Detects DNS queries for subdomains related to "Put.io" sharing website.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://darkatlas.io/blog/medusa-ransomware-group-opsec-failure
+logsource:
+  product: windows
+  service: dns-client
+  definition: 'Requirements: Microsoft-Windows-DNS Client Events/Operational Event
+    Log must be enabled/collected in order to receive the events.'
+detection:
+  selection:
+    EventID: 3008
+    QueryName|contains:
+    - api.put.io
+    - upload.put.io
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8b69fd42-9dad-4674-abef-7fdef43ef92a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/dns_client/win_dns_client_put_io.yml
+falsepositives:
+- Legitimate DNS queries and usage of Put.io
+notes:
+  quarantine_reason: 'upstream status: test'

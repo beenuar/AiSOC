@@ -1,0 +1,34 @@
+id: sigmahq-sigma-28eea407-28d7-4e42-b0be-575d5ba60b2c
+name: Azure AD Only Single Factor Authentication Required
+description: Detect when users are authenticating without MFA being required.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1556.006
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-gb/entra/architecture/security-operations-user-accounts
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    Status: Success
+    AuthenticationRequirement: singleFactorAuthentication
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 28eea407-28d7-4e42-b0be-575d5ba60b2c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_only_single_factor_auth_required.yml
+falsepositives:
+- If this was approved by System Administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

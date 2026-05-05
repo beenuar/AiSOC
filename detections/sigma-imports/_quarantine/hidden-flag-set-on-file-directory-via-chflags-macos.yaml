@@ -1,0 +1,43 @@
+id: sigmahq-sigma-3b2c1059-ae5f-40b6-b5d4-6106d3ac20fe
+name: Hidden Flag Set On File/Directory Via Chflags - MacOS
+description: 'Detects the execution of the "chflags" utility with the "hidden" flag,
+  in order to hide files on MacOS.
+
+  When a file or directory has this hidden flag set, it becomes invisible to the default
+  file listing commands and in graphical file browsers.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1564.004
+  - T1552.001
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/labs/apt32-multi-stage-macos-trojan-innovates-on-crimeware-scripting-technique/
+- https://www.welivesecurity.com/2019/04/09/oceanlotus-macos-malware-update/
+- https://www.paloaltonetworks.com/content/dam/pan/en_US/assets/pdf/reports/Unit_42/unit42-wirelurker.pdf
+- https://ss64.com/mac/chflags.html
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /chflags
+    CommandLine|contains: 'hidden '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3b2c1059-ae5f-40b6-b5d4-6106d3ac20fe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_chflags_hidden_flag.yml
+falsepositives:
+- Legitimate usage of chflags by administrators and users.
+notes:
+  quarantine_reason: 'upstream status: test'

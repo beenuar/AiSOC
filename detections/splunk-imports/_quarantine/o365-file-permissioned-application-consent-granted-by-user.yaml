@@ -1,0 +1,47 @@
+id: splunk-security-content-6c382336-22b8-4023-9b80-1689e799f21f
+name: O365 File Permissioned Application Consent Granted by User
+description: The following analytic identifies instances where a user in the Office
+  365 environment grants consent to an application requesting file permissions for
+  OneDrive or SharePoint. It leverages O365 audit logs, focusing on OAuth application
+  consent events. This activity is significant because granting such permissions can
+  allow applications to access, modify, or delete files, posing a risk if the application
+  is malicious or overly permissive. If confirmed malicious, this could lead to data
+  breaches, data loss, or unauthorized data manipulation, necessitating immediate
+  investigation to validate the application's legitimacy and assess potential risks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1528/
+- https://www.microsoft.com/en-us/security/blog/2022/09/22/malicious-oauth-applications-used-to-compromise-email-servers-and-spread-spam/
+- https://learn.microsoft.com/en-us/defender-cloud-apps/investigate-risky-oauth
+- https://www.alteredsecurity.com/post/introduction-to-365-stealer
+- https://github.com/AlteredSecurity/365-Stealer
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation="Consent
+    to application." ResultStatus=Success | eval admin_consent =mvindex(''ModifiedProperties{}.NewValue'',0)
+    | search admin_consent=False | eval permissions =mvindex(''ModifiedProperties{}.NewValue'',4)
+    | rex field=permissions "Scope:(?<Scope>[^,]+)" | makemv delim=" " Scope | search
+    Scope IN ("Files.Read", "Files.Read.All", "Files.ReadWrite", "Files.ReadWrite.All",
+    "Files.ReadWrite.AppFolder") | fillnull | stats count min(_time) as firstTime
+    max(_time) as lastTime values(Scope) as Scope by signature dest user src vendor_account
+    vendor_product object ObjectId | `security_content_ctime(lastTime)` | `o365_file_permissioned_application_consent_granted_by_user_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6c382336-22b8-4023-9b80-1689e799f21f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_file_permissioned_application_consent_granted_by_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

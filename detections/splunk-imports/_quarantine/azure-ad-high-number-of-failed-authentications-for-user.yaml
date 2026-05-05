@@ -1,0 +1,61 @@
+id: splunk-security-content-630b1694-210a-48ee-a450-6f79e7679f2c
+name: Azure AD High Number Of Failed Authentications For User
+description: The following analytic identifies an Azure AD account experiencing more
+  than 20 failed authentication attempts within a 10-minute window. This detection
+  leverages Azure SignInLogs data, specifically monitoring for error code 50126 and
+  unsuccessful authentication attempts. This behavior is significant as it may indicate
+  a brute force attack targeting the account. If confirmed malicious, an attacker
+  could potentially gain unauthorized access, leading to data breaches or further
+  exploitation within the environment. Security teams should adjust the threshold
+  based on their specific environment to reduce false positives.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/
+- https://attack.mitre.org/techniques/T1110/001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad`
+
+    category=SignInLogs
+
+    properties.status.errorCode=50126
+
+    properties.authenticationDetails{}.succeeded=false
+
+    | rename properties.* as *
+
+    | bin span=10m _time
+
+    | fillnull value=null
+
+    | stats count min(_time) as firstTime max(_time) as lastTime values(dest) as dest
+    values(src) as src values(user_agent) as user_agent by user _time vendor_account
+    vendor_product
+
+    | where count > 20
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `azure_ad_high_number_of_failed_authentications_for_user_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 630b1694-210a-48ee-a450-6f79e7679f2c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_high_number_of_failed_authentications_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-afd12fed-b0ec-45c9-a13d-aa86625dac81
+name: Create Volume Shadow Copy with Powershell
+description: Adversaries may attempt to access or create a copy of the Active Directory
+  domain database in order to steal credential information
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-wmiobject?view=powershell-5.1&viewFallbackFrom=powershell-7
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - Win32_ShadowCopy
+    - ).Create(
+    - ClientAccessible
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: afd12fed-b0ec-45c9-a13d-aa86625dac81
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_create_volume_shadow_copy.yml
+falsepositives:
+- Legitimate PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

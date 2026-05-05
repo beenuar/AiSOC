@@ -1,0 +1,47 @@
+id: sigmahq-sigma-df9a0e0e-fedb-4d6c-8668-d765dfc92aa7
+name: Suspicious Non PowerShell WSMAN COM Provider
+description: Detects suspicious use of the WSMAN provider without PowerShell.exe as
+  the host application.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/chadtilbury/status/1275851297770610688
+- https://bohops.com/2020/05/12/ws-management-com-another-approach-for-winrm-lateral-movement/
+- https://github.com/bohops/WSMan-WinRM
+logsource:
+  product: windows
+  service: powershell-classic
+detection:
+  selection:
+    Data|contains: ProviderName=WSMan
+  filter_main_ps:
+    Data|contains:
+    - HostApplication=powershell
+    - HostApplication=C:\Windows\System32\WindowsPowerShell\v1.0\powershell
+    - HostApplication=C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell
+    - HostApplication=C:/Windows/System32/WindowsPowerShell/v1.0/powershell
+    - HostApplication=C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell
+  filter_main_host_application_null:
+    Data|re: HostId=[a-zA-Z0-9-]{36}\s+EngineVersion=
+  filter_optional_hexnode:
+    Data|contains: HostApplication=C:\Hexnode\Hexnode Agent\Current\HexnodeAgent.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: df9a0e0e-fedb-4d6c-8668-d765dfc92aa7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_wsman_com_provider_no_powershell.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

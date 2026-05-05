@@ -1,0 +1,47 @@
+id: sigmahq-sigma-b85e5894-9b19-4d86-8c87-a2f3b81f0521
+name: BITS Transfer Job Downloading File Potential Suspicious Extension
+description: Detects new BITS transfer job saving local files with potential suspicious
+  extensions
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md
+logsource:
+  product: windows
+  service: bits-client
+detection:
+  selection:
+    EventID: 16403
+    LocalName|endswith:
+    - .bat
+    - .dll
+    - .exe
+    - .hta
+    - .ps1
+    - .psd1
+    - .sh
+    - .vbe
+    - .vbs
+  filter_optional_generic:
+    LocalName|contains: \AppData\
+    RemoteName|contains: .com
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b85e5894-9b19-4d86-8c87-a2f3b81f0521
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/bits_client/win_bits_client_new_transfer_saving_susp_extensions.yml
+falsepositives:
+- While the file extensions in question can be suspicious at times. It's best to add
+  filters according to your environment to avoid large amount false positives
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-30bf1789-379d-4fdc-900f-55cd0a90a801
+name: Visual Studio Code Tunnel Service Installation
+description: Detects the installation of VsCode tunnel (code-tunnel) as a service.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - endpoint
+references:
+- https://ipfyx.fr/post/visual-studio-code-tunnel/
+- https://badoption.eu/blog/2023/01/31/code_c2.html
+- https://code.visualstudio.com/docs/remote/tunnels
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - 'tunnel '
+    - service
+    - internal-run
+    - tunnel-service.log
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 30bf1789-379d-4fdc-900f-55cd0a90a801
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vscode_tunnel_service_install.yml
+falsepositives:
+- Legitimate installation of code-tunnel as a service
+notes:
+  quarantine_reason: 'upstream status: test'

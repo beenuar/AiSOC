@@ -1,0 +1,47 @@
+id: sigmahq-sigma-84b1706c-932a-44c4-ae28-892b28a25b94
+name: OneNote.EXE Execution of Malicious Embedded Scripts
+description: 'Detects the execution of malicious OneNote documents that contain embedded
+  scripts.
+
+  When a user clicks on a OneNote attachment and then on the malicious link inside
+  the ".one" file, it exports and executes the malicious embedded script from specific
+  directories.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.001
+  categories:
+  - endpoint
+references:
+- https://bazaar.abuse.ch/browse/tag/one/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \onenote.exe
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+    CommandLine|contains:
+    - \exported\
+    - \onenoteofflinecache_files\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84b1706c-932a-44c4-ae28-892b28a25b94
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_office_onenote_embedded_script_execution.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

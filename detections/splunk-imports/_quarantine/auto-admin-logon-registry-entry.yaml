@@ -1,0 +1,45 @@
+id: splunk-security-content-1379d2b8-0f18-11ec-8ca3-acde48001122
+name: Auto Admin Logon Registry Entry
+description: The following analytic detects a suspicious registry modification that
+  enables auto admin logon on a host. It leverages data from the Endpoint.Registry
+  data model, specifically looking for changes to the "AutoAdminLogon" value within
+  the "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" registry path. This
+  activity is significant because it was observed in BlackMatter ransomware attacks
+  to maintain access after a safe mode reboot, facilitating further encryption. If
+  confirmed malicious, this could allow attackers to automatically log in and continue
+  their operations, potentially leading to widespread network encryption and data
+  loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.002
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2021/08/09/blackmatter-ransomware-emerges-from-the-shadow-of-darkside/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon*" AND Registry.registry_value_name=AutoAdminLogon
+    AND Registry.registry_value_data=1) by Registry.action Registry.dest Registry.process_guid
+    Registry.process_id Registry.registry_hive Registry.registry_path Registry.registry_key_name
+    Registry.registry_value_data Registry.registry_value_name Registry.registry_value_type
+    Registry.status Registry.user Registry.vendor_product | `drop_dm_object_name(Registry)`
+    | where isnotnull(registry_value_data) | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `auto_admin_logon_registry_entry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 1379d2b8-0f18-11ec-8ca3-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/auto_admin_logon_registry_entry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

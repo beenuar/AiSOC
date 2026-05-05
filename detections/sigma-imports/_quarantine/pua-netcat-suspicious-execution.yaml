@@ -1,0 +1,50 @@
+id: sigmahq-sigma-e31033fc-33f0-4020-9a16-faf9b31cbf08
+name: PUA - Netcat Suspicious Execution
+description: Detects execution of Netcat. Adversaries may use a non-application layer
+  protocol for communication between host and C2 server or among infected hosts within
+  a network
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1095
+  categories:
+  - endpoint
+references:
+- https://nmap.org/ncat/
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1095/T1095.md
+- https://www.revshells.com/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith:
+    - \nc.exe
+    - \ncat.exe
+    - \netcat.exe
+  selection_cmdline:
+    CommandLine|contains:
+    - ' -lvp '
+    - ' -lvnp'
+    - ' -l -v -p '
+    - ' -lv -p '
+    - ' -l --proxy-type http '
+    - ' -vnl --exec '
+    - ' -vnl -e '
+    - ' --lua-exec '
+    - ' --sh-exec '
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e31033fc-33f0-4020-9a16-faf9b31cbf08
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_netcat.yml
+falsepositives:
+- Legitimate ncat use
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: splunk-security-content-01d29b48-ff6f-11eb-b81e-acde48001123
+name: 7zip CommandLine To SMB Share Path
+description: The following analytic detects the execution of 7z or 7za processes with
+  command lines pointing to SMB network shares. It leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on process names and command-line arguments.
+  This activity is significant as it may indicate an attempt to archive and exfiltrate
+  sensitive files to a network share, a technique observed in CONTI LEAK tools. If
+  confirmed malicious, this behavior could lead to data exfiltration, compromising
+  sensitive information and potentially aiding further attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1560.001
+  categories:
+  - endpoint
+references:
+- https://threadreaderapp.com/thread/1423361119926816776.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where (Processes.process_name
+    ="7z.exe" OR Processes.process_name = "7za.exe" OR Processes.process_name = "7zr.exe"
+    OR Processes.original_file_name = "7z.exe" OR Processes.original_file_name =  "7za.exe"
+    OR Processes.original_file_name =  "7zr.exe") AND (Processes.process="*\\C$\\*"
+    OR Processes.process="*\\Admin$\\*" OR Processes.process="*\\IPC$\\*") by Processes.action
+    Processes.dest Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `7zip_commandline_to_smb_share_path_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 01d29b48-ff6f-11eb-b81e-acde48001123
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/7zip_commandline_to_smb_share_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

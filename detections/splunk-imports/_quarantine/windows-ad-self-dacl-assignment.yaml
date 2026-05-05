@@ -1,0 +1,71 @@
+id: splunk-security-content-16132445-da9f-4d03-ad44-56d717dcd67d
+name: Windows AD Self DACL Assignment
+description: Detect when a user creates a new DACL in AD for their own AD object.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode=5136\n| stats min(_time) as _time\n\
+    \        values(\n          eval(\n            if(OperationType==\"%%14675\",AttributeValue,null)\n\
+    \            )\n        ) as old_value\n\n        values(\n          eval(\n \
+    \           if(OperationType==\"%%14674\" ,AttributeValue,null)\n          )\n\
+    \        ) as new_value\n\n        values(OperationType) as OperationType\nby\
+    \ ObjectClass ObjectDN OpCorrelationID src_user SubjectLogonId dest\n\n| rex field=old_value\
+    \ max_match=10000 \"\\((?P<old_values>.*?)\\)\"\n| rex field=new_value max_match=10000\
+    \ \"\\((?P<new_ace>.*?)\\)\"\n| mvexpand new_ace\n| where NOT new_ace IN (old_values)\n\
+    | rex field=new_ace \"(?P<aceType>.*?);(?P<aceFlags>.*?);(?P<aceAccessRights>.*?);(?P<aceObjectGuid>.*?);(?P<aceInheritedTypeGuid>.*?);(?P<aceSid>.*?)$\"\
+    \n| rex max_match=100 field=aceAccessRights \"(?P<AccessRights>[A-Z]{2})\"\n|\
+    \ rex max_match=100 field=aceFlags \"(?P<aceFlags>[A-Z]{2})\"\n\n| lookup ace_type_lookup\
+    \ ace_type_string as aceType OUTPUT ace_type_value as aceType\n| lookup ace_flag_lookup\
+    \ flag_string as aceFlags OUTPUT flag_value as ace_flag_value\n| lookup ace_access_rights_lookup\
+    \ access_rights_string as AccessRights OUTPUT access_rights_value\n| lookup msad_guid_lookup\
+    \ guid as aceObjectGuid OUTPUT displayName as ControlAccessRights\n\n``` Optional\
+    \ SID resolution lookups\n| lookup identity_lookup_expanded objectSid as aceSid\
+    \ OUTPUT downLevelDomainName as user\n| lookup admon_groups_def objectSid as aceSid\
+    \ OUTPUT cn as group\n```\n\n| lookup builtin_groups_lookup builtin_group_string\
+    \ as aceSid OUTPUT builtin_group_name as builtin_group\n\n| eval aceType = coalesce(ace_type_value,\
+    \ aceType),\n       aceInheritance = coalesce(ace_flag_value, \"This object only\"\
+    ),\n       aceAccessRights = if(\n                            aceAccessRights\
+    \ = \"CCDCLCSWRPWPDTLOCRSDRCWDWO\", \"Full control\", coalesce(access_rights_value,AccessRights)\n\
+    \                          ),\n       aceControlAccessRights = if(\n         \
+    \                     (\n                                ControlAccessRights =\
+    \ \"Write member\"\n                                OR\n                     \
+    \           aceObjectGuid = \"bf9679c0-0de6-11d0-a285-00aa003049e2\"\n       \
+    \                       ) AND\n                              (\n             \
+    \                   aceAccessRights = \"All validated writes\"\n             \
+    \                   OR\n                                AccessRights = \"SW\"\n\
+    \                              ),\n                              \"Add/remove\
+    \ self as member\",\n                              coalesce(ControlAccessRights,aceObjectGuid)\n\
+    \                            ),\n       user=coalesce(user, group, builtin_group,\
+    \ aceSid)\n\n| stats values(aceType) as aceType\n        values(aceInheritance)\
+    \ as aceInheritance\n        values(aceControlAccessRights) as aceControlAccessRights\n\
+    \        values(aceAccessRights) as aceAccessRights\n        values(new_ace) as\
+    \ new_ace\n        values(aceInheritedTypeGuid) as aceInheritedTypeGuid\n\nby\
+    \ _time ObjectClass ObjectDN src_user SubjectLogonId user OpCorrelationID dest\n\
+    \n| eval aceControlAccessRights = if(\n                                  mvcount(aceControlAccessRights)\
+    \ = 1\n                                  AND\n                               \
+    \   aceControlAccessRights = \"\", \"All rights\", \"aceControlAccessRights\"\n\
+    \                                )\n| rex field=user \"\\\\\\\\(?P<nt_user>.*?)$\"\
+    \n| where lower(src_user)=lower(nt_user)\n| `windows_ad_self_dacl_assignment_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 16132445-da9f-4d03-ad44-56d717dcd67d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_self_dacl_assignment.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

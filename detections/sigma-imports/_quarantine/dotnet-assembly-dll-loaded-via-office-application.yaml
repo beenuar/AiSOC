@@ -1,0 +1,40 @@
+id: sigmahq-sigma-ff0f2b05-09db-4095-b96d-1b75ca24894a
+name: DotNET Assembly DLL Loaded Via Office Application
+description: Detects any assembly DLL being loaded by an Office Product
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://medium.com/threatpunter/detecting-adversary-tradecraft-with-image-load-event-logging-and-eql-8de93338c16
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \excel.exe
+    - \mspub.exe
+    - \onenote.exe
+    - \onenoteim.exe
+    - \outlook.exe
+    - \powerpnt.exe
+    - \winword.exe
+    ImageLoaded|startswith: C:\Windows\assembly\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ff0f2b05-09db-4095-b96d-1b75ca24894a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_office_dotnet_assembly_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

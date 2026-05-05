@@ -1,0 +1,42 @@
+id: sigmahq-sigma-c43a5405-e8e1-4221-9ac9-dbe3fa14e886
+name: System Language Discovery via Reg.Exe
+description: 'Detects the usage of Reg.Exe to query system language settings.
+
+  Attackers may discover the system language to determine the geographic location
+  of victims, customize payloads for specific regions,
+
+  or avoid targeting certain locales to evade detection.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1614.001
+  categories:
+  - endpoint
+references:
+- https://scythe.io/threat-thursday/threatthursday-darkside-ransomware
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \reg.exe
+  - OriginalFileName: reg.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - query
+    - Control\Nls\Language
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c43a5405-e8e1-4221-9ac9-dbe3fa14e886
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_system_language_discovery.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

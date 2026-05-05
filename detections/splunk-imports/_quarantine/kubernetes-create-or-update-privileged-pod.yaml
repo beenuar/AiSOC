@@ -1,0 +1,40 @@
+id: splunk-security-content-3c6bd734-334d-4818-ae7c-5234313fc5da
+name: Kubernetes Create or Update Privileged Pod
+description: The following analytic detects the creation or update of privileged pods
+  in Kubernetes. It identifies this activity by monitoring Kubernetes Audit logs for
+  pod configurations that include root privileges. This behavior is significant for
+  a SOC as it could indicate an attempt to escalate privileges, exploit the kernel,
+  and gain full access to the host's namespace and devices. If confirmed malicious,
+  this activity could lead to unauthorized access to sensitive information, data breaches,
+  and service disruptions, posing a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` objectRef.resource=pods verb=create OR verb=update requestObject.metadata.annotations.kubectl.kubernetes.io/last-applied-configuration=*\\\
+    \"privileged\\\":true*\n  | fillnull\n  | stats count values(user.groups{}) as\
+    \ user_groups\n    BY kind objectRef.name objectRef.namespace\n       objectRef.resource\
+    \ requestObject.kind responseStatus.code\n       sourceIPs{} stage user.username\n\
+    \       userAgent verb requestObject.metadata.annotations.kubectl.kubernetes.io/last-applied-configuration\n\
+    \  | rename sourceIPs{} as src_ip, user.username as user\n  | `kubernetes_create_or_update_privileged_pod_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3c6bd734-334d-4818-ae7c-5234313fc5da
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_create_or_update_privileged_pod.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

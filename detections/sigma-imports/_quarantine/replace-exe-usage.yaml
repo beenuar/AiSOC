@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9292293b-8496-4715-9db6-37028dcda4b3
+name: Replace.exe Usage
+description: Detects the use of Replace.exe which can be used to replace file with
+  another file
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Replace/
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/replace
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \replace.exe
+  argument:
+    CommandLine|contains|windash: -a
+  condition: selection and argument
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9292293b-8496-4715-9db6-37028dcda4b3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_replace.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,33 @@
+id: sigmahq-sigma-67d5f8fc-8325-44e4-8f5f-7c0ac07cb5ae
+name: Measurable Increase Of Successful Authentications
+description: Detects when successful sign-ins increased by 10% or greater.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    Status: Success
+    Count: <10%
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 67d5f8fc-8325-44e4-8f5f-7c0ac07cb5ae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_auth_sucess_increase.yml
+falsepositives:
+- Increase of users in the environment
+notes:
+  quarantine_reason: 'upstream status: test'

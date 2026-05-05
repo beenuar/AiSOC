@@ -1,0 +1,43 @@
+id: splunk-security-content-bc91a8cd-35e7-4bb2-6140-e756cc46fd71
+name: Detect AWS Console Login by New User
+description: The following analytic detects AWS console login events by new users.
+  It leverages AWS CloudTrail events and compares them against a lookup file of previously
+  seen users based on ARN values. This detection is significant because a new user
+  logging into the AWS console could indicate the creation of new accounts or potential
+  unauthorized access. If confirmed malicious, this activity could lead to unauthorized
+  access to AWS resources, data exfiltration, or further exploitation within the cloud
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552
+  - T1586.003
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats earliest(_time) as firstTime latest(_time) as lastTime FROM\
+    \ datamodel=Authentication\n  WHERE Authentication.signature=ConsoleLogin\n  BY\
+    \ Authentication.user\n| `drop_dm_object_name(Authentication)`\n| join user type=outer\
+    \ [\n| inputlookup previously_seen_users_console_logins\n| stats min(firstTime)\
+    \ as earliestseen\n  BY user]\n| eval userStatus=if(earliestseen >= relative_time(now(),\
+    \ \"-24h@h\") OR isnull(earliestseen), \"First Time Logging into AWS Console\"\
+    , \"Previously Seen User\")\n| where userStatus=\"First Time Logging into AWS\
+    \ Console\"\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_aws_console_login_by_new_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bc91a8cd-35e7-4bb2-6140-e756cc46fd71
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_aws_console_login_by_new_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

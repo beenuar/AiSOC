@@ -1,0 +1,37 @@
+id: sigmahq-sigma-b04934b2-0a68-4845-8a19-bdfed3a68a7a
+name: App Assigned To Azure RBAC/Microsoft Entra Role
+description: Detects when an app is assigned Azure AD roles, such as global administrator,
+  or Azure RBAC roles, such as subscription owner.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#service-principal-assigned-to-a-role
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    targetResources.type: Service Principal
+    properties.message:
+    - Add member to role
+    - Add eligible member to role
+    - Add scoped member to role
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b04934b2-0a68-4845-8a19-bdfed3a68a7a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_role_added.yml
+falsepositives:
+- When the permission is legitimately needed for the app
+notes:
+  quarantine_reason: 'upstream status: test'

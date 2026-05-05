@@ -1,0 +1,46 @@
+id: sigmahq-sigma-851c506b-6b7c-4ce2-8802-c703009d03c0
+name: Winlogon Helper DLL
+description: 'Winlogon.exe is a Windows component responsible for actions at logon/logoff
+  as well as the secure attention sequence (SAS) triggered by Ctrl-Alt-Delete.
+
+  Registry entries in HKLM\Software[Wow6432Node]Microsoft\Windows NT\CurrentVersion\Winlogon\
+  and HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\ are
+
+  used to manage additional helper programs and functionalities that support Winlogon.
+  Malicious modifications to these Registry keys may cause Winlogon to
+
+  load and execute malicious DLLs and/or executables.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.004/T1547.004.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains: CurrentVersion\Winlogon
+  selection2:
+    ScriptBlockText|contains:
+    - Set-ItemProperty
+    - New-Item
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 851c506b-6b7c-4ce2-8802-c703009d03c0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_winlogon_helper_dll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

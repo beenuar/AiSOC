@@ -1,0 +1,38 @@
+id: sigmahq-sigma-5df86130-4e95-4a54-90f7-26541b40aec2
+name: Registry Modification to Hidden File Extension
+description: Hides the file extension through modification of the registry
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1137
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1112/T1112.md#atomic-test-1---modify-registry-of-current-user-profile---cmd
+- https://unit42.paloaltonetworks.com/ransomware-families/
+- https://www.microsoft.com/en-us/wdsi/threats/malware-encyclopedia-description?name=TrojanSpy%3aMSIL%2fHakey.A
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_HideFileExt:
+    TargetObject|endswith: \SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\HideFileExt
+    Details: DWORD (0x00000001)
+  selection_Hidden:
+    TargetObject|endswith: \SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced\Hidden
+    Details: DWORD (0x00000002)
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5df86130-4e95-4a54-90f7-26541b40aec2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_hidden_extention.yml
+falsepositives:
+- Administrative scripts
+notes:
+  quarantine_reason: 'upstream status: test'

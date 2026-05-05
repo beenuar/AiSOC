@@ -1,0 +1,36 @@
+id: sigmahq-sigma-49f5dfc1-f92e-4d34-96fa-feba3f6acf36
+name: Disabling Security Tools - Builtin
+description: Detects disabling security tools
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.004/T1562.004.md
+logsource:
+  product: linux
+  service: syslog
+detection:
+  keywords:
+  - stopping iptables
+  - stopping ip6tables
+  - stopping firewalld
+  - stopping cbdaemon
+  - stopping falcon-sensor
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 49f5dfc1-f92e-4d34-96fa-feba3f6acf36
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/syslog/lnx_syslog_security_tools_disabling_syslog.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

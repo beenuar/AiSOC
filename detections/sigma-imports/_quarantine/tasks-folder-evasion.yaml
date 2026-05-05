@@ -1,0 +1,47 @@
+id: sigmahq-sigma-cc4e02ba-9c06-48e2-b09e-2500cace9ae0
+name: Tasks Folder Evasion
+description: 'The Tasks folder in system32 and syswow64 are globally writable paths.
+
+  Adversaries can take advantage of this and load or influence any script hosts or
+  ANY .NET Application
+
+  in Tasks to load and execute a custom assembly into cscript, wscript, regsvr32,
+  mshta, eventvwr'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/subTee/status/1216465628946563073
+- https://gist.github.com/am0nsec/8378da08f848424e4ab0cc5b317fdd26
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection1:
+    CommandLine|contains:
+    - 'echo '
+    - 'copy '
+    - 'type '
+    - file createnew
+  selection2:
+    CommandLine|contains:
+    - ' C:\Windows\System32\Tasks\'
+    - ' C:\Windows\SysWow64\Tasks\'
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cc4e02ba-9c06-48e2-b09e-2500cace9ae0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_task_folder_evasion.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

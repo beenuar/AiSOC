@@ -1,0 +1,37 @@
+id: sigmahq-sigma-0f2468a2-5055-4212-a368-7321198ee706
+name: Activity from Infrequent Country
+description: Detects when a Microsoft Cloud App Security reported when an activity
+  occurs from a location that wasn't recently or never visited by any user in the
+  organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1573
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Activity from infrequent country
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0f2468a2-5055-4212-a368-7321198ee706
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_activity_from_infrequent_country.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

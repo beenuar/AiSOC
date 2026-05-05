@@ -1,0 +1,37 @@
+id: sigmahq-sigma-c4ff1eac-84ad-44dd-a6fb-d56a92fc43a9
+name: ProcessHacker Privilege Elevation
+description: Detects a ProcessHacker tool that elevated privileges to a very high
+  level
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://twitter.com/1kwpeter/status/1397816101455765504
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ServiceName|startswith: ProcessHacker
+    AccountName: LocalSystem
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c4ff1eac-84ad-44dd-a6fb-d56a92fc43a9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_pua_proceshacker.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

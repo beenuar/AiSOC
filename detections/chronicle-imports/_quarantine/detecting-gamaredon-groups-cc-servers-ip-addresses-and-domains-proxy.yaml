@@ -1,0 +1,114 @@
+id: chronicle-detection-rules-detecting-gamaredon-groups-cc-servers-ip-addresses-and-domains-proxy
+name: detecting_gamaredon_groups_cc_servers_ip_addresses_and_domains_proxy
+description: detecting_gamaredon_groups_cc_servers_ip_addresses_and_domains_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detecting_gamaredon_groups_cc_servers_ip_addresses_and_domains_proxy\
+    \ {\n meta:\n    author = \"Eugene Nechiporenko, SOC Prime\"\n    description\
+    \ = \"This rule detects network connections to compromised IPs and domains related\
+    \ with Gamaredon Group activity (Proxy - domain/IP)  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/BNTLO2DZBiBk\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/22\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071\"\n\n  events:\n(($selection1.principal.ip =\
+    \ \"95.142.45.86\" or $selection1.principal.ip = \"95.142.45.58\" or $selection1.principal.ip\
+    \ = \"95.142.45.57\" or $selection1.principal.ip = \"95.142.45.48\" or $selection1.principal.ip\
+    \ = \"95.142.45.44\" or $selection1.principal.ip = \"95.142.45.185\" or $selection1.principal.ip\
+    \ = \"95.142.45.142\" or $selection1.principal.ip = \"95.142.45.13\" or $selection1.principal.ip\
+    \ = \"95.142.45.118\" or $selection1.principal.ip = \"94.130.217.187\" or $selection1.principal.ip\
+    \ = \"80.211.167.231\" or $selection1.principal.ip = \"5.23.55.212\" or $selection1.principal.ip\
+    \ = \"46.148.20.31\" or $selection1.principal.ip = \"185.231.155.12\" or $selection1.principal.ip\
+    \ = \"185.231.154.25\" or $selection1.principal.ip = \"185.231.154.154\" or $selection1.principal.ip\
+    \ = \"185.158.115.137\") or ($selection1.target.ip = \"95.142.45.86\" or $selection1.target.ip\
+    \ = \"95.142.45.58\" or $selection1.target.ip = \"95.142.45.57\" or $selection1.target.ip\
+    \ = \"95.142.45.48\" or $selection1.target.ip = \"95.142.45.44\" or $selection1.target.ip\
+    \ = \"95.142.45.185\" or $selection1.target.ip = \"95.142.45.142\" or $selection1.target.ip\
+    \ = \"95.142.45.13\" or $selection1.target.ip = \"95.142.45.118\" or $selection1.target.ip\
+    \ = \"94.130.217.187\" or $selection1.target.ip = \"80.211.167.231\" or $selection1.target.ip\
+    \ = \"5.23.55.212\" or $selection1.target.ip = \"46.148.20.31\" or $selection1.target.ip\
+    \ = \"185.231.155.12\" or $selection1.target.ip = \"185.231.154.25\" or $selection1.target.ip\
+    \ = \"185.231.154.154\" or $selection1.target.ip = \"185.158.115.137\") or ($selection1.target.url\
+    \ = \"natos-drp.ddns.net\" or $selection1.target.url = \"nato-drp.ddns.net\" or\
+    \ $selection1.target.url = \"updates-spreadwork.pw\" or $selection1.target.url\
+    \ = \"ukraine-news.ddns.net\" or $selection1.target.url = \"ukraina-drp.ddns.net\"\
+    \ or $selection1.target.url = \"tovar-es.ddns.net\" or $selection1.target.url\
+    \ = \"start-usb.ddns.net\" or $selection1.target.url = \"sovetkirov.ddns.net\"\
+    \ or $selection1.target.url = \"singles-office.ddns.net\" or $selection1.target.url\
+    \ = \"single-office.ddns.net\" or $selection1.target.url = \"yousister.ddns.net\"\
+    \ or $selection1.target.url = \"wq03.ddns.net\" or $selection1.target.url = \"\
+    wq02.ddns.net\" or $selection1.target.url = \"wq01.ddns.net\" or $selection1.target.url\
+    \ = \"werdikt.ddns.net\" or $selection1.target.url = \"wareface.ddns.net\" or\
+    \ $selection1.target.url = \"vnc-new.ddns.net\" or $selection1.target.url = \"\
+    ut03.ddns.net\" or $selection1.target.url = \"ut02.ddns.net\" or $selection1.target.url\
+    \ = \"ut01.ddns.net\" or $selection1.target.url = \"us03.ddns.net\" or $selection1.target.url\
+    \ = \"us02.ddns.net\" or $selection1.target.url = \"us01.ddns.net\" or $selection1.target.url\
+    \ = \"topline.myftp.org\" or $selection1.target.url = \"sushi-bar.ddns.net\" or\
+    \ $selection1.target.url = \"po03.ddns.net\" or $selection1.target.url = \"po02.ddns.net\"\
+    \ or $selection1.target.url = \"po01.ddns.net\" or $selection1.target.url = \"\
+    pk03.ddns.net\" or $selection1.target.url = \"pk02.ddns.net\" or $selection1.target.url\
+    \ = \"pk01.ddns.net\" or $selection1.target.url = \"orizoh88.ddns.net\" or $selection1.target.url\
+    \ = \"optima-se.ddns.net\" or $selection1.target.url = \"new-club.ddns.net\" or\
+    \ $selection1.target.url = \"mykarina.ddns.net\" or $selection1.target.url = \"\
+    microsoft-single.ddns.net\" or $selection1.target.url = \"metro-exodus.ddns.net\"\
+    \ or $selection1.target.url = \"marishka.ddns.net\" or $selection1.target.url\
+    \ = \"macdocs.ddns.net\" or $selection1.target.url = \"karasto01.ddns.net\" or\
+    \ $selection1.target.url = \"gr03.ddns.net\" or $selection1.target.url = \"gr02.ddns.net\"\
+    \ or $selection1.target.url = \"gr01.ddns.net\" or $selection1.target.url = \"\
+    connect-updates.ddns.net\" or $selection1.target.url = \"chrome-update.ddns.net\"\
+    \ or $selection1.target.url = \"samotsvety.com.ua\" or $selection1.target.url\
+    \ = \"admin-ru.ru\" or $selection1.target.url = \"adobe.update-service.net\" or\
+    \ $selection1.target.url = \"apploadapp.webhop.me\" or $selection1.target.url\
+    \ = \"brokbridge.com\" or $selection1.target.url = \"cat.gotdns.ch\" or $selection1.target.url\
+    \ = \"check-update.ru\" or $selection1.target.url = \"childrights.in.ua\" or $selection1.target.url\
+    \ = \"conhost.myftp.org\" or $selection1.target.url = \"docdownload.ddns.net\"\
+    \ or $selection1.target.url = \"downloads.email-attachments.ru\" or $selection1.target.url\
+    \ = \"downloads.file-attachments.ru\" or $selection1.target.url = \"dyndownload.serveirc.com\"\
+    \ or $selection1.target.url = \"e.muravej.ua\" or $selection1.target.url = \"\
+    email-attachments.ru\" or $selection1.target.url = \"file-attachments.ru\" or\
+    \ $selection1.target.url = \"freefiles.myftp.biz\" or $selection1.target.url =\
+    \ \"getmyfile.webhop.me\" or $selection1.target.url = \"googlefiles.serveftp.com\"\
+    \ or $selection1.target.url = \"grom56.ddns.net\" or $selection1.target.url =\
+    \ \"grom90.ddns.net\" or $selection1.target.url = \"hrome-update.ru\" or $selection1.target.url\
+    \ = \"hrome-updater.ru\" or $selection1.target.url = \"loaderskypetm.webhop.me\"\
+    \ or $selection1.target.url = \"loadsoulip.serveftp.com\" or $selection1.target.url\
+    \ = \"mail.file-attachments.ru\" or $selection1.target.url = \"mails.redirectme.net\"\
+    \ or $selection1.target.url = \"mars-ru.ru\" or $selection1.target.url = \"msrestore.ru\"\
+    \ or $selection1.target.url = \"oficialsite.webhop.me\" or $selection1.target.url\
+    \ = \"parkingdoma.webhop.me\" or $selection1.target.url = \"poligjong.webhop.me\"\
+    \ or $selection1.target.url = \"polistar.ddns.net\" or $selection1.target.url\
+    \ = \"proxy-spread.ru\" or $selection1.target.url = \"rms.admin-ru.ru\" or $selection1.target.url\
+    \ = \"skypeemocache.ru\" or $selection1.target.url = \"skypeupdate.ru\" or $selection1.target.url\
+    \ = \"spbpool.ddns.net\" or $selection1.target.url = \"spread-service.ru\" or\
+    \ $selection1.target.url = \"spread-ss.ru\" or $selection1.target.url = \"spread-updates.ru\"\
+    \ or $selection1.target.url = \"stor.tainfo.com.ua\" or $selection1.target.url\
+    \ = \"tortilla.sytes.net\" or $selection1.target.url = \"ukrnet.serveftp.com\"\
+    \ or $selection1.target.url = \"ukrway.galaktion.ru\" or $selection1.target.url\
+    \ = \"umachka.ua\" or $selection1.target.url = \"update-service.net\" or $selection1.target.url\
+    \ = \"updatesp.ddns.net\" or $selection1.target.url = \"updateviber.sytes.net\"\
+    \ or $selection1.target.url = \"webclidie.webhop.me\" or $selection1.target.url\
+    \ = \"win-restore.ru\" or $selection1.target.url = \"winloaded.sytes.net\" or\
+    \ $selection1.target.url = \"winupdateloader.ru\" or $selection1.target.url =\
+    \ \"www.file-attachments.ru\" or $selection1.target.url = \"www.win-restore.ru\"\
+    \ or $selection1.target.url = \"yfperoliz.webhop.me\" or $selection1.target.url\
+    \ = \"prestigeclub.frantov.com.ua\" or $selection1.target.url = \"viberload.ddns.net\"\
+    ))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: detecting_gamaredon_groups_cc_servers_ip_addresses_and_domains_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: detecting_gamaredon_groups_cc_servers_ip_addresses_and_domains_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/proxy/detecting_gamaredon_group_s_c_c_servers_ip_addresses_and_domains__proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,32 @@
+id: sigmahq-sigma-33f41cdd-35ac-4ba8-814b-c6a4244a1ad4
+name: WMI Persistence - Script Event Consumer File Write
+description: Detects file writes of WMI script event consumer
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546.003
+  categories:
+  - endpoint
+references:
+- https://www.eideon.com/2018-03-02-THL03-WMIBackdoors/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image: C:\WINDOWS\system32\wbem\scrcons.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 33f41cdd-35ac-4ba8-814b-c6a4244a1ad4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_wmi_persistence_script_event_consumer_write.yml
+falsepositives:
+- Dell Power Manager (C:\Program Files\Dell\PowerManager\DpmPowerPlanSetup.exe)
+notes:
+  quarantine_reason: 'upstream status: test'

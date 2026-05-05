@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9801abb8-e297-4dbf-9fbd-57dde0e830ad
+name: File Download And Execution Via IEExec.EXE
+description: Detects execution of the IEExec utility to download and execute files
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Ieexec/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \IEExec.exe
+  - OriginalFileName: IEExec.exe
+  selection_cli:
+    CommandLine|contains:
+    - http://
+    - https://
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9801abb8-e297-4dbf-9fbd-57dde0e830ad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ieexec_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

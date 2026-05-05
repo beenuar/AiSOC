@@ -1,0 +1,42 @@
+id: sigmahq-sigma-eeb30123-9fbd-4ee8-aaa0-2e545bbed6dc
+name: Security Support Provider (SSP) Added to LSA Configuration
+description: Detects the addition of a SSP to the registry. Upon a reboot or API call,
+  SSP DLLs gain access to encrypted and plaintext passwords stored in Windows.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.005
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/latest/Persistence/Install-SSP/
+- https://github.com/EmpireProject/Empire/blob/08cbd274bef78243d7a8ed6443b8364acd1fc48b/data/module_source/persistence/Install-SSP.ps1#L157
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith:
+    - \Control\Lsa\Security Packages
+    - \Control\Lsa\OSConfig\Security Packages
+  filter_main_msiexec:
+    Image:
+    - C:\Windows\system32\msiexec.exe
+    - C:\Windows\syswow64\MsiExec.exe
+  filter_main_image_null:
+    Image: null
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: eeb30123-9fbd-4ee8-aaa0-2e545bbed6dc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_ssp_added_lsa_config.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-652c098d-dc11-4ba6-8566-c20e89042f2b
+name: User Added To Admin Group Via Sysadminctl
+description: Detects attempts to create and add an account to the admin group via
+  "sysadminctl"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1078.003/T1078.003.md#atomic-test-3---create-local-account-with-admin-privileges-using-sysadminctl-utility---macos
+- https://ss64.com/osx/sysadminctl.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /sysadminctl
+    CommandLine|contains|all:
+    - ' -addUser '
+    - ' -admin '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 652c098d-dc11-4ba6-8566-c20e89042f2b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_sysadminctl_add_user_to_admin_group.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

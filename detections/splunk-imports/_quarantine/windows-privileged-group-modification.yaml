@@ -1,0 +1,62 @@
+id: splunk-security-content-b8cbef2c-2cc3-4550-b0fc-9715b7852df9
+name: Windows Privileged Group Modification
+description: 'This analytic detects modifications to privileged groups in Active Directory,
+  including addition, creation, deletion, and changes to various types of groups such
+  as local, global, universal, and LDAP query groups.
+
+  It specifically monitors for changes to high-privilege groups like "Administrators",
+  "Domain Admins", "Enterprise Admins", and "ESX Admins", among others.
+
+  This detection is particularly relevant in the context of potential exploitation
+  of vulnerabilities like the VMware ESXi Active Directory Integration Authentication
+  Bypass (CVE-2024-37085), where attackers may attempt to manipulate privileged groups
+  to gain unauthorized access to systems.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  - T1136.002
+  categories:
+  - endpoint
+references:
+- https://nvd.nist.gov/vuln/detail/CVE-2024-37085
+- https://www.rapid7.com/blog/post/2024/07/30/vmware-esxi-cve-2024-37085-targeted-in-ransomware-campaigns/%5C
+- https://x.com/mthcht/status/1818196168515461431?s=12&t=kwffmj0KM1sZtg3MrqC0QQ
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode IN (\n        4727,\n        4731,\n\
+    \        4744,\n        4749,\n        4754,\n        4756,\n        4759,\n \
+    \       4783,\n        4790\n    )\nTargetUserName IN (\n        \"Account Operators\"\
+    ,\n        \"Administrators\",\n        \"Admins DNS\",\n        \"Backup Operators\"\
+    ,\n        \"DnsAdmins\",\n        \"Domain Admins\",\n        \"Enterprise Admins\"\
+    ,\n        \"Enterprise Key Admins\",\n        \"ESX Admins\",\n        \"ESXi\
+    \ Admins\",\n        \"Group Policy Creator Owners\",\n        \"Hyper-V Administrators\"\
+    ,\n        \"Key Admins\",\n        \"Print Operators\",\n        \"Remote Desktop\
+    \ Users\",\n        \"Remote Management Users\",\n        \"Replicators\",\n \
+    \       \"Schema Admins\",\n        \"Server Operators\"\n    )\n| eval object_category=case(\n\
+    \        EventCode=\"4727\", \"Global Group (Security)\",\n        EventCode=\"\
+    4731\", \"Local Group (Security)\",\n        EventCode=\"4744\", \"Local Group\
+    \ (Distribution)\",\n        EventCode=\"4749\", \"Global Group (Distribution)\"\
+    ,\n        EventCode=\"4754\", \"Universal Group (Security)\",\n        EventCode=\"\
+    4756\", \"Universal Group (Security)\",\n        EventCode=\"4759\", \"Universal\
+    \ Group (Distribution)\",\n        EventCode=\"4783\", \"Basic Application Group\"\
+    ,\n        EventCode=\"4790\", \"LDAP Query Group\"\n    )\n\n| rename Computer\
+    \ as dest\n         result as change_type\n         TargetUserName as object\n\
+    \         TargetSid as object_path\n\n| stats count min(_time) as firstTime\n\
+    \              max(_time) as lastTime\n    BY EventCode src_user object_category\n\
+    \       object object_path dest\n       change_type status\n| `windows_privileged_group_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b8cbef2c-2cc3-4550-b0fc-9715b7852df9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_privileged_group_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

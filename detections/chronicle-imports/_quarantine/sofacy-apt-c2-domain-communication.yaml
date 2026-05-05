@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-sofacy-apt-c2-domain-communication
+name: sofacy__apt_c2_domain_communication
+description: sofacy__apt_c2_domain_communication
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule sofacy__apt_c2_domain_communication {\n meta:\n    author\
+    \ = \"Alexandr Yampolskyi, SOC Prime\"\n    description = \"Sofacy, Fancy Bear,\
+    \ Pawn Storm, APT-28 domain communication detection.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/wwYjDSZpHAku\"\n    version\
+    \ = \"0.01\"\n    created = \"2017/11/07\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071, t1043\"\n\n  events:\n($selection.target.hostname\
+    \ = \"myinvestgroup.com\" or $selection.target.hostname = \"netmediaresources.com\"\
+    \ or $selection.target.hostname = \"webviewres.net\" or $selection.target.hostname\
+    \ = \"adfs.senate.group\" or $selection.target.hostname = \"adfs-senate.email\"\
+    \ or $selection.target.hostname = \"adfs-senate.services\" or $selection.target.hostname\
+    \ = \"adfs.senate.qov.info\" or $selection.target.hostname = \"chmail.ir.udelivered.tk\"\
+    \ or $selection.target.hostname = \"webmail-ibsf.org\" or $selection.target.hostname\
+    \ = \"fil-luge.com\" or $selection.target.hostname = \"biathlovvorld.com\" or\
+    \ $selection.target.hostname = \"mail-ibu.eu\" or $selection.target.hostname =\
+    \ \"fisski.ca\" or $selection.target.hostname = \"iihf.eu\" or $selection.target.hostname\
+    \ = \"Cdnverify.net\" or $selection.target.hostname = \"osce-press.com\" or $selection.target.hostname\
+    \ = \"electronicfrontierfoundation.org\" or $selection.target.hostname = \"baltichost.org\"\
+    \ or $selection.target.hostname = \"checkmalware.org\" or $selection.target.hostname\
+    \ = \"kavkazcentr.info\" or $selection.target.hostname = \"login-osce.org\" or\
+    \ $selection.target.hostname = \"malwarecheck.info\" or $selection.target.hostname\
+    \ = \"n0vinite.com\" or $selection.target.hostname = \"nato.nshq.in\" or $selection.target.hostname\
+    \ = \"natoexhibitionff14.com\" or $selection.target.hostname = \"novinitie.com\"\
+    \ or $selection.target.hostname = \"poczta.mon.q0v.pl\" or $selection.target.hostname\
+    \ = \"q0v.pl\" or $selection.target.hostname = \"qov.hu.com\" or $selection.target.hostname\
+    \ = \"rnil.am\" or $selection.target.hostname = \"scanmalware.info\" or $selection.target.hostname\
+    \ = \"smigroup-online.co.uk\" or $selection.target.hostname = \"standartnevvs.com\"\
+    \ or $selection.target.hostname = \"updatecenter.name\" or $selection.target.hostname\
+    \ = \"securitypractic.com\" or $selection.target.hostname = \"drivers-update.info\"\
+    \ or $selection.target.hostname = \"nato-press.com\")\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: sofacy__apt_c2_domain_communication
+provenance:
+  source: chronicle/detection-rules
+  source_id: sofacy__apt_c2_domain_communication
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/proxy/sofacy___apt_c2_domain_communication.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

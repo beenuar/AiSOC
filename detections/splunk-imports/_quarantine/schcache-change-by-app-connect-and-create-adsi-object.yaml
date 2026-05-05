@@ -1,0 +1,42 @@
+id: splunk-security-content-991eb510-0fc6-11ec-82d3-acde48001122
+name: SchCache Change By App Connect And Create ADSI Object
+description: The following analytic detects an application attempting to connect and
+  create an ADSI object to perform an LDAP query. It leverages Sysmon EventCode 11
+  to identify changes in the Active Directory Schema cache files located in %LOCALAPPDATA%\Microsoft\Windows\SchCache
+  or %systemroot%\SchCache. This activity is significant as it can indicate the presence
+  of suspicious applications, such as ransomware, using ADSI object APIs for LDAP
+  queries. If confirmed malicious, this behavior could allow attackers to gather sensitive
+  directory information, potentially leading to further exploitation or lateral movement
+  within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/win32/adsi/adsi-and-uac
+- https://news.sophos.com/en-us/2021/08/09/blackmatter-ransomware-emerges-from-the-shadow-of-darkside/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=11 TargetFilename = \"*\\\\Windows\\\\SchCache\\\
+    \\*\" TargetFilename\n    = \"*.sch*\" NOT (Image IN (\"*\\\\Windows\\\\system32\\\
+    \\mmc.exe\"))\n| stats count min(_time)\n    as firstTime max(_time) as lastTime\
+    \ by action dest file_name file_path process_guid\n    process_id user_id vendor_product\
+    \ process_name\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `schcache_change_by_app_connect_and_create_adsi_object_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 991eb510-0fc6-11ec-82d3-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/schcache_change_by_app_connect_and_create_adsi_object.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

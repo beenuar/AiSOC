@@ -1,0 +1,50 @@
+id: splunk-security-content-10423ac4-10c9-11ec-8dc4-acde48001122
+name: Control Loading from World Writable Directory
+description: The following analytic identifies instances of control.exe loading a
+  .cpl or .inf file from a writable directory, which is related to CVE-2021-40444.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process names and command-line executions mapped to the `Processes`
+  node of the `Endpoint` data model. This activity is significant as it may indicate
+  an attempt to exploit a known vulnerability, potentially leading to unauthorized
+  code execution. If confirmed malicious, this could allow an attacker to gain control
+  over the affected system, leading to further compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.002
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/rundll32.exe-111474C61232202B5B588D2B512CBB25.html
+- https://app.any.run/tasks/36c14029-9df8-439c-bba0-45f2643b0c70/
+- https://attack.mitre.org/techniques/T1218/011/
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-40444
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.002/T1218.002.yaml
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where (Processes.process_name=control.exe
+    OR Processes.original_file_name=CONTROL.EXE) AND Processes.process IN ("*\\appdata\\*",
+    "*\\windows\\temp\\*", "*\\programdata\\*") by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `control_loading_from_world_writable_directory_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 10423ac4-10c9-11ec-8dc4-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/control_loading_from_world_writable_directory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

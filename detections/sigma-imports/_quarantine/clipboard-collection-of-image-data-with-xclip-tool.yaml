@@ -1,0 +1,48 @@
+id: sigmahq-sigma-f200dc3f-b219-425d-a17e-c38467364816
+name: Clipboard Collection of Image Data with Xclip Tool
+description: 'Detects attempts to collect image data stored in the clipboard from
+  users with the usage of xclip tool.
+
+  Xclip has to be installed.
+
+  Highly recommended using rule on servers, due to high usage of clipboard utilities
+  on user workstations.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1115
+  categories:
+  - endpoint
+references:
+- https://linux.die.net/man/1/xclip
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0: xclip
+    a1:
+    - -selection
+    - -sel
+    a2:
+    - clipboard
+    - clip
+    a3: -t
+    a4|startswith: image/
+    a5: -o
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f200dc3f-b219-425d-a17e-c38467364816
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_clipboard_image_collection.yml
+falsepositives:
+- Legitimate usage of xclip tools
+notes:
+  quarantine_reason: 'upstream status: test'

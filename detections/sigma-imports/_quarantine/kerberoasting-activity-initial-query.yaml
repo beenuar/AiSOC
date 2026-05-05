@@ -1,0 +1,49 @@
+id: sigmahq-sigma-d04ae2b8-ad54-4de0-bd87-4bc1da66aa59
+name: Kerberoasting Activity - Initial Query
+description: 'This rule will collect the data needed to start looking into possible
+  kerberoasting activity.
+
+  Further analysis or computation within the query is needed focusing on requests
+  from one specific host/IP towards multiple service names within a time period of
+  5 seconds.
+
+  You can then set a threshold for the number of requests and time between the requests
+  to turn this into an alert.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://www.trustedsec.com/blog/art_of_kerberoast/
+- https://adsecurity.org/?p=3513
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4769
+    Status: '0x0'
+    TicketEncryptionType: '0x17'
+  filter_main_krbtgt:
+    ServiceName|endswith:
+    - krbtgt
+    - $
+  filter_main_machine_accounts:
+    TargetUserName|contains: $@
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d04ae2b8-ad54-4de0-bd87-4bc1da66aa59
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_kerberoasting_activity.yml
+falsepositives:
+- Legacy applications.
+notes:
+  quarantine_reason: 'upstream status: test'

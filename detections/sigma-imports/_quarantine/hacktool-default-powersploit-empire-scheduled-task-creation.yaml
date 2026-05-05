@@ -1,0 +1,46 @@
+id: sigmahq-sigma-56c217c3-2de2-479b-990f-5c109ba8458f
+name: HackTool - Default PowerSploit/Empire Scheduled Task Creation
+description: Detects the creation of a schtask via PowerSploit or Empire Default Configuration.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/0xdeadbeefJERKY/PowerSploit/blob/8690399ef70d2cad10213575ac67e8fa90ddf7c3/Persistence/Persistence.psm1
+- https://github.com/EmpireProject/Empire/blob/08cbd274bef78243d7a8ed6443b8364acd1fc48b/lib/modules/powershell/persistence/userland/schtasks.py
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentImage|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    Image|endswith: \schtasks.exe
+    CommandLine|contains|all:
+    - /Create
+    - powershell.exe -NonI
+    - /TN Updater /TR
+    CommandLine|contains:
+    - /SC ONLOGON
+    - /SC DAILY /ST
+    - /SC ONIDLE
+    - /SC HOURLY
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 56c217c3-2de2-479b-990f-5c109ba8458f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_powersploit_empire_default_schtasks.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

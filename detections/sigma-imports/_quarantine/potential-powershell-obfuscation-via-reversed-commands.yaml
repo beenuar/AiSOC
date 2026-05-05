@@ -1,0 +1,71 @@
+id: sigmahq-sigma-b6b49cd1-34d6-4ead-b1bf-176e9edba9a4
+name: Potential PowerShell Obfuscation Via Reversed Commands
+description: Detects the presence of reversed PowerShell commands in the CommandLine.
+  This is often used as a method of obfuscation by attackers
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://2019.offzone.moscow/ru/report/hunting-for-powershell-abuses/
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse?slide=66
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_cli:
+    CommandLine|contains:
+    - hctac
+    - kaerb
+    - dnammoc
+    - ekovn
+    - eliFd
+    - rahc
+    - etirw
+    - golon
+    - tninon
+    - eddih
+    - tpircS
+    - ssecorp
+    - llehsrewop
+    - esnopser
+    - daolnwod
+    - tneilCbeW
+    - tneilc
+    - ptth
+    - elifotevas
+    - 46esab
+    - htaPpmeTteG
+    - tcejbO
+    - maerts
+    - hcaerof
+    - retupmoc
+  filter_main_encoded_keyword:
+    CommandLine|contains:
+    - ' -EncodedCommand '
+    - ' -enc '
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b6b49cd1-34d6-4ead-b1bf-176e9edba9a4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_cmdline_reversed_strings.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

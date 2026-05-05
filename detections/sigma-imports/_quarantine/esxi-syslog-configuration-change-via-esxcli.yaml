@@ -1,0 +1,40 @@
+id: sigmahq-sigma-38eb1dbb-011f-40b1-a126-cf03a0210563
+name: ESXi Syslog Configuration Change Via ESXCLI
+description: Detects changes to the ESXi syslog configuration via "esxcli"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  - T1690
+  - T1059.012
+  categories:
+  - endpoint
+references:
+- https://support.solarwinds.com/SuccessCenter/s/article/Configure-ESXi-Syslog-to-LEM?language=en_US
+- https://developer.broadcom.com/xapis/esxcli-command-reference/7.0.0/namespace/esxcli_system.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /esxcli
+    CommandLine|contains|all:
+    - system
+    - syslog
+    - config
+    CommandLine|contains: ' set'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 38eb1dbb-011f-40b1-a126-cf03a0210563
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_esxcli_syslog_config_change.yml
+falsepositives:
+- Legitimate administrative activities
+notes:
+  quarantine_reason: 'upstream status: test'

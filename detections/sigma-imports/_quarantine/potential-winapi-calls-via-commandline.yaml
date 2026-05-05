@@ -1,0 +1,89 @@
+id: sigmahq-sigma-ba3f5c1b-6272-4119-9dbd-0bc8d21c2702
+name: Potential WinAPI Calls Via CommandLine
+description: Detects the use of WinAPI Functions via the commandline. As seen used
+  by threat actors via the tool winapiexec
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1106
+  categories:
+  - endpoint
+references:
+- https://twitter.com/m417z/status/1566674631788007425
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - AddSecurityPackage
+    - AdjustTokenPrivileges
+    - Advapi32
+    - CloseHandle
+    - CreateProcessWithToken
+    - CreatePseudoConsole
+    - CreateRemoteThread
+    - CreateThread
+    - CreateUserThread
+    - DangerousGetHandle
+    - DuplicateTokenEx
+    - EnumerateSecurityPackages
+    - FreeHGlobal
+    - FreeLibrary
+    - GetDelegateForFunctionPointer
+    - GetLogonSessionData
+    - GetModuleHandle
+    - GetProcAddress
+    - GetProcessHandle
+    - GetTokenInformation
+    - ImpersonateLoggedOnUser
+    - kernel32
+    - LoadLibrary
+    - memcpy
+    - MiniDumpWriteDump
+    - ntdll
+    - OpenDesktop
+    - OpenProcess
+    - OpenProcessToken
+    - OpenThreadToken
+    - OpenWindowStation
+    - PtrToString
+    - QueueUserApc
+    - ReadProcessMemory
+    - RevertToSelf
+    - RtlCreateUserThread
+    - secur32
+    - SetThreadToken
+    - VirtualAlloc
+    - VirtualFree
+    - VirtualProtect
+    - WaitForSingleObject
+    - WriteInt32
+    - WriteProcessMemory
+    - ZeroFreeGlobalAllocUnicode
+  filter_optional_mpcmdrun:
+    Image|endswith: \MpCmdRun.exe
+    CommandLine|contains: GetLoadLibraryWAddress32
+  filter_optional_compatTelRunner:
+    ParentImage|endswith: \CompatTelRunner.exe
+    CommandLine|contains:
+    - FreeHGlobal
+    - PtrToString
+    - kernel32
+    - CloseHandle
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ba3f5c1b-6272-4119-9dbd-0bc8d21c2702
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_inline_win_api_access.yml
+falsepositives:
+- Some legitimate action or applications may use these functions. Investigate further
+  to determine the legitimacy of the activity.
+notes:
+  quarantine_reason: 'upstream status: test'

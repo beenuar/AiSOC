@@ -1,0 +1,38 @@
+id: sigmahq-sigma-6393e346-1977-46ef-8987-ad414a145fad
+name: AWS ConsoleLogin Failed Authentication
+description: Detects failed AWS console login attempts due to authentication failures.
+  Monitoring these events is crucial for identifying potential brute-force attacks
+  or unauthorized access attempts to AWS accounts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - cloud
+references:
+- https://naikordian.github.io/blog/posts/brute-force-aws-console/
+- https://help.fortinet.com/fsiem/Public_Resource_Access/7_2_1/rules/PH_RULE_AWS_Management_Console_Brute_Force_of_Root_User_Identity.htm
+- https://media.githubusercontent.com/media/splunk/attack_data/master/datasets/attack_techniques/T1110.001/aws_login_failure/aws_cloudtrail_events.json
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: ConsoleLogin
+    errorMessage: Failed authentication
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6393e346-1977-46ef-8987-ad414a145fad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_console_login_failed_authentication.yml
+falsepositives:
+- Legitimate failed login attempts by authorized users. Investigate the source of
+  repeated failed login attempts.
+notes:
+  quarantine_reason: 'upstream status: experimental'

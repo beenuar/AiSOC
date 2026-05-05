@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d99b79d2-0a6f-4f46-ad8b-260b6e17f982
+name: Security Eventlog Cleared
+description: One of the Windows Eventlogs has been cleared. e.g. caused by "wevtutil
+  cl" command execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.005
+  categories:
+  - endpoint
+references:
+- https://twitter.com/deviouspolack/status/832535435960209408
+- https://www.hybrid-analysis.com/sample/027cc450ef5f8c5f653329641ec1fed91f694e0d229928963b30f6b0d7d3a745?environmentId=100
+- https://github.com/Azure/Azure-Sentinel/blob/f99542b94afe0ad2f19a82cc08262e7ac8e1428e/Detections/SecurityEvent/SecurityEventLogCleared.yaml
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_517:
+    EventID: 517
+    Provider_Name: Security
+  selection_1102:
+    EventID: 1102
+    Provider_Name: Microsoft-Windows-Eventlog
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d99b79d2-0a6f-4f46-ad8b-260b6e17f982
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_audit_log_cleared.yml
+falsepositives:
+- Rollout of log collection agents (the setup routine often includes a reset of the
+  local Eventlog)
+- System provisioning (system reset before the golden image creation)
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: splunk-security-content-7c0fa490-12b0-4d0b-b9f5-e101d1e0e06f
+name: O365 Cross-Tenant Access Change
+description: The following analytic identifies when cross-tenant access/synchronization
+  policies are changed in an Azure tenant. Adversaries have been observed altering
+  victim cross-tenant policies as a method of lateral movement or maintaining persistent
+  access to compromised environments. These policies should be considered sensitive
+  and monitored for changes and/or loose configuration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1484/002/
+- https://thehackernews.com/2023/08/emerging-attacker-exploit-microsoft.html
+- https://cyberaffairs.com/news/emerging-attacker-exploit-microsoft-cross-tenant-synchronization/
+- https://www.crowdstrike.com/blog/crowdstrike-defends-against-azure-cross-tenant-synchronization-attacks/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation
+    IN ("Add a partner to cross-tenant access setting.","Delete partner specific cross-tenant
+    access setting.") | eval user = case(match(mvindex(''Actor{}.ID'',-1),"User"),mvindex(''Actor{}.ID'',0),match(mvindex(''Actor{}.ID'',-1),"ServicePrincipal"),mvindex(''Actor{}.ID'',3),true(),mvindex(''Actor{}.ID'',0))
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by dest
+    user src vendor_account vendor_product signature signature_id | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_cross_tenant_access_change_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7c0fa490-12b0-4d0b-b9f5-e101d1e0e06f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_cross_tenant_access_change.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-48a61b29-389f-4032-b317-b30de6b95314
+name: Suspicious Plink Port Forwarding
+description: Detects suspicious Plink tunnel port forwarding to a local port
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://www.real-sec.com/2019/04/bypassing-network-restrictions-through-rdp-tunneling/
+- https://medium.com/@informationsecurity/remote-ssh-tunneling-with-plink-exe-7831072b3d7d
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Description: Command-line SSH, Telnet, and Rlogin client
+    CommandLine|contains: ' -R '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48a61b29-389f-4032-b317-b30de6b95314
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_plink_port_forwarding.yml
+falsepositives:
+- Administrative activity using a remote port forwarding to a local port
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-c64c5175-5189-431b-a55e-6d9882158251
+name: Telegram Bot API Request
+description: Detects suspicious DNS queries to api.telegram.org used by Telegram Bots
+  of any kind
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1102.002
+  categories:
+  - network
+references:
+- https://core.telegram.org/bots/faq
+- https://researchcenter.paloaltonetworks.com/2018/03/unit42-telerat-another-android-trojan-leveraging-telegrams-bot-api-to-target-iranian-users/
+- https://blog.malwarebytes.com/threat-analysis/2016/11/telecrypt-the-ransomware-abusing-telegram-api-defeated/
+- https://www.welivesecurity.com/2016/12/13/rise-telebots-analyzing-disruptive-killdisk-attacks/
+logsource:
+  category: dns
+detection:
+  selection:
+    query: api.telegram.org
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c64c5175-5189-431b-a55e-6d9882158251
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/dns/net_dns_susp_telegram_api.yml
+falsepositives:
+- Legitimate use of Telegram bots in the company
+notes:
+  quarantine_reason: 'upstream status: test'

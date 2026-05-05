@@ -1,0 +1,70 @@
+id: chronicle-detection-rules-windows-event-log-cleared
+name: windows_event_log_cleared
+description: windows_event_log_cleared
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule windows_event_log_cleared {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detects the clearing of event logs within the Windows Event\
+    \ Viewer. \"\n    rule_id = \"mr_067f3ee9-9bc6-400d-9ba5-bebe7253482f\"\n    rule_name\
+    \ = \"Windows Event Log Cleared\"\n    type = \"alert\"\n    data_source = \"\
+    microsoft sysmon, microsoft windows events\"\n    platform = \"Windows\"\n   \
+    \ tactic = \"TA0005\"\n    technique = \"T1070.001\"\n    severity = \"Medium\"\
+    \n    priority = \"Medium\"\n\n  events:\n    (\n        $process.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\" and\n        // currently the command line is focused on\
+    \ the three primary log sets, could expand this further if desired\n        re.regex($process.target.process.command_line,\
+    \ `wevtutil.*cl.*(system|application|security)`) nocase\n    )\n    or\n    (\n\
+    \        $process.metadata.event_type = \"SYSTEM_AUDIT_LOG_WIPE\" and\n      \
+    \  $process.metadata.vendor_name = \"Microsoft\"\n    )\n    or\n    (\n     \
+    \   $process.metadata.event_type = \"STATUS_UPDATE\" and\n        $process.metadata.product_name\
+    \ = \"PowerShell\" and\n        $process.metadata.vendor_name = \"Microsoft\"\
+    \ and\n        (\n            re.regex($process.security_result.description, `Remove-EventLog`)\
+    \ nocase or\n            re.regex($process.security_result.description, `Clear-EventLog`)\
+    \ nocase\n        )\n    )\n    $process.principal.hostname = $hostname\n\n  match:\n\
+    \    $hostname over 5m\n\n  outcome:\n    $risk_score = 65\n    $event_count =\
+    \ count_distinct($process.metadata.id)\n    $process_description = array_distinct($process.metadata.description)\n\
+    \    // added to populate alert graph with additional context\n    // Commented\
+    \ out principal.hostname because it is already represented in graph as match variable.\
+    \ If match changes, can uncomment to add to results\n    //$principal_hostname\
+    \ = array_distinct($process.principal.hostname)\n    $principal_process_pid =\
+    \ array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n\n  condition:\n    $process\n\
+    }"
+  chronicle_rule_name: windows_event_log_cleared
+provenance:
+  source: chronicle/detection-rules
+  source_id: windows_event_log_cleared
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/windows_event_log_cleared.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-88c0f9d8-30a8-4120-bb6b-ebb54abcf2a0
+name: File Time Attribute Change
+description: Detect file time attribute change to hide new or changes to existing
+  files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.006/T1070.006.md
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /touch
+    CommandLine|contains:
+    - -t
+    - -acmr
+    - -d
+    - -r
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 88c0f9d8-30a8-4120-bb6b-ebb54abcf2a0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_change_file_time_attr.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

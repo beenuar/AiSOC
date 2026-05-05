@@ -1,0 +1,72 @@
+id: sigmahq-sigma-178e615d-e666-498b-9630-9ed363038101
+name: Elevated System Shell Spawned From Uncommon Parent Location
+description: Detects when a shell program such as the Windows command prompt or PowerShell
+  is launched with system privileges from a uncommon parent location.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://github.com/Wh04m1001/SysmonEoP
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_shell:
+  - Image|endswith:
+    - \powershell.exe
+    - \powershell_ise.exe
+    - \pwsh.exe
+    - \cmd.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - powershell_ise.EXE
+    - pwsh.dll
+    - Cmd.Exe
+  selection_user:
+    User|contains:
+    - AUTHORI
+    - AUTORI
+    LogonId: '0x3e7'
+  filter_main_generic:
+    ParentImage|contains:
+    - :\Program Files (x86)\
+    - :\Program Files\
+    - :\ProgramData\
+    - :\Windows\System32\
+    - :\Windows\SysWOW64\
+    - :\Windows\Temp\
+    - :\Windows\WinSxS\
+  filter_optional_manageengine:
+    ParentImage|endswith: :\ManageEngine\ADManager Plus\pgsql\bin\postgres.exe
+    Image|endswith: \cmd.exe
+  filter_optional_asgard:
+    CommandLine|contains: :\WINDOWS\system32\cmd.exe /c "
+    CurrentDirectory|contains: :\WINDOWS\Temp\asgard2-agent\
+  filter_optional_ibm_spectrumprotect:
+    ParentImage|contains: :\IBM\SpectrumProtect\webserver\scripts\
+    CommandLine|contains: :\IBM\SpectrumProtect\webserver\scripts\
+  filter_main_parent_null:
+    ParentImage: null
+  filter_main_parent_empty:
+    ParentImage:
+    - ''
+    - '-'
+  condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 178e615d-e666-498b-9630-9ed363038101
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_elevated_system_shell_uncommon_parent.yml
+falsepositives:
+- Some legitimate applications may spawn shells from uncommon parent locations. Apply
+  additional filters and perform an initial baseline before deploying.
+notes:
+  quarantine_reason: 'upstream status: test'

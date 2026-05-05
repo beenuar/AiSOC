@@ -1,0 +1,45 @@
+id: splunk-security-content-c6e24183-a5f4-4b2a-ad01-2eb456d09b67
+name: Windows AD Replication Service Traffic
+description: The following analytic identifies unexpected Active Directory replication
+  traffic from non-domain controller sources. It leverages data from the Network Traffic
+  datamodel, specifically looking for applications related to AD replication. This
+  activity is significant because AD replication traffic should typically only occur
+  between domain controllers. Detection of such traffic from other sources may indicate
+  malicious activities like DCSync or DCShadow, which are used for credential dumping.
+  If confirmed malicious, this could allow attackers to exfiltrate sensitive credentials,
+  leading to unauthorized access and potential domain-wide compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.006
+  - T1207
+  categories:
+  - network
+references:
+- https://adsecurity.org/?p=1729
+- https://attack.mitre.org/techniques/T1003/006/
+- https://attack.mitre.org/techniques/T1207/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(All_Traffic.transport)\
+    \ as transport values(All_Traffic.user) as user values(All_Traffic.src_category)\
+    \ as src_category values(All_Traffic.dest_category) as dest_category min(_time)\
+    \ as firstTime max(_time) as lastTime FROM datamodel=Network_Traffic\n  WHERE\
+    \ All_Traffic.app IN (\"ms-dc-replication\",\"*drsr*\",\"ad drs\")\n  BY All_Traffic.src\
+    \ All_Traffic.dest All_Traffic.app\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(\"All_Traffic\")`\n| `windows_ad_replication_service_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c6e24183-a5f4-4b2a-ad01-2eb456d09b67
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/windows_ad_replication_service_traffic.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

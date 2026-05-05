@@ -1,0 +1,41 @@
+id: sigmahq-sigma-99793437-3e16-439b-be0f-078782cf953d
+name: Tap Installer Execution
+description: Well-known TAP software installation. Possible preparation for data exfiltration
+  using tunneling techniques
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048
+  categories:
+  - endpoint
+references:
+- https://community.openvpn.net/openvpn/wiki/ManagingWindowsTAPDrivers
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \tapinstall.exe
+  filter_optional_avast:
+    Image|contains:
+    - :\Program Files\Avast Software\SecureLine VPN\
+    - :\Program Files (x86)\Avast Software\SecureLine VPN\
+  filter_optional_openvpn:
+    Image|contains: :\Program Files\OpenVPN Connect\drivers\tap\
+  filter_optional_protonvpn:
+    Image|contains: :\Program Files (x86)\Proton Technologies\ProtonVPNTap\installer\
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 99793437-3e16-439b-be0f-078782cf953d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_tapinstall_execution.yml
+falsepositives:
+- Legitimate OpenVPN TAP installation
+notes:
+  quarantine_reason: 'upstream status: test'

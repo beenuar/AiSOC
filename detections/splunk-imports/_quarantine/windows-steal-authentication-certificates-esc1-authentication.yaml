@@ -1,0 +1,59 @@
+id: splunk-security-content-f0306acf-a6ab-437a-bbc6-8628f8d5c97e
+name: Windows Steal Authentication Certificates - ESC1 Authentication
+description: The following analytic detects when a suspicious certificate with a Subject
+  Alternative Name (SAN) is issued using Active Directory Certificate Services (AD
+  CS) and then immediately used for authentication. This detection leverages Windows
+  Security Event Logs, specifically EventCode 4887, to identify the issuance and subsequent
+  use of the certificate. This activity is significant because improperly configured
+  certificate templates can be exploited for privilege escalation and environment
+  compromise. If confirmed malicious, an attacker could gain unauthorized access,
+  escalate privileges, and potentially compromise the entire environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  - T1550
+  categories:
+  - endpoint
+references:
+- https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+- https://github.com/ly4k/Certipy#esc1
+- https://pentestlaboratories.com/2021/11/08/threat-hunting-certificate-account-persistence/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode IN (4887)\nAttributes=\"*SAN:*upn*\"\
+    \nAttributes=\"*CertificateTemplate:*\"\n| stats\n    count\n    min(_time) as\
+    \ firstTime\n    max(_time) as lastTime\n    values(name) as name\n    values(status)\
+    \ as status\n    values(Subject) as ssl_subject\n    values(SubjectKeyIdentifier)\
+    \ as ssl_hash\n    by Computer, EventCode, Requester, Attributes, RequestId\n\
+    | rex field=Attributes \"(?i)CertificateTemplate:(?<object>[^\\r\\n]+)\"\n| rex\
+    \ field=Attributes \"(?i)ccm:(?<req_src>[^\\r\\n]+)\"\n| rex max_match=10 field=Attributes\
+    \ \"(?i)(upn=(?<req_user_1>[^\\r\\n&]+))\"\n| rex max_match=10 field=Attributes\
+    \ \"(?i)(dns=(?<req_dest_1>[^\\r\\n&]+))\"\n| rex field=Requester \"(.+\\\\\\\\\
+    )?(?<src_user>[^\\r\\n]+)\"\n| rename\n    Attributes as object_attrs\n    EventCode\
+    \ as signature_id\n    name as signature\n    RequestId as ssl_serial\n    Requester\
+    \ as ssl_subject_common_name\n| eval user = lower(coalesce(req_user_1, req_user_2))\n\
+    | join user [\n    search `wineventlog_security`\n    EventCode=4768\n    CertThumbprint=*\n\
+    \    | rename\n        TargetUserName as user\n        Computer as auth_dest\n\
+    \        IpAddress as auth_src\n    | fields auth_src, auth_dest, user\n]\n| eval\n\
+    \    src = upper(coalesce(auth_src, req_src)),\n    dest = upper(coalesce(auth_dest,\
+    \ req_dest_1, req_dest_2)),\n    risk_score = 50\n| eval flavor_text = case(\n\
+    \    signature_id==\"4887\",\n    \"User account [\" . user . \"] authenticated\
+    \ after a suspicious certificate was issued for it by [\" . src_user . \"] using\
+    \ certificate request ID: \" . ssl_serial\n)\n| fields - req_* auth_*\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_steal_authentication_certificates___esc1_authentication_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f0306acf-a6ab-437a-bbc6-8628f8d5c97e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_steal_authentication_certificates___esc1_authentication.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

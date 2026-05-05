@@ -1,0 +1,34 @@
+id: sigmahq-sigma-b2309017-4235-44fe-b5af-b15363011957
+name: Uncommon Child Process Of Defaultpack.EXE
+description: Detects uncommon child processes of "DefaultPack.EXE" binary as a proxy
+  to launch other programs
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/DefaultPack/
+- https://www.echotrail.io/insights/search/defaultpack.exe
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \DefaultPack.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b2309017-4235-44fe-b5af-b15363011957
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_defaultpack_uncommon_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

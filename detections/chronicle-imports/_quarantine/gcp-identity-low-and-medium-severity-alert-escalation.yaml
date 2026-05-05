@@ -1,0 +1,67 @@
+id: chronicle-detection-rules-gcp-identity-low-and-medium-severity-alert-escalation
+name: gcp_identity_low_and_medium_severity_alert_escalation
+description: gcp_identity_low_and_medium_severity_alert_escalation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule gcp_identity_low_and_medium_severity_alert_escalation {\n\n  meta:\n  \
+    \  author = \"Mo Mohajerani\"\n    description = \"Detects when a Google Cloud\
+    \ identity experiences a low severity event followed by medium severity event\
+    \ within 24 hours.\"\n    rule_name = \"Google Cloud identity low and medium alert\
+    \ escalation\"\n    rule_id = \"mr_fafc6c00-aedb-4664-ae1a-5a48f3a7534d\"\n  \
+    \  type = \"Alert\"\n    platform = \"GCP\"\n    data_source = \"Security Command\
+    \ Center Threat\"\n    mitre_attack_tactic = \"Defense Evasion, Persistence, Privilege\
+    \ Escalation, Initial Access\"\n    mitre_attack_technique = \"Valid Accounts\"\
+    \n    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    // Low severity\
+    \ alert triggered in SCC\n    $low_severity.metadata.product_name = \"Security\
+    \ Command Center\"\n    $low_severity.security_result[0].severity = \"LOW\"\n\
+    \    $low_severity.principal.user.email_addresses = $user_email\n    // Medium\
+    \ severity alert triggered in SCC\n    $medium_severity.metadata.product_name\
+    \ = \"Security Command Center\"\n    $medium_severity.security_result[0].severity\
+    \ = \"MEDIUM\"\n    $medium_severity.principal.user.email_addresses = $user_email\n\
+    \    // Enforces the sequence of events, ensuring the low severity event(s) triggered\
+    \ prior to the medium severity event(s)\n    $low_severity.metadata.event_timestamp.seconds\
+    \ < $medium_severity.metadata.event_timestamp.seconds\n\n  match:\n    $user_email\
+    \ over 24h\n\n  outcome:\n    // Risk score is increased when the suspicious identity\
+    \ has been accessed from unexpected locations\n    // This logic can be customized\
+    \ based on your organization's environment and normal activity\n    $risk_score\
+    \ = max(80 + if($low_severity.principal.location.country_or_region != \"Germany\"\
+    , 10))\n    $mitre_attack_tactic = \"Defense Evasion, Persistence, Privilege Escalation,\
+    \ Initial Access\"\n    $mitre_attack_technique = \"Valid Accounts\"\n    $mitre_attack_technique_id\
+    \ = \"T1078\"\n    $security_category = array_distinct($medium_severity.security_result.category)\n\
+    \    $security_category_details = array_distinct($medium_severity.security_result.category_details)\n\
+    \    $security_summary = array_distinct($medium_severity.security_result.summary)\n\
+    \    $affected_identity = array_distinct($medium_severity.principal.user.userid)\n\
+    \    $principal_ip_country = array_distinct($medium_severity.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($medium_severity.principal.ip_geo_artifact.location.state)\n\
+    \    $event_count_low = count_distinct($low_severity.metadata.id)\n    $principal_user_display_name\
+    \ = array_distinct($medium_severity.principal.user.user_display_name)\n\n  condition:\n\
+    \    $low_severity and $medium_severity\n}"
+  chronicle_rule_name: gcp_identity_low_and_medium_severity_alert_escalation
+provenance:
+  source: chronicle/detection-rules
+  source_id: gcp_identity_low_and_medium_severity_alert_escalation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/gcp/gcp_identity_low_and_medium_severity_alert_escalation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

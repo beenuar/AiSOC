@@ -1,0 +1,40 @@
+id: splunk-security-content-300688e4-365c-4486-a065-7c884462b31d
+name: AWS ECR Container Upload Unknown User
+description: The following analytic detects the upload of a new container image to
+  AWS Elastic Container Registry (ECR) by an unknown user. It leverages AWS CloudTrail
+  logs to identify `PutImage` events from the ECR service, filtering out known users.
+  This activity is significant because container uploads should typically be performed
+  by a limited set of authorized users. If confirmed malicious, this could indicate
+  unauthorized access, potentially leading to the deployment of malicious containers,
+  data exfiltration, or further compromise of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1204/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventSource=ecr.amazonaws.com eventName=PutImage NOT `aws_ecr_users`\n\
+    \  | rename requestParameters.* as *\n  | rename repositoryName AS image\n  |\
+    \ rename user_name as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY signature user user_agent\n       src vendor_account vendor_region\n\
+    \       vendor_product image\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_ecr_container_upload_unknown_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 300688e4-365c-4486-a065-7c884462b31d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_ecr_container_upload_unknown_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

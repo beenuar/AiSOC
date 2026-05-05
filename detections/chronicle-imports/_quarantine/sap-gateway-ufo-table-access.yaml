@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-sap-gateway-ufo-table-access
+name: sap_gateway_ufo_table_access
+description: sap_gateway_ufo_table_access
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_gateway_ufo_table_access {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects external RFC calls to generic table-read\
+    \ modules via the SAP Gateway.\"\n    severity = \"High\"\n    tactic = \"TA0007\"\
+    \n    technique = \"T1082\"\n\n  events:\n    $e.metadata.product_name = \"SAP_GATEWAY\"\
+    \n\n    (\n      $e.security_result.summary = /RFC_READ_TABLE|BBP_RFC_READ_TABLE|RFC_GET_TABLE_ENTRIES/\
+    \ nocase or\n      $e.metadata.description = /RFC_READ_TABLE/ nocase\n    )\n\n\
+    \    $user = $e.principal.user.userid\n    $source_ip = $e.principal.ip\n    $external_tp\
+    \ = $e.target.process.file.full_path\n\n    not $user in %sap_service_accounts.name\n\
+    \n  match:\n    $user, $source_ip over 30m\n\n  outcome:\n    $risk_score = 40\n\
+    \    $calling_program = array_distinct($external_tp)\n    $target_function = array_distinct($e.security_result.summary)\n\
+    \    $gateway_action = array_distinct($e.security_result.action)\n\n  condition:\n\
+    \    $e\n}"
+  chronicle_rule_name: sap_gateway_ufo_table_access
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_gateway_ufo_table_access
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_gateway_ufo_table_access.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

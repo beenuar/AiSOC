@@ -1,0 +1,74 @@
+id: splunk-security-content-00d050d3-a5b4-4565-a6a5-a31f69681dc3
+name: Windows UAC Bypass Suspicious Escalation Behavior
+description: 'The following analytic detects when a process spawns an executable known
+  for User Account Control (UAC) bypass exploitation and subsequently monitors for
+  any child processes with a higher integrity level than the original process.
+
+  This detection leverages Sysmon EventID 1 data, focusing on process integrity levels
+  and known UAC bypass executables.
+
+  This activity is significant as it may indicate an attacker has successfully used
+  a UAC bypass exploit to escalate privileges.
+
+  If confirmed malicious, the attacker could gain elevated privileges, potentially
+  leading to further system compromise and persistent access.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1548/002/
+- https://atomicredteam.io/defense-evasion/T1548.002/
+- https://hadess.io/user-account-control-uncontrol-mastering-the-art-of-bypassing-windows-uac/
+- https://enigma0x3.net/2016/08/15/fileless-uac-bypass-using-eventvwr-exe-and-registry-hijacking/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count max(_time) as lastTime\n\
+    \nFROM datamodel=Endpoint.Processes WHERE\n\nProcesses.process_integrity_level\
+    \ IN (\n    \"low\",\n    \"medium\"\n)\n\nBY Processes.action Processes.dest\
+    \ Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\n\
+    \   Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\n\
+    \   Processes.process_hash Processes.process_id\n   Processes.process_integrity_level\
+    \ Processes.process_name\n   Processes.process_path Processes.user\n   Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\n| eval original_integrity_level\
+    \ = CASE(\n            match(process_integrity_level,\"low\"),1,\n           \
+    \ match(process_integrity_level,\"medium\"),2,\n            match(process_integrity_level,\"\
+    high\"),3,\n            match(process_integrity_level,\"system\"),4,\n       \
+    \     true(),0\n        )\n| rename process_guid as join_guid_1,\n         process*\
+    \ as parent_process*\n\n| join max=0 dest join_guid_1 [\n    | tstats `security_content_summariesonly`\n\
+    \      count min(_time) as firstTime\n    FROM datamodel=Endpoint.Processes WHERE\n\
+    \n    Processes.process_integrity_level IN (\n        \"high\",\n        \"system\"\
+    \n    )\n    Processes.process_name IN (`uacbypass_process_name`)\n\n    BY Processes.dest\
+    \ Processes.parent_process_guid\n       Processes.process_name Processes.process_guid\n\
+    \n    | `drop_dm_object_name(Processes)`\n    | rename parent_process_guid as\
+    \ join_guid_1,\n             process_guid as join_guid_2,\n             process_name\
+    \ as uac_process_name\n]\n\n| join max=0 dest join_guid_2 [\n    | tstats `security_content_summariesonly`\n\
+    \      count min(_time) as firstTime\n    FROM datamodel=Endpoint.Processes WHERE\n\
+    \n    Processes.parent_process_name IN (`uacbypass_process_name`)\n    Processes.process_integrity_level\
+    \ IN (\n        \"high\",\n        \"system\"\n    )\n    BY Processes.dest Processes.parent_process_guid\n\
+    \       Processes.process_name Processes.process\n       Processes.process_guid\
+    \ Processes.process_path\n       Processes.process_integrity_level Processes.process_current_directory\n\
+    \n    | `drop_dm_object_name(Processes)`\n\n    | rename parent_process_guid as\
+    \ join_guid_2\n\n    | eval elevated_integrity_level = CASE(\n        match(process_integrity_level,\"\
+    low\"),1,\n        match(process_integrity_level,\"medium\"),2,\n        match(process_integrity_level,\"\
+    high\"),3,\n        match(process_integrity_level,\"system\"),4,\n        true(),0\n\
+    \    )\n]\n| where elevated_integrity_level > original_integrity_level\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_uac_bypass_suspicious_escalation_behavior_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 00d050d3-a5b4-4565-a6a5-a31f69681dc3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_uac_bypass_suspicious_escalation_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

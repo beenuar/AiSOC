@@ -1,0 +1,40 @@
+id: sigmahq-sigma-fe10751f-1995-40a5-aaa2-c97ccb4123fe
+name: Linux Capabilities Discovery
+description: Detects attempts to discover the files with setuid/setgid capability
+  on them. That would allow adversary to escalate their privileges.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1083
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://man7.org/linux/man-pages/man8/getcap.8.html
+- https://www.hackingarticles.in/linux-privilege-escalation-using-capabilities/
+- https://mn3m.info/posts/suid-vs-capabilities/
+- https://int0x33.medium.com/day-44-linux-capabilities-privilege-escalation-via-openssl-with-selinux-enabled-and-enforced-74d2bec02099
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0: getcap
+    a1: -r
+    a2: /
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fe10751f-1995-40a5-aaa2-c97ccb4123fe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_capabilities_discovery.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,49 @@
+id: sigmahq-sigma-2d2f44ff-4611-4778-a8fc-323a0e9850cc
+name: Inline Python Execution - Spawn Shell Via OS System Library
+description: Detects execution of inline Python code via the "-c" in order to call
+  the "system" function from the "os" library, and spawn a shell.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/python/#shell
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img:
+  - Image|endswith:
+    - /python
+    - /python2
+    - /python3
+  - Image|contains:
+    - /python2.
+    - /python3.
+  selection_cli:
+    CommandLine|contains|all:
+    - ' -c '
+    - os.system(
+    CommandLine|contains:
+    - /bin/bash
+    - /bin/dash
+    - /bin/fish
+    - /bin/sh
+    - /bin/zsh
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2d2f44ff-4611-4778-a8fc-323a0e9850cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_python_shell_os_system.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

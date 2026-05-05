@@ -1,0 +1,33 @@
+id: sigmahq-sigma-951f8d29-f2f6-48a7-859f-0673ff105e6f
+name: CodeIntegrity - Unsigned Kernel Module Loaded
+description: Detects the presence of a loaded unsigned kernel module on the system.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations
+- Internal Research
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3001
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 951f8d29-f2f6-48a7-859f-0673ff105e6f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/code_integrity/win_codeintegrity_unsigned_driver_loaded.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

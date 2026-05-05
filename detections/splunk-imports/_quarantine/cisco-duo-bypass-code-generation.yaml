@@ -1,0 +1,53 @@
+id: splunk-security-content-446e81ff-ce06-4925-9c7d-4073f9b5abf5
+name: Cisco Duo Bypass Code Generation
+description: 'The following analytic detects when a Duo user generates a bypass code,
+  which allows them to circumvent multi-factor authentication (2FA) protections.
+
+  It works by monitoring Duo activity logs for the ''bypass_create'' action, renaming
+  the affected object as the user, and aggregating events to identify
+
+  instances where a bypass code is issued. This behavior is significant for a Security
+  Operations Center (SOC) because generating a bypass code can enable
+
+  attackers, malicious insiders, or unauthorized administrators to gain access to
+  sensitive systems without the required second authentication factor.
+
+  Such activity may indicate account compromise, privilege abuse, or attempts to weaken
+  security controls. Early detection of bypass code generation is
+
+  critical, as it allows the SOC to investigate and respond before an attacker can
+  exploit the reduced authentication requirements, helping to prevent
+
+  unauthorized access, data breaches, or further lateral movement within the environment.
+  Monitoring for this action helps maintain strong authentication
+
+  standards and reduces the risk of credential-based attacks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=bypass_create\n  | rename object as\
+    \ user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY\
+    \ action actionlabel description\n       user\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `cisco_duo_bypass_code_generation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 446e81ff-ce06-4925-9c7d-4073f9b5abf5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_bypass_code_generation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

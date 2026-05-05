@@ -1,0 +1,51 @@
+id: sigmahq-sigma-bcfece3d-56fe-4545-9931-3b8e92927db1
+name: Winrs Local Command Execution
+description: 'Detects the execution of Winrs.exe where it is used to execute commands
+  locally.
+
+  Commands executed this way are launched under Winrshost.exe and can represent proxy
+  execution used for defense evasion or lateral movement.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://cardinalops.com/blog/living-off-winrm-abusing-complexity-in-remote-management/
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/winrs
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \winrs.exe
+  - OriginalFileName: winrs.exe
+  selection_local_ip:
+    CommandLine|contains|windash:
+    - /r:localhost
+    - /r:127.0.0.1
+    - /r:[::1]
+    - /remote:localhost
+    - /remote:127.0.0.1
+    - /remote:[::1]
+  filter_main_remote:
+    CommandLine|contains|windash:
+    - '/r:'
+    - '/remote:'
+  condition: all of selection_* or (selection_img and not 1 of filter_main_*)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bcfece3d-56fe-4545-9931-3b8e92927db1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrs_local_command_execution.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

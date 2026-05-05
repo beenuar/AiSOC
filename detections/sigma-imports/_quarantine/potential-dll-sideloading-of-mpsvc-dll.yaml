@@ -1,0 +1,38 @@
+id: sigmahq-sigma-5ba243e5-8165-4cf7-8c69-e1d3669654c1
+name: Potential DLL Sideloading Of MpSvc.DLL
+description: Detects potential DLL sideloading of "MpSvc.dll".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/entries/microsoft/built-in/mpsvc.html
+logsource:
+  product: windows
+  category: image_load
+detection:
+  selection:
+    ImageLoaded|endswith: \MpSvc.dll
+  filter_main_generic:
+    ImageLoaded|startswith:
+    - C:\Program Files\Windows Defender\
+    - C:\ProgramData\Microsoft\Windows Defender\Platform\
+    - C:\Windows\WinSxS\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5ba243e5-8165-4cf7-8c69-e1d3669654c1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_mpsvc.yml
+falsepositives:
+- Legitimate applications loading their own versions of the DLL mentioned in this
+  rule.
+notes:
+  quarantine_reason: 'upstream status: test'

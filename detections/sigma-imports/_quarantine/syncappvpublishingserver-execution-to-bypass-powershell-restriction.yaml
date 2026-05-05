@@ -1,0 +1,34 @@
+id: sigmahq-sigma-dddfebae-c46f-439c-af7a-fdb6bde90218
+name: SyncAppvPublishingServer Execution to Bypass Powershell Restriction
+description: Detects SyncAppvPublishingServer process execution which usually utilized
+  by adversaries to bypass PowerShell execution restrictions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Syncappvpublishingserver/
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains: SyncAppvPublishingServer.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dddfebae-c46f-439c-af7a-fdb6bde90218
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_syncappvpublishingserver_exe.yml
+falsepositives:
+- App-V clients
+notes:
+  quarantine_reason: 'upstream status: test'

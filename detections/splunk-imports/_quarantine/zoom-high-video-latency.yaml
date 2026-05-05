@@ -1,0 +1,36 @@
+id: splunk-security-content-6ad6b548-adfa-452c-aa77-9ff94877e832
+name: Zoom High Video Latency
+description: Detects particularly high latency from Zoom logs. Latency observed from
+  threat actors performing Remote Employment Fraud (REF) is typically well above what’s
+  normal for the majority of employees.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`zoom_index` | spath "payload.object.participant.qos{}.type" | search
+    "payload.object.participant.qos{}.type"=video_input | rename payload.object.participant.qos{}.details.avg_latency
+    as avg_latency "payload.object.participant.qos{}.details.latency" as latency payload.object.participant.email
+    as email | rex field=avg_latency "(?<average_latency>\d+) ms" | rex field=latency
+    "(?<overall_latency>\d+) ms" | search email="*" | table email overall_latency
+    latency avg_latency average_latency _raw | stats latest(overall_latency) as overall_latency
+    by email _raw | where overall_latency>300 | `zoom_high_video_latency_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6ad6b548-adfa-452c-aa77-9ff94877e832
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/zoom_high_video_latency.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

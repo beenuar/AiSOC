@@ -1,0 +1,44 @@
+id: sigmahq-sigma-32438676-1dba-4ac7-bf69-b86cba995e05
+name: GCP Access Policy Deleted
+description: 'Detects when an access policy that is applied to a GCP cloud resource
+  is deleted.
+
+  An adversary would be able to remove access policies to gain access to a GCP cloud
+  resource.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/access-context-manager/docs/audit-logging
+- https://cloud.google.com/logging/docs/audit/understanding-audit-logs
+- https://cloud.google.com/logging/docs/reference/audit/auditlog/rest/Shared.Types/AuditLog
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    data.protoPayload.authorizationInfo.permission:
+    - accesscontextmanager.accessPolicies.delete
+    - accesscontextmanager.accessPolicies.accessLevels.delete
+    - accesscontextmanager.accessPolicies.accessZones.delete
+    - accesscontextmanager.accessPolicies.authorizedOrgsDescs.delete
+    data.protoPayload.authorizationInfo.granted: 'true'
+    data.protoPayload.serviceName: accesscontextmanager.googleapis.com
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 32438676-1dba-4ac7-bf69-b86cba995e05
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_access_policy_deleted.yml
+falsepositives:
+- Legitimate administrative activities
+notes:
+  quarantine_reason: 'upstream status: test'

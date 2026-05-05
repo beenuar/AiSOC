@@ -1,0 +1,108 @@
+id: sigmahq-sigma-baecf8fb-edbf-429f-9ade-31fc3f22b970
+name: Office Autorun Keys Modification
+description: 'Detects modification of autostart extensibility point (ASEP) in registry.
+  Adversaries may modify these keys to execute malicious code when Office files are
+  opened.
+
+  There are various legitimate add-ins that also use these keys and this filter list
+  might not be exhaustive.
+
+  Thus, it is recommended to review and tune filters for your environment to reduce
+  false positives before deploying to production.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md
+- https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns
+- https://gist.github.com/GlebSukhodolskiy/0fc5fa5f482903064b448890db1eaf9d
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_office_root:
+    TargetObject|contains:
+    - \Software\Wow6432Node\Microsoft\Office
+    - \Software\Microsoft\Office
+  selection_office_details:
+    TargetObject|contains:
+    - \Word\Addins
+    - \PowerPoint\Addins
+    - \Outlook\Addins
+    - \Onenote\Addins
+    - \Excel\Addins
+    - \Access\Addins
+    - test\Special\Perf
+  filter_main_empty:
+    Details: (Empty)
+  filter_main_null:
+    Details: null
+  filter_main_known_addins:
+    Image|startswith:
+    - C:\Program Files\Microsoft Office\
+    - C:\Program Files (x86)\Microsoft Office\
+    - C:\PROGRA~2\MICROS~2\Office
+    - C:\Windows\System32\msiexec.exe
+    - C:\Windows\SysWOW64\msiexec.exe
+    - C:\Windows\System32\regsvr32.exe
+    - 'C:\Windows\SysWOW64\regsvr32.exe '
+    TargetObject|contains:
+    - \Excel\Addins\AdHocReportingExcelClientLib.AdHocReportingExcelClientAddIn.1\
+    - \Excel\Addins\ExcelPlugInShell.PowerMapConnect\
+    - \Excel\Addins\NativeShim\
+    - \Excel\Addins\NativeShim.InquireConnector.1\
+    - \Excel\Addins\PowerPivotExcelClientAddIn.NativeEntry.1\
+    - \Outlook\AddIns\AccessAddin.DC\
+    - \Outlook\AddIns\ColleagueImport.ColleagueImportAddin\
+    - \Outlook\AddIns\EvernoteCC.EvernoteContactConnector\
+    - \Outlook\AddIns\EvernoteOLRD.Connect\
+    - \Outlook\Addins\\OneNote.OutlookAddin
+    - \Outlook\Addins\DriveFSExtensionLib.Connect\
+    - \Outlook\Addins\GoogleAppsSync.Connect\
+    - \Outlook\Addins\Microsoft.VbaAddinForOutlook.1\
+    - \Outlook\Addins\OcOffice.OcForms\
+    - \Outlook\Addins\OscAddin.Connect\
+    - \Outlook\Addins\OutlookChangeNotifier.Connect\
+    - \Outlook\Addins\UCAddin.LyncAddin.1
+    - \Outlook\Addins\UCAddin.UCAddin.1
+    - \Outlook\Addins\UmOutlookAddin.FormRegionAddin\
+    - AddinTakeNotesService\FriendlyName
+  filter_main_officeclicktorun:
+    Image|startswith:
+    - C:\Program Files\Common Files\Microsoft Shared\ClickToRun\
+    - C:\Program Files\Common Files\Microsoft Shared\ClickToRun\Updates\
+    Image|endswith: \OfficeClickToRun.exe
+  filter_main_vsto:
+    Image|startswith:
+    - C:\Program Files\Common Files\Microsoft Shared\VSTO\
+    - C:\Program Files (x86)\Microsoft Shared\VSTO\
+    Image|endswith: \VSTOInstaller.exe
+  filter_optional_avg:
+    Image:
+    - C:\Program Files\AVG\Antivirus\RegSvr.exe
+    - C:\Program Files\AVG\Antivirus\x86\RegSvr.exe
+    TargetObject|contains: \Microsoft\Office\Outlook\Addins\Antivirus.AsOutExt\
+  filter_optional_avast:
+    Image:
+    - C:\Program Files\Avast Software\Avast\RegSvr.exe
+    - C:\Program Files\Avast Software\Avast\x86\RegSvr.exe
+    TargetObject|contains: \Microsoft\Office\Outlook\Addins\Avast.AsOutExt\
+  condition: all of selection_office_* and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: baecf8fb-edbf-429f-9ade-31fc3f22b970
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_asep_reg_keys_modification_office.yml
+falsepositives:
+- Legitimate software or add-in installations and administrative configurations
+- Automatic registry modifications during legitimate software installations
+notes:
+  quarantine_reason: 'upstream status: test'

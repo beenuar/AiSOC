@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-suspicious-encoded-powershell-command-line
+name: suspicious_encoded_powershell_command_line
+description: suspicious_encoded_powershell_command_line
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_encoded_powershell_command_line {\n meta:\n  \
+    \  author = \"Florian Roth, Markus Neis\"\n    description = \"Detects suspicious\
+    \ powershell process starts with base64 encoded commands  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/0KLT83Uwbrs6\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/09/03\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, t1086\"\n\n  events:\n(((re.regex($selection.target.process.command_line,\
+    \ `.* -e JAB.*`) or re.regex($selection.target.process.command_line, `.* -e  JAB.*`)\
+    \ or re.regex($selection.target.process.command_line, `.* -e   JAB.*`) or re.regex($selection.target.process.command_line,\
+    \ `.* -e    JAB.*`) or re.regex($selection.target.process.command_line, `.* -e\
+    \     JAB.*`) or re.regex($selection.target.process.command_line, `.* -e     \
+    \ JAB.*`) or re.regex($selection.target.process.command_line, `.* -enc JAB.*`)\
+    \ or re.regex($selection.target.process.command_line, `.* -enco JAB.*`) or re.regex($selection.target.process.command_line,\
+    \ `.* -encodedcommand JAB.*`) or re.regex($selection.target.process.command_line,\
+    \ `.* BA^J e-`) or re.regex($selection.target.process.command_line, `.* -e SUVYI.*`)\
+    \ or re.regex($selection.target.process.command_line, `.* -e aWV4I.*`) or re.regex($selection.target.process.command_line,\
+    \ `.* -e SQBFAFgA.*`) or re.regex($selection.target.process.command_line, `.*\
+    \ -e aQBlAHgA.*`) or re.regex($selection.target.process.command_line, `.* -enc\
+    \ SUVYI.*`) or re.regex($selection.target.process.command_line, `.* -enc aWV4I.*`)\
+    \ or re.regex($selection.target.process.command_line, `.* -enc SQBFAFgA.*`) or\
+    \ re.regex($selection.target.process.command_line, `.* -enc aQBlAHgA.*`)) and\
+    \ ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\")) and not (re.regex($selection.target.process.command_line, `.* -ExecutionPolicy\
+    \ remotesigned .*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: suspicious_encoded_powershell_command_line
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_encoded_powershell_command_line
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/suspicious_encoded_powershell_command_line.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

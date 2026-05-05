@@ -1,0 +1,45 @@
+id: sigmahq-sigma-88f0884b-331d-403d-a3a1-b668cf035603
+name: AD Groups Or Users Enumeration Using PowerShell - ScriptBlock
+description: 'Adversaries may attempt to find domain-level groups and permission settings.
+
+  The knowledge of domain-level permission groups can help adversaries determine which
+  groups exist and which users belong to a particular group.
+
+  Adversaries may use this information to determine which users have elevated permissions,
+  such as domain administrators.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1069.002/T1069.002.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  test_2:
+    ScriptBlockText|contains: get-ADPrincipalGroupMembership
+  test_7:
+    ScriptBlockText|contains|all:
+    - get-aduser
+    - '-f '
+    - '-pr '
+    - DoesNotRequirePreAuth
+  condition: 1 of test_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 88f0884b-331d-403d-a3a1-b668cf035603
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_ad_group_reco.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,45 @@
+id: sigmahq-sigma-fecfd1a1-cc78-4313-a1ea-2ee2e8ec27a7
+name: PowerShell Logging Disabled Via Registry Key Tampering
+description: Detects changes to the registry for the currently logged-in user. In
+  order to disable PowerShell module logging, script block logging or transcription
+  and script execution logging
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564.001
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1112/T1112.md#atomic-test-32---windows-powershell-logging-disabled
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \Microsoft\Windows\PowerShell\
+    - \Microsoft\PowerShellCore\
+    TargetObject|endswith:
+    - \ModuleLogging\EnableModuleLogging
+    - \ScriptBlockLogging\EnableScriptBlockLogging
+    - \ScriptBlockLogging\EnableScriptBlockInvocationLogging
+    - \Transcription\EnableTranscripting
+    - \Transcription\EnableInvocationHeader
+    - \EnableScripts
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fecfd1a1-cc78-4313-a1ea-2ee2e8ec27a7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_powershell_logging_disabled.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: splunk-security-content-08cb291e-ea77-48e8-a95a-0799319bf056
+name: Windows AD DSRM Account Changes
+description: The following analytic identifies changes to the Directory Services Restore
+  Mode (DSRM) account behavior via registry modifications. It detects alterations
+  in the registry path "*\\System\\CurrentControlSet\\Control\\Lsa\\DSRMAdminLogonBehavior"
+  with specific values indicating potential misuse. This activity is significant because
+  the DSRM account, if misconfigured, can be exploited to persist within a domain,
+  similar to a local administrator account. If confirmed malicious, an attacker could
+  gain persistent administrative access to a Domain Controller, leading to potential
+  domain-wide compromise and unauthorized access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=1714
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)
+    as lastTime from datamodel=Endpoint.Registry where Registry.registry_path= "*\\System\\CurrentControlSet\\Control\\Lsa\\DSRMAdminLogonBehavior"
+    Registry.registry_value_data IN ("*1","*2") by Registry.action Registry.dest Registry.process_guid
+    Registry.process_id Registry.registry_hive Registry.registry_path Registry.registry_key_name
+    Registry.registry_value_data Registry.registry_value_name Registry.registry_value_type
+    Registry.status Registry.user Registry.vendor_product | `drop_dm_object_name(Registry)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_ad_dsrm_account_changes_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 08cb291e-ea77-48e8-a95a-0799319bf056
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_dsrm_account_changes.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

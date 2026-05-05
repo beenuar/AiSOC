@@ -1,0 +1,39 @@
+id: sigmahq-sigma-b110ebaf-697f-4da1-afd5-b536fa27a2c1
+name: Potential Signing Bypass Via Windows Developer Features - Registry
+description: Detects when the enablement of developer features such as "Developer
+  Mode" or "Application Sideloading". Which allows the user to install untrusted packages.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/malmoeb/status/1560536653709598721
+- https://www.sentinelone.com/labs/inside-malicious-windows-apps-for-malware-deployment/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \Microsoft\Windows\CurrentVersion\AppModelUnlock
+    - \Policies\Microsoft\Windows\Appx\
+    TargetObject|endswith:
+    - \AllowAllTrustedApps
+    - \AllowDevelopmentWithoutDevLicense
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b110ebaf-697f-4da1-afd5-b536fa27a2c1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_turn_on_dev_features.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

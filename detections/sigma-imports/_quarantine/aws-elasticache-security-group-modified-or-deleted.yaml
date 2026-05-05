@@ -1,0 +1,42 @@
+id: sigmahq-sigma-7c797da2-9cf2-4523-ba64-33b06339f0cc
+name: AWS ElastiCache Security Group Modified or Deleted
+description: Identifies when an ElastiCache security group has been modified or deleted.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1531
+  categories:
+  - cloud
+references:
+- https://github.com/elastic/detection-rules/blob/7d5efd68603f42be5e125b5a6a503b2ef3ac0f4e/rules/integrations/aws/impact_elasticache_security_group_modified_or_deleted.toml
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: elasticache.amazonaws.com
+    eventName:
+    - DeleteCacheSecurityGroup
+    - AuthorizeCacheSecurityGroupIngress
+    - RevokeCacheSecurityGroupIngress
+    - AuthorizeCacheSecurityGroupEgress
+    - RevokeCacheSecurityGroupEgress
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7c797da2-9cf2-4523-ba64-33b06339f0cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_elasticache_security_group_modified_or_deleted.yml
+falsepositives:
+- A ElastiCache security group deletion may be done by a system or network administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment. Security Group deletions from unfamiliar users or hosts should
+  be investigated. If known behavior is causing false positives, it can be exempted
+  from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-f1408a58-0e94-4165-b80a-da9f96cf6fc3
+name: JXA In-memory Execution Via OSAScript
+description: Detects possible malicious execution of JXA in-memory via OSAScript
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.002
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/applescript/
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection_main:
+    CommandLine|contains|all:
+    - osascript
+    - ' -e '
+    - eval
+    - NSData.dataWithContentsOfURL
+  selection_js:
+  - CommandLine|contains|all:
+    - ' -l '
+    - JavaScript
+  - CommandLine|contains: .js
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f1408a58-0e94-4165-b80a-da9f96cf6fc3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_jxa_in_memory_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

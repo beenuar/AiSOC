@@ -1,0 +1,46 @@
+id: sigmahq-sigma-6640f31c-01ad-49b5-beb5-83498a5cd8bd
+name: Potential Arbitrary Code Execution Via Node.EXE
+description: Detects the execution node.exe which is shipped with multiple software
+  such as VMware, Adobe...etc. In order to execute arbitrary code. For example to
+  establish reverse shell as seen in Log4j attacks...etc
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references:
+- http://blog.talosintelligence.com/2022/09/lazarus-three-rats.html
+- https://www.sprocketsecurity.com/resources/crossing-the-log4j-horizon-a-vulnerability-with-no-return
+- https://www.rapid7.com/blog/post/2022/01/18/active-exploitation-of-vmware-horizon-servers/
+- https://nodejs.org/api/cli.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_main:
+    Image|endswith: \node.exe
+    CommandLine|contains:
+    - ' -e '
+    - ' --eval '
+  selection_action_reverse_shell:
+    CommandLine|contains|all:
+    - .exec(
+    - net.socket
+    - .connect
+    - child_process
+  condition: selection_main and 1 of selection_action_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6640f31c-01ad-49b5-beb5-83498a5cd8bd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_node_abuse.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

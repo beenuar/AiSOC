@@ -1,0 +1,44 @@
+id: splunk-security-content-3ec347e3-a94a-4a8b-a918-8306ea403182
+name: Windows Outlook Macro Created by Suspicious Process
+description: The following analytic detects the creation of an Outlook Macro (VbaProject.OTM)
+  by a suspicious process. This file is normally created when you create a macro from
+  within Outlook. If this file is created by a process other than Outlook.exe it may
+  be maliciously created. This detection leverages data from the Filesystem datamodel,
+  specifically looking for the file creation event for VbaProject.OTM. This activity
+  is significant as it is commonly associated with some malware infections, indicating
+  potential malicious intent to harvest email information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1137
+  - T1059.005
+  categories:
+  - endpoint
+references:
+- https://lab52.io/blog/analyzing-notdoor-inside-apt28s-expanding-arsenal/
+- https://hackread.com/russian-apt28-notdoor-backdoor-microsoft-outlook/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime values(Filesystem.file_create_time) as file_create_time
+    from datamodel=Endpoint.Filesystem where Filesystem.file_path="*Appdata\\Roaming\\Microsoft\\Outlook\\VbaProject.OTM"
+    by Filesystem.action Filesystem.dest Filesystem.file_access_time Filesystem.file_create_time
+    Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path
+    Filesystem.file_acl Filesystem.file_size Filesystem.process_guid Filesystem.process_id
+    Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_outlook_macro_created_by_suspicious_process_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 3ec347e3-a94a-4a8b-a918-8306ea403182
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_outlook_macro_created_by_suspicious_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

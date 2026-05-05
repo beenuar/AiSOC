@@ -1,0 +1,41 @@
+id: sigmahq-sigma-63647769-326d-4dde-a419-b925cc0caf42
+name: Enable Microsoft Dynamic Data Exchange
+description: Enable Dynamic Data Exchange protocol (DDE) in all supported editions
+  of Microsoft Word or Excel.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1559.002
+  categories:
+  - endpoint
+references:
+- https://msrc.microsoft.com/update-guide/vulnerability/ADV170021
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_word:
+    TargetObject|endswith: \Word\Security\AllowDDE
+    Details:
+    - DWORD (0x00000001)
+    - DWORD (0x00000002)
+  selection_excel:
+    TargetObject|endswith:
+    - \Excel\Security\DisableDDEServerLaunch
+    - \Excel\Security\DisableDDEServerLookup
+    Details: DWORD (0x00000000)
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 63647769-326d-4dde-a419-b925cc0caf42
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_enable_dde.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

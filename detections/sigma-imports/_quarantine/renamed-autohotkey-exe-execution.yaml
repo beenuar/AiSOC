@@ -1,0 +1,51 @@
+id: sigmahq-sigma-0f16d9cf-0616-45c8-8fad-becc11b5a41c
+name: Renamed AutoHotkey.EXE Execution
+description: Detects execution of a renamed autohotkey.exe binary based on PE metadata
+  fields
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.autohotkey.com/download/
+- https://thedfirreport.com/2023/02/06/collect-exfiltrate-sleep-repeat/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Product|contains: AutoHotkey
+  - Description|contains: AutoHotkey
+  - OriginalFileName:
+    - AutoHotkey.exe
+    - AutoHotkey.rc
+  filter:
+  - Image|endswith:
+    - \AutoHotkey.exe
+    - \AutoHotkey32.exe
+    - \AutoHotkey32_UIA.exe
+    - \AutoHotkey64.exe
+    - \AutoHotkey64_UIA.exe
+    - \AutoHotkeyA32.exe
+    - \AutoHotkeyA32_UIA.exe
+    - \AutoHotkeyU32.exe
+    - \AutoHotkeyU32_UIA.exe
+    - \AutoHotkeyU64.exe
+    - \AutoHotkeyU64_UIA.exe
+  - Image|contains: \AutoHotkey
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0f16d9cf-0616-45c8-8fad-becc11b5a41c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_autohotkey.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

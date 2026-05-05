@@ -1,0 +1,46 @@
+id: sigmahq-sigma-d7821ff1-4527-4e33-9f84-d0d57fa2fb66
+name: Print History File Contents
+description: Detects events in which someone prints the contents of history files
+  to the commandline or redirects it to a file for reconnaissance
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1592.004
+  categories:
+  - endpoint
+references:
+- https://github.com/sleventyeleven/linuxprivchecker/
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.003/T1552.003.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+    - /cat
+    - /head
+    - /tail
+    - /more
+  selection_history:
+  - CommandLine|contains:
+    - /.bash_history
+    - /.zsh_history
+  - CommandLine|endswith:
+    - _history
+    - .history
+    - zhistory
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7821ff1-4527-4e33-9f84-d0d57fa2fb66
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_history_recon.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,45 @@
+id: splunk-security-content-f7eda4bc-871c-11eb-b110-acde48001122
+name: Process Deleting Its Process File Path
+description: The following analytic identifies a process attempting to delete its
+  own file path, a behavior often associated with defense evasion techniques. This
+  detection leverages Sysmon EventCode 1 logs, focusing on command lines executed
+  via cmd.exe that include deletion commands. This activity is significant as it may
+  indicate malware, such as Clop ransomware, trying to evade detection by removing
+  its executable file if certain conditions are met. If confirmed malicious, this
+  could allow the attacker to persist undetected, complicating incident response and
+  remediation efforts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/fin11-email-campaigns-precursor-for-ransomware-data-theft
+- https://blog.virustotal.com/2020/11/keep-your-friends-close-keep-ransomware.html
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=1 CommandLine = "* /c *" CommandLine = "* del*"
+    Image = "*\\cmd.exe" | eval result = if(like(process,"%".parent_process."%"),
+    "Found", "Not Found") | stats min(_time) as firstTime max(_time) as lastTime count
+    by action dest original_file_name parent_process parent_process_exec parent_process_guid
+    parent_process_id parent_process_name parent_process_path process process_exec
+    process_guid process_hash process_id process_integrity_level process_name process_path
+    user user_id vendor_product result | where result = "Found" | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `process_deleting_its_process_file_path_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: f7eda4bc-871c-11eb-b110-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/process_deleting_its_process_file_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

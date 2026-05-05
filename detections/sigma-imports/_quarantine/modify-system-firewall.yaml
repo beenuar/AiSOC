@@ -1,0 +1,54 @@
+id: sigmahq-sigma-323ff3f5-0013-4847-bbd4-250b5edb62cc
+name: Modify System Firewall
+description: 'Detects the removal of system firewall rules. Adversaries may only delete
+  or modify a specific system firewall rule to bypass controls limiting network usage
+  or access.
+
+  Detection rules that match only on the disabling of firewalls will miss this.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/22/c/cyclops-blink-sets-sights-on-asus-routers--.html
+- https://blog.aquasec.com/container-security-tnt-container-attack
+- https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/8/html/configuring_and_managing_networking/getting-started-with-nftables_configuring-and-managing-networking
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection1:
+    type: EXECVE
+    a0: iptables
+    a1|contains: DROP
+  selection2:
+    type: EXECVE
+    a0: firewall-cmd
+    a1|contains: remove
+  selection3:
+    type: EXECVE
+    a0: ufw
+    a1|contains: delete
+  selection4:
+    type: EXECVE
+    a0: nft
+    a1|contains:
+    - delete
+    - flush
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 323ff3f5-0013-4847-bbd4-250b5edb62cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_modify_system_firewall.yml
+falsepositives:
+- Legitimate admin activity
+notes:
+  quarantine_reason: 'upstream status: test'

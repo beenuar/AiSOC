@@ -1,0 +1,62 @@
+id: chronicle-detection-rules-win-susp-or-malicious-service-created
+name: win_susp_or_malicious_service_created
+description: win_susp_or_malicious_service_created
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule win_susp_or_malicious_service_created {\n\n  meta:\n    author = \"Georg\
+    \ Lauenstein - suresecure GmbH\"\n    description = \"This detection rule identifies\
+    \ the creation of a Windows service with a suspicious or known malicious name,\
+    \ as logged by Windows Event ID 7045 (`A service was installed in the system`).\
+    \ Threat actors, including those associated with ransomware and other advanced\
+    \ persistent threats (APTs), often create services to achieve persistence, lateral\
+    \ movement, remote execution, or privilege escalation. Detection of such activity\
+    \ is critical for identifying early-stage post-compromise behavior.\"\n    rule_id\
+    \ = \"mr_965f922f-7a20-4579-a9df-1b1dea70672e\"\n    rule_name = \"Suspicious\
+    \ Windows Service Installation Detected\"\n    tactic = \"TA0003\"\n    technique\
+    \ = \"T1543.003\"\n    reference = \"https://github.com/mthcht/awesome-lists/blob/main/Lists/suspicious_windows_services_names_list.csv\"\
+    \n    type = \"alert\"\n    platform = \"Windows\"\n    data_source = \"Windows\
+    \ System Event Log\"\n    severity = \"Medium\"  // Adjust based on your risk\
+    \ assessment\n    priority = \"Medium\"  // Adjust based on your incident response\
+    \ process\n\n  events:\n    $suspicious_service.metadata.event_type = \"SERVICE_CREATION\"\
+    \n    $suspicious_service.metadata.product_name = \"Service Control Manager\"\n\
+    \    $suspicious_service.metadata.product_event_type = \"7045\"\n\n    // Capture\
+    \ the hostname where the event occurred\n    $suspicious_service.principal.hostname\
+    \ = $hostname\n    $suspicious_service.target.application = $service_name\n\n\
+    \    // Create a reference list named `suspicious_windows_service_names` and populate\
+    \ it with suspicious service names such as the list found at https://github.com/mthcht/awesome-lists/blob/main/Lists/suspicious_windows_services_names_list.csv\n\
+    \    $service_name in %suspicious_windows_services_names\n\n  match:\n    $hostname,\
+    \ $service_name over 15m\n\n  outcome:\n    $risk_score = max(65)\n    $event_count\
+    \ = count_distinct($suspicious_service.metadata.id)\n    $principal_hostname =\
+    \ array_distinct($suspicious_service.principal.hostname)\n    $principal_user_userid\
+    \ = array_distinct($suspicious_service.principal.user.userid)\n    $principal_user_windows_sid\
+    \ = array_distinct($suspicious_service.principal.user.windows_sid)\n\n  condition:\n\
+    \    $suspicious_service\n}"
+  chronicle_rule_name: win_susp_or_malicious_service_created
+provenance:
+  source: chronicle/detection-rules
+  source_id: win_susp_or_malicious_service_created
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/win_susp_or_malicious_service_created.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

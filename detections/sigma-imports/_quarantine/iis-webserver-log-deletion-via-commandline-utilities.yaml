@@ -1,0 +1,57 @@
+id: sigmahq-sigma-0649be4a-aeb0-45b0-b89e-7f1668f6d9c0
+name: IIS WebServer Log Deletion via CommandLine Utilities
+description: 'Detects attempts to delete Internet Information Services (IIS) log files
+  via command line utilities, which is a common defense evasion technique used by
+  attackers to cover their tracks.
+
+  Threat actors often abuse vulnerabilities in web applications hosted on IIS servers
+  to gain initial access and later delete IIS logs to evade detection.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/iis/manage/provisioning-and-managing-iis/managing-iis-log-file-storage
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \cmd.exe
+    - \powershell_ise.exe
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - cmd.exe
+    - powershell.exe
+    - powershell_ise.exe
+    - pwsh.dll
+  selection_cli_del:
+    CommandLine|contains:
+    - 'del '
+    - 'erase '
+    - 'rm '
+    - 'remove-item '
+    - 'rmdir '
+  selection_cli_iis_dir:
+    CommandLine|contains: \inetpub\logs\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0649be4a-aeb0-45b0-b89e-7f1668f6d9c0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_iis_logs_deletion.yml
+falsepositives:
+- Deletion of IIS logs that are older than a certain retention period as part of regular
+  maintenance activities.
+- Legitimate schedule tasks or scripts that clean up log files regularly.
+notes:
+  quarantine_reason: 'upstream status: experimental'

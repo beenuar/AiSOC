@@ -1,0 +1,57 @@
+id: chronicle-detection-rules-google-workspace-encryption-key-files-accessed-by-anonymous-user
+name: google_workspace_encryption_key_files_accessed_by_anonymous_user
+description: google_workspace_encryption_key_files_accessed_by_anonymous_user
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule google_workspace_encryption_key_files_accessed_by_anonymous_user {\n\n\
+    \  meta:\n    author = \"Google Cloud Security\"\n    description = \"Identifies\
+    \ when an encryption key file is accessed by an anonymous user in Google Drive.\
+    \ An adversary may attempt to access encryption keys before moving laterally and\
+    \ compromising sensitive data.\"\n    rule_id = \"mr_5d7defeb-13d4-48f3-b6b0-d2cdab30ab57\"\
+    \n    rule_name = \"Google Workspace Encryption Key File Accessed By An Anonymous\
+    \ User\"\n    mitre_attack_tactic = \"Credential Access\"\n    mitre_attack_technique\
+    \ = \"Unsecured Credentials: Private Keys\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1552/004/\"\
+    \n    mitre_attack_version = \"v13.1\"\n    type = \"Alert\"\n    data_source\
+    \ = \"Workspace Activity\"\n    severity = \"Medium\"\n    priority = \"Medium\"\
+    \n\n  events:\n    $ws.metadata.vendor_name = \"Google Workspace\"\n    $ws.metadata.product_name\
+    \ = \"drive\"\n    ($ws.metadata.product_event_type = \"download\" or\n    $ws.metadata.product_event_type\
+    \ = \"view\" or\n    $ws.metadata.product_event_type = \"copy\")\n\n    ($ws.target.resource.attribute.labels[\"\
+    visibility\"] = \"people_with_link\" or\n    $ws.target.resource.attribute.labels[\"\
+    visibility\"] = \"public_on_the_web\")\n    $ws.target.resource.name = /.*token|.*assig|.*pssc|.*keystore|.*pub|.*pgp.asc|.*ps1xml|.*pem|.*gpg.sig|.*der|.*key|.*p7r|.*p12|.*asc|.*jks|.*p7b|.*signature|.*gpg|.*pgp.sig|.*sst|.*pgp|.*gpgz|.*pfx|.*crt|.*p8|.*sig|.*pkcs7|.*jceks|.*pkcs8|.*psc1|.*p7c|.*csr|.*cer|.*spc|.*ps2xml/\n\
+    \n  outcome:\n    $risk_score = max(35)\n    $mitre_attack_tactic = \"Credential\
+    \ Access\"\n    $mitre_attack_technique = \"Unsecured Credentials: Private Keys\"\
+    \n    $mitre_attack_technique_id = \"T1552.004\"\n    $event_count = count_distinct($ws.metadata.id)\n\
+    \    $product_event_type = $ws.metadata.product_event_type\n    $userid = $ws.principal.user.userid\n\
+    \    $doc_type = $ws.src.resource.attribute.labels[\"doc_type\"]\n    $owner =\
+    \ $ws.target.resource.attribute.labels[\"owner\"]\n    $doc_name = $ws.target.resource.name\n\
+    \    //$doc_id = $ws.target.resource.product_object_id\n\n  condition:\n    $ws\n\
+    }"
+  chronicle_rule_name: google_workspace_encryption_key_files_accessed_by_anonymous_user
+provenance:
+  source: chronicle/detection-rules
+  source_id: google_workspace_encryption_key_files_accessed_by_anonymous_user
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/google_workspace_encryption_key_files_accessed_by_anonymous_user.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

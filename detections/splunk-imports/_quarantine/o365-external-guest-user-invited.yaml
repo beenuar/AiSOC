@@ -1,0 +1,47 @@
+id: splunk-security-content-8c6d52ec-d5f2-4b2f-8ba1-f32c047a71fa
+name: O365 External Guest User Invited
+description: The following analytic identifies the invitation of an external guest
+  user within Azure AD. With Azure AD B2B collaboration, users and administrators
+  can invite external users to collaborate with internal users. External guest account
+  invitations should be monitored by security teams as they could potentially lead
+  to unauthorized access. An example of this attack vector was described at BlackHat
+  2022 by security researcher Dirk-Jan during his tall `Backdooring and Hijacking
+  Azure AD Accounts by Abusing External Identities`. This detection leverages the
+  Universal Audit Log (UAL)/o365:management:activity sourcetype as a detection data
+  source.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://dirkjanm.io/assets/raw/US-22-Mollema-Backdooring-and-hijacking-Azure-AD-accounts_final.pdf
+- https://www.blackhat.com/us-22/briefings/schedule/#backdooring-and-hijacking-azure-ad-accounts-by-abusing-external-identities-26999
+- https://attack.mitre.org/techniques/T1136/003/
+- https://docs.microsoft.com/en-us/azure/active-directory/external-identities/b2b-quickstart-add-guest-users-portal
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory AND Operation="Add
+    user*" AND ModifiedProperties{}.NewValue="[*Guest*]" AND ModifiedProperties{}.NewValue="[*Invitation*]"
+    | eval user = (mvindex(''ModifiedProperties{}.NewValue'',5)), src_user = case(match(mvindex(''Actor{}.ID'',-1),"User"),mvindex(''Actor{}.ID'',0),match(mvindex(''Actor{}.ID'',-1),"ServicePrincipal"),mvindex(''Actor{}.ID'',3),true(),mvindex(''Actor{}.ID'',0))
+    | rex field=user "(?<user> [ \w\.-]+@ [ \w-]+\. [ \w-]{2,4})" | rename Operation
+    as signature, Id as signature_id | fillnull | stats count min(_time) as firstTime
+    max(_time) as lastTime by dest user src vendor_account vendor_product signature
+    signature_id src_user | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `o365_external_guest_user_invited_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 8c6d52ec-d5f2-4b2f-8ba1-f32c047a71fa
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_external_guest_user_invited.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,45 @@
+id: splunk-security-content-66adc486-224d-45c1-8e4d-9e7eeaba988f
+name: O365 Multiple AppIDs and UserAgents Authentication Spike
+description: The following analytic identifies unusual authentication activity in
+  an O365 environment, where a single user account experiences more than 8 authentication
+  attempts using 3 or more unique application IDs and over 5 unique user agents within
+  a short timeframe. It leverages O365 audit logs, focusing on authentication events
+  and applying statistical thresholds. This behavior is significant as it may indicate
+  an adversary probing for multi-factor authentication weaknesses. If confirmed malicious,
+  it suggests a compromised account, potentially leading to unauthorized access, privilege
+  escalation, and data exfiltration. Early detection is crucial to prevent further
+  exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1078/
+- https://www.blackhillsinfosec.com/exploiting-mfa-inconsistencies-on-microsoft-services/
+- https://github.com/dafthack/MFASweep
+- https://www.youtube.com/watch?v=SK1zgqaAZ2E
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory (Operation=UserLoggedIn\
+    \ OR Operation=UserLoginFailed)\n  | bucket span=5m _time\n  | stats dc(_raw)\
+    \ as failed_attempts dc(ApplicationId) as unique_app_ids dc(UserAgent) as unique_user_agents\
+    \ values(ApplicationId) values(OS) values(signature) as signature\n    BY _time\
+    \ user src\n       vendor_account vendor_product dest\n  | where failed_attempts\
+    \ > 5 and unique_user_agents > 5 and unique_app_ids > 2\n  | `o365_multiple_appids_and_useragents_authentication_spike_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 66adc486-224d-45c1-8e4d-9e7eeaba988f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multiple_appids_and_useragents_authentication_spike.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

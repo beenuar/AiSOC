@@ -1,0 +1,33 @@
+id: sigmahq-sigma-84b0a8f3-680b-4096-a45b-e9a89221727c
+name: PCRE.NET Package Image Load
+description: Detects processes loading modules related to PCRE.NET package
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://twitter.com/rbmaslen/status/1321859647091970051
+- https://twitter.com/tifkin_/status/1321916444557365248
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|contains: \AppData\Local\Temp\ba9ea7344a4a5f591d6e5dc32a13494b\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84b0a8f3-680b-4096-a45b-e9a89221727c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_pcre_dotnet_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

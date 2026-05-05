@@ -1,0 +1,42 @@
+id: sigmahq-sigma-b439f47d-ef52-4b29-9a2f-57d8a96cb6b8
+name: WMI ActiveScriptEventConsumers Activity Via Scrcons.EXE DLL Load
+description: Detects signs of the WMI script host process "scrcons.exe" loading scripting
+  DLLs which could indicates WMI ActiveScriptEventConsumers EventConsumers activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/HunterPlaybook/status/1301207718355759107
+- https://www.mdsec.co.uk/2020/09/i-like-to-move-it-windows-lateral-movement-part-1-wmi-event-subscription/
+- https://threathunterplaybook.com/hunts/windows/200902-RemoteWMIActiveScriptEventConsumers/notebook.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \scrcons.exe
+    ImageLoaded|endswith:
+    - \vbscript.dll
+    - \wbemdisp.dll
+    - \wshom.ocx
+    - \scrrun.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b439f47d-ef52-4b29-9a2f-57d8a96cb6b8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_scrcons_wmi_scripteventconsumer.yml
+falsepositives:
+- Legitimate event consumers
+- Dell computers on some versions register an event consumer that is known to cause
+  false positives when brightness is changed by the corresponding keyboard button
+notes:
+  quarantine_reason: 'upstream status: test'

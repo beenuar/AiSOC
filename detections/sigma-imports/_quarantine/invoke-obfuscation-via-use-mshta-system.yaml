@@ -1,0 +1,37 @@
+id: sigmahq-sigma-7e9c7999-0f9b-4d4a-a6ed-af6d553d4af4
+name: Invoke-Obfuscation Via Use MSHTA - System
+description: Detects Obfuscated Powershell via use MSHTA in Scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains|all:
+    - mshta
+    - vbscript:createobject
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7e9c7999-0f9b-4d4a-a6ed-af6d553d4af4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_use_mshta_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

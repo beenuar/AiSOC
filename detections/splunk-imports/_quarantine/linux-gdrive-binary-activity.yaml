@@ -1,0 +1,45 @@
+id: splunk-security-content-a42f8029-5472-4c33-8943-bb17bb07466a
+name: Linux Gdrive Binary Activity
+description: The following analytic detects the execution of the 'gdrive' tool on
+  a Linux host. This tool allows standard users to perform tasks associated with Google
+  Drive via the command line. This is used by actors to stage tools as well as exfiltrate
+  data. The detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process names and command-line executions. If confirmed malicious, this
+  could lead to compromise of systems or sensitive data being stolen.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567
+  categories:
+  - endpoint
+references:
+- https://cloud.google.com/blog/topics/threat-intelligence/uncovering-unc3886-espionage-operations
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=\"\
+    gdrive\" Processes.process IN  (\"* download *\", \"* upload *\", \"* list*\"\
+    , \"* update *\", \"* sync *\", \"* share *\", \"* account add*\", \"* drives\
+    \ *\", \"* files *\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_gdrive_binary_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a42f8029-5472-4c33-8943-bb17bb07466a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_gdrive_binary_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

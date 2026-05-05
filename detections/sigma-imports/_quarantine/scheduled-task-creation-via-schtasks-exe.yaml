@@ -1,0 +1,47 @@
+id: sigmahq-sigma-92626ddd-662c-49e3-ac59-f6535f12d189
+name: Scheduled Task Creation Via Schtasks.EXE
+description: Detects the creation of scheduled tasks by user accounts via the "schtasks"
+  utility.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \schtasks.exe
+    CommandLine|contains: ' /create '
+  filter_main_system_user:
+    User|contains:
+    - AUTHORI
+    - AUTORI
+  filter_optional_msoffice:
+    ParentImage:
+    - C:\Program Files\Microsoft Office\root\integration\integrator.exe
+    - C:\Program Files (x86)\Microsoft Office\root\integration\integrator.exe
+    Image:
+    - C:\Windows\System32\schtasks.exe
+    - C:\Windows\SysWOW64\schtasks.exe
+    CommandLine|contains: Microsoft\Office\Office Performance Monitor
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 92626ddd-662c-49e3-ac59-f6535f12d189
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_creation.yml
+falsepositives:
+- Administrative activity
+- Software installation
+notes:
+  quarantine_reason: 'upstream status: test'

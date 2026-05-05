@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-detect-when-the-guest-account-is-enabled
+name: detect_when_the_guest_account_is_enabled
+description: detect_when_the_guest_account_is_enabled
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detect_when_the_guest_account_is_enabled {\n meta:\n    author\
+    \ = \"Joseph Kamau\"\n    description = \"This rule detects when the guest account\
+    \ in windows Operating system is enabled, its best practise to disable the account\
+    \ since it has no password.Attempts to enable it should be investigated  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/We4KiQFjMbik\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"Windows\"\n    service\
+    \ = \"security\"\n    mitre = \"defense_evasion, t1078\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"4722\" and ($selection.principal.user.user_display_name = \"guest\" or $selection.principal.user.user_display_name\
+    \ = \"Guest\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: detect_when_the_guest_account_is_enabled
+provenance:
+  source: chronicle/detection-rules
+  source_id: detect_when_the_guest_account_is_enabled
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/detect_when_the_guest_account_is_enabled.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,48 @@
+id: sigmahq-sigma-e54979bd-c5f9-4d6c-967b-a04b19ac4c74
+name: Uncommon Outbound Kerberos Connection
+description: Detects uncommon outbound network activity via Kerberos default port
+  indicating possible lateral movement or first stage PrivEsc via delegation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558
+  - T1550.003
+  categories:
+  - endpoint
+references:
+- https://github.com/GhostPack/Rubeus
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    DestinationPort: 88
+    Initiated: 'true'
+  filter_main_lsass:
+    Image: C:\Windows\System32\lsass.exe
+  filter_optional_chrome:
+    Image:
+    - C:\Program Files (x86)\Google\Chrome\Application\chrome.exe
+    - C:\Program Files\Google\Chrome\Application\chrome.exe
+  filter_optional_firefox:
+    Image:
+    - C:\Program Files (x86)\Mozilla Firefox\firefox.exe
+    - C:\Program Files\Mozilla Firefox\firefox.exe
+  filter_optional_tomcat:
+    Image|endswith: \tomcat\bin\tomcat8.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e54979bd-c5f9-4d6c-967b-a04b19ac4c74
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_susp_outbound_kerberos_connection.yml
+falsepositives:
+- Web Browsers and third party application might generate similar activity. An initial
+  baseline is required.
+notes:
+  quarantine_reason: 'upstream status: test'

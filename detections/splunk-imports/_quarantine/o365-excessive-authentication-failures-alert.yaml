@@ -1,0 +1,41 @@
+id: splunk-security-content-d441364c-349c-453b-b55f-12eccab67cf9
+name: O365 Excessive Authentication Failures Alert
+description: The following analytic identifies an excessive number of authentication
+  failures, including failed attempts against MFA prompt codes. It uses data from
+  the `o365_management_activity` dataset, focusing on events where the authentication
+  status is marked as failure. This behavior is significant as it may indicate a brute
+  force attack or an attempt to compromise user accounts. If confirmed malicious,
+  this activity could lead to unauthorized access, data breaches, or further exploitation
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory UserAuthenticationMethod=*\
+    \ status=failure\n  | stats count earliest(_time) AS firstTime latest(_time) AS\
+    \ lastTime values(UserAuthenticationMethod) AS UserAuthenticationMethod values(UserAgent)\
+    \ AS user_agent values(status) AS status values(src_ip) AS src values(signature)\
+    \ as signature\n    BY user vendor_account vendor_product\n       dest\n  | where\
+    \ count > 10\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_excessive_authentication_failures_alert_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d441364c-349c-453b-b55f-12eccab67cf9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_excessive_authentication_failures_alert.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

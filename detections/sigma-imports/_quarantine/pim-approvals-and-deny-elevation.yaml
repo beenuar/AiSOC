@@ -1,0 +1,33 @@
+id: sigmahq-sigma-039a7469-0296-4450-84c0-f6966b16dc6d
+name: PIM Approvals And Deny Elevation
+description: Detects when a PIM elevation is approved or denied. Outside of normal
+  operations should be investigated.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-identity-management#azure-ad-roles-assignment
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Request Approved/Denied
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 039a7469-0296-4450-84c0-f6966b16dc6d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_pim_activation_approve_deny.yml
+falsepositives:
+- Actual admin using PIM.
+notes:
+  quarantine_reason: 'upstream status: test'

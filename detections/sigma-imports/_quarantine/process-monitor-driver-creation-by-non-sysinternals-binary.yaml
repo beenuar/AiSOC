@@ -1,0 +1,38 @@
+id: sigmahq-sigma-a05baa88-e922-4001-bc4d-8738135f27de
+name: Process Monitor Driver Creation By Non-Sysinternals Binary
+description: Detects creation of the Process Monitor driver by processes other than
+  Process Monitor (procmon) itself.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains: \procmon
+    TargetFilename|endswith: .sys
+  filter_main_process_explorer:
+    Image|endswith:
+    - \procmon.exe
+    - \procmon64.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a05baa88-e922-4001-bc4d-8738135f27de
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_procmon_driver_susp_creation.yml
+falsepositives:
+- Some false positives may occur with legitimate renamed process monitor binaries
+notes:
+  quarantine_reason: 'upstream status: test'

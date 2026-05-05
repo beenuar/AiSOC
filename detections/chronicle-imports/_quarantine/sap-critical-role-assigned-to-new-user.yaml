@@ -1,0 +1,51 @@
+id: chronicle-detection-rules-sap-critical-role-assigned-to-new-user
+name: sap_critical_role_assigned_to_new_user
+description: sap_critical_role_assigned_to_new_user
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_critical_role_assigned_to_new_user {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects the assignment of high-privilege\
+    \ roles by correlating Change Documents (PFCG) with Security Audit logs (AUD)\
+    \ for IP attribution.\"\n    severity = \"Critical\"\n    tactic = \"TA0004\"\n\
+    \    technique = \"T1098\"\n\n  events:\n    $change.metadata.log_type = \"SAP_CHANGE_DOCUMENT\"\
+    \n    $change.target.resource.attribute.labels[\"TABNAME\"] = \"AGR_USERS\"\n\
+    \    $change.target.resource.attribute.labels[\"CHNGIND\"] = \"I\"\n\n    $role\
+    \ = $change.target.resource.product_object_id\n\n    $audit.metadata.log_type\
+    \ = \"SAP_SECURITY_AUDIT\"\n    $audit.additional.fields[\"msg_1\"] = \"AU7\"\n\
+    \n    //join\n    $target_user = re.capture($change.target.resource.attribute.labels[\"\
+    TABKEY\"], \"^.{33}\\\\s*(\\\\S+)\\\\s*\\\\d{16}$\")\n    $target_user = $audit.additional.fields[\"\
+    param1_1\"]\n\n    $role in %sap_sensitive_roles.role\n\n  match:\n    $target_user\
+    \ over 1h\n\n  outcome:\n    $user_that_created_account = array_distinct($audit.principal.user.userid)\n\
+    \    $user_that_assigned_role = array_distinct($change.principal.user.userid)\n\
+    \    $source_ip = array_distinct($audit.principal.ip)\n    $assigned_role = array_distinct($role)\n\
+    \    $system_id = array_distinct($audit.target.application)\n    $risk_score =\
+    \ 95\n\n  condition:\n    $change and $audit\n}"
+  chronicle_rule_name: sap_critical_role_assigned_to_new_user
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_critical_role_assigned_to_new_user
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_critical_role_assigned_to_new_user.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

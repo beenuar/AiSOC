@@ -1,0 +1,39 @@
+id: sigmahq-sigma-77caf516-34e5-4df9-b4db-20744fea0a60
+name: AWS Successful Console Login Without MFA
+description: 'Detects successful AWS console logins that were performed without Multi-Factor
+  Authentication (MFA).
+
+  This alert can be used to identify potential unauthorized access attempts, as logging
+  in without MFA can indicate compromised credentials or misconfigured security settings.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://securitylabs.datadoghq.com/cloud-security-atlas/vulnerabilities/iam-user-without-mfa/
+- https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-aws-console-sign-in-events.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: ConsoleLogin
+    additionalEventData.MFAUsed: 'NO'
+    responseElements.ConsoleLogin: Success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 77caf516-34e5-4df9-b4db-20744fea0a60
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_console_login_success_without_mfa.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

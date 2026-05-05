@@ -1,0 +1,38 @@
+id: sigmahq-sigma-49f2f17b-b4c8-4172-a68b-d5bf95d05130
+name: UAC Bypass via ICMLuaUtil
+description: Detects the pattern of UAC Bypass using ICMLuaUtil Elevated COM interface
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/uac-bypass-via-icmluautil-elevated-com-interface.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \dllhost.exe
+    ParentCommandLine|contains:
+    - /Processid:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}
+    - /Processid:{D2E7041B-2927-42FB-8E9F-7CE93B6DC937}
+  filter:
+  - Image|endswith: \WerFault.exe
+  - OriginalFileName: WerFault.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 49f2f17b-b4c8-4172-a68b-d5bf95d05130
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_icmluautil.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

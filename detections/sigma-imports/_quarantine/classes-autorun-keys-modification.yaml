@@ -1,0 +1,74 @@
+id: sigmahq-sigma-9df5f547-c86a-433e-b533-f2794357e242
+name: Classes Autorun Keys Modification
+description: 'Detects modification of Windows Registry Classes keys used for persistence.
+
+  Adversaries modify these autostart extensibility points (ASEP) to execute malicious
+  code when file types are opened or actions are performed.
+
+  Various legitimate software also uses these keys. Currently, this rule only filters
+  out known legitimate software paths,
+
+  thus it is recommended to review and tune filters for your environment to reduce
+  false positives before deploying to production.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md
+- https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns
+- https://gist.github.com/GlebSukhodolskiy/0fc5fa5f482903064b448890db1eaf9d
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_classes_base:
+    TargetObject|contains: \Software\Classes
+  selection_classes_target:
+    TargetObject|contains:
+    - \Folder\ShellEx\ExtShellFolderViews
+    - \Folder\ShellEx\DragDropHandlers
+    - \Folder\Shellex\ColumnHandlers
+    - \Filter
+    - \Exefile\Shell\Open\Command\(Default)
+    - \Directory\Shellex\DragDropHandlers
+    - \Directory\Shellex\CopyHookHandlers
+    - \CLSID\{AC757296-3522-4E11-9862-C17BE5A1767E}\Instance
+    - \CLSID\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\Instance
+    - \CLSID\{7ED96837-96F0-4812-B211-F13C24117ED3}\Instance
+    - \CLSID\{083863F1-70DE-11d0-BD40-00A0C911CE86}\Instance
+    - \Classes\AllFileSystemObjects\ShellEx\DragDropHandlers
+    - \.exe
+    - \.cmd
+    - \ShellEx\PropertySheetHandlers
+    - \ShellEx\ContextMenuHandlers
+  filter_main_drivers:
+    Image: C:\Windows\System32\drvinst.exe
+  filter_main_empty:
+    Details: (Empty)
+  filter_main_null:
+    Details: null
+  filter_main_svchost:
+    Image: C:\Windows\System32\svchost.exe
+    TargetObject|contains: \lnkfile\shellex\ContextMenuHandlers\
+  filter_optional_msoffice:
+    Details: '{807583E5-5146-11D5-A672-00B0D022E945}'
+  condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9df5f547-c86a-433e-b533-f2794357e242
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_asep_reg_keys_modification_classes.yml
+falsepositives:
+- Legitimate software automatically (mostly, during installation) sets up autorun
+  keys for legitimate reason
+- Legitimate administrator sets up autorun keys for legitimate reason
+notes:
+  quarantine_reason: 'upstream status: test'

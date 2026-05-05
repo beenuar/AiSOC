@@ -1,0 +1,43 @@
+id: splunk-security-content-36f9626c-4272-4808-aadd-267acce681c0
+name: Windows Modify Registry LongPathsEnabled
+description: The following analytic detects a modification to the Windows registry
+  setting "LongPathsEnabled," which allows file paths longer than 260 characters.
+  This detection leverages data from the Endpoint.Registry datamodel, focusing on
+  changes to the specific registry path and value. This activity is significant because
+  adversaries, including malware like BlackByte, exploit this setting to bypass file
+  path limitations, potentially aiding in evasion techniques. If confirmed malicious,
+  this modification could facilitate the execution of long-path payloads, aiding in
+  persistence and further system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2023/07/06/the-five-day-job-a-blackbyte-ransomware-intrusion-case-study/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\CurrentControlSet\\Control\\FileSystem\\LongPathsEnabled" Registry.registry_value_data
+    = "0x00000001") by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_modify_registry_longpathsenabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 36f9626c-4272-4808-aadd-267acce681c0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_longpathsenabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

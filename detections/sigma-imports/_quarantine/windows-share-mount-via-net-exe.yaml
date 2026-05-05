@@ -1,0 +1,41 @@
+id: sigmahq-sigma-f117933c-980c-4f78-b384-e3d838111165
+name: Windows Share Mount Via Net.EXE
+description: Detects when a share is mounted using the "net.exe" utility
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://drive.google.com/file/d/1lKya3_mLnR3UQuCoiYruO3qgu052_iS_/view
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \net.exe
+    - \net1.exe
+  - OriginalFileName:
+    - net.exe
+    - net1.exe
+  selection_cli:
+    CommandLine|contains:
+    - ' use '
+    - ' \\\\'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f117933c-980c-4f78-b384-e3d838111165
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_net_use_mount_share.yml
+falsepositives:
+- Legitimate activity by administrators and scripts
+notes:
+  quarantine_reason: 'upstream status: test'

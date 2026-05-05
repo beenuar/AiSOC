@@ -1,0 +1,35 @@
+id: sigmahq-sigma-320fccbf-5e32-4101-82b8-2679c5f007c6
+name: CodeIntegrity - Revoked Kernel Driver Loaded
+description: Detects the load of a revoked kernel driver
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations
+- Internal Research
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID:
+    - 3021
+    - 3022
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 320fccbf-5e32-4101-82b8-2679c5f007c6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/code_integrity/win_codeintegrity_revoked_driver_loaded.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

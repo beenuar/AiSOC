@@ -1,0 +1,48 @@
+id: splunk-security-content-9364ee8e-a39a-11eb-8f1d-acde48001122
+name: Anomalous usage of 7zip
+description: The following analytic detects the execution of 7z.exe, a 7-Zip utility,
+  spawned from rundll32.exe or dllhost.exe. This behavior is identified using Endpoint
+  Detection and Response (EDR) telemetry, focusing on process names and parent processes.
+  This activity is significant as it may indicate an adversary attempting to use 7-Zip
+  for data exfiltration, often by renaming the executable to evade detection. If confirmed
+  malicious, this could lead to unauthorized data archiving and exfiltration, compromising
+  sensitive information and potentially leading to further system exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1560.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1560/001/
+- https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/
+- https://thedfirreport.com/2021/01/31/bazar-no-ryuk/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (Processes.parent_process_name\
+    \ IN (\"rundll32.exe\", \"dllhost.exe\") Processes.process_name=*7z*) AND NOT\
+    \ Processes.process_path = \"C:\\\\Program Files\\\\VMware\\\\VMware Tools\\\\\
+    7za.exe\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `anomalous_usage_of_7zip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9364ee8e-a39a-11eb-8f1d-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/anomalous_usage_of_7zip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

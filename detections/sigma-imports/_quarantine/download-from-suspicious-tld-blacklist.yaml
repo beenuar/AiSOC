@@ -1,0 +1,115 @@
+id: sigmahq-sigma-00d0b5ab-1f55-4120-8e83-487c0a7baf19
+name: Download From Suspicious TLD - Blacklist
+description: Detects download of certain file types from hosts in suspicious TLDs
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1566
+  - T1203
+  - T1204.002
+  categories:
+  - network
+references:
+- https://www.symantec.com/connect/blogs/shady-tld-research-gdn-and-our-2016-wrap
+- https://promos.mcafee.com/en-US/PDF/MTMW_Report.pdf
+- https://www.spamhaus.org/statistics/tlds/
+- https://krebsonsecurity.com/2018/06/bad-men-at-work-please-dont-click/
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri-extension:
+    - exe
+    - vbs
+    - bat
+    - rar
+    - ps1
+    - doc
+    - docm
+    - xls
+    - xlsm
+    - pptm
+    - rtf
+    - hta
+    - dll
+    - ws
+    - wsf
+    - sct
+    - zip
+    cs-host|endswith:
+    - .country
+    - .stream
+    - .gdn
+    - .mom
+    - .xin
+    - .kim
+    - .men
+    - .loan
+    - .download
+    - .racing
+    - .online
+    - .science
+    - .ren
+    - .gb
+    - .win
+    - .top
+    - .review
+    - .vip
+    - .party
+    - .tech
+    - .xyz
+    - .date
+    - .faith
+    - .zip
+    - .cricket
+    - .space
+    - .info
+    - .vn
+    - .cm
+    - .am
+    - .cc
+    - .asia
+    - .ws
+    - .tk
+    - .biz
+    - .su
+    - .st
+    - .ro
+    - .ge
+    - .ms
+    - .pk
+    - .nu
+    - .me
+    - .ph
+    - .to
+    - .tt
+    - .name
+    - .tv
+    - .kz
+    - .tc
+    - .mobi
+    - .study
+    - .click
+    - .link
+    - .trade
+    - .accountant
+    - .cf
+    - .gq
+    - .ml
+    - .ga
+    - .pw
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 00d0b5ab-1f55-4120-8e83-487c0a7baf19
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_download_susp_tlds_blacklist.yml
+falsepositives:
+- All kinds of software downloads
+notes:
+  quarantine_reason: 'upstream status: test'

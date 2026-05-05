@@ -1,0 +1,57 @@
+id: sigmahq-sigma-f34047d9-20d3-4e8b-8672-0a35cc50dc71
+name: System Information Discovery - Auditd
+description: Detects System Information Discovery commands
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f296668303c29d3f4c07e42bdd2b28d8dd6625f9/atomics/T1082/T1082.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection_1:
+    type: PATH
+    name:
+    - /etc/lsb-release
+    - /etc/redhat-release
+    - /etc/issue
+  selection_2:
+    type: EXECVE
+    a0:
+    - uname
+    - uptime
+    - lsmod
+    - hostname
+    - env
+  selection_3:
+    type: EXECVE
+    a0: grep
+    a1|contains:
+    - vbox
+    - vm
+    - xen
+    - virtio
+    - hv
+  selection_4:
+    type: EXECVE
+    a0: kmod
+    a1: list
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f34047d9-20d3-4e8b-8672-0a35cc50dc71
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/lnx_auditd_system_info_discovery.yml
+falsepositives:
+- Likely
+notes:
+  quarantine_reason: 'upstream status: test'

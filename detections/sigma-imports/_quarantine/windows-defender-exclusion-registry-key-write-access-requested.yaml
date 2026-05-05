@@ -1,0 +1,42 @@
+id: sigmahq-sigma-e9c8808f-4cfb-4ba9-97d4-e5f3beaa244d
+name: Windows Defender Exclusion Registry Key - Write Access Requested
+description: Detects write access requests to the Windows Defender exclusions registry
+  keys. This could be an indication of an attacker trying to request a handle or access
+  the object to write new exclusions in order to bypass security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/gootkit-malware-bypasses-windows-defender-by-setting-path-exclusions/
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Audit Policy : Security Settings/Local Policies/Audit
+    Policy, Registry System Access Control (SACL): Auditing/User'
+detection:
+  selection:
+    AccessList|contains:
+    - '%%4417'
+    - '%%4418'
+    EventID:
+    - 4656
+    - 4663
+    ObjectName|contains: \Microsoft\Windows Defender\Exclusions\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9c8808f-4cfb-4ba9-97d4-e5f3beaa244d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_windows_defender_exclusions_write_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

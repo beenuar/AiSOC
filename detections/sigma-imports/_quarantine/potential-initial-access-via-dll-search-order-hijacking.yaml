@@ -1,0 +1,69 @@
+id: sigmahq-sigma-dbbd9f66-2ed3-4ca2-98a4-6ea985dd1a1c
+name: Potential Initial Access via DLL Search Order Hijacking
+description: Detects attempts to create a DLL file to a known desktop application
+  dependencies folder such as Slack, Teams or OneDrive and by an unusual process.
+  This may indicate an attempt to load a malicious module via DLL search order hijacking.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  - T1566.001
+  - T1574
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://github.com/elastic/protections-artifacts/commit/746086721fd385d9f5c6647cada1788db4aea95f#diff-5d46dd4ac6866b4337ec126be8cee0e115467b3e8703794ba6f6df6432c806bc
+- https://posts.specterops.io/automating-dll-hijack-discovery-81c4295904b0
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith:
+    - \winword.exe
+    - \excel.exe
+    - \powerpnt.exe
+    - \MSACCESS.EXE
+    - \MSPUB.EXE
+    - \fltldr.exe
+    - \cmd.exe
+    - \certutil.exe
+    - \mshta.exe
+    - \cscript.exe
+    - \wscript.exe
+    - \curl.exe
+    - \powershell.exe
+    - \pwsh.exe
+    TargetFilename|endswith: .dll
+    TargetFilename|contains|all:
+    - \Users\
+    - \AppData\
+    TargetFilename|contains:
+    - \Microsoft\OneDrive\
+    - \Microsoft OneDrive\
+    - \Microsoft\Teams\
+    - \Local\slack\app-
+    - \Local\Programs\Microsoft VS Code\
+  filter:
+    Image|endswith: \cmd.exe
+    TargetFilename|contains|all:
+    - \Users\
+    - \AppData\
+    - \Microsoft\OneDrive\
+    - \api-ms-win-core-
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dbbd9f66-2ed3-4ca2-98a4-6ea985dd1a1c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_initial_access_dll_search_order_hijacking.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

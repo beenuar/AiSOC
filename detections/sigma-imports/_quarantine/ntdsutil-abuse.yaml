@@ -1,0 +1,39 @@
+id: sigmahq-sigma-e6e88853-5f20-4c4a-8d26-cd469fd8d31f
+name: Ntdsutil Abuse
+description: Detects potential abuse of ntdsutil to dump ntds.dit database
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mgreen27/status/1558223256704122882
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj574207(v=ws.11)
+logsource:
+  product: windows
+  service: application
+detection:
+  selection:
+    Provider_Name: ESENT
+    EventID:
+    - 216
+    - 325
+    - 326
+    - 327
+    Data|contains: ntds.dit
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e6e88853-5f20-4c4a-8d26-cd469fd8d31f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/esent/win_esent_ntdsutil_abuse.yml
+falsepositives:
+- Legitimate backup operation/creating shadow copies
+notes:
+  quarantine_reason: 'upstream status: test'

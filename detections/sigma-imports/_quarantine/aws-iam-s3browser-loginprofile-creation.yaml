@@ -1,0 +1,38 @@
+id: sigmahq-sigma-db014773-b1d3-46bd-ba26-133337c0ffee
+name: AWS IAM S3Browser LoginProfile Creation
+description: Detects S3 Browser utility performing reconnaissance looking for existing
+  IAM Users without a LoginProfile defined then (when found) creating a LoginProfile.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.009
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://permiso.io/blog/s/unmasking-guivil-new-cloud-threat-actor
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName:
+    - GetLoginProfile
+    - CreateLoginProfile
+    userAgent|contains: S3 Browser
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db014773-b1d3-46bd-ba26-133337c0ffee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_iam_s3browser_loginprofile_creation.yml
+falsepositives:
+- Valid usage of S3 Browser for IAM LoginProfile listing and/or creation
+notes:
+  quarantine_reason: 'upstream status: test'

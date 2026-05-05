@@ -1,0 +1,37 @@
+id: sigmahq-sigma-71886b70-d7b4-4dbf-acce-87d2ca135262
+name: Suspicious Rejected SMB Guest Logon From IP
+description: Detect Attempt PrintNightmare (CVE-2021-1675) Remote code execution in
+  Windows Spooler Service
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/KevTheHermit/status/1410203844064301056
+- https://web.archive.org/web/20210629055600/https://github.com/hhlxf/PrintNightmare/
+- https://web.archive.org/web/20210701042336/https://github.com/afwu/PrintNightmare
+logsource:
+  product: windows
+  service: smbclient-security
+detection:
+  selection:
+    EventID: 31017
+    UserName: ''
+    ServerName|startswith: \1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 71886b70-d7b4-4dbf-acce-87d2ca135262
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/smbclient/security/win_smbclient_security_susp_failed_guest_logon.yml
+falsepositives:
+- Account fallback reasons (after failed login with specific account)
+notes:
+  quarantine_reason: 'upstream status: test'

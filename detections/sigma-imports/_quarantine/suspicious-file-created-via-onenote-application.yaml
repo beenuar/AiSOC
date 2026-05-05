@@ -1,0 +1,60 @@
+id: sigmahq-sigma-fcc6d700-68d9-4241-9a1a-06874d621b06
+name: Suspicious File Created Via OneNote Application
+description: Detects suspicious files created via the OneNote application. This could
+  indicate a potential malicious ".one"/".onepkg" file was executed as seen being
+  used in malware activity in the wild
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/hackers-now-use-microsoft-onenote-attachments-to-spread-malware/
+- https://blog.osarmor.com/319/onenote-attachment-delivers-asyncrat-malware/
+- https://twitter.com/MaD_c4t/status/1623414582382567424
+- https://labs.withsecure.com/publications/detecting-onenote-abuse
+- https://www.trustedsec.com/blog/new-attacks-old-tricks-how-onenote-malware-is-evolving/
+- https://app.any.run/tasks/17f2d378-6d11-4d6f-8340-954b04f35e83/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \onenote.exe
+    - \onenotem.exe
+    - \onenoteim.exe
+    TargetFilename|contains: \AppData\Local\Temp\OneNote\
+    TargetFilename|endswith:
+    - .bat
+    - .chm
+    - .cmd
+    - .dll
+    - .exe
+    - .hta
+    - .htm
+    - .html
+    - .js
+    - .lnk
+    - .ps1
+    - .vbe
+    - .vbs
+    - .wsf
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fcc6d700-68d9-4241-9a1a-06874d621b06
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_onenote_susp_dropped_files.yml
+falsepositives:
+- False positives should be very low with the extensions list cited. Especially if
+  you don't heavily utilize OneNote.
+- Occasional FPs might occur if OneNote is used internally to share different embedded
+  documents
+notes:
+  quarantine_reason: 'upstream status: test'

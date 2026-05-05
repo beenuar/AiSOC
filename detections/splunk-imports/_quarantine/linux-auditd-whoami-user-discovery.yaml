@@ -1,0 +1,40 @@
+id: splunk-security-content-d1ff2e22-310d-446a-80b3-faedaa7b3b52
+name: Linux Auditd Whoami User Discovery
+description: The following analytic detects the suspicious use of the whoami command,
+  which may indicate an attacker trying to gather information about the current user
+  account on a compromised system. The whoami command is commonly used to verify user
+  privileges and identity, especially during initial stages of an attack to assess
+  the level of access. By monitoring for unusual or unauthorized executions of whoami,
+  this analytic helps in identifying potential reconnaissance activities, enabling
+  security teams to take action before the attacker escalates privileges or conducts
+  further malicious operations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+- https://github.com/peass-ng/PEASS-ng/tree/master/linPEAS
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=SYSCALL comm=whoami OR exe= \"*/whoami\"\n  | rename\
+    \ host as dest\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY comm exe syscall\n       uid ppid pid\n       dest success\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_whoami_user_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d1ff2e22-310d-446a-80b3-faedaa7b3b52
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_whoami_user_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

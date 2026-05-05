@@ -1,0 +1,58 @@
+id: chronicle-detection-rules-o365-login-activity-to-azure-ad-powershell-app
+name: o365_login_activity_to_azure_ad_powershell_app
+description: o365_login_activity_to_azure_ad_powershell_app
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_login_activity_to_azure_ad_powershell_app {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Logins to Azure AD PowerShell\
+    \ app can have legitimate purposes, but are also abused to gain access to user\
+    \ information. Programmatic access to Entra ID (Azure AD) should generally be\
+    \ through apps, so reviewing these activities is needed.\"\n    rule_id = \"mr_0cc56eaf-4176-444d-874d-9780bbb29d4f\"\
+    \n    rule_name = \"O365 Login Activity To Azure AD PowerShell App\"\n    tactic\
+    \ = \"TA0001\"\n    technique = \"T1078.004\"\n    type = \"hunt\"\n    platform\
+    \ = \"azure\"\n    data_source = \"o365\"\n    severity = \"Medium\"\n    priority\
+    \ = \"Medium\"\n\n  events:\n    $login.metadata.event_type = \"USER_LOGIN\"\n\
+    \    $login.metadata.product_event_type = \"UserLoggedIn\"\n    $login.metadata.product_name\
+    \ = \"Office 365\"\n    $login.metadata.vendor_name = \"Microsoft\"\n    $login.target.resource.product_object_id\
+    \ = \"1b730954-1685-4b74-9bfd-dac224a7b894\"\n    $login.security_result.action\
+    \ = \"ALLOW\"\n\n    // Below filters ADFS Sync Account that runs every 30 minutes\
+    \ between AD and Entra ID (for federated environments); can use display name or\
+    \ email address\n    //$login.target.user.userid != \"insert your email address\
+    \ here\" and\n    //$login.target.user.user_display_name != \"On-Premises Directory\
+    \ Synchronization Service Account\"\n    $login.target.user.userid = $userid\n\
+    \n  match:\n    $userid over 5m\n\n  outcome:\n    $risk_score = 65\n    $event_count\
+    \ = count_distinct($login.metadata.id)\n    $security_summary = array_distinct($login.security_result.summary)\n\
+    \    $user_agent = array_distinct($login.network.http.user_agent)\n    $country_region_login_attempt\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    //added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($login.principal.ip)\n    $target_user_userid = array_distinct($login.target.user.userid)\n\
+    \n  condition:\n    $login\n}"
+  chronicle_rule_name: o365_login_activity_to_azure_ad_powershell_app
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_login_activity_to_azure_ad_powershell_app
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_login_activity_to_azure_ad_powershell_app.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

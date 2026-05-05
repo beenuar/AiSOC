@@ -1,0 +1,38 @@
+id: sigmahq-sigma-4ae81040-fc1c-4249-bfa3-938d260214d9
+name: Use Icacls to Hide File to Everyone
+description: Detect use of icacls to deny access for everyone in Users folder sometimes
+  used to hide malicious files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.001
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/1df999e6-1cb8-45e3-8b61-499d1b7d5a9b/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_icacls:
+  - OriginalFileName: iCACLS.EXE
+  - Image|endswith: \icacls.exe
+  selection_cmd:
+    CommandLine|contains|all:
+    - /deny
+    - '*S-1-1-0:'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4ae81040-fc1c-4249-bfa3-938d260214d9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_icacls_deny.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-8b5dacf2-aeb7-459d-b133-678eb696d410
+name: FortiGate - VPN SSL Settings Modified
+description: 'Detects the modification of VPN SSL Settings (for example, the modification
+  of authentication rules).
+
+  This behavior was observed in pair with the addition of a VPN SSL Web Portal.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://www.fortiguard.com/psirt/FG-IR-24-535
+- https://docs.fortinet.com/document/fortigate/7.6.4/fortios-log-message-reference/398/event
+- https://docs.fortinet.com/document/fortigate/7.6.4/cli-reference/114404382/config-vpn-ssl-settings
+- https://docs.fortinet.com/document/fortigate/7.6.4/fortios-log-message-reference/44546/44546-logid-event-config-attr
+logsource:
+  product: fortigate
+  service: event
+detection:
+  selection:
+    action: Edit
+    cfgpath: vpn.ssl.settings
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8b5dacf2-aeb7-459d-b133-678eb696d410
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/fortinet/fortigate/fortinet_fortigate_vpn_ssl_settings_modified.yml
+falsepositives:
+- VPN SSL settings can be changed for legitimate purposes.
+notes:
+  quarantine_reason: 'upstream status: experimental'

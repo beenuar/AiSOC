@@ -1,0 +1,41 @@
+id: sigmahq-sigma-46123129-1024-423e-9fae-43af4a0fa9a5
+name: File Download Via Windows Defender MpCmpRun.EXE
+description: Detects the use of Windows Defender MpCmdRun.EXE to download files
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20200903194959/https://twitter.com/djmtshepana/status/1301608169496612866
+- https://lolbas-project.github.io/lolbas/Binaries/MpCmdRun/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: MpCmdRun.exe
+  - Image|endswith: \MpCmdRun.exe
+  - CommandLine|contains: MpCmdRun.exe
+  - Description: Microsoft Malware Protection Command Line Utility
+  selection_cli:
+    CommandLine|contains|all:
+    - DownloadFile
+    - url
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 46123129-1024-423e-9fae-43af4a0fa9a5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mpcmdrun_download_arbitrary_file.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

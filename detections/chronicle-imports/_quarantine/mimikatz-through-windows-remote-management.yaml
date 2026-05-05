@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-mimikatz-through-windows-remote-management
+name: mimikatz_through_windows_remote_management
+description: mimikatz_through_windows_remote_management
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule mimikatz_through_windows_remote_management {\n meta:\n  \
+    \  author = \"Patryk Prauze - ING Tech\"\n    description = \"Detects usage of\
+    \ mimikatz through WinRM protocol by monitoring access to lsass process by wsmprovhost.exe.\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/mV7fqMpJNxlu\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"credential_access, execution, t1003, t1028, s0005\"\
+    \n\n  events:\n($selection.metadata.product_event_type = \"10\" and $selection.target.process.file.full_path\
+    \ = \"C:\\\\windows\\\\system32\\\\lsass.exe\" and $selection.principal.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\system32\\\\wsmprovhost.exe\")\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: mimikatz_through_windows_remote_management
+provenance:
+  source: chronicle/detection-rules
+  source_id: mimikatz_through_windows_remote_management
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/mimikatz_through_windows_remote_management.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

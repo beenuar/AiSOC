@@ -1,0 +1,34 @@
+id: sigmahq-sigma-39a94fd1-8c9a-4ff6-bf22-c058762f8014
+name: DPAPI Domain Master Key Backup Attempt
+description: Detects anyone attempting a backup for the DPAPI Master Key. This events
+  gets generated at the source and not the Domain Controller.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.004
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190620-DomainDPAPIBackupKeyExtraction/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4692
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39a94fd1-8c9a-4ff6-bf22-c058762f8014
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_dpapi_domain_masterkey_backup_attempt.yml
+falsepositives:
+- If a computer is a member of a domain, DPAPI has a backup mechanism to allow unprotection
+  of the data. Which will trigger this event.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: splunk-security-content-c068d53f-6aaa-4558-8011-3734df878266
+name: O365 Application Registration Owner Added
+description: The following analytic identifies instances where a new owner is assigned
+  to an application registration within an Azure AD and Office 365 tenant. It leverages
+  O365 audit logs, specifically events related to changes in owner assignments within
+  the AzureActiveDirectory workload. This activity is significant because assigning
+  a new owner to an application registration can grant significant control over the
+  application's configuration, permissions, and behavior. If confirmed malicious,
+  an attacker could modify the application's settings, permissions, and behavior,
+  leading to unauthorized data access, privilege escalation, or the introduction of
+  malicious behavior within the application's operations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/
+- https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/overview-assign-app-owners
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation="Add
+    owner to application." | eval app_id=mvindex(''ModifiedProperties{}.NewValue'',
+    0) | eval app_displayName=mvindex(''ModifiedProperties{}.NewValue'', 1) | fillnull
+    | stats count min(_time) as firstTime max(_time) as lastTime by signature dest
+    user src vendor_account vendor_product app_id app_displayName object | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_application_registration_owner_added_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c068d53f-6aaa-4558-8011-3734df878266
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_application_registration_owner_added.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

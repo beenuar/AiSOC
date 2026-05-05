@@ -1,0 +1,33 @@
+id: sigmahq-sigma-a0413867-daf3-43dd-9245-734b3a787942
+name: Bitlocker Key Retrieval
+description: Monitor and alert for Bitlocker key retrieval.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-devices#bitlocker-key-retrieval
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    Category: KeyManagement
+    OperationName: Read BitLocker key
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a0413867-daf3-43dd-9245-734b3a787942
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_ad_bitlocker_key_retrieval.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

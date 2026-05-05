@@ -1,0 +1,40 @@
+id: sigmahq-sigma-39c9f26d-6e3b-4dbb-9c7a-4154b0281112
+name: AWS Bucket Deleted
+description: 'Detects the deletion of S3 buckets in AWS CloudTrail logs.
+
+  Monitoring the deletion of S3 buckets is critical for security and data integrity,
+  as it may indicate potential data loss or unauthorized access attempts.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html
+- https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3api/delete-bucket.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_event_name:
+    eventName: DeleteBucket
+  selection_status_success:
+    errorCode: Success
+  selection_status_null:
+    errorCode: null
+  condition: selection_event_name and 1 of selection_status_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39c9f26d-6e3b-4dbb-9c7a-4154b0281112
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_bucket_deleted.yml
+falsepositives:
+- During maintenance operations or testing, authorized administrators may delete S3
+  buckets as part of routine data management or cleanup activities.
+notes:
+  quarantine_reason: 'upstream status: experimental'

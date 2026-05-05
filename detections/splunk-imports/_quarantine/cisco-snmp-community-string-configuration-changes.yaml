@@ -1,0 +1,48 @@
+id: splunk-security-content-b0ce5521-2533-4f24-b8d5-c2ff977aae08
+name: Cisco SNMP Community String Configuration Changes
+description: This analytic detects changes to SNMP community strings on Cisco devices,
+  which could indicate an attacker establishing persistence or attempting to extract
+  credentials. After gaining initial access to network devices, threat actors like
+  Static Tundra often modify SNMP configurations to enable unauthorized monitoring
+  and data collection. This detection specifically looks for the configuration of
+  SNMP community strings with read-write (rw) or read-only (ro) permissions, as well
+  as the configuration of SNMP hosts that may be used to exfiltrate data. These activities
+  are particularly concerning as they may represent attempts to establish persistent
+  access or extract sensitive information from compromised devices.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1040
+  - T1552
+  categories:
+  - network
+references:
+- https://blog.talosintelligence.com/static-tundra/
+- https://tools.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180328-smi2
+- https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/snmp/command/snmp-cr-book/snmp-s1.html#wp1307296356
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(All_Changes.command)\
+    \ as command min(_time) as firstTime max(_time) as lastTime FROM datamodel=Change.All_Changes\n\
+    \  WHERE (\n        (All_Changes.command=\"*snmp-server community*rw*\")\n   \
+    \     OR\n        (All_Changes.command=\"*snmp-server community*ro*\")\n     \
+    \   OR\n        (All_Changes.command=\"*snmp-server host*\")\n    )\n  BY All_Changes.dvc\
+    \ All_Changes.user\n| `drop_dm_object_name(\"All_Changes\")`\n| rename dvc as\
+    \ dest\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_snmp_community_string_configuration_changes_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b0ce5521-2533-4f24-b8d5-c2ff977aae08
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_snmp_community_string_configuration_changes.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

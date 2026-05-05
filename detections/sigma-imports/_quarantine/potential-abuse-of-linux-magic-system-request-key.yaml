@@ -1,0 +1,58 @@
+id: sigmahq-sigma-ea61bb82-a5e0-42e6-8537-91d29500f1b9
+name: Potential Abuse of Linux Magic System Request Key
+description: 'Detects the potential abuse of the Linux Magic SysRq (System Request)
+  key by adversaries with root or sufficient privileges
+
+  to silently manipulate or destabilize a system. By writing to /proc/sysrq-trigger,
+  they can crash the system, kill processes,
+
+  or disrupt forensic analysis—all while bypassing standard logging. Though intended
+  for recovery and debugging, SysRq can be
+
+  misused as a stealthy post-exploitation tool. It is controlled via /proc/sys/kernel/sysrq
+  or permanently through /etc/sysctl.conf.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  - T1529
+  - T1489
+  - T1499
+  categories:
+  - endpoint
+references:
+- https://www.kernel.org/doc/html/v4.10/_sources/admin-guide/sysrq.txt
+- https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/4/html/reference_guide/s3-proc-sys-kernel
+- https://www.splunk.com/en_us/blog/security/threat-update-awfulshred-script-wiper.html
+logsource:
+  product: linux
+  service: auditd
+  definition: 'Required auditd configuration:
+
+    -w /proc/sysrq-trigger -p wa -k sysrq
+
+    -w /proc/sys/kernel/sysrq -p wa -k sysrq
+
+    '
+detection:
+  selection:
+    type: PATH
+    name|endswith:
+    - /sysrq
+    - /sysctl.conf
+    - /sysrq-trigger
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ea61bb82-a5e0-42e6-8537-91d29500f1b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_magic_system_request_key.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: experimental'

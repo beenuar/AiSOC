@@ -1,0 +1,60 @@
+id: chronicle-detection-rules-entra-id-login-activity-to-uncommon-mscloud-apps
+name: entra_id_login_activity_to_uncommon_mscloud_apps
+description: entra_id_login_activity_to_uncommon_mscloud_apps
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_login_activity_to_uncommon_mscloud_apps {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"This rule detects Azure AD\
+    \ login activity to apps other than a defined list of first party MS Cloud Apps.\
+    \ Note that Azure Active Directory PowerShell and custom Azure apps are not in\
+    \ this list by default\"\n    assumption = \"The lists first_party_ms_cloud_apps\
+    \ is populated and tuned as needed\"\n    rule_id = \"mr_1a39c017-9045-48d4-928d-096511edf3cc\"\
+    \n    rule_name = \"Entra ID Login Activity to Uncommon MS Cloud Apps\"\n    tactic\
+    \ = \"TA0001\"\n    technique = \"T1078.004\"\n    reference = \"https://learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in\"\
+    \n    type = \"alert\"\n    platform = \"azure\"\n    data_source = \"azure ad\"\
+    \n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $login.metadata.product_name = \"Azure AD\"\n    $login.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $login.security_result.action = \"ALLOW\"\n    not $login.target.resource.attribute.labels[\"\
+    App Id\"] in %first_party_ms_cloud_apps\n\n    // Below is to filter ADFS Sync\
+    \ Account that runs every 30 minutes between AD and Azure; can use userid or email\
+    \ address\n    //$login.target.user.userid = \"insert your userid here\"\n   \
+    \ $login.target.user.user_display_name != \"On-Premises Directory Synchronization\
+    \ Service Account\"\n\n    $login.target.user.userid = $userid\n\n  match:\n \
+    \   $userid over 5m\n\n  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($login.metadata.id)\n\
+    \    $target_application = array_distinct($login.target.application)\n    $traget_application_guid\
+    \ = array_distinct($login.target.resource.attribute.labels[\"App Id\"])\n    $security_description\
+    \ = array_distinct($login.security_result.description)\n    $security_summary\
+    \ = array_distinct($login.security_result.summary)\n    $country_region_login_attempt\
+    \ = array_distinct(strings.concat($login.principal.location.city,\" \",$login.principal.location.state,\"\
+    \ \",$login.principal.location.country_or_region))\n    //Used for match condition,\
+    \ don't need as outcome variable as well\n    //$target_user_userid = array_distinct($login.target.user.userid)\n\
+    \n  condition:\n    $login\n}"
+  chronicle_rule_name: entra_id_login_activity_to_uncommon_mscloud_apps
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_login_activity_to_uncommon_mscloud_apps
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_login_activity_to_uncommon_mscloud_apps.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

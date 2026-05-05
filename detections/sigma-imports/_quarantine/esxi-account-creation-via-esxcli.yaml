@@ -1,0 +1,37 @@
+id: sigmahq-sigma-b28e4eb3-8bbc-4f0c-819f-edfe8e2f25db
+name: ESXi Account Creation Via ESXCLI
+description: Detects user account creation on ESXi system via esxcli
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136
+  - T1059.012
+  categories:
+  - endpoint
+references:
+- https://developer.broadcom.com/xapis/esxcli-command-reference/7.0.0/namespace/esxcli_system.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /esxcli
+    CommandLine|contains|all:
+    - 'system '
+    - 'account '
+    - 'add '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b28e4eb3-8bbc-4f0c-819f-edfe8e2f25db
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_esxcli_user_account_creation.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

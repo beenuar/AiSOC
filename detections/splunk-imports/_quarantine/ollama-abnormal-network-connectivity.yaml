@@ -1,0 +1,40 @@
+id: splunk-security-content-19ec30ad-faa2-496a-a6a9-f2e5f778fbdb
+name: Ollama Abnormal Network Connectivity
+description: Detects abnormal network activity and connectivity issues in Ollama including
+  non-localhost API access attempts and warning-level network errors such as DNS lookup
+  failures, TCP connection issues, or host resolution problems that may indicate network-based
+  attacks, unauthorized access attempts, or infrastructure reconnaissance activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1571
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`ollama_server` level=WARN (msg=\"*failed*\" OR msg=\"*dial tcp*\"\
+    \ OR msg=\"*lookup*\" OR msg=\"*no such host*\" OR msg=\"*connection*\" OR msg=\"\
+    *network*\" OR msg=\"*timeout*\" OR msg=\"*unreachable*\" OR msg=\"*refused*\"\
+    )\n  | eval src=coalesce(src, src_ip, \"N/A\")\n  | stats count as incidents,\
+    \ values(src) as src, values(msg) as warning_messages, latest(_time) as last_incident\n\
+    \    BY host\n  | eval last_incident=strftime(last_incident, \"%Y-%m-%d %H:%M:%S\"\
+    )\n  | eval severity=\"medium\"\n  | eval attack_type=\"Abnormal Network Connectivity\"\
+    \n  | stats count\n    BY last_incident, host, incidents,\n       src, warning_messages,\
+    \ severity,\n       attack_type\n  | `ollama_abnormal_network_connectivity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 19ec30ad-faa2-496a-a6a9-f2e5f778fbdb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_abnormal_network_connectivity.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

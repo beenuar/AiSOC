@@ -1,0 +1,43 @@
+id: splunk-security-content-989019b4-b7aa-418a-9a17-2293e91288b6
+name: Windows Modify Registry DisableSecuritySettings
+description: The following analytic detects modifications to the Windows registry
+  that disable security settings for Terminal Services. It leverages the Endpoint
+  data model, specifically monitoring changes to the registry path associated with
+  Terminal Services security settings. This activity is significant because altering
+  these settings can weaken the security posture of Remote Desktop Services, potentially
+  allowing unauthorized remote access. If confirmed malicious, such modifications
+  could enable attackers to gain persistent remote access to the system, facilitating
+  further exploitation and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.darkgate
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path
+    = "*\\Terminal Services\\DisableSecuritySettings"  Registry.registry_value_data
+    = 0x00000001 by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_modify_registry_disablesecuritysettings_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 989019b4-b7aa-418a-9a17-2293e91288b6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_disablesecuritysettings.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

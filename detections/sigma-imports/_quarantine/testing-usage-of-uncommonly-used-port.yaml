@@ -1,0 +1,45 @@
+id: sigmahq-sigma-adf876b3-f1f8-4aa9-a4e4-a64106feec06
+name: Testing Usage of Uncommonly Used Port
+description: 'Adversaries may communicate using a protocol and port paring that are
+  typically not associated.
+
+  For example, HTTPS over port 8088(Citation: Symantec Elfin Mar 2019) or port 587(Citation:
+  Fortinet Agent Tesla April 2018) as opposed to the traditional port 443.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1571
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1571/T1571.md#atomic-test-1---testing-usage-of-uncommonly-used-port-with-powershell
+- https://learn.microsoft.com/en-us/powershell/module/nettcpip/test-netconnection?view=windowsserver2022-ps
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - Test-NetConnection
+    - '-ComputerName '
+    - '-port '
+  filter:
+    ScriptBlockText|contains:
+    - ' 443 '
+    - ' 80 '
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: adf876b3-f1f8-4aa9-a4e4-a64106feec06
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_test_netconnection.yml
+falsepositives:
+- Legitimate administrative script
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,51 @@
+id: splunk-security-content-eaf688b3-bb8f-454d-b105-920a862cd8cb
+name: Windows Default Group Policy Object Modified with GPME
+description: The following analytic detects modifications to default Group Policy
+  Objects (GPOs) using the Group Policy Management Editor (GPME). It leverages the
+  Endpoint data model to identify processes where `mmc.exe` executes `gpme.msc` with
+  specific GUIDs related to default GPOs. This activity is significant because default
+  GPOs, such as the `Default Domain Controllers Policy` and `Default Domain Policy`,
+  are critical for enforcing security policies across the domain. If malicious, such
+  modifications could allow an attacker to gain further access, establish persistence,
+  or deploy malware across numerous hosts, severely compromising the network's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1484/
+- https://attack.mitre.org/techniques/T1484/001
+- https://www.trustedsec.com/blog/weaponizing-group-policy-objects-access/
+- https://adsecurity.org/?p=2716
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn265969(v=ws.11)
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=mmc.exe\
+    \ (Processes.process =*gpme.msc*)\n    AND\n    (Processes.process = \"*31B2F340-016D-11D2-945F-00C04FB984F9*\"\
+    \n    OR\n    Processes.process = \"*6AC1786C-016F-11D2-945F-00C04fB984F9*\" \
+    \ )\n  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_default_group_policy_object_modified_with_gpme_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: eaf688b3-bb8f-454d-b105-920a862cd8cb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_default_group_policy_object_modified_with_gpme.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

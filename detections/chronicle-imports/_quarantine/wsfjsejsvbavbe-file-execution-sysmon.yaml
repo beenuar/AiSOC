@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-wsfjsejsvbavbe-file-execution-sysmon
+name: wsfjsejsvbavbe_file_execution_sysmon
+description: wsfjsejsvbavbe_file_execution_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule wsfjsejsvbavbe_file_execution_sysmon {\n meta:\n    author\
+    \ = \"Michael Haag, Alexandr Yampolskyi\"\n    description = \"Detects suspicious\
+    \ file execution by wscript and cscript.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/KOI4etWKDUTa\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1059, t1204\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and (re.regex($selection.target.process.file.full_path, `.*wscript\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*cscript\\.exe`))\
+    \ and (re.regex($selection.target.process.command_line, `.*\\.jse.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*\\.vbe.*`) or re.regex($selection.target.process.command_line, `.*\\.js.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*\\.vba.*`)))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: wsfjsejsvbavbe_file_execution_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: wsfjsejsvbavbe_file_execution_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/wsf_jse_js_vba_vbe_file_execution__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

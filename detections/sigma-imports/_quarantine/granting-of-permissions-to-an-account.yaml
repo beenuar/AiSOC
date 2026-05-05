@@ -1,0 +1,33 @@
+id: sigmahq-sigma-a622fcd2-4b5a-436a-b8a2-a4171161833c
+name: Granting Of Permissions To An Account
+description: Identifies IPs from which users grant access to other users on azure
+  resources and alerts when a previously unseen source IP address is used.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://github.com/Azure/Azure-Sentinel/blob/e534407884b1ec5371efc9f76ead282176c9e8bb/Detections/AzureActivity/Granting_Permissions_To_Account_detection.yaml
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  keywords:
+  - Microsoft.Authorization/roleAssignments/write
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a622fcd2-4b5a-436a-b8a2-a4171161833c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_granting_permission_detection.yml
+falsepositives:
+- Valid change
+notes:
+  quarantine_reason: 'upstream status: test'

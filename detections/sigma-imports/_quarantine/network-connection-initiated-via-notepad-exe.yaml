@@ -1,0 +1,42 @@
+id: sigmahq-sigma-e81528db-fc02-45e8-8e98-4e84aba1f10b
+name: Network Connection Initiated Via Notepad.EXE
+description: 'Detects a network connection that is initiated by the "notepad.exe"
+  process.
+
+  This might be a sign of process injection from a beacon process or something similar.
+
+  Notepad rarely initiates a network communication except when printing documents
+  for example.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20200219102749/https://www.sans.org/cyber-security-summit/archives/file/summit-archive-1492186586.pdf
+- https://www.cobaltstrike.com/blog/why-is-notepad-exe-connecting-to-the-internet
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \notepad.exe
+  filter_optional_printing:
+    DestinationPort: 9100
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e81528db-fc02-45e8-8e98-4e84aba1f10b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_notepad.yml
+falsepositives:
+- Printing documents via notepad might cause communication with the printer via port
+  9100 or similar.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,97 @@
+id: chronicle-detection-rules-suspicious-file-downloaded-from-file-sharing-website-via-certutil-exe
+name: suspicious_file_downloaded_from_file_sharing_website_via_certutil_exe
+description: suspicious_file_downloaded_from_file_sharing_website_via_certutil_exe
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule suspicious_file_downloaded_from_file_sharing_website_via_certutil_exe {\n\
+    \n  meta:\n    author = \"Nasreddine Bencherchali (Nextron Systems)\"\n    description\
+    \ = \"Detects the execution of certutil with certain flags that allow the utility\
+    \ to download files from file-sharing websites\"\n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_certutil_download_file_sharing_domains.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Suspicious File Downloaded From File-Sharing Website Via Certutil.EXE\"\
+    \n    sigma_uuid = \"42a5f1e7-9603-4f6d-97ae-3f37d130d794\"\n    sigma_status\
+    \ = \"experimental\"\n    rule_id = \"mr_f61b63c4-96f0-4c2c-9f63-2e1dc16ddcf8\"\
+    \n    tactic = \"TA0005\"\n    technique = \"T1027\"\n    type = \"Detection\"\
+    \n    data_source = \"Sysmon\"\n    platform = \"Windows\"\n    severity = \"\
+    High\"\n    priority = \"High\"\n    false_positives = \"Unknown\"\n\n  events:\n\
+    \    $process.metadata.event_type = \"PROCESS_LAUNCH\"\n    (\n        re.regex($process.target.process.file.full_path,\
+    \ `\\\\certutil\\.exe$`) nocase or\n        $process.src.process.file.full_path\
+    \ = \"certutil.exe\" nocase\n    )\n    (\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"urlcache \") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"verifyctl \")\n    )\n    (\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \".githubusercontent.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"anonfiles.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"cdn.discordapp.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"ddns.net\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"dl.dropboxusercontent.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"ghostbin.co\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"glitch.me\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"gofile.io\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"hastebin.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"mediafire.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"mega.nz\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"onrender.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"pages.dev\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"paste.ee\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"pastebin.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"pastebin.pl\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"pastetext.net\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"privatlab.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"privatlab.net\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"send.exploit.in\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"sendspace.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"storage.googleapis.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"storjshare.io\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"supabase.co\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"temp.sh\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"transfer.sh\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"trycloudflare.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"ufile.io\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"w3spaces.com\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"workers.dev\")\n    )\n    $process.principal.hostname = $hostname\n\n  match:\n\
+    \    $hostname over 5m\n\n  outcome:\n      //example usage of specifying test\
+    \ user and hostname to adjust risk score\n      $risk_score = max(if($process.principal.user.userid\
+    \ = \"user\" and $process.principal.hostname = \"hostname\", 0, 15))\n      $principal_process_pid\
+    \ = array_distinct($process.principal.process.pid)\n      $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n      $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n      $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n      $principal_process_product_specfic_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \     $principal_process_parent_process_product_specfic_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \      $target_process_pid = array_distinct($process.target.process.pid)\n   \
+    \   $target_process_command_line = array_distinct($process.target.process.command_line)\n\
+    \      $target_process_file_sha256 = array_distinct($process.target.process.file.sha256)\n\
+    \      $target_process_file_full_path = array_distinct($process.target.process.file.full_path)\n\
+    \      $target_process_product_specfic_process_id = array_distinct($process.target.process.product_specific_process_id)\n\
+    \      $principal_user_userid = array_distinct($process.principal.user.userid)\n\
+    \      $log_type = array_distinct(strings.concat($process.metadata.log_type,\"\
+    /\",$process.metadata.product_event_type))\n\n  condition:\n    $process\n}"
+  chronicle_rule_name: suspicious_file_downloaded_from_file_sharing_website_via_certutil_exe
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_file_downloaded_from_file_sharing_website_via_certutil_exe
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/suspicious_file_downloaded_from_file_sharing_website_via_certutil_exe.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

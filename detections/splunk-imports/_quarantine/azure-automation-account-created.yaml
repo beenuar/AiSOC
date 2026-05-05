@@ -1,0 +1,47 @@
+id: splunk-security-content-860902fd-2e76-46b3-b050-ba548dab576c
+name: Azure Automation Account Created
+description: The following analytic detects the creation of a new Azure Automation
+  account within an Azure tenant. It leverages Azure Audit events, specifically the
+  Azure Activity log category, to identify when an account is created or updated.
+  This activity is significant because Azure Automation accounts can be used to automate
+  tasks and orchestrate actions across Azure and on-premise environments. If an attacker
+  creates an Automation account with elevated privileges, they could maintain persistence,
+  execute malicious runbooks, and potentially escalate privileges or execute code
+  on virtual machines, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/automation/overview
+- https://docs.microsoft.com/en-us/azure/automation/automation-create-standalone-account?tabs=azureportal
+- https://docs.microsoft.com/en-us/azure/automation/automation-hybrid-runbook-worker
+- https://www.inversecos.com/2021/12/how-to-detect-malicious-azure.html
+- https://www.netspi.com/blog/technical/cloud-penetration-testing/maintaining-azure-persistence-via-automation-accounts/
+- https://microsoft.github.io/Azure-Threat-Research-Matrix/Persistence/AZT503/AZT503-3/
+- https://attack.mitre.org/techniques/T1136/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_audit` operationName.value=\"Microsoft.Automation/automationAccounts/write\"\
+    \ status.value=Succeeded\n  | dedup object\n  | rename claims.ipaddr as src, subscriptionId\
+    \ as vendor_account, operationName.value as signature\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest user src\n       vendor_account\
+    \ vendor_product object\n       object_path signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_automation_account_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 860902fd-2e76-46b3-b050-ba548dab576c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_automation_account_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

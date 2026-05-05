@@ -1,0 +1,56 @@
+id: sigmahq-sigma-e0cfaecd-602d-41af-988d-f6ccebb2af26
+name: Suspicious Installer Package Child Process
+description: Detects the execution of suspicious child processes from macOS installer
+  package parent process. This includes osascript, JXA, curl and wget amongst other
+  interpreters
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1059.007
+  - T1071
+  - T1071.001
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/clipping-silver-sparrows-wings/
+- https://github.com/elastic/detection-rules/blob/4312d8c9583be524578a14fe6295c3370b9a9307/rules/macos/execution_installer_package_spawned_network_event.toml
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_installer:
+    ParentImage|endswith:
+    - /package_script_service
+    - /installer
+    Image|endswith:
+    - /sh
+    - /bash
+    - /dash
+    - /python
+    - /ruby
+    - /perl
+    - /php
+    - /javascript
+    - /osascript
+    - /tclsh
+    - /curl
+    - /wget
+    CommandLine|contains:
+    - preinstall
+    - postinstall
+  condition: selection_installer
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e0cfaecd-602d-41af-988d-f6ccebb2af26
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_installer_susp_child_process.yml
+falsepositives:
+- Legitimate software uses the scripts (preinstall, postinstall)
+notes:
+  quarantine_reason: 'upstream status: test'

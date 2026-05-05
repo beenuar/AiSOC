@@ -1,0 +1,49 @@
+id: splunk-security-content-3f28c930-5208-425d-a7b9-53d349756d91
+name: Ollama Possible RCE via Model Loading
+description: Detects Ollama server errors and failures during model loading operations
+  that may indicate malicious model injection, path traversal attempts, or exploitation
+  of model loading mechanisms to achieve remote code execution. Adversaries may attempt
+  to load specially crafted malicious models or exploit vulnerabilities in the model
+  loading process to execute arbitrary code on the server. This detection monitors
+  error messages and failure patterns that could signal attempts to abuse model loading
+  functionality for malicious purposes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ollama_server` level=ERROR ("*llama runner*" OR "*model*" OR "*server.go*"
+    OR "*exited*") | rex field=_raw "source=(?<code_source>[^\s]+)" | rex field=_raw
+    "msg=\"(?<msg>[^\"]+)\"" | rex field=_raw "err=\"(?<err>[^\"]+)\"" | rex field=_raw
+    "level=(?<log_level>\w+)" | eval error_type=case( match(_raw, "exited"), "service_crash",
+    match(_raw, "model"), "model_error", match(_raw, "llama runner"), "runner_error",
+    1=1, "unknown_error" ) | bin _time span=1h | stats count as error_count, earliest(_time)
+    as first_error, latest(_time) as last_error, values(msg) as error_messages, values(err)
+    as error_details, values(code_source) as code_sources, values(error_type) as error_types,
+    dc(error_type) as unique_error_types by host | where error_count > 0 | eval first_error=strftime(first_error,
+    "%Y-%m-%d %H:%M:%S") | eval last_error=strftime(last_error, "%Y-%m-%d %H:%M:%S")
+    | eval severity=case( match(error_details, "exit status") OR error_count > 5,
+    "critical", error_count > 2, "high", 1=1, "medium" ) | eval attack_type="Suspicious
+    Model Loading / Potential RCE" | stats count by first_error, last_error, host,
+    code_sources, error_count, unique_error_types, error_types, error_messages, error_details,
+    severity, attack_type | `ollama_possible_rce_via_model_loading_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 3f28c930-5208-425d-a7b9-53d349756d91
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_possible_rce_via_model_loading.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-caf201a9-c2ce-4a26-9c3a-2b9525413711
+name: Potentially Suspicious Call To Win32_NTEventlogFile Class
+description: Detects usage of the WMI class "Win32_NTEventlogFile" in a potentially
+  suspicious way (delete, backup, change permissions, etc.) from a PowerShell script
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/desktop/legacy/aa394225(v=vs.85)
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_class:
+    CommandLine|contains: Win32_NTEventlogFile
+  selection_function:
+    CommandLine|contains:
+    - .BackupEventlog(
+    - .ChangeSecurityPermissions(
+    - .ChangeSecurityPermissionsEx(
+    - .ClearEventLog(
+    - .Delete(
+    - .DeleteEx(
+    - .Rename(
+    - .TakeOwnerShip(
+    - .TakeOwnerShipEx(
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: caf201a9-c2ce-4a26-9c3a-2b9525413711
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_nteventlogfile_usage.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

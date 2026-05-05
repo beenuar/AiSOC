@@ -1,0 +1,45 @@
+id: splunk-security-content-45cd08f8-a2c9-4f4e-baab-e1a0c624b0ab
+name: Disabling Windows Local Security Authority Defences via Registry
+description: The following analytic identifies the deletion of registry keys that
+  disable Local Security Authority (LSA) protection and Microsoft Defender Device
+  Guard. It leverages data from Endpoint Detection and Response (EDR) agents, focusing
+  on registry actions and paths associated with LSA and Device Guard settings. This
+  activity is significant because disabling these defenses can leave a system vulnerable
+  to various attacks, including credential theft and unauthorized code execution.
+  If confirmed malicious, this action could allow attackers to bypass critical security
+  mechanisms, leading to potential system compromise and persistent access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/configuring-additional-lsa-protection
+- https://docs.microsoft.com/en-us/windows/security/identity-protection/credential-guard/credential-guard-manage
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` min(_time) as _time from
+    datamodel=Endpoint.Registry where Registry.registry_path IN ("*\\Lsa\\LsaCfgFlags",
+    "*\\Lsa\\RunAsPPL", "*\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard\\*")
+    AND ((Registry.action = deleted) OR (Registry.action = modified AND Registry.registry_value_data
+    IN(0x00000000, 0))) by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `disabling_windows_local_security_authority_defences_via_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 45cd08f8-a2c9-4f4e-baab-e1a0c624b0ab
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disabling_windows_local_security_authority_defences_via_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

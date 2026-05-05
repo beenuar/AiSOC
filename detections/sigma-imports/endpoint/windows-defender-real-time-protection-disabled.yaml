@@ -1,0 +1,35 @@
+id: sigmahq-sigma-b28e58e4-2a72-4fae-bdee-0fbe904db642
+name: Windows Defender Real-time Protection Disabled
+description: Detects disabling of Windows Defender Real-time Protection. As this event
+  doesn't contain a lot of information on who initiated this action you might want
+  to reduce it to a "medium" level if this occurs too many times in your environment
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide#event-id-5001
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md
+- https://craigclouditpro.wordpress.com/2020/03/04/hunting-malicious-windows-defender-activity/
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID: 5001
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b28e58e4-2a72-4fae-bdee-0fbe904db642
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/windefend/win_defender_real_time_protection_disabled.yml
+falsepositives:
+- Administrator actions (should be investigated)
+- Seen being triggered occasionally during Windows 8 Defender Updates

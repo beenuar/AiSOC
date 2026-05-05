@@ -1,0 +1,35 @@
+id: sigmahq-sigma-976dd1f2-a484-45ec-aa1d-0e87e882262b
+name: Potential Persistence Via CHM Helper DLL
+description: Detects when an attacker modifies the registry key "HtmlHelp Author"
+  to achieve persistence
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://persistence-info.github.io/Data/htmlhelpauthor.html
+- https://www.hexacorn.com/blog/2018/04/22/beyond-good-ol-run-key-part-76/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \Software\Microsoft\HtmlHelp Author\Location
+    - \Software\WOW6432Node\Microsoft\HtmlHelp Author\Location
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 976dd1f2-a484-45ec-aa1d-0e87e882262b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_chm.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

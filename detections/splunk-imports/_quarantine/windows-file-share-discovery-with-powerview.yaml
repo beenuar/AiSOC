@@ -1,0 +1,43 @@
+id: splunk-security-content-a44c0be1-d7ab-41e4-92fd-aa9af4fe232c
+name: Windows File Share Discovery With Powerview
+description: The following analytic detects the execution of the Invoke-ShareFinder
+  PowerShell cmdlet from PowerView. This detection leverages PowerShell Script Block
+  Logging to identify instances where this specific command is executed. Monitoring
+  this activity is crucial as it indicates an attempt to enumerate network file shares,
+  which may contain sensitive information such as backups, scripts, and credentials.
+  If confirmed malicious, this activity could enable an attacker to escalate privileges
+  or move laterally within the network, potentially compromising additional systems
+  and sensitive data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1135
+  categories:
+  - endpoint
+references:
+- https://github.com/PowerShellEmpire/PowerTools/blob/master/PowerView/powerview.ps1
+- https://thedfirreport.com/2023/01/23/sharefinder-how-threat-actors-discover-file-shares/
+- https://attack.mitre.org/techniques/T1135/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  (ScriptBlockText=Invoke-ShareFinder*)\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_file_share_discovery_with_powerview_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a44c0be1-d7ab-41e4-92fd-aa9af4fe232c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_file_share_discovery_with_powerview.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

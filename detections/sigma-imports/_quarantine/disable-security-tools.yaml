@@ -1,0 +1,53 @@
+id: sigmahq-sigma-ff39f1a6-84ac-476f-a1af-37fcdf53d7c0
+name: Disable Security Tools
+description: Detects disabling security tools
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  launchctl_unload:
+    Image: /bin/launchctl
+    CommandLine|contains: unload
+  security_plists:
+    CommandLine|contains:
+    - com.objective-see.lulu.plist
+    - com.objective-see.blockblock.plist
+    - com.google.santad.plist
+    - com.carbonblack.defense.daemon.plist
+    - com.carbonblack.daemon.plist
+    - at.obdev.littlesnitchd.plist
+    - com.tenablesecurity.nessusagent.plist
+    - com.opendns.osx.RoamingClientConfigUpdater.plist
+    - com.crowdstrike.falcond.plist
+    - com.crowdstrike.userdaemon.plist
+    - osquery
+    - filebeat
+    - auditbeat
+    - packetbeat
+    - td-agent
+  disable_gatekeeper:
+    Image: /usr/sbin/spctl
+    CommandLine|contains: disable
+  condition: (launchctl_unload and security_plists) or disable_gatekeeper
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ff39f1a6-84ac-476f-a1af-37fcdf53d7c0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_disable_security_tools.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

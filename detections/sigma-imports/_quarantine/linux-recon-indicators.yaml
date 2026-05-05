@@ -1,0 +1,36 @@
+id: sigmahq-sigma-0cf7a157-8879-41a2-8f55-388dd23746b7
+name: Linux Recon Indicators
+description: Detects events with patterns found in commands used for reconnaissance
+  on linux systems
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1592.004
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://github.com/sleventyeleven/linuxprivchecker/blob/0d701080bbf92efd464e97d71a70f97c6f2cd658/linuxprivchecker.py
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+    - ' -name .htpasswd'
+    - ' -perm -4000 '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0cf7a157-8879-41a2-8f55-388dd23746b7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_recon_indicators.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

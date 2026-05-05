@@ -1,0 +1,35 @@
+id: sigmahq-sigma-4f281b83-0200-4b34-bf35-d24687ea57c2
+name: ETW Logging Disabled For SCM
+description: Detects changes to the "TracingDisabled" key in order to disable ETW
+  logging for services.exe (SCM)
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1112
+  - T1685
+  categories:
+  - endpoint
+references:
+- http://redplait.blogspot.com/2020/07/whats-wrong-with-etw.html
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|endswith: Software\Microsoft\Windows NT\CurrentVersion\Tracing\SCM\Regular\TracingDisabled
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4f281b83-0200-4b34-bf35-d24687ea57c2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_services_etw_tamper.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

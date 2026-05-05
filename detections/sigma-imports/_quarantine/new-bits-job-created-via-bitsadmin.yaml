@@ -1,0 +1,34 @@
+id: sigmahq-sigma-1ff315dc-2a3a-4b71-8dde-873818d25d39
+name: New BITS Job Created Via Bitsadmin
+description: Detects the creation of a new bits job by Bitsadmin
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md
+logsource:
+  product: windows
+  service: bits-client
+detection:
+  selection:
+    EventID: 3
+    processPath|endswith: \bitsadmin.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1ff315dc-2a3a-4b71-8dde-873818d25d39
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/bits_client/win_bits_client_new_job_via_bitsadmin.yml
+falsepositives:
+- Many legitimate applications or scripts could leverage "bitsadmin". This event is
+  best correlated with EID 16403 via the JobID field
+notes:
+  quarantine_reason: 'upstream status: test'

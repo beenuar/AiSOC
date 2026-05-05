@@ -1,0 +1,46 @@
+id: splunk-security-content-25bdb6cb-2e49-4d34-a93c-d6c567c122fe
+name: Windows Unusual Count Of Users Failed To Authenticate From Process
+description: The following analytic identifies a source process failing to authenticate
+  multiple users, potentially indicating a Password Spraying attack. It leverages
+  Windows Event 4625, which logs failed logon attempts, and uses statistical analysis
+  to detect anomalies. This activity is significant as it may represent an adversary
+  attempting to gain initial access or elevate privileges within an Active Directory
+  environment. If confirmed malicious, the attacker could compromise multiple accounts,
+  leading to unauthorized access, data exfiltration, or further lateral movement within
+  the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4625
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=4625
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/basic-audit-logon-events
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`  EventCode=4625 Logon_Type=2 ProcessName!=\"\
+    -\"\n  | bucket span=2m _time\n  | stats dc(TargetUserName) AS unique_accounts\
+    \ values(TargetUserName) as user values(dest) as dest values(src) as src\n   \
+    \ BY _time, ProcessName, SubjectUserName,\n       Computer, action, app,\n   \
+    \    authentication_method, signature, signature_id\n  | eventstats avg(unique_accounts)\
+    \ as comp_avg , stdev(unique_accounts) as comp_std\n    BY ProcessName, SubjectUserName,\
+    \ Computer\n  | eval upperBound=(comp_avg+comp_std*3)\n  | eval isOutlier=if(unique_accounts\
+    \ > 10 and unique_accounts >= upperBound, 1, 0)\n  | search isOutlier=1\n  | `windows_unusual_count_of_users_failed_to_authenticate_from_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 25bdb6cb-2e49-4d34-a93c-d6c567c122fe
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unusual_count_of_users_failed_to_authenticate_from_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

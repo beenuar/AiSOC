@@ -1,0 +1,36 @@
+id: sigmahq-sigma-3908d64a-3c06-4091-b503-b3a94424533b
+name: New Github Organization Member Added
+description: Detects when a new member is added or invited to a github organization.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - endpoint
+references:
+- https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization#dependabot_alerts-category-actions
+logsource:
+  product: github
+  service: audit
+  definition: 'Requirements: The audit log streaming feature must be enabled to be
+    able to receive such logs. You can enable following the documentation here: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-audit-log-streaming'
+detection:
+  selection:
+    action:
+    - org.add_member
+    - org.invite_member
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3908d64a-3c06-4091-b503-b3a94424533b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/github/audit/github_new_org_member.yml
+falsepositives:
+- Organization approved new members
+notes:
+  quarantine_reason: 'upstream status: test'

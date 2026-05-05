@@ -1,0 +1,38 @@
+id: sigmahq-sigma-75bfe6e6-cd8e-429e-91d3-03921e1d7962
+name: Remote Access Tool - ScreenConnect Installation Execution
+description: Detects ScreenConnect program starts that establish a remote access to
+  a system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://www.anomali.com/blog/probable-iranian-cyber-actors-static-kitten-conducting-cyberespionage-campaign-targeting-uae-and-kuwait-government-agencies
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - e=Access&
+    - y=Guest&
+    - '&p='
+    - '&c='
+    - '&k='
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 75bfe6e6-cd8e-429e-91d3-03921e1d7962
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_remote_access_tools_screenconnect_installation_cli_param.yml
+falsepositives:
+- Legitimate use by administrative staff
+notes:
+  quarantine_reason: 'upstream status: test'

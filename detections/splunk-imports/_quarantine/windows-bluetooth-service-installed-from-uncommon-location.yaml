@@ -1,0 +1,49 @@
+id: splunk-security-content-f12b81e6-2fa2-48e0-95cd-f5f7e4d9ac89
+name: Windows Bluetooth Service Installed From Uncommon Location
+description: 'Identifies the creation of a Windows service named "BluetoothService"
+  with a binary path in user-writable directories, particularly %AppData%\Bluetooth.
+
+  This technique was observed in the Lotus Blossom Chrysalis backdoor campaign, where
+  attackers created a service named "BluetoothService" pointing to a malicious binary
+  (renamed Bitdefender Submission Wizard) in a hidden AppData directory.
+
+  While legitimate Bluetooth services exist in Windows, they are system services with
+  binaries in System32.
+
+  Any BluetoothService created with a binary path in user directories (AppData, Temp,
+  Downloads) is highly suspicious and indicates potential malware persistence.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1543/003/
+- https://attack.mitre.org/techniques/T1036/
+- https://www.rapid7.com/blog/post/tr-chrysalis-backdoor-dive-into-lotus-blossoms-toolkit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system`\nEventCode=7045\nServiceName IN (\n    \"BluetoothService\"\
+    ,\n    \"Bluetooth Service\"\n)\nImagePath IN (\n    \"*\\\\AppData\\\\*\",\n\
+    \    \"*\\\\ProgramData\\\\*\",\n    \"*\\\\Temp\\\\*\",\n    \"*\\\\Users\\\\\
+    *\\\\Bluetooth\\\\*\"\n)\n| stats count min(_time) as firstTime max(_time) as\
+    \ lastTime\n  by Computer ServiceName ImagePath ServiceType StartType UserID\n\
+    | rename Computer as dest\n         UserID as user_id\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_bluetooth_service_installed_from_uncommon_location_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f12b81e6-2fa2-48e0-95cd-f5f7e4d9ac89
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_bluetooth_service_installed_from_uncommon_location.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-65d506d3-fcfe-4071-b4b2-bcefe721bbbb
+name: Potential Persistence Via PlistBuddy
+description: Detects potential persistence activity using LaunchAgents or LaunchDaemons
+  via the PlistBuddy utility
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543.001
+  - T1543.004
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/clipping-silver-sparrows-wings/
+- https://www.manpagez.com/man/8/PlistBuddy/
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /PlistBuddy
+    CommandLine|contains|all:
+    - RunAtLoad
+    - 'true'
+    CommandLine|contains:
+    - LaunchAgents
+    - LaunchDaemons
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 65d506d3-fcfe-4071-b4b2-bcefe721bbbb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_persistence_via_plistbuddy.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

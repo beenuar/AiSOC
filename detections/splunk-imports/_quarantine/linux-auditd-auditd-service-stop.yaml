@@ -1,0 +1,38 @@
+id: splunk-security-content-6cb9d0e1-eabe-41de-a11a-5efade354e9d
+name: Linux Auditd Auditd Service Stop
+description: The following analytic detects the suspicious auditd service stop. This
+  behavior is critical for a SOC to monitor because it may indicate attempts to gain
+  unauthorized access or maintain control over a system. Such actions could be signs
+  of malicious activity. If confirmed, this could lead to serious consequences, including
+  a compromised system, unauthorized access to sensitive data, or even a wider breach
+  affecting the entire network. Detecting and responding to these signs early is essential
+  to prevent potential security incidents.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=SERVICE_STOP unit IN (\"auditd\")\n  | rename host\
+    \ as dest\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY type pid comm\n       exe unit dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_auditd_service_stop_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6cb9d0e1-eabe-41de-a11a-5efade354e9d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_auditd_service_stop.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

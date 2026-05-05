@@ -1,0 +1,48 @@
+id: chronicle-detection-rules-sap-brute-force-rfc-logon
+name: sap_brute_force_rfc_logon
+description: sap_brute_force_rfc_logon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_brute_force_rfc_logon {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Identifies brute force attacks on SAP systems using RFC\
+    \ logons. Detects a single IP attempting to sign in to several systems or clients\
+    \ within a 1-hour interval, indicating potential credential stuffing or internal\
+    \ lateral movement.\"\n    severity = \"Low\"\n    tactic = \"TA0001\"\n    technique\
+    \ = \"T1110\"\n\n  events:\n    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n\
+    \    $e.additional.fields[\"msg_1\"] = /^AU6$|^CUZ$/\n\n    $ip = $e.principal.ip\n\
+    \    $sid = $e.target.application\n    $client = $e.target.resource.attribute.labels[\"\
+    slgmand_1\"]\n\n  match:\n    $ip over 1h\n\n\n  outcome:\n    $total_event_count\
+    \ = count($e.metadata.id)\n    $user_ids_attempted = array_distinct($e.principal.user.userid)\n\
+    \    $systems_targeted = array_distinct($sid)\n    $clients_targeted = array_distinct($client)\n\
+    \    $source_ip = array_distinct($ip)\n    $terminal_names = array_distinct($e.principal.hostname)\n\
+    \    $report_names = array_distinct($e.principal.process.file.names)\n\n  condition:\n\
+    \    #sid >= 2 or #client >= 2\n}"
+  chronicle_rule_name: sap_brute_force_rfc_logon
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_brute_force_rfc_logon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_brute_force_rfc_logon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

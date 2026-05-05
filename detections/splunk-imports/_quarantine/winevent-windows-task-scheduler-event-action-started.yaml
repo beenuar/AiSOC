@@ -1,0 +1,39 @@
+id: splunk-security-content-b3632472-310b-11ec-9aab-acde48001122
+name: WinEvent Windows Task Scheduler Event Action Started
+description: The following analytic detects the execution of tasks registered in Windows
+  Task Scheduler by monitoring EventID 200 (action run) and 201 (action completed)
+  from the Task Scheduler logs. This detection leverages Task Scheduler logs to identify
+  potentially suspicious or unauthorized task executions. Monitoring these events
+  is significant for a SOC as it helps uncover evasive techniques used for persistence,
+  unauthorized code execution, or other malicious activities. If confirmed malicious,
+  this activity could lead to unauthorized access, data exfiltration, or the execution
+  of harmful payloads, posing a significant threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1053.005/T1053.005.md
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_task_scheduler` EventCode IN ("200","201")  | stats count
+    min(_time) as firstTime max(_time) as lastTime by TaskName dvc EventCode | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `winevent_windows_task_scheduler_event_action_started_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b3632472-310b-11ec-9aab-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/winevent_windows_task_scheduler_event_action_started.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

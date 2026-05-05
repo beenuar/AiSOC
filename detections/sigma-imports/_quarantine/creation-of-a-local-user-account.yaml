@@ -1,0 +1,39 @@
+id: sigmahq-sigma-51719bf5-e4fd-4e44-8ba8-b830e7ac0731
+name: Creation Of A Local User Account
+description: Detects the creation of a new user account. Such accounts may be used
+  for persistence that do not require persistent remote access tools to be deployed
+  on the system.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1136.001/T1136.001.md
+- https://ss64.com/osx/sysadminctl.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_dscl:
+    Image|endswith: /dscl
+    CommandLine|contains: create
+  selection_sysadminctl:
+    Image|endswith: /sysadminctl
+    CommandLine|contains: addUser
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 51719bf5-e4fd-4e44-8ba8-b830e7ac0731
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_create_account.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

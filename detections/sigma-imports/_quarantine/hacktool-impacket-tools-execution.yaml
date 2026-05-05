@@ -1,0 +1,69 @@
+id: sigmahq-sigma-4627c6ae-6899-46e2-aa0c-6ebcb1becd19
+name: HackTool - Impacket Tools Execution
+description: Detects the execution of different compiled Windows binaries of the impacket
+  toolset (based on names or part of their names - could lead to false positives)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1557.001
+  categories:
+  - endpoint
+references:
+- https://github.com/ropnop/impacket_static_binaries/releases/tag/0.9.21-dev-binaries
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|contains:
+    - \goldenPac
+    - \karmaSMB
+    - \kintercept
+    - \ntlmrelayx
+    - \rpcdump
+    - \samrdump
+    - \secretsdump
+    - \smbexec
+    - \smbrelayx
+    - \wmiexec
+    - \wmipersist
+  - Image|endswith:
+    - \atexec_windows.exe
+    - \dcomexec_windows.exe
+    - \dpapi_windows.exe
+    - \findDelegation_windows.exe
+    - \GetADUsers_windows.exe
+    - \GetNPUsers_windows.exe
+    - \getPac_windows.exe
+    - \getST_windows.exe
+    - \getTGT_windows.exe
+    - \GetUserSPNs_windows.exe
+    - \ifmap_windows.exe
+    - \mimikatz_windows.exe
+    - \netview_windows.exe
+    - \nmapAnswerMachine_windows.exe
+    - \opdump_windows.exe
+    - \psexec_windows.exe
+    - \rdp_check_windows.exe
+    - \sambaPipe_windows.exe
+    - \smbclient_windows.exe
+    - \smbserver_windows.exe
+    - \sniff_windows.exe
+    - \sniffer_windows.exe
+    - \split_windows.exe
+    - \ticketer_windows.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4627c6ae-6899-46e2-aa0c-6ebcb1becd19
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_impacket_tools.yml
+falsepositives:
+- Legitimate use of the impacket tools
+notes:
+  quarantine_reason: 'upstream status: test'

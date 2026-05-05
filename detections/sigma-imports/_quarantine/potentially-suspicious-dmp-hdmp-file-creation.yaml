@@ -1,0 +1,45 @@
+id: sigmahq-sigma-aba15bdd-657f-422a-bab3-ac2d2a0d6f1c
+name: Potentially Suspicious DMP/HDMP File Creation
+description: Detects the creation of a file with the ".dmp"/".hdmp" extension by a
+  shell or scripting application such as "cmd", "powershell", etc. Often created by
+  software during a crash. Memory dumps can sometimes contain sensitive information
+  such as credentials. It's best to determine the source of the crash.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+    TargetFilename|endswith:
+    - .dmp
+    - .dump
+    - .hdmp
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aba15bdd-657f-422a-bab3-ac2d2a0d6f1c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_dump_file_susp_creation.yml
+falsepositives:
+- Some administrative PowerShell or VB scripts might have the ability to collect dumps
+  and move them to other folders which might trigger a false positive.
+notes:
+  quarantine_reason: 'upstream status: test'

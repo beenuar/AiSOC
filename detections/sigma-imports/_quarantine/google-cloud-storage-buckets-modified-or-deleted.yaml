@@ -1,0 +1,39 @@
+id: sigmahq-sigma-4d9f2ee2-c903-48ab-b9c1-8c0f474913d0
+name: Google Cloud Storage Buckets Modified or Deleted
+description: Detects when storage bucket is modified or deleted in Google Cloud.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/storage/docs/json_api/v1/buckets
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name:
+    - storage.buckets.delete
+    - storage.buckets.insert
+    - storage.buckets.update
+    - storage.buckets.patch
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4d9f2ee2-c903-48ab-b9c1-8c0f474913d0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_bucket_modified_or_deleted.yml
+falsepositives:
+- Storage Buckets being modified or deleted may be performed by a system administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Storage Buckets modified or deleted from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

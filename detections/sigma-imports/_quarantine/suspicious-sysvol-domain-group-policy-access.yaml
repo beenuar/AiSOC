@@ -1,0 +1,35 @@
+id: sigmahq-sigma-05f3c945-dcc8-4393-9f3d-af65077a8f86
+name: Suspicious SYSVOL Domain Group Policy Access
+description: Detects Access to Domain Group Policies stored in SYSVOL
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.006
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=2288
+- https://www.hybrid-analysis.com/sample/f2943f5e45befa52fb12748ca7171d30096e1d4fc3c365561497c618341299d5?environmentId=100
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - \SYSVOL\
+    - \policies\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 05f3c945-dcc8-4393-9f3d-af65077a8f86
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_sysvol_access.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

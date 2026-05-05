@@ -1,0 +1,42 @@
+id: sigmahq-sigma-b7bc7038-638b-4ffd-880c-292c692209ef
+name: Certificate Request Export to Exchange Webserver
+description: Detects a write of an Exchange CSR to an untypical directory or with
+  aspx name suffix which can be used to place a webshell
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/GossiTheDog/status/1429175908905127938
+logsource:
+  service: msexchange-management
+  product: windows
+detection:
+  keywords_export_command:
+    '|all':
+    - New-ExchangeCertificate
+    - ' -GenerateRequest'
+    - ' -BinaryEncoded'
+    - ' -RequestFile'
+  keywords_export_params:
+  - \\\\localhost\\C$
+  - \\\\127.0.0.1\\C$
+  - C:\\inetpub
+  - .aspx
+  condition: keywords_export_command and keywords_export_params
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b7bc7038-638b-4ffd-880c-292c692209ef
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/msexchange/win_exchange_proxyshell_certificate_generation.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-778ba9a8-45e4-4b80-8e3e-34a419f0b85e
+name: TeamViewer Domain Query By Non-TeamViewer Application
+description: Detects DNS queries to a TeamViewer domain only resolved by a TeamViewer
+  client by an image that isn't named TeamViewer (sometimes used by threat actors
+  for obfuscation)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.teamviewer.com/en-us/
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    QueryName:
+    - taf.teamviewer.com
+    - udp.ping.teamviewer.com
+  filter_main_teamviewer:
+    Image|contains: TeamViewer
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 778ba9a8-45e4-4b80-8e3e-34a419f0b85e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_teamviewer_domain_query_by_uncommon_app.yml
+falsepositives:
+- Unknown binary names of TeamViewer
+- Depending on the environment the rule might require some initial tuning before usage
+  to avoid FP with third party applications
+notes:
+  quarantine_reason: 'upstream status: test'

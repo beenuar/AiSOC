@@ -1,0 +1,57 @@
+id: sigmahq-sigma-4e7050dd-e548-483f-b7d6-527ab4fa784d
+name: NTDS.DIT Creation By Uncommon Parent Process
+description: Detects creation of a file named "ntds.dit" (Active Directory Database)
+  by an uncommon parent process or directory
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://www.ired.team/offensive-security/credential-access-and-credential-dumping/ntds.dit-enumeration
+- https://www.n00py.io/2022/03/manipulating-user-passwords-without-mimikatz/
+- https://pentestlab.blog/tag/ntds-dit/
+- https://github.com/samratashok/nishang/blob/414ee1104526d7057f9adaeee196d91ae447283e/Gather/Copy-VSS.ps1
+logsource:
+  product: windows
+  category: file_event
+  definition: 'Requirements: The "ParentImage" field is not available by default on
+    EID 11 of Sysmon logs. To be able to use this rule to the full extent you need
+    to enrich the log with additional ParentImage data'
+detection:
+  selection_file:
+    TargetFilename|endswith: \ntds.dit
+  selection_process_parent:
+    ParentImage|endswith:
+    - \cscript.exe
+    - \httpd.exe
+    - \nginx.exe
+    - \php-cgi.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \w3wp.exe
+    - \wscript.exe
+  selection_process_parent_path:
+    ParentImage|contains:
+    - \apache
+    - \tomcat
+    - \AppData\
+    - \Temp\
+    - \Public\
+    - \PerfLogs\
+  condition: selection_file and 1 of selection_process_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4e7050dd-e548-483f-b7d6-527ab4fa784d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_ntds_dit_uncommon_parent_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-8cde342c-ba48-4b74-b615-172c330f2e93
+name: Suspicious Renamed Comsvcs DLL Loaded By Rundll32
+description: Detects rundll32 loading a renamed comsvcs.dll to dump process memory
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/sbousseaden/status/1555200155351228419
+logsource:
+  product: windows
+  category: image_load
+detection:
+  selection:
+    Image|endswith: \rundll32.exe
+    Hashes|contains:
+    - IMPHASH=eed93054cb555f3de70eaa9787f32ebb
+    - IMPHASH=5e0dbdec1fce52daae251a110b4f309d
+    - IMPHASH=eadbccbb324829acb5f2bbe87e5549a8
+    - IMPHASH=407ca0f7b523319d758a40d7c0193699
+    - IMPHASH=281d618f4e6271e527e6386ea6f748de
+  filter:
+    ImageLoaded|endswith: \comsvcs.dll
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8cde342c-ba48-4b74-b615-172c330f2e93
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_comsvcs_load_renamed_version_by_rundll32.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

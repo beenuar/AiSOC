@@ -1,0 +1,41 @@
+id: sigmahq-sigma-2fbbe9ff-0afc-470b-bdc0-592198339968
+name: Remote Access Tool - Potential MeshAgent Execution - Windows
+description: 'Detects potential execution of MeshAgent which is a tool used for remote
+  access.
+
+  Historical data shows that threat actors rename MeshAgent binary to evade detection.
+
+  Matching command lines with the ''--meshServiceName'' argument can indicate that
+  the MeshAgent is being used for remote access.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.huntress.com/blog/know-thy-enemy-a-novel-november-case-on-persistent-remote-access
+- https://thecyberexpress.com/ukraine-hit-by-meshagent-malware-campaign/
+- https://wazuh.com/blog/how-to-detect-meshagent-with-wazuh/
+- https://www.security.com/threat-intelligence/medusa-ransomware-attacks
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: --meshServiceName
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2fbbe9ff-0afc-470b-bdc0-592198339968
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_remote_access_tools_meshagent_arguments.yml
+falsepositives:
+- Environments that legitimately use MeshAgent
+notes:
+  quarantine_reason: 'upstream status: experimental'

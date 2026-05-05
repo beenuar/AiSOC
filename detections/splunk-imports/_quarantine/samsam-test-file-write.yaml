@@ -1,0 +1,43 @@
+id: splunk-security-content-493a879d-519d-428f-8f57-a06a0fdc107e
+name: Samsam Test File Write
+description: The following analytic detects the creation of a file named "test.txt"
+  within the Windows system directory, indicative of Samsam ransomware propagation.
+  It leverages file-system activity data from the Endpoint data model, specifically
+  monitoring file paths within the Windows System32 directory. This activity is significant
+  as it aligns with known Samsam ransomware behavior, which uses such files for propagation
+  and execution. If confirmed malicious, this could lead to ransomware deployment,
+  resulting in data encryption, system disruption, and potential data loss. Immediate
+  investigation and remediation are crucial to prevent further damage.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime values(Filesystem.user) as user values(Filesystem.dest)
+    as dest values(Filesystem.file_name) as file_name from datamodel=Endpoint.Filesystem
+    where Filesystem.file_path=*\\windows\\system32\\test.txt by Filesystem.action
+    Filesystem.dest Filesystem.file_access_time Filesystem.file_create_time Filesystem.file_hash
+    Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path Filesystem.file_acl
+    Filesystem.file_size Filesystem.process_guid Filesystem.process_id Filesystem.user
+    Filesystem.vendor_product | `drop_dm_object_name(Filesystem)` | `security_content_ctime(lastTime)`
+    | `security_content_ctime(firstTime)` | `samsam_test_file_write_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 493a879d-519d-428f-8f57-a06a0fdc107e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/samsam_test_file_write.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,51 @@
+id: splunk-security-content-e91bd102-d630-4e76-ab73-7e3ba22c5961
+name: First Time Seen Child Process of Zoom
+description: The following analytic identifies the first-time execution of child processes
+  spawned by Zoom (zoom.exe or zoom.us). It leverages Endpoint Detection and Response
+  (EDR) data, specifically monitoring process creation events and comparing them against
+  previously seen child processes. This activity is significant because the execution
+  of unfamiliar child processes by Zoom could indicate malicious exploitation or misuse
+  of the application. If confirmed malicious, this could lead to unauthorized code
+  execution, data exfiltration, or further compromise of the endpoint.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime values(Processes.user) as user values(Processes.action) as action\
+    \ values(Processes.dest) as dest values(Processes.original_file_name) as original_file_name\
+    \ values(Processes.parent_process) as parent_process values(Processes.parent_process_exec)\
+    \ as parent_process_exec values(Processes.parent_process_guid) as parent_process_guid\
+    \ values(Processes.parent_process_id) as parent_process_id values(Processes.parent_process_name)\
+    \ as parent_process_name values(Processes.parent_process_path) as parent_process_path\
+    \ values(Processes.process) as process values(Processes.process_exec) as process_exec\
+    \ values(Processes.process_guid) as process_guid values(Processes.process_hash)\
+    \ as process_hash values(Processes.process_integrity_level) as process_integrity_level\
+    \ values(Processes.process_name) as process_name values(Processes.process_path)\
+    \ as process_path  values(Processes.user_id) as user_id values(Processes.vendor_product)\
+    \ as vendor_product FROM datamodel=Endpoint.Processes\n  WHERE (\n        Processes.parent_process_name=zoom.exe\n\
+    \        OR\n        Processes.parent_process_name=zoom.us\n    )\n  BY Processes.process_id\
+    \ Processes.dest\n| `drop_dm_object_name(Processes)`\n| lookup zoom_first_time_child_process\
+    \ dest as dest process_name as process_name OUTPUT firstTimeSeen\n| where isnull(firstTimeSeen)\
+    \ OR firstTimeSeen > relative_time(now(), \"`previously_seen_zoom_child_processes_window`\"\
+    )\n| `security_content_ctime(firstTime)`\n| `first_time_seen_child_process_of_zoom_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e91bd102-d630-4e76-ab73-7e3ba22c5961
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/first_time_seen_child_process_of_zoom.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

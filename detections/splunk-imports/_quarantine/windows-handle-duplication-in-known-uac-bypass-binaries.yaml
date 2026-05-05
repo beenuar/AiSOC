@@ -1,0 +1,50 @@
+id: splunk-security-content-d7369bf5-1315-4138-b927-2dd8bb8c1da7
+name: Windows Handle Duplication in Known UAC-Bypass Binaries
+description: The following analytic detects suspicious handle duplication activity
+  targeting known Windows utilities such as ComputerDefaults.exe, Eventvwr.exe, and
+  others. This technique is commonly used to escalate privileges or bypass UAC by
+  inheriting or injecting elevated tokens or handles. The detection focuses on non-standard
+  use of DuplicateHandle or token duplication where process, thread, or token handles
+  are copied into the context of trusted, signed utilities. Such behavior may indicate
+  attempts to execute with elevated rights without user consent. Alerts enable rapid
+  triage using process trees, handle data, token attributes, command-lines, and binary
+  hashes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.001
+  categories:
+  - endpoint
+references:
+- https://www.recordedfuture.com/research/from-castleloader-to-castlerat-tag-150-advances-operations
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=10 TargetImage IN("*\\ComputerDefaults.exe", "*\\eventvwr.exe*",
+    "*\\fodhelper.exe","*\\slui.exe","*\\sdclt.exe","*\\mmc.exe", "*\\colorcpl.exe","*\\wsreset.exe","*\\esentutl.exe",
+    "*\PkgMgr.exe") AND NOT (SourceImage IN ("*C:\\Windows\\system32\\*","*C:\\Windows\\syswow64\\*","*C:\\Program
+    Files\\*", "*C:\\Program Files (x86)\\*","%systemroot%\\*")) | eval g_access_decimal
+    = tonumber(replace(GrantedAccess,"0x",""),16) | eval PROCESS_DUP_HANDLE = 64 |
+    eval dup_handle_set = bit_and (g_access_decimal, PROCESS_DUP_HANDLE) | where dup_handle_set
+    == PROCESS_DUP_HANDLE | stats count min(_time) as firstTime max(_time) as lastTime
+    by SourceImage TargetImage GrantedAccess PROCESS_DUP_HANDLE g_access_decimal dup_handle_set
+    Guid Opcode ProcessID SecurityID SourceProcessGUID SourceProcessId  TargetProcessGUID
+    TargetProcessId UserID dest granted_access parent_process_exec parent_process_guid
+    parent_process_id parent_process_name parent_process_path process_exec process_guid
+    process_id process_name process_path signature signature_id user_id vendor_product
+    CallTrace EventID | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_handle_duplication_in_known_uac_bypass_binaries_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d7369bf5-1315-4138-b927-2dd8bb8c1da7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_handle_duplication_in_known_uac_bypass_binaries.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

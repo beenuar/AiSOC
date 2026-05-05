@@ -1,0 +1,44 @@
+id: splunk-security-content-55f22929-cfd3-4388-ba5c-4d01fac7ee7e
+name: Windows IIS Components New Module Added
+description: The following analytic detects the addition of new IIS modules on a Windows
+  IIS server. It leverages the Windows Event log - Microsoft-IIS-Configuration/Operational,
+  specifically EventCode 29, to identify this activity. This behavior is significant
+  because IIS modules are rarely added to production servers, and unauthorized modules
+  could indicate malicious activity. If confirmed malicious, an attacker could use
+  these modules to execute arbitrary code, escalate privileges, or maintain persistence
+  within the environment, potentially compromising the server and sensitive data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/64396dfd9fc3734e1d1901a8f2f07040
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://www.crowdstrike.com/wp-content/uploads/2022/05/crowdstrike-iceapple-a-novel-internet-information-services-post-exploitation-framework-1.pdf
+- https://unit42.paloaltonetworks.com/unit42-oilrig-uses-rgdoor-iis-backdoor-targets-middle-east/
+- https://www.secureworks.com/research/bronze-union
+- https://github.com/redcanaryco/atomic-red-team/tree/master/atomics/T1505.004
+- https://strontic.github.io/xcyclopedia/library/appcmd.exe-055B2B09409F980BF9B5A3969D01E5B2.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`iis_operational_logs` EventCode=29\n  | stats  count min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY OpCode EventCode ComputerName\n   \
+    \    Message\n  | rename ComputerName AS dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_iis_components_new_module_added_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 55f22929-cfd3-4388-ba5c-4d01fac7ee7e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_iis_components_new_module_added.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,45 @@
+id: sigmahq-sigma-1182f3b3-e716-4efa-99ab-d2685d04360f
+name: History File Deletion
+description: Detects events in which a history file gets deleted, e.g. the ~/bash_history
+  to remove traces of malicious activity
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1565.001
+  categories:
+  - endpoint
+references:
+- https://github.com/sleventyeleven/linuxprivchecker/
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.003/T1552.003.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+    - /rm
+    - /unlink
+    - /shred
+  selection_history:
+  - CommandLine|contains:
+    - /.bash_history
+    - /.zsh_history
+  - CommandLine|endswith:
+    - _history
+    - .history
+    - zhistory
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1182f3b3-e716-4efa-99ab-d2685d04360f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_history_delete.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

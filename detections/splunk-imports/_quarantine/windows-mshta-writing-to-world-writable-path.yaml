@@ -1,0 +1,55 @@
+id: splunk-security-content-efbcf8ee-bc75-47f1-8985-a5c638c4faf0
+name: Windows MSHTA Writing to World Writable Path
+description: The following analytic identifies instances of `mshta.exe` writing files
+  to world-writable directories. It leverages Sysmon EventCode 11 logs to detect file
+  write operations by `mshta.exe` to directories like `C:\Windows\Tasks` and `C:\Windows\Temp`.
+  This activity is significant as it often indicates an attempt to establish persistence
+  or execute malicious code, deviating from the utility's legitimate use. If confirmed
+  malicious, this behavior could lead to the execution of multi-stage payloads, potentially
+  resulting in full system compromise and unauthorized access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/apt29-wineloader-german-political-parties
+- https://www.zscaler.com/blogs/security-research/european-diplomats-targeted-spikedwine-wineloader
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=11\n(\n  Image=\"*\\\\mshta.exe\"\n  OR\n  OriginalFileName=\"\
+    mshta.exe\"\n)\nTargetFilename IN (\n                    \"*\\\\Windows\\\\PLA\\\
+    \\Reports\\\\*\",\n                    \"*\\\\Windows\\\\PLA\\\\Rules\\\\*\",\n\
+    \                    \"*\\\\Windows\\\\PLA\\\\Templates\\\\*\",\n            \
+    \        \"*\\\\Windows\\\\Registration\\\\CRMLog\\\\*\",\n                  \
+    \  \"*\\\\Windows\\\\System32\\\\Com\\\\dmp\\\\*\",\n                    \"*\\\
+    \\Windows\\\\System32\\\\LogFiles\\\\WMI\\\\*\",\n                    \"*\\\\\
+    Windows\\\\System32\\\\Microsoft\\\\Crypto\\\\RSA\\\\MachineKeys\\\\*\",\n   \
+    \                 \"*\\\\Windows\\\\System32\\\\spool\\\\drivers\\\\color\\\\\
+    *\",\n                    \"*\\\\Windows\\\\System32\\\\spool\\\\PRINTERS\\\\\
+    *\",\n                    \"*\\\\Windows\\\\System32\\\\spool\\\\SERVERS\\\\*\"\
+    ,\n                    \"*\\\\Windows\\\\System32\\\\Tasks\\\\*\",\n         \
+    \           \"*\\\\Windows\\\\SysWOW64\\\\Com\\\\dmp\\\\*\",\n               \
+    \     \"*\\\\Windows\\\\SysWOW64\\\\Tasks\\\\*\",\n                    \"*\\\\\
+    Windows\\\\Tasks\\\\*\",\n                    \"*\\\\Windows\\\\Temp\\\\*\",\n\
+    \                    \"*\\\\Windows\\\\tracing\\\\*\"\n                  )\n|\
+    \ stats count min(_time) as firstTime max(_time) as lastTime by action dest file_name\n\
+    file_path  process_guid process_id user user_id vendor_product Image TargetFilename\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_mshta_writing_to_world_writable_path_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: efbcf8ee-bc75-47f1-8985-a5c638c4faf0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_mshta_writing_to_world_writable_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

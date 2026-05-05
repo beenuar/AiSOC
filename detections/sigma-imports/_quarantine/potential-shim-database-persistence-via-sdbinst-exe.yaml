@@ -1,0 +1,43 @@
+id: sigmahq-sigma-517490a7-115a-48c6-8862-1a481504d5a8
+name: Potential Shim Database Persistence via Sdbinst.EXE
+description: 'Detects installation of a new shim using sdbinst.exe.
+
+  Adversaries may establish persistence and/or elevate privileges by executing malicious
+  content triggered by application shims'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.011
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/fin7-shim-databases-persistence
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \sdbinst.exe
+  - OriginalFileName: sdbinst.exe
+  selection_cli:
+    CommandLine|contains: .sdb
+  filter_optional_iis:
+    ParentImage|endswith: \msiexec.exe
+    CommandLine|contains:
+    - :\Program Files (x86)\IIS Express\iisexpressshim.sdb
+    - :\Program Files\IIS Express\iisexpressshim.sdb
+  condition: all of selection_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 517490a7-115a-48c6-8862-1a481504d5a8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sdbinst_shim_persistence.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

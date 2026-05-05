@@ -1,0 +1,47 @@
+id: sigmahq-sigma-06ce37c2-61ab-4f05-9ff5-b1a96d18ae32
+name: WMIC Loading Scripting Libraries
+description: 'Detects threat actors proxy executing code and bypassing application
+  controls by leveraging wmic and the `/FORMAT` argument switch to download and execute
+  an XSL file (i.e js, vbs, etc).
+
+  It could be an indicator of SquiblyTwo technique, which uses Windows Management
+  Instrumentation (WMI) to execute malicious code.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1220
+  categories:
+  - endpoint
+references:
+- https://securitydatasets.com/notebooks/atomic/windows/defense_evasion/SDWIN-201017061100.html
+- https://twitter.com/dez_/status/986614411711442944
+- https://lolbas-project.github.io/lolbas/Binaries/Wmic/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \wmic.exe
+    ImageLoaded|endswith:
+    - \jscript.dll
+    - \vbscript.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 06ce37c2-61ab-4f05-9ff5-b1a96d18ae32
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_wmic_remote_xsl_scripting_dlls.yml
+falsepositives:
+- The command wmic os get lastbootuptime loads vbscript.dll
+- The command wmic os get locale loads vbscript.dll
+- Since the ImageLoad event doesn't have enough information in this case. It's better
+  to look at the recent process creation events that spawned the WMIC process and
+  investigate the command line and parent/child processes to get more insights
+- The command `wmic ntevent` loads vbscript.dll
+notes:
+  quarantine_reason: 'upstream status: test'

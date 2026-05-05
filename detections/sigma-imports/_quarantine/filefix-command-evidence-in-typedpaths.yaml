@@ -1,0 +1,72 @@
+id: sigmahq-sigma-4fee3d51-8069-4a4c-a0f7-924fcaff2c70
+name: FileFix - Command Evidence in TypedPaths
+description: Detects commonly-used chained commands and strings in the most recent
+  'url' value of the 'TypedPaths' key, which could be indicative of a user being targeted
+  by the FileFix technique.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.004
+  categories:
+  - endpoint
+references:
+- https://x.com/russianpanda9xx/status/1940831134759506029
+- https://mrd0x.com/filefix-clickfix-alternative/
+- https://www.scpx.com.au/2025/11/16/decades-old-finger-protocol-abused-in-clickfix-malware-attacks/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_base:
+    TargetObject|endswith: \Software\Microsoft\Windows\CurrentVersion\Explorer\TypedPaths\url1
+    Details|contains|all:
+    - '#'
+    - http
+  selection_cmd:
+  - Details|contains:
+    - account
+    - anti-bot
+    - botcheck
+    - captcha
+    - challenge
+    - confirmation
+    - fraud
+    - human
+    - identification
+    - identificator
+    - identity
+    - robot
+    - validation
+    - verification
+    - verify
+  - Details|contains:
+    - '%comspec%'
+    - bitsadmin
+    - certutil
+    - cmd
+    - cscript
+    - curl
+    - finger
+    - mshta
+    - powershell
+    - pwsh
+    - regsvr32
+    - rundll32
+    - schtasks
+    - wget
+    - wscript
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4fee3d51-8069-4a4c-a0f7-924fcaff2c70
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_filefix_typedpath_commands.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-15b75071-74cc-47e0-b4c6-b43744a62a2b
+name: Suspicious Process Start Locations
+description: Detects suspicious process run from unusual locations
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://car.mitre.org/wiki/CAR-2013-05-002
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|contains:
+    - :\RECYCLER\
+    - :\SystemVolumeInformation\
+  - Image|startswith:
+    - C:\Windows\Tasks\
+    - C:\Windows\debug\
+    - C:\Windows\fonts\
+    - C:\Windows\help\
+    - C:\Windows\drivers\
+    - C:\Windows\addins\
+    - C:\Windows\cursors\
+    - C:\Windows\system32\tasks\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 15b75071-74cc-47e0-b4c6-b43744a62a2b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_run_locations.yml
+falsepositives:
+- False positives depend on scripts and administrative tools used in the monitored
+  environment
+notes:
+  quarantine_reason: 'upstream status: test'

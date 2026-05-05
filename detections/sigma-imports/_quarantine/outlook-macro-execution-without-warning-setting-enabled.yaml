@@ -1,0 +1,37 @@
+id: sigmahq-sigma-e3b50fa5-3c3f-444e-937b-0a99d33731cd
+name: Outlook Macro Execution Without Warning Setting Enabled
+description: Detects the modification of Outlook security setting to allow unprompted
+  execution of macros.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1137
+  - T1008
+  - T1546
+  categories:
+  - endpoint
+references:
+- https://www.mdsec.co.uk/2020/11/a-fresh-outlook-on-mail-based-persistence/
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=53
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Outlook\Security\Level
+    Details|contains: '0x00000001'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e3b50fa5-3c3f-444e-937b-0a99d33731cd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_outlook_enable_macro_execution.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

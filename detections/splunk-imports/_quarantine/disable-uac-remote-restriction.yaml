@@ -1,0 +1,43 @@
+id: splunk-security-content-9928b732-210e-11ec-b65e-acde48001122
+name: Disable UAC Remote Restriction
+description: The following analytic detects the modification of the registry to disable
+  UAC remote restriction by setting the "LocalAccountTokenFilterPolicy" value to "0x00000001".
+  It leverages data from the Endpoint.Registry data model, specifically monitoring
+  changes to the registry path "*\\CurrentVersion\\Policies\\System*". This activity
+  is significant because disabling UAC remote restriction can allow an attacker to
+  bypass User Account Control (UAC) protections, potentially leading to privilege
+  escalation. If confirmed malicious, this could enable an attacker to execute unauthorized
+  actions with elevated privileges, compromising the security of the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/troubleshoot/windows-server/windows-security/user-account-control-and-remote-restriction
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path="*\\CurrentVersion\\Policies\\System*"
+    Registry.registry_value_name="LocalAccountTokenFilterPolicy" Registry.registry_value_data="0x00000001"  )
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)`| where isnotnull(registry_value_data)
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `disable_uac_remote_restriction_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 9928b732-210e-11ec-b65e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disable_uac_remote_restriction.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

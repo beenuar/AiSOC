@@ -1,0 +1,48 @@
+id: sigmahq-sigma-dcff7e85-d01f-4eb5-badd-84e2e6be8294
+name: Windows Default Domain GPO Modification via GPME
+description: 'Detects the use of the Group Policy Management Editor (GPME) to modify
+  Default Domain or Default Domain Controllers Group Policy Objects (GPOs).
+
+  Adversaries may leverage GPME to make stealthy changes in these default GPOs to
+  deploy malicious GPOs configurations across the domain without raising suspicion.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/25/i/unmasking-the-gentlemen-ransomware.html
+- https://adsecurity.org/?p=3377
+- https://sdmsoftware.com/general-stuff/launching-the-new-gp-management-editor-from-the-command-line/
+- https://www.pentestpartners.com/security-blog/living-off-the-land-gpo-style/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_mmc:
+  - Image|endswith: \mmc.exe
+  - OriginalFileName: MMC.exe
+  selection_gpme:
+    CommandLine|contains|all:
+    - gpme.msc
+    - 'gpobject:'
+  selection_default_gpos:
+    CommandLine|contains:
+    - 31B2F340-016D-11D2-945F-00C04FB984F9
+    - 6AC1786C-016F-11D2-945F-00C04FB984F9
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dcff7e85-d01f-4eb5-badd-84e2e6be8294
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mmc_default_domain_gpo_modification_via_gpme.yml
+falsepositives:
+- Legitimate use of GPME to modify GPOs
+notes:
+  quarantine_reason: 'upstream status: experimental'

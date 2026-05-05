@@ -1,0 +1,56 @@
+id: sigmahq-sigma-69bd9b97-2be2-41b6-9816-fb08757a4d1a
+name: Potentially Suspicious Execution From Parent Process In Public Folder
+description: Detects a potentially suspicious execution of a parent process located
+  in the "\Users\Public" folder executing a child process containing references to
+  shell or scripting binaries and commandlines.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/blackbyte-ransomware/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|contains: :\Users\Public\
+  selection_child:
+  - Image|endswith:
+    - \bitsadmin.exe
+    - \certutil.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  - CommandLine|contains:
+    - bitsadmin
+    - certutil
+    - cscript
+    - mshta
+    - powershell
+    - regsvr32
+    - rundll32
+    - wscript
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 69bd9b97-2be2-41b6-9816-fb08757a4d1a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_execution_from_public_folder_as_parent.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-16a71777-0b2e-4db7-9888-9d59cb75200b
+name: Github Delete Action Invoked
+description: Detects delete action in the Github audit logs for codespaces, environment,
+  project and repo.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1213.003
+  categories:
+  - endpoint
+references:
+- https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/reviewing-the-audit-log-for-your-organization#audit-log-actions
+- https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/security-log-events#codespaces
+logsource:
+  product: github
+  service: audit
+  definition: 'Requirements: The audit log streaming feature must be enabled to be
+    able to receive such logs. You can enable following the documentation here: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-audit-log-streaming'
+detection:
+  selection:
+    action:
+    - codespaces.destroy
+    - environment.delete
+    - project.delete
+    - repo.destroy
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 16a71777-0b2e-4db7-9888-9d59cb75200b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/github/audit/github_delete_action_invoked.yml
+falsepositives:
+- Validate the deletion activity is permitted. The "actor" field need to be validated.
+notes:
+  quarantine_reason: 'upstream status: test'

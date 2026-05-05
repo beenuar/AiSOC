@@ -1,0 +1,48 @@
+id: sigmahq-sigma-13c02350-4177-4e45-ac17-cf7ca628ff5e
+name: Files With System DLL Name In Unsuspected Locations
+description: 'Detects the creation of a file with the ".dll" extension that has the
+  name of a System DLL in uncommon or unsuspected locations. (Outisde of "System32",
+  "SysWOW64", etc.).
+
+  It is highly recommended to perform an initial baseline before using this rule in
+  production.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.005
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith:
+    - \secur32.dll
+    - \tdh.dll
+  filter_main_generic:
+    TargetFilename|contains:
+    - C:\$WINDOWS.~BT\
+    - C:\$WinREAgent\
+    - C:\Windows\SoftwareDistribution\
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\WinSxS\
+    - C:\Windows\uus\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 13c02350-4177-4e45-ac17-cf7ca628ff5e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_creation_system_dll_files.yml
+falsepositives:
+- Third party software might bundle specific versions of system DLLs.
+notes:
+  quarantine_reason: 'upstream status: test'

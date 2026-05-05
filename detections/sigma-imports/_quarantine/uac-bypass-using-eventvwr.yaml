@@ -1,0 +1,39 @@
+id: sigmahq-sigma-63e4f530-65dc-49cc-8f80-ccfa95c69d43
+name: UAC Bypass Using EventVwr
+description: Detects the pattern of a UAC bypass using Windows Event Viewer
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/orange_8361/status/1518970259868626944?s=20&t=RFXqZjtA7tWM3HxqEH78Aw
+- https://twitter.com/splinter_code/status/1519075134296006662?s=12&t=DLUXH86WtcmG_AZ5gY3C6g
+- https://lolbas-project.github.io/lolbas/Binaries/Eventvwr/#execute
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith:
+    - \Microsoft\Event Viewer\RecentViews
+    - \Microsoft\EventV~1\RecentViews
+  filter:
+    Image|startswith:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 63e4f530-65dc-49cc-8f80-ccfa95c69d43
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_eventvwr.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

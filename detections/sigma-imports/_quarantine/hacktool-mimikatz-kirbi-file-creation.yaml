@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9e099d99-44c2-42b6-a6d8-54c3545cab29
+name: HackTool - Mimikatz Kirbi File Creation
+description: Detects the creation of files created by mimikatz such as ".kirbi", "mimilsa.log",
+  etc.
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1558
+  categories:
+  - endpoint
+references:
+- https://cobalt.io/blog/kerberoast-attack-techniques
+- https://pentestlab.blog/2019/10/21/persistence-security-support-provider/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith:
+    - .kirbi
+    - mimilsa.log
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e099d99-44c2-42b6-a6d8-54c3545cab29
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_hktl_mimikatz_files.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

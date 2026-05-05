@@ -1,0 +1,41 @@
+id: splunk-security-content-d2d4af6a-6c2b-4d79-80c5-fc2cf12a2f68
+name: Windows Drivers Loaded by Signature
+description: The following analytic identifies all drivers being loaded on Windows
+  systems using Sysmon EventCode 6 (Driver Load). It leverages fields such as driver
+  path, signature status, and hash to detect potentially suspicious drivers. This
+  activity is significant for a SOC as malicious drivers can be used to gain kernel-level
+  access, bypass security controls, or persist in the environment. If confirmed malicious,
+  this activity could allow an attacker to execute arbitrary code with high privileges,
+  leading to severe system compromise and potential data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1014
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/tracking-driver-inventory-to-expose-rootkits/
+- https://attack.mitre.org/techniques/T1014/
+- https://www.fuzzysecurity.com/tutorials/28.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=6\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY ImageLoaded dest dvc\n       process_hash process_path signature\n\
+    \       signature_id user_id vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_drivers_loaded_by_signature_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d2d4af6a-6c2b-4d79-80c5-fc2cf12a2f68
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_drivers_loaded_by_signature.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

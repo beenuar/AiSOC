@@ -1,0 +1,40 @@
+id: mitre-car-car-2021-05-002
+name: Batch File Write to System32
+description: While batch files are not inherently malicious, it is uncommon to see
+  them created after OS installation, especially in the Windows directory. This analytic
+  looks for the suspicious activity of a batch file being created within the C:\Windows\System32
+  directory tree. There will be only occasional false positives due to administrator
+  actions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode – Batch file created in the Windows system32 directory tree
+    type: Pseudocode
+    code: "files = search File:create\nbatch_files = filter files where (\n  extension\
+      \ =\".bat\" AND file_path = \"C:\\Windows\\system32*\" )\noutput batch_files\n"
+  - name: Splunk code
+    type: Splunk
+    code: '| tstats count min(_time) as firstTime max(_time) as lastTime values(Filesystem.dest)
+      as dest values(Filesystem.file_name) as file_name values(Filesystem.user) as
+      user from datamodel=Endpoint.Filesystem by Filesystem.file_path   | rex field=file_name
+      "(?<file_extension>\.[^\.]+)$" | search file_path=*system32* AND file_extension=.bat'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-05-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-05-002.yaml
+notes:
+  car_status: needs_implementation

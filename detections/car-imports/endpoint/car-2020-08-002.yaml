@@ -1,0 +1,74 @@
+id: mitre-car-car-2020-08-002
+name: NTFS Alternate Data Stream Execution - LOLBAS
+description: NTFS Alternate Data Streams (ADSs) may be used by adversaries as a means
+  of evading security tools by storing malicious data or binaries in file attribute
+  metadata. ADSs are also powerful because their contents can be directly executed
+  by various Windows tools; accordingly, this analytic looks at common ways of executing
+  ADSs using Living off the Land Binaries and Scripts (LOLBAS).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564
+  categories:
+  - endpoint
+references:
+- The [LOLBAS project](https://lolbas-project.github.io/) is an amazing resource and
+  was used as the basis for many of these analytics.
+- Oddvar Moe has created an excellent NTFS ADS execution reference [here on github](https://gist.github.com/api0cradle/cdd2d0d0ec9abb686f0e89306e277b8f).
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: NTFS ADS - pseudocode
+    type: pseudocode
+    code: 'processes = search Process:Create
+
+      ads_processes = filter processes where (
+
+      exe == "control.exe OR appvlp.exe OR cmd.exe OR ftp.exe OR bash.exe OR mavinject.exe
+      OR bitsadmin.exe" and command_line.matches("__some_regex__")
+
+      )
+
+      output ads_processes'
+  - name: NTFS ADS - control
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image=C:\\Windows\System32\\control.exe
+      OR Image=C:\\Windows\SysWOW64\\control.exe) | regex CommandLine="(\w+(\.\w+)?):(\w+\.dll)"
+  - name: NTFS ADS - appvlp
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image="C:\\Program Files\\Microsoft
+      Office\\root\\Client\\AppVLP.exe" OR Image="C:\\Program Files (x86)\\Microsoft
+      Office\\root\\Client\\AppVLP.exe") | regex CommandLine="(\w+(\.\w+)?):(\w+(\.\w+)?)"
+  - name: NTFS ADS - cmd
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image=C:\\Windows\\System32\\cmd.exe
+      OR Image=C:\\Windows\\SysWOW64\\cmd.exe) | regex CommandLine="-\s+<.*\b(\w+(\.\w+)?):(\w+(\.\w+)?)"
+  - name: NTFS ADS - ftp
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image=C:\\Windows\\System32\\ftp.exe
+      OR Image=C:\\Windows\\SysWOW64\\ftp.exe) | regex CommandLine="-s:(\w+(\.\w+)?):(\w+(\.\w+)?)"
+  - name: NTFS ADS - bash
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image=C:\\Windows\\System32\\bash.exe
+      OR C:\\Windows\\SysWOW64\\bash.exe) | regex CommandLine="-c.*(\w+(\.\w+)?):(\w+(\.\w+)?)"
+  - name: NTFS ADS - mavinject
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image=C:\\Windows\\System32\\mavinject.exe
+      OR C:\\Windows\\SysWOW64\\mavinject.exe) | regex CommandLine="\d+\s+\/INJECTRUNNING.*\b(\w+(\.\w+)?):(\w+(\.\w+)?)"
+  - name: NTFS ADS - bitsadmin
+    type: splunk
+    code: index=__sysmon_index__ EventCode=1 (Image=C:\\Windows\\System32\\bitsadmin.exe
+      OR C:\\Windows\\SysWOW64\\bitsadmin.exe) | regex CommandLine="\/create.*\/addfile.*\/SetNotifyCmdLine.*\b(\w+\.\w+):(\w+(\.\w+)?)"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-08-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-08-002.yaml
+notes:
+  car_status: needs_implementation

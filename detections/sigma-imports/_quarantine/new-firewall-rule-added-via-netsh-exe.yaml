@@ -1,0 +1,44 @@
+id: sigmahq-sigma-cd5cfd80-aa5f-44c0-9c20-108c4ae12e3c
+name: New Firewall Rule Added Via Netsh.EXE
+description: Detects the addition of a new rule to the Windows firewall via netsh
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20190508165435/https://www.operationblockbuster.com/wp-content/uploads/2016/02/Operation-Blockbuster-RAT-and-Staging-Report.pdf
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \netsh.exe
+  - OriginalFileName: netsh.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' firewall '
+    - ' add '
+  filter_optional_dropbox:
+    CommandLine|contains:
+    - advfirewall firewall add rule name=Dropbox dir=in action=allow "program=?:\Program
+      Files (x86)\Dropbox\Client\Dropbox.exe" enable=yes profile=Any
+    - advfirewall firewall add rule name=Dropbox dir=in action=allow "program=?:\Program
+      Files\Dropbox\Client\Dropbox.exe" enable=yes profile=Any
+  condition: all of selection_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cd5cfd80-aa5f-44c0-9c20-108c4ae12e3c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_netsh_fw_add_rule.yml
+falsepositives:
+- Legitimate administration activity
+- Software installations
+notes:
+  quarantine_reason: 'upstream status: test'

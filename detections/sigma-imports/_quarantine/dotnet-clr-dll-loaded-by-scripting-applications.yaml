@@ -1,0 +1,47 @@
+id: sigmahq-sigma-4508a70e-97ef-4300-b62b-ff27992990ea
+name: DotNet CLR DLL Loaded By Scripting Applications
+description: Detects .NET CLR DLLs being loaded by scripting applications such as
+  wscript or cscript. This could be an indication of potential suspicious execution.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://github.com/tyranid/DotNetToJScript
+- https://thewover.github.io/Introducing-Donut/
+- https://web.archive.org/web/20230329154538/https://blog.menasec.net/2019/07/interesting-difr-traces-of-net-clr.html
+- https://web.archive.org/web/20221026202428/https://gist.github.com/code-scrap/d7f152ffcdb3e0b02f7f394f5187f008
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \cmstp.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \msxsl.exe
+    - \regsvr32.exe
+    - \wmic.exe
+    - \wscript.exe
+    ImageLoaded|endswith:
+    - \clr.dll
+    - \mscoree.dll
+    - \mscorlib.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4508a70e-97ef-4300-b62b-ff27992990ea
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_susp_script_dotnet_clr_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

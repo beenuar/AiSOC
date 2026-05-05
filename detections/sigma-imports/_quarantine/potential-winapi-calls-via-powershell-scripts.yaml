@@ -1,0 +1,54 @@
+id: sigmahq-sigma-03d83090-8cba-44a0-b02f-0b756a050306
+name: Potential WinAPI Calls Via PowerShell Scripts
+description: Detects use of WinAPI functions in PowerShell scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1106
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_injection:
+    ScriptBlockText|contains|all:
+    - VirtualAlloc
+    - OpenProcess
+    - WriteProcessMemory
+    - CreateRemoteThread
+  selection_token_steal:
+    ScriptBlockText|contains|all:
+    - OpenProcessToken
+    - LookupPrivilegeValue
+    - AdjustTokenPrivileges
+  selection_duplicate_token:
+    ScriptBlockText|contains|all:
+    - OpenProcessToken
+    - DuplicateTokenEx
+    - CloseHandle
+  selection_process_write_read:
+    ScriptBlockText|contains|all:
+    - WriteProcessMemory
+    - VirtualAlloc
+    - ReadProcessMemory
+    - VirtualFree
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 03d83090-8cba-44a0-b02f-0b756a050306
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_win_api_susp_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

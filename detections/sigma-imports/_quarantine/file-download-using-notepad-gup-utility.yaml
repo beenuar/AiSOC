@@ -1,0 +1,40 @@
+id: sigmahq-sigma-44143844-0631-49ab-97a0-96387d6b2d7c
+name: File Download Using Notepad++ GUP Utility
+description: Detects execution of the Notepad++ updater (gup) from a process other
+  than Notepad++ to download files.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://twitter.com/nas_bench/status/1535322182863179776
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \GUP.exe
+  - OriginalFileName: gup.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' -unzipTo '
+    - http
+  filter:
+    ParentImage|endswith: \notepad++.exe
+  condition: all of selection* and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 44143844-0631-49ab-97a0-96387d6b2d7c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_gup_download.yml
+falsepositives:
+- Other parent processes other than notepad++ using GUP that are not currently identified
+notes:
+  quarantine_reason: 'upstream status: test'

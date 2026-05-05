@@ -1,0 +1,32 @@
+id: sigmahq-sigma-3d0ed417-3d94-4963-a562-4a92c940656a
+name: Creation of a Diagcab
+description: Detects the creation of diagcab file, which could be caused by some legitimate
+  installer or is a sign of exploitation (review the filename and its location)
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://threadreaderapp.com/thread/1533879688141086720.html
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: .diagcab
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3d0ed417-3d94-4963-a562-4a92c940656a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_diagcab.yml
+falsepositives:
+- Legitimate microsoft diagcab
+notes:
+  quarantine_reason: 'upstream status: test'

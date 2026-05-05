@@ -1,0 +1,46 @@
+id: sigmahq-sigma-f0767f15-0fb3-44b9-851e-e8d9a6d0005d
+name: Scheduled Task Executed Uncommon LOLBIN
+description: Detects the execution of Scheduled Tasks where the program being run
+  is located in a suspicious location or where it is an unusual program to be run
+  from a Scheduled Task
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: taskscheduler
+  definition: 'Requirements: The "Microsoft-Windows-TaskScheduler/Operational" is
+    disabled by default and needs to be enabled in order for this detection to trigger'
+detection:
+  selection:
+    EventID: 129
+    Path|endswith:
+    - \calc.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \mspaint.exe
+    - \notepad.exe
+    - \regsvr32.exe
+    - \wscript.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f0767f15-0fb3-44b9-851e-e8d9a6d0005d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/taskscheduler/win_taskscheduler_lolbin_execution_via_task_scheduler.yml
+falsepositives:
+- False positives may occur with some of the selected binaries if you have tasks using
+  them (which could be very common in your environment). Exclude all the specific
+  trusted tasks before using this rule
+notes:
+  quarantine_reason: 'upstream status: test'

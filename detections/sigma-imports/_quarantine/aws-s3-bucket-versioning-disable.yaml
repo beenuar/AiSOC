@@ -1,0 +1,35 @@
+id: sigmahq-sigma-a136ac98-b2bc-4189-a14d-f0d0388e57a7
+name: AWS S3 Bucket Versioning Disable
+description: Detects when S3 bucket versioning is disabled. Threat actors use this
+  technique during AWS ransomware incidents prior to deleting S3 objects.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - cloud
+references:
+- https://invictus-ir.medium.com/ransomware-in-the-cloud-7f14805bbe82
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: s3.amazonaws.com
+    eventName: PutBucketVersioning
+    requestParameters|contains: Suspended
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a136ac98-b2bc-4189-a14d-f0d0388e57a7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_disable_bucket_versioning.yml
+falsepositives:
+- AWS administrator legitimately disabling bucket versioning
+notes:
+  quarantine_reason: 'upstream status: test'

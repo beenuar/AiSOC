@@ -1,0 +1,50 @@
+id: sigmahq-sigma-851fd622-b675-4d26-b803-14bc7baa517a
+name: HackTool - WinPwn Execution - ScriptBlock
+description: Detects scriptblock text keywords indicative of potential usge of the
+  tool WinPwn. A tool for Windows and Active Directory reconnaissance and exploitation.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1046
+  - T1082
+  - T1106
+  - T1518
+  - T1548.002
+  - T1552.001
+  - T1555
+  - T1555.003
+  categories:
+  - endpoint
+references:
+- https://github.com/S3cur3Th1sSh1t/WinPwn
+- https://www.publicnow.com/view/EB87DB49C654D9B63995FAD4C9DE3D3CC4F6C3ED?1671634841
+- https://reconshell.com/winpwn-tool-for-internal-windows-pentesting-and-ad-security/
+- https://github.com/redcanaryco/atomic-red-team/blob/4d6c4e8e23d465af7a2388620cfe3f8c76e16cf0/atomics/T1082/T1082.md
+- https://grep.app/search?q=winpwn&filter[repo][0]=redcanaryco/atomic-red-team
+logsource:
+  category: ps_script
+  product: windows
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Offline_Winpwn
+    - 'WinPwn '
+    - WinPwn.exe
+    - WinPwn.ps1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 851fd622-b675-4d26-b803-14bc7baa517a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_hktl_winpwn.yml
+falsepositives:
+- As the script block is a blob of text. False positive may occur with scripts that
+  contain the keyword as a reference or simply use it for detection.
+notes:
+  quarantine_reason: 'upstream status: test'

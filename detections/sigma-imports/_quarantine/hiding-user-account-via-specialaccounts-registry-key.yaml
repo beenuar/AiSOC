@@ -1,0 +1,36 @@
+id: sigmahq-sigma-f8aebc67-a56d-4ec9-9fbe-7b0e8b7b4efd
+name: Hiding User Account Via SpecialAccounts Registry Key
+description: Detects modifications to the registry key "HKLM\Software\Microsoft\Windows
+  NT\CurrentVersion\Winlogon\SpecialAccounts\Userlist" where the value is set to "0"
+  in order to hide user account from being listed on the logon screen.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564.002
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/07/11/select-xmrig-from-sqlserver/
+- https://github.com/redcanaryco/atomic-red-team/blob/40b77d63808dd4f4eafb83949805636735a1fd15/atomics/T1564.002/T1564.002.md#atomic-test-3---create-hidden-user-in-registry
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SpecialAccounts\UserList
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f8aebc67-a56d-4ec9-9fbe-7b0e8b7b4efd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_special_accounts.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

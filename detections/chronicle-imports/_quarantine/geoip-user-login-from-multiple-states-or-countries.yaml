@@ -1,0 +1,62 @@
+id: chronicle-detection-rules-geoip-user-login-from-multiple-states-or-countries
+name: geoip_user_login_from_multiple_states_or_countries
+description: geoip_user_login_from_multiple_states_or_countries
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule geoip_user_login_from_multiple_states_or_countries {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detect multiple user logins\
+    \ from multiple states or countries using Chronicle GeoIP enrichment.\"\n    rule_id\
+    \ = \"mr_3fa832e4-1ac0-42cd-9f0a-357d6b8fb12f\"\n    rule_name = \"GeoIP User\
+    \ Login From Multiple States Or Countries\"\n    type = \"alert\"\n    data_source\
+    \ = \"microsoft ad, azure ad, okta, aws cloudtrail, google scc\"\n    tags = \"\
+    geoip enrichment\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \    $login.metadata.event_type = \"USER_LOGIN\"\n    $login.security_result.action\
+    \ = \"ALLOW\"\n    $login.principal.ip_geo_artifact.location.country_or_region\
+    \ != \"\"\n\n    $login.principal.ip_geo_artifact.location.country_or_region =\
+    \ $country\n    $login.principal.ip_geo_artifact.location.state  = $state\n  \
+    \  $login.metadata.product_name = $product\n    $login.target.user.userid = $user\n\
+    \n  match:\n    $user, $product over 1h\n\n  outcome:\n    $risk_score = 35\n\
+    \    $event_count = count_distinct($login.metadata.id)\n    $state_login_threshold\
+    \ = 2\n    $dc_state = count_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $array_state = array_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $dc_country_or_region = count_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $array_country_or_region = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $array_asn = array_distinct($login.principal.ip_geo_artifact.network.asn)\n\
+    \    $array_carrier_name = array_distinct($login.principal.ip_geo_artifact.network.carrier_name)\n\
+    \    //added to populate alert graph with additional context\n    $principal_hostname\
+    \ = array_distinct($login.principal.hostname)\n    $principal_ip = array_distinct($login.principal.ip)\n\
+    \    $target_hostname = array_distinct($login.target.hostname)\n    $target_ip\
+    \ = array_distinct($login.target.ip)\n    $principal_user_userid = array_distinct($login.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($login.target.user.userid)\n    $principal_resource_name\
+    \ = array_distinct($login.principal.resource.name)\n    $target_resource_name\
+    \ = array_distinct($login.target.resource.name)\n    $target_url = array_distinct($login.target.url)\n\
+    \n  condition:\n    #country >= 1 and #state >= 2\n}"
+  chronicle_rule_name: geoip_user_login_from_multiple_states_or_countries
+provenance:
+  source: chronicle/detection-rules
+  source_id: geoip_user_login_from_multiple_states_or_countries
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/authentication/geoip_user_login_from_multiple_states_or_countries.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

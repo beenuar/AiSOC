@@ -1,0 +1,38 @@
+id: sigmahq-sigma-c1d867fe-8d95-4487-aab4-e53f2d339f90
+name: Renamed Sysinternals Sdelete Execution
+description: Detects the use of a renamed SysInternals Sdelete, which is something
+  an administrator shouldn't do (the renaming)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/sdelete
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1485/T1485.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    OriginalFileName: sdelete.exe
+  filter:
+    Image|endswith:
+    - \sdelete.exe
+    - \sdelete64.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c1d867fe-8d95-4487-aab4-e53f2d339f90
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_sysinternals_sdelete.yml
+falsepositives:
+- System administrator usage
+notes:
+  quarantine_reason: 'upstream status: test'

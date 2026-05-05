@@ -1,0 +1,41 @@
+id: splunk-security-content-4c2d198b-da58-48d7-ba27-9368732d0054
+name: Windows Multi hop Proxy TOR Website Query
+description: The following analytic identifies DNS queries to known TOR proxy websites,
+  such as "*.torproject.org" and "www.theonionrouter.com". It leverages Sysmon EventCode
+  22 to detect these queries by monitoring DNS query events from endpoints. This activity
+  is significant because adversaries often use TOR proxies to disguise the source
+  of their malicious traffic, making it harder to trace their actions. If confirmed
+  malicious, this behavior could indicate an attempt to obfuscate network traffic,
+  potentially allowing attackers to exfiltrate data or communicate with command and
+  control servers undetected.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.003
+  categories:
+  - network
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.agent_tesla
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=22 QueryName IN (\"*.torproject.org\", \"www.theonionrouter.com\"\
+    )\n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY answer\
+    \ answer_count dvc\n       process_exec process_guid process_name\n       query\
+    \ query_count reply_code_id\n       signature signature_id src\n       user_id\
+    \ vendor_product QueryName\n       QueryResults QueryStatus\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_multi_hop_proxy_tor_website_query_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4c2d198b-da58-48d7-ba27-9368732d0054
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/windows_multi_hop_proxy_tor_website_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

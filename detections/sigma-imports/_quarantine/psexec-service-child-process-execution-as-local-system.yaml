@@ -1,0 +1,38 @@
+id: sigmahq-sigma-7c0dcd3d-acf8-4f71-9570-f448b0034f94
+name: PsExec Service Child Process Execution as LOCAL SYSTEM
+description: Detects suspicious launch of the PSEXESVC service on this system and
+  a sub process run as LOCAL_SYSTEM (-s), which means that someone remotely started
+  a command on this system running it with highest privileges and not only the privileges
+  of the login user account (e.g. the administrator account)
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/psexec
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage: C:\Windows\PSEXESVC.exe
+    User|contains:
+    - AUTHORI
+    - AUTORI
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7c0dcd3d-acf8-4f71-9570-f448b0034f94
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_psexesvc_as_system.yml
+falsepositives:
+- Users that debug Microsoft Intune issues using the commands mentioned in the official
+  documentation; see https://learn.microsoft.com/en-us/mem/intune/apps/intune-management-extension
+notes:
+  quarantine_reason: 'upstream status: test'

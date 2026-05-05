@@ -1,0 +1,34 @@
+id: sigmahq-sigma-e2b5163d-7deb-4566-9af3-40afea6858c3
+name: Certificate Private Key Acquired
+description: Detects when an application acquires a certificate private key
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/breaking-the-chain-defending-against-certificate-services-abuse.html
+logsource:
+  product: windows
+  service: capi2
+  definition: 'Requirements: The CAPI2 Operational log needs to be enabled'
+detection:
+  selection:
+    EventID: 70
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e2b5163d-7deb-4566-9af3-40afea6858c3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/capi2/win_capi2_acquire_certificate_private_key.yml
+falsepositives:
+- Legitimate application requesting certificate exports will trigger this. Apply additional
+  filters as needed
+notes:
+  quarantine_reason: 'upstream status: test'

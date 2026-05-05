@@ -1,0 +1,42 @@
+id: sigmahq-sigma-db1c21e4-cd66-4b4e-85ca-590f0780529c
+name: Windows Recovery Environment Disabled Via Reagentc
+description: 'Detects attempts to disable windows recovery environment using Reagentc.
+
+  ReAgentc.exe is a command-line tool in Windows used to manage the Windows Recovery
+  Environment (WinRE).
+
+  It allows users to enable, disable, and configure WinRE, which is used for troubleshooting
+  and repairing common boot issues.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/security-labs/maas-appeal-an-infostealer-rises-from-the-ashes
+- https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/reagentc-command-line-options?view=windows-11
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \reagentc.exe
+  - OriginalFileName: reagentc.exe
+  selection_cli:
+    CommandLine|contains|windash: /disable
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db1c21e4-cd66-4b4e-85ca-590f0780529c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reagentc_disable_windows_recovery_environment.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: experimental'

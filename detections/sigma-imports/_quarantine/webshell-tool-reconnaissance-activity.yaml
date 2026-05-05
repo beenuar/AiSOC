@@ -1,0 +1,63 @@
+id: sigmahq-sigma-f64e5c19-879c-4bae-b471-6d84c8339677
+name: Webshell Tool Reconnaissance Activity
+description: Detects processes spawned from web servers (PHP, Tomcat, IIS, etc.) that
+  perform reconnaissance looking for the existence of popular scripting tools (perl,
+  python, wget) on the system via the help commands
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://ragged-lab.blogspot.com/2020/07/webshells-automating-reconnaissance.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_webserver_image:
+    ParentImage|endswith:
+    - \caddy.exe
+    - \httpd.exe
+    - \nginx.exe
+    - \php-cgi.exe
+    - \w3wp.exe
+    - \ws_tomcatservice.exe
+  selection_webserver_characteristics_tomcat1:
+    ParentImage|endswith:
+    - \java.exe
+    - \javaw.exe
+    ParentImage|contains:
+    - -tomcat-
+    - \tomcat
+  selection_webserver_characteristics_tomcat2:
+    ParentImage|endswith:
+    - \java.exe
+    - \javaw.exe
+    CommandLine|contains:
+    - CATALINA_HOME
+    - catalina.jar
+  selection_recon:
+    CommandLine|contains:
+    - perl --help
+    - perl -h
+    - python --help
+    - python -h
+    - python3 --help
+    - python3 -h
+    - wget --help
+  condition: 1 of selection_webserver_* and selection_recon
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f64e5c19-879c-4bae-b471-6d84c8339677
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_webshell_tool_recon.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-f7b5f842-a6af-4da5-9e95-e32478f3cd2f
+name: MsiExec Web Install
+description: Detects suspicious msiexec process starts with web addresses as parameter
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.007
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://blog.trendmicro.com/trendlabs-security-intelligence/attack-using-windows-installer-msiexec-exe-leads-lokibot/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - ' msiexec'
+    - ://
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f7b5f842-a6af-4da5-9e95-e32478f3cd2f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_msiexec_web_install.yml
+falsepositives:
+- False positives depend on scripts and administrative tools used in the monitored
+  environment
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,46 @@
+id: splunk-security-content-50eaabf8-5180-4e86-bfb2-011472c359fc
+name: O365 Tenant Wide Admin Consent Granted
+description: The following analytic identifies instances where admin consent is granted
+  to an application within an Azure AD and Office 365 tenant. It leverages O365 audit
+  logs, specifically events related to the admin consent action within the AzureActiveDirectory
+  workload. This activity is significant because admin consent allows applications
+  to access data across the entire tenant, potentially exposing vast amounts of organizational
+  data. If confirmed malicious, an attacker could gain extensive and persistent access
+  to organizational data, leading to data exfiltration, espionage, further malicious
+  activities, and potential compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/003/
+- https://www.mandiant.com/resources/blog/remediation-and-hardening-strategies-for-microsoft-365-to-defend-against-unc2452
+- https://learn.microsoft.com/en-us/security/operations/incident-response-playbook-app-consent
+- https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/grant-admin-consent?pivots=portal
+- https://microsoft.github.io/Azure-Threat-Research-Matrix/Persistence/AZT501/AZT501-2/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation="Consent to application." | eval
+    new_field=mvindex(''ModifiedProperties{}.NewValue'', 4) | rex field=new_field
+    "ConsentType: (?<ConsentType>[^\,]+)" | rex field=new_field "Scope: (?<Scope>[^\,]+)"
+    | search ConsentType = "AllPrincipals" | fillnull | stats count min(_time) as
+    firstTime max(_time) as lastTime by user, object, ObjectId, ConsentType, Scope,
+    dest, vendor_account, vendor_product, signature, src | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_tenant_wide_admin_consent_granted_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 50eaabf8-5180-4e86-bfb2-011472c359fc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_tenant_wide_admin_consent_granted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

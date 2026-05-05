@@ -1,0 +1,108 @@
+id: chronicle-detection-rules-graphrunner-suspicious-user-agent-strings
+name: graphrunner_suspicious_user_agent_strings
+description: graphrunner_suspicious_user_agent_strings
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule graphrunner_suspicious_user_agent_strings {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"GraphRunner contains a function that\
+    \ forges UA strings. The UA strings below are found in that function. Can be used\
+    \ for other UA strings if desired\"\n    rule_id = \"mr_61809764-4da4-48dc-aa14-aa28c00be3fa\"\
+    \n    rule_name = \"Suspicious User Agent Strings associated withGraphRunner\"\
+    \n    //Currently used by default in the following functions\n    //Get-GraphTokens,\
+    \ Invoke-RefreshGraphTokens, Invoke-RefreshToSharePointToken, Invoke-ImmersiveFileReader,\
+    \ Invoke-BruteClientIDAccess\n    assumption = \"Function can be modified to change\
+    \ strings to more recent browser versions, upkeep and monitoring is required.\"\
+    \n    reference = \"https://github.com/dafthack/GraphRunner/blob/main/GraphRunner.ps1\"\
+    \n    type = \"Hunt\"\n    data_source = \"Azure Activity, MS Graph Activity Logs\"\
+    \n    platform = \"Azure\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n\
+    \  events:\n    //Focused on O365/Entra ID Logs - Could expand further for other\
+    \ use cases if desired\n    (\n        $web.metadata.product_name = \"Azure Activity\"\
+    \ OR\n        $web.metadata.product_name = \"Office 365\" OR\n        $web.metadata.product_name\
+    \ = \"Azure AD\" OR\n        $web.metadata.product_name = \"Azure AD Directory\
+    \ Audit\" OR\n        $web.metadata.product_event_type = \"Microsoft Graph Activity\"\
+    \n    )\n    //Displayed here as strings separated by OR statement\n    //Each\
+    \ line is commented with device or browser or combination as specified in GraphRunner\n\
+    \    //Could also convert to regex to refine if desired or used with a reference\
+    \ list\n    (\n        $web.network.http.user_agent = \"Mozilla/5.0 (Macintosh;\
+    \ Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114\
+    \ Safari/537.36\" nocase or // Mac/Chrome | Chrome\n        $web.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:70.0) Gecko/20100101 Firefox/70.0\"\
+    \ nocase or // Mac/Firefox\n        $web.network.http.user_agent = \"Mozilla/5.0\
+    \ (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko)\
+    \ Chrome/91.0.4472.114 Safari/604.1 Edg/91.0.100.0\" nocase or // Mac/Edge\n \
+    \       $web.network.http.user_agent = \"Mozilla/5.0 (Macintosh; Intel Mac OS\
+    \ X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Safari/605.1.15\"\
+    \ nocase or // Mac/Safari | Mac | Safari\n        $web.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko\"\
+    \ nocase or // Windows/IE | IE\n        $web.network.http.user_agent = \"Mozilla/5.0\
+    \ (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114\
+    \ Safari/537.36\" nocase or // Windows/Chrome\n        $web.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Windows NT 10.0; WOW64; rv:70.0) Gecko/20100101 Firefox/70.0\"\
+    \ nocase or // Windows/Firefox | Firefox\n        $web.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like\
+    \ Gecko) Chrome/70.0.3538.102 Safari/537.36 Edge/18.19042\" nocase or // Windows/Edge\
+    \ | Windows\n        $web.network.http.user_agent = \"Mozilla/5.0 (Linux; U; Android\
+    \ 4.0.2; en-us; Galaxy Nexus Build/ICL53F) AppleWebKit/534.30 (KHTML, like Gecko)\
+    \ Version/4.0 Mobile Safari/534.30\" nocase or // AndroidMobile/Android | AndroidMobile\
+    \ | Android\n        $web.network.http.user_agent = \"Mozilla/5.0 (Linux; Android\
+    \ 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114\
+    \ Mobile Safari/537.36\" nocase or // AndroidMobile/Chrome\n        $web.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Android 4.4; Mobile; rv:70.0) Gecko/70.0 Firefox/70.0\" nocase\
+    \ or // AndroidMobile/Firefox\n        $web.network.http.user_agent = \"Mozilla/5.0\
+    \ (Linux; Android 8.1.0; Pixel Build/OPM4.171019.021.D1) AppleWebKit/537.36 (KHTML,\
+    \ like Gecko) Chrome/65.0.3325.109 Mobile Safari/537.36 EdgA/42.0.0.2057\" nocase\
+    \ or // AndroidMobile/Edge\n        $web.network.http.user_agent = \"Mozilla/5.0\
+    \ (iPhone; CPU iPhone OS 13_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like\
+    \ Gecko) CriOS/91.0.4472.114 Mobile/15E148 Safari/604.1\" nocase or // iPhone/Chrome\n\
+    \        $web.network.http.user_agent = \"Mozilla/5.0 (iPhone; CPU iPhone OS 8_3\
+    \ like Mac OS X) AppleWebKit/600.1.4 (KHTML, like Gecko) FxiOS/1.0 Mobile/12F69\
+    \ Safari/600.1.4\" nocase or // iPhone/Firefox\n        $web.network.http.user_agent\
+    \ = \"Mozilla/5.0 (iPhone; CPU iPhone OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15\
+    \ (KHTML, like Gecko) Version/12.1.1 EdgiOS/44.5.0.10 Mobile/15E148 Safari/604.1\"\
+    \ nocase or // iPhone/Edge\n        $web.network.http.user_agent = \"Mozilla/5.0\
+    \ (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like\
+    \ Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1\" nocase or // iPhone/Safari\
+    \ | iPhone\n        $web.network.http.user_agent = \"Mozilla/5.0 (Macintosh; Intel\
+    \ Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36\"\
+    \ nocase // Edge\n    )\n    //assumes that every event would have either a principal.ip\
+    \ or principal.user.userid, could be modfied include other common value to aggregate\
+    \ detections\n    $identifier = strings.coalesce($web.principal.ip, $web.principal.user.userid)\n\
+    \n  match:\n    $identifier over 5m\n\n  outcome:\n    $risk_score = 35\n    $event_count\
+    \ = count_distinct($web.metadata.id)\n    $principal_email = array_distinct($web.principal.user.email_addresses)\n\
+    \    $principal_ip = array_distinct($web.principal.ip)\n    $user_agent = array_distinct($web.network.http.user_agent)\n\
+    \    $location = array_distinct(strings.concat(\"City: \", $web.principal.location.city,\
+    \ \" State: \",\n        $web.principal.location.state, \" Country: \", $web.principal.location.country_or_region))\n\
+    \    $session_id = array_distinct(if($web.metadata.product_event_type = \"Microsoft\
+    \ Graph Activity\", $web.network.session_id, \"\"))\n    $login_detail = array_distinct(if($web.metadata.event_type\
+    \ = \"USER_LOGIN\", $web.security_result.category_details, \"\"))\n    $target_url\
+    \ = array_distinct(if($web.metadata.product_event_type = \"Microsoft Graph Activity\"\
+    , $web.target.url, \"\"))\n\n  condition:\n    $web\n}"
+  chronicle_rule_name: graphrunner_suspicious_user_agent_strings
+provenance:
+  source: chronicle/detection-rules
+  source_id: graphrunner_suspicious_user_agent_strings
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/graph_activity/graphrunner_suspicious_user_agent_strings.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

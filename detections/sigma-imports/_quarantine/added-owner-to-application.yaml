@@ -1,0 +1,33 @@
+id: sigmahq-sigma-74298991-9fc4-460e-a92e-511aa60baec1
+name: Added Owner To Application
+description: Detects when a new owner is added to an application. This gives that
+  account privileges to make modifications and configuration changes to the application.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#new-owner
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Add owner to application
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 74298991-9fc4-460e-a92e-511aa60baec1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_owner_added.yml
+falsepositives:
+- When a new application owner is added by an administrator
+notes:
+  quarantine_reason: 'upstream status: test'

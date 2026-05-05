@@ -1,0 +1,50 @@
+id: splunk-security-content-0ae94cdd-021a-4a62-a96d-9cec90b61530
+name: M365 Copilot Failed Authentication Patterns
+description: Detects M365 Copilot users with failed authentication attempts, MFA failures,
+  or multi-location access patterns indicating potential credential attacks or account
+  compromise. The detection aggregates M365 Copilot Graph API authentication events
+  per user, calculating metrics like distinct cities/countries accessed, unique IP
+  addresses and browsers, failed login attempts (status containing "fail" or "error"),
+  and MFA failures (error code 50074). Users are flagged when they access Copilot
+  from multiple cities (cities_count > 1), experience any authentication failures
+  (failed_attempts > 0), or encounter MFA errors (mfa_failures > 0), which are indicators
+  of credential stuffing, brute force attacks, or compromised accounts attempting
+  to bypass multi-factor authentication.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`m365_copilot_graph_api` (appDisplayName=\"*Copilot*\" OR appDisplayName=\"\
+    M365ChatClient\" OR appDisplayName=\"OfficeAIAppChatCopilot\")\n  | eval user\
+    \ = userPrincipalName\n  | stats count as events, dc(location.city) as cities_count,\
+    \ values(location.city) as city_list, dc(location.countryOrRegion) as countries_count,\
+    \ values(location.countryOrRegion) as country_list, dc(ipAddress) as ip_count,\
+    \ values(ipAddress) as ip_addresses, sum(eval(if(match(status, \"(?i)fail\n  |\
+    \ error\"), 1, 0))) as failed_attempts, sum(eval(if(match(_raw, \"50074\"), 1,\
+    \ 0))) as mfa_failures, dc(deviceDetail.browser) as browser_count, values(deviceDetail.browser)\
+    \ as browsers_used, min(_time) as first_seen, max(_time) as last_seen by user\n\
+    \  | eval first_seen = strftime(first_seen, \"%Y-%m-%d %H:%M:%S\")\n  | eval last_seen\
+    \ = strftime(last_seen, \"%Y-%m-%d %H:%M:%S\")\n  | where cities_count > 1 OR\
+    \ failed_attempts > 0 OR mfa_failures > 0\n  | sort -mfa_failures, -failed_attempts,\
+    \ -countries_count\n  | `m365_copilot_failed_authentication_patterns_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0ae94cdd-021a-4a62-a96d-9cec90b61530
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_failed_authentication_patterns.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

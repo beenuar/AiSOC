@@ -1,0 +1,57 @@
+id: sigmahq-sigma-7638e5fe-600c-4289-a968-f49dd537ec7d
+name: HackTool - NetExec Execution
+description: 'Detects execution of the hacktool NetExec.
+
+  NetExec (formerly CrackMapExec) is a widely used post-exploitation tool designed
+  for Active Directory penetration testing and network enumeration
+
+  In enterprise environments, the use of NetExec is considered suspicious or potentially
+  malicious because it enables attackers to enumerate hosts, exploit network services,
+  and move laterally across systems.
+
+  Threat actors and red teams commonly use NetExec to identify vulnerable systems,
+  harvest credentials, and execute commands remotely.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1018
+  - T1021
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2025/12/17/cats-got-your-files-lynx-ransomware/
+- https://github.com/Pennyw0rth/NetExec
+- https://www.netexec.wiki/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \nxc.exe
+    CommandLine|contains:
+    - ' ftp '
+    - ' ldap '
+    - ' mssql '
+    - ' nfs '
+    - ' rdp '
+    - ' smb '
+    - ' ssh '
+    - ' vnc '
+    - ' winrm '
+    - ' wmi '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7638e5fe-600c-4289-a968-f49dd537ec7d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_netexec.yml
+falsepositives:
+- Legitimate use of NetExec by security professionals or system administrators for
+  network assessment and management.
+notes:
+  quarantine_reason: 'upstream status: experimental'

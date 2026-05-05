@@ -1,0 +1,50 @@
+id: sigmahq-sigma-78b3756a-7804-4ef7-8555-7b9024a02e2d
+name: AWS S3 Data Management Tampering
+description: Detects when a user tampers with S3 data management in Amazon Web Services.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1537
+  categories:
+  - cloud
+references:
+- https://github.com/elastic/detection-rules/pull/1145/files
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_Operations.html
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLogging.html
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketWebsite.html
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketEncryption.html
+- https://docs.aws.amazon.com/AmazonS3/latest/userguide/setting-repl-config-perm-overview.html
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_RestoreObject.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: s3.amazonaws.com
+    eventName:
+    - PutBucketLogging
+    - PutBucketWebsite
+    - PutEncryptionConfiguration
+    - PutLifecycleConfiguration
+    - PutReplicationConfiguration
+    - ReplicateObject
+    - RestoreObject
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 78b3756a-7804-4ef7-8555-7b9024a02e2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_s3_data_management_tampering.yml
+falsepositives:
+- A S3 configuration change may be done by a system or network administrator. Verify
+  whether the user identity, user agent, and/or hostname should be making changes
+  in your environment. S3 configuration change from unfamiliar users or hosts should
+  be investigated. If known behavior is causing false positives, it can be exempted
+  from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

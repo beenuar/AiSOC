@@ -1,0 +1,41 @@
+id: splunk-security-content-97a8dc5f-8a7c-4fed-9e3e-ec407fd0268a
+name: Windows Computer Account Created by Computer Account
+description: The following analytic identifies a computer account creating a new computer
+  account with a specific Service Principal Name (SPN) "RestrictedKrbHost". This detection
+  leverages Windows Security Event Logs, specifically EventCode 4741, to identify
+  such activities. This behavior is significant as it may indicate an attempt to establish
+  unauthorized Kerberos authentication channels, potentially leading to lateral movement
+  or privilege escalation. If confirmed malicious, this activity could allow an attacker
+  to impersonate services, access sensitive information, or maintain persistence within
+  the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-kile/445e4499-7e49-4f2a-8d82-aaf2d1ee3c47
+- https://github.com/Dec0ne/KrbRelayUp
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4741 user_type=computer SubjectDomainName!=\"\
+    NT AUTHORITY\" ServicePrincipalNames=*RestrictedKrbHost*\n  | stats  count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest, subject, action\n       ,src_user,\
+    \ user, user_type,\n       SubjectUserName,SubjectDomainName\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_computer_account_created_by_computer_account_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 97a8dc5f-8a7c-4fed-9e3e-ec407fd0268a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_computer_account_created_by_computer_account.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

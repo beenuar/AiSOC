@@ -1,0 +1,36 @@
+id: sigmahq-sigma-00bb5bd5-1379-4fcf-a965-a5b6f7478064
+name: Windows Firewall Settings Have Been Changed
+description: Detects activity when the settings of the Windows firewall have been
+  changed
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd364427(v=ws.10)
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID:
+    - 2002
+    - 2083
+    - 2003
+    - 2082
+    - 2008
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 00bb5bd5-1379-4fcf-a965-a5b6f7478064
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/firewall_as/win_firewall_as_setting_change.yml
+notes:
+  quarantine_reason: 'upstream status: test'

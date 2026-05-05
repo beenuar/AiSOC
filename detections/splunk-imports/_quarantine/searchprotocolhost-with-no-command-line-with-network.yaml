@@ -1,0 +1,55 @@
+id: splunk-security-content-b690df8c-a145-11eb-a38b-acde48001122
+name: SearchProtocolHost with no Command Line with Network
+description: The following analytic detects instances of searchprotocolhost.exe running
+  without command line arguments but with an active network connection. This behavior
+  is identified using Endpoint Detection and Response (EDR) telemetry, focusing on
+  process execution and network traffic data. It is significant because searchprotocolhost.exe
+  typically runs with specific command line arguments, and deviations from this norm
+  can indicate malicious activity, such as Cobalt Strike usage. If confirmed malicious,
+  this activity could allow attackers to establish network connections for command
+  and control, potentially leading to data exfiltration or further system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://github.com/mandiant/red_team_tool_countermeasures/blob/master/rules/PGF/supplemental/hxioc/SUSPICIOUS%20EXECUTION%20OF%20SEARCHPROTOCOLHOST%20(METHODOLOGY).ioc
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\
+    \ where\n(\n  Processes.process_name=searchprotocolhost.exe\n  OR\n  Processes.original_file_name=searchprotocolhost.exe\n\
+    )\nProcesses.process IN (\n  \"*searchprotocolhost\",\n  \"*searchprotocolhost.exe\"\
+    ,\n  \"*searchprotocolhost.exe\\\"\"\n)\nby _time span=1h Processes.action Processes.dest\
+    \ Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n   Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n   Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\n   Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| join process_id dest\n[\n  | tstats `security_content_summariesonly`\
+    \ count\n    FROM datamodel=Network_Traffic.All_Traffic where\n    All_Traffic.dest_port\
+    \ != 0\n    by All_Traffic.action All_Traffic.app All_Traffic.bytes All_Traffic.bytes_in\
+    \ All_Traffic.bytes_out\n       All_Traffic.dest  All_Traffic.dest_ip All_Traffic.dest_port\
+    \ All_Traffic.dvc All_Traffic.protocol\n       All_Traffic.protocol_version All_Traffic.src\
+    \ All_Traffic.src_ip All_Traffic.src_port\n       All_Traffic.transport All_Traffic.user\
+    \ All_Traffic.vendor_product All_Traffic.direction\n       All_Traffic.process_id\n\
+    | `drop_dm_object_name(All_Traffic)`\n| rename dest as C2\n| rename src as dest\n\
+    ]\n| table _time dest parent_process_name process_name process_path process process_id\
+    \ dest_port C2\n| `searchprotocolhost_with_no_command_line_with_network_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b690df8c-a145-11eb-a38b-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/searchprotocolhost_with_no_command_line_with_network.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

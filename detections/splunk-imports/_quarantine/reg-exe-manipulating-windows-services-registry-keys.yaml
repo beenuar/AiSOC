@@ -1,0 +1,46 @@
+id: splunk-security-content-8470d755-0c13-45b3-bd63-387a373c10cf
+name: Reg exe Manipulating Windows Services Registry Keys
+description: The following analytic detects the use of reg.exe to modify registry
+  keys associated with Windows services and their configurations. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process names, parent
+  processes, and command-line executions. This activity is significant because unauthorized
+  changes to service registry keys can indicate an attempt to establish persistence
+  or escalate privileges. If confirmed malicious, this could allow an attacker to
+  control service behavior, potentially leading to unauthorized code execution or
+  system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.011
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(Processes.process_name) as process_name values(Processes.parent_process_name)\
+    \ as parent_process_name values(Processes.user) as user FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (Processes.process_name=reg.exe Processes.process=*reg* Processes.process=*add*\
+    \ Processes.process=*Services*)\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `reg_exe_manipulating_windows_services_registry_keys_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8470d755-0c13-45b3-bd63-387a373c10cf
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/reg_exe_manipulating_windows_services_registry_keys.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

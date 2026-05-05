@@ -1,0 +1,37 @@
+id: sigmahq-sigma-3d2a2d59-929c-4b78-8c1a-145dfe9e07b1
+name: Publisher Attachment File Dropped In Suspicious Location
+description: Detects creation of files with the ".pub" extension in suspicious or
+  uncommon locations. This could be a sign of attackers abusing Publisher documents
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/EmericNasi/status/1623224526220804098
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains:
+    - \AppData\Local\Temp\
+    - \Users\Public\
+    - \Windows\Temp\
+    - C:\Temp\
+    TargetFilename|endswith: .pub
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3d2a2d59-929c-4b78-8c1a-145dfe9e07b1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_publisher_files_in_susp_locations.yml
+falsepositives:
+- Legitimate usage of ".pub" files from those locations
+notes:
+  quarantine_reason: 'upstream status: test'

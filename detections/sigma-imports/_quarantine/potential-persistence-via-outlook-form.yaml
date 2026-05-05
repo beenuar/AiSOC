@@ -1,0 +1,39 @@
+id: sigmahq-sigma-c3edc6a5-d9d4-48d8-930e-aab518390917
+name: Potential Persistence Via Outlook Form
+description: Detects the creation of a new Outlook form which can contain malicious
+  code
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1137.003
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=76
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=79
+- https://learn.microsoft.com/en-us/office/vba/outlook/concepts/outlook-forms/create-an-outlook-form
+- https://www.slipstick.com/developer/custom-form/clean-outlooks-forms-cache/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith: \outlook.exe
+    TargetFilename|contains:
+    - \AppData\Local\Microsoft\FORMS\IPM
+    - \Local Settings\Application Data\Microsoft\Forms
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c3edc6a5-d9d4-48d8-930e-aab518390917
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_outlook_newform.yml
+falsepositives:
+- Legitimate use of outlook forms
+notes:
+  quarantine_reason: 'upstream status: test'

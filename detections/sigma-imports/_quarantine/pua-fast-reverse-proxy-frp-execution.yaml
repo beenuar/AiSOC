@@ -1,0 +1,43 @@
+id: sigmahq-sigma-32410e29-5f94-4568-b6a3-d91a8adad863
+name: PUA - Fast Reverse Proxy (FRP) Execution
+description: Detects the use of Fast Reverse Proxy. frp is a fast reverse proxy to
+  help you expose a local server behind a NAT or firewall to the Internet.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1090
+  categories:
+  - endpoint
+references:
+- https://asec.ahnlab.com/en/38156/
+- https://github.com/fatedier/frp
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith:
+    - \frpc.exe
+    - \frps.exe
+  selection_cli:
+    CommandLine|contains: \frpc.ini
+  selection_hashes:
+    Hashes|contains:
+    - MD5=7D9C233B8C9E3F0EA290D2B84593C842
+    - SHA1=06DDC9280E1F1810677935A2477012960905942F
+    - SHA256=57B0936B8D336D8E981C169466A15A5FD21A7D5A2C7DAF62D5E142EE860E387C
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 32410e29-5f94-4568-b6a3-d91a8adad863
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_frp.yml
+falsepositives:
+- Legitimate use
+notes:
+  quarantine_reason: 'upstream status: test'

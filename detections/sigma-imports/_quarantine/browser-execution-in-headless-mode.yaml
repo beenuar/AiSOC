@@ -1,0 +1,40 @@
+id: sigmahq-sigma-ef9dcfed-690c-4c5d-a9d1-482cd422225c
+name: Browser Execution In Headless Mode
+description: Detects execution of Chromium based browser in headless mode
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1564.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mrd0x/status/1478234484881436672?s=12
+- https://www.trendmicro.com/en_us/research/23/e/managed-xdr-investigation-of-ducktail-in-trend-micro-vision-one.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \brave.exe
+    - \chrome.exe
+    - \msedge.exe
+    - \opera.exe
+    - \vivaldi.exe
+    CommandLine|contains: --headless
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ef9dcfed-690c-4c5d-a9d1-482cd422225c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_browsers_chromium_headless_exec.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

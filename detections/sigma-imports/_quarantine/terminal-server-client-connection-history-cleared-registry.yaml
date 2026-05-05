@@ -1,0 +1,40 @@
+id: sigmahq-sigma-07bdd2f5-9c58-4f38-aec8-e101bb79ef8d
+name: Terminal Server Client Connection History Cleared - Registry
+description: Detects the deletion of registry keys containing the MSTSC connection
+  history
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/remove-entries-from-remote-desktop-connection-computer
+- http://woshub.com/how-to-clear-rdp-connections-history/
+- https://www.trendmicro.com/en_us/research/23/a/vice-society-ransomware-group-targets-manufacturing-companies.html
+logsource:
+  category: registry_delete
+  product: windows
+detection:
+  selection1:
+    EventType: DeleteValue
+    TargetObject|contains: \Microsoft\Terminal Server Client\Default\MRU
+  selection2:
+    EventType: DeleteKey
+    TargetObject|contains: \Microsoft\Terminal Server Client\Servers\
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07bdd2f5-9c58-4f38-aec8-e101bb79ef8d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_delete/registry_delete_mstsc_history_cleared.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

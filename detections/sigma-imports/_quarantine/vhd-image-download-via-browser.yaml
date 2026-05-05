@@ -1,0 +1,51 @@
+id: sigmahq-sigma-8468111a-ef07-4654-903b-b863a80bbc95
+name: VHD Image Download Via Browser
+description: 'Detects creation of ".vhd"/".vhdx" files by browser processes.
+
+  Malware can use mountable Virtual Hard Disk ".vhd" files to encapsulate payloads
+  and evade security controls.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1587.001
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/intelligence-insights-october-2021/
+- https://www.kaspersky.com/blog/lazarus-vhd-ransomware/36559/
+- https://securelist.com/lazarus-on-the-hunt-for-big-game/97757/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \brave.exe
+    - \chrome.exe
+    - \firefox.exe
+    - \iexplore.exe
+    - \maxthon.exe
+    - \MicrosoftEdge.exe
+    - \msedge.exe
+    - \msedgewebview2.exe
+    - \opera.exe
+    - \safari.exe
+    - \seamonkey.exe
+    - \vivaldi.exe
+    - \whale.exe
+    TargetFilename|contains: .vhd
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8468111a-ef07-4654-903b-b863a80bbc95
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_vhd_download_via_browsers.yml
+falsepositives:
+- Legitimate downloads of ".vhd" files would also trigger this
+notes:
+  quarantine_reason: 'upstream status: test'

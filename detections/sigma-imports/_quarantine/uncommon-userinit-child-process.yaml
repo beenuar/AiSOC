@@ -1,0 +1,57 @@
+id: sigmahq-sigma-0a98a10c-685d-4ab0-bddc-b6bdd1d48458
+name: Uncommon Userinit Child Process
+description: Detects uncommon "userinit.exe" child processes, which could be a sign
+  of uncommon shells or login scripts used for persistence.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1037.001
+  categories:
+  - endpoint
+references:
+- https://cocomelonc.github.io/persistence/2022/12/09/malware-pers-20.html
+- https://learn.microsoft.com/en-us/windows-server/administration/server-core/server-core-sconfig#powershell-is-the-default-shell-on-server-core
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \userinit.exe
+  filter_main_explorer:
+    Image|endswith: :\WINDOWS\explorer.exe
+  filter_optional_logonscripts:
+    CommandLine|contains:
+    - netlogon.bat
+    - UsrLogon.cmd
+  filter_optional_windows_core:
+    CommandLine: PowerShell.exe
+  filter_optional_proquota:
+    Image|endswith:
+    - :\Windows\System32\proquota.exe
+    - :\Windows\SysWOW64\proquota.exe
+  filter_optional_citrix:
+    Image|endswith:
+    - :\Program Files (x86)\Citrix\HDX\bin\cmstart.exe
+    - :\Program Files (x86)\Citrix\HDX\bin\icast.exe
+    - :\Program Files (x86)\Citrix\System32\icast.exe
+    - :\Program Files\Citrix\HDX\bin\cmstart.exe
+    - :\Program Files\Citrix\HDX\bin\icast.exe
+    - :\Program Files\Citrix\System32\icast.exe
+  filter_optional_image_null:
+    Image: null
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0a98a10c-685d-4ab0-bddc-b6bdd1d48458
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_userinit_uncommon_child_processes.yml
+falsepositives:
+- Legitimate logon scripts or custom shells may trigger false positives. Apply additional
+  filters accordingly.
+notes:
+  quarantine_reason: 'upstream status: test'

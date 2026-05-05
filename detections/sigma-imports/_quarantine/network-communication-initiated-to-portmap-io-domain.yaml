@@ -1,0 +1,37 @@
+id: sigmahq-sigma-07837ab9-60e1-481f-a74d-c31fb496a94c
+name: Network Communication Initiated To Portmap.IO Domain
+description: Detects an executable accessing the portmap.io domain, which could be
+  a sign of forbidden C2 traffic or data exfiltration by malicious actors
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  - T1090.002
+  categories:
+  - endpoint
+references:
+- https://portmap.io/
+- https://github.com/rapid7/metasploit-framework/issues/11337
+- https://pro.twitter.com/JaromirHorejsi/status/1795001037746761892/photo/2
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    DestinationHostname|endswith: .portmap.io
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07837ab9-60e1-481f-a74d-c31fb496a94c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_portmap.yml
+falsepositives:
+- Legitimate use of portmap.io domains
+notes:
+  quarantine_reason: 'upstream status: test'

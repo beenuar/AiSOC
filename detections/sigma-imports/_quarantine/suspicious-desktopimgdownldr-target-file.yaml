@@ -1,0 +1,43 @@
+id: sigmahq-sigma-fc4f4817-0c53-4683-a4ee-b17a64bc1039
+name: Suspicious Desktopimgdownldr Target File
+description: Detects a suspicious Microsoft desktopimgdownldr file creation that stores
+  a file to a suspicious location or contains a file with a suspicious extension
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://labs.sentinelone.com/living-off-windows-land-a-new-native-file-downldr/
+- https://twitter.com/SBousseaden/status/1278977301745741825
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith: \svchost.exe
+    TargetFilename|contains: \Personalization\LockScreenImage\
+  filter1:
+    TargetFilename|contains: C:\Windows\
+  filter2:
+    TargetFilename|contains:
+    - .jpg
+    - .jpeg
+    - .png
+  condition: selection and not filter1 and not filter2
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fc4f4817-0c53-4683-a4ee-b17a64bc1039
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_desktopimgdownldr_file.yml
+falsepositives:
+- False positives depend on scripts and administrative tools used in the monitored
+  environment
+notes:
+  quarantine_reason: 'upstream status: test'

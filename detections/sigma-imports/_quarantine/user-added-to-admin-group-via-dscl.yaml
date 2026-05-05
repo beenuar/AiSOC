@@ -1,0 +1,38 @@
+id: sigmahq-sigma-b743623c-2776-40e0-87b1-682b975d0ca5
+name: User Added To Admin Group Via Dscl
+description: Detects attempts to create and add an account to the admin group via
+  "dscl"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1078.003/T1078.003.md#atomic-test-2---create-local-account-with-admin-privileges---macos
+- https://ss64.com/osx/dscl.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /dscl
+    CommandLine|contains|all:
+    - ' -append '
+    - ' /Groups/admin '
+    - ' GroupMembership '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b743623c-2776-40e0-87b1-682b975d0ca5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_dscl_add_user_to_admin_group.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,32 @@
+id: sigmahq-sigma-75c505b1-711d-4f68-a357-8c3fe37dbf2d
+name: HackTool - SILENTTRINITY Stager DLL Load
+description: Detects SILENTTRINITY stager dll loading activity
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071
+  categories:
+  - endpoint
+references:
+- https://github.com/byt3bl33d3r/SILENTTRINITY
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Description|contains: st2stager
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 75c505b1-711d-4f68-a357-8c3fe37dbf2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_hktl_silenttrinity_stager.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

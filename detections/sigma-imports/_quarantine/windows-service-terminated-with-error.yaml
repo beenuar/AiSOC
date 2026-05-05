@@ -1,0 +1,33 @@
+id: sigmahq-sigma-acfa2210-0d71-4eeb-b477-afab494d596c
+name: Windows Service Terminated With Error
+description: Detects Windows services that got terminated for whatever reason
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7023
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: acfa2210-0d71-4eeb-b477-afab494d596c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_terminated_error_generic.yml
+falsepositives:
+- False positives could occur since service termination could happen due to multiple
+  reasons
+notes:
+  quarantine_reason: 'upstream status: test'

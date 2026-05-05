@@ -1,0 +1,59 @@
+id: chronicle-detection-rules-entra-id-devicecode-phishing-attack
+name: entra_id_devicecode_phishing_attack
+description: entra_id_devicecode_phishing_attack
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_devicecode_phishing_attack {\n\n  meta:\n    author = \"Bastradamus\"\
+    \n    description = \"Detects strong indicators of a successful device code phishing\
+    \ attack.\"\n    severity = \"High\"\n    priority = \"High\"\n    rule_id = \"\
+    mr_8b29e3d1-5c42-4f91-9aef-b673ad89f0e4\"\n    rule_name = \"Microsoft Entra ID\
+    \ Device code phishing attack\"\n    type = \"alert\"\n    data_source = \"Workspace\
+    \ Activity, azure ad\"\n    reference = \"https://systemweakness.com/detecting-device-code-phishing-in-google-security-operations-9bf1c282cff0\"\
+    \n    mitre_attack_tactic = \"Initial Access\"\n    mitre_attack_technique = \"\
+    Phishing\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1566/\"\
+    \n\n  events:\n    $email.network.email.to = $user\n    $email.metadata.vendor_name\
+    \ = \"Google Workspace\"\n    $email.metadata.product_name = \"gmail\" nocase\n\
+    \    $email.about.url = /microsoft.com\\/devicelogin/ or\n    $email.about.url\
+    \ = /oauth2\\/deviceauth/\n    //user clicks the device code phish URL.\n    $email.about.labels.value\
+    \ = /71|9/\n\n    $entra.metadata.vendor_name = \"Microsoft\"\n    $entra.metadata.product_name\
+    \ = \"Azure AD\"\n    //Entra error code 50199: The user was asked to confirm\
+    \ that this app is the application they intended to sign into.\n    $entra.security_result.rule_id\
+    \ = /^(0|50199)$/\n\n    //join\n    $email.network.email.to = $entra.target.user.userid\n\
+    \n  match:\n    //Time window based on the fact that the device code expires within\
+    \ 15 minutes. Added an extra 60 seconds.\n    $user over 16m\n\n  outcome:\n \
+    \   $mitre_attack_tactic = array_distinct(\"Initial Access\")\n    $mitre_attack_technique\
+    \ = array_distinct(\"Phishing\")\n    $mitre_attack_technique_id = array_distinct(\"\
+    T1566\")\n    $target_user_distinct_count = count_distinct($user)\n    $target_user_count\
+    \ = count($user)\n    $principal_ip = array_distinct($email.principal.ip)\n  \
+    \  $sender_from = array_distinct($email.principal.network.email.from)\n    $recipient\
+    \ = array_distinct($email.network.email.to)\n\n  condition:\n    $email and $entra\n\
+    }"
+  chronicle_rule_name: entra_id_devicecode_phishing_attack
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_devicecode_phishing_attack
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_devicecode_phishing_attack.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

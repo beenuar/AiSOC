@@ -1,0 +1,45 @@
+id: sigmahq-sigma-025bd229-fd1f-4fdb-97ab-20006e1a5368
+name: Unusual File Download from Direct IP Address
+description: Detects the download of suspicious file type from URLs with IP
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://github.com/trustedsec/SysmonCommunityGuide/blob/adcdfee20999f422b974c8d4149bf4c361237db7/chapters/file-stream-creation-hash.md
+- https://labs.withsecure.com/publications/detecting-onenote-abuse
+logsource:
+  product: windows
+  category: create_stream_hash
+detection:
+  selection:
+    Contents|re: http[s]?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+    TargetFilename|contains:
+    - .ps1:Zone
+    - .bat:Zone
+    - .exe:Zone
+    - .vbe:Zone
+    - .vbs:Zone
+    - .dll:Zone
+    - .one:Zone
+    - .cmd:Zone
+    - .hta:Zone
+    - .xll:Zone
+    - .lnk:Zone
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 025bd229-fd1f-4fdb-97ab-20006e1a5368
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_stream_hash/create_stream_hash_susp_ip_domains.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9847f263-4a81-424f-970c-875dab15b79b
+name: Suspicious TSCON Start as SYSTEM
+description: Detects a tscon.exe start as LOCAL SYSTEM
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- http://www.korznikov.com/2017/03/0-day-or-feature-privilege-escalation.html
+- https://medium.com/@networksecurity/rdp-hijacking-how-to-hijack-rds-and-remoteapp-sessions-transparently-to-move-through-an-da2a1e73a5f6
+- https://www.ired.team/offensive-security/lateral-movement/t1076-rdp-hijacking-for-lateral-movement
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    User|contains:
+    - AUTHORI
+    - AUTORI
+    Image|endswith: \tscon.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9847f263-4a81-424f-970c-875dab15b79b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_tscon_localsystem.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

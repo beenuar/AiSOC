@@ -1,0 +1,42 @@
+id: splunk-security-content-49cdce75-f814-4d56-a7a4-c64ec3a481f2
+name: O365 ApplicationImpersonation Role Assigned
+description: The following analytic detects the assignment of the ApplicationImpersonation
+  role in Office 365 to a user or application. It uses the Office 365 Management Activity
+  API to monitor Azure Active Directory audit logs for role assignment events. This
+  activity is significant because the ApplicationImpersonation role allows impersonation
+  of any user, enabling access to and modification of their mailbox. If confirmed
+  malicious, an attacker could gain unauthorized access to sensitive information,
+  manipulate mailbox data, and perform actions as a legitimate user, posing a severe
+  security risk to the organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/002/
+- https://www.mandiant.com/resources/blog/remediation-and-hardening-strategies-for-microsoft-365-to-defend-against-unc2452
+- https://www.mandiant.com/media/17656
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=Exchange Operation=\"New-ManagementRoleAssignment\"\
+    \ Role=ApplicationImpersonation\n  | rename User as target_user\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY signature\
+    \ dest user\n       src vendor_account vendor_product\n       target_user\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `o365_applicationimpersonation_role_assigned_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 49cdce75-f814-4d56-a7a4-c64ec3a481f2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_applicationimpersonation_role_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

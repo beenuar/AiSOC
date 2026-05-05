@@ -1,0 +1,57 @@
+id: sigmahq-sigma-4b991083-3d0e-44ce-8fc4-b254025d8d4b
+name: Unusual Parent Process For Cmd.EXE
+description: Detects suspicious parent process for cmd.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/unusual-parent-process-for-cmd.exe.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \cmd.exe
+    ParentImage|endswith:
+    - \csrss.exe
+    - \ctfmon.exe
+    - \dllhost.exe
+    - \epad.exe
+    - \FlashPlayerUpdateService.exe
+    - \GoogleUpdate.exe
+    - \jucheck.exe
+    - \jusched.exe
+    - \LogonUI.exe
+    - \lsass.exe
+    - \regsvr32.exe
+    - \SearchIndexer.exe
+    - \SearchProtocolHost.exe
+    - \SIHClient.exe
+    - \sihost.exe
+    - \slui.exe
+    - \spoolsv.exe
+    - \sppsvc.exe
+    - \taskhostw.exe
+    - \unsecapp.exe
+    - \WerFault.exe
+    - \wermgr.exe
+    - \wlanext.exe
+    - \WUDFHost.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4b991083-3d0e-44ce-8fc4-b254025d8d4b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_unusual_parent.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-ba42babc-0666-4393-a4f7-ceaf5a69191e
+name: Uncommon Child Processes Of SndVol.exe
+description: Detects potentially uncommon child processes of SndVol.exe (the Windows
+  volume mixer)
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Max_Mal_/status/1661322732456353792
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentImage|endswith: \SndVol.exe
+  filter_main_rundll32:
+    Image|endswith: \rundll32.exe
+    CommandLine|contains: ' shell32.dll,Control_RunDLL '
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ba42babc-0666-4393-a4f7-ceaf5a69191e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sndvol_susp_child_processes.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

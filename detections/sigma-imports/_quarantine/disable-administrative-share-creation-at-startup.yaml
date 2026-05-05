@@ -1,0 +1,38 @@
+id: sigmahq-sigma-c7dcacd0-cc59-4004-b0a4-1d6cdebe6f3e
+name: Disable Administrative Share Creation at Startup
+description: Administrative shares are hidden network shares created by Microsoft
+  Windows NT operating systems that grant system administrators remote access to every
+  disk volume on a network-connected system
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.005
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.005/T1070.005.md#atomic-test-4---disable-administrative-share-creation-at-startup
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Services\LanmanServer\Parameters\
+    TargetObject|endswith:
+    - \AutoShareWks
+    - \AutoShareServer
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c7dcacd0-cc59-4004-b0a4-1d6cdebe6f3e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disable_administrative_share.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

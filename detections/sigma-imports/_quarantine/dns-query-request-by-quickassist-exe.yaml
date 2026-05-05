@@ -1,0 +1,38 @@
+id: sigmahq-sigma-882e858a-3233-4ba8-855e-2f3d3575803d
+name: DNS Query Request By QuickAssist.EXE
+description: Detects DNS queries initiated by "QuickAssist.exe" to Microsoft Quick
+  Assist primary endpoint that is used to establish a session.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1210
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2024/05/15/threat-actors-misusing-quick-assist-in-social-engineering-attacks-leading-to-ransomware/
+- https://www.linkedin.com/posts/kevin-beaumont-security_ive-been-assisting-a-few-orgs-hit-with-successful-activity-7268055739116445701-xxjZ/
+- https://x.com/cyb3rops/status/1862406110365245506
+- https://learn.microsoft.com/en-us/windows/client-management/client-tools/quick-assist
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    Image|endswith: \QuickAssist.exe
+    QueryName|endswith: remoteassistance.support.services.microsoft.com
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 882e858a-3233-4ba8-855e-2f3d3575803d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_quickassist.yml
+falsepositives:
+- Legitimate use of Quick Assist in the environment.
+notes:
+  quarantine_reason: 'upstream status: experimental'

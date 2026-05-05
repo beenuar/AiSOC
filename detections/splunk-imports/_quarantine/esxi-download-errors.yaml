@@ -1,0 +1,35 @@
+id: splunk-security-content-515cccd0-c4d8-4427-92d9-8a8f8b5a71dc
+name: ESXi Download Errors
+description: This detection identifies failed file download attempts on ESXi hosts
+  by looking for specific error messages in the system logs. These failures may indicate
+  unauthorized or malicious attempts to install or update components—such as VIBs
+  or scripts
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1601.001
+  - T1562.001
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message IN ("*Download failed*", "*Failed to download
+    file*", "*File download error*", "*Could not download*") | rex field=_raw "Z (?<dest>[\w\.]*)\s"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest Message |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_download_errors_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 515cccd0-c4d8-4427-92d9-8a8f8b5a71dc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_download_errors.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

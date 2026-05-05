@@ -1,0 +1,54 @@
+id: sigmahq-sigma-9c0295ce-d60d-40bd-bd74-84673b7592b1
+name: Suspicious Encoded And Obfuscated Reflection Assembly Load Function Call
+description: Detects suspicious base64 encoded and obfuscated "LOAD" keyword used
+  in .NET "reflection.assembly"
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://github.com/Neo23x0/Raccine/blob/20a569fa21625086433dcce8bb2765d0ea08dcb6/yara/mal_revil.yar
+- https://thedfirreport.com/2022/05/09/seo-poisoning-a-gootloader-story/
+- https://learn.microsoft.com/en-us/dotnet/api/system.appdomain.load?view=net-7.0
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - OgA6ACgAIgBMACIAKwAiAG8AYQBkACIAKQ
+    - oAOgAoACIATAAiACsAIgBvAGEAZAAiACkA
+    - 6ADoAKAAiAEwAIgArACIAbwBhAGQAIgApA
+    - OgA6ACgAIgBMAG8AIgArACIAYQBkACIAKQ
+    - oAOgAoACIATABvACIAKwAiAGEAZAAiACkA
+    - 6ADoAKAAiAEwAbwAiACsAIgBhAGQAIgApA
+    - OgA6ACgAIgBMAG8AYQAiACsAIgBkACIAKQ
+    - oAOgAoACIATABvAGEAIgArACIAZAAiACkA
+    - 6ADoAKAAiAEwAbwBhACIAKwAiAGQAIgApA
+    - OgA6ACgAJwBMACcAKwAnAG8AYQBkACcAKQ
+    - oAOgAoACcATAAnACsAJwBvAGEAZAAnACkA
+    - 6ADoAKAAnAEwAJwArACcAbwBhAGQAJwApA
+    - OgA6ACgAJwBMAG8AJwArACcAYQBkACcAKQ
+    - oAOgAoACcATABvACcAKwAnAGEAZAAnACkA
+    - 6ADoAKAAnAEwAbwAnACsAJwBhAGQAJwApA
+    - OgA6ACgAJwBMAG8AYQAnACsAJwBkACcAKQ
+    - oAOgAoACcATABvAGEAJwArACcAZAAnACkA
+    - 6ADoAKAAnAEwAbwBhACcAKwAnAGQAJwApA
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9c0295ce-d60d-40bd-bd74-84673b7592b1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_base64_reflection_assembly_load_obfusc.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

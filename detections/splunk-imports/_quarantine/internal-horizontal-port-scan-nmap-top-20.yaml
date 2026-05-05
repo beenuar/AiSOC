@@ -1,0 +1,55 @@
+id: splunk-security-content-3141a041-4f57-4277-9faa-9305ca1f8e5b
+name: Internal Horizontal Port Scan NMAP Top 20
+description: This analytic identifies instances where an internal host has attempted
+  to communicate with 250 or more destination IP addresses using on of the NMAP top
+  20 ports. Horizontal port scans from internal hosts can indicate reconnaissance
+  or scanning activities, potentially signaling malicious intent or misconfiguration.
+  By monitoring network traffic logs, this detection helps detect and respond to such
+  behavior promptly, enhancing network security and preventing potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n        dc(All_Traffic.dest_ip) as totalDestIPCount\n\
+    \        values(All_Traffic.action) as action\n        values(All_Traffic.dest_zone)\
+    \ as dest_zone\n        values(All_Traffic.rule) as rule\n        values(All_Traffic.src_category)\
+    \ as src_category\n        values(All_Traffic.src_port) as src_port\n        values(All_Traffic.src_zone)\
+    \ as src_zone\n\nfrom datamodel=Network_Traffic where\n\nAll_Traffic.src_ip IN\
+    \ (\n  \"10.0.0.0/8\", \"172.16.0.0/12\", \"192.168.0.0/16\", \"100.64.0.0/10\"\
+    ,\n  \"127.0.0.0/8\", \"169.254.0.0/16\", \"192.0.0.0/24\", \"192.0.0.0/29\",\
+    \ \"192.0.0.8/32\",\n  \"192.0.0.9/32\", \"192.0.0.10/32\", \"192.0.0.170/32\"\
+    , \"192.0.0.171/32\", \"192.0.2.0/24\",\n  \"192.31.196.0/24\", \"192.52.193.0/24\"\
+    , \"192.88.99.0/24\", \"224.0.0.0/4\", \"192.175.48.0/24\",\n  \"198.18.0.0/15\"\
+    , \"198.51.100.0/24\", \"203.0.113.0/24\", \"240.0.0.0/4\"\n)\nAll_Traffic.dest_port\
+    \ IN (\n  21, 22, 23, 25, 53, 80, 110, 111,\n  135, 139, 143, 443, 445, 993, 995,\n\
+    \  1723, 3306, 3389, 5900, 8080\n)\n\nby span=1h _time\n   All_Traffic.src_ip\
+    \ All_Traffic.dest_port\n   All_Traffic.transport\n\n| `drop_dm_object_name(\"\
+    All_Traffic\")`\n| where totalDestIPCount>=250\n| eval dest_port=transport + \"\
+    /\" + dest_port\n| stats min(firstTime) as firstTime\n        max(lastTime) as\
+    \ lastTime\n        dc(dest_port) as num_ports_scanned\n        sum(totalDestIPCount)\
+    \ as totalDestIPCount\n        values(action) as action\n        values(dest_port)\
+    \ as dest_ports\n        values(dest_zone) as dest_zone\n        values(rule)\
+    \ as rule\n        values(src_category) as src_category\n        values(src_zone)\
+    \ as src_zone\n  by _time src_ip\n| fields - _time\n| `security_content_ctime(lastTime)`\n\
+    | `security_content_ctime(firstTime)`\n| `internal_horizontal_port_scan_nmap_top_20_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3141a041-4f57-4277-9faa-9305ca1f8e5b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/internal_horizontal_port_scan_nmap_top_20.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

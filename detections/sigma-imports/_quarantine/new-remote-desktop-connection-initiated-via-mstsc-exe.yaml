@@ -1,0 +1,43 @@
+id: sigmahq-sigma-954f0af7-62dd-418f-b3df-a84bc2c7a774
+name: New Remote Desktop Connection Initiated Via Mstsc.EXE
+description: 'Detects the usage of "mstsc.exe" with the "/v" flag to initiate a connection
+  to a remote server.
+
+  Adversaries may use valid accounts to log into a computer using the Remote Desktop
+  Protocol (RDP). The adversary may then perform actions as the logged-on user.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1021.001/T1021.001.md#t1021001---remote-desktop-protocol
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/mstsc
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \mstsc.exe
+  - OriginalFileName: mstsc.exe
+  selection_cli:
+    CommandLine|contains|windash: ' /v:'
+  filter_optional_wsl:
+    ParentImage: C:\Windows\System32\lxss\wslhost.exe
+    CommandLine|contains: C:\ProgramData\Microsoft\WSL\wslg.rdp
+  condition: all of selection_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 954f0af7-62dd-418f-b3df-a84bc2c7a774
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mstsc_remote_connection.yml
+falsepositives:
+- WSL (Windows Sub System For Linux)
+notes:
+  quarantine_reason: 'upstream status: test'

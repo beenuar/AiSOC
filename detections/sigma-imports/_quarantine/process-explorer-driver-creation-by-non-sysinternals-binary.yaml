@@ -1,0 +1,45 @@
+id: sigmahq-sigma-de46c52b-0bf8-4936-a327-aace94f94ac6
+name: Process Explorer Driver Creation By Non-Sysinternals Binary
+description: 'Detects creation of the Process Explorer drivers by processes other
+  than Process Explorer (procexp) itself.
+
+  Hack tools or malware may use the Process Explorer driver to elevate privileges,
+  drops it to disk for a few moments, runs a service using that driver and removes
+  it afterwards.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer
+- https://github.com/Yaxser/Backstab
+- https://www.elastic.co/security-labs/stopping-vulnerable-driver-attacks
+- https://news.sophos.com/en-us/2023/04/19/aukill-edr-killer-malware-abuses-process-explorer-driver/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains: \PROCEXP
+    TargetFilename|endswith: .sys
+  filter_main_process_explorer:
+    Image|endswith:
+    - \procexp.exe
+    - \procexp64.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: de46c52b-0bf8-4936-a327-aace94f94ac6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_procexp_driver_susp_creation.yml
+falsepositives:
+- Some false positives may occur with legitimate renamed process explorer binaries
+notes:
+  quarantine_reason: 'upstream status: test'

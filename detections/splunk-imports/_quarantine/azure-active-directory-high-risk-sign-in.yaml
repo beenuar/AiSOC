@@ -1,0 +1,42 @@
+id: splunk-security-content-1ecff169-26d7-4161-9a7b-2ac4c8e61bea
+name: Azure Active Directory High Risk Sign-in
+description: The following analytic detects high-risk sign-in attempts against Azure
+  Active Directory, identified by Azure Identity Protection. It leverages the RiskyUsers
+  and UserRiskEvents log categories from Azure AD events ingested via EventHub. This
+  activity is significant as it indicates potentially compromised accounts, flagged
+  by heuristics and machine learning. If confirmed malicious, attackers could gain
+  unauthorized access to sensitive resources, leading to data breaches or further
+  exploitation within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://docs.microsoft.com/en-us/azure/active-directory/identity-protection/overview-identity-protection
+- https://docs.microsoft.com/en-us/azure/active-directory/identity-protection/concept-identity-protection-risks
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=UserRiskEvents properties.riskLevel=high\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product category\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_active_directory_high_risk_sign_in_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1ecff169-26d7-4161-9a7b-2ac4c8e61bea
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_active_directory_high_risk_sign_in.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

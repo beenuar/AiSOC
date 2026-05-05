@@ -1,0 +1,56 @@
+id: sigmahq-sigma-8e95e73e-ba02-4a87-b4d7-0929b8053038
+name: Suspicious ArcSOC.exe Child Process
+description: 'Detects script interpreters, command-line tools, and similar suspicious
+  child processes of ArcSOC.exe.
+
+  ArcSOC.exe is the process name which hosts ArcGIS Server REST services. If an attacker
+  compromises an ArcGIS
+
+  Server system and uploads a malicious Server Object Extension (SOE), they can send
+  crafted requests to the corresponding
+
+  service endpoint and remotely execute code from the ArcSOC.exe process.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1203
+  categories:
+  - endpoint
+references:
+- https://reliaquest.com/blog/threat-spotlight-inside-flax-typhoons-arcgis-compromise/
+- https://enterprise.arcgis.com/en/server/12.0/administer/windows/inside-an-arcgis-server-site.htm
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \ArcSOC.exe
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wmic.exe
+    - \wscript.exe
+  filter_main_cmd:
+    Image|endswith: \cmd.exe
+    CommandLine: cmd.exe /c "ver"
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8e95e73e-ba02-4a87-b4d7-0929b8053038
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_arcsoc_susp_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

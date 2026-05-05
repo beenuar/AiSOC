@@ -1,0 +1,36 @@
+id: sigmahq-sigma-734f8d9b-42b8-41b2-bcf5-abaf49d5a3c8
+name: Remote PowerShell Session Host Process (WinRM)
+description: Detects remote PowerShell sections by monitoring for wsmprovhost (WinRM
+  host process) as a parent or child process (sign of an active PowerShell remote
+  session).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190511-RemotePwshExecution/notebook.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \wsmprovhost.exe
+  - ParentImage|endswith: \wsmprovhost.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 734f8d9b-42b8-41b2-bcf5-abaf49d5a3c8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrm_remote_powershell_session_process.yml
+falsepositives:
+- Legitimate usage of remote Powershell, e.g. for monitoring purposes.
+notes:
+  quarantine_reason: 'upstream status: test'

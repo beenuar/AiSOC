@@ -1,0 +1,55 @@
+id: sigmahq-sigma-9c7e131a-0f2c-4ae0-9d43-b04f4e266d43
+name: Uncommon Child Process Of Appvlp.EXE
+description: 'Detects uncommon child processes of Appvlp.EXE
+
+  Appvlp or the Application Virtualization Utility is included with Microsoft Office.
+  Attackers are able to abuse "AppVLP" to execute shell commands.
+
+  Normally, this binary is used for Application Virtualization, but it can also be
+  abused to circumvent the ASR file path rule folder
+
+  or to mark a file as a system file.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Appvlp/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \appvlp.exe
+  filter_main_generic:
+    Image|endswith:
+    - :\Windows\SysWOW64\rundll32.exe
+    - :\Windows\System32\rundll32.exe
+  filter_optional_office_msoasb:
+    Image|contains: :\Program Files\Microsoft Office
+    Image|endswith: \msoasb.exe
+  filter_optional_office_skype:
+    Image|contains|all:
+    - :\Program Files\Microsoft Office
+    - \SkypeSrv\
+    Image|endswith: \SKYPESERVER.EXE
+  filter_optional_office_msouc:
+    Image|contains: :\Program Files\Microsoft Office
+    Image|endswith: \MSOUC.EXE
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9c7e131a-0f2c-4ae0-9d43-b04f4e266d43
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_appvlp_uncommon_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,45 @@
+id: sigmahq-sigma-d937b75f-a665-4480-88a5-2f20e9f9b22a
+name: Possible Privilege Escalation via Weak Service Permissions
+description: Detection of sc.exe utility spawning by user with Medium integrity level
+  to change service ImagePath or FailureCommand
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.011
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-privilege-escalation-in-windows-environment
+- https://pentestlab.blog/2017/03/30/weak-service-permissions/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  scbynonadmin:
+    Image|endswith: \sc.exe
+    IntegrityLevel:
+    - Medium
+    - S-1-16-8192
+  selection_binpath:
+    CommandLine|contains|all:
+    - config
+    - binPath
+  selection_failure:
+    CommandLine|contains|all:
+    - failure
+    - command
+  condition: scbynonadmin and 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d937b75f-a665-4480-88a5-2f20e9f9b22a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sc_change_sevice_image_path_by_non_admin.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

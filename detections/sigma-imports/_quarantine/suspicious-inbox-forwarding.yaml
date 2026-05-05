@@ -1,0 +1,37 @@
+id: sigmahq-sigma-6c220477-0b5b-4b25-bb90-66183b4089e8
+name: Suspicious Inbox Forwarding
+description: Detects when a Microsoft Cloud App Security reported suspicious email
+  forwarding rules, for example, if a user created an inbox rule that forwards a copy
+  of all emails to an external address.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1020
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Suspicious inbox forwarding
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6c220477-0b5b-4b25-bb90-66183b4089e8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_susp_inbox_forwarding.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

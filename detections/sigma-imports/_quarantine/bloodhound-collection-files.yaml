@@ -1,0 +1,50 @@
+id: sigmahq-sigma-02773bed-83bf-469f-b7ff-e676e7d78bab
+name: BloodHound Collection Files
+description: Detects default file names outputted by the BloodHound collection tool
+  SharpHound
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087.001
+  - T1087.002
+  - T1482
+  - T1069.001
+  - T1069.002
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://academy.hackthebox.com/course/preview/active-directory-bloodhound/bloodhound--data-collection
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith:
+    - BloodHound.zip
+    - _computers.json
+    - _containers.json
+    - _gpos.json
+    - _groups.json
+    - _ous.json
+    - _users.json
+  filter_optional_ms_winapps:
+    Image|endswith: \svchost.exe
+    TargetFilename|startswith: C:\Program Files\WindowsApps\Microsoft.
+    TargetFilename|endswith: \pocket_containers.json
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 02773bed-83bf-469f-b7ff-e676e7d78bab
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_bloodhound_collection.yml
+falsepositives:
+- Some false positives may arise in some environment and this may require some tuning.
+  Add additional filters or reduce level depending on the level of noise
+notes:
+  quarantine_reason: 'upstream status: test'

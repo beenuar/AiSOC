@@ -1,0 +1,41 @@
+id: sigmahq-sigma-a24e5861-c6ca-4fde-a93c-ba9256feddf0
+name: Uncommon Process Access Rights For Target Image
+description: Detects process access request to uncommon target images with a "PROCESS_ALL_ACCESS"
+  access mask.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1055.011
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith:
+    - \calc.exe
+    - \calculator.exe
+    - \mspaint.exe
+    - \notepad.exe
+    - \ping.exe
+    - \wordpad.exe
+    - \write.exe
+    GrantedAccess: '0x1FFFFF'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a24e5861-c6ca-4fde-a93c-ba9256feddf0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_susp_all_access_uncommon_target.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

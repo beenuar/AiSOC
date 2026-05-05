@@ -1,0 +1,88 @@
+id: sigmahq-sigma-dcd74b95-3f36-4ed9-9598-0490951643aa
+name: PowerView PowerShell Cmdlets - ScriptBlock
+description: Detects Cmdlet names from PowerView of the PowerSploit exploitation framework.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/stable/Recon/README
+- https://github.com/PowerShellMafia/PowerSploit/tree/master/Recon
+- https://thedfirreport.com/2020/10/08/ryuks-return
+- https://adsecurity.org/?p=2277
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Export-PowerViewCSV
+    - Find-DomainLocalGroupMember
+    - Find-DomainObjectPropertyOutlier
+    - Find-DomainProcess
+    - Find-DomainShare
+    - Find-DomainUserEvent
+    - Find-DomainUserLocation
+    - Find-ForeignGroup
+    - Find-ForeignUser
+    - Find-GPOComputerAdmin
+    - Find-GPOLocation
+    - Find-InterestingDomain
+    - Find-InterestingFile
+    - Find-LocalAdminAccess
+    - Find-ManagedSecurityGroups
+    - Get-CachedRDPConnection
+    - Get-DFSshare
+    - Get-DomainDFSShare
+    - Get-DomainDNSRecord
+    - Get-DomainDNSZone
+    - Get-DomainFileServer
+    - Get-DomainGPOComputerLocalGroupMapping
+    - Get-DomainGPOLocalGroup
+    - Get-DomainGPOUserLocalGroupMapping
+    - Get-LastLoggedOn
+    - Get-LoggedOnLocal
+    - Get-NetFileServer
+    - Get-NetForest
+    - Get-NetGPOGroup
+    - Get-NetProcess
+    - Get-NetRDPSession
+    - Get-RegistryMountedDrive
+    - Get-RegLoggedOn
+    - Get-WMIRegCachedRDPConnection
+    - Get-WMIRegLastLoggedOn
+    - Get-WMIRegMountedDrive
+    - Get-WMIRegProxy
+    - Invoke-ACLScanner
+    - Invoke-CheckLocalAdminAccess
+    - Invoke-EnumerateLocalAdmin
+    - Invoke-EventHunter
+    - Invoke-FileFinder
+    - Invoke-Kerberoast
+    - Invoke-MapDomainTrust
+    - Invoke-ProcessHunter
+    - Invoke-RevertToSelf
+    - Invoke-ShareFinder
+    - Invoke-UserHunter
+    - Invoke-UserImpersonation
+    - Remove-RemoteConnection
+    - Request-SPNTicket
+    - Resolve-IPAddress
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dcd74b95-3f36-4ed9-9598-0490951643aa
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_powerview_malicious_commandlets.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

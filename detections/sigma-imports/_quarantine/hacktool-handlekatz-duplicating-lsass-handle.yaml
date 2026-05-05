@@ -1,0 +1,38 @@
+id: sigmahq-sigma-b1bd3a59-c1fd-4860-9f40-4dd161a7d1f5
+name: HackTool - HandleKatz Duplicating LSASS Handle
+description: Detects HandleKatz opening LSASS to duplicate its handle to later dump
+  the memory without opening any new handles
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1106
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://github.com/codewhitesec/HandleKatz
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: \lsass.exe
+    GrantedAccess: '0x1440'
+    CallTrace|startswith: C:\Windows\System32\ntdll.dll+
+    CallTrace|contains: '|UNKNOWN('
+    CallTrace|endswith: )
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b1bd3a59-c1fd-4860-9f40-4dd161a7d1f5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_hktl_handlekatz_lsass_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

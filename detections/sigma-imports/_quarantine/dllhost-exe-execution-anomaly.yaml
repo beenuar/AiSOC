@@ -1,0 +1,41 @@
+id: sigmahq-sigma-e7888eb1-13b0-4616-bd99-4bc0c2b054b9
+name: Dllhost.EXE Execution Anomaly
+description: Detects a "dllhost" process spawning with no commandline arguments which
+  is very rare to happen and could indicate process injection activity or malware
+  mimicking similar system processes.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/child-processes/
+- https://nasbench.medium.com/what-is-the-dllhost-exe-process-actually-running-ef9fe4c19c08
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/goofy-guineapig/NCSC-MAR-Goofy-Guineapig.pdf
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \dllhost.exe
+    CommandLine:
+    - dllhost.exe
+    - dllhost
+  filter_main_null:
+    CommandLine: null
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e7888eb1-13b0-4616-bd99-4bc0c2b054b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dllhost_no_cli_execution.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

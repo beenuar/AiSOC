@@ -1,0 +1,32 @@
+id: sigmahq-sigma-4153a907-2451-4e4f-a578-c52bb6881432
+name: Suspicious DNS Query with B64 Encoded String
+description: Detects suspicious DNS queries using base64 encoding
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  - T1071.004
+  categories:
+  - network
+references:
+- https://github.com/krmaxwell/dns-exfiltration
+logsource:
+  category: dns
+detection:
+  selection:
+    query|contains: ==.
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4153a907-2451-4e4f-a578-c52bb6881432
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/dns/net_dns_susp_b64_queries.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

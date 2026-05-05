@@ -1,0 +1,33 @@
+id: sigmahq-sigma-1a2ea919-d11d-4d1e-8535-06cda13be20f
+name: Triple Cross eBPF Rootkit Default Persistence
+description: Detects the creation of "ebpfbackdoor" files in both "cron.d" and "sudoers.d"
+  directories. Which both are related to the TripleCross persistence method
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  categories:
+  - endpoint
+references:
+- https://github.com/h3xduck/TripleCross/blob/12629558b8b0a27a5488a0b98f1ea7042e76f8ab/apps/deployer.sh
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: ebpfbackdoor
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a2ea919-d11d-4d1e-8535-06cda13be20f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/file_event/file_event_lnx_triple_cross_rootkit_persistence.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

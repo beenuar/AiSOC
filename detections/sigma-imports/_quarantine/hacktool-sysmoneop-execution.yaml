@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8a7e90c5-fe6e-45dc-889e-057fe4378bd9
+name: HackTool - SysmonEOP Execution
+description: Detects the execution of the PoC that can be used to exploit Sysmon CVE-2022-41120
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://github.com/Wh04m1001/SysmonEoP
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith: \SysmonEOP.exe
+  selection_hash:
+    Hashes|contains:
+    - IMPHASH=22F4089EB8ABA31E1BB162C6D9BF72E5
+    - IMPHASH=5123FA4C4384D431CD0D893EEB49BBEC
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8a7e90c5-fe6e-45dc-889e-057fe4378bd9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sysmoneop.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

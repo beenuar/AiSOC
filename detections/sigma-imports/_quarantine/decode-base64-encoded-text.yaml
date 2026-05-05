@@ -1,0 +1,33 @@
+id: sigmahq-sigma-e2072cab-8c9a-459b-b63c-40ae79e27031
+name: Decode Base64 Encoded Text
+description: Detects usage of base64 utility to decode arbitrary base64-encoded text
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1027/T1027.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /base64
+    CommandLine|contains: -d
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e2072cab-8c9a-459b-b63c-40ae79e27031
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_base64_decode.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,73 @@
+id: chronicle-detection-rules-vt-relationships-file-downloaded-from-ip
+name: vt_relationships_file_downloaded_from_ip
+description: vt_relationships_file_downloaded_from_ip
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule vt_relationships_file_downloaded_from_ip {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Alert on downloading a known file\
+    \ hash from a known IP with VT Relationships.\"\n    rule_id = \"mr_1a62ba21-6f3d-40c7-9278-b1e2d639a10b\"\
+    \n    rule_name = \"VT Relationships File Downloaded From IP\"\n    type = \"\
+    alert\"\n    tags = \"vt\"\n    data_source = \"zscalar, crowdstrike\"\n    severity\
+    \ = \"High\"\n    priority = \"High\"\n\n  events:\n    // NETWORK_HTTP\n    $network.metadata.event_type\
+    \ = \"NETWORK_HTTP\"\n    $network.principal.user.userid = $userid\n    $network.target.ip\
+    \ = $ip\n\n    // FILE_CREATION\n    $file.metadata.event_type = \"FILE_CREATION\"\
+    \n    $file.target.user.userid = $userid\n    $file.target.file.sha256 = $file_hash\n\
+    \n    // Network HTTP event must occur before the file creation event\n    $network.metadata.event_timestamp.seconds\
+    \ < $file.metadata.event_timestamp.seconds\n\n    //Uses VirusTotal integration\
+    \ via entity graph, this section maps to target file hash\n    $vt.graph.metadata.entity_type\
+    \ = \"FILE\"\n    $vt.graph.metadata.source_type = \"GLOBAL_CONTEXT\"\n    $vt.graph.metadata.vendor_name\
+    \ = \"VirusTotal\"\n    $vt.graph.metadata.product_name = \"VirusTotal Relationships\"\
+    \n    $vt.graph.entity.file.sha256 = $file_hash\n\n    //Uses VirusTotal integration\
+    \ via entity graph, this section maps the hash to the ip address it is downloaded\
+    \ from\n    $vt.graph.relations.entity_type = \"IP_ADDRESS\"\n    $vt.graph.relations.relationship\
+    \ = \"DOWNLOADED_FROM\"\n    $vt.graph.relations.entity.ip = $ip\n\n  match:\n\
+    \    $userid over 5m\n\n  outcome:\n    $risk_score = 85\n    // added to populate\
+    \ alert graph with additional context\n    $principal_hostname = array_distinct($network.principal.hostname)\n\
+    \    $target_hostname = array_distinct($network.target.hostname)\n    $principal_process_pid\
+    \ = array_distinct($file.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($file.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($file.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($file.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($file.principal.process.product_specific_process_id)\n    $principal_process_parent_process_product_specific_process_id\
+    \ = array_distinct($file.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($file.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($file.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($file.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($file.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($file.target.process.product_specific_process_id)\n    $target_process_parent_process_product_specific_process_id\
+    \ = array_distinct($file.target.process.parent_process.product_specific_process_id)\n\
+    \    // Commented out principal.user.userid because it is already represented\
+    \ in graph as match variable. If match changes, can uncomment to add to results\n\
+    \    //$principal_user_userid = array_distinct($file.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($file.target.user.userid)\n    $target_url\
+    \ = array_distinct($network.target.url)\n\n  condition:\n    $network and $file\
+    \ and $vt\n}"
+  chronicle_rule_name: vt_relationships_file_downloaded_from_ip
+provenance:
+  source: chronicle/detection-rules
+  source_id: vt_relationships_file_downloaded_from_ip
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/vt_relationships_file_downloaded_from_ip.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

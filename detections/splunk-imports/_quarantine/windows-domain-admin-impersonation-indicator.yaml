@@ -1,0 +1,56 @@
+id: splunk-security-content-10381f93-6d38-470a-9c30-d25478e3bd3f
+name: Windows Domain Admin Impersonation Indicator
+description: The following analytic identifies potential Kerberos ticket forging attacks,
+  specifically the Diamond Ticket attack. This is detected when a user logs into a
+  host and the GroupMembership field in event 4627 indicates a privileged group (e.g.,
+  Domain Admins), but the user does not actually belong to that group in the directory
+  service. The detection leverages Windows Security Event Log 4627, which logs account
+  logon events. The analytic cross-references the GroupMembership field from the event
+  against a pre-populated lookup of actual group memberships. Its crucial to note
+  that the accuracy and effectiveness of this detection heavily rely on the users
+  diligence in populating and regularly updating this lookup table. Any discrepancies
+  between the events GroupMembership and the lookup indicate potential ticket forging.
+  Kerberos ticket forging, especially the Diamond Ticket attack, allows attackers
+  to impersonate any user and potentially gain unauthorized access to resources. By
+  forging a ticket that indicates membership in a privileged group, an attacker can
+  bypass security controls and gain elevated privileges. Detecting such discrepancies
+  in group memberships during logon events can be a strong indicator of this attack
+  in progress, making it crucial for security teams to monitor and investigate. If
+  validated as a true positive, this indicates that an attacker has successfully forged
+  a Kerberos ticket and may have gained unauthorized access to critical resources,
+  potentially with elevated privileges.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558
+  categories:
+  - endpoint
+references:
+- https://trustedsec.com/blog/a-diamond-in-the-ruff
+- https://unit42.paloaltonetworks.com/next-gen-kerberos-attacks
+- https://github.com/GhostPack/Rubeus/pull/136
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4627
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4627 LogonType=3 NOT TargetUserName\
+    \ IN (\"*$\", \"SYSTEM\", \"DWM-*\",\"LOCAL SERVICE\",\"NETWORK SERVICE\", \"\
+    ANONYMOUS LOGON\", \"UMFD-*\")\n  | where match(GroupMembership, \"Domain Admins\"\
+    )\n  | stats count\n    BY _time TargetUserName GroupMembership\n       action\
+    \ app dest\n       signature_id user vendor_product\n  | lookup domain_admins\
+    \ username as TargetUserName OUTPUT username\n  | fillnull value=NotDA username\n\
+    \  | search username = \"NotDA\"\n  | `windows_domain_admin_impersonation_indicator_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 10381f93-6d38-470a-9c30-d25478e3bd3f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_domain_admin_impersonation_indicator.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

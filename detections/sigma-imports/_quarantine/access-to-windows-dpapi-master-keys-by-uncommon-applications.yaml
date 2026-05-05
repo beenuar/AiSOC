@@ -1,0 +1,46 @@
+id: sigmahq-sigma-46612ae6-86be-4802-bc07-39b59feb1309
+name: Access To Windows DPAPI Master Keys By Uncommon Applications
+description: 'Detects file access requests to the the Windows Data Protection API
+  Master keys by an uncommon application.
+
+  This can be a sign of credential stealing. Example case would be usage of mimikatz
+  "dpapi::masterkey" function'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1555.004
+  categories:
+  - endpoint
+references:
+- http://blog.harmj0y.net/redteaming/operational-guidance-for-offensive-user-dpapi-abuse/
+- https://book.hacktricks.xyz/windows-hardening/windows-local-privilege-escalation/dpapi-extracting-passwords
+logsource:
+  category: file_access
+  product: windows
+  definition: 'Requirements: Microsoft-Windows-Kernel-File ETW provider'
+detection:
+  selection:
+    FileName|contains:
+    - \Microsoft\Protect\S-1-5-18\
+    - \Microsoft\Protect\S-1-5-21-
+  filter_system_folders:
+    Image|startswith:
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+    - C:\Windows\system32\
+    - C:\Windows\SysWOW64\
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 46612ae6-86be-4802-bc07-39b59feb1309
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_access/file_access_win_susp_dpapi_master_key_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

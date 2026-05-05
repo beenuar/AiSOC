@@ -1,0 +1,45 @@
+id: mitre-car-car-2021-05-004
+name: BITS Job Persistence
+description: The following query identifies Microsoft Background Intelligent Transfer
+  Service utility `bitsadmin.exe` scheduling a BITS job to persist on an endpoint.
+  The query identifies the parameters used to create, resume or add a file to a BITS
+  job. Typically seen combined in a oneliner or ran in sequence. If identified, review
+  the BITS job created and capture any files written to disk. It is possible for BITS
+  to be used to upload files and this may require further network data analysis to
+  identify. You can use `bitsadmin /list /verbose` to list out the jobs during investigation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode – detect a BITS job being scheduled
+    type: Pseudocode
+    code: "processes = search Process:Create\nbitsadmin_commands = filter processes\
+      \ where (\n  exe =\"C:\\Windows\\System32\\bitsadmin.exe\" AND command_line\
+      \ includes one of [*create*, *addfile*, *setnotifyflags*, *setnotifycmdline*,\
+      \ *setminretrydelay*, *setcustomheaders*,*resume*])\noutput bitsadmin_commands\n"
+  - name: Splunk code
+    type: Splunk
+    code: '| tstats count min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Processes
+      where Processes.process_name=bitsadmin.exe Processes.process IN (*create*, *addfile*,
+      *setnotifyflags*, *setnotifycmdline*, *setminretrydelay*, *setcustomheaders*,
+      *resume* ) by Processes.dest Processes.user Processes.parent_process Processes.process_name
+      Processes.process Processes.process_id Processes.parent_process_id'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-05-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-05-004.yaml
+notes:
+  car_status: needs_implementation

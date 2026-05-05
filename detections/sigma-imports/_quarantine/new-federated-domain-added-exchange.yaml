@@ -1,0 +1,40 @@
+id: sigmahq-sigma-42127bdd-9133-474f-a6f1-97b6c08a4339
+name: New Federated Domain Added - Exchange
+description: Detects the addition of a new Federated Domain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://www.fireeye.com/content/dam/fireeye-www/blog/pdfs/wp-m-unc2452-2021-000343-01.pdf
+- https://us-cert.cisa.gov/ncas/alerts/aa21-008a
+- https://www.splunk.com/en_us/blog/security/a-golden-saml-journey-solarwinds-continued.html
+- https://www.sygnia.co/golden-saml-advisory
+- https://o365blog.com/post/aadbackdoor/
+logsource:
+  service: exchange
+  product: m365
+detection:
+  selection:
+    eventSource: Exchange
+    eventName: Add-FederatedDomain
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 42127bdd-9133-474f-a6f1-97b6c08a4339
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/exchange/microsoft365_new_federated_domain_added_exchange.yml
+falsepositives:
+- The creation of a new Federated domain is not necessarily malicious, however these
+  events need to be followed closely, as it may indicate federated credential abuse
+  or backdoor via federated identities at a similar or different cloud provider.
+notes:
+  quarantine_reason: 'upstream status: test'

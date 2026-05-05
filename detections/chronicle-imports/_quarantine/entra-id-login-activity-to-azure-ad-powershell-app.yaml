@@ -1,0 +1,53 @@
+id: chronicle-detection-rules-entra-id-login-activity-to-azure-ad-powershell-app
+name: entra_id_login_activity_to_azure_ad_powershell_app
+description: entra_id_login_activity_to_azure_ad_powershell_app
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_login_activity_to_azure_ad_powershell_app {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Logins to Azure AD PowerShell\
+    \ app can have legitimate purposes, but are also abused to gain access to user\
+    \ information. Programatic access to Azure AD should generally be through other\
+    \ apps\"\n    rule_id = \"mr_5bce885a-7f65-41e1-ae94-9befc892d704\"\n    rule_name\
+    \ = \"Entra ID Login Activity to Azure AD PowerShell Application\"\n    type =\
+    \ \"hunt\"\n    platform = \"azure\"\n    data_source = \"azure ad\"\n    severity\
+    \ = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $login.metadata.product_name = \"Azure AD\"\n    $login.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $login.target.application = \"Azure Active Directory PowerShell\"\
+    \n    $login.security_result.action = \"ALLOW\"\n    $login.target.user.userid\
+    \ = $userid\n\n  match:\n    $userid over 5m\n\n  outcome:\n    $risk_score =\
+    \ 65\n    $event_count = count_distinct($login.metadata.id)\n    $target_application\
+    \ = array_distinct($login.target.application)\n    $security_description = array_distinct($login.security_result.description)\n\
+    \    $security_summary = array_distinct($login.security_result.summary)\n    $country_region_login_attempt\
+    \ = array_distinct(strings.concat($login.principal.location.city,\" \",$login.principal.location.state,\"\
+    \ \",$login.principal.location.country_or_region))\n    $user_agent = array_distinct($login.network.http.user_agent)\n\
+    \    $principal_ip = array_distinct($login.principal.ip)\n\n  condition:\n   \
+    \ $login\n}"
+  chronicle_rule_name: entra_id_login_activity_to_azure_ad_powershell_app
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_login_activity_to_azure_ad_powershell_app
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_login_activity_to_azure_ad_powershell_app.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

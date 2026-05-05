@@ -1,0 +1,52 @@
+id: sigmahq-sigma-8f2a5c3d-9e4b-4a7c-8d1f-2e5a6b9c3d7e
+name: Suspicious Space Characters in TypedPaths Registry Path - FileFix
+description: Detects the occurrence of numerous space characters in TypedPaths registry
+  paths, which may indicate execution via phishing lures using file-fix techniques
+  to hide malicious commands.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.004
+  - T1027.010
+  categories:
+  - endpoint
+references:
+- https://expel.com/blog/cache-smuggling-when-a-picture-isnt-a-thousand-words/
+- https://mrd0x.com/filefix-clickfix-alternative/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_key:
+    TargetObject|endswith: \Software\Microsoft\Windows\CurrentVersion\Explorer\TypedPaths\url1
+    Details|contains: '#'
+  selection_space_variation:
+    Details|contains:
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    - '            '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8f2a5c3d-9e4b-4a7c-8d1f-2e5a6b9c3d7e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_susp_typedpaths_space_characters.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

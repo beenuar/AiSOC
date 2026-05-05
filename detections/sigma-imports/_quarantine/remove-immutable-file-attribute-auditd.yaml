@@ -1,0 +1,34 @@
+id: sigmahq-sigma-a5b977d6-8a81-4475-91b9-49dbfcd941f7
+name: Remove Immutable File Attribute - Auditd
+description: Detects removing immutable file attribute.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1222.002/T1222.002.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0|contains: chattr
+    a1|contains: -i
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a5b977d6-8a81-4475-91b9-49dbfcd941f7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_chattr_immutable_removal.yml
+falsepositives:
+- Administrator interacting with immutable files (e.g. for instance backups).
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,50 @@
+id: splunk-security-content-d8419343-f0f8-4d8e-91cc-18bb531df87d
+name: Windows Identify PowerShell Web Access IIS Pool
+description: This analytic detects and analyzes PowerShell Web Access (PSWA) usage
+  in Windows environments. It tracks both connection attempts (EventID 4648) and successful
+  logons (EventID 4624) associated with PSWA, providing a comprehensive view of access
+  patterns. The analytic identifies PSWA's operational status, host servers, processes,
+  and connection metrics. It highlights unique target accounts, domains accessed,
+  and verifies logon types. This information is crucial for detecting potential misuse,
+  such as lateral movement, brute force attempts, or unusual access patterns. By offering
+  insights into PSWA activity, it enables security teams to quickly assess and investigate
+  potential security incidents involving this powerful administrative tool.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-241a
+- https://gist.github.com/MHaggis/7e67b659af9148fa593cf2402edebb41
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` (EventCode=4648 OR EventCode=4624 OR EventCode=4625)
+    SubjectUserName="pswa_pool" | fields EventCode, SubjectUserName, TargetUserName,
+    Computer, TargetDomainName, ProcessName, LogonType | rename Computer as dest |
+    stats count(eval(EventCode=4648)) as "Connection Attempts", count(eval(EventCode=4624))
+    as "Successful Logons", count(eval(EventCode=4625)) as "Unsuccessful Logons",
+    dc(TargetUserName) as "Unique Target Accounts", values(dest) as "PSWA Host", dc(TargetDomainName)
+    as "Unique Target Domains", values(ProcessName) as "PSWA Process", values(TargetUserName)
+    as "Target Users List", values(TargetServerName) as "Target Servers List", values(LogonType)
+    as "Logon Types" | eval PSWA_Running = "Yes", "PSWA Process" = mvindex(split(mvindex("PSWA
+    Process", 0), "\\"), -1) | fields PSWA_Running, "PSWA Host", "PSWA Process", "Connection
+    Attempts", "Successful Logons","Unsuccessful Logons", "Unique Target Accounts",
+    "Unique Target Domains", "Target Users List","Target Servers List", "Logon Types"
+    | `security_content_ctime(firstTime)` |`security_content_ctime(lastTime)` | `windows_identify_powershell_web_access_iis_pool_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d8419343-f0f8-4d8e-91cc-18bb531df87d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_identify_powershell_web_access_iis_pool.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

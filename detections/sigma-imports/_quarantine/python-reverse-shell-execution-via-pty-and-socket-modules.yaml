@@ -1,0 +1,39 @@
+id: sigmahq-sigma-32e62bc7-3de0-4bb1-90af-532978fe42c0
+name: Python Reverse Shell Execution Via PTY And Socket Modules
+description: Detects the execution of python with calls to the socket and pty module
+  in order to connect and spawn a potential reverse shell.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.revshells.com/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|contains: python
+    CommandLine|contains|all:
+    - ' -c '
+    - import
+    - pty
+    - socket
+    - spawn
+    - .connect
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 32e62bc7-3de0-4bb1-90af-532978fe42c0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_python_reverse_shell.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

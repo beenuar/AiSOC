@@ -1,0 +1,52 @@
+id: sigmahq-sigma-ecbc5e16-58e0-4521-9c60-eb9a7ea4ad34
+name: Meterpreter or Cobalt Strike Getsystem Service Installation - Security
+description: Detects the use of getsystem Meterpreter/Cobalt Strike command by detecting
+  a specific service installation
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1134.001
+  - T1134.002
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-privilege-escalation-in-windows-environment
+- https://blog.cobaltstrike.com/2014/04/02/what-happens-when-i-type-getsystem/
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection_eid:
+    EventID: 4697
+  selection_cli_cmd:
+    ServiceFileName|contains|all:
+    - /c
+    - echo
+    - \pipe\
+    ServiceFileName|contains:
+    - cmd
+    - '%COMSPEC%'
+  selection_cli_rundll:
+    ServiceFileName|contains|all:
+    - rundll32
+    - .dll,a
+    - '/p:'
+  selection_cli_share:
+    ServiceFileName|startswith: \\\\127.0.0.1\\ADMIN$\
+  condition: selection_eid and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ecbc5e16-58e0-4521-9c60-eb9a7ea4ad34
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_meterpreter_or_cobaltstrike_getsystem_service_install.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

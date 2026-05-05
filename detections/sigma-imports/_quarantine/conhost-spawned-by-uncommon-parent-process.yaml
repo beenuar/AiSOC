@@ -1,0 +1,63 @@
+id: sigmahq-sigma-cbb9e3d1-2386-4e59-912e-62f1484f7a89
+name: Conhost Spawned By Uncommon Parent Process
+description: Detects when the Console Window Host (conhost.exe) process is spawned
+  by an uncommon parent process, which could be indicative of potential code injection
+  activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/conhost-spawned-by-suspicious-parent-process.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \conhost.exe
+    ParentImage|endswith:
+    - \explorer.exe
+    - \lsass.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \services.exe
+    - \smss.exe
+    - \spoolsv.exe
+    - \svchost.exe
+    - \userinit.exe
+    - \wininit.exe
+    - \winlogon.exe
+  filter_main_svchost:
+    ParentCommandLine|contains:
+    - -k apphost -s AppHostSvc
+    - -k imgsvc
+    - -k localService -p -s RemoteRegistry
+    - -k LocalSystemNetworkRestricted -p -s NgcSvc
+    - -k NetSvcs -p -s NcaSvc
+    - -k netsvcs -p -s NetSetupSvc
+    - -k netsvcs -p -s wlidsvc
+    - -k NetworkService -p -s DoSvc
+    - -k wsappx -p -s AppXSvc
+    - -k wsappx -p -s ClipSVC
+    - -k wusvcs -p -s WaaSMedicSvc
+  filter_optional_dropbox:
+    ParentCommandLine|contains:
+    - C:\Program Files (x86)\Dropbox\Client\
+    - C:\Program Files\Dropbox\Client\
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cbb9e3d1-2386-4e59-912e-62f1484f7a89
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_conhost_uncommon_parent.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

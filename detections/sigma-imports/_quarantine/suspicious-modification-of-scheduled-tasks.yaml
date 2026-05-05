@@ -1,0 +1,82 @@
+id: sigmahq-sigma-1c0e41cd-21bb-4433-9acc-4a2cd6367b9b
+name: Suspicious Modification Of Scheduled Tasks
+description: 'Detects when an attacker tries to modify an already existing scheduled
+  tasks to run from a suspicious location
+
+  Attackers can create a simple looking task in order to avoid detection on creation
+  as it''s often the most focused on
+
+  Instead they modify the task after creation to include their malicious payload'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_schtasks:
+    Image|endswith: \schtasks.exe
+    CommandLine|contains|all:
+    - ' /Change '
+    - ' /TN '
+  selection_susp_locations:
+    CommandLine|contains:
+    - \AppData\Local\Temp
+    - \AppData\Roaming\
+    - \Users\Public\
+    - \WINDOWS\Temp\
+    - \Desktop\
+    - \Downloads\
+    - \Temporary Internet
+    - C:\ProgramData\
+    - C:\Perflogs\
+    - '%ProgramData%'
+    - '%appdata%'
+    - '%comspec%'
+    - '%localappdata%'
+  selection_susp_images:
+    CommandLine|contains:
+    - regsvr32
+    - rundll32
+    - 'cmd /c '
+    - 'cmd /k '
+    - 'cmd /r '
+    - 'cmd.exe /c '
+    - 'cmd.exe /k '
+    - 'cmd.exe /r '
+    - powershell
+    - mshta
+    - wscript
+    - cscript
+    - certutil
+    - bitsadmin
+    - bash.exe
+    - 'bash '
+    - scrcons
+    - 'wmic '
+    - wmic.exe
+    - forfiles
+    - scriptrunner
+    - hh.exe
+    - 'hh '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1c0e41cd-21bb-4433-9acc-4a2cd6367b9b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_change.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

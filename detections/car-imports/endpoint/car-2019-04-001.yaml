@@ -1,0 +1,77 @@
+id: mitre-car-car-2019-04-001
+name: UAC Bypass
+description: Bypassing user account control (UAC Bypass) is generally done by piggybacking
+  on a system process that has auto-escalate privileges. This analytic looks to detect
+  those cases as described by the open-source [UACME](https://github.com/hfiref0x/UACME)
+  tool.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: splunk
+    code: 'index=_your_sysmon_index_ EventCode=1 IntegrityLevel=High|search (ParentCommandLine="\"c:\\windows\\system32\\dism.exe\"*""*.xml"
+      AND Image!="c:\\users\\*\\appdata\\local\\temp\\*\\dismhost.exe") OR ParentImage=c:\\windows\\system32\\fodhelper.exe
+      OR (CommandLine="\"c:\\windows\\system32\\wusa.exe\"*/quiet*" AND User!=NOT_TRANSLATED
+      AND CurrentDirectory=c:\\windows\\system32\\ AND ParentImage!=c:\\windows\\explorer.exe)
+      OR CommandLine="*.exe\"*cleanmgr.exe /autoclean*" OR (ParentImage="c:\\windows\\*dccw.exe"
+      AND Image!="c:\\windows\\system32\\cttune.exe") OR Image="c:\\program files\\windows
+      media player\\osk.exe" OR ParentImage="c:\\windows\\system32\\slui.exe"|eval
+      PossibleTechniques=case(like(lower(ParentCommandLine),"%c:\\windows\\system32\\dism.exe%"),
+      "UACME #23", like(lower(Image),"c:\\program files\\windows media player\\osk.exe"),
+      "UACME #32", like(lower(ParentImage),"c:\\windows\\system32\\fodhelper.exe"),  "UACME
+      #33", like(lower(CommandLine),"%.exe\"%cleanmgr.exe /autoclean%"), "UACME #34",
+      like(lower(Image),"c:\\windows\\system32\\wusa.exe"), "UACME #36", like(lower(ParentImage),"c:\\windows\\%dccw.exe"),
+      "UACME #37", like(lower(ParentImage),"c:\\windows\\system32\\slui.exe"), "UACME
+      #45")
+
+      '
+  - name: ''
+    type: pseudocode
+    code: "processes = search Process:Create\npossible_uac_bypass = filter processes\
+      \ where (\n  integrity_level == \"High\" and\n  (parent_image_path == \"c:\\\
+      windows\\system32\\fodhelper.exe\") or\n  (command_line == \"*.exe\\\"*cleanmgr.exe\
+      \ /autoclean*\") or\n  (image_path == \"c:\\program files\\windows media player\\\
+      osk.exe\") or\n  (parent_image_path == \"c:\\windows\\system32\\slui.exe\")\
+      \ or\n  (parent_command_line == '\"c:\\windows\\system32\\dism.exe\"*\"\"*.xml\"\
+      ' and image_path != \"c:\\users\\*\\appdata\\local\\temp\\*\\dismhost.exe\"\
+      ) or\n  (command_line == '\"c:\\windows\\system32\\wusa.exe\"*/quiet*' and user\
+      \ != \"NOT_TRANSLATED\" and current_working_directory == \"c:\\windows\\system32\\\
+      \" and parent_image_path != \"c:\\windows\\explorer.exe\") or\n  (parent_image_path\
+      \ == \"c:\\windows\\*dccw.exe\" and image_path != \"c:\\windows\\system32\\\
+      cttune.exe\")\n)\noutput possible_uac_bypass\n"
+  - name: Sigma/Sysmon (Eventvwr)
+    type: Sigma
+    code: ''
+  - name: Sigma/Sysmon (sdclt)
+    type: Sigma
+    code: ''
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 integrity_level="High" ((parent_image="c:\windows\system32\fodhelper.exe"
+      OR command=''*.exe"*cleanmgr.exe /autoclean*'' OR image="c:\program files\windows
+      media player\osk.exe" OR parent_image="c:\windows\system32\slui.exe") OR (parent_command=''"c:\windows\system32\dism.exe"*""*.xml"''
+      -image="c:\users\*\appdata\local\temp\*\dismhost.exe") OR (parent_image="c:\windows\*dccw.exe"
+      -image="c:\windows\system32\cttune.exe") OR (command=''"c:\windows\system32\wusa.exe"*/quiet*''
+      -user="NOT_TRANSLATED" path="c:\windows\system32\" -parent_image="c:\windows\explorer.exe"))
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-04-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-04-001.yaml
+notes:
+  car_status: needs_implementation

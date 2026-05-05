@@ -1,0 +1,48 @@
+id: splunk-security-content-63a449ae-9f04-11ec-945e-acde48001122
+name: Windows Disable Windows Group Policy Features Through Registry
+description: The following analytic detects suspicious registry modifications aimed
+  at disabling Windows Group Policy features. It leverages data from the Endpoint.Registry
+  data model, focusing on specific registry paths and values associated with disabling
+  key Windows functionalities. This activity is significant because it is commonly
+  used by ransomware to hinder mitigation and forensic response efforts. If confirmed
+  malicious, this behavior could severely impair the ability of security teams to
+  analyze and respond to the attack, allowing the attacker to maintain control and
+  persist within the compromised environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://hybrid-analysis.com/sample/ef1c427394c205580576d18ba68d5911089c7da0386f19d1ca126929d3e671ab?environmentId=120&lang=en
+- https://www.sophos.com/en-us/threat-center/threat-analyses/viruses-and-spyware/Troj~Krotten-N/detailed-analysis
+- https://www.virustotal.com/gui/file/2d7855bf6470aa323edf2949b54ce2a04d9e38770f1322c3d0420c2303178d91/details
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry
+    WHERE (Registry.registry_path= "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\*"
+    OR Registry.registry_path= "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\*"
+    Registry.registry_value_name IN ("NoDesktop", "NoFind", "NoControlPanel", "NoFileMenu",
+    "NoSetTaskbar", "NoTrayContextMenu", "TaskbarLockAll", "NoThemesTab","NoPropertiesMyDocuments","NoVisualStyleChoice","NoColorChoice","NoPropertiesMyDocuments")
+    Registry.registry_value_data = "0x00000001") by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data) | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_disable_windows_group_policy_features_through_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 63a449ae-9f04-11ec-945e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disable_windows_group_policy_features_through_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-20a5ffa1-3848-4584-b6f8-c7c7fd9f69c8
+name: Ruby Inline Command Execution
+description: Detects execution of ruby using the "-e" flag. This is could be used
+  as a way to launch a reverse shell or execute live ruby code.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+- https://www.revshells.com/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \ruby.exe
+  - OriginalFileName: ruby.exe
+  selection_cli:
+    CommandLine|contains: ' -e'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 20a5ffa1-3848-4584-b6f8-c7c7fd9f69c8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ruby_inline_command_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-ca9bf243-465e-494a-9e54-bf9fc239057d
+name: Azure Subscription Permission Elevation Via AuditLogs
+description: 'Detects when a user has been elevated to manage all Azure Subscriptions.
+
+  This change should be investigated immediately if it isn''t planned.
+
+  This setting could allow an attacker access to Azure subscriptions in your environment.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts#assignment-and-elevation
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    Category: Administrative
+    OperationName: Assigns the caller to user access admin
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ca9bf243-465e-494a-9e54-bf9fc239057d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_subscription_permissions_elevation_via_auditlogs.yml
+falsepositives:
+- If this was approved by System Administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

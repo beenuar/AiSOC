@@ -1,0 +1,61 @@
+id: sigmahq-sigma-213d6a77-3d55-4ce8-ba74-fcfef741974e
+name: Private Keys Reconnaissance Via CommandLine Tools
+description: Adversaries may search for private key certificate files on compromised
+  systems for insecurely stored credential
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.004/T1552.004.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_cmd_img:
+  - Image|endswith: \cmd.exe
+  - OriginalFileName: Cmd.Exe
+  selection_cmd_cli:
+    CommandLine|contains: 'dir '
+  selection_pwsh_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_pwsh_cli:
+    CommandLine|contains: 'Get-ChildItem '
+  selection_findstr:
+  - Image|endswith: \findstr.exe
+  - OriginalFileName: FINDSTR.EXE
+  selection_ext:
+    CommandLine|contains:
+    - .key
+    - .pgp
+    - .gpg
+    - .ppk
+    - .p12
+    - .pem
+    - .pfx
+    - .cer
+    - .p7b
+    - .asc
+  condition: selection_ext and (all of selection_cmd_* or all of selection_pwsh_*
+    or selection_findstr)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 213d6a77-3d55-4ce8-ba74-fcfef741974e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_private_keys_recon.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

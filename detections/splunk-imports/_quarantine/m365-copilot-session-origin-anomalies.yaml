@@ -1,0 +1,47 @@
+id: splunk-security-content-0caf1c1c-0fba-401e-8ec7-f07cfdeee75b
+name: M365 Copilot Session Origin Anomalies
+description: Detects M365 Copilot users accessing from multiple geographic locations
+  to identify potential account compromise, credential sharing, or impossible travel
+  patterns. The detection aggregates M365 Copilot Graph API events per user, calculating
+  distinct cities and countries accessed, unique IP addresses, and the observation
+  timeframe to compute a locations-per-day metric that measures geographic mobility.
+  Users accessing Copilot from more than one city (cities_count > 1) are flagged and
+  sorted by country and city diversity, surfacing accounts exhibiting anomalous geographic
+  patterns that suggest compromised credentials being used from distributed locations
+  or simultaneous access from impossible travel distances.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`m365_copilot_graph_api` (appDisplayName=\"*Copilot*\" OR appDisplayName=\"\
+    M365ChatClient\" OR appDisplayName=\"OfficeAIAppChatCopilot\")\n  | eval user\
+    \ = userPrincipalName\n  | stats count as events, dc(location.city) as cities_count,\
+    \ values(location.city) as city_list, dc(location.countryOrRegion) as countries_count,\
+    \ values(location.countryOrRegion) as country_list, dc(ipAddress) as ip_count,\
+    \ values(ipAddress) as ip_addresses, min(_time) as first_seen, max(_time) as last_seen\n\
+    \    BY user\n  | eval days_active = round((last_seen - first_seen)/86400, 1)\n\
+    \  | eval locations_per_day = if(days_active > 0, round(cities_count/days_active,\
+    \ 2), cities_count)\n  | eval first_seen = strftime(first_seen, \"%Y-%m-%d %H:%M:%S\"\
+    )\n  | eval last_seen = strftime(last_seen, \"%Y-%m-%d %H:%M:%S\")\n  | where\
+    \ cities_count > 1\n  | sort -countries_count, -cities_count\n  | `m365_copilot_session_origin_anomalies_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0caf1c1c-0fba-401e-8ec7-f07cfdeee75b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_session_origin_anomalies.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

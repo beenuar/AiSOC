@@ -1,0 +1,47 @@
+id: splunk-security-content-1ff9eb9a-7d72-4993-a55e-59a839e607f1
+name: Internal Horizontal Port Scan
+description: This analytic identifies instances where an internal host has attempted
+  to communicate with 250 or more destination IP addresses using the same port and
+  protocol. Horizontal port scans from internal hosts can indicate reconnaissance
+  or scanning activities, potentially signaling malicious intent or misconfiguration.
+  By monitoring network traffic logs, this detection helps detect and respond to such
+  behavior promptly, enhancing network security and preventing potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(All_Traffic.action)\
+    \ as action values(All_Traffic.src_category) as src_category values(All_Traffic.dest_zone)\
+    \ as dest_zone values(All_Traffic.src_zone) as src_zone values(All_Traffic.src_port)\
+    \ as src_port count FROM datamodel=Network_Traffic\n  WHERE All_Traffic.src_ip\
+    \ IN (\"10.0.0.0/8\",\"172.16.0.0/12\",\"192.168.0.0/16\")\n  BY All_Traffic.src_ip\
+    \ All_Traffic.dest_port All_Traffic.dest_ip\n     All_Traffic.transport All_Traffic.rule\
+    \ span=1s\n     _time\n| `drop_dm_object_name(\"All_Traffic\")`\n| eval gtime=_time\n\
+    | bin span=1h gtime\n| stats min(_time) as _time values(action) as action dc(dest_ip)\
+    \ as totalDestIPCount values(src_category) as src_category values(dest_zone) as\
+    \ dest_zone values(src_zone) as src_zone\n  BY src_ip dest_port gtime\n     transport\n\
+    | where totalDestIPCount>=250\n| eval dest_port=transport + \"/\" + dest_port\n\
+    | stats min(_time) as _time values(action) as action sum(totalDestIPCount) as\
+    \ totalDestIPCount values(src_category) as src_category values(dest_port) as dest_ports\
+    \ values(dest_zone) as dest_zone values(src_zone) as src_zone\n  BY src_ip gtime\n\
+    | fields - gtime\n| `internal_horizontal_port_scan_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1ff9eb9a-7d72-4993-a55e-59a839e607f1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/internal_horizontal_port_scan.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

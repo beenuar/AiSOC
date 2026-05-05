@@ -1,0 +1,44 @@
+id: sigmahq-sigma-4fdc44df-bfe9-4fcc-b041-68f5a2d3031c
+name: Powershell LocalAccount Manipulation
+description: 'Adversaries may manipulate accounts to maintain access to victim systems.
+
+  Account manipulation may consist of any action that preserves adversary access to
+  a compromised account, such as modifying credentials or permission groups'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1098/T1098.md#atomic-test-1---admin-account-manipulate
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.localaccounts/?view=powershell-5.1
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Disable-LocalUser
+    - Enable-LocalUser
+    - Get-LocalUser
+    - Set-LocalUser
+    - New-LocalUser
+    - Rename-LocalUser
+    - Remove-LocalUser
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4fdc44df-bfe9-4fcc-b041-68f5a2d3031c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_localuser.yml
+falsepositives:
+- Legitimate administrative script
+notes:
+  quarantine_reason: 'upstream status: test'

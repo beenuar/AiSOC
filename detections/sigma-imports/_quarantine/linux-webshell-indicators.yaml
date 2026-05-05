@@ -1,0 +1,60 @@
+id: sigmahq-sigma-818f7b24-0fba-4c49-a073-8b755573b9c7
+name: Linux Webshell Indicators
+description: Detects suspicious sub processes of web server processes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://www.acunetix.com/blog/articles/web-shells-101-using-php-introduction-web-shells-part-2/
+- https://media.defense.gov/2020/Jun/09/2002313081/-1/-1/0/CSI-DETECT-AND-PREVENT-WEB-SHELL-MALWARE-20200422.PDF
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection_general:
+    ParentImage|endswith:
+    - /httpd
+    - /lighttpd
+    - /nginx
+    - /apache2
+    - /node
+    - /caddy
+  selection_tomcat:
+    ParentCommandLine|contains|all:
+    - /bin/java
+    - tomcat
+  selection_websphere:
+    ParentCommandLine|contains|all:
+    - /bin/java
+    - websphere
+  sub_processes:
+    Image|endswith:
+    - /whoami
+    - /ifconfig
+    - /ip
+    - /bin/uname
+    - /bin/cat
+    - /bin/crontab
+    - /hostname
+    - /iptables
+    - /netstat
+    - /pwd
+    - /route
+  condition: 1 of selection_* and sub_processes
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 818f7b24-0fba-4c49-a073-8b755573b9c7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_webshell_detection.yml
+falsepositives:
+- Web applications that invoke Linux command line tools
+notes:
+  quarantine_reason: 'upstream status: test'

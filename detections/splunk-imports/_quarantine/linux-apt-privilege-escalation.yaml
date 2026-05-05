@@ -1,0 +1,46 @@
+id: splunk-security-content-4d5a05fa-77d9-4fd0-af9c-05704f9f9a88
+name: Linux APT Privilege Escalation
+description: The following analytic detects the use of the Advanced Package Tool (APT)
+  or apt-get with elevated privileges via sudo on Linux systems. It leverages Endpoint
+  Detection and Response (EDR) telemetry to identify processes where APT commands
+  are executed with sudo rights. This activity is significant because it indicates
+  a user can run system commands as root, potentially leading to unauthorized root
+  shell access. If confirmed malicious, this could allow an attacker to escalate privileges,
+  execute arbitrary commands, and gain full control over the affected system, posing
+  a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/apt/
+- https://www.digitalocean.com/community/tutorials/what-is-apt
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where Processes.process="*apt*"
+    AND Processes.process="*APT::Update::Pre-Invoke::*" AND Processes.process="*sudo*"
+    by Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec Processes.process_guid Processes.process_hash Processes.process_id
+    Processes.process_integrity_level Processes.process_name Processes.process_path
+    Processes.user Processes.user_id Processes.vendor_product | `drop_dm_object_name(Processes)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `linux_apt_privilege_escalation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 4d5a05fa-77d9-4fd0-af9c-05704f9f9a88
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_apt_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-85ff530b-261d-48c6-a441-facaa2e81e48
+name: New Service Creation Using Sc.EXE
+description: Detects the creation of a new service using the "sc.exe" utility.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1543.003/T1543.003.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \sc.exe
+    CommandLine|contains|all:
+    - create
+    - binPath
+  filter_optional_dropbox:
+    ParentImage|startswith:
+    - C:\Program Files (x86)\Dropbox\Client\
+    - C:\Program Files\Dropbox\Client\
+    ParentImage|endswith: \Dropbox.exe
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 85ff530b-261d-48c6-a441-facaa2e81e48
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sc_create_service.yml
+falsepositives:
+- Legitimate administrator or user creates a service for legitimate reasons.
+- Software installation
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-1e59c230-6670-45bf-83b0-98903780607e
+name: Gpscript Execution
+description: Detects the execution of the LOLBIN gpscript, which executes logon or
+  startup scripts configured in Group Policy
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://oddvar.moe/2018/04/27/gpscript-exe-another-lolbin-to-the-list/
+- https://lolbas-project.github.io/lolbas/Binaries/Gpscript/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \gpscript.exe
+  - OriginalFileName: GPSCRIPT.EXE
+  selection_cli:
+    CommandLine|contains:
+    - ' /logon'
+    - ' /startup'
+  filter_main_svchost:
+    ParentCommandLine: C:\windows\system32\svchost.exe -k netsvcs -p -s gpsvc
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1e59c230-6670-45bf-83b0-98903780607e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_gpscript.yml
+falsepositives:
+- Legitimate uses of logon scripts distributed via group policy
+notes:
+  quarantine_reason: 'upstream status: test'

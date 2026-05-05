@@ -1,0 +1,34 @@
+id: sigmahq-sigma-63c779ba-f638-40a0-a593-ddd45e8b1ddc
+name: EventLog EVTX File Deleted
+description: Detects the deletion of the event log files which may indicate an attempt
+  to destroy forensic evidence
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\Windows\System32\winevt\Logs\
+    TargetFilename|endswith: .evtx
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 63c779ba-f638-40a0-a593-ddd45e8b1ddc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_event_log_files.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

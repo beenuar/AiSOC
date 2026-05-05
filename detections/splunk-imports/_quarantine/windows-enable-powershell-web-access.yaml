@@ -1,0 +1,41 @@
+id: splunk-security-content-175bb2de-6227-416b-9678-9b61999cd21f
+name: Windows Enable PowerShell Web Access
+description: The following analytic detects the enabling of PowerShell Web Access
+  via PowerShell commands. It leverages PowerShell script block logging (EventCode
+  4104) to identify the execution of the `Install-WindowsFeature` cmdlet with the
+  `WindowsPowerShellWebAccess` parameter. This activity is significant because enabling
+  PowerShell Web Access can facilitate remote execution of PowerShell commands, potentially
+  allowing an attacker to gain unauthorized access to systems and networks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-241a
+- https://gist.github.com/MHaggis/7e67b659af9148fa593cf2402edebb41
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*Install-WindowsFeature*WindowsPowerShellWebAccess*\"\
+    ,\"*Install-PswaWebApplication*\",\"*Add-PswaAuthorizationRule*UserName *ComputerName\
+    \ *\")\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_enable_powershell_web_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 175bb2de-6227-416b-9678-9b61999cd21f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_enable_powershell_web_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

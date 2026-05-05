@@ -1,0 +1,45 @@
+id: sigmahq-sigma-696bfb54-227e-4602-ac5b-30d9d2053312
+name: Veeam Backup Database Suspicious Query
+description: Detects potentially suspicious SQL queries using SQLCmd targeting the
+  Veeam backup databases in order to steal information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1005
+  categories:
+  - endpoint
+references:
+- https://labs.withsecure.com/publications/fin7-target-veeam-servers
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_sql:
+    Image|endswith: \sqlcmd.exe
+    CommandLine|contains|all:
+    - VeeamBackup
+    - 'From '
+  selection_db:
+    CommandLine|contains:
+    - BackupRepositories
+    - Backups
+    - Credentials
+    - HostCreds
+    - SmbFileShares
+    - Ssh_creds
+    - VSphereInfo
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 696bfb54-227e-4602-ac5b-30d9d2053312
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sqlcmd_veeam_db_recon.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

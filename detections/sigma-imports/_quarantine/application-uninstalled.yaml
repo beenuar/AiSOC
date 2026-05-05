@@ -1,0 +1,36 @@
+id: sigmahq-sigma-570ae5ec-33dc-427c-b815-db86228ad43e
+name: Application Uninstalled
+description: An application has been removed. Check if it is critical.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/EVTX-ETW-Resources/blob/f1b010ce0ee1b71e3024180de1a3e67f99701fe4/ETWProvidersManifests/Windows11/22H2/W11_22H2_Pro_20221220_22621.963/WEPExplorer/Microsoft-Windows-MsiServer.xml
+- https://learn.microsoft.com/en-us/windows/win32/msi/event-logging
+logsource:
+  product: windows
+  service: application
+detection:
+  selection:
+    Provider_Name: MsiInstaller
+    EventID:
+    - 1034
+    - 11724
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 570ae5ec-33dc-427c-b815-db86228ad43e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/msiinstaller/win_builtin_remove_application.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b4c8da4a-1c12-46b0-8a2b-0a8521d03442
+name: Restricted Software Access By SRP
+description: Detects restricted access to applications by the Software Restriction
+  Policies (SRP) policy
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1072
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/identity/software-restriction-policies/software-restriction-policies
+- https://github.com/nasbench/EVTX-ETW-Resources/blob/7a806a148b3d9d381193d4a80356016e6e8b1ee8/ETWEventsList/CSV/Windows11/22H2/W11_22H2_Pro_20220920_22621.382/Providers/Microsoft-Windows-AppXDeployment-Server.csv
+logsource:
+  product: windows
+  service: application
+detection:
+  selection:
+    Provider_Name: Microsoft-Windows-SoftwareRestrictionPolicies
+    EventID:
+    - 865
+    - 866
+    - 867
+    - 868
+    - 882
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b4c8da4a-1c12-46b0-8a2b-0a8521d03442
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/microsoft_windows_software_restriction_policies/win_software_restriction_policies_block.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

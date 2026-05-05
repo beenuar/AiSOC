@@ -1,0 +1,39 @@
+id: sigmahq-sigma-06b401f4-107c-4ff9-947f-9ec1e7649f1e
+name: Potential Arbitrary Command Execution Via FTP.EXE
+description: Detects execution of "ftp.exe" script with the "-s" or "/s" flag and
+  any child processes ran by "ftp.exe".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Ftp/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \ftp.exe
+  selection_child_img:
+  - Image|endswith: \ftp.exe
+  - OriginalFileName: ftp.exe
+  selection_child_cli:
+    CommandLine|contains|windash: '-s:'
+  condition: selection_parent or all of selection_child_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 06b401f4-107c-4ff9-947f-9ec1e7649f1e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ftp_arbitrary_command_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

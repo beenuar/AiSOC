@@ -1,0 +1,39 @@
+id: sigmahq-sigma-7ed2c9f7-c59d-4c82-a7e2-f859aa676099
+name: Suspicious MacOS Firmware Activity
+description: Detects when a user manipulates with Firmward Password on MacOS. NOTE
+  - this command has been disabled on silicon-based apple computers.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/usnistgov/macos_security/blob/932a51f3e819dd3e02ebfcf3ef433cfffafbe28b/rules/os/os_firmware_password_require.yaml
+- https://www.manpagez.com/man/8/firmwarepasswd/
+- https://support.apple.com/guide/security/firmware-password-protection-sec28382c9ca/web
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection1:
+    Image: /usr/sbin/firmwarepasswd
+    CommandLine|contains:
+    - setpasswd
+    - full
+    - delete
+    - check
+  condition: selection1
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7ed2c9f7-c59d-4c82-a7e2-f859aa676099
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_susp_macos_firmware_activity.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: splunk-security-content-651ee958-a433-471c-b264-39725b788b83
+name: PowerShell Invoke CIMMethod CIMSession
+description: The following analytic detects the creation of a New-CIMSession cmdlet
+  followed by the use of the Invoke-CIMMethod cmdlet within PowerShell. It leverages
+  PowerShell Script Block Logging to identify these specific cmdlets in the ScriptBlockText
+  field. This activity is significant because it mirrors the behavior of the Invoke-WMIMethod
+  cmdlet, often used for remote code execution via NTLMv2 pass-the-hash authentication.
+  If confirmed malicious, this could allow an attacker to execute commands remotely,
+  potentially leading to unauthorized access and control over targeted systems.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/cimcmdlets/invoke-cimmethod?view=powershell-7.3
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*invoke-CIMMethod*\"\
+    , \"*New-CimSession*\")\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ EventID\n       Guid Opcode Name\n       Path ProcessID ScriptBlockId\n    \
+    \   ScriptBlockText\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `powershell_invoke_cimmethod_cimsession_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 651ee958-a433-471c-b264-39725b788b83
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_invoke_cimmethod_cimsession.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

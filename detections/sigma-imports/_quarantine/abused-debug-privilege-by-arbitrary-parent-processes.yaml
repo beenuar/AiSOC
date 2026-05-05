@@ -1,0 +1,56 @@
+id: sigmahq-sigma-d522eca2-2973-4391-a3e0-ef0374321dae
+name: Abused Debug Privilege by Arbitrary Parent Processes
+description: Detection of unusual child processes by different system processes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://image.slidesharecdn.com/kheirkhabarovoffzonefinal-181117201458/95/hunting-for-privilege-escalation-in-windows-environment-74-638.jpg
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_parent:
+    ParentImage|endswith:
+    - \winlogon.exe
+    - \services.exe
+    - \lsass.exe
+    - \csrss.exe
+    - \smss.exe
+    - \wininit.exe
+    - \spoolsv.exe
+    - \searchindexer.exe
+    User|contains:
+    - AUTHORI
+    - AUTORI
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    - \cmd.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+    - Cmd.Exe
+  filter:
+    CommandLine|contains|all:
+    - ' route '
+    - ' ADD '
+  condition: all of selection_* and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d522eca2-2973-4391-a3e0-ef0374321dae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_abusing_debug_privilege.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

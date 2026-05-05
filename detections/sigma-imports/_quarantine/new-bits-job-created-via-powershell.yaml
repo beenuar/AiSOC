@@ -1,0 +1,35 @@
+id: sigmahq-sigma-fe3a2d49-f255-4d10-935c-bda7391108eb
+name: New BITS Job Created Via PowerShell
+description: Detects the creation of a new bits job by PowerShell
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md
+logsource:
+  product: windows
+  service: bits-client
+detection:
+  selection:
+    EventID: 3
+    processPath|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fe3a2d49-f255-4d10-935c-bda7391108eb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/bits_client/win_bits_client_new_job_via_powershell.yml
+falsepositives:
+- Administrator PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

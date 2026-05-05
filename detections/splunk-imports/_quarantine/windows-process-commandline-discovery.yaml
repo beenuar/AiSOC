@@ -1,0 +1,47 @@
+id: splunk-security-content-67d2a52e-a7e2-4a5d-ae44-a21212048bc2
+name: Windows Process Commandline Discovery
+description: The following analytic detects the use of Windows Management Instrumentation
+  Command-line (WMIC) to retrieve information about running processes, specifically
+  targeting the command lines used to launch those processes. This detection leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on logs containing
+  process details and command-line executions. This activity is significant as it
+  may indicate suspicious behavior, such as a user or process gathering detailed process
+  information, which is uncommon for non-technical users. If confirmed malicious,
+  this could allow an attacker to gain insights into running processes, aiding in
+  further exploitation or lateral movement.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1057
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_wmic`\
+    \ Processes.process= \"* process *\" Processes.process= \"* get *\" Processes.process=\
+    \ \"*CommandLine*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_process_commandline_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 67d2a52e-a7e2-4a5d-ae44-a21212048bc2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_process_commandline_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-26d3f0a2-f514-4a3f-a8a7-e7e48a8d9160
+name: PUA - Adidnsdump Execution
+description: 'This tool enables enumeration and exporting of all DNS records in the
+  zone for recon purposes of internal networks Python 3 and python.exe must be installed,
+
+  Usee to Query/modify DNS records for Active Directory integrated DNS via LDAP'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1018/T1018.md#atomic-test-9---remote-system-discovery---adidnsdump
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \python.exe
+    CommandLine|contains: adidnsdump
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 26d3f0a2-f514-4a3f-a8a7-e7e48a8d9160
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_python_adidnsdump.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

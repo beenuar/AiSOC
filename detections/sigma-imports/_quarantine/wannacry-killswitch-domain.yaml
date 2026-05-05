@@ -1,0 +1,36 @@
+id: sigmahq-sigma-3eaf6218-3bed-4d8a-8707-274096f12a18
+name: Wannacry Killswitch Domain
+description: Detects wannacry killswitch domain dns queries
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://www.mandiant.com/resources/blog/wannacry-ransomware-campaign
+logsource:
+  category: dns
+detection:
+  selection:
+    query:
+    - ifferfsodp9ifjaposdfjhgosurijfaewrwergwea.testing
+    - ifferfsodp9ifjaposdfjhgosurijfaewrwergwea.test
+    - ifferfsodp9ifjaposdfjhgosurijfaewrwergwea.com
+    - ayylmaotjhsstasdfasdfasdfasdfasdfasdfasdf.com
+    - iuqssfsodp9ifjaposdfjhgosurijfaewrwergwea.com
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3eaf6218-3bed-4d8a-8707-274096f12a18
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/dns/net_dns_wannacry_killswitch_domain.yml
+falsepositives:
+- Analyst testing
+notes:
+  quarantine_reason: 'upstream status: test'

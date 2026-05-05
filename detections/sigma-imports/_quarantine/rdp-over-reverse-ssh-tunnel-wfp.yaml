@@ -1,0 +1,52 @@
+id: sigmahq-sigma-5bed80b6-b3e8-428e-a3ae-d3c757589e41
+name: RDP over Reverse SSH Tunnel WFP
+description: Detects svchost hosting RDP termsvcs communicating with the loopback
+  address
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1090.001
+  - T1090.002
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1096148422984384514
+- https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES/blob/44fbe85f72ee91582876b49678f9a26292a155fb/Command%20and%20Control/DE_RDP_Tunnel_5156.evtx
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5156
+  sourceRDP:
+    SourcePort: 3389
+    DestAddress:
+    - 127.*
+    - ::1
+  destinationRDP:
+    DestPort: 3389
+    SourceAddress:
+    - 127.*
+    - ::1
+  filter_app_container:
+    FilterOrigin: AppContainer Loopback
+  filter_thor:
+    Application|endswith:
+    - \thor.exe
+    - \thor64.exe
+  condition: selection and ( sourceRDP or destinationRDP ) and not 1 of filter*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5bed80b6-b3e8-428e-a3ae-d3c757589e41
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_rdp_reverse_tunnel.yml
+falsepositives:
+- Programs that connect locally to the RDP port
+notes:
+  quarantine_reason: 'upstream status: test'

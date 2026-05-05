@@ -1,0 +1,36 @@
+id: sigmahq-sigma-3bad990e-4848-4a78-9530-b427d854aac0
+name: Domain Trust Discovery Via Dsquery
+description: Detects execution of "dsquery.exe" for domain trust discovery
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1482
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1482/T1482.md
+- https://posts.specterops.io/an-introduction-to-manual-active-directory-querying-with-dsquery-and-ldapsearch-84943c13d7eb?gi=41b97a644843
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \dsquery.exe
+  - OriginalFileName: dsquery.exe
+  selection_cli:
+    CommandLine|contains: trustedDomain
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3bad990e-4848-4a78-9530-b427d854aac0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dsquery_domain_trust_discovery.yml
+falsepositives:
+- Legitimate use of the utilities by legitimate user for legitimate reason
+notes:
+  quarantine_reason: 'upstream status: test'

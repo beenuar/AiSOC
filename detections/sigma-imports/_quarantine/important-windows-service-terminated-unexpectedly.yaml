@@ -1,0 +1,39 @@
+id: sigmahq-sigma-56abae0c-6212-4b97-adc0-0b559bb950c3
+name: Important Windows Service Terminated Unexpectedly
+description: Detects important or interesting Windows services that got terminated
+  unexpectedly.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.randori.com/blog/vulnerability-analysis-queuejumper-cve-2023-21554/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_eid:
+    Provider_Name: Service Control Manager
+    EventID: 7034
+  selection_name:
+  - param1|contains: Message Queuing
+  - Binary|contains:
+    - 4d0053004d005100
+    - 6d0073006d007100
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 56abae0c-6212-4b97-adc0-0b559bb950c3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_terminated_unexpectedly.yml
+falsepositives:
+- Rare false positives could occur since service termination could happen due to multiple
+  reasons
+notes:
+  quarantine_reason: 'upstream status: test'

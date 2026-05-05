@@ -1,0 +1,40 @@
+id: sigmahq-sigma-d3f90469-fb05-42ce-b67d-0fded91bbef3
+name: Bitbucket User Login Failure Via SSH
+description: 'Detects SSH user login access failures.
+
+  Please note that this rule can be noisy and is recommended to use with correlation
+  based on "author.name" field.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.004
+  - T1110
+  categories:
+  - endpoint
+references:
+- https://confluence.atlassian.com/bitbucketserver/view-and-configure-the-audit-log-776640417.html
+- https://confluence.atlassian.com/bitbucketserver/enable-ssh-access-to-git-repositories-776640358.html
+logsource:
+  product: bitbucket
+  service: audit
+  definition: 'Requirements: "Advance" log level is required to receive these audit
+    events.'
+detection:
+  selection:
+    auditType.category: Authentication
+    auditType.action: User login failed(SSH)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3f90469-fb05-42ce-b67d-0fded91bbef3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/bitbucket/audit/bitbucket_audit_user_login_failure_via_ssh_detected.yml
+falsepositives:
+- Legitimate user wrong password attempts.
+notes:
+  quarantine_reason: 'upstream status: test'

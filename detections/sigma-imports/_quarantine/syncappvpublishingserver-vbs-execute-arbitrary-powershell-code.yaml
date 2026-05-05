@@ -1,0 +1,36 @@
+id: sigmahq-sigma-36475a7d-0f6d-4dce-9b01-6aeb473bbaf1
+name: SyncAppvPublishingServer VBS Execute Arbitrary PowerShell Code
+description: Executes arbitrary PowerShell code using SyncAppvPublishingServer.vbs
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1216
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1216/T1216.md
+- https://lolbas-project.github.io/lolbas/Binaries/Syncappvpublishingserver/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - \SyncAppvPublishingServer.vbs
+    - ;
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 36475a7d-0f6d-4dce-9b01-6aeb473bbaf1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_syncappvpublishingserver_vbs_execute_psh.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

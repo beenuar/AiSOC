@@ -1,0 +1,39 @@
+id: sigmahq-sigma-17e53739-a1fc-4a62-b1b9-87711c2d5e44
+name: Python Function Execution Security Warning Disabled In Excel - Registry
+description: 'Detects changes to the registry value "PythonFunctionWarnings" that
+  would prevent any warnings or alerts from showing when Python functions are about
+  to be executed.
+
+  Threat actors could run malicious code through the new Microsoft Excel feature that
+  allows Python to run within the spreadsheet.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://support.microsoft.com/en-us/office/data-security-and-python-in-excel-33cc88a4-4a87-485e-9ff9-f35958278327
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Microsoft\Office\
+    TargetObject|endswith: \Excel\Security\PythonFunctionWarnings
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 17e53739-a1fc-4a62-b1b9-87711c2d5e44
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_disable_python_security_warnings.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

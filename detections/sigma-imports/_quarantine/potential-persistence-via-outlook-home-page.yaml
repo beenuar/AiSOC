@@ -1,0 +1,40 @@
+id: sigmahq-sigma-ddd171b5-2cc6-4975-9e78-f0eccd08cc76
+name: Potential Persistence Via Outlook Home Page
+description: 'Detects potential persistence activity via outlook home page.
+
+  An attacker can set a home page to achieve code execution and persistence by editing
+  the WebView registry keys.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=70
+- https://support.microsoft.com/en-us/topic/outlook-home-page-feature-is-missing-in-folder-properties-d207edb7-aa02-46c5-b608-5d9dbed9bd04?ui=en-us&rs=en-us&ad=us
+- https://trustedsec.com/blog/specula-turning-outlook-into-a-c2-with-one-registry-change
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|contains|all:
+    - \Software\Microsoft\Office\
+    - \Outlook\WebView\
+    TargetObject|endswith: \URL
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ddd171b5-2cc6-4975-9e78-f0eccd08cc76
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_outlook_homepage.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

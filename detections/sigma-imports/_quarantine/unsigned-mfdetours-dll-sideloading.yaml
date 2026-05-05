@@ -1,0 +1,37 @@
+id: sigmahq-sigma-948a0953-f287-4806-bbcb-3b2e396df89f
+name: Unsigned Mfdetours.DLL Sideloading
+description: Detects DLL sideloading of unsigned "mfdetours.dll". Executing "mftrace.exe"
+  can be abused to attach to an arbitrary process and force load any DLL named "mfdetours.dll"
+  from the current directory of execution.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \mfdetours.dll
+  filter_main_legit_path:
+    ImageLoaded|contains: :\Program Files (x86)\Windows Kits\10\bin\
+    SignatureStatus: Valid
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 948a0953-f287-4806-bbcb-3b2e396df89f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_mfdetours_unsigned.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

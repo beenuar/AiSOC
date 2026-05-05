@@ -1,0 +1,51 @@
+id: chronicle-detection-rules-oilrig-part-1
+name: oilrig_part_1
+description: oilrig_part_1
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule oilrig_part_1 {\n meta:\n    author = \"Ariel Millahuel\"\
+    \n    description = \"OilRig is an Iranian threat group operating primarily in\
+    \ the Middle East by targeting organizations in this region that are in a variety\
+    \ of different industries; however, this group has occasionally targeted organizations\
+    \ outside of the Middle East as well. It also appears OilRig carries out supply\
+    \ chain attacks, where the threat group leverages the trust relationship between\
+    \ organizations to attack their primary targets.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Nvw0NkZgaA6d\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, persistence, privilege_escalation,\
+    \ T1059, T1053\"\n\n  events:\n(($selection2.target.process.command_line = \"\
+    cmd.exe\\\" /c wmic /Node:localhost /Namespace:\\\\\\\\root\\\\SecurityCenter2\
+    \ Path AntiVirusProduct Get displayName /Format:List\" or $selection2.target.process.command_line\
+    \ = \"schtasks.exe /create /F /tn \\\"SC Scheduled Scan\\\" /xml \\\"C:\\\\Users\\\
+    \\admin\\\\AppData\\\\Local\\\\Microsoft\\\\Taskbar\\\\SCSCAN.xml\" or $selection2.target.process.command_line\
+    \ = \"ipconfig /flushdns\" or re.regex($selection2.target.process.command_line,\
+    \ `cmd\\.exe /c copy \\\"C:\\\\Users\\\\admin\\\\AppData\\\\Local\\\\Temp.*\\\
+    .doc\\\" \\\"C:\\\\Users\\\\admin\\\\AppData\\\\Roaming\\\\Tmp\\.doc`) or re.regex($selection2.target.process.command_line,\
+    \ `cmd\\.exe /c SchTasks /Create /SC MINUTE /MO 3 /TN \\\"InetlSecurityAssistManager\\\
+    \" /TR \\\"C:\\\\Users\\\\admin\\\\AppData\\\\Local\\\\Temp.*\\.exe\\\" /f`) or\
+    \ $selection2.target.process.command_line = \"cmd.exe\\\" /c start /b schtasks\
+    \ /query /fo csv\" or $selection2.target.process.command_line = \"powershell.exe\\\
+    \" -exec bypass -File C:\\\\programdata\\\\Office365DCOMCheck.ps1\") and ($selection2.metadata.product_event_type\
+    \ = \"4688\" or $selection2.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection2\n}"
+  chronicle_rule_name: oilrig_part_1
+provenance:
+  source: chronicle/detection-rules
+  source_id: oilrig_part_1
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/oilrig_part_2.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

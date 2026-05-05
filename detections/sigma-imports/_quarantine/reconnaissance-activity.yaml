@@ -1,0 +1,45 @@
+id: sigmahq-sigma-968eef52-9cff-4454-8992-1e74b9cbad6c
+name: Reconnaissance Activity
+description: Detects activity as "net user administrator /domain" and "net group domain
+  admins /domain"
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://findingbad.blogspot.de/2017/01/hunting-what-does-it-look-like.html
+logsource:
+  product: windows
+  service: security
+  definition: The volume of Event ID 4661 is high on Domain Controllers and therefore
+    "Audit SAM" and "Audit Kernel Object" advanced audit policy settings are not configured
+    in the recommendations for server systems
+detection:
+  selection:
+    EventID: 4661
+    AccessMask: '0x2d'
+    ObjectType:
+    - SAM_USER
+    - SAM_GROUP
+    ObjectName|startswith: S-1-5-21-
+    ObjectName|endswith:
+    - '-500'
+    - '-512'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 968eef52-9cff-4454-8992-1e74b9cbad6c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_net_recon_activity.yml
+falsepositives:
+- Administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

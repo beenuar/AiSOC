@@ -1,0 +1,31 @@
+id: sigmahq-sigma-7d4cdc5a-0076-40ca-aac8-f7e714570e47
+name: CMSTP Execution Process Creation
+description: Detects various indicators of Microsoft Connection Manager Profile Installer
+  execution
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1218.003
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20190720093911/http://www.endurant.io/cmstp/detecting-cmstp-enabled-code-execution-and-uac-bypass-with-sysmon/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \cmstp.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7d4cdc5a-0076-40ca-aac8-f7e714570e47
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmstp_execution_by_creation.yml
+falsepositives:
+- Legitimate CMSTP use (unlikely in modern enterprise environments)

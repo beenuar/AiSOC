@@ -1,0 +1,43 @@
+id: sigmahq-sigma-49aae26c-450e-448b-911d-b3c13d178dfc
+name: Linux Keylogging with Pam.d
+description: Detect attempt to enable auditing of TTY input
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003
+  - T1056.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1056.001/T1056.001.md
+- https://linux.die.net/man/8/pam_tty_audit
+- https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/security_guide/sec-configuring_pam_for_auditing
+- https://access.redhat.com/articles/4409591#audit-record-types-2
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection_path_events:
+    type: PATH
+    name:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+  selection_tty_events:
+    type:
+    - TTY
+    - USER_TTY
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 49aae26c-450e-448b-911d-b3c13d178dfc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/lnx_auditd_keylogging_with_pam_d.yml
+falsepositives:
+- Administrative work
+notes:
+  quarantine_reason: 'upstream status: test'

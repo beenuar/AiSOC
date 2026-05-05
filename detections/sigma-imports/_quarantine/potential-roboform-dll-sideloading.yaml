@@ -1,0 +1,45 @@
+id: sigmahq-sigma-f64c9b2d-b0ad-481d-9d03-7fc75020892a
+name: Potential RoboForm.DLL Sideloading
+description: Detects potential DLL sideloading of "roboform.dll", a DLL used by RoboForm
+  Password Manager
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/StopMalvertisin/status/1648604148848549888
+- https://twitter.com/t3ft3lb/status/1656194831830401024
+- https://www.roboform.com/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith:
+    - \roboform.dll
+    - \roboform-x64.dll
+  filter_main_path:
+    Image|startswith:
+    - ' C:\Program Files (x86)\Siber Systems\AI RoboForm\'
+    - ' C:\Program Files\Siber Systems\AI RoboForm\'
+    Image|endswith:
+    - \robotaskbaricon.exe
+    - \robotaskbaricon-x64.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f64c9b2d-b0ad-481d-9d03-7fc75020892a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_robform.yml
+falsepositives:
+- If installed on a per-user level, the path would be located in "AppData\Local".
+  Add additional filters to reflect this mode of installation
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-0dba975d-a193-4ed1-a067-424df57570d1
+name: Uncommon Network Connection Initiated By Certutil.EXE
+description: 'Detects a network connection initiated by the certutil.exe utility.
+
+  Attackers can abuse the utility in order to download malware or additional payloads.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \certutil.exe
+    Initiated: 'true'
+    DestinationPort:
+    - 80
+    - 135
+    - 443
+    - 445
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0dba975d-a193-4ed1-a067-424df57570d1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_certutil_initiated_connection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

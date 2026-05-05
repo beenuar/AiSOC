@@ -1,0 +1,38 @@
+id: sigmahq-sigma-7692f583-bd30-4008-8615-75dab3f08a99
+name: Enable BPF Kprobes Tracing
+description: Detects common command used to enable bpf kprobes tracing
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://embracethered.com/blog/posts/2021/offensive-bpf-bpftrace/
+- https://bpftrace.org/
+- https://www.kernel.org/doc/html/v5.0/trace/kprobetrace.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains|all:
+    - echo 1 >
+    - /sys/kernel/debug/tracing/events/kprobes/
+    CommandLine|contains:
+    - /myprobe/enable
+    - /myretprobe/enable
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7692f583-bd30-4008-8615-75dab3f08a99
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_bpf_kprob_tracing_enabled.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

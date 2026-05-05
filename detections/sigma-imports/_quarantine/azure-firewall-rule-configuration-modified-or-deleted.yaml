@@ -1,0 +1,40 @@
+id: sigmahq-sigma-2a7d64cf-81fa-4daf-ab1b-ab80b789c067
+name: Azure Firewall Rule Configuration Modified or Deleted
+description: Identifies when a Firewall Rule Configuration is Modified or Deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName:
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/RULECOLLECTIONGROUPS/WRITE
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/RULECOLLECTIONGROUPS/DELETE
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/RULEGROUPS/WRITE
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/RULEGROUPS/DELETE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2a7d64cf-81fa-4daf-ab1b-ab80b789c067
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_network_firewall_rule_modified_or_deleted.yml
+falsepositives:
+- Firewall Rule Configuration being modified or deleted may be performed by a system
+  administrator. Verify whether the user identity, user agent, and/or hostname should
+  be making changes in your environment.
+- Firewall Rule Configuration modified or deleted from unfamiliar users should be
+  investigated. If known behavior is causing false positives, it can be exempted from
+  the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-e55a5195-4724-480e-a77e-3ebe64bd3759
+name: Invoke-Obfuscation Via Use MSHTA - PowerShell
+description: Detects Obfuscated Powershell via use MSHTA in Scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_4104:
+    ScriptBlockText|contains|all:
+    - set
+    - '&&'
+    - mshta
+    - vbscript:createobject
+    - .run
+    - (window.close)
+  condition: selection_4104
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e55a5195-4724-480e-a77e-3ebe64bd3759
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_invoke_obfuscation_via_use_mhsta.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

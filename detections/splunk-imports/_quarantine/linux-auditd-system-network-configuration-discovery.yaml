@@ -1,0 +1,43 @@
+id: splunk-security-content-5db16825-81bd-4923-a8d6-d6a13a59832a
+name: Linux Auditd System Network Configuration Discovery
+description: The following analytic detects suspicious system network configuration
+  discovery activities, which may indicate an adversary's attempt to gather information
+  about the network environment. Such actions typically involve commands or tools
+  used to identify network interfaces, routing tables, and active connections. Detecting
+  these activities is crucial, as they often precede more targeted attacks like lateral
+  movement or data exfiltration. By identifying unusual or unauthorized network discovery
+  efforts, this analytic helps security teams to swiftly detect and respond to potential
+  reconnaissance operations, mitigating the risk of further compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1016
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=SYSCALL comm IN (\"arp\", \"ifconfig\", \"ip\"\
+    , \"netstat\", \"firewall-cmd\", \"ufw\", \"iptables\", \"ss\", \"route\")\n \
+    \ | bucket _time span=15m\n  | rename host as dest\n  | stats dc(comm) as unique_commands,\
+    \ values(comm) as comm, values(exe) as exe, values(syscall) as syscall, values(uid)\
+    \ as uid, values(ppid) as ppid, values(pid) as pid, count, min(_time) as firstTime,\
+    \ max(_time) as lastTime\n    BY success dest\n  | where unique_commands >= 4\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_system_network_configuration_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5db16825-81bd-4923-a8d6-d6a13a59832a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_system_network_configuration_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

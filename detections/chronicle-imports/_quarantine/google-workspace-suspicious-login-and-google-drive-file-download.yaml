@@ -1,0 +1,63 @@
+id: chronicle-detection-rules-google-workspace-suspicious-login-and-google-drive-file-download
+name: google_workspace_suspicious_login_and_google_drive_file_download
+description: google_workspace_suspicious_login_and_google_drive_file_download
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule google_workspace_suspicious_login_and_google_drive_file_download {\n\n\
+    \  meta:\n    author = \"Google Cloud Security\"\n    description = \"Identifies\
+    \ when a Google Workspace user downloads a file from Google Drive after a suspicious\
+    \ login event occurred.\"\n    rule_id = \"mr_3c55c930-d9be-4d34-a90e-baf92c22ae40\"\
+    \n    rule_name = \"Google Workspace Suspicious Login and Google Drive File Download\"\
+    \n    mitre_attack_tactic = \"Exfiltration\"\n    mitre_attack_technique = \"\
+    Exfiltration Over Web Service\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1567/\"\
+    \n    mitre_attack_version = \"v13.1\"\n    type = \"Alert\"\n    data_source\
+    \ = \"Workspace Activity\"\n    severity = \"High\"\n    priority = \"High\"\n\
+    \n  events:\n    // Suspicious Login Event\n    $login.metadata.vendor_name =\
+    \ \"Google Workspace\"\n    $login.metadata.product_name = \"login\"\n    $login.metadata.product_event_type\
+    \ = \"login_success\"\n    $login.about.labels[\"is_suspicious\"] = \"true\"\n\
+    \n    // Document Download Event\n    $download.metadata.vendor_name = \"Google\
+    \ Workspace\"\n    $download.metadata.product_name = \"drive\"\n    $download.metadata.product_event_type\
+    \ = \"download\"\n\n    // Joining login and download events using userid\n  \
+    \  $login.target.user.userid = $download.principal.user.userid\n\n    // Placeholders\
+    \ for match section\n    $login.principal.ip = $principal_ip\n    $login.target.user.userid\
+    \ = $target_userid\n\n    // First login event occurs later a download event\n\
+    \    $login.metadata.event_timestamp.seconds < $download.metadata.event_timestamp.seconds\n\
+    \n  match:\n    $target_userid, $principal_ip over 1h\n\n  outcome:\n\n    $risk_score\
+    \ = max(75)\n    $mitre_attack_tactic = \"Exfiltration\"\n    $mitre_attack_technique\
+    \ = \"Exfiltration Over Web Service\"\n    $mitre_attack_technique_id = \"T1567\"\
+    \n    $event_count = count_distinct($download.metadata.id)\n    $product_event_type\
+    \ = array_distinct($download.metadata.product_event_type)\n    $userid = array_distinct($download.principal.user.userid)\n\
+    \    $doc_type = array_distinct($download.src.resource.attribute.labels[\"doc_type\"\
+    ])\n    $owner = array_distinct($download.target.resource.attribute.labels[\"\
+    owner\"])\n    $doc_name = array_distinct($download.target.resource.name)\n  \
+    \  $doc_id = array_distinct($download.target.resource.product_object_id)\n\n \
+    \ condition:\n    $login and $download\n}"
+  chronicle_rule_name: google_workspace_suspicious_login_and_google_drive_file_download
+provenance:
+  source: chronicle/detection-rules
+  source_id: google_workspace_suspicious_login_and_google_drive_file_download
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/google_workspace_suspicious_login_and_google_drive_file_download.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

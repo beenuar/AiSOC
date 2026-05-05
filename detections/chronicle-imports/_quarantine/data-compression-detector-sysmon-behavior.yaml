@@ -1,0 +1,40 @@
+id: chronicle-detection-rules-data-compression-detector-sysmon-behavior
+name: data_compression_detector_sysmon_behavior
+description: data_compression_detector_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule data_compression_detector_sysmon_behavior {\n meta:\n   \
+    \ author = \"Lee Archinal\"\n    description = \"This content detects characteristcs\
+    \ of data compression as described by the Mitre Att&ck Framework Technique T1002\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/2L88AmwSHepe\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/09/20\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, t1002\"\n\n  events:\n((($selection1.metadata.product_event_type\
+    \ = \"11\" and re.regex($selection1.target.process.file.full_path, `.*\\.powershell\\\
+    .exe`) and re.regex($selection1.target.file.full_path, `.*\\.zip`)) or ($selection1.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection1.target.process.file.full_path, `.*rar\\.exe`)\
+    \ and re.regex($selection1.target.process.command_line, `.*\\.rar`))) or ($selection1.metadata.product_event_type\
+    \ = \"11\" and re.regex($selection1.target.process.file.full_path, `.*rar\\.exe`)\
+    \ and re.regex($selection1.target.file.full_path, `.*\\.rar`)))\n\n  condition:\n\
+    \    $selection1\n}"
+  chronicle_rule_name: data_compression_detector_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: data_compression_detector_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/data_compression_detector__sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

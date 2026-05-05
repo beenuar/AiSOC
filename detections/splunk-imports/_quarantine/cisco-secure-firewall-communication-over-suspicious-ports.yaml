@@ -1,0 +1,48 @@
+id: splunk-security-content-d85c05c8-42c0-4e4a-87e7-4e1bb3e844e3
+name: Cisco Secure Firewall - Communication Over Suspicious Ports
+description: The following analytic detects potential reverse shell activity by identifying
+  connections involving ports commonly associated with remote access tools, shell
+  listeners, or tunneling utilities. It leverages Cisco Secure Firewall Threat Defense
+  logs and monitors destination ports against a list of non-standard, high-risk port
+  values often used in post-exploitation scenarios. Adversaries frequently configure
+  tools like netcat, Meterpreter, or other backdoors to listen or connect over uncommon
+  ports such as 4444, 2222, or 51820 to bypass standard monitoring and firewall rules.
+  If confirmed malicious, this activity may represent command and control (C2) tunneling,
+  lateral movement, or unauthorized remote access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021
+  - T1055
+  - T1059.001
+  - T1105
+  - T1219
+  - T1571
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=ConnectionEvent dest_port IN (\"\
+    888\", \"999\", \"2200\", \"2222\", \"4000\", \"4444\", \"6789\", \"8531\", \"\
+    50501\", \"51820\") | fillnull value=\"unknown\" url\n| stats min(_time) as firstTime\
+    \ max(_time) as lastTime\n      values(src_port) as src_port\n      values(url)\
+    \ as url\n      values(rule) as rule\n      count by src, dest, dest_port, transport,\
+    \ action\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___communication_over_suspicious_ports_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d85c05c8-42c0-4e4a-87e7-4e1bb3e844e3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___communication_over_suspicious_ports.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

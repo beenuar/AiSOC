@@ -1,0 +1,40 @@
+id: sigmahq-sigma-72124974-a68b-4366-b990-d30e0b2a190d
+name: Metasploit SMB Authentication
+description: Alerts on Metasploit host's authentications on the domain.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://github.com/rapid7/metasploit-framework/blob/1416b5776d963f21b7b5b45d19f3e961201e0aed/lib/rex/proto/smb/client.rb
+logsource:
+  product: windows
+  service: security
+detection:
+  selection1:
+    EventID:
+    - 4625
+    - 4624
+    LogonType: 3
+    AuthenticationPackageName: NTLM
+    WorkstationName|re: ^[A-Za-z0-9]{16}$
+  selection2:
+    EventID: 4776
+    Workstation|re: ^[A-Za-z0-9]{16}$
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 72124974-a68b-4366-b990-d30e0b2a190d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_metasploit_authentication.yml
+falsepositives:
+- Linux hostnames composed of 16 characters.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-93d298a1-d28f-47f1-a468-d971e7796679
+name: Disable Tamper Protection on Windows Defender
+description: Detects disabling Windows Defender Tamper Protection
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://www.tenforums.com/tutorials/123792-turn-off-tamper-protection-microsoft-defender-antivirus.html
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Microsoft\Windows Defender\Features\TamperProtection
+    Details: DWORD (0x00000000)
+  filter_msmpeng_client:
+    Image|startswith: C:\ProgramData\Microsoft\Windows Defender\Platform\
+    Image|endswith: \MsMpEng.exe
+  filter_msmpeng_domain_controller:
+    Image: C:\Program Files\Windows Defender\MsMpEng.exe
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 93d298a1-d28f-47f1-a468-d971e7796679
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disabled_tamper_protection_on_microsoft_defender.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

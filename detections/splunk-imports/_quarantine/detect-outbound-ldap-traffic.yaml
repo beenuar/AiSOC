@@ -1,0 +1,47 @@
+id: splunk-security-content-5e06e262-d7cd-4216-b2f8-27b437e18458
+name: Detect Outbound LDAP Traffic
+description: The following analytic identifies outbound LDAP traffic to external IP
+  addresses. It leverages the Network_Traffic data model to detect connections on
+  ports 389 or 636 that are not directed to private IP ranges (RFC1918). This activity
+  is significant because outbound LDAP traffic can indicate potential data exfiltration
+  or unauthorized access attempts. If confirmed malicious, attackers could exploit
+  this to access sensitive directory information, leading to data breaches or further
+  network compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1059
+  categories:
+  - network
+references:
+- https://www.govcert.ch/blog/zero-day-exploit-targeting-popular-java-library-log4j/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n         count min(_time)\
+    \ as firstTime\n               max(_time) as lastTime\n               values(All_Traffic.dest_ip)\
+    \ as dest_ip\nFROM datamodel=Network_Traffic.All_Traffic WHERE\n\nAll_Traffic.dest_port\
+    \ IN (\n    389,\n    636\n)\nNOT ( All_Traffic.dest_ip IN `non_public_ip_blocks`\n\
+    OR All_Traffic.dest IN `non_public_ip_blocks`\n)\nby All_Traffic.action All_Traffic.app\
+    \ All_Traffic.bytes\n   All_Traffic.bytes_in All_Traffic.bytes_out All_Traffic.dest\n\
+    \   All_Traffic.dest_ip All_Traffic.dest_port All_Traffic.dvc\n   All_Traffic.protocol\
+    \ All_Traffic.protocol_version All_Traffic.src\n   All_Traffic.src_ip All_Traffic.src_port\
+    \ All_Traffic.transport\n   All_Traffic.user All_Traffic.vendor_product All_Traffic.rule\n\
+    | `drop_dm_object_name(\"All_Traffic\")`\n| where src_ip != dest_ip OR src !=\
+    \ dest\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_outbound_ldap_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5e06e262-d7cd-4216-b2f8-27b437e18458
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_outbound_ldap_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

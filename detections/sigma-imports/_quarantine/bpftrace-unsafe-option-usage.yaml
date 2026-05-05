@@ -1,0 +1,34 @@
+id: sigmahq-sigma-f8341cb2-ee25-43fa-a975-d8a5a9714b39
+name: BPFtrace Unsafe Option Usage
+description: Detects the usage of the unsafe bpftrace option
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- https://embracethered.com/blog/posts/2021/offensive-bpf-bpftrace/
+- https://bpftrace.org/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: bpftrace
+    CommandLine|contains: --unsafe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f8341cb2-ee25-43fa-a975-d8a5a9714b39
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_bpftrace_unsafe_option_usage.yml
+falsepositives:
+- Legitimate usage of the unsafe option
+notes:
+  quarantine_reason: 'upstream status: test'

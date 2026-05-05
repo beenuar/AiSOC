@@ -1,0 +1,45 @@
+id: sigmahq-sigma-24549159-ac1b-479c-8175-d42aea947cae
+name: Hacktool Ruler
+description: This events that are generated when using the hacktool Ruler by Sensepost
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087
+  - T1114
+  - T1059
+  - T1550.002
+  categories:
+  - endpoint
+references:
+- https://github.com/sensepost/ruler
+- https://github.com/sensepost/ruler/issues/47
+- https://github.com/staaldraad/go-ntlm/blob/cd032d41aa8ce5751c07cb7945400c0f5c81e2eb/ntlm/ntlmv1.go#L427
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4776
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4624
+logsource:
+  product: windows
+  service: security
+detection:
+  selection1:
+    EventID: 4776
+    Workstation: RULER
+  selection2:
+    EventID:
+    - 4624
+    - 4625
+    WorkstationName: RULER
+  condition: (1 of selection*)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 24549159-ac1b-479c-8175-d42aea947cae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_alert_ruler.yml
+falsepositives:
+- Go utilities that use staaldraad awesome NTLM library
+notes:
+  quarantine_reason: 'upstream status: test'

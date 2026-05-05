@@ -1,0 +1,47 @@
+id: sigmahq-sigma-f2bed782-994e-4f40-9cd5-518198cb3fba
+name: Linux Sudo Chroot Execution
+description: 'Detects the execution of ''sudo'' command with ''--chroot'' option,
+  which is used to change the root directory for command execution.
+
+  Attackers may use this technique to evade detection and execute commands in a modified
+  environment.
+
+  This can be part of a privilege escalation strategy, as it allows the execution
+  of commands with elevated privileges in a controlled environment as seen in CVE-2025-32463.
+
+  While investigating, look out for unusual or unexpected use of ''sudo --chroot''
+  in conjunction with other commands or scripts such as execution from temporary directories
+  or unusual user accounts.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://github.com/kh4sh3i/CVE-2025-32463/blob/81bb430f84fa2089224733c3ed4bfa434c197ad4/exploit.sh
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /sudo
+    CommandLine|contains:
+    - ' --chroot '
+    - 'sudo -R '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f2bed782-994e-4f40-9cd5-518198cb3fba
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_chroot_execution.yml
+falsepositives:
+- Legitimate administrative tasks or scripts that use 'sudo --chroot' for containerization,
+  testing, or system management.
+notes:
+  quarantine_reason: 'upstream status: experimental'

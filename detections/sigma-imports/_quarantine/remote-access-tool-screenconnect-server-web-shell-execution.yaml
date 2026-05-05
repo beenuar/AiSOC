@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b19146a3-25d4-41b4-928b-1e2a92641b1b
+name: Remote Access Tool - ScreenConnect Server Web Shell Execution
+description: Detects potential web shell execution from the ScreenConnect server process.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://blackpointcyber.com/resources/blog/breaking-through-the-screen/
+- https://www.connectwise.com/company/trust/security-bulletins/connectwise-screenconnect-23.9.8
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentImage|endswith: \ScreenConnect.Service.exe
+    Image|endswith:
+    - \cmd.exe
+    - \csc.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b19146a3-25d4-41b4-928b-1e2a92641b1b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_remote_access_tools_screenconnect_webshell.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

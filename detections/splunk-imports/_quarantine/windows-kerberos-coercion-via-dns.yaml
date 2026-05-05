@@ -1,0 +1,45 @@
+id: splunk-security-content-9029b575-6f6b-4ab1-b660-67b24b7e9c3d
+name: Windows Kerberos Coercion via DNS
+description: Detects DNS-based Kerberos coercion attacks where adversaries inject
+  marshaled credential structures into DNS records to spoof SPNs and redirect authentication
+  such as in CVE-2025-33073. This detection leverages Windows Security Event Codes
+  5136, 5137, 4662, looking for DNS events with specific CREDENTIAL_TARGET_INFORMATION
+  entries.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  - T1557.001
+  - T1187
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20250617122747/https://www.synacktiv.com/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
+- https://www.synacktiv.com/publications/relaying-kerberos-over-smb-using-krbrelayx
+- https://www.guidepointsecurity.com/blog/the-birth-and-death-of-loopyticket/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`  (((EventCode=\"5136\" OR EventCode=\"5137\"\
+    ) ObjectClass=\"dnsNode\" ObjectDN=\"*1UWhRCA*\" ObjectDN=\"*AAAAA*\" ObjectDN=\"\
+    *YBAAAA*\") OR (EventCode=\"4662\" AdditionalInfo=\"*1UWhRCA*\" AdditionalInfo=\"\
+    *AAAAA*\" AdditionalInfo=\"*YBAAAA*\"))\n  | eval Object=coalesce(lower(ObjectGUID),\
+    \ trim(AdditionalInfo2, \"%{}\"))\n  | eval user=coalesce(SubjectUserName, Caller_User_Name)\n\
+    \  | stats min(_time) as firstTime, max(_time) as lastTime values(EventCode) as\
+    \ event_codes values(ObjectDN) as dns_record values(user) as user values(Computer)\
+    \ as dest\n    BY Object\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_kerberos_coercion_via_dns_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9029b575-6f6b-4ab1-b660-67b24b7e9c3d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_kerberos_coercion_via_dns.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

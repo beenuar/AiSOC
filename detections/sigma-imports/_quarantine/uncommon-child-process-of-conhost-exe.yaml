@@ -1,0 +1,41 @@
+id: sigmahq-sigma-7dc2dedd-7603-461a-bc13-15803d132355
+name: Uncommon Child Process Of Conhost.EXE
+description: Detects uncommon "conhost" child processes. This could be a sign of "conhost"
+  usage as a LOLBIN or potential process injection activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- http://www.hexacorn.com/blog/2020/05/25/how-to-con-your-host/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \conhost.exe
+  filter_main_conhost:
+    Image|endswith: :\Windows\System32\conhost.exe
+  filter_main_null:
+    Image: null
+  filter_main_empty:
+    Image: ''
+  filter_optional_provider:
+    Provider_Name: SystemTraceProvider-Process
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7dc2dedd-7603-461a-bc13-15803d132355
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_conhost_susp_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-office-macro-starts-cmd
+name: office_macro_starts_cmd
+description: office_macro_starts_cmd
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule office_macro_starts_cmd {\n meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects a Windows command line executable started\
+    \ from Microsoft Word or Excel  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/G1MCKmrJFFAl\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n\n  events:\n($selection.metadata.product_event_type = \"1\" and\
+    \ (re.regex($selection.principal.process.file.full_path, `.*\\\\WINWORD\\.EXE`)\
+    \ or re.regex($selection.principal.process.file.full_path, `.*\\\\EXCEL\\.EXE`))\
+    \ and re.regex($selection.target.process.file.full_path, `.*\\\\cmd\\.exe`))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: office_macro_starts_cmd
+provenance:
+  source: chronicle/detection-rules
+  source_id: office_macro_starts_cmd
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/office_macro_starts_cmd.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

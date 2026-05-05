@@ -1,0 +1,53 @@
+id: sigmahq-sigma-11b1ed55-154d-4e82-8ad7-83739298f720
+name: NTDS.DIT Creation By Uncommon Process
+description: Detects creation of a file named "ntds.dit" (Active Directory Database)
+  by an uncommon process or a process located in a suspicious directory
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://stealthbits.com/blog/extracting-password-hashes-from-the-ntds-dit-file/
+- https://adsecurity.org/?p=2398
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection_ntds:
+    TargetFilename|endswith: \ntds.dit
+  selection_process_img:
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+    - \wsl.exe
+    - \wt.exe
+  selection_process_paths:
+    Image|contains:
+    - \AppData\
+    - \Temp\
+    - \Public\
+    - \PerfLogs\
+  condition: selection_ntds and 1 of selection_process_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 11b1ed55-154d-4e82-8ad7-83739298f720
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_ntds_dit_uncommon_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-97fbabf8-8e1b-47a2-b7d5-a418d2b95e3d
+name: AWS New Lambda Layer Attached
+description: 'Detects when a user attached a Lambda layer to an existing Lambda function.
+
+  A malicious Lambda layer could execute arbitrary code in the context of the function''s
+  IAM role.
+
+  This would give an adversary access to resources that the function has access to.'
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+- https://github.com/clearvector/lambda-spy
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: lambda.amazonaws.com
+    eventName|startswith: UpdateFunctionConfiguration
+    requestParameters.layers|contains: '*'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 97fbabf8-8e1b-47a2-b7d5-a418d2b95e3d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_new_lambda_layer_attached.yml
+falsepositives:
+- Lambda Layer being attached may be performed by a system administrator. Verify whether
+  the user identity, user agent, and/or hostname should be making changes in your
+  environment.
+- Lambda Layer being attached from unfamiliar users should be investigated. If known
+  behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

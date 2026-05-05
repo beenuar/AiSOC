@@ -1,0 +1,85 @@
+id: chronicle-detection-rules-wmic-ntds-dit-t1003-003-cisa-report
+name: wmic_ntds_dit_T1003_003_cisa_report
+description: wmic_ntds_dit_T1003_003_cisa_report
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule wmic_ntds_dit_T1003_003_cisa_report {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects extraction of ntds.dit file using\
+    \ vssadmin.exe or ntdsutil.exe with wmic as identified in CISA Living off the\
+    \ Land pdf\"\n    rule_id = \"mr_b1719d37-6689-485d-b80c-b509fdaa1af8\"\n    rule_name\
+    \ = \"MITRE ATT&CK T1003.003 WMIC Ntds.dit CISA Report\"\n    type = \"alert\"\
+    \n    platform = \"Windows\"\n    data_source = \"microsoft sysmon, windows event\
+    \ logs\"\n    tactic = \"TA0006\"\n    technique = \"T1003.003\"\n    reference\
+    \ = \"https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF\"\
+    \n    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    (\n     \
+    \   $process.metadata.event_type = \"PROCESS_LAUNCH\" and\n        (\n       \
+    \     // cisa report referenced cmd /c in their report throughout, can filter\
+    \ this in/out for tuning as needed\n            // other wmic switches like /user\
+    \ and /password, these have been excluded to focus on the commands being issued\
+    \ since local access does not require these\n            re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*wmic.*process.*call.*create.*ntdsutil.*create.*full`) nocase or\n\
+    \            // for greater precision to align with the report, the following\
+    \ line can be used instead of the previous line to focus on specific folders referenced\n\
+    \            //re.regex($process.target.process.command_line, `(|cmd.*/c).*wmic.*process.*call.*create.*ntdsutil.*create.*full.*windows\\\
+    \\temp\\\\(tmp|pro|msafee_logs)`) nocase or\n            re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*vssadmin.*create.*shadow`) nocase or\n            // To detect\
+    \ this without wmic being used but written to c:\\windows\\temp\\ in general\n\
+    \            re.regex($process.target.process.command_line, `(|cmd.*/c).*ntdsutil.*create.*full.*windows\\\
+    \\temp\\\\`) nocase\n        )\n    )\n    or\n    (\n        // This does not\
+    \ detect one of the utilities responsible for executing ntdsutil or vssadmin,\
+    \ but does detect .dit file being created in monitored folders\n        $process.metadata.event_type\
+    \ = \"FILE_CREATION\" and\n        re.regex($process.target.file.full_path, `\\\
+    .dit$`) nocase\n    )\n    or\n    (\n        //Identify application event log\
+    \ actions associated with the creation of the ntds.dit file and with ntds database\n\
+    \        $process.metadata.product_name = \"ESENT\" and\n        $process.metadata.vendor_name\
+    \ = \"Microsoft\" and\n        (\n            $process.metadata.product_event_type\
+    \ = \"216\" or\n            $process.metadata.product_event_type = \"325\" or\n\
+    \            $process.metadata.product_event_type = \"326\" or\n            $process.metadata.product_event_type\
+    \ = \"327\"\n        )\n    )\n    $process.principal.hostname = $hostname\n\n\
+    \  match:\n    $hostname over 5m\n\n  outcome:\n    $risk_score = 85\n    $event_count\
+    \ = count_distinct($process.metadata.id)\n    // added to populate alert graph\
+    \ with additional context\n    // Commented out principal.hostname because it\
+    \ is already represented in graph as match variable. If match changes, can uncomment\
+    \ to add to results\n    //$principal_hostname = array_distinct($process.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($process.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($process.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($process.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($process.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($process.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n\n  condition:\n    $process\n\
+    }"
+  chronicle_rule_name: wmic_ntds_dit_T1003_003_cisa_report
+provenance:
+  source: chronicle/detection-rules
+  source_id: wmic_ntds_dit_T1003_003_cisa_report
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/wmic_ntds_dit_T1003_003_cisa_report.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

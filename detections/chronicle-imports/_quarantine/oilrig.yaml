@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-oilrig
+name: oilrig
+description: oilrig
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule oilrig {\n meta:\n    author = \"Ariel Millahuel\"\n    description\
+    \ = \"OilRig is an Iranian threat group operating primarily in the Middle East\
+    \ by targeting organizations in this region that are in a variety of different\
+    \ industries; however, this group has occasionally targeted organizations outside\
+    \ of the Middle East as well. It also appears OilRig carries out supply chain\
+    \ attacks, where the threat group leverages the trust relationship between organizations\
+    \ to attack their primary targets.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Nvw0NkZgaA6d\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, persistence, privilege_escalation, T1059,\
+    \ T1053\"\n\n  events:\n($selection1.metadata.product_event_type = \"11\" and\
+    \ (re.regex($selection1.target.file.full_path, `.*nsExec\\.dll.*`) or re.regex($selection1.target.file.full_path,\
+    \ `.*nseEBFB\\.tmp.*`) or re.regex($selection1.target.file.full_path, `.*chkSrv\\\
+    .vbs.*`) or re.regex($selection1.target.file.full_path, `.*SCSCAN\\.xml.*`) or\
+    \ re.regex($selection1.target.file.full_path, `.*AnyDesk\\.exe.*`)))\n\n  condition:\n\
+    \    $selection1\n}"
+  chronicle_rule_name: oilrig
+provenance:
+  source: chronicle/detection-rules
+  source_id: oilrig
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/oilrig_part_1.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

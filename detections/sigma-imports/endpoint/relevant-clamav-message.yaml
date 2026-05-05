@@ -1,0 +1,34 @@
+id: sigmahq-sigma-36aa86ca-fd9d-4456-814e-d3b1b8e1e0bb
+name: Relevant ClamAV Message
+description: Detects relevant ClamAV messages
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1588.001
+  categories:
+  - endpoint
+references:
+- https://github.com/ossec/ossec-hids/blob/1ecffb1b884607cb12e619f9ab3c04f530801083/etc/rules/clam_av_rules.xml
+logsource:
+  product: linux
+  service: clamav
+detection:
+  keywords:
+  - Trojan*FOUND
+  - VirTool*FOUND
+  - Webshell*FOUND
+  - Rootkit*FOUND
+  - Htran*FOUND
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 36aa86ca-fd9d-4456-814e-d3b1b8e1e0bb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/clamav/lnx_clamav_relevant_message.yml
+falsepositives:
+- Unknown

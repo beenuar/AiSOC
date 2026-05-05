@@ -1,0 +1,33 @@
+id: sigmahq-sigma-f0e2b768-5220-47dd-b891-d57b96fc0ec1
+name: CSExec Service File Creation
+description: Detects default CSExec service filename which indicates CSExec service
+  installation and execution
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://github.com/malcomvetter/CSExec
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \csexecsvc.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f0e2b768-5220-47dd-b891-d57b96fc0ec1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_csexec_service.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

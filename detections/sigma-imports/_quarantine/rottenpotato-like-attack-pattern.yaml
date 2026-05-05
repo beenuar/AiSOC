@@ -1,0 +1,39 @@
+id: sigmahq-sigma-16f5d8ca-44bd-47c8-acbe-6fc95a16c12f
+name: RottenPotato Like Attack Pattern
+description: Detects logon events that have characteristics of events generated during
+  an attack with RottenPotato and the like
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1557.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1195284233729777665
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 3
+    TargetUserName: ANONYMOUS LOGON
+    WorkstationName: '-'
+    IpAddress:
+    - 127.0.0.1
+    - ::1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 16f5d8ca-44bd-47c8-acbe-6fc95a16c12f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_susp_rottenpotato.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

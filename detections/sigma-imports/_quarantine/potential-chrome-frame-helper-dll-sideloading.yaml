@@ -1,0 +1,38 @@
+id: sigmahq-sigma-72ca7c75-bf85-45cd-aca7-255d360e423c
+name: Potential Chrome Frame Helper DLL Sideloading
+description: Detects potential DLL sideloading of "chrome_frame_helper.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/entries/3rd_party/google/chrome_frame_helper.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \chrome_frame_helper.dll
+  filter_main_path:
+    ImageLoaded|startswith:
+    - C:\Program Files\Google\Chrome\Application\
+    - C:\Program Files (x86)\Google\Chrome\Application\
+  filter_optional_user_path:
+    ImageLoaded|contains: \AppData\local\Google\Chrome\Application\
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 72ca7c75-bf85-45cd-aca7-255d360e423c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_chrome_frame_helper.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

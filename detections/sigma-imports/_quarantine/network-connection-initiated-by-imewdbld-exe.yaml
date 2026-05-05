@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8d7e392e-9b28-49e1-831d-5949c6281228
+name: Network Connection Initiated By IMEWDBLD.EXE
+description: Detects a network connection initiated by IMEWDBLD.EXE. This might indicate
+  potential abuse of the utility as a LOLBIN in order to download arbitrary files
+  or additional payloads.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1105/T1105.md#atomic-test-10---windows---powershell-download
+- https://lolbas-project.github.io/lolbas/Binaries/IMEWDBLD/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    Image|endswith: \IMEWDBLD.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8d7e392e-9b28-49e1-831d-5949c6281228
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_imewdbld.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

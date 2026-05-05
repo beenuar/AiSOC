@@ -1,0 +1,38 @@
+id: splunk-security-content-41c61539-98ca-4750-b3ec-7c29a2f06343
+name: Windows Modify Registry Delete Firewall Rules
+description: The following analytic detects a potential deletion of firewall rules,
+  indicating a possible security breach or unauthorized access attempt. It identifies
+  actions where firewall rules are removed using commands like netsh advfirewall firewall
+  delete rule, which can expose the network to external threats by disabling critical
+  security measures. Monitoring these activities helps maintain network integrity
+  and prevent malicious attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/new-shrinklocker-ransomware-uses-bitlocker-to-encrypt-your-files/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=12 TargetObject = "*\\System\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\FirewallRules\\*"
+    EventType=DeleteValue |  stats count min(_time) as firstTime max(_time) as lastTime
+    by action dest process_guid process_id registry_hive registry_path registry_key_name
+    status user vendor_product | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_modify_registry_delete_firewall_rules_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 41c61539-98ca-4750-b3ec-7c29a2f06343
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_delete_firewall_rules.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

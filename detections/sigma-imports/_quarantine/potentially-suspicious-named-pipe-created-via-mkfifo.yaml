@@ -1,0 +1,34 @@
+id: sigmahq-sigma-999c3b12-0a8c-40b6-8e13-dd7d62b75c7a
+name: Potentially Suspicious Named Pipe Created Via Mkfifo
+description: Detects the creation of a new named pipe using the "mkfifo" utility in
+  a potentially suspicious location
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://dev.to/0xbf/use-mkfifo-to-create-named-pipe-linux-tips-5bbk
+- https://www.mandiant.com/resources/blog/barracuda-esg-exploited-globally
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /mkfifo
+    CommandLine|contains: ' /tmp/'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 999c3b12-0a8c-40b6-8e13-dd7d62b75c7a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_mkfifo_named_pipe_creation_susp_location.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

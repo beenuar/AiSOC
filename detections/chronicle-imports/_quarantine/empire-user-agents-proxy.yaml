@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-empire-user-agents-proxy
+name: empire_user_agents_proxy
+description: empire_user_agents_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule empire_user_agents_proxy {\n meta:\n    author = \"Alexandr\
+    \ Yampolskyi, SOC Prime\"\n    description = \"Empire User Agents Detection. \
+    \ License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/YuTlLtuvk1d7\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/27\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071\"\n\n  events:\n($selection.principal.application\
+    \ = \"Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko\" or\
+    \ $selection.principal.application = \"Mozilla/6.0 (X11; Linux x86_64; rv:24.0)\
+    \ Gecko/20140205     Firefox/27.0 Iceweasel/25.3.0\" or $selection.principal.application\
+    \ = \"Mozilla/5.0 (Windows NT 6.3; rv:36.0) Gecko/20100101 Firefox/36.0\")\n\n\
+    \  condition:\n    $selection\n}"
+  chronicle_rule_name: empire_user_agents_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: empire_user_agents_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/proxy/empire_user_agents__proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

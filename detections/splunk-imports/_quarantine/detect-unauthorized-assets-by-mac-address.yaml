@@ -1,0 +1,39 @@
+id: splunk-security-content-dcfd6b40-42f9-469d-a433-2e53f7489ff4
+name: Detect Unauthorized Assets by MAC address
+description: The following analytic identifies unauthorized devices attempting to
+  connect to the organization's network by inspecting DHCP request packets. It detects
+  this activity by comparing the MAC addresses in DHCP requests against a list of
+  known authorized devices stored in the assets_by_str.csv file. This activity is
+  significant for a SOC because unauthorized devices can pose security risks, including
+  potential data breaches or network disruptions. If confirmed malicious, this activity
+  could allow an attacker to gain unauthorized network access, potentially leading
+  to further exploitation or data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Network_Sessions\n\
+    \  WHERE nodename=All_Sessions.DHCP All_Sessions.tag=dhcp\n  BY All_Sessions.dest_ip\
+    \ All_Sessions.dest_mac\n| dedup All_Sessions.dest_mac\n| `drop_dm_object_name(\"\
+    Network_Sessions\")`\n| `drop_dm_object_name(\"All_Sessions\")`\n| search NOT\
+    \ [\n| inputlookup asset_lookup_by_str\n| rename mac as dest_mac\n| fields + dest_mac]\n\
+    | `detect_unauthorized_assets_by_mac_address_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dcfd6b40-42f9-469d-a433-2e53f7489ff4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_unauthorized_assets_by_mac_address.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

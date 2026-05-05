@@ -1,0 +1,36 @@
+id: sigmahq-sigma-a2e5019d-a658-4c6a-92bf-7197b54e2cae
+name: PowerShell Scripts Installed as Services
+description: Detects powershell script installed as a Service
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains:
+    - powershell
+    - pwsh
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a2e5019d-a658-4c6a-92bf-7197b54e2cae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_powershell_script_installed_as_service.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

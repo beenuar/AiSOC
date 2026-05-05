@@ -1,0 +1,37 @@
+id: sigmahq-sigma-40f9af16-589d-4984-b78d-8c2aec023197
+name: Potential UAC Bypass Via Sdclt.EXE
+description: A General detection for sdclt being spawned as an elevated process. This
+  could be an indicator of sdclt being used for bypass UAC techniques.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/OTRF/detection-hackathon-apt29/issues/6
+- https://github.com/OTRF/ThreatHunter-Playbook/blob/2d4257f630f4c9770f78d0c1df059f891ffc3fec/docs/evals/apt29/detections/3.B.2_C36B49B5-DF58-4A34-9FE9-56189B9DEFEA.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: sdclt.exe
+    IntegrityLevel:
+    - High
+    - S-1-16-12288
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 40f9af16-589d-4984-b78d-8c2aec023197
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_sdclt.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

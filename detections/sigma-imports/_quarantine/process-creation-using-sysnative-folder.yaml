@@ -1,0 +1,47 @@
+id: sigmahq-sigma-3c1b5fb0-c72f-45ba-abd1-4d4c353144ab
+name: Process Creation Using Sysnative Folder
+description: Detects process creation events that use the Sysnative folder (common
+  for CobaltStrike spawns)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/08/29/cobalt-strike-a-defenders-guide/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - CommandLine|contains: :\Windows\Sysnative\
+  - Image|contains: :\Windows\Sysnative\
+  filter_main_ngen:
+    Image|contains:
+    - C:\Windows\Microsoft.NET\Framework64\v
+    - C:\Windows\Microsoft.NET\Framework\v
+    - C:\Windows\Microsoft.NET\FrameworkArm\v
+    - C:\Windows\Microsoft.NET\FrameworkArm64\v
+    Image|endswith: \ngen.exe
+    CommandLine|contains: install
+  filter_optional_xampp:
+    CommandLine|contains|all:
+    - '"C:\Windows\sysnative\cmd.exe"'
+    - \xampp\
+    - \catalina_start.bat
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3c1b5fb0-c72f-45ba-abd1-4d4c353144ab
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_sysnative.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

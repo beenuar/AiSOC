@@ -1,0 +1,64 @@
+id: mitre-car-car-2015-07-001
+name: All Logins Since Last Boot
+description: 'Once a credential dumper like [mimikatz](https://attack.mitre.org/software/S0002)
+  runs, every user logged on since boot is potentially compromised, because the credentials
+  were accessed via the memory of `lsass.exe`. When such an event occurs, this analytic
+  will give the forensic context to identify compromised users. Those users could
+  potentially be used in later events for additional logons.
+
+
+  The time field indicates the first and last time a system reported a user logged
+  into a given system. This means that activity could be intermittent between the
+  times given and should not be considered a duration.
+
+
+
+  ### Output Description
+
+
+  A list of hostnames and the users that had been logged into the system at some point
+  after to the system''s last restart.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Login
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'input target_host
+
+      input event_time
+
+
+      all_boots = search SystemLogs:BootUp where (hostname == target_host and time
+      < event_time)
+
+      boot_time = max(all_boots.time)
+
+
+      user_logins = search UserSession:Login
+
+      host_logins = filter user_logins where (hostname == target_host and boot_time
+      < time < event_time)
+
+      compromised_accounts = unique(user_logins.user)
+
+
+      output users'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2015-07-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2015-07-001.yaml
+notes:
+  car_status: needs_implementation

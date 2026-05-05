@@ -1,0 +1,41 @@
+id: sigmahq-sigma-6cc5fceb-9a71-4c23-aeeb-963abe0b279c
+name: Suspicious Use of /dev/tcp
+description: Detects suspicious command with /dev/tcp
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.andreafortuna.org/2021/03/06/some-useful-tips-about-dev-tcp/
+- https://book.hacktricks.xyz/shells/shells/linux
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1046/T1046.md#atomic-test-1---port-scan
+logsource:
+  product: linux
+detection:
+  keywords:
+  - cat </dev/tcp/
+  - exec 3<>/dev/tcp/
+  - echo >/dev/tcp/
+  - bash -i >& /dev/tcp/
+  - sh -i >& /dev/udp/
+  - 0<&196;exec 196<>/dev/tcp/
+  - exec 5<>/dev/tcp/
+  - (sh)0>/dev/tcp/
+  - bash -c 'bash -i >& /dev/tcp/
+  - echo -e '#!/bin/bash\nbash -i >& /dev/tcp/
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6cc5fceb-9a71-4c23-aeeb-963abe0b279c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/lnx_susp_dev_tcp.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

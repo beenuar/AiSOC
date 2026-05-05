@@ -1,0 +1,37 @@
+id: sigmahq-sigma-919f2ef0-be2d-4a7a-b635-eb2b41fde044
+name: Disable Security Events Logging Adding Reg Key MiniNt
+description: Detects the addition of a key 'MiniNt' to the registry. Upon a reboot,
+  Windows Event Log service will stop writing events.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0gtweet/status/1182516740955226112
+- https://www.hackingarticles.in/defense-evasion-windows-event-logging-t1562-002/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+  - TargetObject: HKLM\SYSTEM\CurrentControlSet\Control\MiniNt
+    EventType: CreateKey
+  - NewName: HKLM\SYSTEM\CurrentControlSet\Control\MiniNt
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 919f2ef0-be2d-4a7a-b635-eb2b41fde044
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_disable_security_events_logging_adding_reg_key_minint.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

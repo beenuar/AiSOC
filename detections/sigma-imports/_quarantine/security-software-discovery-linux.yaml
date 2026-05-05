@@ -1,0 +1,44 @@
+id: sigmahq-sigma-c9d8b7fd-78e4-44fe-88f6-599135d46d60
+name: Security Software Discovery - Linux
+description: Detects usage of system utilities (only grep and egrep for now) to discover
+  security software discovery
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1518.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1518.001/T1518.001.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+    - /grep
+    - /egrep
+    CommandLine|contains:
+    - nessusd
+    - td-agent
+    - packetbeat
+    - filebeat
+    - auditbeat
+    - osqueryd
+    - cbagentd
+    - falcond
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c9d8b7fd-78e4-44fe-88f6-599135d46d60
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_security_software_discovery.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

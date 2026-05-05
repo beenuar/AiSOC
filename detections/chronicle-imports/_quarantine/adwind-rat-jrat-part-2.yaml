@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-adwind-rat-jrat-part-2
+name: adwind_rat__jrat_part_2
+description: adwind_rat__jrat_part_2
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule adwind_rat__jrat_part_2 {\n meta:\n    author = \"Florian\
+    \ Roth, Tom Ueltschi\"\n    description = \"Detects javaw.exe in AppData folder\
+    \ as used by Adwind / JRAT  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/4VPNvKK4SGiZ\"\n    version\
+    \ = \"0.01\"\n    created = \"2017/11/10\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, t1064\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"13\" and re.regex($selection.target.registry.registry_key, `REGISTRY\\\\\
+    MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run.*`) and re.regex($selection.metadata.description,\
+    \ `%AppData%\\\\Roaming\\\\Oracle\\\\bin\\\\.*`))\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: adwind_rat__jrat_part_2
+provenance:
+  source: chronicle/detection-rules
+  source_id: adwind_rat__jrat_part_2
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/adwind_rat___jrat_part_3.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,65 @@
+id: splunk-security-content-55d8741c-fa32-4692-8109-410304961eb8
+name: Windows Office Product Spawned Uncommon Process
+description: The following analytic detects a Microsoft Office product spawning uncommon
+  processes. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process creation events where Office applications are the parent
+  process. This activity is significant as it may indicate an attempt of a malicious
+  macro execution or exploitation of an unknown vulnerability in an office product,
+  in order to bypass security controls. If confirmed malicious, this behavior could
+  allow an attacker to execute arbitrary code, potentially leading to system compromise,
+  data exfiltration, or further lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://any.run/malware-trends/trickbot
+- https://any.run/report/47561b4e949041eff0a0f4693c59c81726591779fe21183ae9185b5eb6a69847/aba3722a-b373-4dae-8273-8730fb40cdbe
+- https://app.any.run/tasks/fb894ab8-a966-4b72-920b-935f41756afd/
+- https://attack.mitre.org/techniques/T1047/
+- https://bazaar.abuse.ch/sample/02cbc1ab80695fc12ff8822b926957c3a600247b9ca412a137f69cb5716c8781/
+- https://blog.cluster25.duskrise.com/2022/09/23/in-the-footsteps-of-the-fancy-bear-powerpoint-graphite/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1047/T1047.md
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1105/T1105.md
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1197/T1197.md
+- https://redcanary.com/threat-detection-report/threats/TA551/
+- https://twitter.com/cyb3rops/status/1416050325870587910?s=21
+- https://www.fortinet.com/blog/threat-research/latest-remcos-rat-phishing
+- https://www.joesandbox.com/analysis/380662/0/html
+- https://www.joesandbox.com/analysis/702680/0/html
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/trojanized-onenote-document-leads-to-formbook-malware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime from datamodel=Endpoint.Processes where\n`process_office_products_parent`\n\
+    AND\n(\n  Processes.process_name IN (\n    bitsadmin.exe,\n    certutil.exe,\n\
+    \    cmd.exe,\n    cscript.exe,\n    mshta.exe,\n    powershell.exe,\n    pwsh.exe,\n\
+    \    regsvr32.exe,\n    rundll32.exe,\n    wmic.exe,\n    wscript.exe\n  )\n \
+    \ OR\n  Processes.original_file_name IN (\n    bitsadmin.exe,\n    CertUtil.exe,\n\
+    \    Cmd.Exe,\n    cscript.exe,\n    MSHTA.EXE,\n    PowerShell.EXE,\n    pwsh.dll,\n\
+    \    REGSVR32.EXE,\n    RUNDLL32.EXE,\n    wmic.exe,\n    wscript.exe\n  )\n)\n\
+    by Processes.action Processes.dest Processes.original_file_name\n   Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n   Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid Processes.process_hash\n   Processes.process_id\
+    \ Processes.process_integrity_level Processes.process_name Processes.process_path\n\
+    \   Processes.user Processes.user_id Processes.vendor_product | `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_office_product_spawned_uncommon_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 55d8741c-fa32-4692-8109-410304961eb8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_office_product_spawned_uncommon_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

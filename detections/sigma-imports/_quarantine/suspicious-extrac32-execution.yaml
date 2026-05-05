@@ -1,0 +1,41 @@
+id: sigmahq-sigma-aa8e035d-7be4-48d3-a944-102aec04400d
+name: Suspicious Extrac32 Execution
+description: Download or Copy file with Extrac32
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Extrac32/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_lolbas:
+  - CommandLine|contains: extrac32.exe
+  - Image|endswith: \extrac32.exe
+  - OriginalFileName: extrac32.exe
+  selection_archive:
+    CommandLine|contains: .cab
+  selection_options:
+    CommandLine|contains:
+    - /C
+    - /Y
+    - ' \\\\'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aa8e035d-7be4-48d3-a944-102aec04400d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_extrac32.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

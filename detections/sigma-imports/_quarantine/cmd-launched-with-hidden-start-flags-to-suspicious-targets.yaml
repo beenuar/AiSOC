@@ -1,0 +1,92 @@
+id: sigmahq-sigma-5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
+name: Cmd Launched with Hidden Start Flags to Suspicious Targets
+description: 'Detects cmd.exe executing commands with the "start" utility using "/b"
+  (no window) or "/min" (minimized) flags.
+
+  To reduce false positives from standard background tasks, detection is restricted
+  to scenarios where the target is a known script extension or located in suspicious
+  temporary/public directories.
+
+  This technique was observed in Chaos, DarkSide, and Emotet malware campaigns.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.003
+  categories:
+  - endpoint
+references:
+- https://www.fortinet.com/blog/threat-research/evolution-of-chaos-ransomware-faster-smarter-and-more-dangerous
+- https://www.fortinet.com/blog/threat-research/newly-discovered-function-in-darkside-ransomware-variant-targets-disk-partitions
+- https://www.fortinet.com/blog/threat-research/ms-office-files-involved-in-emotet-trojan-campaign-pt-one
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/start
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_cmd_img:
+  - Image|endswith: \cmd.exe
+  - OriginalFileName: Cmd.Exe
+  selection_cmd_hidden_start_1:
+    CommandLine|contains|windash:
+    - 'start '
+    - start/b
+    - start/min
+  selection_cmd_hidden_start_2:
+    CommandLine|contains|windash:
+    - '/b '
+    - /b"
+    - '/min '
+    - /min"
+  selection_cli_uncommon_location:
+    CommandLine|contains:
+    - :\Perflogs\
+    - :\Temp\
+    - :\Users\Default\
+    - :\Windows\Temp\
+    - \AppData\Roaming\
+    - \Contacts\
+    - \Documents\
+    - \Downloads\
+    - \Favorites\
+    - \Favourites\
+    - \inetpub\
+    - \Music\
+    - \Photos\
+    - \Temporary Internet\
+    - \Users\Public\
+    - \Videos\
+  selection_cli_susp_extension:
+    CommandLine|contains:
+    - .bat
+    - .cmd
+    - .cpl
+    - .hta
+    - .js
+    - .ps1
+    - .scr
+    - .vbe
+    - .vbs
+  selection_cli_susp_pattern:
+    CommandLine|contains:
+    - ' -nop '
+    - ' -sta '
+    - .downloadfile(
+    - .downloadstring(
+    - '-noni '
+    - '-w hidden '
+  condition: all of selection_cmd_* and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_launched_with_hidden_start_flag.yml
+falsepositives:
+- Legitimate administrative scripts running from temporary folders.
+- Niche software updaters utilizing hidden batch files in ProgramData.
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,62 @@
+id: splunk-security-content-6b4a0a7f-10d1-4d72-9c4c-5c6a3d9f9d6a
+name: Shai-Hulud Workflow File Creation or Modification
+description: 'Detects creation or deletion of malicious GitHub Actions workflow files
+  associated with
+
+  Shai-Hulud worm variants on Linux or Windows endpoints. This includes the original
+  shai-hulud-workflow.yml,
+
+  the 2.0 backdoor discussion.yaml (enables command injection via GitHub Discussions
+  on self-hosted
+
+  runners named SHA1HULUD), and the secrets exfiltration workflow formatter_*.yml
+  pattern. These
+
+  files are used to exfiltrate credentials and propagate across repositories.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.006
+  - T1554
+  - T1195
+  categories:
+  - endpoint
+references:
+- https://www.wiz.io/blog/shai-hulud-2-0-ongoing-supply-chain-attack
+- https://securelist.com/shai-hulud-worm-infects-500-npm-packages-in-a-supply-chain-attack/117547/
+- https://github.com/SigmaHQ/sigma/pull/5658/files
+- https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\n\nfrom datamodel=Endpoint.Filesystem where\n\nFilesystem.file_path\
+    \ IN (\n  \"*/.github/workflows/discussion.yaml\",\n  \"*/.github/workflows/discussion.yml\"\
+    ,\n  \"*/.github/workflows/formatter_*.yaml\",\n  \"*/.github/workflows/formatter_*.yml\"\
+    ,\n  \"*/.github/workflows/shai-hulud-workflow.yaml\",\n  \"*/.github/workflows/shai-hulud-workflow.yml\"\
+    ,\n  \"*/.github/workflows/shai-hulud.yaml\",\n  \"*/.github/workflows/shai-hulud.yml\"\
+    ,\n  \"*\\\\.github\\\\workflows\\\\discussion.yaml\",\n  \"*\\\\.github\\\\workflows\\\
+    \\discussion.yml\",\n  \"*\\\\.github\\\\workflows\\\\formatter_*.yaml\",\n  \"\
+    *\\\\.github\\\\workflows\\\\formatter_*.yml\",\n  \"*\\\\.github\\\\workflows\\\
+    \\shai-hulud-workflow.yaml\",\n  \"*\\\\.github\\\\workflows\\\\shai-hulud-workflow.yml\"\
+    ,\n  \"*\\\\.github\\\\workflows\\\\shai-hulud.yaml\",\n  \"*\\\\.github\\\\workflows\\\
+    \\shai-hulud.yml\"\n)\n\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\
+    \ Filesystem.file_create_time\n   Filesystem.file_hash Filesystem.file_modify_time\
+    \ Filesystem.file_name Filesystem.file_path Filesystem.file_acl Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id Filesystem.user\n   Filesystem.vendor_product\n\
+    \n| `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `shai_hulud_workflow_file_creation_or_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6b4a0a7f-10d1-4d72-9c4c-5c6a3d9f9d6a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/shai_hulud_workflow_file_creation_or_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-26e7c5e2-6545-481e-b7e6-050143459635
+name: CA Policy Removed by Non Approved Actor
+description: Monitor and alert on conditional access changes where non approved actor
+  removed CA Policy.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  - T1556
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-infrastructure#conditional-access
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Delete conditional access policy
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 26e7c5e2-6545-481e-b7e6-050143459635
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_aad_secops_ca_policy_removedby_bad_actor.yml
+falsepositives:
+- Misconfigured role permissions
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+notes:
+  quarantine_reason: 'upstream status: test'

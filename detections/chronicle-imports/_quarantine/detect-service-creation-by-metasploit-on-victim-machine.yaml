@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-detect-service-creation-by-metasploit-on-victim-machine
+name: detect_service_creation_by_metasploit_on_victim_machine
+description: detect_service_creation_by_metasploit_on_victim_machine
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detect_service_creation_by_metasploit_on_victim_machine {\n\
+    \ meta:\n    author = \"Joseph Kamau\"\n    description = \"This rule detects\
+    \ when a service is created by metasploit(e.g psexec) via powershell on a victim\
+    \ endpoint  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/nHv2Sd3eaLs2\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"Windows\"\n    service\
+    \ = \"security\"\n    mitre = \"execution, powershell, t1086\"\n\n  events:\n\
+    ($selection.metadata.product_event_type = \"7045\" and re.regex($selection.target.process.command_line,\
+    \ `%COMSPEC% /b /c start /b /min powershell\\.exe -nop -w hidden -noni -c.*`))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: detect_service_creation_by_metasploit_on_victim_machine
+provenance:
+  source: chronicle/detection-rules
+  source_id: detect_service_creation_by_metasploit_on_victim_machine
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/detect_service_creation_by_metasploit_on_victim_machine.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

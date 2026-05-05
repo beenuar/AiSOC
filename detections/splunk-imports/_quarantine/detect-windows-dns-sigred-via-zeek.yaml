@@ -1,0 +1,40 @@
+id: splunk-security-content-c5c622e4-d073-11ea-87d0-0242ac130003
+name: Detect Windows DNS SIGRed via Zeek
+description: The following analytic detects the presence of SIGRed, a critical DNS
+  vulnerability, using Zeek DNS and Zeek Conn data. It identifies specific DNS query
+  types (SIG and KEY) and checks for high data transfer within a flow. This detection
+  is significant because SIGRed allows attackers to execute remote code on Windows
+  DNS servers, potentially leading to unauthorized access and control. If confirmed
+  malicious, this activity could result in data exfiltration, service disruption,
+  or further network compromise. Immediate investigation and mitigation, such as patching
+  or isolating the affected server, are crucial.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count from datamodel=Network_Resolution\
+    \ where\n  DNS.query_type IN (SIG,KEY) by DNS.flow_id\n| rename DNS.flow_id as\
+    \ flow_id\n| append [\n  | tstats  `security_content_summariesonly` count\n  from\
+    \ datamodel=Network_Traffic where\n  All_Traffic.bytes_in>65000\n  by All_Traffic.flow_id\n\
+    \  | rename All_Traffic.flow_id as flow_id\n]\n| stats count by flow_id\n| where\
+    \ count>1\n| fields - count'\n| `detect_windows_dns_sigred_via_zeek_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c5c622e4-d073-11ea-87d0-0242ac130003
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_windows_dns_sigred_via_zeek.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

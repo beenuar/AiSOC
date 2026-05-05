@@ -1,0 +1,36 @@
+id: sigmahq-sigma-6f583da0-3a90-4566-a4ed-83c09fe18bbf
+name: Account Created And Deleted Within A Close Time Frame
+description: Detects when an account was created and deleted in a short period of
+  time.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#short-lived-accounts
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message:
+    - Add user
+    - Delete user
+    Status: Success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6f583da0-3a90-4566-a4ed-83c09fe18bbf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_ad_account_created_deleted.yml
+falsepositives:
+- Legit administrative action
+notes:
+  quarantine_reason: 'upstream status: test'

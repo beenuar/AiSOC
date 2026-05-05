@@ -1,0 +1,35 @@
+id: sigmahq-sigma-48ea844d-19b1-4642-944e-fe39c2cc1fec
+name: UAC Bypass Using IDiagnostic Profile - File
+description: Detects the creation of a file by "dllhost.exe" in System32 directory
+  part of "IDiagnosticProfileUAC" UAC bypass technique
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/Wh04m1001/IDiagnosticProfileUAC
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith: \DllHost.exe
+    TargetFilename|startswith: C:\Windows\System32\
+    TargetFilename|endswith: .dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48ea844d-19b1-4642-944e-fe39c2cc1fec
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_idiagnostic_profile.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

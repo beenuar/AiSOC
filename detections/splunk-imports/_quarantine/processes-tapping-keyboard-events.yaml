@@ -1,0 +1,45 @@
+id: splunk-security-content-2a371608-331d-4034-ae2c-21dda8f1d0ec
+name: Processes Tapping Keyboard Events
+description: The following analytic detects processes on macOS systems that are tapping
+  keyboard events, potentially monitoring all keystrokes made by a user. It leverages
+  data from osquery results within the Alerts data model, focusing on specific process
+  names and command lines. This activity is significant as it is a common technique
+  used by Remote Access Trojans (RATs) to log keystrokes, posing a serious security
+  risk. If confirmed malicious, this could lead to unauthorized access to sensitive
+  information, including passwords and personal data, compromising the integrity and
+  confidentiality of the system.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| from datamodel Alerts.Alerts
+
+    | search app=osquery:results name=pack_osx-attacks_Keyboard_Event_Taps
+
+    | rename columns.cmdline as cmd, columns.name as process_name, columns.pid as
+    process_id
+
+    | dedup host,process_name
+
+    | table host,process_name, cmd, process_id
+
+    | `processes_tapping_keyboard_events_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 2a371608-331d-4034-ae2c-21dda8f1d0ec
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/processes_tapping_keyboard_events.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

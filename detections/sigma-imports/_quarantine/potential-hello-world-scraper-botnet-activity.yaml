@@ -1,0 +1,37 @@
+id: sigmahq-sigma-1712bafe-be05-4a0e-89d4-17a3ed151bf5
+name: Potential Hello-World Scraper Botnet Activity
+description: Detects network traffic potentially associated with a scraper botnet
+  variant that uses the "Hello-World/1.0" user-agent string.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1595
+  categories:
+  - network
+references:
+- https://www.greynoise.io/blog/new-scraper-botnet-concentrated-in-taiwan
+- https://viz.greynoise.io/tags/hello-world-scraper-botnet?days=30
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent: Hello-World/1.0
+    cs-method: GET
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1712bafe-be05-4a0e-89d4-17a3ed151bf5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_hello_world_user_agent.yml
+falsepositives:
+- Legitimate network monitoring or vulnerability scanning tools that may use this
+  generic user agent.
+- Internal development or testing scripts. Consider filtering by source IP if this
+  is expected from certain systems.
+notes:
+  quarantine_reason: 'upstream status: experimental'

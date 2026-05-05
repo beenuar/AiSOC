@@ -1,0 +1,39 @@
+id: sigmahq-sigma-91109523-17f0-4248-a800-f81d9e7c081d
+name: PowerShell WMI Win32_Product Install MSI
+description: Detects the execution of an MSI file using PowerShell and the WMI Win32_Product
+  class
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.007
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1218.007/T1218.007.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - 'Invoke-CimMethod '
+    - '-ClassName '
+    - 'Win32_Product '
+    - '-MethodName '
+    - .msi
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 91109523-17f0-4248-a800-f81d9e7c081d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_win32_product_install_msi.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

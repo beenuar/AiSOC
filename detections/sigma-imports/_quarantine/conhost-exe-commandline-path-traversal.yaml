@@ -1,0 +1,34 @@
+id: sigmahq-sigma-ee5e119b-1f75-4b34-add8-3be976961e39
+name: Conhost.exe CommandLine Path Traversal
+description: detects the usage of path traversal in conhost.exe indicating possible
+  command/argument confusion/hijacking
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://pentestlab.blog/2020/07/06/indirect-command-execution/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentCommandLine|contains: conhost
+    CommandLine|contains: /../../
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ee5e119b-1f75-4b34-add8-3be976961e39
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_conhost_path_traversal.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

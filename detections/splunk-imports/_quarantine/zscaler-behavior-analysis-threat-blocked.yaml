@@ -1,0 +1,38 @@
+id: splunk-security-content-289ad59f-8939-4331-b805-f2bd51d36fb8
+name: Zscaler Behavior Analysis Threat Blocked
+description: The following analytic identifies threats blocked by the Zscaler proxy
+  based on behavior analysis. It leverages web proxy logs to detect entries where
+  actions are blocked and threat names and classes are specified. This detection is
+  significant as it highlights potential malicious activities that were intercepted
+  by Zscaler's behavior analysis, providing early indicators of threats. If confirmed
+  malicious, these blocked threats could indicate attempted breaches or malware infections,
+  helping security teams to understand and mitigate potential risks in their environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - application
+references:
+- https://help.zscaler.com/zia/nss-feed-output-format-web-logs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zscaler_proxy` action=blocked threatname!=\"None\" threatclass=\"\
+    Behavior Analysis\"\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY action deviceowner user\n       threatname url src\n       dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `zscaler_behavior_analysis_threat_blocked_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 289ad59f-8939-4331-b805-f2bd51d36fb8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/zscaler_behavior_analysis_threat_blocked.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

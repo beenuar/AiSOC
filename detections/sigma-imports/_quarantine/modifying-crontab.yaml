@@ -1,0 +1,32 @@
+id: sigmahq-sigma-af202fd3-7bff-4212-a25a-fb34606cfcbe
+name: Modifying Crontab
+description: Detects suspicious modification of crontab file.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1053.003/T1053.003.md
+logsource:
+  product: linux
+  service: cron
+detection:
+  keywords:
+  - REPLACE
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: af202fd3-7bff-4212-a25a-fb34606cfcbe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/cron/lnx_cron_crontab_file_modification.yml
+falsepositives:
+- Legitimate modification of crontab
+notes:
+  quarantine_reason: 'upstream status: test'

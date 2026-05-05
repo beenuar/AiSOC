@@ -1,0 +1,48 @@
+id: splunk-security-content-5df35d50-e1a3-4a52-a337-92e69d9b1b8a
+name: Windows PowerShell Process With Malicious String
+description: The following analytic detects the execution of multiple offensive toolkits
+  and commands through the process execution datamodel. This method captures commands
+  given directly to powershell.exe, allowing for the identification of suspicious
+  activities including several well-known tools used for credential theft, lateral
+  movement, and persistence. If confirmed malicious, this could lead to unauthorized
+  access, privilege escalation, and potential compromise of sensitive information
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1059/001/
+- https://github.com/PowerShellMafia/PowerSploit
+- https://github.com/PowerShellEmpire/
+- https://github.com/S3cur3Th1sSh1t/PowerSharpPack
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_powershell`\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | lookup malicious_powershell_strings command as process\n| where isnotnull(match)\n\
+    | `windows_powershell_process_with_malicious_string_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5df35d50-e1a3-4a52-a337-92e69d9b1b8a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_process_with_malicious_string.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

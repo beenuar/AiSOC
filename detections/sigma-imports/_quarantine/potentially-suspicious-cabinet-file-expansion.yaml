@@ -1,0 +1,59 @@
+id: sigmahq-sigma-9f107a84-532c-41af-b005-8d12a607639f
+name: Potentially Suspicious Cabinet File Expansion
+description: Detects the expansion or decompression of cabinet files from potentially
+  suspicious or uncommon locations, e.g. seen in Iranian MeteorExpress related attacks
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://labs.sentinelone.com/meteorexpress-mysterious-wiper-paralyzes-iranian-trains-with-epic-troll
+- https://blog.malwarebytes.com/threat-intelligence/2021/08/new-variant-of-konni-malware-used-in-campaign-targetting-russia/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_cmd:
+    Image|endswith: \expand.exe
+    CommandLine|contains|windash: '-F:'
+  selection_folders_1:
+    CommandLine|contains:
+    - :\Perflogs\
+    - :\ProgramData
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \Admin$\
+    - \AppData\Local\Temp\
+    - \AppData\Roaming\
+    - \C$\
+    - \Temporary Internet
+  selection_folders_2:
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Favorites\
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Favourites\
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Contacts\
+  filter_optional_dell:
+    ParentImage: C:\Program Files (x86)\Dell\UpdateService\ServiceShell.exe
+    CommandLine|contains: C:\ProgramData\Dell\UpdateService\Temp\
+  condition: selection_cmd and 1 of selection_folders_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9f107a84-532c-41af-b005-8d12a607639f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_expand_cabinet_files.yml
+falsepositives:
+- System administrator Usage
+notes:
+  quarantine_reason: 'upstream status: test'

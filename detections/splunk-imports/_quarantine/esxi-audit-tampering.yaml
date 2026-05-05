@@ -1,0 +1,37 @@
+id: splunk-security-content-c48a155b-2861-417a-813c-220f5272cf01
+name: ESXi Audit Tampering
+description: This detection identifies the use of the esxcli system auditrecords commands,
+  which can be used to tamper with logging on an ESXi host. This action may indicate
+  an attempt to evade detection or hinder forensic analysis by preventing the recording
+  of system-level audit events.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.003
+  - T1070
+  categories:
+  - application
+references:
+- https://detect.fyi/detecting-and-responding-to-esxi-compromise-with-splunk-f33998ce7823
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*esxcli system auditrecords*" Message IN ("*remote*","*local*")
+    NOT Message = "*[shell*" | rex field=_raw "Z (?<dest>[\w\.]+)\s" | rex field=_raw
+    "[\w+]\]: (?<full_command>.*)" | rex field=full_command "\[(?<user>.*)]:\s(?<command>.*)"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest user command
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_audit_tampering_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c48a155b-2861-417a-813c-220f5272cf01
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_audit_tampering.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,46 @@
+id: sigmahq-sigma-30a8cb77-8eb3-4cfb-8e79-ad457c5a4592
+name: Renamed Powershell Under Powershell Channel
+description: Detects a renamed Powershell execution, which is a common technique used
+  to circumvent security controls and bypass detection logic that's dependent on process
+  names and process paths.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse
+logsource:
+  product: windows
+  category: ps_classic_start
+detection:
+  selection:
+    Data|contains: HostName=ConsoleHost
+  filter_main_ps:
+    Data|contains:
+    - HostApplication=powershell
+    - HostApplication=C:\Windows\System32\WindowsPowerShell\v1.0\powershell
+    - HostApplication=C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell
+    - HostApplication=C:/Windows/System32/WindowsPowerShell/v1.0/powershell
+    - HostApplication=C:/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell
+    - HostApplication=C:\\\\WINDOWS\\\\system32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe
+    - HostApplication=C:\\\\WINDOWS\\\\SysWOW64\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe
+  filter_main_host_application_null:
+    Data|re: HostId=[a-zA-Z0-9-]{36}\s+EngineVersion=
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 30a8cb77-8eb3-4cfb-8e79-ad457c5a4592
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_renamed_powershell.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: splunk-security-content-1606cc5b-fd5f-4865-9fe3-0ed1eaec2df6
+name: HTTP Duplicated Header
+description: Detects when a request has more than one of the same header. This is
+  commonly used in request smuggling and other web based attacks. HTTP Request Smuggling
+  exploits inconsistencies in how front-end and back-end servers parse HTTP requests
+  by using ambiguous or malformed headers to hide malicious requests within legitimate
+  ones. Attackers leverage duplicate headers, particularly Content-Length and Transfer-Encoding,
+  to cause different servers in the chain to disagree on where one request ends and
+  another begins. RFC7230 states that a sender MUST NOT generate multiple header fields
+  with the same field name in a message unless either the entire field value for that
+  header field is defined as a comma-separated list or the header field is a well-known
+  exception.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1190
+  categories:
+  - application
+references:
+- https://portswigger.net/web-security/request-smuggling#what-is-http-request-smuggling
+- https://portswigger.net/research/http1-must-die
+- https://www.vaadata.com/blog/what-is-http-request-smuggling-exploitations-and-security-best-practices/
+- https://www.securityweek.com/new-http-request-smuggling-attacks-impacted-cdns-major-orgs-millions-of-websites/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`suricata` http.request_headers{}.name=\"*\"\n  | rename dest_ip as\
+    \ dest\n  | spath path=http.request_headers{}.name output=header_names\n  | mvexpand\
+    \ header_names\n  | where lower(header_names) != \"set-cookie\"\n  | stats count\n\
+    \    BY _raw, header_names, src_ip,\n       dest\n  | where count > 1\n  | stats\
+    \ values(header_names) as duplicate_headers\n    BY _raw, count, src_ip,\n   \
+    \    dest\n  | `http_duplicated_header_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1606cc5b-fd5f-4865-9fe3-0ed1eaec2df6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/http_duplicated_header.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

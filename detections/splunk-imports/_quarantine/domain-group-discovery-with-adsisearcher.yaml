@@ -1,0 +1,42 @@
+id: splunk-security-content-089c862f-5f83-49b5-b1c8-7e4ff66560c7
+name: Domain Group Discovery with Adsisearcher
+description: The following analytic detects the use of the `[Adsisearcher]` type accelerator
+  in PowerShell to query Active Directory for domain groups. It leverages PowerShell
+  Script Block Logging (EventCode=4104) to identify specific script blocks containing
+  `[adsisearcher]` and group-related queries. This activity is significant as it may
+  indicate an attempt by adversaries or Red Teams to enumerate domain groups for situational
+  awareness and Active Directory discovery. If confirmed malicious, this behavior
+  could lead to further reconnaissance, privilege escalation, or lateral movement
+  within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://devblogs.microsoft.com/scripting/use-the-powershell-adsisearcher-type-accelerator-to-search-active-directory/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` (ScriptBlockText = \"*[adsisearcher]*\" AND ScriptBlockText\
+    \ = \"*(objectcategory=group)*\" AND ScriptBlockText = \"*findAll()*\")\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `domain_group_discovery_with_adsisearcher_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 089c862f-5f83-49b5-b1c8-7e4ff66560c7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/domain_group_discovery_with_adsisearcher.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

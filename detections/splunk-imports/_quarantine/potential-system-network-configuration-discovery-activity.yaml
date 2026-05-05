@@ -1,0 +1,52 @@
+id: splunk-security-content-3f0b95e3-3195-46ac-bea3-84fb59e7fac5
+name: Potential System Network Configuration Discovery Activity
+description: The following analytic identifies the rapid execution of processes used
+  for system network configuration discovery on an endpoint. It leverages data from
+  Endpoint Detection and Response (EDR) agents, focusing on process GUIDs, names,
+  parent processes, and command-line executions. This activity can be significant
+  as it may indicate an attacker attempting to map the network, which is a common
+  precursor to lateral movement or further exploitation. If confirmed malicious, this
+  behavior could allow an attacker to gain insights into the network topology, identify
+  critical systems, and plan subsequent attacks, potentially leading to data exfiltration
+  or system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1016
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count values(Processes.process)\
+    \ as process\n        values(Processes.parent_process) as parent_process\n   \
+    \     min(_time) as firstTime\n        max(_time) as lastTime\nfrom datamodel=Endpoint.Processes\
+    \ where\n\nNOT Processes.user IN (\"\",\"unknown\")\n\nby Processes.action Processes.dest\
+    \ Processes.original_file_name\nProcesses.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\nProcesses.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\nProcesses.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\nProcesses.process_id Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\nProcesses.user Processes.user_id\
+    \ Processes.vendor_product _time\n\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(Processes)`\n| search process_name IN (\n          \"arp.exe\"\
+    ,\n          \"dsquery.exe\",\n          \"hostname.exe\",\n          \"ipconfig.exe\"\
+    ,\n          \"nbstat.exe\",\n          \"net.exe\",\n          \"net1.exe\",\n\
+    \          \"nltest.exe\",\n          \"netsh.exe\",\n          \"nslookup.exe\"\
+    ,\n          \"ping.exe\",\n          \"quser.exe\",\n          \"qwinsta.exe\"\
+    ,\n          \"telnet.exe\",\n          \"tracert.exe\",\n        )\n| transaction\
+    \ dest connected=false maxpause=5m\n| where eventcount>=5\n| `potential_system_network_configuration_discovery_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3f0b95e3-3195-46ac-bea3-84fb59e7fac5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/potential_system_network_configuration_discovery_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

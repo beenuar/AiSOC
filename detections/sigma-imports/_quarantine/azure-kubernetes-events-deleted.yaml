@@ -1,0 +1,37 @@
+id: sigmahq-sigma-225d8b09-e714-479c-a0e4-55e6f29adf35
+name: Azure Kubernetes Events Deleted
+description: Detects when Events are deleted in Azure Kubernetes. An adversary may
+  delete events in Azure Kubernetes in an attempt to evade detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations#microsoftkubernetes
+- https://github.com/elastic/detection-rules/blob/da3852b681cf1a33898b1535892eab1f3a76177a/rules/integrations/azure/defense_evasion_kubernetes_events_deleted.toml
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName: MICROSOFT.KUBERNETES/CONNECTEDCLUSTERS/EVENTS.K8S.IO/EVENTS/DELETE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 225d8b09-e714-479c-a0e4-55e6f29adf35
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_kubernetes_events_deleted.yml
+falsepositives:
+- Event deletions may be done by a system or network administrator. Verify whether
+  the username, hostname, and/or resource name should be making changes in your environment.
+  Events deletions from unfamiliar users or hosts should be investigated. If known
+  behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: splunk-security-content-bbc644bc-37df-4e1a-9c88-ec9a53e2038c
+name: Disabling Remote User Account Control
+description: The following analytic identifies modifications to the registry key that
+  controls the enforcement of Windows User Account Control (UAC). It detects changes
+  to the registry path `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\EnableLUA`
+  where the value is set to `0x00000000`. This activity is significant because disabling
+  UAC can allow unauthorized changes to the system without user consent, potentially
+  leading to privilege escalation. If confirmed malicious, an attacker could gain
+  elevated privileges, making it easier to execute further attacks or maintain persistence
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path=*\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA*
+    Registry.registry_value_data="0x00000000" by Registry.action Registry.dest Registry.process_guid
+    Registry.process_id Registry.registry_hive Registry.registry_path Registry.registry_key_name
+    Registry.registry_value_data Registry.registry_value_name Registry.registry_value_type
+    Registry.status Registry.user Registry.vendor_product | `drop_dm_object_name(Registry)`
+    | `disabling_remote_user_account_control_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: bbc644bc-37df-4e1a-9c88-ec9a53e2038c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disabling_remote_user_account_control.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

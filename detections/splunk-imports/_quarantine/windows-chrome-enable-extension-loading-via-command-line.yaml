@@ -1,0 +1,47 @@
+id: splunk-security-content-da355155-1d23-48f9-bf95-e534ae273ab0
+name: Windows Chrome Enable Extension Loading via Command-Line
+description: 'The following analytic detects instances where Google Chrome is started
+  with the --disable-features=DisableLoadExtensionCommandLineSwitch flag, effectively
+  enabling the loading of extensions via the command line.
+
+  This may indicate attempts to bypass enterprise extension policies, load unauthorized
+  or malicious extensions, or manipulate browser behavior.
+
+  Monitoring this activity helps identify potential security policy violations, malware
+  persistence techniques, or other suspicious Chrome modifications.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1185
+  categories:
+  - endpoint
+references:
+- https://www.gdatasoftware.com/blog/2025/11/38298-learning-about-browser-hijacking
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime\nfrom datamodel=Endpoint.Processes where\n  Processes.process_name\
+    \ = \"Chrome.exe\"\n  Processes.process= \"*--disable-features*\"\n  Processes.process=\
+    \ \"*DisableLoadExtensionCommandLineSwitch*\"\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process\n   Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process Processes.process_exec\n   Processes.process_guid\
+    \ Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_name Processes.process_path Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_chrome_enable_extension_loading_via_command_line_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: da355155-1d23-48f9-bf95-e534ae273ab0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_chrome_enable_extension_loading_via_command_line.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

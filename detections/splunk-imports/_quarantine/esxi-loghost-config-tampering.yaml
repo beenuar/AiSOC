@@ -1,0 +1,34 @@
+id: splunk-security-content-64bc2fa3-c493-44b4-8e94-3e5dbf71377e
+name: ESXi Loghost Config Tampering
+description: This detection identifies changes to the syslog loghost configuration
+  on an ESXi host, which may indicate an attempt to disrupt log forwarding and evade
+  detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*Set called with key*" AND Message IN ("*Syslog.global.logHost*","*Syslog.global.logdir*")
+    | rex field=_raw "key ''(?<key>[^'']+)'', value ''\"(?<value>[^\"]+)\"''" | rex
+    field=_raw "Z (?<dest>[\w\.]+)\s" | stats min(_time) as firstTime max(_time) as
+    lastTime count by dest key value | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `esxi_loghost_config_tampering_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 64bc2fa3-c493-44b4-8e94-3e5dbf71377e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_loghost_config_tampering.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

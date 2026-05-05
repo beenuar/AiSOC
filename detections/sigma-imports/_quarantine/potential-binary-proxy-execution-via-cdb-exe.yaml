@@ -1,0 +1,42 @@
+id: sigmahq-sigma-b5c7395f-e501-4a08-94d4-57fe7a9da9d2
+name: Potential Binary Proxy Execution Via Cdb.EXE
+description: Detects usage of "cdb.exe" to launch arbitrary processes or commands
+  from a debugger script file
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1106
+  - T1218
+  - T1127
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Cdb/
+- https://web.archive.org/web/20170715043507/http://www.exploit-monday.com/2016/08/windbg-cdb-shellcode-runner.html
+- https://twitter.com/nas_bench/status/1534957360032120833
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \cdb.exe
+  - OriginalFileName: CDB.Exe
+  selection_cli:
+    CommandLine|contains:
+    - ' -c '
+    - ' -cf '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b5c7395f-e501-4a08-94d4-57fe7a9da9d2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cdb_arbitrary_command_execution.yml
+falsepositives:
+- Legitimate use of debugging tools
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-olympic-destroyer-detector
+name: olympic_destroyer_detector
+description: olympic_destroyer_detector
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule olympic_destroyer_detector {\n meta:\n    author = \"Alexandr\
+    \ Yampolskyi, SOC Prime\"\n    description = \"Olympic Destroyer Detector.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/tBP2ek12qCRQ\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/06/19\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Defense Evasion, t1112, Execution, t1204\"\n\n \
+    \ events:\n(($selection.metadata.product_event_type = \"1\" and ($selection.target.file.md5\
+    \ = \"9bc365a16c63f25dfddcbe11da042974\" or $selection.target.file.md5 = \"da93e6651c5ba3e3e96f4ae2dd763d94\"\
+    \ or $selection.target.file.md5 = \"6ccd8133f250d4babefbd66b898739b9\" or $selection.target.file.md5\
+    \ = \"abe771f280cdea6e7eaf19a26b1a9488\" or $selection.target.file.md5 = \"b60da65b8d3627a89481efb23d59713a\"\
+    \ or $selection.target.file.md5 = \"b94bdb63f0703d32c20f4b2e5500dbbe\" or $selection.target.file.md5\
+    \ = \"bb5e8733a940fedfb1ef6b0e0ec3635c\" or $selection.target.file.md5 = \"97ddc336d7d92b7db17d098ec2ee6092\"\
+    \ or $selection.target.file.md5 = \"1d0cf431e623b21aeae8f2b8414d2a73\" or $selection.target.file.md5\
+    \ = \"0e7b32d23fbd6d62a593c234bafa2311\" or $selection.target.file.md5 = \"e2e102291d259f054625cc85318b7ef5\"\
+    \ or $selection.target.file.md5 = \"0c6ddc3a722b865cc2d1185e27cef9b8\" or $selection.target.file.md5\
+    \ = \"54b06b05b6b92a8f2ff02fdf47baad0e\" or $selection.target.file.md5 = \"4247901eca6d87f5f3af7df8249ea825\"\
+    )) or ($selection.metadata.product_event_type = \"13\" and (re.regex($selection.target.registry.registry_key,\
+    \ `.*\\\\Software\\\\Policies\\\\Microsoft\\\\Windows\\\\PowerShell\\\\ScriptBlockLogging\\\
+    \\EnableScriptBlockLogging`) or re.regex($selection.target.registry.registry_key,\
+    \ `.*\\\\Software\\\\Policies\\\\Microsoft\\\\Windows\\\\PowerShell\\\\ScriptBlockLogging\\\
+    \\EnableScriptBlockInvocationLogging`)) and $selection.metadata.description =\
+    \ \"0\" and $selection.metadata.event_type = \"SetValue\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: olympic_destroyer_detector
+provenance:
+  source: chronicle/detection-rules
+  source_id: olympic_destroyer_detector
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/olympic_destroyer_detector.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

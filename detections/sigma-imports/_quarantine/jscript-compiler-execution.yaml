@@ -1,0 +1,38 @@
+id: sigmahq-sigma-52788a70-f1da-40dd-8fbd-73b5865d6568
+name: JScript Compiler Execution
+description: 'Detects the execution of the "jsc.exe" (JScript Compiler).
+
+  Attacker might abuse this in order to compile JScript files on the fly and bypassing
+  application whitelisting.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Jsc/
+- https://www.phpied.com/make-your-javascript-a-windows-exe/
+- https://twitter.com/DissectMalware/status/998797808907046913
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+  - Image|endswith: \jsc.exe
+  - OriginalFileName: jsc.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 52788a70-f1da-40dd-8fbd-73b5865d6568
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_jsc_execution.yml
+falsepositives:
+- Legitimate use to compile JScript by developers.
+notes:
+  quarantine_reason: 'upstream status: test'

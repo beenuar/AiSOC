@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b1decb61-ed83-4339-8e95-53ea51901720
+name: TeamViewer Log File Deleted
+description: Detects the deletion of the TeamViewer log files which may indicate an
+  attempt to destroy forensic evidence
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.004/T1070.004.md
+logsource:
+  product: windows
+  category: file_delete
+detection:
+  selection:
+    TargetFilename|contains: \TeamViewer_
+    TargetFilename|endswith: .log
+  filter:
+    Image: C:\Windows\system32\svchost.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b1decb61-ed83-4339-8e95-53ea51901720
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_teamviewer_logs.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

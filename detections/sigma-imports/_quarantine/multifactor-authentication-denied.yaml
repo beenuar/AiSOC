@@ -1,0 +1,36 @@
+id: sigmahq-sigma-e40f4962-b02b-4192-9bfe-245f7ece1f99
+name: Multifactor Authentication Denied
+description: User has indicated they haven't instigated the MFA prompt and could indicate
+  an attacker has the password for the account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1110
+  - T1621
+  categories:
+  - cloud
+references:
+- https://www.microsoft.com/security/blog/2022/03/22/dev-0537-criminal-actor-targeting-organizations-for-data-exfiltration-and-destruction/
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    AuthenticationRequirement: multiFactorAuthentication
+    Status|contains: MFA Denied
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e40f4962-b02b-4192-9bfe-245f7ece1f99
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_mfa_denies.yml
+falsepositives:
+- Users actually login but miss-click into the Deny button when MFA prompt.
+notes:
+  quarantine_reason: 'upstream status: test'

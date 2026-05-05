@@ -1,0 +1,48 @@
+id: chronicle-detection-rules-sap-security-audit-log-user-created-deleted-or-unlocked
+name: sap_security_audit_log_user_created_deleted_or_unlocked
+description: sap_security_audit_log_user_created_deleted_or_unlocked
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_security_audit_log_user_created_deleted_or_unlocked {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Detects when an SAP\
+    \ user is created, deleted, or unlocked\"\n    severity = \"Medium\"\n    tactic\
+    \ = \"TA0003\"\n    technique = \"T1136\"\n\n  events:\n    $e.metadata.log_type\
+    \ = \"SAP_SECURITY_AUDIT\"\n\n    $e.additional.fields[\"msg_1\"] = /^AU7$|^AU8$|^AU9$|^AUA$/\
+    \ nocase\n\n    $user = $e.principal.user.userid\n    $sid = $e.target.application\n\
+    \n    //exclusions\n    not $user in %sap_admin_users.user\n\n  match:\n    $user,\
+    \ $sid over 59m\n\n  outcome:\n    $risk_score = 75\n    $target_sid = array_distinct($sid)\n\
+    \    $description = array_distinct($e.metadata.description)\n    $terminal = array_distinct($e.principal.hostname)\n\
+    \    $message_ids = array_distinct($e.additional.fields[\"msg_1\"])\n    $target_user\
+    \ = array_distinct($e.additional.fields[\"param1_1\"])\n    $t_code = array_distinct($e.security_result.detection_fields[\"\
+    slgtc_1\"])\n    $TXSUBCLSID = array_distinct($e.security_result.summary)\n  \
+    \  $system = array_distinct($e.target.application)\n    $instance = array_distinct($e.target.resource.name)\n\
+    \n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_security_audit_log_user_created_deleted_or_unlocked
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_security_audit_log_user_created_deleted_or_unlocked
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_security_audit_log_user_created_deleted_or_unlocked.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

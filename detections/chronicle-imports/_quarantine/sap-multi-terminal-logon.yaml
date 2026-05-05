@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-sap-multi-terminal-logon
+name: sap_multi_terminal_logon
+description: sap_multi_terminal_logon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_multi_terminal_logon {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Identifies successful logons for the same User ID from multiple\
+    \ different terminal IDs or client hostnames in a short timeframe, indicating\
+    \ potential credential sharing or session theft.\"\n    severity = \"medium\"\n\
+    \    tactic = \"TA0006\"\n    technique = \"T1078\"\n\n  events:\n    $e.metadata.log_type\
+    \ = \"SAP_SECURITY_AUDIT\"\n    (\n        $e.metadata.event_type = \"USER_LOGIN\"\
+    \ or\n        $e.additional.fields[\"msg_1\"] = /^AU1$|^AU5$/\n    )\n\n\n   \
+    \ // Ensure we only check events that actually have a terminal/hostname recorded\n\
+    \    $e.principal.hostname != \"\"\n\n    $terminal = $e.principal.hostname\n\
+    \    $user = $e.principal.user.userid\n\n  match:\n    // You can reduce this\
+    \ window to 15m or 30m if 1h is too broad for direct terminal switches\n    $user\
+    \ over 15m\n\n  outcome:\n    $terminals = array_distinct($terminal)\n    $count_of_terminals\
+    \ = count_distinct($terminal)\n    // Give a high risk score if they switch terminals\n\
+    \    $risk_score = 60\n    $sap_instance = array_distinct($e.target.resource.name)\n\
+    \n  condition:\n    // Trigger if the user is seen on 2 or more distinct terminals\n\
+    \    #terminal >= 2\n}"
+  chronicle_rule_name: sap_multi_terminal_logon
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_multi_terminal_logon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_multi_terminal_logon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

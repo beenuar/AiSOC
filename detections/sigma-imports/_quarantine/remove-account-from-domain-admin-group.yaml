@@ -1,0 +1,40 @@
+id: sigmahq-sigma-48a45d45-8112-416b-8a67-46e03a4b2107
+name: Remove Account From Domain Admin Group
+description: 'Adversaries may interrupt availability of system and network resources
+  by inhibiting access to accounts utilized by legitimate users.
+
+  Accounts may be deleted, locked, or manipulated (ex: changed credentials) to remove
+  access to accounts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1531
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1531/T1531.md#atomic-test-3---remove-account-from-domain-admin-group
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - Remove-ADGroupMember
+    - '-Identity '
+    - '-Members '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48a45d45-8112-416b-8a67-46e03a4b2107
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_remove_adgroupmember.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-60167e5c-84b2-4c95-a7ac-86281f27c445
+name: Remote PowerShell Session (PS Classic)
+description: Detects remote PowerShell sessions
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190511-RemotePwshExecution/notebook.html
+logsource:
+  product: windows
+  category: ps_classic_start
+detection:
+  selection:
+    Data|contains|all:
+    - HostName=ServerRemoteHost
+    - wsmprovhost.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 60167e5c-84b2-4c95-a7ac-86281f27c445
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_remote_powershell_session.yml
+falsepositives:
+- Legitimate use remote PowerShell sessions
+notes:
+  quarantine_reason: 'upstream status: test'

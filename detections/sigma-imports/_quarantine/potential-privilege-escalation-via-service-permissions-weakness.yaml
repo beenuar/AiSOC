@@ -1,0 +1,43 @@
+id: sigmahq-sigma-0f9c21f1-6a73-4b0e-9809-cb562cb8d981
+name: Potential Privilege Escalation via Service Permissions Weakness
+description: Detect modification of services configuration (ImagePath, FailureCommand
+  and ServiceDLL) in registry by processes with Medium integrity level
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.011
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-privilege-escalation-in-windows-environment
+- https://pentestlab.blog/2017/03/31/insecure-registry-permissions/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    IntegrityLevel:
+    - Medium
+    - S-1-16-8192
+    CommandLine|contains|all:
+    - ControlSet
+    - services
+    CommandLine|contains:
+    - \ImagePath
+    - \FailureCommand
+    - \ServiceDll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0f9c21f1-6a73-4b0e-9809-cb562cb8d981
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_registry_privilege_escalation_via_service_key.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

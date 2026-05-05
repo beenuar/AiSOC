@@ -1,0 +1,39 @@
+id: splunk-security-content-03cdd68a-34fb-11ec-9bd3-acde48001122
+name: Gsuite suspicious calendar invite
+description: The following analytic detects suspicious calendar invites sent via GSuite,
+  potentially indicating compromised accounts or malicious internal activity. It leverages
+  GSuite calendar logs, focusing on events where a high volume of invites (over 100)
+  is sent within a 5-minute window. This behavior is significant as it may involve
+  the distribution of malicious links or attachments, posing a security risk. If confirmed
+  malicious, this activity could lead to widespread phishing attacks, unauthorized
+  access, or malware distribution within the organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - cloud
+references:
+- https://www.techrepublic.com/article/how-to-avoid-the-dreaded-google-calendar-malicious-invite-issue/
+- https://gcn.com/cybersecurity/2012/09/the-20-most-common-words-in-phishing-attacks/280956/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gsuite_calendar`\n  | bin span=5m _time\n  | rename parameters.* as\
+    \ *\n  | search target_calendar_id!=null email=\"*yourdomain.com\"\n  | stats\
+    \  count values(target_calendar_id) values(event_title) values(event_guest)\n\
+    \    BY email _time\n  | where count >100\n  | `gsuite_suspicious_calendar_invite_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 03cdd68a-34fb-11ec-9bd3-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gsuite_suspicious_calendar_invite.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

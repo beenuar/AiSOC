@@ -1,0 +1,36 @@
+id: sigmahq-sigma-0e0bc253-07ed-43f1-816d-e1b220fe8971
+name: Potential RjvPlatform.DLL Sideloading From Non-Default Location
+description: Detects potential DLL sideloading of "RjvPlatform.dll" by "SystemResetPlatform.exe"
+  located in a non-default location.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0gtweet/status/1666716511988330499
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \RjvPlatform.dll
+    Image: \SystemResetPlatform.exe
+  filter_main_legit_path:
+    Image|startswith: C:\Windows\System32\SystemResetPlatform\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0e0bc253-07ed-43f1-816d-e1b220fe8971
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_rjvplatform_non_default_location.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

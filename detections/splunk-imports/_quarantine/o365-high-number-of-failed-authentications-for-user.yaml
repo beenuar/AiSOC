@@ -1,0 +1,41 @@
+id: splunk-security-content-31641378-2fa9-42b1-948e-25e281cb98f7
+name: O365 High Number Of Failed Authentications for User
+description: The following analytic identifies an O365 account experiencing more than
+  20 failed authentication attempts within 5 minutes. It uses O365 Unified Audit Logs,
+  specifically "UserLoginFailed" events, to monitor and flag accounts exceeding this
+  threshold. This activity is significant as it may indicate a brute force attack
+  or password guessing attempt. If confirmed malicious, an attacker could gain unauthorized
+  access to the O365 environment, potentially compromising sensitive emails, documents,
+  and other data. Prompt investigation and action are crucial to prevent unauthorized
+  access and data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/
+- https://attack.mitre.org/techniques/T1110/001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Operation=UserLoginFailed record_type=AzureActiveDirectoryStsLogon\
+    \ Workload=AzureActiveDirectory\n  | bucket span=5m _time\n  | fillnull\n  | stats\
+    \ dc(_raw) AS failed_attempts values(src_ip) as src\n    BY signature user _time\n\
+    \       dest vendor_account vendor_product\n  | where failed_attempts > 10\n \
+    \ | `o365_high_number_of_failed_authentications_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 31641378-2fa9-42b1-948e-25e281cb98f7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_high_number_of_failed_authentications_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

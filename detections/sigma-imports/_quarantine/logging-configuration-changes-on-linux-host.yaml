@@ -1,0 +1,36 @@
+id: sigmahq-sigma-c830f15d-6f6e-430f-8074-6f73d6807841
+name: Logging Configuration Changes on Linux Host
+description: Detect changes of syslog daemons configuration files
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- self experience
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name:
+    - /etc/syslog.conf
+    - /etc/rsyslog.conf
+    - /etc/syslog-ng/syslog-ng.conf
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c830f15d-6f6e-430f-8074-6f73d6807841
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_logging_config_change.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

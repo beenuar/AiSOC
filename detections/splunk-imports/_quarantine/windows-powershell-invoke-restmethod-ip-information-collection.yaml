@@ -1,0 +1,45 @@
+id: splunk-security-content-8db47e12-9c3e-4f5a-b0d6-e42a1895cd4f
+name: Windows PowerShell Invoke-RestMethod IP Information Collection
+description: The following analytic detects the use of PowerShell's Invoke-RestMethod
+  cmdlet to collect geolocation data from ipinfo.io or IP address information from
+  api.ipify.org. This behavior leverages PowerShell Script Block Logging to identify
+  scripts that gather external IP information and potential geolocation data. This
+  activity is significant as it may indicate reconnaissance efforts, where threat
+  actors are attempting to determine the geographical location or network details
+  of a compromised system. While some legitimate software may use these services,
+  this pattern is commonly observed in malware and post-exploitation toolkits like
+  those used by Water Gamayun threat actors.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  - T1016
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://securityintelligence.com/posts/new-threat-actor-water-gamayun-targets-telecom-finance/
+- https://www.ncsc.gov.uk/report/weekly-threat-report-12th-april-2024
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText=\"*Invoke-RestMethod*\"\
+    \ AND (ScriptBlockText=\"*ipinfo.io*\" OR ScriptBlockText=\"*api.ipify.org*\"\
+    ))\n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest\
+    \ signature signature_id\n       user_id vendor_product Guid\n       Opcode Name\
+    \ Path\n       ProcessID ScriptBlockId ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_powershell_invoke_restmethod_ip_information_collection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8db47e12-9c3e-4f5a-b0d6-e42a1895cd4f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_invoke_restmethod_ip_information_collection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

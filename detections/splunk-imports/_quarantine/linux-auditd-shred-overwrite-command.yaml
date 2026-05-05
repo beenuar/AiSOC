@@ -1,0 +1,39 @@
+id: splunk-security-content-ce2bde4d-a1d4-4452-8c87-98440e5adfb3
+name: Linux Auditd Shred Overwrite Command
+description: The following analytic detects the execution of the 'shred' command on
+  a Linux machine, which is used to overwrite files to make them unrecoverable. It
+  leverages data from Linux Auditd, focusing on process names and command-line arguments.
+  This activity is significant because the 'shred' command can be used in destructive
+  attacks, such as those seen in the Industroyer2 malware targeting energy facilities.
+  If confirmed malicious, this activity could lead to the permanent destruction of
+  critical files, severely impacting system integrity and data availability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://www.welivesecurity.com/2022/04/12/industroyer2-industroyer-reloaded/
+- https://cert.gov.ua/article/39518
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`  proctitle IN (\"*shred*\")  AND proctitle IN (\"*-n*\"\
+    , \"*-z*\", \"*-u*\", \"*-s*\")\n  | rename host as dest\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY proctitle dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_shred_overwrite_command_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ce2bde4d-a1d4-4452-8c87-98440e5adfb3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_shred_overwrite_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

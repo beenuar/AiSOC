@@ -1,0 +1,73 @@
+id: sigmahq-sigma-502b42de-4306-40b4-9596-6f590c81f073
+name: Local Accounts Discovery
+description: Local accounts, System Owner/User discovery using operating systems utilities
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1033
+  - T1087.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1033/T1033.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_other_img:
+  - Image|endswith:
+    - \whoami.exe
+    - \quser.exe
+    - \qwinsta.exe
+  - OriginalFileName:
+    - whoami.exe
+    - quser.exe
+    - qwinsta.exe
+  selection_other_wmi:
+    Image|endswith: \wmic.exe
+    CommandLine|contains|all:
+    - useraccount
+    - get
+  selection_other_cmdkey:
+    Image|endswith: \cmdkey.exe
+    CommandLine|contains: ' /l'
+  selection_cmd:
+    Image|endswith: \cmd.exe
+    CommandLine|contains|all:
+    - ' /c'
+    - 'dir '
+    - \Users\
+  filter_cmd:
+    CommandLine|contains: ' rmdir '
+  selection_net:
+    Image|endswith:
+    - \net.exe
+    - \net1.exe
+    CommandLine|contains: user
+  filter_net:
+    CommandLine|contains:
+    - /domain
+    - /add
+    - /delete
+    - /active
+    - /expires
+    - /passwordreq
+    - /scriptpath
+    - /times
+    - /workstations
+  condition: (selection_cmd and not filter_cmd) or (selection_net and not filter_net)
+    or 1 of selection_other_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 502b42de-4306-40b4-9596-6f590c81f073
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_local_system_owner_account_discovery.yml
+falsepositives:
+- Legitimate administrator or user enumerates local users for legitimate reason
+notes:
+  quarantine_reason: 'upstream status: test'

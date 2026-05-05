@@ -1,0 +1,35 @@
+id: sigmahq-sigma-e7d79a1b-25ed-4956-bd56-bd344fa8fd06
+name: OpenCanary - MySQL Login Attempt
+description: Detects instances where a MySQL service on an OpenCanary node has had
+  a login attempt.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003
+  - T1213
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 8001
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e7d79a1b-25ed-4956-bd56-bd344fa8fd06
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_mysql_login_attempt.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

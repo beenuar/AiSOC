@@ -1,0 +1,35 @@
+id: sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e
+name: Overwriting the File with Dev Zero or Null
+description: Detects overwriting (effectively wiping/deleting) of a file.
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1485/T1485.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0|contains: dd
+    a1|contains:
+    - if=/dev/null
+    - if=/dev/zero
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 37222991-11e9-4b6d-8bdf-60fbe48f753e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_dd_delete_file.yml
+falsepositives:
+- Appending null bytes to files.
+- Legitimate overwrite of files.

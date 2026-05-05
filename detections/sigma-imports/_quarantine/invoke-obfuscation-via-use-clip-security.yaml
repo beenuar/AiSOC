@@ -1,0 +1,36 @@
+id: sigmahq-sigma-1a0a2ff1-611b-4dac-8216-8a7b47c618a6
+name: Invoke-Obfuscation Via Use Clip - Security
+description: Detects Obfuscated Powershell via use Clip.exe in Scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|contains: (Clipboard|i
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a0a2ff1-611b-4dac-8216-8a7b47c618a6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_invoke_obfuscation_via_use_clip_services_security.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

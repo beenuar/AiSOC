@@ -1,0 +1,45 @@
+id: mitre-car-car-2013-05-003
+name: SMB Write Request
+description: As described in [CAR-2013-01-003](../CAR-2013-01-003), SMB provides a
+  means of remotely managing a file system. Adversaries often use SMB to move laterally
+  to a host. SMB is commonly used to upload files. It may be used for staging in [Exfiltration](https://attack.mitre.org/tactics/TA0010)
+  or as a [Lateral Movement](https://attack.mitre.org/tactics/TA0008) technique. Unlike
+  SMB Reads, SMB Write requests typically require an additional level of access, resulting
+  in less activity. Focusing on SMB Write activity narrows the field to find techniques
+  that actively change remote hosts, instead of passively reading files.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1570
+  - T1021
+  - T1078
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Network,Netflow,PCAP
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'flow = search Flow:Message
+
+      smb_write = filter flow where (dest_port == "445" and protocol == "smb.write")
+
+      smb_write.file_name = smb_write.proto_info.file_name
+
+      output smb_write
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-05-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-05-003.yaml
+notes:
+  car_status: needs_implementation

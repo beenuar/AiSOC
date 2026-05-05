@@ -1,0 +1,55 @@
+id: sigmahq-sigma-88f680b8-070e-402c-ae11-d2914f2257f1
+name: PowerShell Base64 Encoded IEX Cmdlet
+description: Detects usage of a base64 encoded "IEX" cmdlet in a process command line
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - CommandLine|base64offset|contains:
+    - IEX ([
+    - iex ([
+    - iex (New
+    - IEX (New
+    - IEX([
+    - iex([
+    - iex(New
+    - IEX(New
+    - IEX(('
+    - iex(('
+  - CommandLine|contains:
+    - SQBFAFgAIAAoAFsA
+    - kARQBYACAAKABbA
+    - JAEUAWAAgACgAWw
+    - aQBlAHgAIAAoAFsA
+    - kAZQB4ACAAKABbA
+    - pAGUAeAAgACgAWw
+    - aQBlAHgAIAAoAE4AZQB3A
+    - kAZQB4ACAAKABOAGUAdw
+    - pAGUAeAAgACgATgBlAHcA
+    - SQBFAFgAIAAoAE4AZQB3A
+    - kARQBYACAAKABOAGUAdw
+    - JAEUAWAAgACgATgBlAHcA
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 88f680b8-070e-402c-ae11-d2914f2257f1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_base64_iex.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,52 @@
+id: splunk-security-content-d9eb7cda-5622-4722-bc88-7f2442f4b5af
+name: Windows Sensitive Group Discovery With Net
+description: The following analytic detects the execution of `net.exe` with command-line
+  arguments used to query elevated domain or sensitive groups. It leverages data from
+  Endpoint Detection and Response (EDR) agents, focusing on process names and command-line
+  executions. This activity is significant as it indicates potential reconnaissance
+  efforts by adversaries to identify high-privileged users within Active Directory.
+  If confirmed malicious, this behavior could lead to further attacks aimed at compromising
+  privileged accounts, escalating privileges, or gaining unauthorized access to sensitive
+  systems and data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/appendix-b--privileged-accounts-and-groups-in-active-directory
+- https://adsecurity.org/?p=3658
+- https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF
+- https://thedfirreport.com/2023/05/22/icedid-macro-ends-in-nokoyawa-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_net`\
+    \ Processes.process=\"*group*\" Processes.process IN (\"*Domain Admins*\", \"\
+    *Enterprise Admins*\", \"*Schema Admins*\", \"*Account Operators*\", \"*Server\
+    \ Operators*\", \"*Protected Users*\", \"*Dns Admins*\", \"*Domain Computers*\"\
+    )\n  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_sensitive_group_discovery_with_net_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d9eb7cda-5622-4722-bc88-7f2442f4b5af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sensitive_group_discovery_with_net.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

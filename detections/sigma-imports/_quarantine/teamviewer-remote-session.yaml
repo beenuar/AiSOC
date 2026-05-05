@@ -1,0 +1,38 @@
+id: sigmahq-sigma-162ab1e4-6874-4564-853c-53ec3ab8be01
+name: TeamViewer Remote Session
+description: Detects the creation of log files during a TeamViewer remote session
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.teamviewer.com/en-us/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection1:
+    TargetFilename|endswith:
+    - \TeamViewer\RemotePrinting\tvprint.db
+    - \TeamViewer\TVNetwork.log
+  selection2:
+    TargetFilename|contains|all:
+    - \TeamViewer
+    - _Logfile.log
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 162ab1e4-6874-4564-853c-53ec3ab8be01
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_teamviewer_remote_session.yml
+falsepositives:
+- Legitimate uses of TeamViewer in an organisation
+notes:
+  quarantine_reason: 'upstream status: test'

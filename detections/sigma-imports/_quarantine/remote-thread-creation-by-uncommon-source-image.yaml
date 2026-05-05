@@ -1,0 +1,123 @@
+id: sigmahq-sigma-66d31e5f-52d6-40a4-9615-002d3789a119
+name: Remote Thread Creation By Uncommon Source Image
+description: Detects uncommon processes creating remote threads.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- Personal research, statistical analysis
+- https://lolbas-project.github.io
+logsource:
+  product: windows
+  category: create_remote_thread
+detection:
+  selection:
+    SourceImage|endswith:
+    - \explorer.exe
+    - \iexplore.exe
+    - \msiexec.exe
+    - \powerpnt.exe
+    - \schtasks.exe
+    - \winlogon.exe
+  filter_main_winlogon_1:
+    SourceImage: C:\Windows\System32\winlogon.exe
+    TargetImage:
+    - C:\Windows\System32\services.exe
+    - C:\Windows\System32\wininit.exe
+    - C:\Windows\System32\csrss.exe
+    - C:\Windows\System32\LogonUI.exe
+    - C:\Windows\System32\wlrmdr.exe
+    - C:\Windows\System32\AtBroker.exe
+    - C:\Windows\System32\dwm.exe
+    - C:\Windows\System32\fontdrvhost.exe
+    - C:\Windows\System32\userinit.exe
+  filter_main_winlogon_2:
+    SourceImage: C:\Windows\System32\winlogon.exe
+    TargetParentProcessId: 4
+  filter_main_schtasks_conhost:
+    SourceImage:
+    - C:\Windows\System32\schtasks.exe
+    - C:\Windows\SysWOW64\schtasks.exe
+    TargetImage: C:\Windows\System32\conhost.exe
+  filter_main_explorer:
+    SourceImage: C:\Windows\explorer.exe
+    TargetImage|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+  filter_main_system:
+    TargetImage: System
+  filter_main_msiexec_1:
+    SourceImage|endswith: \msiexec.exe
+    TargetImage|contains:
+    - \AppData\Local\
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+    - C:\Windows\Microsoft.NET\Framework64\
+  filter_main_msiexec_2:
+    SourceImage|endswith: \msiexec.exe
+    TargetImage:
+    - C:\Windows\System32\msiexec.exe
+    - C:\Windows\SysWOW64\msiexec.exe
+  filter_main_iexplore:
+    SourceImage: C:\Program Files\Internet Explorer\iexplore.exe
+    TargetImage:
+    - C:\Program Files (x86)\Internet Explorer\iexplore.exe
+    - C:\Windows\System32\rundll32.exe
+  filter_main_powerpnt:
+    SourceImage|endswith: \POWERPNT.EXE
+    TargetImage|contains:
+    - C:\Program Files\Microsoft Office\
+    - C:\Program Files (x86)\Microsoft Office\
+  filter_optional_aurora_smartconsole1:
+    SourceImage: C:\Program Files\internet explorer\iexplore.exe
+    SourceCommandLine|contains|all:
+    - https://
+    - .checkpoint.com/documents/
+    - SmartConsole_OLH/
+    - default.htm#cshid=
+  filter_optional_aurora_smartconsole2:
+    SourceImage: C:\Program Files\internet explorer\iexplore.exe
+    SourceParentImage|startswith:
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+    SourceParentImage|contains|all:
+    - \CheckPoint\SmartConsole\
+    - \SmartConsole.exe
+  filter_optional_powerpnt:
+    SourceImage|contains: \Microsoft Office\
+    SourceImage|endswith: \POWERPNT.EXE
+    TargetImage: C:\Windows\System32\csrss.exe
+  filter_main_null:
+    TargetImage: null
+  filter_main_empty:
+    TargetImage: ''
+  filter_optional_onedrive:
+    SourceImage: C:\Windows\explorer.exe
+    TargetImage|endswith: \AppData\Local\Microsoft\OneDrive\OneDrive.exe
+  filter_optional_aurora:
+    SourceImage: C:\Windows\explorer.exe
+    TargetImage|endswith: \aurora-dashboard.exe
+  filter_optional_officesetup:
+    SourceImage: C:\Windows\explorer.exe
+    TargetImage|endswith: \OfficeSetup.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 66d31e5f-52d6-40a4-9615-002d3789a119
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_remote_thread/create_remote_thread_win_susp_uncommon_source_image.yml
+falsepositives:
+- This rule is best put in testing first in order to create a baseline that reflects
+  the data in your environment.
+notes:
+  quarantine_reason: 'upstream status: test'

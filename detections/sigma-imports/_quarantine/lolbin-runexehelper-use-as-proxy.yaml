@@ -1,0 +1,34 @@
+id: sigmahq-sigma-cd71385d-fd9b-4691-9b98-2b1f7e508714
+name: Lolbin Runexehelper Use As Proxy
+description: Detect usage of the "runexehelper.exe" binary as a proxy to launch other
+  programs
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0gtweet/status/1206692239839289344
+- https://lolbas-project.github.io/lolbas/Binaries/Runexehelper/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \runexehelper.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cd71385d-fd9b-4691-9b98-2b1f7e508714
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_runexehelper.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

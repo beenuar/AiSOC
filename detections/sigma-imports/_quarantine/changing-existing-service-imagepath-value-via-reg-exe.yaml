@@ -1,0 +1,45 @@
+id: sigmahq-sigma-9b0b7ac3-6223-47aa-a3fd-e8f211e637db
+name: Changing Existing Service ImagePath Value Via Reg.EXE
+description: 'Adversaries may execute their own malicious payloads by hijacking the
+  Registry entries used by services.
+
+  Adversaries may use flaws in the permissions for registry to redirect from the originally
+  specified executable to one that they control, in order to launch their own code
+  at Service start.
+
+  Windows stores local service configuration information in the Registry under HKLM\SYSTEM\CurrentControlSet\Services'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.011
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1574.011/T1574.011.md#atomic-test-2---service-imagepath-change-with-regexe
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \reg.exe
+    CommandLine|contains|all:
+    - 'add '
+    - SYSTEM\CurrentControlSet\Services\
+    - ' ImagePath '
+  selection_value:
+    CommandLine|contains|windash: ' -d '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9b0b7ac3-6223-47aa-a3fd-e8f211e637db
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_service_imagepath_change.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

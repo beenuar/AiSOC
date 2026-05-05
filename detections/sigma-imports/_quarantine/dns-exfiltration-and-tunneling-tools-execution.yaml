@@ -1,0 +1,36 @@
+id: sigmahq-sigma-98a96a5a-64a0-4c42-92c5-489da3866cb0
+name: DNS Exfiltration and Tunneling Tools Execution
+description: Well-known DNS Exfiltration tools execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1048.001
+  - T1071.004
+  - T1132.001
+  categories:
+  - endpoint
+references:
+- https://github.com/iagox86/dnscat2
+- https://github.com/yarrick/iodine
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \iodine.exe
+  - Image|contains: \dnscat2
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 98a96a5a-64a0-4c42-92c5-489da3866cb0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dns_exfiltration_tools_execution.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

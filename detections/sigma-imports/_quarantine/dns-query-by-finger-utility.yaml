@@ -1,0 +1,43 @@
+id: sigmahq-sigma-c082c2b0-525b-4dbc-9a26-a57dc4692074
+name: DNS Query by Finger Utility
+description: 'Detects DNS queries made by the finger utility, which can be abused
+  by threat actors to retrieve remote commands for execution on Windows devices.
+
+  In one ClickFix malware campaign, adversaries leveraged the finger protocol to fetch
+  commands from a remote server.
+
+  Since the finger utility is not commonly used in modern Windows environments, its
+  presence already raises suspicion.
+
+  Investigating such DNS queries can also help identify potential malicious infrastructure
+  used by threat actors for command and control (C2) communication.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/decades-old-finger-protocol-abused-in-clickfix-malware-attacks/
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    Image|endswith: \finger.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c082c2b0-525b-4dbc-9a26-a57dc4692074
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_finger.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

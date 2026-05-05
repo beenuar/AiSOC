@@ -1,0 +1,35 @@
+id: sigmahq-sigma-9058ca8b-f397-4fd1-a9fa-2b7aad4d6309
+name: Okta Admin Functions Access Through Proxy
+description: Detects access to Okta admin functions through proxy.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://www.beyondtrust.com/blog/entry/okta-support-unit-breach
+- https://dataconomy.com/2023/10/23/okta-data-breach/
+- https://blog.cloudflare.com/how-cloudflare-mitigated-yet-another-okta-compromise/
+logsource:
+  service: okta
+  product: okta
+detection:
+  selection:
+    debugContext.debugData.requestUri|contains: admin
+    securityContext.isProxy: 'true'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9058ca8b-f397-4fd1-a9fa-2b7aad4d6309
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_admin_activity_from_proxy_query.yml
+falsepositives:
+- False positives are expected if administrators access these function through proxy
+  legitimatly. Apply additional filters if necessary
+notes:
+  quarantine_reason: 'upstream status: test'

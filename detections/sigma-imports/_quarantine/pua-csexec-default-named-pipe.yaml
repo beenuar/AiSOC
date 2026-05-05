@@ -1,0 +1,40 @@
+id: sigmahq-sigma-f318b911-ea88-43f4-9281-0de23ede628e
+name: PUA - CSExec Default Named Pipe
+description: Detects default CSExec pipe creation
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://drive.google.com/file/d/1lKya3_mLnR3UQuCoiYruO3qgu052_iS_/view
+- https://github.com/malcomvetter/CSExec
+logsource:
+  product: windows
+  category: pipe_created
+  definition: Note that you have to configure logging for Named Pipe Events in Sysmon
+    config (Event ID 17 and Event ID 18). The basic configuration is in popular sysmon
+    configuration (https://github.com/SwiftOnSecurity/sysmon-config), but it is worth
+    verifying. You can also use other repo, e.g. https://github.com/Neo23x0/sysmon-config,
+    https://github.com/olafhartong/sysmon-modular. How to test detection? You can
+    check powershell script from this site https://svch0st.medium.com/guide-to-named-pipes-and-hunting-for-cobalt-strike-pipes-dc46b2c5f575
+detection:
+  selection:
+    PipeName|contains: \csexecsvc
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f318b911-ea88-43f4-9281-0de23ede628e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/pipe_created/pipe_created_pua_csexec_default_pipe.yml
+falsepositives:
+- Legitimate Administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

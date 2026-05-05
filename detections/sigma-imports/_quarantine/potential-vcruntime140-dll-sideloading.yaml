@@ -1,0 +1,52 @@
+id: sigmahq-sigma-d7a63acb-1284-49bc-bfea-7771146c8b1c
+name: Potential Vcruntime140 DLL Sideloading
+description: 'Detects potential DLL sideloading of vcruntime140.dll, a common C++
+  runtime library.
+
+  Threat actors have been observed using DLL sideloading techniques to load malicious
+  payloads under the guise of legitimate applications such as SqlWriter, SqlDumper
+  etc.
+
+  Notably, APT29 has been documented leveraging WinELOADER to sideload vcruntime140.dll
+  for executing malicious code.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/apt29-wineloader-german-political-parties
+- https://www.zscaler.com/blogs/security-research/european-diplomats-targeted-spikedwine-wineloader
+- https://www.nextron-systems.com/2023/09/15/detecting-janelarat-with-yara-and-thor/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \vcruntime140.dll
+  filter_main_legitimate_path:
+    ImageLoaded|startswith:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+  filter_main_legitimate_signer:
+    Signed: true
+    SignatureStatus: Valid
+    Description: Microsoft® C Runtime Library
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7a63acb-1284-49bc-bfea-7771146c8b1c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_vcruntime140.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

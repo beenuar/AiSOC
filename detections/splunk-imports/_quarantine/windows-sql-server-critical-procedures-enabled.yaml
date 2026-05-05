@@ -1,0 +1,54 @@
+id: splunk-security-content-d0434864-b043-41e3-8c08-30e53605e9cb
+name: Windows SQL Server Critical Procedures Enabled
+description: This detection identifies when critical SQL Server configuration options
+  are modified, including "Ad Hoc Distributed Queries", "external scripts enabled",
+  "Ole Automation Procedures", "clr enabled", and "clr strict security". These features
+  can be abused by attackers for various malicious purposes - Ad Hoc Distributed Queries
+  enables Active Directory reconnaissance through ADSI provider, external scripts
+  and Ole Automation allow execution of arbitrary code, and CLR features can be used
+  to run custom assemblies. Enabling these features could indicate attempts to gain
+  code execution or perform reconnaissance through SQL Server.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/ad-hoc-distributed-queries-server-configuration-option
+- https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/external-scripts-enabled-server-configuration-option
+- https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/ole-automation-procedures-server-configuration-option
+- https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/clr-enabled-server-configuration-option
+- https://www.netspi.com/blog/technical/network-penetration-testing/enumerating-domain-accounts-via-sql-server-using-adsi/
+- https://attack.mitre.org/techniques/T1505/001/
+- https://www.netspi.com/blog/technical-blog/adversary-simulation/attacking-sql-server-clr-assemblies/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_application` EventCode=15457\n  | rex field=EventData_Xml\
+    \ \"<Data>(?<config_name>[^<]+)</Data><Data>(?<old_value>[^<]+)</Data><Data>(?<new_value>[^<]+)</Data>\"\
+    \n  | where config_name IN (\"Ad Hoc Distributed Queries\", \"external scripts\
+    \ enabled\", \"Ole Automation Procedures\", \"clr enabled\", \"clr strict security\"\
+    )\n  | rename host as dest\n  | eval change_type=case( old_value=\"0\" AND new_value=\"\
+    1\", \"enabled\", old_value=\"1\" AND new_value=\"0\", \"disabled\", true(), \"\
+    modified\" )\n  | eval risk_score=case( change_type=\"enabled\", 90, change_type=\"\
+    disabled\", 60, true(), 70 )\n  | eval risk_message=\"SQL Server critical procedure\
+    \ \".config_name.\" was \".change_type.\" on host \".dest.\", which may indicate\
+    \ attempts to gain code execution or perform reconnaissance\"\n  | stats count\
+    \ min(_time) as firstTime max(_time) as lastTime\n    BY dest EventCode config_name\n\
+    \       change_type risk_message risk_score\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_sql_server_critical_procedures_enabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d0434864-b043-41e3-8c08-30e53605e9cb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sql_server_critical_procedures_enabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

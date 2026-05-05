@@ -1,0 +1,33 @@
+id: sigmahq-sigma-21e44d78-95e7-421b-a464-ffd8395659c4
+name: HTTP Request With Empty User Agent
+description: 'Detects a potentially suspicious empty user agent strings in proxy log.
+
+  Could potentially indicate an uncommon request method.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://twitter.com/Carlos_Perez/status/883455096645931008
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent: ''
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 21e44d78-95e7-421b-a464-ffd8395659c4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_ua_empty.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-detect-crackmapexec-mimikatz-module-footprint-on-a-victim-machine
+name: detect_crackmapexec_mimikatz_module_footprint_on_a_victim_machine
+description: detect_crackmapexec_mimikatz_module_footprint_on_a_victim_machine
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detect_crackmapexec_mimikatz_module_footprint_on_a_victim_machine\
+    \ {\n meta:\n    author = \"Joseph Kamau\"\n    description = \"This rule detects\
+    \ crackmapexec Mimikatz module obfuscated powershell activity on a victim endpoint\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/05G2LOW8X5VP\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"Windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"credential_dumping, t1003, powershell, t1086\"\n\
+    \n  events:\n((re.regex($selection.target.process.file.full_path, `.*\\\\powershell\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\cmd\\.exe`))\
+    \ and (re.regex($selection.target.process.command_line, `.*91,78,101,116.*`) or\
+    \ re.regex($selection.target.process.command_line, `.*91t78v101v116.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*91,78@101@116.*`) or re.regex($selection.target.process.command_line, `.*91\
+    \ ,78 ,101, 116 , 46 , 83.*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: detect_crackmapexec_mimikatz_module_footprint_on_a_victim_machine
+provenance:
+  source: chronicle/detection-rules
+  source_id: detect_crackmapexec_mimikatz_module_footprint_on_a_victim_machine
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/detect_crackmapexec_mimikatz_module_footprint_on_a_victim_machine.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

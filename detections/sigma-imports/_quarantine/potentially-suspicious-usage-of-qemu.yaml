@@ -1,0 +1,51 @@
+id: sigmahq-sigma-5fc297ae-25b6-488a-8f25-cc12ac29b744
+name: Potentially Suspicious Usage Of Qemu
+description: 'Detects potentially suspicious execution of the Qemu utility in a Windows
+  environment.
+
+  Threat actors have leveraged this utility and this technique for achieving network
+  access as reported by Kaspersky.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1090
+  - T1572
+  categories:
+  - endpoint
+references:
+- https://securelist.com/network-tunneling-with-qemu/111803/
+- https://www.qemu.org/docs/master/system/invocation.html#hxtool-5
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - -m 1M
+    - -m 2M
+    - -m 3M
+    CommandLine|contains|all:
+    - restrict=off
+    - '-netdev '
+    - connect=
+    - -nographic
+  filter_main_normal_usecase:
+    CommandLine|contains:
+    - ' -cdrom '
+    - ' type=virt '
+    - ' -blockdev '
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5fc297ae-25b6-488a-8f25-cc12ac29b744
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_qemu_suspicious_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,95 @@
+id: sigmahq-sigma-1cdd9a09-06c9-4769-99ff-626e2b3991b8
+name: Suspicious Double Extension File Execution
+description: Detects suspicious use of an .exe extension after a non-executable file
+  extension like .pdf.exe, a set of spaces or underlines to cloak the executable file
+  in spear phishing campaigns
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://blu3-team.blogspot.com/2019/06/misleading-extensions-xlsexe-docexe.html
+- https://twitter.com/blackorbird/status/1140519090961825792
+- https://cloud.google.com/blog/topics/threat-intelligence/cybercriminals-weaponize-fake-ai-websites
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - '      .exe'
+    - ______.exe
+    - .doc.exe
+    - .doc.js
+    - .docx.exe
+    - .docx.js
+    - .gif.exe
+    - .jpeg.exe
+    - .jpg.exe
+    - .mkv.exe
+    - .mov.exe
+    - .mp3.exe
+    - .mp4.exe
+    - .pdf.exe
+    - .pdf.js
+    - .png.exe
+    - .ppt.exe
+    - .ppt.js
+    - .pptx.exe
+    - .pptx.js
+    - .rtf.exe
+    - .rtf.js
+    - .svg.exe
+    - .txt.exe
+    - .txt.js
+    - .xls.exe
+    - .xls.js
+    - .xlsx.exe
+    - .xlsx.js
+    - ⠀⠀⠀⠀⠀⠀.exe
+    CommandLine|contains:
+    - '      .exe'
+    - ______.exe
+    - .doc.exe
+    - .doc.js
+    - .docx.exe
+    - .docx.js
+    - .gif.exe
+    - .jpeg.exe
+    - .jpg.exe
+    - .mkv.exe
+    - .mov.exe
+    - .mp3.exe
+    - .mp4.exe
+    - .pdf.exe
+    - .pdf.js
+    - .png.exe
+    - .ppt.exe
+    - .ppt.js
+    - .pptx.exe
+    - .pptx.js
+    - .rtf.exe
+    - .rtf.js
+    - .svg.exe
+    - .txt.exe
+    - .txt.js
+    - .xls.exe
+    - .xls.js
+    - .xlsx.exe
+    - .xlsx.js
+    - ⠀⠀⠀⠀⠀⠀.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1cdd9a09-06c9-4769-99ff-626e2b3991b8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_double_extension.yml
+falsepositives:
+- Unknown

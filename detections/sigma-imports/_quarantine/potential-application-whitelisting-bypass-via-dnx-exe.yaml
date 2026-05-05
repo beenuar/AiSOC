@@ -1,0 +1,37 @@
+id: sigmahq-sigma-81ebd28b-9607-4478-bf06-974ed9d53ed7
+name: Potential Application Whitelisting Bypass via Dnx.EXE
+description: 'Detects the execution of Dnx.EXE. The Dnx utility allows for the execution
+  of C# code.
+
+  Attackers might abuse this in order to bypass application whitelisting.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1027.004
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Csi/
+- https://enigma0x3.net/2016/11/17/bypassing-application-whitelisting-by-using-dnx-exe/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \dnx.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 81ebd28b-9607-4478-bf06-974ed9d53ed7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dnx_execute_csharp_code.yml
+falsepositives:
+- Legitimate use of dnx.exe by legitimate user
+notes:
+  quarantine_reason: 'upstream status: test'

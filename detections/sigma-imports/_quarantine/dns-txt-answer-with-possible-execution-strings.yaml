@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8ae51330-899c-4641-8125-e39f2e07da72
+name: DNS TXT Answer with Possible Execution Strings
+description: Detects strings used in command execution in DNS TXT Answer
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  categories:
+  - network
+references:
+- https://twitter.com/stvemillertime/status/1024707932447854592
+- https://github.com/samratashok/nishang/blob/414ee1104526d7057f9adaeee196d91ae447283e/Backdoors/DNS_TXT_Pwnage.ps1
+logsource:
+  category: dns
+detection:
+  selection:
+    record_type: TXT
+    answer|contains:
+    - IEX
+    - Invoke-Expression
+    - cmd.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8ae51330-899c-4641-8125-e39f2e07da72
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/dns/net_dns_susp_txt_exec_strings.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

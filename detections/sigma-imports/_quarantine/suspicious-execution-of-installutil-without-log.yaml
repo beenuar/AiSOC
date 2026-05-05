@@ -1,0 +1,37 @@
+id: sigmahq-sigma-d042284c-a296-4988-9be5-f424fadcc28c
+name: Suspicious Execution of InstallUtil Without Log
+description: Uses the .NET InstallUtil.exe application in order to execute image without
+  log
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/
+- https://learn.microsoft.com/en-us/dotnet/framework/tools/installutil-exe-installer-tool
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \InstallUtil.exe
+    Image|contains: Microsoft.NET\Framework
+    CommandLine|contains|all:
+    - '/logfile= '
+    - /LogToConsole=false
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d042284c-a296-4988-9be5-f424fadcc28c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_instalutil_no_log_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

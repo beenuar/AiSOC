@@ -1,0 +1,33 @@
+id: sigmahq-sigma-1c8e96cd-2bed-487d-9de0-b46c90cade56
+name: Potential Qakbot Registry Activity
+description: Detects a registry key used by IceID in a campaign that distributes malicious
+  OneNote files
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.zscaler.com/blogs/security-research/onenote-growing-threat-malware-distribution
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Software\firm\soft\Name
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1c8e96cd-2bed-487d-9de0-b46c90cade56
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_malware_qakbot_registry.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

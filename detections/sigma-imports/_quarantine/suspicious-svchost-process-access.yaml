@@ -1,0 +1,42 @@
+id: sigmahq-sigma-166e9c50-8cd9-44af-815d-d1f0c0e90dde
+name: Suspicious Svchost Process Access
+description: Detects suspicious access to the "svchost" process such as that used
+  by Invoke-Phantom to kill the thread of the Windows event logging service.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://github.com/hlldz/Invoke-Phant0m
+- https://twitter.com/timbmsft/status/900724491076214784
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: :\Windows\System32\svchost.exe
+    GrantedAccess: '0x1F3FFF'
+    CallTrace|contains: UNKNOWN
+  filter_main_msbuild:
+    SourceImage|contains: :\Program Files\Microsoft Visual Studio\
+    SourceImage|endswith: \MSBuild\Current\Bin\MSBuild.exe
+    CallTrace|contains:
+    - Microsoft.Build.ni.dll
+    - System.ni.dll
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 166e9c50-8cd9-44af-815d-d1f0c0e90dde
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_svchost_susp_access_request.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

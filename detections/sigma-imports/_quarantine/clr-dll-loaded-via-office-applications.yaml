@@ -1,0 +1,40 @@
+id: sigmahq-sigma-d13c43f0-f66b-4279-8b2c-5912077c1780
+name: CLR DLL Loaded Via Office Applications
+description: Detects CLR DLL being loaded by an Office Product
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://medium.com/threatpunter/detecting-adversary-tradecraft-with-image-load-event-logging-and-eql-8de93338c16
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \excel.exe
+    - \mspub.exe
+    - \outlook.exe
+    - \onenote.exe
+    - \onenoteim.exe
+    - \powerpnt.exe
+    - \winword.exe
+    ImageLoaded|contains: \clr.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d13c43f0-f66b-4279-8b2c-5912077c1780
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_office_dotnet_clr_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

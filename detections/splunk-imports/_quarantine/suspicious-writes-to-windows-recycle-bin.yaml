@@ -1,0 +1,49 @@
+id: splunk-security-content-b5541828-8ffd-4070-9d95-b3da4de924cb
+name: Suspicious writes to windows Recycle Bin
+description: The following analytic detects when a process other than explorer.exe
+  writes to the Windows Recycle Bin. It leverages the Endpoint.Filesystem and Endpoint.Processes
+  data models in Splunk to identify any process writing to the "*$Recycle.Bin*" file
+  path, excluding explorer.exe. This activity is significant because it may indicate
+  an attacker attempting to hide their actions, potentially leading to data theft,
+  ransomware, or other malicious outcomes. If confirmed malicious, this behavior could
+  allow an attacker to persist in the environment and evade detection by security
+  tools.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(Filesystem.file_path) as file_path values(Filesystem.file_name)\
+    \ as file_name FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.file_path\
+    \ = \"*$Recycle.Bin*\"\n  BY Filesystem.process_name Filesystem.process_id Filesystem.dest\n\
+    | `drop_dm_object_name(\"Filesystem\")`\n| join process_id dest [\n| tstats `security_content_summariesonly`\
+    \ values(Processes.user) as user values(Processes.process_name) as process_name\
+    \ values(Processes.parent_process_name) as parent_process_name FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name != \"explorer.exe\"\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(\"Processes\")`\n| table user\
+    \ process_name process_id dest]\n| `suspicious_writes_to_windows_recycle_bin_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b5541828-8ffd-4070-9d95-b3da4de924cb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_writes_to_windows_recycle_bin.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

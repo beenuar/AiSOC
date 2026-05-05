@@ -1,0 +1,65 @@
+id: sigmahq-sigma-f37b4bce-49d0-4087-9f5b-58bffda77316
+name: Potential AutoLogger Sessions Tampering
+description: 'Detects tampering with autologger trace sessions which is a technique
+  used by attackers to disable logging.
+
+  The AutoLogger event tracing session records events up that occur early in the operating
+  system boot process.
+
+  Applications and device drivers can use the AutoLogger session to capture traces
+  before the user logs in, and also used by security solutions as telemetry source.
+
+  Adversaries may disable these sessions to evade detection and prevent security monitoring
+  of early boot activities and system events.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/MichalKoczwara/status/1553634816016498688
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+- https://i.blackhat.com/EU-21/Wednesday/EU-21-Teodorescu-Veni-No-Vidi-No-Vici-Attacks-On-ETW-Blind-EDRs.pdf
+- https://learn.microsoft.com/en-us/windows/win32/etw/configuring-and-starting-an-autologger-session
+- https://blog.palantir.com/tampering-with-windows-event-tracing-background-offense-and-defense-4be7ac62ac63
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_main:
+    TargetObject|contains: \Control\WMI\Autologger\
+  selection_values:
+    TargetObject|contains:
+    - \EventLog-
+    - \Defender
+    TargetObject|endswith:
+    - \Enabled
+    - \Start
+    Details: DWORD (0x00000000)
+  filter_main_wevtutil:
+    Image: C:\Windows\system32\wevtutil.exe
+  filter_main_defender:
+    Image|startswith:
+    - C:\ProgramData\Microsoft\Windows Defender\Platform\
+    - C:\Program Files\Windows Defender\
+    - C:\Program Files (x86)\Windows Defender\
+    Image|endswith: \MsMpEng.exe
+    TargetObject|contains:
+    - \DefenderApiLogger\
+    - \DefenderAuditLogger\
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f37b4bce-49d0-4087-9f5b-58bffda77316
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disable_autologger_sessions.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

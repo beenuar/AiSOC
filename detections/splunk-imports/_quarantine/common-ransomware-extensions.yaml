@@ -1,0 +1,61 @@
+id: splunk-security-content-a9e5c5db-db11-43ca-86a8-c852d1b2c0ec
+name: Common Ransomware Extensions
+description: The following analytic detects modifications to files with extensions
+  commonly associated with ransomware. It leverages the Endpoint.Filesystem data model
+  to identify changes in file extensions that match known ransomware patterns. This
+  activity is significant because it suggests an attacker is attempting to encrypt
+  or alter files, potentially leading to severe data loss and operational disruption.
+  If confirmed malicious, this activity could result in the encryption of critical
+  data, rendering it inaccessible and causing significant damage to the organization's
+  data integrity and availability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://github.com/splunk/security_content/issues/2448
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  min(_time) as firstTime\n\
+    \  max(_time) as lastTime\n  count latest(Filesystem.user) as user\n        values(Filesystem.file_path)\
+    \ as file_path\n  from datamodel=Endpoint.Filesystem\n  where NOT Filesystem.file_name\
+    \ IN (\n    \"*.bat\",\n    \"*.cmd\",\n    \"*.com\",\n    \"*.cpl\",\n    \"\
+    *.dll\",\n    \"*.doc\",\n    \"*.docx\",\n    \"*.exe\",\n    \"*.gif\",\n  \
+    \  \"*.jar\",\n    \"*.jpeg\",\n    \"*.jpg\",\n    \"*.js\",\n    \"*.lnk\",\n\
+    \    \"*.pif\",\n    \"*.png\",\n    \"*.ppt\",\n    \"*.pptx\",\n    \"*.ps1\"\
+    ,\n    \"*.psm1\",\n    \"*.scr\",\n    \"*.sys\",\n    \"*.txt\",\n    \"*.vbs\"\
+    ,\n    \"*.wsf\",\n    \"*.xls\",\n    \"*.xlsx\"\n  )\n  by Filesystem.action\
+    \ Filesystem.dest\n     Filesystem.file_access_time Filesystem.file_create_time\n\
+    \     Filesystem.file_hash Filesystem.file_modify_time\n     Filesystem.file_name\
+    \ Filesystem.file_path\n     Filesystem.file_acl Filesystem.file_size\n     Filesystem.process_guid\
+    \ Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | rex field=file_name \"(?<file_extension>(\\.[^\\.]+){1,2})$\"\n| lookup update=true\
+    \ ransomware_extensions_lookup Extensions AS file_extension OUTPUT Extensions\
+    \ Name\n| search Name !=False\n| stats min(firstTime) as firstTime\n        max(lastTime)\
+    \ as lastTime\n        dc(file_path) as path_count\n        dc(file_name) as file_count\n\
+    \        values(action) as action\n        values(file_access_time) as file_access_time\n\
+    \        values(file_create_time) as file_create_time\n        values(file_hash)\
+    \ as file_hash\n        values(file_modify_time) as file_modify_time\n       \
+    \ values(file_acl) as file_acl\n        values(file_size) as file_size\n     \
+    \   values(file_path) as file_path\n        values(process_guid) as process_guid\n\
+    \        values(process_id) as process_id\n        values(user) as user\n    \
+    \    values(vendor_product) as vendor_product\n        values(file_name) as file_name\n\
+    \        values(file_extension) as file_extension\n        values(Name) as Name\n\
+    \  by dest\n| where path_count > 1 OR file_count > 20\n| `common_ransomware_extensions_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a9e5c5db-db11-43ca-86a8-c852d1b2c0ec
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/common_ransomware_extensions.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

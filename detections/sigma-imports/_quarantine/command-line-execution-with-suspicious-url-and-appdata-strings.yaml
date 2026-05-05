@@ -1,0 +1,41 @@
+id: sigmahq-sigma-1ac8666b-046f-4201-8aba-1951aaec03a3
+name: Command Line Execution with Suspicious URL and AppData Strings
+description: Detects a suspicious command line execution that includes an URL and
+  AppData string in the command line parameters as used by several droppers (js/vbs
+  > powershell)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  - T1059.001
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.hybrid-analysis.com/sample/3a1f01206684410dbe8f1900bbeaaa543adfcd07368ba646b499fa5274b9edf6?environmentId=100
+- https://www.hybrid-analysis.com/sample/f16c729aad5c74f19784a24257236a8bbe27f7cdc4a89806031ec7f1bebbd475?environmentId=100
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \cmd.exe
+    CommandLine|contains|all:
+    - http
+    - ://
+    - '%AppData%'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1ac8666b-046f-4201-8aba-1951aaec03a3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_http_appdata.yml
+falsepositives:
+- High
+notes:
+  quarantine_reason: 'upstream status: test'

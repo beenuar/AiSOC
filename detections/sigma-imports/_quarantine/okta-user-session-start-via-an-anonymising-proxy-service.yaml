@@ -1,0 +1,35 @@
+id: sigmahq-sigma-bde30855-5c53-4c18-ae90-1ff79ebc9578
+name: Okta User Session Start Via An Anonymising Proxy Service
+description: Detects when an Okta user session starts where the user is behind an
+  anonymising proxy service.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://sec.okta.com/articles/2023/08/cross-tenant-impersonation-prevention-and-detection
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.session.start
+    securityContext.isProxy: 'true'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bde30855-5c53-4c18-ae90-1ff79ebc9578
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_user_session_start_via_anonymised_proxy.yml
+falsepositives:
+- If a user requires an anonymising proxy due to valid justifications.
+notes:
+  quarantine_reason: 'upstream status: test'

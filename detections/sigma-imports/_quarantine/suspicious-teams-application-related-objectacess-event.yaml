@@ -1,0 +1,39 @@
+id: sigmahq-sigma-25cde13e-8e20-4c29-b949-4e795b76f16f
+name: Suspicious Teams Application Related ObjectAcess Event
+description: Detects an access to authentication tokens and accounts of Microsoft
+  Teams desktop application.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/microsoft-teams-stores-auth-tokens-as-cleartext-in-windows-linux-macs/
+- https://www.vectra.ai/blogpost/undermining-microsoft-teams-security-by-mining-tokens
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4663
+    ObjectName|contains:
+    - \Microsoft\Teams\Cookies
+    - \Microsoft\Teams\Local Storage\leveldb
+  filter:
+    ProcessName|contains: \Microsoft\Teams\current\Teams.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 25cde13e-8e20-4c29-b949-4e795b76f16f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_teams_suspicious_objectaccess.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

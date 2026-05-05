@@ -1,0 +1,40 @@
+id: sigmahq-sigma-d84c0ded-edd7-4123-80ed-348bb3ccc4d5
+name: Suspicious SQL Query
+description: Detects suspicious SQL query keywrods that are often used during recon,
+  exfiltration or destructive activities. Such as dropping tables and selecting wildcard
+  fields
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1505.001
+  categories:
+  - endpoint
+references:
+- https://github.com/sqlmapproject/sqlmap
+logsource:
+  category: database
+  definition: 'Requirements: Must be able to log the SQL queries'
+detection:
+  keywords:
+  - drop
+  - truncate
+  - dump
+  - select \*
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d84c0ded-edd7-4123-80ed-348bb3ccc4d5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/category/database/db_anomalous_query.yml
+falsepositives:
+- Inventory and monitoring activity
+- Vulnerability scanners
+- Legitimate applications
+notes:
+  quarantine_reason: 'upstream status: test'

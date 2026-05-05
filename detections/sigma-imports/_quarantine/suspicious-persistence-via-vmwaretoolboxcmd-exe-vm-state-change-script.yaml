@@ -1,0 +1,47 @@
+id: sigmahq-sigma-236d8e89-ed95-4789-a982-36f4643738ba
+name: Suspicious Persistence Via VMwareToolBoxCmd.EXE VM State Change Script
+description: Detects execution of the "VMwareToolBoxCmd.exe" with the "script" and
+  "set" flag to setup a specific script that's located in a potentially suspicious
+  location to run for a specific VM state
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2021/10/08/analyzing-and-detecting-a-vmtools-persistence-technique/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_bin_img:
+  - Image|endswith: \VMwareToolBoxCmd.exe
+  - OriginalFileName: toolbox-cmd.exe
+  selection_bin_cli:
+    CommandLine|contains|all:
+    - ' script '
+    - ' set '
+  selection_susp_paths:
+    CommandLine|contains:
+    - :\PerfLogs\
+    - :\Temp\
+    - :\Windows\System32\Tasks\
+    - :\Windows\Tasks\
+    - :\Windows\Temp\
+    - \AppData\Local\Temp
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 236d8e89-ed95-4789-a982-36f4643738ba
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vmware_toolbox_cmd_persistence_susp.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

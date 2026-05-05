@@ -1,0 +1,66 @@
+id: sigmahq-sigma-d4e2745c-f0c6-4bde-a3ab-b553b3f693cc
+name: Persistence Via Disk Cleanup Handler - Autorun
+description: 'Detects when an attacker modifies values of the Disk Cleanup Handler
+  in the registry to achieve persistence via autorun.
+
+  The disk cleanup manager is part of the operating system.
+
+  It displays the dialog box […] The user has the option of enabling or disabling
+  individual handlers by selecting or clearing their check box in the disk cleanup
+  manager''s UI.
+
+  Although Windows comes with a number of disk cleanup handlers, they aren''t designed
+  to handle files produced by other applications.
+
+  Instead, the disk cleanup manager is designed to be flexible and extensible by enabling
+  any developer to implement and register their own disk cleanup handler.
+
+  Any developer can extend the available disk cleanup services by implementing and
+  registering a disk cleanup handler.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://persistence-info.github.io/Data/diskcleanuphandler.html
+- https://www.hexacorn.com/blog/2018/09/02/beyond-good-ol-run-key-part-86/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  root:
+    TargetObject|contains: \SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\
+  selection_autorun:
+    TargetObject|contains: \Autorun
+    Details: DWORD (0x00000001)
+  selection_pre_after:
+    TargetObject|contains:
+    - \CleanupString
+    - \PreCleanupString
+    Details|contains:
+    - cmd
+    - powershell
+    - rundll32
+    - mshta
+    - cscript
+    - wscript
+    - wsl
+    - \Users\Public\
+    - \Windows\TEMP\
+    - \Microsoft\Windows\Start Menu\Programs\Startup\
+  condition: root and 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d4e2745c-f0c6-4bde-a3ab-b553b3f693cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disk_cleanup_handler_autorun_persistence.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

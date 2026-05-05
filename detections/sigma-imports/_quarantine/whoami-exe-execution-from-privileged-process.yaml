@@ -1,0 +1,40 @@
+id: sigmahq-sigma-79ce34ca-af29-4d0e-b832-fc1b377020db
+name: Whoami.EXE Execution From Privileged Process
+description: Detects the execution of "whoami.exe" by privileged accounts that are
+  often abused by threat actors
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-privilege-escalation-in-windows-environment
+- https://web.archive.org/web/20221019044836/https://nsudo.m2team.org/en-us/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: whoami.exe
+  - Image|endswith: \whoami.exe
+  selection_user:
+    User|contains:
+    - AUTHORI
+    - AUTORI
+    - TrustedInstaller
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 79ce34ca-af29-4d0e-b832-fc1b377020db
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_whoami_execution_from_high_priv_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

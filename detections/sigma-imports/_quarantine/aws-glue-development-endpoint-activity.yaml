@@ -1,0 +1,39 @@
+id: sigmahq-sigma-4990c2e3-f4b8-45e3-bc3c-30b14ff0ed26
+name: AWS Glue Development Endpoint Activity
+description: Detects possible suspicious glue development endpoint activity.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation/
+- https://docs.aws.amazon.com/glue/latest/webapi/API_CreateDevEndpoint.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: glue.amazonaws.com
+    eventName:
+    - CreateDevEndpoint
+    - DeleteDevEndpoint
+    - UpdateDevEndpoint
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4990c2e3-f4b8-45e3-bc3c-30b14ff0ed26
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_passed_role_to_glue_development_endpoint.yml
+falsepositives:
+- Glue Development Endpoint Activity may be performed by a system administrator. Verify
+  whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

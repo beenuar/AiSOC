@@ -1,0 +1,34 @@
+id: sigmahq-sigma-814ddeca-3d31-4265-8e07-8cc54fb44903
+name: LiveKD Kernel Memory Dump File Created
+description: Detects the creation of a file that has the same name as the default
+  LiveKD kernel memory dump.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename: C:\Windows\livekd.dmp
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 814ddeca-3d31-4265-8e07-8cc54fb44903
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_livekd_default_dump_name.yml
+falsepositives:
+- In rare occasions administrators might leverage LiveKD to perform live kernel debugging.
+  This should not be allowed on production systems. Investigate and apply additional
+  filters where necessary.
+notes:
+  quarantine_reason: 'upstream status: test'

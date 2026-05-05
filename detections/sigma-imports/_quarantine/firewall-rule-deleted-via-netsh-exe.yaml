@@ -1,0 +1,46 @@
+id: sigmahq-sigma-1a5fefe6-734f-452e-a07d-fc1c35bce4b2
+name: Firewall Rule Deleted Via Netsh.EXE
+description: Detects the removal of a port or application rule in the Windows Firewall
+  configuration using netsh
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/8bbd5b4c-b82d-4e6d-a3ea-d454594a37cc/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \netsh.exe
+  - OriginalFileName: netsh.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - firewall
+    - 'delete '
+  filter_optional_dropbox:
+    ParentImage|endswith: \Dropbox.exe
+    CommandLine|contains: name=Dropbox
+  filter_optional_avast:
+    ParentImage|endswith: \instup.exe
+    CommandLine|contains: advfirewall firewall delete rule name="Avast Antivirus Admin
+      Client"
+  condition: all of selection_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a5fefe6-734f-452e-a07d-fc1c35bce4b2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_netsh_fw_delete_rule.yml
+falsepositives:
+- Legitimate administration activity
+- Software installations and removal
+notes:
+  quarantine_reason: 'upstream status: test'

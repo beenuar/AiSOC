@@ -1,0 +1,38 @@
+id: sigmahq-sigma-fdb62a13-9a81-4e5c-a38f-ea93a16f6d7c
+name: PowerShell Base64 Encoded FromBase64String Cmdlet
+description: Detects usage of a base64 encoded "FromBase64String" cmdlet in a process
+  command line
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1140
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - CommandLine|base64offset|contains: ::FromBase64String
+  - CommandLine|contains:
+    - OgA6AEYAcgBvAG0AQgBhAHMAZQA2ADQAUwB0AHIAaQBuAGcA
+    - oAOgBGAHIAbwBtAEIAYQBzAGUANgA0AFMAdAByAGkAbgBnA
+    - 6ADoARgByAG8AbQBCAGEAcwBlADYANABTAHQAcgBpAG4AZw
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fdb62a13-9a81-4e5c-a38f-ea93a16f6d7c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_base64_frombase64string.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

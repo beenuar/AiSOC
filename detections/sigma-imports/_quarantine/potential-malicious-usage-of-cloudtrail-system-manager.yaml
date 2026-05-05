@@ -1,0 +1,41 @@
+id: sigmahq-sigma-38e7f511-3f74-41d4-836e-f57dfa18eead
+name: Potential Malicious Usage of CloudTrail System Manager
+description: Detect when System Manager successfully executes commands against an
+  instance.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1566
+  - T1566.002
+  categories:
+  - cloud
+references:
+- https://github.com/elastic/detection-rules/blob/v8.6.0/rules/integrations/aws/initial_access_via_system_manager.toml
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_event:
+    eventName: SendCommand
+    eventSource: ssm.amazonaws.com
+  selection_status_success:
+    errorCode: Success
+  selection_status_null:
+    errorCode: null
+  condition: selection_event and 1 of selection_status_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 38e7f511-3f74-41d4-836e-f57dfa18eead
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_ssm_malicious_usage.yml
+falsepositives:
+- There are legitimate uses of SSM to send commands to EC2 instances
+- Legitimate users may have to use SSM to perform actions against machines in the
+  Cloud to update or maintain them
+notes:
+  quarantine_reason: 'upstream status: test'

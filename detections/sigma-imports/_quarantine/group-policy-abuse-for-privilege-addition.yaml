@@ -1,0 +1,40 @@
+id: sigmahq-sigma-1c480e10-7ee1-46d4-8ed2-85f9789e3ce4
+name: Group Policy Abuse for Privilege Addition
+description: Detects the first occurrence of a modification to Group Policy Object
+  Attributes to add privileges to user accounts or use them to add users as local
+  admins.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/group-policy-abuse-for-privilege-addition.html#_setup_275
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: The "Audit Directory Service Changes" logging policy
+    must be configured in order to receive events.'
+detection:
+  selection:
+    EventID: 5136
+    AttributeLDAPDisplayName: gPCMachineExtensionNames
+    AttributeValue|contains:
+    - 827D319E-6EAC-11D2-A4EA-00C04F79F83A
+    - 803E14A0-B4FB-11D0-A0D0-00A0C90F574B
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1c480e10-7ee1-46d4-8ed2-85f9789e3ce4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_group_policy_abuse_privilege_addition.yml
+falsepositives:
+- Users allowed to perform these modifications (user found in field SubjectUserName)
+notes:
+  quarantine_reason: 'upstream status: test'

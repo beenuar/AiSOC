@@ -1,0 +1,75 @@
+id: chronicle-detection-rules-whois-expired-domain-executable-downloaded
+name: whois_expired_domain_executable_downloaded
+description: whois_expired_domain_executable_downloaded
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule whois_expired_domain_executable_downloaded {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Detect web traffic to a recently\
+    \ expired domain followed by an exe file creation event\"\n    rule_id = \"mr_ce0a1979-ec95-40d4-8107-748ee6d1e93f\"\
+    \n    rule_name = \"WHOIS Expired Domain Executable Downloaded\"\n    type = \"\
+    alert\"\n    tags = \"whois\"\n    data_source = \"zscalar, microsoft sysmon\"\
+    \n    platform = \"Windows\"\n    severity = \"Low\"\n    priority = \"Low\"\n\
+    \n  events:\n    $access.metadata.event_type = \"NETWORK_HTTP\"\n    $access.principal.hostname\
+    \ = $hostname\n    $access.target.hostname = $domain\n\n    // join access event\
+    \ to entity graph to use WHOIS data\n    $whois.graph.entity.domain.name = $domain\n\
+    \n    // Whois domains provided by GCTI Feed\n    $whois.graph.metadata.entity_type\
+    \ = \"DOMAIN_NAME\"\n    $whois.graph.metadata.vendor_name = \"WHOIS\"\n    $whois.graph.metadata.product_name\
+    \ = \"WHOISXMLAPI Simple Whois\"\n    $whois.graph.metadata.source_type = \"GLOBAL_CONTEXT\"\
+    \n    // Filter out domains without expiration time\n    $whois.graph.entity.domain.expiration_time.seconds\
+    \ > 0\n    // Domain expired before the event\n    $whois.graph.entity.domain.expiration_time.seconds\
+    \ < $access.metadata.event_timestamp.seconds\n\n    // join access event with\
+    \ executable file creation event by principal hostname\n    $creation.principal.hostname\
+    \ = $hostname\n    $creation.metadata.event_type = \"FILE_CREATION\"\n    $creation.target.file.full_path\
+    \ = /\\.exe/ nocase\n\n    // file creation comes after network event\n    $creation.metadata.event_timestamp.seconds\
+    \ > $access.metadata.event_timestamp.seconds\n\n  match:\n    $hostname over 1h\n\
+    \n  outcome:\n    $risk_score = 20\n    // added to populate alert graph with\
+    \ additional context\n    // Commented out principal.hostname because it is already\
+    \ represented in graph as match variable. If match changes, can uncomment to add\
+    \ to results\n    //$principal_hostname = array_distinct($access.principal.hostname)\n\
+    \    $target_hostname = array_distinct($access.target.hostname)\n    $principal_process_pid\
+    \ = array_distinct($access.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($access.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($access.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($access.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($access.principal.process.product_specific_process_id)\n  \
+    \  $principal_process_parent_process_product_specific_process_id = array_distinct($access.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($access.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($access.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($access.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($access.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($access.target.process.product_specific_process_id)\n    $target_process_parent_process_product_specific_process_id\
+    \ = array_distinct($access.target.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($access.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($access.target.user.userid)\n    $target_url\
+    \ = array_distinct($access.target.url)\n    $target_file_sha256 = array_distinct($creation.target.file.sha256)\n\
+    \    $target_file_full_path = array_distinct($creation.target.file.full_path)\n\
+    \n  condition:\n    $access and $whois and $creation\n}"
+  chronicle_rule_name: whois_expired_domain_executable_downloaded
+provenance:
+  source: chronicle/detection-rules
+  source_id: whois_expired_domain_executable_downloaded
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/whois_expired_domain_executable_downloaded.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,44 @@
+id: splunk-security-content-e84b3c74-f742-11ee-9f6e-acde48001122
+name: AWS Bedrock High Number List Foundation Model Failures
+description: The following analytic identifies an high number of AccessDenied attempts
+  to list AWS Bedrock foundation models. It leverages AWS CloudTrail logs to detect
+  when a user or service experiences multiple failures when calling the ListFoundationModels
+  API. This activity is significant as it may indicate an adversary performing reconnaissance
+  of available AI models after compromising credentials with limited permissions.
+  Repeated failures could suggest brute force attempts to enumerate accessible resources
+  or misconfigured access controls. If confirmed malicious, this could represent early-stage
+  reconnaissance before attempting to access or manipulate Bedrock models or knowledge
+  bases.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1580
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModels.html
+- https://trustoncloud.com/blog/exposing-the-weakness-how-we-identified-a-flaw-in-bedrocks-foundation-model-access-control/
+- https://attack.mitre.org/techniques/T1595/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cloudtrail` eventSource=bedrock.amazonaws.com eventName=ListFoundationModels
+    errorCode=AccessDenied  | rename user_name as user | stats count min(_time) as
+    firstTime max(_time) as lastTime values(errorCode) as errorCodes values(errorMessage)
+    as errorMessages by src user user_agent vendor_account vendor_product dest signature
+    vendor_region | where count > 9 | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `aws_bedrock_high_number_list_foundation_model_failures_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e84b3c74-f742-11ee-9f6e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_bedrock_high_number_list_foundation_model_failures.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

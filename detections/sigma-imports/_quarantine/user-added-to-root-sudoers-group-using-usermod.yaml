@@ -1,0 +1,36 @@
+id: sigmahq-sigma-6a50f16c-3b7b-42d1-b081-0fdd3ba70a73
+name: User Added To Root/Sudoers Group Using Usermod
+description: Detects usage of the "usermod" binary to add users add users to the root
+  or suoders groups
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://pberba.github.io/security/2021/11/23/linux-threat-hunting-for-persistence-account-creation-manipulation/
+- https://www.configserverfirewall.com/ubuntu-linux/ubuntu-add-user-to-root-group/
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /usermod
+    CommandLine|contains:
+    - -aG root
+    - -aG sudoers
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6a50f16c-3b7b-42d1-b081-0fdd3ba70a73
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_usermod_susp_group.yml
+falsepositives:
+- Legitimate administrator activities
+notes:
+  quarantine_reason: 'upstream status: test'

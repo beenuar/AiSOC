@@ -1,0 +1,42 @@
+id: sigmahq-sigma-470ec5fa-7b4e-4071-b200-4c753100f49b
+name: Failed Code Integrity Checks
+description: Detects code integrity failures such as missing page hashes or corrupted
+  drivers due unauthorized modification. This could be a sign of tampered binaries.
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1027.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-5038
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-6281
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID:
+    - 5038
+    - 6281
+  filter_optional_crowdstrike:
+    param1|contains:
+    - \CSFalconServiceUninstallTool_
+    - \Program Files\CrowdStrike\
+    - \System32\drivers\CrowdStrike\
+    - \Windows\System32\ScriptControl64_
+  filter_optional_sophos:
+    param1|contains: \Program Files\Sophos\
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 470ec5fa-7b4e-4071-b200-4c753100f49b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_codeintegrity_check_failure.yml
+falsepositives:
+- Disk device errors

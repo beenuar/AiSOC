@@ -1,0 +1,94 @@
+id: sigmahq-sigma-b730a276-6b63-41b8-bcf8-55930c8fc6ee
+name: Csc.EXE Execution Form Potentially Suspicious Parent
+description: Detects a potentially suspicious parent of "csc.exe", which could be
+  a sign of payload delivery.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1059.007
+  - T1218.005
+  - T1027.004
+  categories:
+  - endpoint
+references:
+- https://www.uptycs.com/blog/warzonerat-can-now-evade-with-process-hollowing
+- https://reaqta.com/2017/11/short-journey-darkvnc/
+- https://www.pwc.com/gx/en/issues/cybersecurity/cyber-threat-intelligence/yellow-liderc-ships-its-scripts-delivers-imaploader-malware.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \csc.exe
+  - OriginalFileName: csc.exe
+  selection_parent_generic:
+    ParentImage|endswith:
+    - \cscript.exe
+    - \excel.exe
+    - \mshta.exe
+    - \onenote.exe
+    - \outlook.exe
+    - \powerpnt.exe
+    - \winword.exe
+    - \wscript.exe
+  selection_parent_powershell:
+    ParentImage|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    ParentCommandLine|contains:
+    - '-Encoded '
+    - FromBase64String
+  selection_parent_susp_location:
+  - ParentCommandLine|re: (?:[Pp]rogram[Dd]ata|%(?:[Ll]ocal)?[Aa]pp[Dd]ata%|\\[Aa]pp[Dd]ata\\(?:[Ll]ocal(?:[Ll]ow)?|[Rr]oaming))\\[^\\]{1,256}$
+  - ParentCommandLine|contains:
+    - :\PerfLogs\
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \Temporary Internet
+  - ParentCommandLine|contains|all:
+    - :\Users\
+    - \Favorites\
+  - ParentCommandLine|contains|all:
+    - :\Users\
+    - \Favourites\
+  - ParentCommandLine|contains|all:
+    - :\Users\
+    - \Contacts\
+  - ParentCommandLine|contains|all:
+    - :\Users\
+    - \Pictures\
+  filter_main_programfiles:
+    ParentImage|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+  filter_main_sdiagnhost:
+    ParentImage: C:\Windows\System32\sdiagnhost.exe
+  filter_main_w3p:
+    ParentImage: C:\Windows\System32\inetsrv\w3wp.exe
+  filter_optional_chocolatey:
+    ParentImage: C:\ProgramData\chocolatey\choco.exe
+  filter_optional_defender:
+    ParentCommandLine|contains: \ProgramData\Microsoft\Windows Defender Advanced Threat
+      Protection
+  filter_optional_ansible:
+    ParentCommandLine|contains:
+    - JwB7ACIAZgBhAGkAbABlAGQAIgA6AHQAcgB1AGUALAAiAG0AcwBnACIAOgAiAEEAbgBzAGkAYgBsAGUAIAByAGUAcQB1AGkAcgBlAHMAIABQAG8AdwBlAHIAUwBoAGUAbABsACAAdgAzAC4AMAAgAG8AcgAgAG4AZQB3AGUAcgAiAH0AJw
+    - cAewAiAGYAYQBpAGwAZQBkACIAOgB0AHIAdQBlACwAIgBtAHMAZwAiADoAIgBBAG4AcwBpAGIAbABlACAAcgBlAHEAdQBpAHIAZQBzACAAUABvAHcAZQByAFMAaABlAGwAbAAgAHYAMwAuADAAIABvAHIAIABuAGUAdwBlAHIAIgB9ACcA
+    - nAHsAIgBmAGEAaQBsAGUAZAAiADoAdAByAHUAZQAsACIAbQBzAGcAIgA6ACIAQQBuAHMAaQBiAGwAZQAgAHIAZQBxAHUAaQByAGUAcwAgAFAAbwB3AGUAcgBTAGgAZQBsAGwAIAB2ADMALgAwACAAbwByACAAbgBlAHcAZQByACIAfQAnA
+  condition: selection_img and 1 of selection_parent_* and not 1 of filter_main_*
+    and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b730a276-6b63-41b8-bcf8-55930c8fc6ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_csc_susp_parent.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

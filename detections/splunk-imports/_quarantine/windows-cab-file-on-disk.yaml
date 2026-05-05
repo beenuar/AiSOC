@@ -1,0 +1,43 @@
+id: splunk-security-content-622f08d0-69ef-42c2-8139-66088bc25acd
+name: Windows CAB File on Disk
+description: The following analytic detects .cab files being written to disk. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on events where
+  the file name is '*.cab' and the action is 'write'. This activity is significant
+  as .cab files can be used to deliver malicious payloads, including embedded .url
+  files that execute harmful code. If confirmed malicious, this behavior could lead
+  to unauthorized code execution and potential system compromise. Analysts should
+  review the file path and associated artifacts for further investigation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://github.com/PaloAltoNetworks/Unit42-timely-threat-intel/blob/main/2023-10-25-IOCs-from-DarkGate-activity.txt
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Filesystem.file_path)\
+    \ as file_path min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n\
+    \  WHERE (\n        Filesystem.file_name=*.cab\n    )\n  BY Filesystem.action\
+    \ Filesystem.dest Filesystem.file_access_time\n     Filesystem.file_create_time\
+    \ Filesystem.file_hash Filesystem.file_modify_time\n     Filesystem.file_name\
+    \ Filesystem.file_path Filesystem.file_acl\n     Filesystem.file_size Filesystem.process_guid\
+    \ Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(\"\
+    Filesystem\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_cab_file_on_disk_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 622f08d0-69ef-42c2-8139-66088bc25acd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_cab_file_on_disk.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: splunk-security-content-14e3a089-cc23-4f4d-a770-26e44a31fbac
+name: Windows BitLockerToGo with Network Activity
+description: The following analytic detects suspicious usage of BitLockerToGo.exe,
+  which has been observed being abused by Lumma stealer malware. The malware leverages
+  this legitimate Windows utility to manipulate registry keys, search for cryptocurrency
+  wallets and credentials, and exfiltrate sensitive data. This activity is significant
+  because BitLockerToGo.exe provides functionality for viewing, copying, and writing
+  files as well as modifying registry branches - capabilities that the Lumma stealer
+  exploits for malicious purposes. If confirmed malicious, this could indicate an
+  active data theft campaign targeting cryptocurrency wallets, browser credentials,
+  and password manager archives. The detection focuses on identifying BitLockerToGo.exe
+  execution patterns that deviate from normal system behavior.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://any.run/report/5e9ba24639f70787e56f10a241271ae819ef9c573edb22b9eeade7cb40a2df2a/66f16c7b-2cfc-40c5-91cc-f1cbe9743fa3
+- https://securelist.com/fake-captcha-delivers-lumma-amadey/114312/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=22 process_name=\"bitlockertogo.exe\"\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY answer answer_count\
+    \ dvc\n       process_exec process_guid process_name\n       query query_count\
+    \ reply_code_id\n       signature signature_id src\n       user_id vendor_product\
+    \ QueryName\n       QueryResults QueryStatus\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_bitlockertogo_with_network_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 14e3a089-cc23-4f4d-a770-26e44a31fbac
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_bitlockertogo_with_network_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

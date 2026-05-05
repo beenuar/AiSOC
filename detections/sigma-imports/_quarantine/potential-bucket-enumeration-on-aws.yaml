@@ -1,0 +1,39 @@
+id: sigmahq-sigma-f305fd62-beca-47da-ad95-7690a0620084
+name: Potential Bucket Enumeration on AWS
+description: Looks for potential enumeration of AWS buckets via ListBuckets.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1580
+  - T1619
+  categories:
+  - cloud
+references:
+- https://github.com/Lifka/hacking-resources/blob/c2ae355d381bd0c9f0b32c4ead049f44e5b1573f/cloud-hacking-cheat-sheets.md
+- https://jamesonhacking.blogspot.com/2020/12/pivoting-to-private-aws-s3-buckets.html
+- https://securitycafe.ro/2022/12/14/aws-enumeration-part-ii-practical-enumeration/
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: s3.amazonaws.com
+    eventName: ListBuckets
+  filter:
+    userIdentity.type: AssumedRole
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f305fd62-beca-47da-ad95-7690a0620084
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_enum_buckets.yml
+falsepositives:
+- Administrators listing buckets, it may be necessary to filter out users who commonly
+  conduct this activity.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,62 @@
+id: splunk-security-content-e5ab41bf-745d-4f72-a393-2611151afd8e
+name: Azure AD High Number Of Failed Authentications From Ip
+description: The following analytic detects an IP address with 20 or more failed authentication
+  attempts to an Azure AD tenant within 10 minutes. It leverages Azure AD SignInLogs
+  to identify repeated failed logins from the same IP. This behavior is significant
+  as it may indicate a brute force attack aimed at gaining unauthorized access or
+  escalating privileges. If confirmed malicious, the attacker could potentially compromise
+  user accounts, leading to unauthorized access to sensitive information and resources
+  within the Azure environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  - T1110.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/
+- https://attack.mitre.org/techniques/T1110/001/
+- https://attack.mitre.org/techniques/T1110/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad`
+
+    category=SignInLogs
+
+    properties.status.errorCode=50126
+
+    properties.authenticationDetails{}.succeeded=false
+
+    | rename properties.* as *
+
+    | bin span=10m _time
+
+    | fillnull value=null
+
+    | stats count min(_time) as firstTime max(_time) as lastTime values(dest) as dest
+    values(user) as user values(user_agent) as user_agent by src _time vendor_account
+    vendor_product
+
+    | where count > 20
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `azure_ad_high_number_of_failed_authentications_from_ip_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e5ab41bf-745d-4f72-a393-2611151afd8e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_high_number_of_failed_authentications_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

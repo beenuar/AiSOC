@@ -1,0 +1,45 @@
+id: splunk-security-content-c82adbc6-9f00-11ec-a81f-acde48001122
+name: Windows Disable Lock Workstation Feature Through Registry
+description: The following analytic detects a suspicious registry modification that
+  disables the Lock Computer feature in Windows. It leverages data from the Endpoint.Registry
+  data model, specifically monitoring changes to the registry path "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\DisableLockWorkstation"
+  with a value of "0x00000001". This activity is significant because it prevents users
+  from locking their screens, a tactic often used by malware, including ransomware,
+  to maintain control over compromised systems. If confirmed malicious, this could
+  allow attackers to sustain their presence and execute further malicious actions
+  without user interruption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/in-dev-ransomware-forces-you-do-to-survey-before-unlocking-computer/
+- https://heimdalsecurity.com/blog/fatalrat-targets-telegram/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\DisableLockWorkstation"
+    Registry.registry_value_data = "0x00000001") by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data) | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_disable_lock_workstation_feature_through_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c82adbc6-9f00-11ec-a81f-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disable_lock_workstation_feature_through_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

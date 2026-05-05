@@ -1,0 +1,141 @@
+id: sigmahq-sigma-b64a026b-8deb-4c1d-92fd-98893209dff1
+name: Running Chrome VPN Extensions via the Registry 2 VPN Extension
+description: Running Chrome VPN Extensions via the Registry install 2 vpn extension
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1133/T1133.md#atomic-test-1---running-chrome-vpn-extensions-via-the-registry-2-vpn-extension
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  chrome_ext:
+    TargetObject|contains: Software\Wow6432Node\Google\Chrome\Extensions
+    TargetObject|endswith: update_url
+  chrome_vpn:
+    TargetObject|contains:
+    - fdcgdnkidjaadafnichfpabhfomcebme
+    - fcfhplploccackoneaefokcmbjfbkenj
+    - bihmplhobchoageeokmgbdihknkjbknd
+    - gkojfkhlekighikafcpjkiklfbnlmeio
+    - jajilbjjinjmgcibalaakngmkilboobh
+    - gjknjjomckknofjidppipffbpoekiipm
+    - nabbmpekekjknlbkgpodfndbodhijjem
+    - kpiecbcckbofpmkkkdibbllpinceiihk
+    - nlbejmccbhkncgokjcmghpfloaajcffj
+    - omghfjlpggmjjaagoclmmobgdodcjboh
+    - bibjcjfmgapbfoljiojpipaooddpkpai
+    - mpcaainmfjjigeicjnlkdfajbioopjko
+    - jljopmgdobloagejpohpldgkiellmfnc
+    - lochiccbgeohimldjooaakjllnafhaid
+    - nhnfcgpcbfclhfafjlooihdfghaeinfc
+    - ookhnhpkphagefgdiemllfajmkdkcaim
+    - namfblliamklmeodpcelkokjbffgmeoo
+    - nbcojefnccbanplpoffopkoepjmhgdgh
+    - majdfhpaihoncoakbjgbdhglocklcgno
+    - lnfdmdhmfbimhhpaeocncdlhiodoblbd
+    - eppiocemhmnlbhjplcgkofciiegomcon
+    - cocfojppfigjeefejbpfmedgjbpchcng
+    - foiopecknacmiihiocgdjgbjokkpkohc
+    - hhdobjgopfphlmjbmnpglhfcgppchgje
+    - jgbaghohigdbgbolncodkdlpenhcmcge
+    - inligpkjkhbpifecbdjhmdpcfhnlelja
+    - higioemojdadgdbhbbbkfbebbdlfjbip
+    - hipncndjamdcmphkgngojegjblibadbe
+    - iolonopooapdagdemdoaihahlfkncfgg
+    - nhfjkakglbnnpkpldhjmpmmfefifedcj
+    - jpgljfpmoofbmlieejglhonfofmahini
+    - fgddmllnllkalaagkghckoinaemmogpe
+    - ejkaocphofnobjdedneohbbiilggdlbi
+    - keodbianoliadkoelloecbhllnpiocoi
+    - hoapmlpnmpaehilehggglehfdlnoegck
+    - poeojclicodamonabcabmapamjkkmnnk
+    - dfkdflfgjdajbhocmfjolpjbebdkcjog
+    - kcdahmgmaagjhocpipbodaokikjkampi
+    - klnkiajpmpkkkgpgbogmcgfjhdoljacg
+    - lneaocagcijjdpkcabeanfpdbmapcjjg
+    - pgfpignfckbloagkfnamnolkeaecfgfh
+    - jplnlifepflhkbkgonidnobkakhmpnmh
+    - jliodmnojccaloajphkingdnpljdhdok
+    - hnmpcagpplmpfojmgmnngilcnanddlhb
+    - ffbkglfijbcbgblgflchnbphjdllaogb
+    - kcndmbbelllkmioekdagahekgimemejo
+    - jdgilggpfmjpbodmhndmhojklgfdlhob
+    - bihhflimonbpcfagfadcnbbdngpopnjb
+    - ppajinakbfocjfnijggfndbdmjggcmde
+    - oofgbpoabipfcfjapgnbbjjaenockbdp
+    - bhnhkdgoefpmekcgnccpnhjfdgicfebm
+    - knmmpciebaoojcpjjoeonlcjacjopcpf
+    - dhadilbmmjiooceioladdphemaliiobo
+    - jedieiamjmoflcknjdjhpieklepfglin
+    - mhngpdlhojliikfknhfaglpnddniijfh
+    - omdakjcmkglenbhjadbccaookpfjihpa
+    - npgimkapccfidfkfoklhpkgmhgfejhbj
+    - akeehkgglkmpapdnanoochpfmeghfdln
+    - gbmdmipapolaohpinhblmcnpmmlgfgje
+    - aigmfoeogfnljhnofglledbhhfegannp
+    - cgojmfochfikphincbhokimmmjenhhgk
+    - ficajfeojakddincjafebjmfiefcmanc
+    - ifnaibldjfdmaipaddffmgcmekjhiloa
+    - jbnmpdkcfkochpanomnkhnafobppmccn
+    - apcfdffemoinopelidncddjbhkiblecc
+    - mjolnodfokkkaichkcjipfgblbfgojpa
+    - oifjbnnafapeiknapihcmpeodaeblbkn
+    - plpmggfglncceinmilojdkiijhmajkjh
+    - mjnbclmflcpookeapghfhapeffmpodij
+    - bblcccknbdbplgmdjnnikffefhdlobhp
+    - aojlhgbkmkahabcmcpifbolnoichfeep
+    - lcmammnjlbmlbcaniggmlejfjpjagiia
+    - knajdeaocbpmfghhmijicidfcmdgbdpm
+    - bdlcnpceagnkjnjlbbbcepohejbheilk
+    - edknjdjielmpdlnllkdmaghlbpnmjmgb
+    - eidnihaadmmancegllknfbliaijfmkgo
+    - ckiahbcmlmkpfiijecbpflfahoimklke
+    - macdlemfnignjhclfcfichcdhiomgjjb
+    - chioafkonnhbpajpengbalkececleldf
+    - amnoibeflfphhplmckdbiajkjaoomgnj
+    - llbhddikeonkpbhpncnhialfbpnilcnc
+    - pcienlhnoficegnepejpfiklggkioccm
+    - iocnglnmfkgfedpcemdflhkchokkfeii
+    - igahhbkcppaollcjeaaoapkijbnphfhb
+    - njpmifchgidinihmijhcfpbdmglecdlb
+    - ggackgngljinccllcmbgnpgpllcjepgc
+    - kchocjcihdgkoplngjemhpplmmloanja
+    - bnijmipndnicefcdbhgcjoognndbgkep
+    - lklekjodgannjcccdlbicoamibgbdnmi
+    - dbdbnchagbkhknegmhgikkleoogjcfge
+    - egblhcjfjmbjajhjhpmnlekffgaemgfh
+    - ehbhfpfdkmhcpaehaooegfdflljcnfec
+    - bkkgdjpomdnfemhhkalfkogckjdkcjkg
+    - almalgbpmcfpdaopimbdchdliminoign
+    - akkbkhnikoeojlhiiomohpdnkhbkhieh
+    - gbfgfbopcfokdpkdigfmoeaajfmpkbnh
+    - bniikohfmajhdcffljgfeiklcbgffppl
+    - lejgfmmlngaigdmmikblappdafcmkndb
+    - ffhhkmlgedgcliajaedapkdfigdobcif
+    - gcknhkkoolaabfmlnjonogaaifnjlfnp
+    - pooljnboifbodgifngpppfklhifechoe
+    - fjoaledfpmneenckfbpdfhkmimnjocfa
+    - aakchaleigkohafkfjfjbblobjifikek
+    - dpplabbmogkhghncfbfdeeokoefdjegm
+    - padekgcemlokbadohgkifijomclgjgif
+    - bfidboloedlamgdmenmlbipfnccokknp
+  condition: all of chrome_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b64a026b-8deb-4c1d-92fd-98893209dff1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_chrome_extension.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

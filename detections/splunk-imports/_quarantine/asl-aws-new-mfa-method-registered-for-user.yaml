@@ -1,0 +1,46 @@
+id: splunk-security-content-33ae0931-2a03-456b-b1d7-b016c5557fbd
+name: ASL AWS New MFA Method Registered For User
+description: The following analytic identifies the registration of a new Multi-Factor
+  Authentication (MFA) method for an AWS account, as logged through Amazon Security
+  Lake (ASL). It detects this activity by monitoring the `CreateVirtualMFADevice`
+  API operation within ASL logs. This behavior is significant because adversaries
+  who gain unauthorized access to an AWS account may register a new MFA method to
+  maintain persistence. If confirmed malicious, this activity could allow attackers
+  to secure their access, making it harder to detect and remove their presence from
+  the compromised environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.006
+  categories:
+  - cloud
+references:
+- https://aws.amazon.com/blogs/security/you-can-now-assign-multiple-mfa-devices-in-iam/
+- https://attack.mitre.org/techniques/T1556/
+- https://attack.mitre.org/techniques/T1556/006/
+- https://twitter.com/jhencinski/status/1618660062352007174
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=CreateVirtualMFADevice\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor.user.uid\
+    \ api.operation api.service.name\n       http_request.user_agent src_endpoint.ip\
+    \ actor.user.account.uid\n       cloud.provider cloud.region\n  | rename actor.user.uid\
+    \ as user api.operation as action api.service.name as dest http_request.user_agent\
+    \ as user_agent src_endpoint.ip as src actor.user.account.uid as vendor_account\
+    \ cloud.provider as vendor_product cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `asl_aws_new_mfa_method_registered_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 33ae0931-2a03-456b-b1d7-b016c5557fbd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_new_mfa_method_registered_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

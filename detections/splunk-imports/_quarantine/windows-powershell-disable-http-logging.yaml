@@ -1,0 +1,46 @@
+id: splunk-security-content-27958de0-2857-43ca-9d4c-b255cf59dcab
+name: Windows PowerShell Disable HTTP Logging
+description: The following analytic detects the use of `get-WebConfigurationProperty`
+  and `Set-ItemProperty` commands in PowerShell to disable HTTP logging on Windows
+  systems. This detection leverages PowerShell Script Block Logging, specifically
+  looking for script blocks that reference HTTP logging properties and attempt to
+  set them to "false" or "dontLog". Disabling HTTP logging is significant as it can
+  be used by adversaries to cover their tracks and delete logs, hindering forensic
+  investigations. If confirmed malicious, this activity could allow attackers to evade
+  detection and persist in the environment undetected.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.004
+  - T1562.002
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://www.crowdstrike.com/wp-content/uploads/2022/05/crowdstrike-iceapple-a-novel-internet-information-services-post-exploitation-framework-1.pdf
+- https://unit42.paloaltonetworks.com/unit42-oilrig-uses-rgdoor-iis-backdoor-targets-middle-east/
+- https://www.secureworks.com/research/bronze-union
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN(\"*get-WebConfigurationProperty*\"\
+    ,\"*Set-ItemProperty*\") AND ScriptBlockText IN (\"*httpLogging*\",\"*Logfile.enabled*\"\
+    ) AND ScriptBlockText IN (\"*dontLog*\", \"*false*\")\n  | fillnull\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_powershell_disable_http_logging_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 27958de0-2857-43ca-9d4c-b255cf59dcab
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_disable_http_logging.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

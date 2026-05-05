@@ -1,0 +1,37 @@
+id: sigmahq-sigma-1de68c67-af5c-4097-9c85-fe5578e09e67
+name: WCE wceaux.dll Access
+description: Detects wceaux.dll access while WCE pass-the-hash remote command execution
+  on source host
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references:
+- https://www.jpcert.or.jp/english/pub/sr/ir_research.html
+- https://jpcertcc.github.io/ToolAnalysisResultSheet
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID:
+    - 4656
+    - 4663
+    ObjectName|endswith: \wceaux.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1de68c67-af5c-4097-9c85-fe5578e09e67
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_mal_wceaux_dll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

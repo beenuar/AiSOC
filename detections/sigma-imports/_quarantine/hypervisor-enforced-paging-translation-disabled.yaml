@@ -1,0 +1,36 @@
+id: sigmahq-sigma-7f2954d2-99c2-4d42-a065-ca36740f187b
+name: Hypervisor Enforced Paging Translation Disabled
+description: Detects changes to the "DisableHypervisorEnforcedPagingTranslation" registry
+  value. Where the it is set to "1" in order to disable the Hypervisor Enforced Paging
+  Translation feature.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://twitter.com/standa_t/status/1808868985678803222
+- https://github.com/AaLl86/WindowsInternals/blob/070dc4f317726dfb6ffd2b7a7c121a33a8659b5e/Slides/Hypervisor-enforced%20Paging%20Translation%20-%20The%20end%20of%20non%20data-driven%20Kernel%20Exploits%20(Recon2024).pdf
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \DisableHypervisorEnforcedPagingTranslation
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7f2954d2-99c2-4d42-a065-ca36740f187b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_deviceguard_hypervisorenforcedpagingtranslation_disabled.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

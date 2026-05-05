@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-wmiexec-vbs-script
+name: wmiexec_vbs_script
+description: wmiexec_vbs_script
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule wmiexec_vbs_script {\n meta:\n    author = \"Florian Roth\"\
+    \n    description = \"Detects suspicious file execution by wscript and cscript\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/NRzdC2mfrIv4\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, g0045, t1064\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection.target.process.file.full_path, `.*\\\\cscript\\\
+    .exe`) and re.regex($selection.target.process.command_line, `.*\\.vbs /shell .*`))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: wmiexec_vbs_script
+provenance:
+  source: chronicle/detection-rules
+  source_id: wmiexec_vbs_script
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/wmiexec_vbs_script.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

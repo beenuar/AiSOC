@@ -1,0 +1,44 @@
+id: sigmahq-sigma-db885529-903f-4c5d-9864-28fe199e6370
+name: Computer Discovery And Export Via Get-ADComputer Cmdlet - PowerShell
+description: Detects usage of the Get-ADComputer cmdlet to collect computer information
+  and output it to a file
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references:
+- http://blog.talosintelligence.com/2022/09/lazarus-three-rats.html
+- https://www.microsoft.com/en-us/security/blog/2022/10/18/defenders-beware-a-case-for-post-ransomware-investigations/
+- https://www.cisa.gov/uscert/sites/default/files/publications/aa22-320a_joint_csa_iranian_government-sponsored_apt_actors_compromise_federal%20network_deploy_crypto%20miner_credential_harvester.pdf
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - 'Get-ADComputer '
+    - ' -Filter \*'
+    ScriptBlockText|contains:
+    - ' | Select '
+    - Out-File
+    - Set-Content
+    - Add-Content
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db885529-903f-4c5d-9864-28fe199e6370
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_computer_discovery_get_adcomputer.yml
+falsepositives:
+- Legitimate admin scripts may use the same technique, it's better to exclude specific
+  computers or users who execute these commands or scripts often
+notes:
+  quarantine_reason: 'upstream status: test'

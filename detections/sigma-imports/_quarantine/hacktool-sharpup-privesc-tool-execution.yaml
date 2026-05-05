@@ -1,0 +1,43 @@
+id: sigmahq-sigma-c484e533-ee16-4a93-b6ac-f0ea4868b2f1
+name: HackTool - SharpUp PrivEsc Tool Execution
+description: Detects the use of SharpUp, a tool for local privilege escalation
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1615
+  - T1569.002
+  - T1574.005
+  categories:
+  - endpoint
+references:
+- https://github.com/GhostPack/SharpUp
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \SharpUp.exe
+  - Description: SharpUp
+  - CommandLine|contains:
+    - HijackablePaths
+    - UnquotedServicePath
+    - ProcessDLLHijack
+    - ModifiableServiceBinaries
+    - ModifiableScheduledTask
+    - DomainGPPPassword
+    - CachedGPPPassword
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c484e533-ee16-4a93-b6ac-f0ea4868b2f1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharpup.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

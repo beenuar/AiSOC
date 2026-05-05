@@ -1,0 +1,44 @@
+id: sigmahq-sigma-83c161b6-ca67-4f33-8ad0-644a0737cf07
+name: Suspicious Application Installed
+description: Detects suspicious application installed by looking at the added shortcut
+  to the app resolver cache
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://nasbench.medium.com/finding-forensic-goodness-in-obscure-windows-event-logs-60e978ea45a3
+logsource:
+  product: windows
+  service: shell-core
+detection:
+  selection_name:
+    EventID: 28115
+    Name|contains:
+    - Zenmap
+    - AnyDesk
+    - wireshark
+    - openvpn
+  selection_packageid:
+    EventID: 28115
+    AppID|contains:
+    - zenmap.exe
+    - prokzult ad
+    - wireshark
+    - openvpn
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 83c161b6-ca67-4f33-8ad0-644a0737cf07
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/shell_core/win_shell_core_susp_packages_installed.yml
+falsepositives:
+- Packages or applications being legitimately used by users or administrators
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-64760eef-87f7-4ed3-93fd-655668ea9420
+name: Use of Scriptrunner.exe
+description: The "ScriptRunner.exe" binary can be abused to proxy execution through
+  it and bypass possible whitelisting
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Scriptrunner/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \ScriptRunner.exe
+  - OriginalFileName: ScriptRunner.exe
+  selection_cli:
+    CommandLine|contains: ' -appvscript '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 64760eef-87f7-4ed3-93fd-655668ea9420
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_scriptrunner.yml
+falsepositives:
+- Legitimate use when App-v is deployed
+notes:
+  quarantine_reason: 'upstream status: test'

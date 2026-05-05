@@ -1,0 +1,45 @@
+id: splunk-security-content-454076fb-0e9e-4adf-b93a-da132621c5e6
+name: Kubernetes Process Running From New Path
+description: The following analytic identifies processes running from newly seen paths
+  within a Kubernetes environment. It leverages process metrics collected via an OTEL
+  collector and hostmetrics receiver, and data is pulled from Splunk Observability
+  Cloud using the Splunk Infrastructure Monitoring Add-on. This detection compares
+  processes observed in the last hour with those seen over the previous 30 days. This
+  activity is significant as it may indicate unauthorized changes, compromised nodes,
+  or the introduction of malicious software. If confirmed malicious, it could lead
+  to unauthorized process execution, control over critical resources, data exfiltration,
+  privilege escalation, or malware introduction within the Kubernetes cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| mstats count(process.memory.utilization) as process.memory.utilization_count\
+    \ where `kubernetes_metrics` AND earliest=-1h by host.name k8s.cluster.name k8s.node.name\
+    \ process.pid process.executable.path process.executable.name\n| eval current=\"\
+    True\"\n| append [ mstats count(process.memory.utilization) as process.memory.utilization_count\
+    \ where `kubernetes_metrics` AND earliest=-30d latest=-1h by host.name k8s.cluster.name\
+    \ k8s.node.name process.pid process.executable.path process.executable.name ]\n\
+    | stats count values(current) as current\n  BY host.name k8s.cluster.name k8s.node.name\n\
+    \     process.pid process.executable.name process.executable.path\n| where count=1\
+    \ and current=\"True\"\n| rename host.name as host\n| `kubernetes_process_running_from_new_path_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 454076fb-0e9e-4adf-b93a-da132621c5e6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_process_running_from_new_path.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

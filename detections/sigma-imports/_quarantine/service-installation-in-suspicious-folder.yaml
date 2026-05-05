@@ -1,0 +1,40 @@
+id: sigmahq-sigma-5e993621-67d4-488a-b9ae-b420d08b96cb
+name: Service Installation in Suspicious Folder
+description: Detects service installation in suspicious folder appdata
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains:
+    - \AppData\
+    - \\\\127.0.0.1
+    - \\\\localhost
+  filter_optional_zoom:
+    ServiceName: Zoom Sharing Service
+    ImagePath|contains: :\Program Files\Common Files\Zoom\Support\CptService.exe
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5e993621-67d4-488a-b9ae-b420d08b96cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_susp_service_installation_folder.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,50 @@
+id: mitre-car-car-2020-11-009
+name: Compiled HTML Access
+description: Adversaries may hide malicious code in .chm compiled HTML files. When
+  these files are read, Windows uses the HTML help executable named hh.exe, which
+  is the signature for this analytic.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - instances of hh.exe
+    type: Pseudocode
+    code: 'processes = search Process:Create
+
+      target_processes = filter processes where (exe="C:\Windows\syswow64\hh.exe"
+      OR exe="C:\Windows\system32\hh.exe")
+
+      output target_processes
+
+      '
+  - name: Splunk Search - hh.exe
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) (Image="C:\\Windows\\syswow64\\hh.exe"
+      OR Image="C:\\Windows\\system32\\hh.exe")
+
+      '
+  - name: LogPoint Search - hh.exe
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 (image="C:\Windows\syswow64\hh.exe" OR
+      image="C:\Windows\system32\hh.exe")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-009
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-009.yaml
+notes:
+  car_status: needs_implementation

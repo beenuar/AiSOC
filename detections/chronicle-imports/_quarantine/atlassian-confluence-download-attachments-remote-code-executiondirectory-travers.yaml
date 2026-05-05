@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-atlassian-confluence-download-attachments-remote-code-executiondirectory-travers
+name: atlassian_confluence_download_attachments_remote_code_executiondirectory_traversal
+description: atlassian_confluence_download_attachments_remote_code_executiondirectory_traversal
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule atlassian_confluence_download_attachments_remote_code_executiondirectory_traversal\
+    \ {\n meta:\n    author = \"Halil Ibrahim Cosgun\"\n    description = \"Detects\
+    \ Atlassian Confluence RCE via Attachment Download. Sample regex added to detect\
+    \ directory traversal, it can be improved.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/pCBpTAya0HBi\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"proxy\"\n    mitre\
+    \ = \"initial_access, persistence, privilege_escalation, T1190, T1100\"\n\n  events:\n\
+    ($selection.network.http.method = \"POST\" and re.regex($selection.target.url,\
+    \ `/plugins/drag-and-drop/upload\\.action\\?pageId.*&filename=^\\(\\?!\\..*\\\\\
+    /\\.\\\\/\\.\\)\\.{0,200}$.*&size=.*&mimeType=.*atl_token=.*&name=^\\(\\?!\\..*\\\
+    \\/\\.\\\\/\\.\\)\\.{0,200}$.*`))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: atlassian_confluence_download_attachments_remote_code_executiondirectory_traversal
+provenance:
+  source: chronicle/detection-rules
+  source_id: atlassian_confluence_download_attachments_remote_code_executiondirectory_traversal
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/proactive_exploit_detection/proxy/atlassian_confluence_download_attachments_remote_code_execution_directory_traversal.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-aa35a627-33fb-4d04-a165-d33b4afca3e8
+name: Remote LSASS Process Access Through Windows Remote Management
+description: Detects remote access to the LSASS process via WinRM. This could be a
+  sign of credential dumping from tools like mimikatz.
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1003.001
+  - T1059.001
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://pentestlab.blog/2018/05/15/lateral-movement-winrm/
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: \lsass.exe
+    SourceImage|endswith: :\Windows\system32\wsmprovhost.exe
+  filter_main_access:
+    GrantedAccess: '0x80000000'
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aa35a627-33fb-4d04-a165-d33b4afca3e8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_lsass_remote_access_trough_winrm.yml
+falsepositives:
+- Unlikely

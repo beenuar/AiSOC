@@ -1,0 +1,40 @@
+id: sigmahq-sigma-83c17918-746e-4bd9-920b-8e098bf88c23
+name: Azure Network Firewall Policy Modified or Deleted
+description: Identifies when a Firewall Policy is Modified or Deleted.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.001
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName:
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/WRITE
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/JOIN/ACTION
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/CERTIFICATES/ACTION
+    - MICROSOFT.NETWORK/FIREWALLPOLICIES/DELETE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 83c17918-746e-4bd9-920b-8e098bf88c23
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_network_firewall_policy_modified_or_deleted.yml
+falsepositives:
+- Firewall Policy being modified or deleted may be performed by a system administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Firewall Policy modified or deleted from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

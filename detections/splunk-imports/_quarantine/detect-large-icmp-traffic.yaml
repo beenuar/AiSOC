@@ -1,0 +1,49 @@
+id: splunk-security-content-9cd6d066-94d5-4ccd-a8b9-28c03ca91be8
+name: Detect Large ICMP Traffic
+description: 'The following analytic identifies ICMP traffic to external IP addresses
+  with total bytes (sum of bytes in and bytes out) greater than 1,000 bytes.
+
+  It leverages the Network_Traffic data model to detect large ICMP packet that aren''t
+  blocked and are directed toward external networks. We use All_Traffic.bytes in the
+  detection to capture variations in inbound versus outbound traffic sizes, as significant
+  discrepancies or unusually large ICMP exchanges can indicate information smuggling,
+  covert communication, or command-and-control (C2) activities.
+
+  If validated as malicious, this could signal ICMP tunneling, unauthorized data transfer,
+  or compromised endpoints requiring immediate investigation.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1095
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n          count earliest(_time)\
+    \ as firstTime\n                latest(_time) as lastTime\n                values(All_Traffic.action)\
+    \ as action\nfrom datamodel=Network_Traffic where\nAll_Traffic.bytes > 1000\n\
+    All_Traffic.action != blocked\nAND\n(\n    All_Traffic.protocol=icmp\n    OR\n\
+    \    All_Traffic.transport=icmp\n)\nNOT ( All_Traffic.dest_ip IN `non_public_ip_blocks`\n\
+    OR All_Traffic.dest IN `non_public_ip_blocks`\n)\nby All_Traffic.src_ip All_Traffic.src\
+    \ All_Traffic.dest_ip All_Traffic.dest All_Traffic.protocol\n   All_Traffic.bytes\
+    \ All_Traffic.app All_Traffic.bytes_in\n   All_Traffic.bytes_out All_Traffic.dest_port\
+    \ All_Traffic.dvc\n   All_Traffic.protocol_version All_Traffic.src_port\n   All_Traffic.user\
+    \ All_Traffic.vendor_product\n| `drop_dm_object_name(\"All_Traffic\")`\n| eval\
+    \ dest_ip = dest\n| eval src_ip = src\n| iplocation dest_ip\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `detect_large_icmp_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9cd6d066-94d5-4ccd-a8b9-28c03ca91be8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_large_icmp_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

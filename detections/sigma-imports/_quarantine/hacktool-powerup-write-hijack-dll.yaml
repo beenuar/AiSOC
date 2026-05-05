@@ -1,0 +1,41 @@
+id: sigmahq-sigma-602a1f13-c640-4d73-b053-be9a2fa58b96
+name: HackTool - Powerup Write Hijack DLL
+description: 'Powerup tool''s Write Hijack DLL exploits DLL hijacking for privilege
+  escalation.
+
+  In it''s default mode, it builds a self deleting .bat file which executes malicious
+  command.
+
+  The detection rule relies on creation of the malicious bat file (debug.bat by default).'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/latest/Privesc/Write-HijackDll/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    TargetFilename|endswith: .bat
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 602a1f13-c640-4d73-b053-be9a2fa58b96
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_hktl_powerup_dllhijacking.yml
+falsepositives:
+- Any powershell script that creates bat files
+notes:
+  quarantine_reason: 'upstream status: test'

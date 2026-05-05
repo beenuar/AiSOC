@@ -1,0 +1,37 @@
+id: sigmahq-sigma-409f8a98-4496-4aaa-818a-c931c0a8b832
+name: Created Files by Microsoft Sync Center
+description: This rule detects suspicious files created by Microsoft Sync Center (mobsync)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/intelligence-insights-november-2021/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection_mobsync:
+    Image|endswith: \mobsync.exe
+  filter_created_file:
+    TargetFilename|endswith:
+    - .dll
+    - .exe
+  condition: selection_mobsync and filter_created_file
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 409f8a98-4496-4aaa-818a-c931c0a8b832
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_creation_by_mobsync.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

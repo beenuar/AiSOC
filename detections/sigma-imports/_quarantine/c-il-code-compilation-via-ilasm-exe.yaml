@@ -1,0 +1,39 @@
+id: sigmahq-sigma-850d55f9-6eeb-4492-ad69-a72338f65ba4
+name: C# IL Code Compilation Via Ilasm.EXE
+description: Detects the use of "Ilasm.EXE" in order to compile C# intermediate (IL)
+  code to EXE or DLL.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Ilasm/
+- https://www.echotrail.io/insights/search/ilasm.exe
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \ilasm.exe
+  - OriginalFileName: ilasm.exe
+  selection_cli:
+    CommandLine|contains:
+    - ' /dll'
+    - ' /exe'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 850d55f9-6eeb-4492-ad69-a72338f65ba4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ilasm_il_code_compilation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

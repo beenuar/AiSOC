@@ -1,0 +1,49 @@
+id: sigmahq-sigma-387df17d-3b04-448f-8669-9e7fd5e5fd8c
+name: Suspicious Process Access of MsMpEng by WerFaultSecure - EDR-Freeze
+description: 'Detects process access events where WerFaultSecure accesses MsMpEng.exe
+  with dbgcore.dll or dbghelp.dll in the call trace, indicating potential EDR freeze
+  techniques.
+
+  This technique leverages WerFaultSecure.exe running as a Protected Process Light
+  (PPL) with WinTCB protection level to call MiniDumpWriteDump and suspend EDR/AV
+  processes, allowing malicious activity to execute undetected during the suspension
+  period.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://blog.axelarator.net/hunting-for-edr-freeze/
+logsource:
+  category: process_access
+  product: windows
+  definition: "Requires Sysmon Event ID 10 (ProcessAccess) with CallTrace enabled.\n\
+    Example sysmon config snippet with grouping, as logging individual ProcessAccess\
+    \ events can generate excessive logs:\n<ProcessAccess onmatch=\"include\">\n \
+    \   <Rule groupRelation=\"and\">\n    <TargetImage condition=\"end with\">\\MsMpEng.exe</TargetImage>\n\
+    \    <SourceImage condition=\"end with\">\\WerFaultSecure.exe</SourceImage>\n\
+    \    </Rule>\n</ProcessAccess>\n"
+detection:
+  selection:
+    SourceImage|endswith: \WerFaultSecure.exe
+    TargetImage|endswith: \MsMpEng.exe
+    CallTrace|contains:
+    - \dbgcore.dll
+    - \dbghelp.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 387df17d-3b04-448f-8669-9e7fd5e5fd8c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_werfaultsecure_msmpeng_access.yml
+falsepositives:
+- Legitimate Windows Error Reporting operations
+notes:
+  quarantine_reason: 'upstream status: experimental'

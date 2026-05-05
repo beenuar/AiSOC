@@ -1,0 +1,42 @@
+id: splunk-security-content-56e877a6-1455-4479-ada6-0550dc1e22f8
+name: Email Attachments With Lots Of Spaces
+description: The following analytic detects email attachments with an unusually high
+  number of spaces in their file names, which is a common tactic used by attackers
+  to obfuscate file extensions. It leverages the Email data model to identify attachments
+  where the ratio of spaces to the total file name length exceeds 10%. This behavior
+  is significant as it may indicate an attempt to bypass security filters and deliver
+  malicious payloads. If confirmed malicious, this activity could lead to the execution
+  of harmful code or unauthorized access to sensitive information within the recipient's
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  - T1036.008
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(All_Email.recipient)\
+    \ as recipient_address min(_time) as firstTime max(_time) as lastTime FROM datamodel=Email\n\
+    \  WHERE All_Email.file_name=\"*\"\n  BY All_Email.src_user, All_Email.file_name\
+    \ All_Email.message_id\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(\"All_Email\")`\n| eval space_ratio = (mvcount(split(file_name,\"\
+    \ \"))-1)/len(file_name)\n| search space_ratio >= 0.1\n| rex field=recipient_address\
+    \ \"(?<recipient_user>.*)@\"\n| `email_attachments_with_lots_of_spaces_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 56e877a6-1455-4479-ada6-0550dc1e22f8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/email_attachments_with_lots_of_spaces.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

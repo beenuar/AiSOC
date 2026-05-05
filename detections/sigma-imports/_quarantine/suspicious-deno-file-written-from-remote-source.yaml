@@ -1,0 +1,43 @@
+id: sigmahq-sigma-6c0ce3b6-85e2-49d4-9c3f-6e008ce9796e
+name: Suspicious Deno File Written from Remote Source
+description: 'Detects Deno writing a file from a direct HTTP(s) call and writing to
+  the appdata folder or bringing it''s own malicious DLL.
+
+  This behavior may indicate an attempt to execute remotely hosted, potentially malicious
+  files through deno.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1204
+  - T1059.007
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://taggart-tech.com/evildeno/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection_path:
+    TargetFilename|contains:
+    - \deno\gen\
+    - \deno\remote\https\
+    TargetFilename|contains|all:
+    - :\Users\
+    - \AppData\
+  condition: selection_path
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6c0ce3b6-85e2-49d4-9c3f-6e008ce9796e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_creation_deno.yml
+falsepositives:
+- Legitimate usage of deno to request a file or bring a DLL to a host
+notes:
+  quarantine_reason: 'upstream status: experimental'

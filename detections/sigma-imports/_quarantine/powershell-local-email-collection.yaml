@@ -1,0 +1,41 @@
+id: sigmahq-sigma-2837e152-93c8-43d2-85ba-c3cd3c2ae614
+name: Powershell Local Email Collection
+description: 'Adversaries may target user email on local systems to collect sensitive
+  information.
+
+  Files containing email data can be acquired from a users local system, such as Outlook
+  storage or cache files.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1114.001/T1114.001.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Get-Inbox.ps1
+    - Microsoft.Office.Interop.Outlook
+    - Microsoft.Office.Interop.Outlook.olDefaultFolders
+    - -comobject outlook.application
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2837e152-93c8-43d2-85ba-c3cd3c2ae614
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_mail_acces.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

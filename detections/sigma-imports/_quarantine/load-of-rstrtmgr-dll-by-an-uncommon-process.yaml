@@ -1,0 +1,69 @@
+id: sigmahq-sigma-3669afd2-9891-4534-a626-e5cf03810a61
+name: Load Of RstrtMgr.DLL By An Uncommon Process
+description: 'Detects the load of RstrtMgr DLL (Restart Manager) by an uncommon process.
+
+  This library has been used during ransomware campaigns to kill processes that would
+  prevent file encryption by locking them (e.g. Conti ransomware, Cactus ransomware).
+  It has also recently been seen used by the BiBi wiper for Windows.
+
+  It could also be used for anti-analysis purposes by shut downing specific processes.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1486
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/blog/windows-restart-manager-part-1/
+- https://www.crowdstrike.com/blog/windows-restart-manager-part-2/
+- https://web.archive.org/web/20231221193106/https://www.swascan.com/cactus-ransomware-malware-analysis/
+- https://taiwan.postsen.com/business/88601/Hamas-hackers-use-data-destruction-software-BiBi-which-consumes-a-lot-of-processor-resources-to-wipe-Windows-computer-data--iThome.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+  - ImageLoaded|endswith: \RstrtMgr.dll
+  - OriginalFileName: RstrtMgr.dll
+  filter_main_generic:
+    Image|startswith:
+    - C:\$WINDOWS.~BT\'
+    - C:\$WinREAgent\'
+    - C:\Program Files (x86)\'
+    - C:\Program Files\'
+    - C:\ProgramData\'
+    - C:\Windows\explorer.exe'
+    - C:\Windows\SoftwareDistribution\'
+    - C:\Windows\SysNative\'
+    - C:\Windows\System32\'
+    - C:\Windows\SysWOW64\'
+    - C:\Windows\WinSxS\'
+    - C:\WUDownloadCache\'
+  filter_main_user_software_installations:
+    Image|startswith: C:\Users\'
+    Image|contains|all:
+    - \AppData\Local\Temp\is-
+    - .tmp\
+    Image|endswith: .tmp
+  filter_main_admin_software_installations:
+    Image|startswith: C:\Windows\Temp\'
+  filter_optional_onedrive:
+    Image|startswith: C:\Users\
+    Image|endswith: \AppData\Local\Microsoft\OneDrive\OneDriveStandaloneUpdater.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3669afd2-9891-4534-a626-e5cf03810a61
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_rstrtmgr_uncommon_load.yml
+falsepositives:
+- Other legitimate Windows processes not currently listed
+- Processes related to software installation
+notes:
+  quarantine_reason: 'upstream status: test'

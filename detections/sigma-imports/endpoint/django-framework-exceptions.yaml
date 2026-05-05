@@ -1,0 +1,43 @@
+id: sigmahq-sigma-fd435618-981e-4a7c-81f8-f78ce480d616
+name: Django Framework Exceptions
+description: Detects suspicious Django web application framework exceptions that could
+  indicate exploitation attempts
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://docs.djangoproject.com/en/1.11/ref/exceptions/
+- https://docs.djangoproject.com/en/1.11/topics/logging/#django-security
+logsource:
+  category: application
+  product: django
+detection:
+  keywords:
+  - SuspiciousOperation
+  - DisallowedHost
+  - DisallowedModelAdminLookup
+  - DisallowedModelAdminToField
+  - DisallowedRedirect
+  - InvalidSessionKey
+  - RequestDataTooBig
+  - SuspiciousFileOperation
+  - SuspiciousMultipartForm
+  - SuspiciousSession
+  - TooManyFieldsSent
+  - PermissionDenied
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fd435618-981e-4a7c-81f8-f78ce480d616
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/django/appframework_django_exceptions.yml
+falsepositives:
+- Application bugs

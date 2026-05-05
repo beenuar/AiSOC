@@ -1,0 +1,44 @@
+id: sigmahq-sigma-a3f5c081-e75b-43a0-9f5b-51f26fe5dba2
+name: Potential Suspicious Winget Package Installation
+description: Detects potential suspicious winget package installation from a suspicious
+  source.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/Misc-Research/tree/b9596e8109dcdb16ec353f316678927e507a5b8d/LOLBINs/Winget
+logsource:
+  product: windows
+  category: create_stream_hash
+detection:
+  selection:
+    Contents|startswith: '[ZoneTransfer]  ZoneId=3'
+    Contents|contains:
+    - ://1
+    - ://2
+    - ://3
+    - ://4
+    - ://5
+    - ://6
+    - ://7
+    - ://8
+    - ://9
+    TargetFilename|endswith: :Zone.Identifier
+    TargetFilename|contains: \AppData\Local\Temp\WinGet\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a3f5c081-e75b-43a0-9f5b-51f26fe5dba2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_stream_hash/create_stream_hash_winget_susp_package_source.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

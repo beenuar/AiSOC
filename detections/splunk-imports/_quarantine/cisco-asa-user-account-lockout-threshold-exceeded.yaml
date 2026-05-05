@@ -1,0 +1,52 @@
+id: splunk-security-content-3e8f9c2a-6d4b-4a7e-9c5f-1b8d7e3a9f2c
+name: Cisco ASA - User Account Lockout Threshold Exceeded
+description: 'This analytic detects user account lockouts on Cisco ASA devices resulting
+  from excessive failed authentication attempts.
+
+  Account lockouts may indicate brute force attacks, password spraying campaigns,
+  credential stuffing attempts using compromised credentials from external breaches,
+  or misconfigured automation attempting authentication with incorrect credentials.
+  These activities represent attempts to gain unauthorized access to network infrastructure.
+
+  The detection monitors for ASA message ID 113006, which is generated when a user
+  account is locked out after exceeding the configured maximum number of failed authentication
+  attempts, capturing the locked account name and the failure threshold that was exceeded.
+
+  Investigate account lockouts for privileged or administrative accounts, multiple
+  simultaneous lockouts affecting different accounts (suggesting password spraying),
+  lockouts originating from unusual source IP addresses, lockouts during off-hours,
+  or patterns suggesting automated attack tools.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  - T1110.003
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/asa-syslog/syslog-messages-101001-to-199021.html#con_4769446
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (113006)\n| rex \"locked out on exceeding\
+    \ '(?<attempts_count>\\d+)' successive failed authentication attempts\"\n| rex\
+    \ \"User '(?<user>[^']+)' locked out\"\n| eval failure_description=\"locked out\
+    \ on exceeding \" . attempts_count . \" successive failed authentication attempts\"\
+    \n| fillnull\n| stats earliest(_time) as firstTime\n        latest(_time) as lastTime\n\
+    \        values(message_id) as message_id\n        values(failure_description)\
+    \ as failure_description\n  by host user\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_asa___user_account_lockout_threshold_exceeded_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3e8f9c2a-6d4b-4a7e-9c5f-1b8d7e3a9f2c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___user_account_lockout_threshold_exceeded.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

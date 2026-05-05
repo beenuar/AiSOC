@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9b0f8a61-91b2-464f-aceb-0527e0a45020
+name: Potential COM Object Hijacking Via TreatAs Subkey - Registry
+description: Detects COM object hijacking via TreatAs subkey
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.015
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2018/08/18/abusing-the-com-registry-structure-part-2-loading-techniques-for-evasion-and-persistence/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains|all:
+    - HKU\
+    - Classes\CLSID\
+    - \TreatAs
+  filter_main_svchost:
+    Image: C:\WINDOWS\system32\svchost.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9b0f8a61-91b2-464f-aceb-0527e0a45020
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_com_key_linking.yml
+falsepositives:
+- Maybe some system utilities in rare cases use linking keys for backward compatibility
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-0afbd410-de03-4078-8491-f132303cb67d
+name: Renamed NetSupport RAT Execution
+description: Detects the execution of a renamed "client32.exe" (NetSupport RAT) via
+  Imphash, Product and OriginalFileName strings
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/misbehaving-rats/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Product|contains: NetSupport Remote Control
+  - OriginalFileName|contains: client32.exe
+  - Hashes|contains: IMPHASH=A9D50692E95B79723F3E76FCF70D023E
+  filter:
+    Image|endswith: \client32.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0afbd410-de03-4078-8491-f132303cb67d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_netsupport_rat.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

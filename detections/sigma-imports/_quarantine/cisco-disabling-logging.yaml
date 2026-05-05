@@ -1,0 +1,33 @@
+id: sigmahq-sigma-9e8f6035-88bf-4a63-96b6-b17c0508257e
+name: Cisco Disabling Logging
+description: Turn off logging locally or remote
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://www.cisco.com/en/US/docs/ios/security/command/reference/sec_a2.pdf
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - no logging
+  - no aaa new-model
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e8f6035-88bf-4a63-96b6-b17c0508257e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_disable_logging.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

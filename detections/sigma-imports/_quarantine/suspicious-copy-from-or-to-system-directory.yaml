@@ -1,0 +1,69 @@
+id: sigmahq-sigma-fff9d2b7-e11c-4a69-93d3-40ef66189767
+name: Suspicious Copy From or To System Directory
+description: 'Detects a suspicious copy operation that tries to copy a program from
+  system (System32, SysWOW64, WinSxS) directories to another on disk.
+
+  Often used to move LOLBINs such as ''certutil'' or ''desktopimgdownldr'' to a different
+  location with a different name in order to bypass detections based on locations.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://www.hybrid-analysis.com/sample/8da5b75b6380a41eee3a399c43dfe0d99eeefaa1fd21027a07b1ecaa4cd96fdd?environmentId=120
+- https://web.archive.org/web/20180331144337/https://www.fireeye.com/blog/threat-research/2018/03/sanny-malware-delivery-method-updated-in-recently-observed-attacks.html
+- https://thedfirreport.com/2023/08/28/html-smuggling-leads-to-domain-wide-ransomware/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img_cmd:
+    Image|endswith: \cmd.exe
+    CommandLine|contains: 'copy '
+  selection_img_pwsh:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    CommandLine|contains:
+    - copy-item
+    - ' copy '
+    - 'cpi '
+    - ' cp '
+  selection_img_other:
+  - Image|endswith:
+    - \robocopy.exe
+    - \xcopy.exe
+  - OriginalFileName:
+    - robocopy.exe
+    - XCOPY.EXE
+  selection_target:
+    CommandLine|re|i: \s['"]?C:\\Windows\\(?:System32|SysWOW64|WinSxS)
+  filter_optional_avira:
+    Image|endswith: \cmd.exe
+    CommandLine|contains|all:
+    - /c copy
+    - \Temp\
+    - \avira_system_speedup.exe
+    CommandLine|contains:
+    - C:\Program Files\Avira\
+    - C:\Program Files (x86)\Avira\
+  condition: 1 of selection_img_* and selection_target and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fff9d2b7-e11c-4a69-93d3-40ef66189767
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_copy_system_dir.yml
+falsepositives:
+- Depend on scripts and administrative tools used in the monitored environment (For
+  example an admin scripts like https://www.itexperience.net/sccm-batch-files-and-32-bits-processes-on-64-bits-os/)
+- When cmd.exe and xcopy.exe are called directly
+- When the command contains the keywords but not in the correct order
+notes:
+  quarantine_reason: 'upstream status: test'

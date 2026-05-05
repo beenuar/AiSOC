@@ -1,0 +1,39 @@
+id: sigmahq-sigma-9827ae57-3802-418f-994b-d5ecf5cd974b
+name: Potential Registry Persistence Attempt Via DbgManagedDebugger
+description: Detects the addition of the "Debugger" value to the "DbgManagedDebugger"
+  key in order to achieve persistence. Which will get invoked when an application
+  crashes
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2013/09/19/beyond-good-ol-run-key-part-4/
+- https://github.com/last-byte/PersistenceSniper
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Microsoft\.NETFramework\DbgManagedDebugger
+  filter:
+    Details: '"C:\Windows\system32\vsjitdebugger.exe" PID %d APPDOM %d EXTEXT "%s"
+      EVTHDL %d'
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9827ae57-3802-418f-994b-d5ecf5cd974b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_dbgmanageddebugger_persistence.yml
+falsepositives:
+- Legitimate use of the key to setup a debugger. Which is often the case on developers
+  machines
+notes:
+  quarantine_reason: 'upstream status: test'

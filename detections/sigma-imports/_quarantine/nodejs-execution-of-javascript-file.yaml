@@ -1,0 +1,47 @@
+id: sigmahq-sigma-ba3874b9-0fae-465f-836c-eb5d071a1789
+name: NodeJS Execution of JavaScript File
+description: 'Detects execution of JavaScript or JSC files using NodeJs binary node.exe,
+  that could be potentially suspicious.
+
+  Node.js is a popular open-source JavaScript runtime that runs code outside browsers
+  and is widely used for both frontend and backend development.
+
+  Adversaries have been observed abusing Node.js to disguise malware as legitimate
+  processes, evade security defenses, and maintain persistence within target systems.
+
+  Because Node.js is commonly used, this rule may generate false positives in some
+  environments. However, if such activity is unusual in your environment, it is highly
+  suspicious and warrants immediate investigation.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2025/04/15/threat-actors-misuse-node-js-to-deliver-malware-and-other-malicious-payloads/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \node.exe
+  - OriginalFileName: node.exe
+  - Product: Node.js
+  selection_cmd:
+    CommandLine|contains: .js
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ba3874b9-0fae-465f-836c-eb5d071a1789
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_security_susp_node_js_execution.yml
+falsepositives:
+- Legitimate use of node.exe to execute JavaScript or JSC files on your environment
+notes:
+  quarantine_reason: 'upstream status: experimental'

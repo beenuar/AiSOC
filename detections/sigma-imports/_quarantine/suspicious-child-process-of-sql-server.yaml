@@ -1,0 +1,52 @@
+id: sigmahq-sigma-869b9ca7-9ea2-4a5a-8325-e80e62f75445
+name: Suspicious Child Process Of SQL Server
+description: Detects suspicious child processes of the SQLServer process. This could
+  indicate potential RCE or SQL Injection.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  - T1190
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \sqlservr.exe
+    Image|endswith:
+    - \bash.exe
+    - \bitsadmin.exe
+    - \cmd.exe
+    - \netstat.exe
+    - \nltest.exe
+    - \ping.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \sh.exe
+    - \systeminfo.exe
+    - \tasklist.exe
+    - \wsl.exe
+  filter_optional_datev:
+    ParentImage|startswith: C:\Program Files\Microsoft SQL Server\
+    ParentImage|endswith: DATEV_DBENGINE\MSSQL\Binn\sqlservr.exe
+    Image: C:\Windows\System32\cmd.exe
+    CommandLine|startswith: '"C:\Windows\system32\cmd.exe" '
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 869b9ca7-9ea2-4a5a-8325-e80e62f75445
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mssql_susp_child_process.yml
+notes:
+  quarantine_reason: 'upstream status: test'

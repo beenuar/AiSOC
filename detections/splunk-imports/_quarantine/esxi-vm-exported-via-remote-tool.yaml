@@ -1,0 +1,36 @@
+id: splunk-security-content-2e155547-aaac-49d3-b0ef-ceabc31fd364
+name: ESXi VM Exported via Remote Tool
+description: This detection identifies the use of a remote tool to download virtual
+  machine disk files from a datastore. The NFC protocol is used by management tools
+  to transfer files to and from ESXi hosts, but it can also be abused by attackers
+  or insiders to exfiltrate full virtual disk images
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1005
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*File download from path*" Message="*was initiated
+    from*" | rex field=_raw "from path ''\[(?<Datastore>[^\]]+)\](?<VMPath>[^'']+)''"
+    | rex field=_raw "initiated from ''(?<InitiatorTool>[^/]+)/(?<ToolVersion>[^@]+)@(?<InitiatorIP>\d{1,3}(?:\.\d{1,3}){3})''"
+    | rex field=_raw "Z (?<dest>[\w\.]+)\s" | stats min(_time) as firstTime max(_time)
+    as lastTime count by Datastore VMPath InitiatorTool ToolVersion InitiatorIP dest
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_vm_exported_via_remote_tool_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 2e155547-aaac-49d3-b0ef-ceabc31fd364
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_vm_exported_via_remote_tool.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

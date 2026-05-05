@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d29a20b2-be4b-4827-81f2-3d8a59eab5fc
+name: Sysinternals Tools AppX Versions Execution
+description: 'Detects execution of Sysinternals tools via an AppX package.
+
+  Attackers could install the Sysinternals Suite to get access to tools such as psexec
+  and procdump to avoid detection based on System paths.'
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/microsoft-store
+logsource:
+  product: windows
+  service: appmodel-runtime
+detection:
+  selection:
+    EventID: 201
+    ImageName:
+    - procdump.exe
+    - psloglist.exe
+    - psexec.exe
+    - livekd.exe
+    - ADExplorer.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d29a20b2-be4b-4827-81f2-3d8a59eab5fc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/appmodel_runtime/win_appmodel_runtime_sysinternals_tools_appx_execution.yml
+falsepositives:
+- Legitimate usage of sysinternals applications from the Windows Store will trigger
+  this. Apply exclusions as needed.
+notes:
+  quarantine_reason: 'upstream status: test'

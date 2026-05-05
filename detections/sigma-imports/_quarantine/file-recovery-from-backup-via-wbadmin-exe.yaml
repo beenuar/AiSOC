@@ -1,0 +1,42 @@
+id: sigmahq-sigma-6fe4aa1e-0531-4510-8be2-782154b73b48
+name: File Recovery From Backup Via Wbadmin.EXE
+description: 'Detects the recovery of files from backups via "wbadmin.exe".
+
+  Attackers can restore sensitive files such as NTDS.DIT or Registry Hives from backups
+  in order to potentially extract credentials.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wbadmin-start-recovery
+- https://lolbas-project.github.io/lolbas/Binaries/Wbadmin/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \wbadmin.exe
+  - OriginalFileName: WBADMIN.EXE
+  selection_cli:
+    CommandLine|contains|all:
+    - ' recovery'
+    - recoveryTarget
+    - itemtype:File
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6fe4aa1e-0531-4510-8be2-782154b73b48
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wbadmin_restore_file.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

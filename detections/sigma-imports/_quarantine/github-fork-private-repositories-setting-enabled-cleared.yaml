@@ -1,0 +1,38 @@
+id: sigmahq-sigma-69b3bd1e-b38a-462f-9a23-fbdbf63d2294
+name: Github Fork Private Repositories Setting Enabled/Cleared
+description: Detects when the policy allowing forks of private and internal repositories
+  is changed (enabled or cleared).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1020
+  - T1537
+  categories:
+  - endpoint
+references:
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise#private_repository_forking
+logsource:
+  product: github
+  service: audit
+  definition: 'Requirements: The audit log streaming feature must be enabled to be
+    able to receive such logs. You can enable following the documentation here: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-audit-log-streaming'
+detection:
+  selection:
+    action:
+    - private_repository_forking.clear
+    - private_repository_forking.enable
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 69b3bd1e-b38a-462f-9a23-fbdbf63d2294
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/github/audit/github_fork_private_repos_enabled_or_cleared.yml
+falsepositives:
+- Allowed administrative activities.
+notes:
+  quarantine_reason: 'upstream status: test'

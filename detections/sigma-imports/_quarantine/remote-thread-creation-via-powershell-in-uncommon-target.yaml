@@ -1,0 +1,39 @@
+id: sigmahq-sigma-99b97608-3e21-4bfe-8217-2a127c396a0e
+name: Remote Thread Creation Via PowerShell In Uncommon Target
+description: Detects the creation of a remote thread from a Powershell process in
+  an uncommon target process
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://www.fireeye.com/blog/threat-research/2018/06/bring-your-own-land-novel-red-teaming-technique.html
+logsource:
+  product: windows
+  category: create_remote_thread
+detection:
+  selection:
+    SourceImage|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    TargetImage|endswith:
+    - \rundll32.exe
+    - \regsvr32.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 99b97608-3e21-4bfe-8217-2a127c396a0e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_remote_thread/create_remote_thread_win_powershell_susp_targets.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

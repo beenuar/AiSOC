@@ -1,0 +1,35 @@
+id: sigmahq-sigma-e9edd087-89d8-48c9-b0b4-5b9bb10896b8
+name: Potential SpEL Injection In Spring Framework
+description: Detects potential SpEL Injection exploitation, which may lead to RCE.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://owasp.org/www-community/vulnerabilities/Expression_Language_Injection
+- https://www.wix.engineering/post/threat-and-vulnerability-hunting-with-application-server-error-logs
+logsource:
+  category: application
+  product: spring
+  definition: 'Requirements: application error logs must be collected (with LOG_LEVEL=ERROR
+    and above)'
+detection:
+  keywords:
+  - org.springframework.expression.ExpressionException
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9edd087-89d8-48c9-b0b4-5b9bb10896b8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/spring/spring_spel_injection.yml
+falsepositives:
+- Application bugs
+notes:
+  quarantine_reason: 'upstream status: test'

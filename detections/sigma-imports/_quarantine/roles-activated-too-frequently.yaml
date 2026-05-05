@@ -1,0 +1,33 @@
+id: sigmahq-sigma-645fd80d-6c07-435b-9e06-7bc1b5656cba
+name: Roles Activated Too Frequently
+description: Identifies when the same privilege role has multiple activations by the
+  same user.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-how-to-configure-security-alerts#roles-are-being-activated-too-frequently
+logsource:
+  product: azure
+  service: pim
+detection:
+  selection:
+    riskEventType: sequentialActivationRenewalsAlertIncident
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 645fd80d-6c07-435b-9e06-7bc1b5656cba
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/privileged_identity_management/azure_pim_role_frequent_activation.yml
+falsepositives:
+- Investigate where if active time period for a role is set too short.
+notes:
+  quarantine_reason: 'upstream status: test'

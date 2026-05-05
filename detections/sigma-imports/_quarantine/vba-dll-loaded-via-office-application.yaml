@@ -1,0 +1,44 @@
+id: sigmahq-sigma-e6ce8457-68b1-485b-9bdd-3c2b5d679aa9
+name: VBA DLL Loaded Via Office Application
+description: Detects VB DLL's loaded by an office application. Which could indicate
+  the presence of VBA Macros.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://medium.com/threatpunter/detecting-adversary-tradecraft-with-image-load-event-logging-and-eql-8de93338c16
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \excel.exe
+    - \mspub.exe
+    - \onenote.exe
+    - \onenoteim.exe
+    - \outlook.exe
+    - \powerpnt.exe
+    - \winword.exe
+    ImageLoaded|endswith:
+    - \VBE7.DLL
+    - \VBEUI.DLL
+    - \VBE7INTL.DLL
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e6ce8457-68b1-485b-9bdd-3c2b5d679aa9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_office_vbadll_load.yml
+falsepositives:
+- Legitimate macro usage. Add the appropriate filter according to your environment
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: splunk-security-content-5890ba10-4e48-4dc0-8a40-3e1ebe75e737
+name: Linux Auditd Base64 Decode Files
+description: The following analytic detects suspicious Base64 decode operations that
+  may indicate malicious activity, such as data exfiltration or execution of encoded
+  commands. Base64 is commonly used to encode data for safe transmission, but attackers
+  may abuse it to conceal malicious payloads. This detection focuses on identifying
+  unusual or unexpected Base64 decoding processes, particularly when associated with
+  critical files or directories. By monitoring these activities, the analytic helps
+  uncover potential threats, enabling security teams to respond promptly and mitigate
+  risks associated with encoded malware or unauthorized data access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1140
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+- https://gtfobins.github.io/gtfobins/dd/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` execve_command = \"*base64*\" AND execve_command IN\
+    \ (\"*-d*\", \"* --d*\")\n  | rename host as dest\n  | rename comm as process_name\n\
+    \  | rename exe as process\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY argc execve_command dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_base64_decode_files_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5890ba10-4e48-4dc0-8a40-3e1ebe75e737
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_base64_decode_files.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-2b669496-d215-47d8-bd9a-f4a45bf07cda
+name: Data Exfiltration to Unsanctioned Apps
+description: Detects when a Microsoft Cloud App Security reported when a user or IP
+  address uses an app that is not sanctioned to perform an activity that resembles
+  an attempt to exfiltrate information from your organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1537
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Data exfiltration to unsanctioned apps
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2b669496-d215-47d8-bd9a-f4a45bf07cda
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_data_exfiltration_to_unsanctioned_app.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

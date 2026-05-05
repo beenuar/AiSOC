@@ -1,0 +1,59 @@
+id: chronicle-detection-rules-usb-file-stealer-usbguard-detector-sysmon
+name: usb_file_stealer_usbguard_detector_sysmon
+description: usb_file_stealer_usbguard_detector_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule usb_file_stealer_usbguard_detector_sysmon {\n meta:\n   \
+    \ author = \"Alexandr Yampolskyi, SOC Prime\"\n    description = \"It is a small,\
+    \ standalone program that monitors USB drives connected to the computer and copies\
+    \ all files that match the filter chosen by the attackers.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/19yoRxeAUhFX\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/06/01\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and ($selection.target.file.md5 = \"050EB7D20EE8EF1E1DAEE2F421E5BF648FB645DF\"\
+    \ or $selection.target.file.md5 = \"069A919B3BC8070BB2D71D3E1AD9F7642D8ECF0F\"\
+    \ or $selection.target.file.md5 = \"0D265E0BDA9DF83815759ABCA64938EC0FF65733\"\
+    \ or $selection.target.file.md5 = \"0D7DF910D0FB7B100F084BFB8DFA0A9F2371171A\"\
+    \ or $selection.target.file.md5 = \"2FF3F5DA2960BE95E50B751680F450896AD1ED67\"\
+    \ or $selection.target.file.md5 = \"3200ECC7503F184F72AB9DA1DC3E1F8D43DDFD48\"\
+    \ or $selection.target.file.md5 = \"46D256EF277328E803D2B15CA7C188267059949D\"\
+    \ or $selection.target.file.md5 = \"524EE1B7269D02F725E55254A015200BB472463A\"\
+    \ or $selection.target.file.md5 = \"53A0EFD3D448DA8E32CFDDA5848312D3CF802B06\"\
+    \ or $selection.target.file.md5 = \"6FC150A9CAFA75813E7473C687935E7E4A5DCE24\"\
+    \ or $selection.target.file.md5 = \"70559245303F99630A27CB47B328C20C9666F0BB\"\
+    \ or $selection.target.file.md5 = \"7D8044A5CBEFE3B016F2132A5750C30BB647E599\"\
+    \ or $selection.target.file.md5 = \"8FD919D531A7A80615517E1AC13C2D0F050AF20D\"\
+    \ or $selection.target.file.md5 = \"9D22421DA9696B535C708178C72323F64D31FC80\"\
+    \ or $selection.target.file.md5 = \"BFD2DFA3D6AF31DF4B9CC2F6B31B239ADF1CECA1\"\
+    \ or $selection.target.file.md5 = \"C08A6222B59A187F3CF27A7BAE4CACFACC97DDEE\"\
+    \ or $selection.target.file.md5 = \"C2F6A65E14605828880927B9BA3C386507BD8161\"\
+    \ or $selection.target.file.md5 = \"C562006D2FA53B15052A4B80C94B86355CCA7427\"\
+    \ or $selection.target.file.md5 = \"CB43058D9EBB517832DF7058641AEDF6B303E736\"\
+    \ or $selection.target.file.md5 = \"CC8A9C28E884FDA0E1B3F6CEAB12805FEA17D3C1\"\
+    \ or $selection.target.file.md5 = \"D3CC27CA772E30C6260C5A3B6309D27F08A295CD\"\
+    \ or $selection.target.file.md5 = \"E7A2DE3776BA7D939711E620C7D6AB25946C9881\"\
+    \ or $selection.target.file.md5 = \"EE6EFA7A6A85A1B2FA6351787A1612F060086320\"\
+    \ or $selection.target.file.md5 = \"EF0ABB3A0CD1E65B33C0F109DD18F156FC0F0CDE\"\
+    \ or $selection.target.file.md5 = \"F63BE193C8A0FBB430F3B88CC8194D755BAD9CD1\"\
+    ))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: usb_file_stealer_usbguard_detector_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: usb_file_stealer_usbguard_detector_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/usb_file_stealer__usbguard__detector__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

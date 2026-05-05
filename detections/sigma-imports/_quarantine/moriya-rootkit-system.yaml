@@ -1,0 +1,35 @@
+id: sigmahq-sigma-25b9c01c-350d-4b95-bed1-836d04a4f324
+name: Moriya Rootkit - System
+description: Detects the use of Moriya rootkit as described in the securelist's Operation
+  TunnelSnake report
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://securelist.com/operation-tunnelsnake-and-moriya-rootkit/101831
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ServiceName: ZzNetSvc
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 25b9c01c-350d-4b95-bed1-836d04a4f324
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_moriya_rootkit.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

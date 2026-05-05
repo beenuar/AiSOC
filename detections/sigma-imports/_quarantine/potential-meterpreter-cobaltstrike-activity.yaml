@@ -1,0 +1,51 @@
+id: sigmahq-sigma-15619216-e993-4721-b590-4c520615a67d
+name: Potential Meterpreter/CobaltStrike Activity
+description: Detects the use of getsystem Meterpreter/Cobalt Strike command by detecting
+  a specific service starting
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1134.001
+  - T1134.002
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-privilege-escalation-in-windows-environment
+- https://blog.cobaltstrike.com/2014/04/02/what-happens-when-i-type-getsystem/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    ParentImage|endswith: \services.exe
+  selection_technique_1:
+    CommandLine|contains|all:
+    - /c
+    - echo
+    - \pipe\
+    CommandLine|contains:
+    - cmd
+    - '%COMSPEC%'
+  selection_technique_2:
+    CommandLine|contains|all:
+    - rundll32
+    - .dll,a
+    - '/p:'
+  filter_defender:
+    CommandLine|contains: MpCmdRun
+  condition: selection_img and 1 of selection_technique_* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 15619216-e993-4721-b590-4c520615a67d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_meterpreter_getsystem.yml
+falsepositives:
+- Commandlines containing components like cmd accidentally
+- Jobs and services started with cmd
+notes:
+  quarantine_reason: 'upstream status: test'

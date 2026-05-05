@@ -1,0 +1,53 @@
+id: sigmahq-sigma-b6188d2f-b3c4-4d2c-a17d-9706e0851af0
+name: Potential Goopdate.DLL Sideloading
+description: Detects potential DLL sideloading of "goopdate.dll", a DLL used by googleupdate.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/goofy-guineapig/NCSC-MAR-Goofy-Guineapig.pdf
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \goopdate.dll
+  filter_main_generic:
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+  filter_optional_dropbox_installer_temp:
+    Image|contains|all:
+    - \AppData\Local\Temp\GUM
+    - .tmp\Dropbox
+    ImageLoaded|contains|all:
+    - \AppData\Local\Temp\GUM
+    - .tmp\goopdate.dll
+  filter_optional_googleupdate_temp:
+    Image|contains:
+    - \AppData\Local\Temp\GUM
+    - :\Windows\SystemTemp\GUM
+    Image|endswith: .tmp\GoogleUpdate.exe
+    ImageLoaded|contains:
+    - \AppData\Local\Temp\GUM
+    - :\Windows\SystemTemp\GUM
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b6188d2f-b3c4-4d2c-a17d-9706e0851af0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_goopdate.yml
+falsepositives:
+- False positives are expected from Google Chrome installations running from user
+  locations (AppData) and other custom locations. Apply additional filters accordingly.
+- Other third party chromium browsers located in AppData
+notes:
+  quarantine_reason: 'upstream status: test'

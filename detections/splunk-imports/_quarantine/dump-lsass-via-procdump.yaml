@@ -1,0 +1,60 @@
+id: splunk-security-content-3742ebfe-64c2-11eb-ae93-0242ac130002
+name: Dump LSASS via procdump
+description: 'The following analytic detects the use of procdump.exe to dump the LSASS
+
+  process, specifically looking for the -mm and -ma command-line arguments. It leverages
+
+  data from Endpoint Detection and Response (EDR) agents, focusing on process names,
+
+  command-line executions, and parent processes. This activity is significant because
+
+  dumping LSASS can expose sensitive credentials, posing a severe security risk. If
+
+  confirmed malicious, an attacker could obtain credentials, escalate privileges,
+
+  and move laterally within the network, leading to potential data breaches and further
+
+  compromise of the environment.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1003/001/
+- https://docs.microsoft.com/en-us/sysinternals/downloads/procdump
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1003.001/T1003.001.md#atomic-test-2---dump-lsassexe-memory-using-procdump
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://x.com/wietze/status/1958302556033065292?s=12
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    (\n  Processes.process_name IN (\n    \"procdump.exe\",\n    \"procdump64.exe\"\
+    ,\n    \"procdump64a.exe\"\n  )\n  OR\n  Processes.original_file_name=procdump\n\
+    )\nProcesses.process IN (\n    \"*-ma*\",\n    \"*-mm*\",\n    \"*-mp*\",\n  \
+    \  \"*/ma*\",\n    \"*/mm*\",\n    \"*/mp*\"\n)\nProcesses.process IN (\n    \"\
+    * keyiso*\",\n    \"* ls*\",\n    \"* samss*\"\n)\n\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process\n   Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process Processes.process_exec\n   Processes.process_guid\
+    \ Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_name Processes.process_path Processes.user Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `dump_lsass_via_procdump_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3742ebfe-64c2-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/dump_lsass_via_procdump.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

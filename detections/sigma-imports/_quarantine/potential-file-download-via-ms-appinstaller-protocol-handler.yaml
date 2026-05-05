@@ -1,0 +1,37 @@
+id: sigmahq-sigma-180c7c5c-d64b-4a63-86e9-68910451bc8b
+name: Potential File Download Via MS-AppInstaller Protocol Handler
+description: 'Detects usage of the "ms-appinstaller" protocol handler via command
+  line to potentially download arbitrary files via AppInstaller.EXE
+
+  The downloaded files are temporarly stored in ":\Users\%username%\AppData\Local\Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\AC\INetCache\<RANDOM-8-CHAR-DIRECTORY>"'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/AppInstaller/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - ms-appinstaller://?source=
+    - http
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 180c7c5c-d64b-4a63-86e9-68910451bc8b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_ms_appinstaller_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

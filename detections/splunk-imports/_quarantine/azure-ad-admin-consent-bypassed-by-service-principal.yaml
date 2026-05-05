@@ -1,0 +1,47 @@
+id: splunk-security-content-9d4fea43-9182-4c5a-ada8-13701fd5615d
+name: Azure AD Admin Consent Bypassed by Service Principal
+description: The following analytic identifies instances where a service principal
+  in Azure Active Directory assigns app roles without standard admin consent. It uses
+  Entra ID logs from the `azure_monitor_aad` data source, focusing on the "Add app
+  role assignment to service principal" operation. This detection is significant as
+  it highlights potential bypasses of critical administrative consent processes, which
+  could lead to unauthorized privileges being granted. If confirmed malicious, this
+  activity could allow attackers to exploit automation to assign sensitive permissions
+  without proper oversight, potentially compromising the security of the Azure AD
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad` (operationName="Add app role assignment to service
+    principal" OR operationName="Add member to role*") src_user_type=servicePrincipal
+    | rename properties.* as * | eval roleId = mvindex(''targetResources{}.modifiedProperties{}.newValue'',0)
+    | eval roleValue = mvindex(''targetResources{}.modifiedProperties{}.newValue'',1)
+    | eval roleDescription = mvindex(''targetResources{}.modifiedProperties{}.newValue'',2)
+    | eval user_id = mvindex(''targetResources{}.id'', 0), user=coalesce(user,mvindex(''targetResources{}.displayName'',0))
+    | rename initiatedBy.app.displayName as src_user, userAgent as user_agent | fillnull
+    | stats count min(_time) as firstTime max(_time) as lastTime by dest user src
+    vendor_account vendor_product src_user user_id roleId roleValue roleDescription
+    user_agent signature | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `azure_ad_admin_consent_bypassed_by_service_principal_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 9d4fea43-9182-4c5a-ada8-13701fd5615d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_admin_consent_bypassed_by_service_principal.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

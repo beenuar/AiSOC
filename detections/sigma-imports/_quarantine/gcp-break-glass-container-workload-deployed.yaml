@@ -1,0 +1,39 @@
+id: sigmahq-sigma-76737c19-66ee-4c07-b65a-a03301d1573d
+name: GCP Break-glass Container Workload Deployed
+description: Detects the deployment of workloads that are deployed by using the break-glass
+  flag to override Binary Authorization controls.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/binary-authorization
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    data.protoPayload.resource.type: k8s_cluster
+    data.protoPayload.logName:
+    - cloudaudit.googleapis.com/activity
+    - cloudaudit.googleapis.com%2Factivity
+    data.protoPayload.methodName: io.k8s.core.v1.pods.create
+  keywords:
+  - image-policy.k8s.io/break-glass
+  condition: selection and keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 76737c19-66ee-4c07-b65a-a03301d1573d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_breakglass_container_workload_deployed.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-1cf98dc2-fcb0-47c9-8aea-654c9284d1ae
+name: Disk Image Creation Via Hdiutil - MacOS
+description: Detects the execution of the hdiutil utility in order to create a disk
+  image.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.loobins.io/binaries/hdiutil/
+- https://www.sentinelone.com/blog/from-the-front-linesunsigned-macos-orat-malware-gambles-for-the-win/
+- https://ss64.com/mac/hdiutil.html
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /hdiutil
+    CommandLine|contains: create
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1cf98dc2-fcb0-47c9-8aea-654c9284d1ae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_hdiutil_create.yml
+falsepositives:
+- Legitimate usage of hdiutil by administrators and users.
+notes:
+  quarantine_reason: 'upstream status: test'

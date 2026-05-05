@@ -1,0 +1,46 @@
+id: sigmahq-sigma-bde47d4b-9987-405c-94c7-b080410e8ea7
+name: Clearing Windows Console History
+description: Identifies when a user attempts to clear console history. An adversary
+  may clear the command history of a compromised account to conceal the actions undertaken
+  during an intrusion.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://stefanos.cloud/blog/kb/how-to-clear-the-powershell-command-history/
+- https://www.shellhacks.com/clear-history-powershell/
+- https://community.sophos.com/sophos-labs/b/blog/posts/powershell-command-history-forensics
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection1:
+    ScriptBlockText|contains: Clear-History
+  selection2a:
+    ScriptBlockText|contains:
+    - Remove-Item
+    - rm
+  selection2b:
+    ScriptBlockText|contains:
+    - ConsoleHost_history.txt
+    - (Get-PSReadlineOption).HistorySavePath
+  condition: selection1 or selection2a and selection2b
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bde47d4b-9987-405c-94c7-b080410e8ea7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_clearing_windows_console_history.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

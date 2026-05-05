@@ -1,0 +1,83 @@
+id: chronicle-detection-rules-suspicious-process-creation
+name: suspicious_process_creation
+description: suspicious_process_creation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_process_creation {\n  meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects suspicious process starts on Windows systems\
+    \ based on keywords  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/DBAD2CuOyp0m\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/01/01\"\n\n  events:\n    (re.regex($event.target.process.command_line,\
+    \ `vssadmin.exe delete shadows.*`) or re.regex($event.target.process.command_line,\
+    \ `vssadmin delete shadows.*`) or re.regex($event.target.process.command_line,\
+    \ `vssadmin create shadow /for=C:.*`) or re.regex($event.target.process.command_line,\
+    \ `copy \\\\\\\\?\\\\GLOBALROOT\\\\Device\\\\\\\\.*\\\\windows\\\\ntds\\\\ntds.dit.*`)\
+    \ or re.regex($event.target.process.command_line, `copy \\\\\\\\?\\\\GLOBALROOT\\\
+    \\Device\\\\\\\\.*\\\\config\\\\SAM.*`) or re.regex($event.target.process.command_line,\
+    \ `copy \\\\\\\\?\\\\GLOBALROOT\\\\Device\\\\\\\\.*\\\\config\\\\SYSTEM.*`) or\
+    \ re.regex($event.target.process.command_line, `type \\\\\\\\?\\\\GLOBALROOT\\\
+    \\Device\\\\\\\\.*\\\\config\\\\SAM.*`) or re.regex($event.target.process.command_line,\
+    \ `type \\\\\\\\?\\\\GLOBALROOT\\\\Device\\\\\\\\.*\\\\config\\\\SYSTEM.*`) or\
+    \ re.regex($event.target.process.command_line, `type \\\\\\\\?\\\\GLOBALROOT\\\
+    \\Device\\\\\\\\.*\\\\windows\\\\ntds\\\\ntds.dit.*`) or re.regex($event.target.process.command_line,\
+    \ `reg SAVE HKLM\\\\SYSTEM .*`) or re.regex($event.target.process.command_line,\
+    \ `reg SAVE HKLM\\\\SAM .*`) or re.regex($event.target.process.command_line, `.*\
+    \ sekurlsa:.*`) or re.regex($event.target.process.command_line, `net localgroup\
+    \ administrators .* /add`) or re.regex($event.target.process.command_line, `net\
+    \ group \"Domain Admins\" .* /ADD /DOMAIN`) or re.regex($event.target.process.command_line,\
+    \ `certutil.exe .*-urlcache.* http.*`) or re.regex($event.target.process.command_line,\
+    \ `certutil.exe .*-urlcache.* ftp.*`) or re.regex($event.target.process.command_line,\
+    \ `netsh advfirewall firewall .*\\\\AppData\\\\\\\\.*`) or re.regex($event.target.process.command_line,\
+    \ `attrib +S +H +R .*\\\\AppData\\\\\\\\.*`) or re.regex($event.target.process.command_line,\
+    \ `schtasks.* /create .*\\\\AppData\\\\\\\\.*`) or re.regex($event.target.process.command_line,\
+    \ `schtasks.* /sc minute.*`) or re.regex($event.target.process.command_line, `.*\\\
+    \\Regasm.exe .*\\\\AppData\\\\\\\\.*`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\Regasm .*\\\\AppData\\\\\\\\.*`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\bitsadmin.* /transfer.*`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\certutil.exe .* -decode .*`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\certutil.exe .* -decodehex .*`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\certutil.exe -ping .*`) or re.regex($event.target.process.command_line,\
+    \ `icacls .* /grant Everyone:F /T /C /Q`) or re.regex($event.target.process.command_line,\
+    \ `.* wmic shadowcopy delete .*`) or re.regex($event.target.process.command_line,\
+    \ `.* wmic shadowcopy call create Volume=.*`) or re.regex($event.target.process.command_line,\
+    \ `.* wbadmin.exe delete catalog -quiet.*`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\wscript.exe .*.jse`) or re.regex($event.target.process.command_line,\
+    \ `.*\\\\wscript.exe .*.js`) or re.regex($event.target.process.command_line, `.*\\\
+    \\wscript.exe .*.vba`) or re.regex($event.target.process.command_line, `.*\\\\\
+    wscript.exe .*.vbe`) or re.regex($event.target.process.command_line, `.*\\\\cscript.exe\
+    \ .*.jse`) or re.regex($event.target.process.command_line, `.*\\\\cscript.exe\
+    \ .*.js`) or re.regex($event.target.process.command_line, `.*\\\\cscript.exe .*.vba`)\
+    \ or re.regex($event.target.process.command_line, `.*\\\\cscript.exe .*.vbe`)\
+    \ or re.regex($event.target.process.command_line, `.*\\\\fodhelper.exe`) or re.regex($event.target.process.command_line,\
+    \ `.*waitfor.*/s.*`) or re.regex($event.target.process.command_line, `.*waitfor.*/si\
+    \ persist.*`) or re.regex($event.target.process.command_line, `.*remote.*/s.*`)\
+    \ or re.regex($event.target.process.command_line, `.*remote.*/c.*`) or re.regex($event.target.process.command_line,\
+    \ `.*remote.*/q.*`) or re.regex($event.target.process.command_line, `.*AddInProcess.*`)\
+    \ or re.regex($event.target.process.command_line, `.* /stext .*`) or re.regex($event.target.process.command_line,\
+    \ `.* /scomma .*`) or re.regex($event.target.process.command_line, `.* /stab .*`)\
+    \ or re.regex($event.target.process.command_line, `.* /stabular .*`) or re.regex($event.target.process.command_line,\
+    \ `.* /shtml .*`) or re.regex($event.target.process.command_line, `.* /sverhtml\
+    \ .*`) or re.regex($event.target.process.command_line, `.* /sxml .*`))\n    ($event.metadata.product_log_id\
+    \ = \"4688\" or $event.metadata.product_log_id = \"1\")\n\n  condition:\n    $event\n\
+    }"
+  chronicle_rule_name: suspicious_process_creation
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_process_creation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/suspicious_process_creation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

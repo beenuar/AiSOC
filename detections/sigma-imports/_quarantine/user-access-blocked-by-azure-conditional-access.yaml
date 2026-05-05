@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9a60e676-26ac-44c3-814b-0c2a8b977adf
+name: User Access Blocked by Azure Conditional Access
+description: 'Detect access has been blocked by Conditional Access policies.
+
+  The access policy does not allow token issuance which might be sights≈ of unauthorizeed
+  login to valid accounts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    ResultType: 53003
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9a60e676-26ac-44c3-814b-0c2a8b977adf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_user_login_blocked_by_conditional_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

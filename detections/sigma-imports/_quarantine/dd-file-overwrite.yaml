@@ -1,0 +1,40 @@
+id: sigmahq-sigma-2953194b-e33c-4859-b9e8-05948c167447
+name: DD File Overwrite
+description: Detects potential overwriting and deletion of a file using DD.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1485/T1485.md#atomic-test-2---macoslinux---overwrite-file-with-dd
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection1:
+    Image:
+    - /bin/dd
+    - /usr/bin/dd
+  selection2:
+    CommandLine|contains: of=
+  selection3:
+    CommandLine|contains:
+    - if=/dev/zero
+    - if=/dev/null
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2953194b-e33c-4859-b9e8-05948c167447
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_dd_file_overwrite.yml
+falsepositives:
+- Any user deleting files that way.
+notes:
+  quarantine_reason: 'upstream status: test'

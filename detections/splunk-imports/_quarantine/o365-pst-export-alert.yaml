@@ -1,0 +1,42 @@
+id: splunk-security-content-5f694cc4-a678-4a60-9410-bffca1b647dc
+name: O365 PST export alert
+description: The following analytic detects instances where a user has initiated an
+  eDiscovery search or exported a PST file in an Office 365 environment. It leverages
+  Office 365 management activity logs, specifically filtering for events under ThreatManagement
+  with the name "eDiscovery search started or exported." This activity is significant
+  as it may indicate data exfiltration attempts or unauthorized access to sensitive
+  information. If confirmed malicious, it suggests an attacker or insider threat is
+  attempting to gather or exfiltrate data, potentially leading to data breaches, loss
+  of intellectual property, or unauthorized access to confidential communications.
+  Immediate investigation is required.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Category=ThreatManagement Name=\"eDiscovery\
+    \ search started or exported\"\n  | fillnull\n  | stats count earliest(_time)\
+    \ as firstTime latest(_time) as lastTime\n    BY Source Severity AlertEntityId\n\
+    \       Name user src\n       vendor_account vendor_product dest\n       signature\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_pst_export_alert_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5f694cc4-a678-4a60-9410-bffca1b647dc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_pst_export_alert.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

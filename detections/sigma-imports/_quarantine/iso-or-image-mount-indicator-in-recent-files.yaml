@@ -1,0 +1,44 @@
+id: sigmahq-sigma-4358e5a5-7542-4dcb-b9f3-87667371839b
+name: ISO or Image Mount Indicator in Recent Files
+description: 'Detects the creation of recent element file that points to an .ISO,
+  .IMG, .VHD or .VHDX file as often used in phishing attacks.
+
+  This can be a false positive on server systems but on workstations users should
+  rarely mount .iso or .img files.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2021/05/27/new-sophisticated-email-based-attack-from-nobelium/
+- https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/malicious-spam-campaign-uses-iso-image-files-to-deliver-lokibot-and-nanocore
+- https://blog.emsisoft.com/en/32373/beware-new-wave-of-malware-spreads-via-iso-file-email-attachments/
+- https://insights.sei.cmu.edu/blog/the-dangers-of-vhd-and-vhdx-files/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith:
+    - .iso.lnk
+    - .img.lnk
+    - .vhd.lnk
+    - .vhdx.lnk
+    TargetFilename|contains: \Microsoft\Windows\Recent\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4358e5a5-7542-4dcb-b9f3-87667371839b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_iso_file_recent.yml
+falsepositives:
+- Cases in which a user mounts an image file for legitimate reasons
+notes:
+  quarantine_reason: 'upstream status: test'

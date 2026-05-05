@@ -1,0 +1,48 @@
+id: splunk-security-content-242e4d30-cb59-4051-b0cf-58895e218f40
+name: O365 User Consent Blocked for Risky Application
+description: The following analytic identifies instances where Office 365 has blocked
+  a user's attempt to grant consent to an application deemed risky or potentially
+  malicious. This detection leverages O365 audit logs, specifically focusing on failed
+  user consent actions due to system-driven blocks. Monitoring these blocked consent
+  attempts is crucial as it highlights potential threats early on, indicating that
+  a user might be targeted or that malicious applications are attempting to infiltrate
+  the organization. If confirmed malicious, this activity suggests that O365's security
+  measures successfully prevented a harmful application from accessing organizational
+  data, warranting immediate investigation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1528/
+- https://www.microsoft.com/en-us/security/blog/2022/09/22/malicious-oauth-applications-used-to-compromise-email-servers-and-spread-spam/
+- https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/protect-against-consent-phishing
+- https://learn.microsoft.com/en-us/defender-cloud-apps/investigate-risky-oauth
+- https://www.alteredsecurity.com/post/introduction-to-365-stealer
+- https://github.com/AlteredSecurity/365-Stealer
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation="Consent
+    to application." ResultStatus=Failure | eval permissions =mvindex(''ModifiedProperties{}.NewValue'',
+    4) | eval reason =mvindex(''ModifiedProperties{}.NewValue'', 5) | search reason
+    = "Risky application detected" | rex field=permissions "Scope: (?<Scope>[^,]+)"
+    | fillnull | stats max(_time) as lastTime by user, reason, object, Scope, dest,
+    src, vendor_account, vendor_product, signature | `security_content_ctime(lastTime)`
+    | `o365_user_consent_blocked_for_risky_application_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 242e4d30-cb59-4051-b0cf-58895e218f40
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_user_consent_blocked_for_risky_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

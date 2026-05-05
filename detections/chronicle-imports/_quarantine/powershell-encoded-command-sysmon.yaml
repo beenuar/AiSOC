@@ -1,0 +1,45 @@
+id: chronicle-detection-rules-powershell-encoded-command-sysmon
+name: powershell_encoded_command_sysmon
+description: powershell_encoded_command_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule powershell_encoded_command_sysmon {\n meta:\n    author =\
+    \ \"Michael Haag, Alexandr Yampolskyi\"\n    description = \"Detects usage of\
+    \ Powershell Encoded Commands.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/jgJIAiHq2tb5\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, t1059\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection.target.process.file.full_path, `.*powershell\\\
+    .exe`) and (re.regex($selection.target.process.command_line, `.*base64.*`) or\
+    \ re.regex($selection.target.process.command_line, `.*-enc.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*-enco.*`) or re.regex($selection.target.process.command_line, `.*-encod.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*-encode.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*-encoded.*`) or re.regex($selection.target.process.command_line, `.*-ec.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*-en.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*-encodedC.*`) or re.regex($selection.target.process.command_line, `.*-encodedCo.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*-encodedCom.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*-encodedComm.*`) or re.regex($selection.target.process.command_line, `.*-encodedComma.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*-encodedComman.*`) or\
+    \ re.regex($selection.target.process.command_line, `.*-encodedCommand.*`)))\n\n\
+    \  condition:\n    $selection\n}"
+  chronicle_rule_name: powershell_encoded_command_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: powershell_encoded_command_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/powershell_encoded_command__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

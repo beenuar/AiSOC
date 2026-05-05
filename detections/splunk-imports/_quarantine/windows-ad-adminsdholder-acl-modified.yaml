@@ -1,0 +1,71 @@
+id: splunk-security-content-00d877c3-7b7b-443d-9562-6b231e2abab9
+name: Windows AD AdminSDHolder ACL Modified
+description: The following analytic detects modifications to the Access Control List
+  (ACL) of the AdminSDHolder object in a Windows domain, specifically the addition
+  of new rules. It leverages EventCode 5136 from the Security Event Log, focusing
+  on changes to the nTSecurityDescriptor attribute. This activity is significant because
+  the AdminSDHolder object secures privileged group members, and unauthorized changes
+  can allow attackers to establish persistence and escalate privileges. If confirmed
+  malicious, this could enable an attacker to control domain-level permissions, compromising
+  the entire Active Directory environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/appendix-c--protected-accounts-and-groups-in-active-directory
+- https://social.technet.microsoft.com/wiki/contents/articles/22331.adminsdholder-protected-groups-and-security-descriptor-propagator.aspx
+- https://adsecurity.org/?p=1906
+- https://pentestlab.blog/2022/01/04/domain-persistence-adminsdholder/
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5136
+- https://learn.microsoft.com/en-us/windows/win32/secauthz/access-control-lists
+- https://medium.com/@cryps1s/detecting-windows-endpoint-compromise-with-sacls-cd748e10950
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5136 ObjectClass=container ObjectDN="CN=AdminSDHolder,CN=System*"  |
+    stats min(_time) as _time values(eval(if(OperationType=="%%14675",AttributeValue,null)))
+    as old_value values(eval(if(OperationType=="%%14674",AttributeValue,null))) as
+    new_value values(OperationType) as OperationType values(dest) as dest by ObjectClass
+    ObjectDN OpCorrelationID src_user SubjectLogonId  | rex field=old_value max_match=10000
+    "\((?P<old_values>.*?)\)"  | rex field=new_value max_match=10000 "\((?P<new_ace>.*?)\)"  |
+    mvexpand new_ace | where NOT new_ace IN (old_values)  | rex field=new_ace "(?P<aceType>.*?);(?P<aceFlags>.*?);(?P<aceAccessRights>.*?);(?P<aceObjectGuid>.*?);(?P<aceInheritedTypeGuid>.*?);(?P<aceSid>.*?)$"
+    | rex max_match=100 field=aceAccessRights "(?P<AccessRights>[A-Z]{2})"  | rex
+    max_match=100 field=aceFlags "(?P<aceFlags>[A-Z]{2})"  | lookup msad_guid_lookup
+    guid as aceObjectGuid OUTPUT displayName as ControlAccessRights | lookup ace_access_rights_lookup
+    access_rights_string as AccessRights OUTPUT access_rights_value  | lookup ace_type_lookup
+    ace_type_string as aceType OUTPUT ace_type_value  | lookup ace_flag_lookup flag_string
+    as aceFlags OUTPUT flag_value as ace_flag_value ``` Optional SID resolution lookups
+    | lookup identity_lookup_expanded objectSid as aceSid OUTPUT downLevelDomainName
+    as user  | lookup admon_groups_def objectSid as aceSid OUTPUT cn as group``` |
+    lookup builtin_groups_lookup builtin_group_string  as aceSid OUTPUTNEW builtin_group_name
+    as builtin_group | eval aceType=coalesce(ace_type_value,aceType), aceFlags=coalesce(ace_flag_value,"This
+    object only"), aceAccessRights=if(aceAccessRights="CCDCLCSWRPWPDTLOCRSDRCWDWO","Full
+    control",coalesce(access_rights_value,AccessRights)), aceControlAccessRights=coalesce(ControlAccessRights,aceObjectGuid),
+    user=coalesce(user, group, builtin_group, aceSid) | stats min(_time) as _time
+    values(aceType) as aceType values(aceFlags) as aceFlags(inheritance) values(aceControlAccessRights)
+    as aceControlAccessRights values(aceAccessRights) as aceAccessRights values(new_ace)
+    as new_ace values(SubjectLogonId) as SubjectLogonId by ObjectClass ObjectDN src_user
+    user | eval aceControlAccessRights=if(mvcount(aceControlAccessRights)=1 AND aceControlAccessRights="","All
+    rights",''aceControlAccessRights'') | search NOT aceType IN (*denied*,D,OD,XD)
+    AND aceAccessRights IN ("Full control","All extended rights","All validated writes","Create
+    all child objects","Delete all child objects","Delete subtree","Delete","Modify
+    permissions","Modify owner","Write all properties",CC,CR,DC,DT,SD,SW,WD,WO,WP)
+    | `windows_ad_adminsdholder_acl_modified_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 00d877c3-7b7b-443d-9562-6b231e2abab9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_adminsdholder_acl_modified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

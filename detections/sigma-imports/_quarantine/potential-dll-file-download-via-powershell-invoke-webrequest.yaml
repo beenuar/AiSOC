@@ -1,0 +1,42 @@
+id: sigmahq-sigma-0f0450f3-8b47-441e-a31b-15a91dc243e2
+name: Potential DLL File Download Via PowerShell Invoke-WebRequest
+description: Detects potential DLL files being downloaded using the PowerShell Invoke-WebRequest
+  or Invoke-RestMethod cmdlets.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.zscaler.com/blogs/security-research/onenote-growing-threat-malware-distribution
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains:
+    - 'Invoke-RestMethod '
+    - 'Invoke-WebRequest '
+    - 'IRM '
+    - 'IWR '
+    CommandLine|contains|all:
+    - http
+    - OutFile
+    - .dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0f0450f3-8b47-441e-a31b-15a91dc243e2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_download_dll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

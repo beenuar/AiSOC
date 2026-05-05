@@ -1,0 +1,44 @@
+id: sigmahq-sigma-6fb63b40-e02a-403e-9ffd-3bcc1d749442
+name: Metasploit Or Impacket Service Installation Via SMB PsExec
+description: Detects usage of Metasploit SMB PsExec (exploit/windows/smb/psexec) and
+  Impacket psexec.py by triggering on specific service installation
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1570
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://bczyz1.github.io/2021/01/30/psexec.html
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|re: ^%systemroot%\\[a-zA-Z]{8}\.exe$
+    ServiceName|re: (^[a-zA-Z]{4}$)|(^[a-zA-Z]{8}$)|(^[a-zA-Z]{16}$)
+    ServiceStartType: 3
+    ServiceType: '0x10'
+  filter:
+    ServiceName: PSEXESVC
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6fb63b40-e02a-403e-9ffd-3bcc1d749442
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_metasploit_or_impacket_smb_psexec_service_install.yml
+falsepositives:
+- Possible, different agents with a 8 character binary and a 4, 8 or 16 character
+  service name
+notes:
+  quarantine_reason: 'upstream status: test'

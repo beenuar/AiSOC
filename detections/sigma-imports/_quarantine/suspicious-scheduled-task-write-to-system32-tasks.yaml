@@ -1,0 +1,37 @@
+id: sigmahq-sigma-80e1f67a-4596-4351-98f5-a9c3efabac95
+name: Suspicious Scheduled Task Write to System32 Tasks
+description: Detects the creation of tasks from processes executed from suspicious
+  locations
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains: \Windows\System32\Tasks
+    Image|contains:
+    - \AppData\
+    - C:\PerfLogs
+    - \Windows\System32\config\systemprofile
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 80e1f67a-4596-4351-98f5-a9c3efabac95
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_task_write.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

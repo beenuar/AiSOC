@@ -1,0 +1,36 @@
+id: sigmahq-sigma-1c8774a0-44d4-4db0-91f8-e792359c70bd
+name: REGISTER_APP.VBS Proxy Execution
+description: Detects the use of a Microsoft signed script 'REGISTER_APP.VBS' to register
+  a VSS/VDS Provider as a COM+ application.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/sblmsrsn/status/1456613494783160325?s=20
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - \register_app.vbs
+    - -register
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1c8774a0-44d4-4db0-91f8-e792359c70bd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_register_app.yml
+falsepositives:
+- Legitimate usage of the script. Always investigate what's being registered to confirm
+  if it's benign
+notes:
+  quarantine_reason: 'upstream status: test'

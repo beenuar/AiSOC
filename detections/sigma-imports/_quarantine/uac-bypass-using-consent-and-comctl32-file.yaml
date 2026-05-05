@@ -1,0 +1,34 @@
+id: sigmahq-sigma-62ed5b55-f991-406a-85d9-e8e8fdf18789
+name: UAC Bypass Using Consent and Comctl32 - File
+description: Detects the pattern of UAC Bypass using consent.exe and comctl32.dll
+  (UACMe 22)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\Windows\System32\consent.exe.@
+    TargetFilename|endswith: \comctl32.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 62ed5b55-f991-406a-85d9-e8e8fdf18789
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_consent_comctl32.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

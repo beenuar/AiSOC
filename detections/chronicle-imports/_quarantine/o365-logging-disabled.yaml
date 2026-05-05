@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-o365-logging-disabled
+name: o365_logging_disabled
+description: o365_logging_disabled
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_logging_disabled {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detect when the Unified Audit Log is disabled\"\n    rule_id\
+    \ = \"mr_17a49d19-2ea1-4d7d-9e4d-bbc7ffb07099\"\n    rule_name = \"Office 365\
+    \ logging is disabled\"\n    assumption = \"If logging is expected, there is no\
+    \ reason for this to be switched off. If it is disabled a gap in logging will\
+    \ occur.\"\n    tactic = \"TA0005\"\n    technique = \"T1562.008\"\n    type =\
+    \ \"alert\"\n    platform = \"azure\"\n    data_source = \"o365\"\n    severity\
+    \ = \"Critical\"\n    priority = \"Critical\"\n\n  events:\n    $log.metadata.event_type\
+    \ = \"SETTING_CREATION\"\n    $log.metadata.product_event_type = \"Set-AdminAuditLogConfig\"\
+    \n    $log.metadata.product_name = \"Office 365\"\n    $log.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $log.security_result.detection_fields[\"UnifiedAuditLogIngestionEnabled\"\
+    ] = \"False\"\n    $log.principal.user.userid = $user\n\n  match:\n    $user over\
+    \ 5m\n\n  outcome:\n    $risk_score = 85\n    $event_count = count_distinct($log.metadata.id)\n\
+    \    $referral_url = array_distinct($log.network.http.referral_url)\n    $user_agent\
+    \ = array_distinct($log.network.http.user_agent)\n    $principal_application =\
+    \ array_distinct($log.principal.application)\n    $principal_ip = array_distinct($log.principal.ip)\n\
+    \    $target_application = array_distinct($log.target.application)\n    $principal_user_userid\
+    \ = array_distinct($log.principal.user.userid)\n    $session = array_distinct($log.network.session_id)\n\
+    \    $location = array_distinct(strings.coalesce($log.principal.location.state,$log.principal.location.country_or_region))\n\
+    \    $target_resource_resource_type = array_distinct($log.target.resource.resource_type)\n\
+    \    $target_url = array_distinct($log.target.url)\n\n  condition:\n    $log\n\
+    }"
+  chronicle_rule_name: o365_logging_disabled
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_logging_disabled
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_logging_disabled.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

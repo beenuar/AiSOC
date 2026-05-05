@@ -1,0 +1,51 @@
+id: sigmahq-sigma-9cfe4b27-1e56-48b4-b7a8-d46851c91a44
+name: MMC Executing Files with Reversed Extensions Using RTLO Abuse
+description: Detects malicious behavior where the MMC utility (`mmc.exe`) executes
+  files with reversed extensions caused by Right-to-Left Override (RLO) abuse, disguising
+  them as document formats.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  - T1218.014
+  - T1036.002
+  categories:
+  - endpoint
+references:
+- https://www.unicode.org/versions/Unicode5.2.0/ch02.pdf
+- https://en.wikipedia.org/wiki/Right-to-left_override
+- https://tria.ge/241015-l98snsyeje/behavioral2
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+  - Image|endswith: \mmc.exe
+  - OriginalFileName: MMC.exe
+  selection_commandline:
+    CommandLine|contains:
+    - cod.msc
+    - fdp.msc
+    - ftr.msc
+    - lmth.msc
+    - slx.msc
+    - tdo.msc
+    - xcod.msc
+    - xslx.msc
+    - xtpp.msc
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9cfe4b27-1e56-48b4-b7a8-d46851c91a44
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mmc_rlo_abuse_pattern.yml
+falsepositives:
+- Legitimate administrative actions using MMC to execute misnamed `.msc` files.
+- Unconventional but non-malicious usage of RLO or reversed extensions.
+notes:
+  quarantine_reason: 'upstream status: experimental'

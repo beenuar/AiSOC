@@ -1,0 +1,43 @@
+id: sigmahq-sigma-c8a180d6-47a3-4345-a609-53f9c3d834fc
+name: Suspicious Reconnaissance Activity Using Get-LocalGroupMember Cmdlet
+description: Detects suspicious reconnaissance command line activity on Windows systems
+  using the PowerShell Get-LocalGroupMember Cmdlet
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.001
+  categories:
+  - endpoint
+references:
+- https://www.absolomb.com/2018-01-26-Windows-Privilege-Escalation-Guide/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_cmdlet:
+    CommandLine|contains: 'Get-LocalGroupMember '
+  selection_group:
+    CommandLine|contains:
+    - domain admins
+    - ' administrator'
+    - ' administrateur'
+    - enterprise admins
+    - Exchange Trusted Subsystem
+    - Remote Desktop Users
+    - Utilisateurs du Bureau à distance
+    - Usuarios de escritorio remoto
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c8a180d6-47a3-4345-a609-53f9c3d834fc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_get_localgroup_member_recon.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

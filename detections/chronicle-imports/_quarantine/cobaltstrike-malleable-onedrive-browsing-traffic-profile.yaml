@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-cobaltstrike-malleable-onedrive-browsing-traffic-profile
+name: cobaltstrike_malleable_onedrive_browsing_traffic_profile
+description: cobaltstrike_malleable_onedrive_browsing_traffic_profile
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule cobaltstrike_malleable_onedrive_browsing_traffic_profile\
+    \ {\n meta:\n    author = \"Markus Neis\"\n    description = \"Detects Malleable\
+    \ OneDrive Profile  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/KN9myumUJzVW\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"proxy\"\n    mitre\
+    \ = \"t1102\"\n\n  events:\n(($selection.network.http.method = \"GET\" and re.regex($selection.target.url,\
+    \ `.*\\?manifest=wac`) and $selection.principal.hostname = \"onedrive.live.com\"\
+    ) and not (re.regex($selection.target.url, `http.*://onedrive\\.live\\.com/.*`)))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: cobaltstrike_malleable_onedrive_browsing_traffic_profile
+provenance:
+  source: chronicle/detection-rules
+  source_id: cobaltstrike_malleable_onedrive_browsing_traffic_profile
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/proxy/cobaltstrike_malleable_onedrive_browsing_traffic_profile.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

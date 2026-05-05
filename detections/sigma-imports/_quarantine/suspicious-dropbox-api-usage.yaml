@@ -1,0 +1,40 @@
+id: sigmahq-sigma-25eabf56-22f0-4915-a1ed-056b8dae0a68
+name: Suspicious Dropbox API Usage
+description: Detects an executable that isn't dropbox but communicates with the Dropbox
+  API
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1567.002
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/7e906adc-9d11-447f-8641-5f40375ecebb
+- https://www.zscaler.com/blogs/security-research/new-espionage-attack-molerats-apt-targeting-users-middle-east
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    DestinationHostname|endswith:
+    - api.dropboxapi.com
+    - content.dropboxapi.com
+  filter_main_legit_dropbox:
+    Image|contains: \Dropbox
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 25eabf56-22f0-4915-a1ed-056b8dae0a68
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_dropbox_api.yml
+falsepositives:
+- Legitimate use of the API with a tool that the author wasn't aware of
+notes:
+  quarantine_reason: 'upstream status: test'

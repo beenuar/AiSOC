@@ -1,0 +1,34 @@
+id: sigmahq-sigma-cf93e05e-d798-4d9e-b522-b0248dc61eaf
+name: HackTool - SharpChisel Execution
+description: Detects usage of the Sharp Chisel via the commandline arguments
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1090.001
+  categories:
+  - endpoint
+references:
+- https://github.com/shantanu561993/SharpChisel
+- https://www.sentinelone.com/labs/wading-through-muddy-waters-recent-activity-of-an-iranian-state-sponsored-threat-actor/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \SharpChisel.exe
+  - Product: SharpChisel
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cf93e05e-d798-4d9e-b522-b0248dc61eaf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharp_chisel.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-0cf2e1c6-8d10-4273-8059-738778f981ad
+name: Potential WerFault ReflectDebugger Registry Value Abuse
+description: Detects potential WerFault "ReflectDebugger" registry value abuse for
+  persistence.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://cocomelonc.github.io/malware/2022/11/02/malware-pers-18.html
+- https://www.hexacorn.com/blog/2018/08/31/beyond-good-ol-run-key-part-85/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Microsoft\Windows\Windows Error Reporting\Hangs\ReflectDebugger
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0cf2e1c6-8d10-4273-8059-738778f981ad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_reflectdebugger.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,61 @@
+id: splunk-security-content-9a4e50c7-5b62-4d52-93b4-f2b61332e9a5
+name: Advanced IP or Port Scanner Execution
+description: 'The following analytic detects the execution of network scanning utilities
+  such as Advanced IP Scanner or Advanced Port Scanner.
+
+  These legitimate administrative tools are often leveraged by threat actors and ransomware
+  operators during the discovery phase to enumerate active hosts and open ports within
+  a target environment.
+
+  Detection is based on process creation telemetry referencing known executable names,
+  original file names, or specific command-line parameters such as "/portable" and
+  "/lng" that are characteristic of these tools.
+
+  If confirmed malicious, this activity may indicate internal reconnaissance aimed
+  at identifying reachable systems or services prior to lateral movement or further
+  post-compromise actions.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1046
+  - T1135
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2019/12/09/snatch-ransomware-reboots-pcs-into-safe-mode-to-bypass-protection/
+- https://cloud.google.com/blog/topics/threat-intelligence/tactics-techniques-procedures-associated-with-maze-ransomware-incidents/
+- https://assets.documentcloud.org/documents/20444693/fbi-pin-egregor-ransomware-bc-01062021.pdf
+- https://thedfirreport.com/2021/01/18/all-that-for-a-coinminer
+- https://github.com/3CORESec/MAL-CL/tree/master/Descriptors/Other/Advanced%20IP%20Scanner
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\n  from datamodel=Endpoint.Processes where\n\
+    \    Processes.process_name IN (\"advanced_ip_scanner.exe\", \"advanced_ip_scanner_console.exe\"\
+    , \"advanced_port_scanner.exe\", \"advanced_port_scanner_console.exe\")\n    OR\n\
+    \    Processes.original_file_name IN (\"advanced_ip_scanner.exe\", \"advanced_ip_scanner_console.exe\"\
+    , \"advanced_port_scanner.exe\", \"advanced_port_scanner_console.exe\")\n    OR\
+    \ (\n    Processes.process = \"* /portable *\"\n    Processes.process = \"* /lng\
+    \ *\"\n    )\n\n  by Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n     Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n     Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec\n     Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `advanced_ip_or_port_scanner_execution_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9a4e50c7-5b62-4d52-93b4-f2b61332e9a5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/advanced_ip_or_port_scanner_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

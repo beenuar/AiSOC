@@ -1,0 +1,42 @@
+id: sigmahq-sigma-00321fee-ca72-4cce-b011-5415af3b9960
+name: MSSQL Destructive Query
+description: Detects the invocation of MS SQL transactions that are destructive towards
+  table or database data, such as "DROP TABLE" or "DROP DATABASE".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-table-transact-sql?view=sql-server-ver16
+- https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-database-transact-sql?view=sql-server-ver16
+- https://learn.microsoft.com/en-us/sql/t-sql/statements/truncate-table-transact-sql?view=sql-server-ver16
+logsource:
+  product: windows
+  service: application
+  definition: 'Requirements: MSSQL audit policy must be enabled in order to receive
+    this event (event id 33205)'
+detection:
+  selection:
+    Provider_Name: MSSQLSERVER$AUDIT
+    EventID: 33205
+    Data|contains:
+    - statement:TRUNCATE TABLE
+    - statement:DROP TABLE
+    - statement:DROP DATABASE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 00321fee-ca72-4cce-b011-5415af3b9960
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/mssqlserver/win_mssql_destructive_query.yml
+falsepositives:
+- Legitimate transaction from a sysadmin.
+notes:
+  quarantine_reason: 'upstream status: experimental'

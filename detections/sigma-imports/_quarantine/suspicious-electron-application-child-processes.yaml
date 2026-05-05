@@ -1,0 +1,70 @@
+id: sigmahq-sigma-f26eb764-fd89-464b-85e2-dc4a8e6e77b8
+name: Suspicious Electron Application Child Processes
+description: Detects suspicious child processes of electron apps (teams, discord,
+  slack, etc.). This could be a potential sign of ".asar" file tampering (See reference
+  section for more information) or binary execution proxy through specific CLI arguments
+  (see related rule)
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://taggart-tech.com/quasar-electron/
+- https://github.com/mttaggart/quasar
+- https://positive.security/blog/ms-officecmd-rce
+- https://lolbas-project.github.io/lolbas/Binaries/Msedge/
+- https://lolbas-project.github.io/lolbas/Binaries/Teams/
+- https://lolbas-project.github.io/lolbas/Binaries/msedgewebview2/
+- https://medium.com/@MalFuzzer/one-electron-to-rule-them-all-dc2e9b263daf
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith:
+    - \chrome.exe
+    - \discord.exe
+    - \GitHubDesktop.exe
+    - \keybase.exe
+    - \msedge.exe
+    - \msedgewebview2.exe
+    - \msteams.exe
+    - \slack.exe
+    - \teams.exe
+  selection_child_image:
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \whoami.exe
+    - \wscript.exe
+  selection_child_paths:
+    Image|contains:
+    - :\ProgramData\
+    - :\Temp\
+    - \AppData\Local\Temp\
+    - \Users\Public\
+    - \Windows\Temp\
+  filter_optional_discord:
+    ParentImage|endswith: \Discord.exe
+    Image|endswith: \cmd.exe
+    CommandLine|contains: \NVSMI\nvidia-smi.exe
+  condition: selection_parent and 1 of selection_child_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f26eb764-fd89-464b-85e2-dc4a8e6e77b8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_electron_app_children.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

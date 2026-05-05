@@ -1,0 +1,36 @@
+id: sigmahq-sigma-eb2d07d4-49cb-4523-801a-da002df36602
+name: HackTool - EDRSilencer Execution
+description: Detects the execution of EDRSilencer, a tool that leverages Windows Filtering
+  Platform (WFP) to block Endpoint Detection and Response (EDR) agents from reporting
+  security events to the server based on PE metadata information.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/netero1010/EDRSilencer
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \EDRSilencer.exe
+  - OriginalFileName: EDRSilencer.exe
+  - Description|contains: EDRSilencer
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: eb2d07d4-49cb-4523-801a-da002df36602
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_edrsilencer.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

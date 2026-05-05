@@ -1,0 +1,48 @@
+id: splunk-security-content-3d8536b6-52b4-4c3e-b695-3f2e90bb22be
+name: Cisco Secure Firewall - Potential Data Exfiltration
+description: The following analytic detects potentially suspicious large volumes of
+  data sent by the connection initiator on flows from internal to external networks.
+  It leverages Cisco Secure Firewall Threat Defense ConnectionEvent logs and thresholds
+  on InitiatorBytes (bytes transmitted by the initiator), which for typical inside-initiated
+  client sessions approximates upload or outbound payload from the internal host and
+  avoids flagging large downloads where most bytes appear in ResponderBytes. Connections
+  where the initiator sent at least 100 MB are flagged, as these may indicate unauthorized
+  data exfiltration, especially if associated with unusual users, hosts, or processes.
+  This analytic is scoped to inside-to-outside flows using a macro (cisco_secure_firewall_inside_to_outside)
+  to abstract environment-specific zone definitions. If confirmed malicious, this
+  behavior may reflect data staging and exfiltration over an encrypted or stealthy
+  transport.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  - T1567.002
+  - T1048.003
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=ConnectionEvent `cisco_secure_firewall_inside_to_outside`\n\
+    | eval initiator_mb = round(InitiatorBytes / 1024 / 1024, 2)\n| where initiator_mb\
+    \ >= 100\n| eval Potentially_Exfiltrated = initiator_mb + \" MB\"\n| stats min(_time)\
+    \ as firstTime max(_time) as lastTime\n    Values(url) as url\n    Values(rule)\
+    \ as rule\n    Values(dest_port) as dest_port\n    by src, dest, Potentially_Exfiltrated,\
+    \ transport, action\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___potential_data_exfiltration_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3d8536b6-52b4-4c3e-b695-3f2e90bb22be
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___potential_data_exfiltration.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-e20b5b14-ce93-4230-88af-981983ef6e74
+name: QuickAssist Execution
+description: Detects the execution of Microsoft Quick Assist tool "QuickAssist.exe".
+  This utility can be used by attackers to gain remote access.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2024/05/15/threat-actors-misusing-quick-assist-in-social-engineering-attacks-leading-to-ransomware/
+- https://www.linkedin.com/posts/kevin-beaumont-security_ive-been-assisting-a-few-orgs-hit-with-successful-activity-7268055739116445701-xxjZ/
+- https://x.com/cyb3rops/status/1862406110365245506
+- https://learn.microsoft.com/en-us/windows/client-management/client-tools/quick-assist
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \QuickAssist.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e20b5b14-ce93-4230-88af-981983ef6e74
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_quickassist_execution.yml
+falsepositives:
+- Legitimate use of Quick Assist in the environment.
+notes:
+  quarantine_reason: 'upstream status: experimental'

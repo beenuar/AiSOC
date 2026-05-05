@@ -1,0 +1,59 @@
+id: sigmahq-sigma-6f1a11aa-4b8a-4b7f-9e13-4d3e4ff0e0d4
+name: WSL Kali-Linux Usage
+description: Detects the use of Kali Linux through Windows Subsystem for Linux
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://medium.com/@redfanatic7/running-kali-linux-on-windows-51ad95166e6e
+- https://learn.microsoft.com/en-us/windows/wsl/install
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img_appdata:
+  - Image|contains|all:
+    - :\Users\
+    - \AppData\Local\packages\KaliLinux
+  - Image|contains|all:
+    - :\Users\
+    - \AppData\Local\Microsoft\WindowsApps\kali.exe
+  selection_img_windowsapps:
+    Image|contains: :\Program Files\WindowsApps\KaliLinux.
+    Image|endswith: \kali.exe
+  selection_kali_wsl_parent:
+    ParentImage|endswith:
+    - \wsl.exe
+    - \wslhost.exe
+  selection_kali_wsl_child:
+  - Image|contains:
+    - \kali.exe
+    - \KaliLinux
+  - CommandLine|contains:
+    - Kali.exe
+    - Kali-linux
+    - kalilinux
+  filter_main_install_uninstall:
+    CommandLine|contains:
+    - ' -i '
+    - ' --install '
+    - ' --unregister '
+  condition: 1 of selection_img_* or all of selection_kali_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6f1a11aa-4b8a-4b7f-9e13-4d3e4ff0e0d4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wsl_kali_linux_usage.yml
+falsepositives:
+- Legitimate installation or usage of Kali Linux WSL by administrators or security
+  teams
+notes:
+  quarantine_reason: 'upstream status: experimental'

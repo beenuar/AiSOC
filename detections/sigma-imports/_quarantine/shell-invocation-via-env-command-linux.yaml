@@ -1,0 +1,41 @@
+id: sigmahq-sigma-bed978f8-7f3a-432b-82c5-9286a9b3031a
+name: Shell Invocation via Env Command - Linux
+description: Detects the use of the env command to invoke a shell. This may indicate
+  an attempt to bypass restricted environments, escalate privileges, or execute arbitrary
+  commands.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/env/#shell
+- https://www.elastic.co/guide/en/security/current/linux-restricted-shell-breakout-via-linux-binary-s.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /env
+    CommandLine|contains:
+    - /bin/bash
+    - /bin/dash
+    - /bin/fish
+    - /bin/sh
+    - /bin/zsh
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bed978f8-7f3a-432b-82c5-9286a9b3031a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_env_shell_invocation.yml
+falsepositives:
+- Github operations such as ghe-backup
+notes:
+  quarantine_reason: 'upstream status: test'

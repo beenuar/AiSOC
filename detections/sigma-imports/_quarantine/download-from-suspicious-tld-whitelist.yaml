@@ -1,0 +1,70 @@
+id: sigmahq-sigma-b5de2919-b74a-4805-91a7-5049accbaefe
+name: Download From Suspicious TLD - Whitelist
+description: Detects executable downloads from suspicious remote systems
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1566
+  - T1203
+  - T1204.002
+  categories:
+  - network
+references:
+- Internal Research
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri-extension:
+    - exe
+    - vbs
+    - bat
+    - rar
+    - ps1
+    - doc
+    - docm
+    - xls
+    - xlsm
+    - pptm
+    - rtf
+    - hta
+    - dll
+    - ws
+    - wsf
+    - sct
+    - zip
+  filter:
+    cs-host|endswith:
+    - .com
+    - .org
+    - .net
+    - .edu
+    - .gov
+    - .uk
+    - .ca
+    - .de
+    - .jp
+    - .fr
+    - .au
+    - .us
+    - .ch
+    - .it
+    - .nl
+    - .se
+    - .no
+    - .es
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b5de2919-b74a-4805-91a7-5049accbaefe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_download_susp_tlds_whitelist.yml
+falsepositives:
+- All kind of software downloads
+notes:
+  quarantine_reason: 'upstream status: test'

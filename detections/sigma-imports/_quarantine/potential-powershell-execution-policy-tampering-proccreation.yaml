@@ -1,0 +1,39 @@
+id: sigmahq-sigma-cf2e938e-9a3e-4fe8-a347-411642b28a9f
+name: Potential PowerShell Execution Policy Tampering - ProcCreation
+description: Detects changes to the PowerShell execution policy registry key in order
+  to bypass signing requirements for script execution from the CommandLine
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/de-de/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.3
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_path:
+    CommandLine|contains:
+    - \ShellIds\Microsoft.PowerShell\ExecutionPolicy
+    - \Policies\Microsoft\Windows\PowerShell\ExecutionPolicy
+  selection_values:
+    CommandLine|contains:
+    - Bypass
+    - RemoteSigned
+    - Unrestricted
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cf2e938e-9a3e-4fe8-a347-411642b28a9f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_registry_set_unsecure_powershell_policy.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

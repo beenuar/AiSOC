@@ -1,0 +1,41 @@
+id: sigmahq-sigma-4f84b697-c9ed-4420-8ab5-e09af5b2345d
+name: New DLL Added to AppInit_DLLs Registry Key
+description: DLLs that are specified in the AppInit_DLLs value in the Registry key
+  HKLM\Software\Microsoft\Windows NT\CurrentVersion\Windows are loaded by user32.dll
+  into every process that loads user32.dll
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.010
+  categories:
+  - endpoint
+references:
+- https://eqllib.readthedocs.io/en/latest/analytics/822dc4c5-b355-4df8-bd37-29c458997b8f.html
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+  - TargetObject|endswith:
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_Dlls
+    - \SOFTWARE\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_Dlls
+  - NewName|endswith:
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_Dlls
+    - \SOFTWARE\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Windows\AppInit_Dlls
+  filter:
+    Details: (Empty)
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4f84b697-c9ed-4420-8ab5-e09af5b2345d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_new_dll_added_to_appinit_dlls_registry_key.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

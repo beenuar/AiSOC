@@ -1,0 +1,49 @@
+id: sigmahq-sigma-b17ea6f7-6e90-447e-a799-e6c0a493d6ce
+name: Shadow Copies Creation Using Operating Systems Utilities
+description: Shadow Copies creation using operating systems utilities, possible credential
+  access
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  - T1003.002
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/tutorial-for-ntds-goodness-vssadmin-wmis-ntdsdit-system/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    - \wmic.exe
+    - \vssadmin.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+    - wmic.exe
+    - VSSADMIN.EXE
+  selection_cli:
+    CommandLine|contains|all:
+    - shadow
+    - create
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b17ea6f7-6e90-447e-a799-e6c0a493d6ce
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_shadow_copies_creation.yml
+falsepositives:
+- Legitimate administrator working with shadow copies, access for backup purposes
+notes:
+  quarantine_reason: 'upstream status: test'

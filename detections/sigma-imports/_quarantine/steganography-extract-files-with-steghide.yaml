@@ -1,0 +1,39 @@
+id: sigmahq-sigma-a5a827d9-1bbe-4952-9293-c59d897eb41b
+name: Steganography Extract Files with Steghide
+description: Detects extraction of files with usage of steghide binary, the adversaries
+  may use this technique to prevent the detection of hidden information.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027.003
+  categories:
+  - endpoint
+references:
+- https://vitux.com/how-to-hide-confidential-files-in-images-on-debian-using-steganography/
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0: steghide
+    a1: extract
+    a2: -sf
+    a3|endswith:
+    - .jpg
+    - .png
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a5a827d9-1bbe-4952-9293-c59d897eb41b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_steghide_extract_steganography.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

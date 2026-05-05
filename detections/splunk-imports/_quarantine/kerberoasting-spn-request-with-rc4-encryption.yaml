@@ -1,0 +1,41 @@
+id: splunk-security-content-5cc67381-44fa-4111-8a37-7a230943f027
+name: Kerberoasting spn request with RC4 encryption
+description: The following analytic detects potential Kerberoasting attacks by identifying
+  Kerberos service ticket requests with RC4 encryption through Event ID 4769. It leverages
+  specific Ticket_Options values commonly used by Kerberoasting tools. This activity
+  is significant as Kerberoasting allows attackers to request service tickets for
+  domain accounts, typically service accounts, and crack them offline to gain privileged
+  access. If confirmed malicious, this could lead to unauthorized access, privilege
+  escalation, and further compromise of the Active Directory environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/4e3e9c8096dde00639a6b98845ec349135554ed5/atomics/T1208/T1208.md
+- https://www.hub.trimarcsecurity.com/post/trimarc-research-detecting-kerberoasting-activity
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4769 ServiceName!=\"*$\" (TicketOptions=0x40810000\
+    \ OR TicketOptions=0x40800000 OR TicketOptions=0x40810010) TicketEncryptionType=0x17\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY Computer,\
+    \ user, service_id,\n       service, TicketEncryptionType, TicketOptions\n  |\
+    \ rename Computer as dest\n  | `security_content_ctime(lastTime)`\n  | `security_content_ctime(firstTime)`\n\
+    \  | `kerberoasting_spn_request_with_rc4_encryption_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5cc67381-44fa-4111-8a37-7a230943f027
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/kerberoasting_spn_request_with_rc4_encryption.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,42 @@
+id: splunk-security-content-9251299c-ea5b-11eb-a8de-acde48001122
+name: Detect Copy of ShadowCopy with Script Block Logging
+description: The following analytic detects the use of PowerShell commands to copy
+  the SAM, SYSTEM, or SECURITY hives, which are critical for credential theft. It
+  leverages PowerShell Script Block Logging (EventCode=4104) to capture and analyze
+  the full command executed. This activity is significant as it indicates an attempt
+  to exfiltrate sensitive registry hives for offline password cracking. If confirmed
+  malicious, this could lead to unauthorized access to credentials, enabling further
+  compromise of the system and potential lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-36934
+- https://github.com/GossiTheDog/HiveNightmare
+- https://github.com/JumpsecLabs/Guidance-Advice/tree/main/SAM_Permissions
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`powershell` EventCode=4104 ScriptBlockText IN ("*copy*","*[System.IO.File]::Copy*")
+    AND ScriptBlockText IN ("*System32\\config\\SAM*", "*System32\\config\\SYSTEM*","*System32\\config\\SECURITY*")
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by dest
+    signature signature_id user_id vendor_product EventID Guid Opcode Name Path ProcessID
+    ScriptBlockId ScriptBlockText | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `detect_copy_of_shadowcopy_with_script_block_logging_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 9251299c-ea5b-11eb-a8de-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_copy_of_shadowcopy_with_script_block_logging.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

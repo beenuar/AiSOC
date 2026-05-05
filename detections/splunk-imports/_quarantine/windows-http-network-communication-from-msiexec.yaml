@@ -1,0 +1,54 @@
+id: splunk-security-content-b0fd38c7-f71a-43a2-870e-f3ca06bcdd99
+name: Windows HTTP Network Communication From MSIExec
+description: The following analytic detects MSIExec making network connections over
+  ports 443 or 80. This behavior is identified by correlating process creation events
+  from Endpoint Detection and Response (EDR) agents with network traffic logs. Typically,
+  MSIExec does not perform network communication to the internet, making this activity
+  unusual and potentially indicative of malicious behavior. If confirmed malicious,
+  an attacker could be using MSIExec to download or communicate with external servers,
+  potentially leading to data exfiltration, command and control (C2) communication,
+  or further malware deployment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.007
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/06/06/will-the-real-msiexec-please-stand-up-exploit-leads-to-data-exfiltration/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.007/T1218.007.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count\n\nFROM datamodel=Endpoint.Processes\
+    \ where\n\n`process_msiexec`\n\nby _time Processes.action Processes.dest Processes.original_file_name\n\
+    \   Processes.parent_process Processes.parent_process_exec\n   Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\n\
+    \   Processes.process Processes.process_exec Processes.process_guid\n   Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_integrity_level Processes.process_name\n\
+    \   Processes.process_path Processes.user Processes.user_id\n   Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n\n| join process_id [\n    | tstats `security_content_summariesonly`\n\
+    \      count\n\n    FROM datamodel=Network_Traffic.All_Traffic where\n\n    All_Traffic.dest_port\
+    \ IN (\"80\",\"443\")\n\n    by All_Traffic.action All_Traffic.app All_Traffic.bytes\n\
+    \       All_Traffic.bytes_in All_Traffic.bytes_out All_Traffic.dest\n       All_Traffic.dest_ip\
+    \ All_Traffic.dest_port All_Traffic.dvc\n       All_Traffic.protocol All_Traffic.protocol_version\
+    \ All_Traffic.src\n       All_Traffic.src_ip All_Traffic.src_port All_Traffic.transport\n\
+    \       All_Traffic.user All_Traffic.vendor_product All_Traffic.direction\n  \
+    \     All_Traffic.process_id\n\n    | `drop_dm_object_name(All_Traffic)`\n]\n\
+    | table _time user dest parent_process_name process_name\n        process_path\
+    \ process process_id dest_port dest_ip\n| `windows_http_network_communication_from_msiexec_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b0fd38c7-f71a-43a2-870e-f3ca06bcdd99
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_http_network_communication_from_msiexec.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

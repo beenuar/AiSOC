@@ -1,0 +1,39 @@
+id: sigmahq-sigma-2c95fa8a-8b8d-4787-afce-7117ceb8e3da
+name: Time Machine Backup Disabled Via Tmutil - MacOS
+description: 'Detects disabling of Time Machine (Apple''s automated backup utility
+  software) via the native macOS backup utility "tmutil".
+
+  An attacker can use this to prevent backups from occurring.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1490/T1490.md#atomic-test-12---disable-time-machine
+- https://www.loobins.io/binaries/tmutil/
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_img:
+  - Image|endswith: /tmutil
+  - CommandLine|contains: tmutil
+  selection_cmd:
+    CommandLine|contains: disable
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2c95fa8a-8b8d-4787-afce-7117ceb8e3da
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_tmutil_disable_backup.yml
+falsepositives:
+- Legitimate administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

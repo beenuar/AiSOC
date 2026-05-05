@@ -1,0 +1,45 @@
+id: sigmahq-sigma-e92a4287-e072-4a40-9739-370c106bb750
+name: HackTool - SOAPHound Execution
+description: Detects the execution of SOAPHound, a .NET tool for collecting Active
+  Directory data, using specific command-line arguments that may indicate an attempt
+  to extract sensitive AD information.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087
+  categories:
+  - endpoint
+references:
+- https://github.com/FalconForceTeam/SOAPHound
+- https://medium.com/falconforce/soaphound-tool-to-collect-active-directory-data-via-adws-165aca78288c
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_1:
+    CommandLine|contains:
+    - ' --buildcache '
+    - ' --bhdump '
+    - ' --certdump '
+    - ' --dnsdump '
+  selection_2:
+    CommandLine|contains:
+    - ' -c '
+    - ' --cachefilename '
+    - ' -o '
+    - ' --outputdirectory'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e92a4287-e072-4a40-9739-370c106bb750
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_soaphound_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

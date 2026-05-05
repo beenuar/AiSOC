@@ -1,0 +1,69 @@
+id: chronicle-detection-rules-ms-graph-graphrunner-graphrecon-enumeration
+name: ms_graph_graphrunner_graphrecon_enumeration
+description: ms_graph_graphrunner_graphrecon_enumeration
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ms_graph_graphrunner_graphrecon_enumeration {\n\n  meta:\n    author =\
+    \ \"Google Cloud Security\"\n    description = \"Identify the use of the GraphRunner\
+    \ recon command Invoke-GraphRecon with the permission enum flag set, providing\
+    \ allowed actions and conditional access data for the current user.\"\n    rule_id\
+    \ = \"mr_2bb3fd42-5569-4bab-9788-855425971b7f\"\n    rule_name = \"Enumeration\
+    \ observed in the Microsoft Graph API using GraphRunner GraphRecon command\"\n\
+    \    reference = \"https://github.com/dafthack/GraphRunner/blob/main/GraphRunner.ps1\"\
+    \n    type = \"Alert\"\n    data_source = \"MS Graph Activity Logs\"\n    platform\
+    \ = \"Azure\"\n    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n\
+    \    $api_est.metadata.event_type = \"NETWORK_HTTP\"\n    $api_est.metadata.product_event_type\
+    \ = \"Microsoft Graph Activity\"\n    $api_est.target.url = \"https://graph.microsoft.com/beta/roleManagement/directory/estimateAccess\"\
+    \ nocase\n    //Can be tuned for specific User Agent strings being used - by default\
+    \ GraphRunner does not forge the UA for this action\n    //$api_est.network.http.user_agent\
+    \ = /PowerShell/ nocase\n    $api_est.network.http.method = \"POST\"\n    $api_est.network.http.response_code\
+    \ = 200\n    $api_est.principal.ip = $ip\n    $api_est.network.session_id = $session\n\
+    \n    $api_me.metadata.event_type = \"NETWORK_HTTP\"\n    $api_me.metadata.product_event_type\
+    \ = \"Microsoft Graph Activity\"\n    $api_me.target.url = \"https://graph.microsoft.com/v1.0/me\"\
+    \ nocase\n    //Can be tuned for specific User Agent strings being used - by default\
+    \ GraphRunner does not forge the UA for this action\n    //$api_me.network.http.user_agent\
+    \ = /PowerShell/ nocase\n    $api_me.network.http.method = \"GET\"\n    $api_me.network.http.response_code\
+    \ = 200\n    $api_me.principal.ip = $ip\n    $api_me.network.session_id = $session\n\
+    \n    $api_auth.metadata.event_type = \"NETWORK_HTTP\"\n    $api_auth.metadata.product_event_type\
+    \ = \"Microsoft Graph Activity\"\n    $api_auth.target.url = \"https://graph.microsoft.com/beta/policies/authorizationPolicy\"\
+    \ nocase\n    //Can be tuned for specific User Agent strings being used - by default\
+    \ GraphRunner does not forge the UA for this action\n    //$api_auth.network.http.user_agent\
+    \ = /PowerShell/ nocase\n    $api_auth.network.http.method = \"GET\"\n    $api_auth.network.http.response_code\
+    \ = 200\n    $api_auth.principal.ip = $ip\n    $api_auth.network.session_id =\
+    \ $session\n\n  match:\n    $ip, $session over 5m\n\n  outcome:\n    $risk_score\
+    \ = 65\n    $event_count = count_distinct($api_est.metadata.id) + count_distinct($api_auth.metadata.id)\
+    \ + count_distinct($api_me.metadata.id)\n    $requesting_user_guid = array_distinct($api_est.principal.user.userid)\n\
+    \    $requesting_ip = array_distinct($api_est.principal.ip)\n    $user_agent =\
+    \ array_distinct($api_est.network.http.user_agent)\n    $location = array_distinct($api_est.principal.location.name)\n\
+    \    $target_application_id_guid = array_distinct($api_est.target.resource.product_object_id)\n\
+    \    $session_id = array_distinct($api_est.network.session_id)\n\n  condition:\n\
+    \    $api_est and $api_auth and $api_me\n}"
+  chronicle_rule_name: ms_graph_graphrunner_graphrecon_enumeration
+provenance:
+  source: chronicle/detection-rules
+  source_id: ms_graph_graphrunner_graphrecon_enumeration
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/graph_activity/ms_graph_graphrunner_graphrecon_enumeration.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

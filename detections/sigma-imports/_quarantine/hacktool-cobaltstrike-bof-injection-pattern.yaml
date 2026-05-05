@@ -1,0 +1,38 @@
+id: sigmahq-sigma-09706624-b7f6-455d-9d02-adee024cee1d
+name: HackTool - CobaltStrike BOF Injection Pattern
+description: Detects a typical pattern of a CobaltStrike BOF which inject into other
+  processes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1106
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/boku7/injectAmsiBypass
+- https://github.com/boku7/spawn
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    CallTrace|re: ^C:\\Windows\\SYSTEM32\\ntdll\.dll\+[a-z0-9]{4,6}\|C:\\Windows\\System32\\KERNELBASE\.dll\+[a-z0-9]{4,6}\|UNKNOWN\([A-Z0-9]{16}\)$
+    GrantedAccess:
+    - '0x1028'
+    - '0x1fffff'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 09706624-b7f6-455d-9d02-adee024cee1d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_hktl_cobaltstrike_bof_injection_pattern.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

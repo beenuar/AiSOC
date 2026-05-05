@@ -1,0 +1,118 @@
+id: chronicle-detection-rules-suspicious-entra-id-sign-in-external-call
+name: suspicious_entra_id_sign_in_external_call
+description: suspicious_entra_id_sign_in_external_call
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule suspicious_entra_id_sign_in_external_call {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Detects authentication to O365 followed\
+    \ by a non-interactive sign-ins that aligns to suspicious activity.\"\n    rule_id\
+    \ = \"mr_2245edf0-3a75-4bf6-901b-c47ffda1703e\"\n    rule_name = \"Hunt for suspicious\
+    \ sign-in to Entra ID Using Extrnal Call Method\"\n    assumption = \"Microsoft\
+    \ Office is the application the stolen token is associated with, however this\
+    \ can be modified in GraphRunner. This detection could create FPs if not focusing\
+    \ on the default application, however filtering on suspicious IP addresses or\
+    \ user agents may help make this useful as a hunting rule.\"\n    reference =\
+    \ \"https://github.com/dafthack/GraphRunner/blob/main/GraphRunner.ps1\"\n    type\
+    \ = \"hunt\"\n    platform = \"azure\"\n    data_source = \"o365, azure activity\"\
+    \n    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $init_login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $init_login.metadata.product_event_type = \"UserLoggedIn\"\
+    \n    $init_login.metadata.product_name = \"Office 365\"\n    $init_login.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $init_login.security_result.action = \"ALLOW\"\n    $init_login.network.session_id\
+    \ != \"\"\n    strings.to_lower($init_login.target.user.userid) = $user\n    $init_login.principal.ip\
+    \ = $ip\n    //Can add specific IPs of interest here or filter admin consoles\
+    \ out\n    //$init_login.principal.ip != \"10.10.10.10\"\n\n    $init_login.network.session_id\
+    \ != $sub_login.network.session_id\n    $init_login.target.application != $sub_login.target.application\n\
+    \    $init_login.network.http.user_agent != $sub_login.network.http.user_agent\n\
+    \    $init_login.metadata.event_timestamp.seconds < $sub_login.metadata.event_timestamp.seconds\n\
+    \n    $sub_login.metadata.event_type = \"USER_LOGIN\"\n    $sub_login.metadata.product_event_type\
+    \ = \"Sign-in activity\"\n    $sub_login.metadata.product_name = \"Azure Activity\"\
+    \n    $sub_login.metadata.vendor_name = \"Microsoft\"\n    $sub_login.security_result.action\
+    \ = \"ALLOW\"\n    $sub_login.security_result.category_details = \"NonInteractiveUserSignInLogs\"\
+    \n    //Microsoft Office GUID is the default application used with Get-GraphTokens\
+    \ function. This can be customized but is a good place to start\n    //$sub_login.target.application\
+    \ = \"Microsoft Office\"\n    //UA listing displayed here as strings separated\
+    \ by or statement\n    //Each line is commented with device or browser or combination\
+    \ as specified in GraphRunner\n    //Could also convert to regex to refine if\
+    \ desired or used with a list\n    (\n        $sub_login.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML,\
+    \ like Gecko) Chrome/91.0.4472.114 Safari/537.36\" nocase or // Mac/Chrome | Chrome\n\
+    \        $sub_login.network.http.user_agent = \"Mozilla/5.0 (Macintosh; Intel\
+    \ Mac OS X 10.14; rv:70.0) Gecko/20100101 Firefox/70.0\" nocase or // Mac/Firefox\n\
+    \        $sub_login.network.http.user_agent = \"Mozilla/5.0 (Macintosh; Intel\
+    \ Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/91.0.4472.114\
+    \ Safari/604.1 Edg/91.0.100.0\" nocase or // Mac/Edge\n        $sub_login.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML,\
+    \ like Gecko) Version/13.0.3 Safari/605.1.15\" nocase or // Mac/Safari | Mac |\
+    \ Safari\n        $sub_login.network.http.user_agent = \"Mozilla/5.0 (Windows\
+    \ NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko\" nocase or // Windows/IE |\
+    \ IE\n        $sub_login.network.http.user_agent = \"Mozilla/5.0 (Windows NT 10.0;\
+    \ WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36\"\
+    \ nocase or // Windows/Chrome\n        $sub_login.network.http.user_agent = \"\
+    Mozilla/5.0 (Windows NT 10.0; WOW64; rv:70.0) Gecko/20100101 Firefox/70.0\" nocase\
+    \ or // Windows/Firefox | Firefox\n        $sub_login.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like\
+    \ Gecko) Chrome/70.0.3538.102 Safari/537.36 Edge/18.19042\" nocase or // Windows/Edge\
+    \ | Windows\n        $sub_login.network.http.user_agent = \"Mozilla/5.0 (Linux;\
+    \ U; Android 4.0.2; en-us; Galaxy Nexus Build/ICL53F) AppleWebKit/534.30 (KHTML,\
+    \ like Gecko) Version/4.0 Mobile Safari/534.30\" nocase or // AndroidMobile/Android\
+    \ | AndroidMobile | Android\n        $sub_login.network.http.user_agent = \"Mozilla/5.0\
+    \ (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko)\
+    \ Chrome/91.0.4472.114 Mobile Safari/537.36\" nocase or // AndroidMobile/Chrome\n\
+    \        $sub_login.network.http.user_agent = \"Mozilla/5.0 (Android 4.4; Mobile;\
+    \ rv:70.0) Gecko/70.0 Firefox/70.0\" nocase or // AndroidMobile/Firefox\n    \
+    \    $sub_login.network.http.user_agent = \"Mozilla/5.0 (Linux; Android 8.1.0;\
+    \ Pixel Build/OPM4.171019.021.D1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.109\
+    \ Mobile Safari/537.36 EdgA/42.0.0.2057\" nocase or // AndroidMobile/Edge\n  \
+    \      $sub_login.network.http.user_agent = \"Mozilla/5.0 (iPhone; CPU iPhone\
+    \ OS 13_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/91.0.4472.114\
+    \ Mobile/15E148 Safari/604.1\" nocase or // iPhone/Chrome\n        $sub_login.network.http.user_agent\
+    \ = \"Mozilla/5.0 (iPhone; CPU iPhone OS 8_3 like Mac OS X) AppleWebKit/600.1.4\
+    \ (KHTML, like Gecko) FxiOS/1.0 Mobile/12F69 Safari/600.1.4\" nocase or // iPhone/Firefox\n\
+    \        $sub_login.network.http.user_agent = \"Mozilla/5.0 (iPhone; CPU iPhone\
+    \ OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.1\
+    \ EdgiOS/44.5.0.10 Mobile/15E148 Safari/604.1\" nocase or // iPhone/Edge\n   \
+    \     $sub_login.network.http.user_agent = \"Mozilla/5.0 (iPhone; CPU iPhone OS\
+    \ 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3\
+    \ Mobile/15E148 Safari/604.1\" nocase or // iPhone/Safari | iPhone\n        $sub_login.network.http.user_agent\
+    \ = \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML,\
+    \ like Gecko) Chrome/103.0.0.0 Safari/537.36\" nocase // Edge\n    )\n    strings.to_lower($sub_login.principal.user.email_addresses[0])\
+    \ = $user\n    $sub_login.principal.ip = $ip\n\n  match:\n    $user, $ip over\
+    \ 5m\n\n  outcome:\n    $risk_score = 65\n    $event_count = count_distinct($init_login.metadata.id)\n\
+    \    $init_user_agent = array_distinct($init_login.network.http.user_agent)\n\
+    \    $sub_user_agent = array_distinct($sub_login.network.http.user_agent)\n  \
+    \  $security_summary = array_distinct($init_login.security_result.summary)\n \
+    \   $init_target_application = array_distinct($init_login.target.application)\n\
+    \    $sub_target_application = array_distinct($sub_login.target.application)\n\
+    \    //$principal_user_userid = array_distinct($group.principal.user.userid)\n\
+    \    $principal_user =array_distinct($user)\n    $principal_ip = array_distinct($init_login.principal.ip)\n\
+    \    $session_id = array_distinct($init_login.network.session_id)\n\n  condition:\n\
+    \    $init_login and $sub_login\n}"
+  chronicle_rule_name: suspicious_entra_id_sign_in_external_call
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_entra_id_sign_in_external_call
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/suspicious_entra_id_sign_in_external_call.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

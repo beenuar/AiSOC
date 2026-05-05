@@ -1,0 +1,35 @@
+id: sigmahq-sigma-adf9f4d2-559e-4f5c-95be-c28dff0b1476
+name: New Country
+description: Detects sign-ins from new countries. The detection considers past activity
+  locations to determine new and infrequent locations.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#new-country
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: newCountry
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: adf9f4d2-559e-4f5c-95be-c28dff0b1476
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_new_coutry_region.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins from the user.
+notes:
+  quarantine_reason: 'upstream status: test'

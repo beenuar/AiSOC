@@ -1,0 +1,41 @@
+id: sigmahq-sigma-aa7a3fce-bef5-4311-9cc1-5f04bb8c308c
+name: Certificate Exported Via PowerShell - ScriptBlock
+description: Detects calls to cmdlets inside of PowerShell scripts that are used to
+  export certificates from the local certificate store. Threat actors were seen abusing
+  this to steal private keys from compromised machines.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.004
+  categories:
+  - endpoint
+references:
+- https://us-cert.cisa.gov/ncas/analysis-reports/ar21-112a
+- https://learn.microsoft.com/en-us/powershell/module/pki/export-pfxcertificate?view=windowsserver2022-ps
+- https://www.splunk.com/en_us/blog/security/breaking-the-chain-defending-against-certificate-services-abuse.html
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Export-PfxCertificate
+    - Export-Certificate
+  filter_optional_module_export:
+    ScriptBlockText|contains: CmdletsToExport = @(
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aa7a3fce-bef5-4311-9cc1-5f04bb8c308c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_export_certificate.yml
+falsepositives:
+- Legitimate certificate exports by administrators. Additional filters might be required.
+notes:
+  quarantine_reason: 'upstream status: test'

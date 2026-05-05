@@ -1,0 +1,44 @@
+id: splunk-security-content-a7da845d-6fae-41cf-b823-6c0b8c55814a
+name: Azure AD Privileged Authentication Administrator Role Assigned
+description: The following analytic detects the assignment of the Privileged Authentication
+  Administrator role to an Azure AD user. It leverages Azure Active Directory audit
+  logs to identify when this specific role is assigned. This activity is significant
+  because users in this role can set or reset authentication methods for any user,
+  including those in privileged roles like Global Administrators. If confirmed malicious,
+  an attacker could change credentials and assume the identity and permissions of
+  high-privilege users, potentially leading to unauthorized access to sensitive information
+  and critical configurations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/active-directory/roles/permissions-reference#privileged-authentication-administrator
+- https://posts.specterops.io/azure-privilege-escalation-via-azure-api-permissions-abuse-74aee1006f48
+- https://learn.microsoft.com/en-us/azure/active-directory/roles/permissions-reference
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` \"operationName\"=\"Add member to role\" \"properties.targetResources{}.modifiedProperties{}.newValue\"\
+    =\"\\\"Privileged Authentication Administrator\\\"\"\n  | rename properties.*\
+    \ as *\n  | rename initiatedBy.user.userPrincipalName as initiatedBy\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest user\
+    \ src\n       vendor_account vendor_product initiatedBy\n       signature\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_privileged_authentication_administrator_role_assigned_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a7da845d-6fae-41cf-b823-6c0b8c55814a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_privileged_authentication_administrator_role_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-9f2cc74d-78af-4eb2-bb64-9cd1d292b87b
+name: Microsoft Sync Center Suspicious Network Connections
+description: Detects suspicious connections from Microsoft Sync Center to non-private
+  IPs.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/intelligence-insights-november-2021/
+logsource:
+  product: windows
+  category: network_connection
+detection:
+  selection:
+    Image|endswith: \mobsync.exe
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9f2cc74d-78af-4eb2-bb64-9cd1d292b87b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_susp_outbound_mobsync_connection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

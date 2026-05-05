@@ -1,0 +1,34 @@
+id: sigmahq-sigma-ec8c4047-fad9-416a-8c81-0f479353d7f6
+name: Diagnostic Library Sdiageng.DLL Loaded By Msdt.EXE
+description: Detects both of CVE-2022-30190 (Follina) and DogWalk vulnerabilities
+  exploiting msdt.exe binary to load the "sdiageng.dll" library
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://www.securonix.com/blog/detecting-microsoft-msdt-dogwalk/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \msdt.exe
+    ImageLoaded|endswith: \sdiageng.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ec8c4047-fad9-416a-8c81-0f479353d7f6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_sdiageng_load_by_msdt.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

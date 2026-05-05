@@ -1,0 +1,45 @@
+id: splunk-security-content-c3f48aa9-878e-443f-8889-e42a11a9bea9
+name: Microsoft Intune Bulk Wipe
+description: 'The following analytic detects a high volume of "wipe ManagedDevice"
+  events from the Intune admin portal (5+ per hour by default).
+
+  It leverages Intune audit logs to identify when this action is triggered. This activity
+  is significant beacuse the "wipe ManagedDevice" action factory resets devices connected
+  to your Microsoft Intune tenant.
+
+  If confirmed malicious, an attacker can abuse this action to perform a large-scale
+  data wiping attack against your managed endpoints.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1561.001
+  categories:
+  - cloud
+references:
+- https://www.lumos.com/blog/stryker-hack
+- https://www.covertswarm.com/post/swarm-intelligence-strykers-intune-wipe-proves-your-bcdr-plan-has-a-single-point-of-failure
+- https://www.wwt.com/blog/how-the-stryker-intune-wipe-incident-highlights-a-critical-gap-in-endpoint-control
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_activity`\noperationName=\"wipe ManagedDevice\"\n| rename\
+    \ identity as user\n         resultType as result\n| fillnull\n| table _time action\
+    \ command dest user src\n        vendor_account vendor_product change_type\n \
+    \       properties.Targets.*\n\n| stats min(_time) as firstTime\n        max(_time)\
+    \ as lastTime\n        values(*) as *\n  count by user\n\n| where count >= 5\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `microsoft_intune_bulk_wipe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c3f48aa9-878e-443f-8889-e42a11a9bea9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/microsoft_intune_bulk_wipe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

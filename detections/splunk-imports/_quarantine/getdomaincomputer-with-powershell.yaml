@@ -1,0 +1,46 @@
+id: splunk-security-content-ed550c19-712e-43f6-bd19-6f58f61b3a5e
+name: GetDomainComputer with PowerShell
+description: The following analytic detects the execution of `powershell.exe` with
+  command-line arguments that utilize `Get-DomainComputer` to discover remote systems.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process names and command-line executions. This activity is significant
+  as `Get-DomainComputer` is part of PowerView, a tool often used by adversaries for
+  domain enumeration and situational awareness. If confirmed malicious, this activity
+  could allow attackers to map out the network, identify critical systems, and plan
+  further attacks, potentially leading to unauthorized access and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.process_name=\"powershell.exe\"\n    )\n    (Processes.process=*Get-DomainComputer*)\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `getdomaincomputer_with_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ed550c19-712e-43f6-bd19-6f58f61b3a5e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getdomaincomputer_with_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-b447f7de-1e53-4cbf-bfb4-f1f6d0b04e4e
+name: Suspicious Binaries and Scripts in Public Folder
+description: Detects the creation of a file with a suspicious extension in the public
+  folder, which could indicate potential malicious activity.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - endpoint
+references:
+- https://intel.thedfirreport.com/events/view/30032
+- https://intel.thedfirreport.com/eventReports/view/70
+- https://thedfirreport.com/2025/01/27/cobalt-strike-and-a-pair-of-socks-lead-to-lockbit-ransomware/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains: :\Users\Public\
+    TargetFilename|endswith:
+    - .bat
+    - .dll
+    - .exe
+    - .hta
+    - .js
+    - .ps1
+    - .vbe
+    - .vbs
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b447f7de-1e53-4cbf-bfb4-f1f6d0b04e4e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_public_folder_extension.yml
+falsepositives:
+- Administrators deploying legitimate binaries to public folders.
+notes:
+  quarantine_reason: 'upstream status: experimental'

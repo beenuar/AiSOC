@@ -1,0 +1,48 @@
+id: sigmahq-sigma-fb843269-508c-4b76-8b8d-88679db22ce7
+name: Suspicious Execution of Powershell with Base64
+description: Commandline to launch powershell with a base64 payload
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1059.001/T1059.001.md#atomic-test-20---powershell-invoke-known-malicious-cmdlets
+- https://unit42.paloaltonetworks.com/unit42-pulling-back-the-curtains-on-encodedcommand-powershell-attacks/
+- https://mikefrobbins.com/2017/06/15/simple-obfuscation-with-powershell-using-base64-encoding/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    CommandLine|contains:
+    - ' -e '
+    - ' -en '
+    - ' -enc '
+    - ' -enco'
+    - ' -ec '
+  filter_encoding:
+    CommandLine|contains: ' -Encoding '
+  filter_azure:
+    ParentImage|contains:
+    - C:\Packages\Plugins\Microsoft.GuestConfiguration.ConfigurationforWindows\
+    - \gc_worker.exe
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fb843269-508c-4b76-8b8d-88679db22ce7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_encode.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

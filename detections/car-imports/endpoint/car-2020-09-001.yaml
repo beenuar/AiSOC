@@ -1,0 +1,49 @@
+id: mitre-car-car-2020-09-001
+name: Scheduled Task - FileAccess
+description: In order to gain persistence, privilege escalation, or remote execution,
+  an adversary may use the Windows Task Scheduler to schedule a command to be run
+  at a specified time, date, and even host. Task Scheduler stores tasks as files in
+  two locations - C:\Windows\Tasks (legacy) or C:\Windows\System32\Tasks. Accordingly,
+  this analytic looks for the creation of task files in these two locations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: File
+detection:
+  implementations:
+  - name: Pseudocode - Windows task file creation
+    type: Pseudocode
+    code: "files = search File:Create\ntask_files = filter files where (\n  (file_path\
+      \ = \"C:\\Windows\\System32\\Tasks\\*\" or file_path = \"C:\\Windows\\Tasks\\\
+      *\")  and\n  image_path != \"C:\\WINDOWS\\system32\\svchost.exe\")\noutput task_files\n"
+  - name: Splunk search - Windows task file creation
+    type: Splunk
+    code: 'index=__your_sysmon_index__ EventCode=11 Image!="C:\\WINDOWS\\system32\\svchost.exe"
+      (TargetFilename="C:\\Windows\\System32\\Tasks\\
+
+      *" OR TargetFilename="C:\\Windows\\Tasks\\*")
+
+      '
+  - name: LogPoint search - Windows task file creation
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=11 -source_image="C:\WINDOWS\system32\svchost.exe"
+      (path="C:\Windows\System32\Tasks*" OR path="C:\Windows\Tasks*")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-09-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-09-001.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,55 @@
+id: sigmahq-sigma-c0b2768a-dd06-4671-8339-b16ca8d1f27f
+name: Potentially Suspicious NTFS Symlink Behavior Modification
+description: Detects the modification of NTFS symbolic link behavior using fsutil,
+  which could be used to enable remote to local or remote to remote symlinks for potential
+  attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1222.001
+  categories:
+  - endpoint
+references:
+- https://www.cybereason.com/blog/cybereason-vs.-blackcat-ransomware
+- https://learn.microsoft.com/fr-fr/windows-server/administration/windows-commands/fsutil-behavior
+- https://thedfirreport.com/2025/06/30/hide-your-rdp-password-spray-leads-to-ransomhub-deployment/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img_proxy:
+  - Image|endswith:
+    - \cmd.exe
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - Cmd.Exe
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_fsutil_cli:
+    CommandLine|contains|all:
+    - fsutil
+    - behavior
+    - set
+    - SymlinkEvaluation
+  selection_symlink_params:
+    CommandLine|contains:
+    - R2L:1
+    - R2R:1
+    - L2L:1
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c0b2768a-dd06-4671-8339-b16ca8d1f27f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_fsutil_symlinkevaluation.yml
+falsepositives:
+- Legitimate usage, investigate the parent process and context to determine if benign.
+notes:
+  quarantine_reason: 'upstream status: test'

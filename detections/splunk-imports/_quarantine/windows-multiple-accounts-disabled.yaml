@@ -1,0 +1,40 @@
+id: splunk-security-content-5d93894e-befa-4429-abde-7fc541020b7b
+name: Windows Multiple Accounts Disabled
+description: The following analytic identifies instances where more than five unique
+  Windows accounts are disabled within a 10-minute window, as indicated by Event Code
+  4725 in the Windows Security Event Log. It leverages the wineventlog_security dataset,
+  grouping data into 10-minute segments and tracking the count and distinct count
+  of TargetUserName. This behavior is significant as it may indicate internal policy
+  breaches or an external attacker's attempt to disrupt operations. If confirmed malicious,
+  this activity could lead to widespread account lockouts, hindering user access and
+  potentially disrupting business operations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  - T1078
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1098/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4725 status=success\n  | bucket span=10m\
+    \ _time\n  | stats count dc(user) as unique_users values(user) as user values(dest)\
+    \ as dest\n    BY EventCode signature _time\n       src_user SubjectDomainName\
+    \ TargetDomainName\n       Logon_ID\n  | where unique_users > 5\n  | `windows_multiple_accounts_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5d93894e-befa-4429-abde-7fc541020b7b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_multiple_accounts_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

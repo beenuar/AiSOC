@@ -1,0 +1,65 @@
+id: sigmahq-sigma-b640c0b8-87f8-4daa-aef8-95a24261dd1d
+name: MITRE BZAR Indicators for Execution
+description: Windows DCE-RPC functions which indicate an execution techniques on the
+  remote system. All credit for the Zeek mapping of the suspicious endpoint/operation
+  field goes to MITRE
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  - T1053.002
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://github.com/mitre-attack/bzar#indicators-for-attck-execution
+logsource:
+  product: zeek
+  service: dce_rpc
+detection:
+  op1:
+    endpoint: JobAdd
+    operation: atsvc
+  op2:
+    endpoint: ITaskSchedulerService
+    operation: SchRpcEnableTask
+  op3:
+    endpoint: ITaskSchedulerService
+    operation: SchRpcRegisterTask
+  op4:
+    endpoint: ITaskSchedulerService
+    operation: SchRpcRun
+  op5:
+    endpoint: IWbemServices
+    operation: ExecMethod
+  op6:
+    endpoint: IWbemServices
+    operation: ExecMethodAsync
+  op7:
+    endpoint: svcctl
+    operation: CreateServiceA
+  op8:
+    endpoint: svcctl
+    operation: CreateServiceW
+  op9:
+    endpoint: svcctl
+    operation: StartServiceA
+  op10:
+    endpoint: svcctl
+    operation: StartServiceW
+  condition: 1 of op*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b640c0b8-87f8-4daa-aef8-95a24261dd1d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_dce_rpc_mitre_bzar_execution.yml
+falsepositives:
+- Windows administrator tasks or troubleshooting
+- Windows management scripts or software
+notes:
+  quarantine_reason: 'upstream status: test'

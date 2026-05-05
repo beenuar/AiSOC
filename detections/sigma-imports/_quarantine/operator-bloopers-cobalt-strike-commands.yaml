@@ -1,0 +1,51 @@
+id: sigmahq-sigma-647c7b9e-d784-4fda-b9a0-45c565a7b729
+name: Operator Bloopers Cobalt Strike Commands
+description: Detects use of Cobalt Strike commands accidentally entered in the CMD
+  shell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://hstechdocs.helpsystems.com/manuals/cobaltstrike/current/userguide/content/cobalt-4-5-user-guide.pdf
+- https://thedfirreport.com/2021/10/04/bazarloader-and-the-conti-leaks/
+- https://thedfirreport.com/2022/06/16/sans-ransomware-summit-2022-can-you-detect-this/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: Cmd.Exe
+  - Image|endswith: \cmd.exe
+  selection_cli:
+    CommandLine|startswith:
+    - 'cmd '
+    - cmd.exe
+    - c:\windows\system32\cmd.exe
+    CommandLine|contains:
+    - psinject
+    - spawnas
+    - make_token
+    - remote-exec
+    - rev2self
+    - dcsync
+    - logonpasswords
+    - execute-assembly
+    - getsystem
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 647c7b9e-d784-4fda-b9a0-45c565a7b729
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_cobaltstrike_bloopers_cmd.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

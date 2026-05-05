@@ -1,0 +1,47 @@
+id: sigmahq-sigma-19b08b1c-861d-4e75-a1ef-ea0c1baf202b
+name: Suspicious Download Via Certutil.EXE
+description: Detects the execution of certutil with certain flags that allow the utility
+  to download files.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil
+- https://forensicitguy.github.io/agenttesla-vba-certutil-download/
+- https://news.sophos.com/en-us/2021/04/13/compromised-exchange-server-hosting-cryptojacker-targeting-other-exchange-servers/
+- https://twitter.com/egre55/status/1087685529016193025
+- https://lolbas-project.github.io/lolbas/Binaries/Certutil/
+- https://www.hexacorn.com/blog/2020/08/23/certutil-one-more-gui-lolbin
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \certutil.exe
+  - OriginalFileName: CertUtil.exe
+  selection_flags:
+    CommandLine|contains:
+    - 'urlcache '
+    - 'verifyctl '
+    - 'URL '
+  selection_http:
+    CommandLine|contains: http
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 19b08b1c-861d-4e75-a1ef-ea0c1baf202b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_certutil_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

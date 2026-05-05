@@ -1,0 +1,45 @@
+id: sigmahq-sigma-bdc64095-d59a-42a2-8588-71fd9c9d9abc
+name: Suspicious Unsigned Dbghelp/Dbgcore DLL Loaded
+description: 'Detects the load of dbghelp/dbgcore DLL (used to make memory dumps)
+  by suspicious processes.
+
+  Tools like ProcessHacker and some attacker tradecract use MiniDumpWriteDump API
+  found in dbghelp.dll or dbgcore.dll.
+
+  As an example, SilentTrynity C2 Framework has a module that leverages this API to
+  dump the contents of Lsass.exe and transfer it over the network back to the attacker''s
+  machine.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/nf-minidumpapiset-minidumpwritedump
+- https://www.pinvoke.net/default.aspx/dbghelp/MiniDumpWriteDump.html
+- https://medium.com/@fsx30/bypass-edrs-memory-protection-introduction-to-hooking-2efb21acffd6
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith:
+    - \dbghelp.dll
+    - \dbgcore.dll
+    Signed: 'false'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bdc64095-d59a-42a2-8588-71fd9c9d9abc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_dbghelp_dbgcore_unsigned_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

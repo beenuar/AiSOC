@@ -1,0 +1,51 @@
+id: splunk-security-content-51c43b7b-e406-45d2-9bad-5c67f07e6528
+name: MacOS Hidden Files and Directories
+description: 'The following analytic detects suspicious creation of hidden files and
+  directories, which may indicate an attacker''s attempt to conceal malicious activities
+  or unauthorized data.
+
+  Hidden files and directories are often used to evade detection by security tools
+  and administrators, providing a stealthy means for storing malware, logs, or sensitive
+  information.
+
+  By monitoring for unusual or unauthorized creation of hidden files and directories,
+  this analytic helps identify potential attempts to hide or unauthorized creation
+  of hidden files and directories, and helps identify potential attempts to hide malicious
+  operations, enabling security teams to uncover and address hidden threats effectively.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.001
+  categories:
+  - endpoint
+references:
+- https://osquery.readthedocs.io/en/stable/deployment/process-auditing/
+- https://ss64.com/mac/chflags.html
+- https://ss64.com/mac/xattr.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime from datamodel=Endpoint.Processes where\n\n(\n    Processes.process=\"\
+    *chflags *\"\n    Processes.process=\"* hidden*\"\n)\nOR\n(\n    Processes.process=\"\
+    *xattr *\"\n    Processes.process=\"* -wx *\"\n    Processes.process=\"*com.apple.FinderInfo*\"\
+    \n)\n\nby Processes.dest Processes.original_file_name Processes.parent_process_id\n\
+    \   Processes.process Processes.process_exec Processes.process_guid\n   Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_current_directory Processes.process_name\n\
+    \   Processes.process_path Processes.user\n   Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `macos_hidden_files_and_directories_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 51c43b7b-e406-45d2-9bad-5c67f07e6528
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_hidden_files_and_directories.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

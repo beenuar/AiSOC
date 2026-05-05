@@ -1,0 +1,61 @@
+id: sigmahq-sigma-28208707-fe31-437f-9a7f-4b1108b94d2e
+name: Suspicious Startup Folder Persistence
+description: 'Detects the creation of potentially malicious script and executable
+  files in Windows startup folders, which is a common persistence technique used by
+  threat actors.
+
+  These files (.ps1, .vbs, .js, .bat, etc.) are automatically executed when a user
+  logs in, making the Startup folder an attractive target for attackers.
+
+  This technique is frequently observed in malvertising campaigns and malware distribution
+  where attackers attempt to maintain long-term access to compromised systems.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://github.com/last-byte/PersistenceSniper
+- https://www.microsoft.com/en-us/security/blog/2025/03/06/malvertising-campaign-leads-to-info-stealers-hosted-on-github/
+- https://github.com/redcanaryco/atomic-red-team/blob/5ede8f21e42ebe37e0a6eff757dba60bcfa85859/atomics/T1547.001/T1547.001.md
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains: \Windows\Start Menu\Programs\Startup\
+    TargetFilename|endswith:
+    - .bat
+    - .cmd
+    - .dll
+    - .hta
+    - .jar
+    - .js
+    - .jse
+    - .msi
+    - .ps1
+    - .psd1
+    - .psm1
+    - .scr
+    - .url
+    - .vba
+    - .vbe
+    - .vbs
+    - .wsf
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 28208707-fe31-437f-9a7f-4b1108b94d2e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_startup_folder_persistence.yml
+falsepositives:
+- Rare legitimate usage of some of the extensions mentioned in the rule
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,44 @@
+id: splunk-security-content-0995fca1-f346-432f-b0bf-a66d14e6b428
+name: Windows Increase in User Modification Activity
+description: This analytic detects an increase in modifications to AD user objects.
+  A large volume of changes to user objects can indicate potential security risks,
+  such as unauthorized access attempts, impairing defences or establishing persistence.
+  By monitoring AD logs for unusual modification patterns, this detection helps identify
+  suspicious behavior that could compromise the integrity and security of the AD environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  - T1562
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode IN (4720,4722,4723,4724,4725,4726,4728,4732,4733,4738,4743,4780)\n\
+    \  | bucket span=5m _time\n  | stats values(TargetDomainName) as TargetDomainName,\
+    \ values(user) as user, dc(user) as userCount, values(user_category) as user_category,\
+    \ values(src_user_category) as src_user_category, values(dest) as dest, values(dest_category)\
+    \ as dest_category\n    BY _time, src_user, signature,\n       status\n  | eventstats\
+    \ avg(userCount) as comp_avg , stdev(userCount) as comp_std\n    BY src_user,\
+    \ signature\n  | eval upperBound=(comp_avg+comp_std*3)\n  | eval isOutlier=if(userCount\
+    \ > 10 and userCount >= upperBound, 1, 0)\n  | search isOutlier=1\n  | stats values(TargetDomainName)\
+    \ as TargetDomainName, values(user) as user, dc(user) as userCount, values(user_category)\
+    \ as user_category, values(src_user_category) as src_user_category, values(dest)\
+    \ as dest, values(dest_category) as dest_category values(signature) as signature\n\
+    \    BY _time, src_user, status\n  | `windows_increase_in_user_modification_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0995fca1-f346-432f-b0bf-a66d14e6b428
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_increase_in_user_modification_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

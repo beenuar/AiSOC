@@ -1,0 +1,34 @@
+id: sigmahq-sigma-f7d7ebd5-a016-46e2-9c54-f9932f2d386d
+name: Potential RDP Tunneling Via SSH
+description: Execution of ssh.exe to perform data exfiltration and tunneling through
+  RDP
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1572
+  categories:
+  - endpoint
+references:
+- https://www.absolomb.com/2018-01-26-Windows-Privilege-Escalation-Guide/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \ssh.exe
+    CommandLine|contains: :3389
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f7d7ebd5-a016-46e2-9c54-f9932f2d386d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ssh_rdp_tunneling.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

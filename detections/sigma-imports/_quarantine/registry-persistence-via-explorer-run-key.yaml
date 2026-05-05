@@ -1,0 +1,41 @@
+id: sigmahq-sigma-b7916c2a-fa2f-4795-9477-32b731f70f11
+name: Registry Persistence via Explorer Run Key
+description: Detects a possible persistence mechanism using RUN key for Windows Explorer
+  and pointing to a suspicious folder
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://researchcenter.paloaltonetworks.com/2018/07/unit42-upatre-continues-evolve-new-anti-analysis-techniques/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Microsoft\Windows\CurrentVersion\Policies\Explorer\Run
+    Details|contains:
+    - :\$Recycle.bin\
+    - :\ProgramData\
+    - :\Temp\
+    - :\Users\Default\
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \AppData\Local\Temp\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b7916c2a-fa2f-4795-9477-32b731f70f11
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_susp_reg_persist_explorer_run.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

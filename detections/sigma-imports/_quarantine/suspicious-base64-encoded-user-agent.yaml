@@ -1,0 +1,35 @@
+id: sigmahq-sigma-d443095b-a221-4957-a2c4-cd1756c9b747
+name: Suspicious Base64 Encoded User-Agent
+description: Detects suspicious encoded User-Agent strings, as seen used by some malware.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://deviceatlas.com/blog/list-of-user-agent-strings#desktop
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent|startswith:
+    - Q2hyb21l
+    - QXBwbGVXZWJLaX
+    - RGFsdmlr
+    - TW96aWxsY
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d443095b-a221-4957-a2c4-cd1756c9b747
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_ua_base64_encoded.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

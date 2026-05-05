@@ -1,0 +1,51 @@
+id: sigmahq-sigma-c79da740-5030-45ec-a2e0-479e824a562c
+name: System Disk And Volume Reconnaissance Via Wmic.EXE
+description: 'An adversary might use WMI to discover information about the system,
+  such as the volume name, size,
+
+  free space, and other disk information. This can be done using the ''wmic'' command-line
+  utility and has been
+
+  observed being used by threat actors such as Volt Typhoon.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-144a
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wmic
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \WMIC.exe
+  - OriginalFileName: wmic.exe
+  selection_cli:
+  - CommandLine|contains:
+    - ' volumename'
+    - ' logicaldisk'
+  - CommandLine|contains|all:
+    - path
+    - win32_logicaldisk
+  - CommandLine|contains|all:
+    - ' volume'
+    - ' list '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c79da740-5030-45ec-a2e0-479e824a562c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_recon_volume.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

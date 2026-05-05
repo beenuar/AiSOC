@@ -1,0 +1,44 @@
+id: splunk-security-content-e155876a-6048-11eb-ae93-0242ac130002
+name: O365 New Federated Domain Added
+description: The following analytic identifies the addition of a new federated domain
+  in an Office 365 environment. This behavior is detected by analyzing Office 365
+  management activity logs, specifically filtering for Workload=Exchange and Operation="Add-FederatedDomain".
+  The addition of a new federated domain is significant as it may indicate unauthorized
+  changes or potential compromises. If confirmed malicious, attackers could establish
+  a backdoor, bypass security measures, or exfiltrate data, leading to data breaches
+  and unauthorized access to sensitive information. Immediate investigation is required
+  to review the details of the added domain and any concurrent suspicious activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://www.fireeye.com/content/dam/fireeye-www/blog/pdfs/wp-m-unc2452-2021-000343-01.pdf
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://www.splunk.com/en_us/blog/security/a-golden-saml-journey-solarwinds-continued.html
+- https://blog.sygnia.co/detection-and-hunting-of-golden-saml-attack?hsLang=en
+- https://o365blog.com/post/aadbackdoor/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Operation IN (\"*add*\", \"*new*\") AND\
+    \ Operation=\"*domain*\"\n  | eval src=\"NA\"\n  | fillnull\n  | stats count values(ModifiedProperties{}.NewValue)\
+    \ as new_value\n    BY user user_agent authentication_service\n       signature\
+    \ Workload src\n       vendor_account vendor_product dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_new_federated_domain_added_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e155876a-6048-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_new_federated_domain_added.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

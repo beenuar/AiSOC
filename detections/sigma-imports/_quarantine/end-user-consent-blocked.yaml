@@ -1,0 +1,32 @@
+id: sigmahq-sigma-7091372f-623c-4293-bc37-20c32b3492be
+name: End User Consent Blocked
+description: Detects when end user consent is blocked due to risk-based consent.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#end-user-stopped-due-to-risk-based-consent
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    failure_status_reason: Microsoft.online.Security.userConsentBlockedForRiskyAppsExceptions
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7091372f-623c-4293-bc37-20c32b3492be
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_end_user_consent_blocked.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,56 @@
+id: sigmahq-sigma-cef24b90-dddc-4ae1-a09a-8764872f69fc
+name: Suspicious Get Local Groups Information
+description: 'Detects the use of PowerShell modules and cmdlets to gather local group
+  information.
+
+  Adversaries may use local system permission groups to determine which groups exist
+  and which users belong to a particular group such as the local administrators group.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1069.001/T1069.001.md
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_localgroup:
+  - Payload|contains:
+    - 'get-localgroup '
+    - 'get-localgroupmember '
+  - ContextInfo|contains:
+    - 'get-localgroup '
+    - 'get-localgroupmember '
+  selection_wmi_module:
+  - Payload|contains:
+    - 'get-wmiobject '
+    - 'gwmi '
+    - 'get-ciminstance '
+    - 'gcim '
+  - ContextInfo|contains|all:
+    - 'get-wmiobject '
+    - 'gwmi '
+    - 'get-ciminstance '
+    - 'gcim '
+  selection_wmi_class:
+  - Payload|contains: win32_group
+  - ContextInfo|contains: win32_group
+  condition: selection_localgroup or all of selection_wmi_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cef24b90-dddc-4ae1-a09a-8764872f69fc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_susp_local_group_reco.yml
+falsepositives:
+- Administrator script
+notes:
+  quarantine_reason: 'upstream status: test'

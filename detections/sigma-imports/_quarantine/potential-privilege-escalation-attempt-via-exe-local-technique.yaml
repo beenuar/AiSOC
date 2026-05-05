@@ -1,0 +1,39 @@
+id: sigmahq-sigma-07a99744-56ac-40d2-97b7-2095967b0e03
+name: Potential Privilege Escalation Attempt Via .Exe.Local Technique
+description: Detects potential privilege escalation attempt via the creation of the
+  "*.Exe.Local" folder inside the "System32" directory in order to sideload "comctl32.dll"
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/binderlabs/DirCreate2System
+- https://github.com/sailay1996/awesome_windows_logical_bugs/blob/60cbb23a801f4c3195deac1cc46df27c225c3d07/dir_create2system.txt
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith:
+    - C:\Windows\System32\logonUI.exe.local
+    - C:\Windows\System32\werFault.exe.local
+    - C:\Windows\System32\consent.exe.local
+    - C:\Windows\System32\narrator.exe.local
+    - C:\Windows\System32\wermgr.exe.local
+    TargetFilename|endswith: \comctl32.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07a99744-56ac-40d2-97b7-2095967b0e03
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_system32_local_folder_privilege_escalation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

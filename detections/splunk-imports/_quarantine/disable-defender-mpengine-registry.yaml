@@ -1,0 +1,44 @@
+id: splunk-security-content-cc391750-3024-11ec-955a-acde48001122
+name: Disable Defender MpEngine Registry
+description: The following analytic detects the modification of the Windows Defender
+  MpEngine registry value, specifically setting MpEnablePus to 0x00000000. This detection
+  leverages endpoint registry logs, focusing on changes within the path "*\\Policies\\Microsoft\\Windows
+  Defender\\MpEngine*". This activity is significant as it indicates an attempt to
+  disable key Windows Defender features, potentially allowing malware to evade detection.
+  If confirmed malicious, this could lead to undetected malware execution, persistence,
+  and further system compromise. Immediate investigation and endpoint isolation are
+  recommended.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path
+    = "*\\Policies\\Microsoft\\Windows Defender\\MpEngine*" Registry.registry_value_name
+    = MpEnablePus Registry.registry_value_data = 0x00000000) by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data) | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `disable_defender_mpengine_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: cc391750-3024-11ec-955a-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disable_defender_mpengine_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

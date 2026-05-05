@@ -1,0 +1,106 @@
+id: mitre-car-car-2016-03-001
+name: Host Discovery Commands
+description: 'When entering on a host for the first time, an adversary may try to
+  [discover](https://attack.mitre.org/tactics/TA0007) information about the host.
+  There are several built-in Windows commands that can be used to learn about the
+  software configurations, active users, administrators, and networking configuration.
+  These commands should be monitored to identify when an adversary is learning information
+  about the system and environment. The information returned may impact choices an
+  adversary can make when [establishing persistence](https://attack.mitre.org/tactics/TA0003),
+  [escalating privileges](https://attack.mitre.org/tactics/TA0004), or [moving laterally](https://attack.mitre.org/tactics/TA0008).
+
+
+  Because these commands are built in, they may be run frequently by power users or
+  even by normal users. Thus, an analytic looking at this information should have
+  well-defined white- or blacklists, and should consider looking at an anomaly detection
+  approach, so that this information can be learned dynamically.
+
+
+  Within the built-in Windows Commands:
+
+
+  -   `hostname`
+
+  -   `ipconfig`
+
+  -   `net`
+
+  -   `quser`
+
+  -   `qwinsta`
+
+  -   `sc` with flags `query`, `queryex`, `qc`
+
+  -   `systeminfo`
+
+  -   `tasklist`
+
+  -   `dsquery`
+
+  -   `whoami`
+
+
+  **Note** `dsquery` is only pre-existing on Windows servers.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087
+  - T1069
+  - T1016
+  - T1082
+  - T1033
+  - T1057
+  - T1007
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: "process = search Process:Create\ninfo_command = filter process where (\n\
+      \ exe == \"hostname.exe\" or\n exe == \"ipconfig.exe\" or\n exe == \"net.exe\"\
+      \ or\n exe == \"quser.exe\" or\n exe == \"qwinsta.exe\" or\n exe == \"sc\" and\
+      \ (command_line match \" query\" or command_line match \" qc\")) or\n exe ==\
+      \ \"systeminfo.exe\" or\n exe == \"tasklist.exe\" or\n exe == \"whoami.exe\"\
+      \n)\noutput info_command\n"
+  - name: ''
+    type: Splunk
+    code: 'index=__your_sysmon_index__ EventCode=1 (Image="C:\\Windows\\*\\hostname.exe"
+      OR Image="C:\\Windows\\*\\ipconfig.exe" OR Image="C:\\Windows\\*\\net.exe" OR
+      Image="C:\\Windows\\*\\quser.exe" OR Image="C:\\Windows\\*\\qwinsta.exe" OR
+      (Image="C:\\Windows\\*\\sc.exe" AND (CommandLine="* query *" OR CommandLine="*
+      qc *")) OR Image="C:\\Windows\\*\\systeminfo.exe" OR Image="C:\\Windows\\*\\tasklist.exe"
+      OR Image="C:\\Windows\\*\\whoami.exe")|stats values(Image) as "Images" values(CommandLine)
+      as "Command Lines" by ComputerName
+
+      '
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (process_name == \"hostname.exe\" or\
+      \ process_name == \"ipconfig.exe\" or process_name == \"net.exe\" or process_name\
+      \ == \"quser.exe\" process_name == \"qwinsta.exe\" or process_name == \"systeminfo.exe\"\
+      \ or process_name == \"tasklist.exe\" or process_name == \"whoami.exe\" or (process_name\
+      \ == \"sc.exe\" and (command_line == \"* query *\" or command_line == \"* qc\
+      \ *\")))\n"
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 (image in ["*\hostname.exe", "*\ipconfig.exe",
+      "*\net.exe", "*\quser.exe", "*\qwinsta.exe", "*\systeminfo.exe", "*\tasklist.exe",
+      "*\whoami.exe"] OR (image="*\sc.exe" command IN ["* query *", "* qc *"))
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2016-03-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2016-03-001.yaml
+notes:
+  car_status: needs_implementation

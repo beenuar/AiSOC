@@ -1,0 +1,36 @@
+id: sigmahq-sigma-0b4ae027-2a2d-4b93-8c7e-962caaba5b2a
+name: Time Travel Debugging Utility Usage
+description: Detects usage of Time Travel Debugging Utility. Adversaries can execute
+  malicious processes and dump processes, such as lsass.exe, via tttracer.exe.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Tttracer/
+- https://twitter.com/mattifestation/status/1196390321783025666
+- https://twitter.com/oulusoyum/status/1191329746069655553
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentImage|endswith: \tttracer.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0b4ae027-2a2d-4b93-8c7e-962caaba5b2a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_tttracer_mod_load.yml
+falsepositives:
+- Legitimate usage by software developers/testers
+notes:
+  quarantine_reason: 'upstream status: test'

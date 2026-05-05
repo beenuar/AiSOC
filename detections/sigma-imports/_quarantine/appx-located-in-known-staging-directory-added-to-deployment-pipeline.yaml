@@ -1,0 +1,50 @@
+id: sigmahq-sigma-5cdeaf3d-1489-477c-95ab-c318559fc051
+name: AppX Located in Known Staging Directory Added to Deployment Pipeline
+description: Detects an appx package that was added to the pipeline of the "to be
+  processed" packages that is located in a known folder often used as a staging directory.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/labs/inside-malicious-windows-apps-for-malware-deployment/
+- https://learn.microsoft.com/en-us/windows/win32/appxpkg/troubleshooting
+- https://news.sophos.com/en-us/2021/11/11/bazarloader-call-me-back-attack-abuses-windows-10-apps-mechanism/
+logsource:
+  product: windows
+  service: appxdeployment-server
+detection:
+  selection_eid:
+    EventID: 854
+  selection_paths_forward:
+    Path|contains:
+    - :/Perflogs/
+    - :/Users/Public/
+    - :/Windows/Temp/
+    - /AppdData/Local/Temp/
+    - /Desktop/
+    - /Downloads/
+  selection_paths_back:
+    Path|contains:
+    - :\PerfLogs\
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \AppdData\Local\Temp\
+    - \Desktop\
+    - \Downloads\
+  condition: selection_eid and 1 of selection_paths_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5cdeaf3d-1489-477c-95ab-c318559fc051
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/appxdeployment_server/win_appxdeployment_server_appx_package_in_staging_directory.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

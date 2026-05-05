@@ -1,0 +1,45 @@
+id: sigmahq-sigma-f43f5d2f-3f2a-4cc8-b1af-81fde7dbaf0e
+name: AWS Suspicious SAML Activity
+description: Identifies when suspicious SAML activity has occurred in AWS. An adversary
+  could gain backdoor access via SAML.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1548
+  - T1550
+  - T1550.001
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/IAM/latest/APIReference/API_UpdateSAMLProvider.html
+- https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_sts:
+    eventSource: sts.amazonaws.com
+    eventName: AssumeRoleWithSAML
+  selection_iam:
+    eventSource: iam.amazonaws.com
+    eventName: UpdateSAMLProvider
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f43f5d2f-3f2a-4cc8-b1af-81fde7dbaf0e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_susp_saml_activity.yml
+falsepositives:
+- Automated processes that uses Terraform may lead to false positives.
+- SAML Provider could be updated by a system administrator. Verify whether the user
+  identity, user agent, and/or hostname should be making changes in your environment.
+- SAML Provider being updated from unfamiliar users should be investigated. If known
+  behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

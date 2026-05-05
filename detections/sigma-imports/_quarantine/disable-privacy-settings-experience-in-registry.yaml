@@ -1,0 +1,33 @@
+id: sigmahq-sigma-0372e1f9-0fd2-40f7-be1b-a7b2b848fa7b
+name: Disable Privacy Settings Experience in Registry
+description: Detects registry modifications that disable Privacy Settings Experience
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/9e5b12c4912c07562aec7500447b11fa3e17e254/atomics/T1562.001/T1562.001.md
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \SOFTWARE\Policies\Microsoft\Windows\OOBE\DisablePrivacyExperience
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0372e1f9-0fd2-40f7-be1b-a7b2b848fa7b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disable_privacy_settings_experience.yml
+falsepositives:
+- Legitimate admin script
+notes:
+  quarantine_reason: 'upstream status: test'

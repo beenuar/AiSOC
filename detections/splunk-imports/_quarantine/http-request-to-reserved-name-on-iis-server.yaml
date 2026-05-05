@@ -1,0 +1,50 @@
+id: splunk-security-content-1e45e6a8-110b-4886-b815-8d69cf35bf0a
+name: HTTP Request to Reserved Name on IIS Server
+description: 'Detects attempts to exploit a request smuggling technique against IIS
+  that leverages a Windows quirk where requests for reserved Windows device names
+  such as "/con" trigger an early server response before the request body is received.
+
+  When combined with a Content-Length desynchronization, this behavior can lead to
+  a parsing confusion between frontend and backend.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1190
+  categories:
+  - application
+references:
+- https://portswigger.net/web-security/request-smuggling#what-is-http-request-smuggling
+- https://portswigger.net/research/http1-must-die
+- https://www.vaadata.com/blog/what-is-http-request-smuggling-exploitations-and-security-best-practices/
+- https://www.securityweek.com/new-http-request-smuggling-attacks-impacted-cdns-major-orgs-millions-of-websites/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\nWeb.url IN (\n\
+    \    \"*/aux\",\n    \"*/com1\",\n    \"*/com2\",\n    \"*/com3\",\n    \"*/com4\"\
+    ,\n    \"*/com5\",\n    \"*/com6\",\n    \"*/com7\",\n    \"*/con\",\n    \"*/nul\"\
+    ,\n    \"*/prn\"\n)\n\nBY Web.src Web.dest Web.http_user_agent\n   Web.url Web.url_domain\
+    \ Web.status Web.http_method\n\n| `drop_dm_object_name(\"Web\")`\n```\nWe have\
+    \ to add the logic below because the TA does not extract the URI path from the\
+    \ URL, and the anchors are short. Hence to avoid false positives, we need to extract\
+    \ the URI path from the URL and check if it is a reserved name.\n```\n| eval uri=replace(url,\
+    \ url_domain, \"\")\n| where uri IN (\n    \"/aux\",\n    \"/com1\",\n    \"/com2\"\
+    ,\n    \"/com3\",\n    \"/com4\",\n    \"/com5\",\n    \"/com6\",\n    \"/com7\"\
+    ,\n    \"/con\",\n    \"/nul\",\n    \"/prn\"\n)\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `http_request_to_reserved_name_on_iis_server_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1e45e6a8-110b-4886-b815-8d69cf35bf0a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/http_request_to_reserved_name_on_iis_server.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

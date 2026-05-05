@@ -1,0 +1,38 @@
+id: sigmahq-sigma-e8a52bbd-bced-459f-bd93-64db45ce7657
+name: Potential Suspicious PowerShell Module File Created
+description: Detects the creation of a new PowerShell module in the first folder of
+  the module directory structure "\WindowsPowerShell\Modules\malware\malware.psm1".
+  This is somewhat an uncommon practice as legitimate modules often includes a version
+  folder.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://learn.microsoft.com/en-us/powershell/scripting/developer/module/understanding-a-windows-powershell-module?view=powershell-7.3
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith:
+    - \\WindowsPowerShell\\Modules\\*\.ps
+    - \\WindowsPowerShell\\Modules\\*\.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e8a52bbd-bced-459f-bd93-64db45ce7657
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_powershell_module_susp_creation.yml
+falsepositives:
+- False positive rate will vary depending on the environments. Additional filters
+  might be required to make this logic usable in production.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-193d5ccd-6f59-40c6-b5b0-8e32d5ddd3d1
+name: Xwizard.EXE Execution From Non-Default Location
+description: 'Detects the execution of Xwizard tool from a non-default directory.
+
+  When executed from a non-default directory, this utility can be abused in order
+  to side load a custom version of "xwizards.dll".'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Xwizard/
+- http://www.hexacorn.com/blog/2017/07/31/the-wizard-of-x-oppa-plugx-style/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \xwizard.exe
+  - OriginalFileName: xwizard.exe
+  filter_main_legit_location:
+    Image|startswith:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\WinSxS\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 193d5ccd-6f59-40c6-b5b0-8e32d5ddd3d1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_xwizard_execution_non_default_location.yml
+falsepositives:
+- Windows installed on non-C drive
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: splunk-security-content-e4a96dfd-667a-4487-b942-ccef5a1e81e8
+name: Windows Find Interesting ACL with FindInterestingDomainAcl
+description: The following analytic detects the execution of the `Find-InterestingDomainAcl`
+  cmdlet, part of the PowerView toolkit, using PowerShell Script Block Logging (EventCode=4104).
+  This detection leverages logs to identify when this command is run, which is significant
+  as adversaries may use it to find misconfigured or unusual Access Control Lists
+  (ACLs) within a domain. If confirmed malicious, this activity could allow attackers
+  to identify privilege escalation opportunities or weak security configurations in
+  Active Directory, potentially leading to unauthorized access or further exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/latest/Recon/Find-InterestingDomainAcl/
+- https://attack.mitre.org/techniques/T1087/002/
+- https://book.hacktricks.xyz/windows-hardening/basic-powershell-for-pentesters/powerview
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Find-InterestingDomainAcl*\"\
+    \n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_find_interesting_acl_with_findinterestingdomainacl_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e4a96dfd-667a-4487-b942-ccef5a1e81e8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_find_interesting_acl_with_findinterestingdomainacl.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

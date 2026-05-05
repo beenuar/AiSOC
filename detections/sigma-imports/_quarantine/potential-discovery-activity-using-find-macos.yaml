@@ -1,0 +1,41 @@
+id: sigmahq-sigma-85de3a19-b675-4a51-bfc6-b11a5186c971
+name: Potential Discovery Activity Using Find - MacOS
+description: Detects usage of "find" binary in a suspicious manner to perform discovery
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/SaiSathvik1/Linux-Privilege-Escalation-Notes
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /find
+    CommandLine|contains:
+    - -perm -4000
+    - -perm -2000
+    - -perm 0777
+    - -perm -222
+    - -perm -o w
+    - -perm -o x
+    - -perm -u=s
+    - -perm -g=s
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 85de3a19-b675-4a51-bfc6-b11a5186c971
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_susp_find_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

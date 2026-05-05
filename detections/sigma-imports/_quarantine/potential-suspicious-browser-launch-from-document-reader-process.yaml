@@ -1,0 +1,55 @@
+id: sigmahq-sigma-1193d960-2369-499f-a158-7b50a31df682
+name: Potential Suspicious Browser Launch From Document Reader Process
+description: Detects when a browser process or browser tab is launched from an application
+  that handles document files such as Adobe, Microsoft Office, etc. And connects to
+  a web application over http(s), this could indicate a possible phishing attempt.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/69c5abaa-92ad-45ba-8c53-c11e23e05d04/
+- https://app.any.run/tasks/64043a79-165f-4052-bcba-e6e49f847ec1/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentImage|contains:
+    - Acrobat Reader
+    - Microsoft Office
+    - PDF Reader
+    Image|endswith:
+    - \brave.exe
+    - \chrome.exe
+    - \firefox.exe
+    - \msedge.exe
+    - \opera.exe
+    - \maxthon.exe
+    - \seamonkey.exe
+    - \vivaldi.exe
+    CommandLine|contains: http
+  filter_main_microsoft_help:
+    CommandLine|contains: https://go.microsoft.com/fwlink/
+  filter_optional_foxit:
+    CommandLine|contains:
+    - http://ad.foxitsoftware.com/adlog.php?
+    - https://globe-map.foxitservice.com/go.php?do=redirect
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1193d960-2369-499f-a158-7b50a31df682
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_browser_launch_from_document_reader_process.yml
+falsepositives:
+- Unlikely in most cases, further investigation should be done in the commandline
+  of the browser process to determine the context of the URL accessed.
+notes:
+  quarantine_reason: 'upstream status: test'

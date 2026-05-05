@@ -1,0 +1,61 @@
+id: sigmahq-sigma-a94cdd87-6c54-4678-a6cc-2814ffe5a13d
+name: Unix Shell Configuration Modification
+description: Detect unix shell configuration modification. Adversaries may establish
+  persistence through executing malicious commands triggered when a new shell is opened.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.004
+  categories:
+  - endpoint
+references:
+- https://objective-see.org/blog/blog_0x68.html
+- https://web.archive.org/web/20221204161143/https://www.glitch-cat.com/p/green-lambert-and-attack
+- https://www.anomali.com/blog/pulling-linux-rabbit-rabbot-malware-out-of-a-hat
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name:
+    - /etc/shells
+    - /etc/profile
+    - /etc/profile.d/*
+    - /etc/bash.bashrc
+    - /etc/bashrc
+    - /etc/zsh/zprofile
+    - /etc/zsh/zshrc
+    - /etc/zsh/zlogin
+    - /etc/zsh/zlogout
+    - /etc/csh.cshrc
+    - /etc/csh.login
+    - /root/.bashrc
+    - /root/.bash_profile
+    - /root/.profile
+    - /root/.zshrc
+    - /root/.zprofile
+    - /home/*/.bashrc
+    - /home/*/.zshrc
+    - /home/*/.bash_profile
+    - /home/*/.zprofile
+    - /home/*/.profile
+    - /home/*/.bash_login
+    - /home/*/.bash_logout
+    - /home/*/.zlogin
+    - /home/*/.zlogout
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a94cdd87-6c54-4678-a6cc-2814ffe5a13d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_unix_shell_configuration_modification.yml
+falsepositives:
+- Admin or User activity are expected to generate some false positives
+notes:
+  quarantine_reason: 'upstream status: test'

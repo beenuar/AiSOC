@@ -1,0 +1,44 @@
+id: splunk-security-content-72cb9de9-e98b-4ac9-80b2-5331bba6ea97
+name: Circle CI Disable Security Step
+description: The following analytic detects the disablement of security steps in a
+  CircleCI pipeline. It leverages CircleCI logs, using field renaming, joining, and
+  statistical analysis to identify instances where mandatory security steps are not
+  executed. This activity is significant because disabling security steps can introduce
+  vulnerabilities, unauthorized changes, or malicious code into the pipeline. If confirmed
+  malicious, this could lead to potential attacks, data breaches, or compromised infrastructure.
+  Investigate by reviewing job names, commit details, and user information associated
+  with the disablement, and examine any relevant artifacts and concurrent processes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1554
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`circleci`\n  | rename workflows.job_id AS job_id\n  | join job_id\
+    \ [\n  | search `circleci`\n  | stats values(name) as step_names count\n    BY\
+    \ job_id job_name ]\n  | stats count\n    BY step_names job_id job_name\n    \
+    \   vcs.committer_name vcs.subject vcs.url\n       owners{}\n  | rename vcs.*\
+    \ as * , owners{} as user\n  | lookup mandatory_step_for_job job_name OUTPUTNEW\
+    \ step_name AS mandatory_step\n  | search mandatory_step=*\n  | eval mandatory_step_executed=if(like(step_names,\
+    \ \"%\".mandatory_step.\"%\"), 1, 0)\n  | where mandatory_step_executed=0\n  |\
+    \ rex field=url \"(?<repository>[^\\/]*\\/[^\\/]*)$\"\n  | eval phase=\"build\"\
+    \n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `circle_ci_disable_security_step_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 72cb9de9-e98b-4ac9-80b2-5331bba6ea97
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/circle_ci_disable_security_step.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

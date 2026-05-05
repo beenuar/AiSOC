@@ -1,0 +1,38 @@
+id: sigmahq-sigma-de41232e-12e8-49fa-86bc-c05c7e722df9
+name: Suspicious PowerShell Download - PoshModule
+description: Detects suspicious PowerShell download command
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/dotnet/api/system.net.webclient.downloadfile?view=net-8.0
+- https://learn.microsoft.com/en-us/dotnet/api/system.net.webclient.downloadstring?view=net-8.0
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_webclient_:
+    ContextInfo|contains: System.Net.WebClient
+  selection_function:
+    ContextInfo|contains:
+    - .DownloadFile(
+    - .DownloadString(
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: de41232e-12e8-49fa-86bc-c05c7e722df9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_susp_download.yml
+falsepositives:
+- PowerShell scripts that download content from the Internet
+notes:
+  quarantine_reason: 'upstream status: test'

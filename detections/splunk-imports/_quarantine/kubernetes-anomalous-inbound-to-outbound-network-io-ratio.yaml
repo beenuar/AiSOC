@@ -1,0 +1,54 @@
+id: splunk-security-content-9d8f6e3f-39df-46d8-a9d4-96173edc501f
+name: Kubernetes Anomalous Inbound to Outbound Network IO Ratio
+description: The following analytic identifies significant changes in network communication
+  behavior within Kubernetes containers by examining the inbound to outbound network
+  IO ratios. It leverages process metrics from an OTEL collector and Kubelet Stats
+  Receiver, along with data from Splunk Observability Cloud. Anomalies are detected
+  using a lookup table containing average and standard deviation values for network
+  IO, triggering an event if the anomaly persists for over an hour. This activity
+  is significant as it may indicate data exfiltration, command and control communication,
+  or compromised container behavior. If confirmed malicious, it could lead to data
+  breaches, service outages, and unauthorized access within the Kubernetes cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| mstats avg(k8s.pod.network.io) as io where `kubernetes_metrics` by
+    k8s.cluster.name k8s.pod.name k8s.node.name direction span=10s | eval service
+    = replace(''k8s.pod.name'', "-\w{5}$|-[abcdef0-9]{8,10}-\w{5}$", "") | eval key
+    = ''k8s.cluster.name'' + ":" + ''service'' | stats avg(eval(if(direction="transmit",
+    io,null()))) as outbound_network_io avg(eval(if(direction="receive", io,null())))
+    as inbound_network_io by key service k8s.cluster.name k8s.pod.name k8s.node.name
+    _time | eval inbound:outbound = inbound_network_io/outbound_network_io | eval
+    outbound:inbound = outbound_network_io/inbound_network_io | fields - *network_io
+    | lookup k8s_container_network_io_ratio_baseline key | eval anomalies = "" | foreach
+    stdev_* [ eval anomalies =if( ''<<MATCHSTR>>'' > (''avg_<<MATCHSTR>>'' + 4 * ''stdev_<<MATCHSTR>>''),
+    anomalies + "<<MATCHSTR>> ratio higher than average by " + tostring(round((''<<MATCHSTR>>''
+    - ''avg_<<MATCHSTR>>'')/''stdev_<<MATCHSTR>>'' ,2)) + " Standard Deviations. <<MATCHSTR>>="
+    + tostring(''<<MATCHSTR>>'') + " avg_<<MATCHSTR>>=" + tostring(''avg_<<MATCHSTR>>'')
+    + " ''stdev_<<MATCHSTR>>''=" + tostring(''stdev_<<MATCHSTR>>'') + ", " , anomalies)
+    ] | eval anomalies = replace(anomalies, ",\s$", "") | where anomalies!="" | stats
+    count values(anomalies) as anomalies by k8s.cluster.name k8s.node.name k8s.pod.name
+    service | rename service as k8s.service | where count > 5 | rename k8s.node.name
+    as host | `kubernetes_anomalous_inbound_to_outbound_network_io_ratio_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 9d8f6e3f-39df-46d8-a9d4-96173edc501f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_anomalous_inbound_to_outbound_network_io_ratio.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

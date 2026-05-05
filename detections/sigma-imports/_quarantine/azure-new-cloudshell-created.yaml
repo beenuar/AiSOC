@@ -1,0 +1,32 @@
+id: sigmahq-sigma-72af37e2-ec32-47dc-992b-bc288a2708cb
+name: Azure New CloudShell Created
+description: Identifies when a new cloudshell is created inside of Azure portal.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName: MICROSOFT.PORTAL/CONSOLES/WRITE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 72af37e2-ec32-47dc-992b-bc288a2708cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_new_cloudshell_created.yml
+falsepositives:
+- A new cloudshell may be created by a system administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: splunk-security-content-a9079b18-1633-11ec-859c-acde48001122
+name: Check Elevated CMD using whoami
+description: The following analytic identifies the execution of the "whoami" command
+  with the "/group" flag, where the results are passed to the "find" command in order
+  to look for a the string "12288". This string represents the SID of the group "Mandatory
+  Label\High Mandatory Level" effectively checking if the current process is running
+  as a "High" integrity process or with Administrator privileges. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process and command-line
+  telemetry. This activity is significant because it is commonly used by attackers,
+  such as FIN7, to perform reconnaissance on a compromised host. If confirmed malicious,
+  this behavior could indicate an attacker is assessing their privilege level, potentially
+  leading to further privilege escalation or persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process\
+    \ = \"*whoami*\" Processes.process = \"*/group*\" Processes.process = \"* find\
+    \ *\" Processes.process = \"*12288*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `check_elevated_cmd_using_whoami_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a9079b18-1633-11ec-859c-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/check_elevated_cmd_using_whoami.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

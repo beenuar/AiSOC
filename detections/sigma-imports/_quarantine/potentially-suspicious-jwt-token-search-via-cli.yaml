@@ -1,0 +1,56 @@
+id: sigmahq-sigma-6d3a3952-6530-44a3-8554-cf17c116c615
+name: Potentially Suspicious JWT Token Search Via CLI
+description: 'Detects potentially suspicious search for JWT tokens via CLI by looking
+  for the string "eyJ0eX" or "eyJhbG".
+
+  JWT tokens are often used for access-tokens across various applications and services
+  like Microsoft 365, Azure, AWS, Google Cloud, and others.
+
+  Threat actors may search for these tokens to steal them for lateral movement or
+  privilege escalation.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://mrd0x.com/stealing-tokens-from-office-applications/
+- https://www.scip.ch/en/?labs.20240523
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_tools:
+    CommandLine|contains:
+    - 'find '
+    - find.exe
+    - findstr
+    - 'select-string '
+    - strings
+  selection_jwt_string:
+    CommandLine|contains:
+    - eyJ0eXAiOi
+    - eyJhbGciOi
+    - ' eyJ0eX'
+    - ' "eyJ0eX"'
+    - ' ''eyJ0eX'''
+    - ' eyJhbG'
+    - ' "eyJhbG"'
+    - ' ''eyJhbG'''
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6d3a3952-6530-44a3-8554-cf17c116c615
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_jwt_token_search.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

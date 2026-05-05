@@ -1,0 +1,35 @@
+id: sigmahq-sigma-bdd8157d-8e85-4397-bb82-f06cc9c71dbb
+name: UAC Bypass Using IEInstal - File
+description: Detects the pattern of UAC Bypass using IEInstal.exe (UACMe 64)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image: C:\Program Files\Internet Explorer\IEInstal.exe
+    TargetFilename|startswith: C:\Users\
+    TargetFilename|contains: \AppData\Local\Temp\
+    TargetFilename|endswith: consent.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bdd8157d-8e85-4397-bb82-f06cc9c71dbb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_ieinstal.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,44 @@
+id: splunk-security-content-a1b2c3d4-e5f6-4789-a012-3456789abcde
+name: Windows BitDefender Submission Wizard DLL Sideloading
+description: Detects DLL side-loading of Bitdefender Submission Wizard (BDSubmit.exe,
+  bdsw.exe, or renamed BluetoothService.exe) when a malicious log.dll is loaded from
+  a non-standard path via Sysmon ImageLoad events.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1574/002/
+- https://www.rapid7.com/blog/post/tr-chrysalis-backdoor-dive-into-lotus-blossoms-toolkit/
+- https://attack.mitre.org/groups/G0065/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=7\n(\n    Image IN (\n        \"*\\\\BDSubmit.exe\"\
+    ,\n        \"*\\\\bdsw.exe\",\n        \"*\\\\BluetoothService.exe\"\n    )\n\
+    \    OR\n    OriginalFileName IN (\n        \"BDSubmit.exe\",\n        \"bdsw.exe\"\
+    \n    )\n)\nImageLoaded=\"*\\\\log.dll\"\nNOT ImageLoaded IN (\n    \"*:\\\\Program\
+    \ Files (x86)\\\\*\",\n    \"*:\\\\Program Files\\\\*\",\n    \"*:\\\\Windows\\\
+    \\System32\\\\*\",\n    \"*:\\\\Windows\\\\SysWOW64\\\\*\"\n)\n| stats count min(_time)\
+    \ as firstTime\n              max(_time) as lastTime\n  by dest Image ImageLoaded\
+    \ Signed SignatureStatus User OriginalFileName loaded_file\n     loaded_file_path\
+    \ process_exec process_guid process_hash process_id process_name\n     process_path\
+    \ service_dll_signature_exists service_dll_signature_verified signature\n    \
+    \ signature_id user_id vendor_product\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_bitdefender_submission_wizard_dll_sideloading_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a1b2c3d4-e5f6-4789-a012-3456789abcde
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_bitdefender_submission_wizard_dll_sideloading.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

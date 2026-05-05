@@ -1,0 +1,33 @@
+id: sigmahq-sigma-411742ad-89b0-49cb-a7b0-3971b5c1e0a4
+name: Locked Workstation
+description: Detects locked workstation session events that occur automatically after
+  a standard period of inactivity.
+severity: low
+enabled: true
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.cisecurity.org/controls/cis-controls-list/
+- https://www.pcisecuritystandards.org/documents/PCI_DSS_v3-2-1.pdf
+- https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.04162018.pdf
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=4800
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4800
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 411742ad-89b0-49cb-a7b0-3971b5c1e0a4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_workstation_was_locked.yml
+falsepositives:
+- Likely

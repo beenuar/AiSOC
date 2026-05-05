@@ -1,0 +1,39 @@
+id: splunk-security-content-f2d1110d-b01c-4a58-9975-90a9edeb083a
+name: Linux Auditd File Permissions Modification Via Chattr
+description: The following analytic detects suspicious file permissions modifications
+  using the chattr command, which may indicate an attacker attempting to manipulate
+  file attributes to evade detection or prevent alteration. The chattr command can
+  be used to make files immutable or restrict deletion, which can be leveraged to
+  protect malicious files or disrupt system operations. By monitoring for unusual
+  or unauthorized chattr usage, this analytic helps identify potential tampering with
+  critical files, enabling security teams to quickly respond to and mitigate threats
+  associated with unauthorized file attribute changes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.002
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` proctitle = \"*chattr *\" AND proctitle = \"* -i*\"\n\
+    \  | rename host as dest\n  | stats count min(_time) as firstTime max(_time) as\
+    \ lastTime\n    BY proctitle dest\n  | `security_content_ctime(firstTime)`\n \
+    \ | `security_content_ctime(lastTime)`\n  | `linux_auditd_file_permissions_modification_via_chattr_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f2d1110d-b01c-4a58-9975-90a9edeb083a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_file_permissions_modification_via_chattr.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

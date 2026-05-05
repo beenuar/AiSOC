@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-mustang-panda-dropper
+name: mustang_panda_dropper
+description: mustang_panda_dropper
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule mustang_panda_dropper {\n meta:\n    author = \"Florian Roth\"\
+    \n    description = \"Detects specific process parameters as used by Mustang Panda\
+    \ droppers  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Im4AdMvRZZgJ\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/10/30\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\") and ((re.regex($selection1.target.process.command_line,\
+    \ `.*Temp\\\\wtask\\.exe /create.*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*%windir:~-3,1%%PUBLIC:~-9,1%.*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*/E:vbscript .* C:\\\\Users.*\\.txt\\\" /F`) or re.regex($selection1.target.process.command_line,\
+    \ `.*/tn \\\"Security Script .*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*%windir:~-1,1%.*`)) or re.regex($selection1.target.process.file.full_path,\
+    \ `.*Temp\\\\winwsh\\.exe`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: mustang_panda_dropper
+provenance:
+  source: chronicle/detection-rules
+  source_id: mustang_panda_dropper
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/mustang_panda_dropper.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

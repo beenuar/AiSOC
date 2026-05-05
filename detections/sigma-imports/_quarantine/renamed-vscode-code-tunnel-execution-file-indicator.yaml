@@ -1,0 +1,38 @@
+id: sigmahq-sigma-d102b8f5-61dc-4e68-bd83-9a3187c67377
+name: Renamed VsCode Code Tunnel Execution - File Indicator
+description: Detects the creation of a file with the name "code_tunnel.json" which
+  indicate execution and usage of VsCode tunneling utility by an "Image" or "Process"
+  other than VsCode.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://ipfyx.fr/post/visual-studio-code-tunnel/
+- https://badoption.eu/blog/2023/01/31/code_c2.html
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \code_tunnel.json
+  filter_main_legit_name:
+    Image|endswith:
+    - \code-tunnel.exe
+    - \code.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d102b8f5-61dc-4e68-bd83-9a3187c67377
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_vscode_tunnel_renamed_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

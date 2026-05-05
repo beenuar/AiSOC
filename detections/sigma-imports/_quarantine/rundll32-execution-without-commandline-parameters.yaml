@@ -1,0 +1,41 @@
+id: sigmahq-sigma-1775e15e-b61b-4d14-a1a3-80981298085a
+name: Rundll32 Execution Without CommandLine Parameters
+description: Detects suspicious start of rundll32.exe without any parameters as found
+  in CobaltStrike beacon activity
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://www.cobaltstrike.com/help-opsec
+- https://twitter.com/ber_m1ng/status/1397948048135778309
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|endswith:
+    - \rundll32.exe
+    - \rundll32.exe"
+    - \rundll32
+  filter:
+    ParentImage|contains:
+    - \AppData\Local\
+    - \Microsoft\Edge\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1775e15e-b61b-4d14-a1a3-80981298085a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_no_params.yml
+falsepositives:
+- Possible but rare
+notes:
+  quarantine_reason: 'upstream status: test'

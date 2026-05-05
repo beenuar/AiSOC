@@ -1,0 +1,56 @@
+id: sigmahq-sigma-9e8894c0-0ae0-11ef-9d85-1f2942bec57c
+name: Suspicious Shell Open Command Registry Modification
+description: 'Detects modifications to shell open registry keys that point to suspicious
+  locations typically used by malware for persistence.
+
+  Generally, modifications to the `*\shell\open\command` registry key can indicate
+  an attempt to change the default action for opening files,
+
+  and various UAC bypass or persistence techniques involve modifying these keys to
+  execute malicious scripts or binaries.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  - T1546.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/25/f/water-curse.html
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \shell\open\command\
+    Details|contains:
+    - \$Recycle.Bin\
+    - \AppData\Local\Temp\
+    - \Contacts\
+    - \Music\
+    - \PerfLogs\
+    - \Photos\
+    - \Pictures\
+    - \Users\Public\
+    - \Videos\
+    - \Windows\Temp\
+    - '%AppData%'
+    - '%LocalAppData%'
+    - '%Temp%'
+    - '%tmp%'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e8894c0-0ae0-11ef-9d85-1f2942bec57c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_susp_shell_open_keys_modification_patterns.yml
+falsepositives:
+- Legitimate software installations or updates that modify the shell open command
+  registry keys to these locations.
+notes:
+  quarantine_reason: 'upstream status: experimental'

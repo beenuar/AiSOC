@@ -1,0 +1,65 @@
+id: sigmahq-sigma-69aeb277-f15f-4d2d-b32a-55e883609563
+name: Windows Event Auditing Disabled
+description: 'Detects scenarios where system auditing (i.e.: Windows event log auditing)
+  is disabled.
+
+  This may be used in a scenario where an entity would want to bypass local logging
+  to evade detection when Windows event logging is enabled and reviewed.
+
+  Also, it is recommended to turn off "Local Group Policy Object Processing" via GPO,
+  which will make sure that Active Directory GPOs take precedence over local/edited
+  computer policies via something such as "gpedit.msc".
+
+  Please note, that disabling "Local Group Policy Object Processing" may cause an
+  issue in scenarios of one off specific GPO modifications - however, it is recommended
+  to perform these modifications in Active Directory anyways.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://docs.google.com/presentation/d/1dkrldTTlN3La-OjWtkWJBb4hVk6vfsSMBFBERs6R8zA/edit
+logsource:
+  product: windows
+  service: security
+  definition: dfd8c0f4-e6ad-4e07-b91b-f2fca0ddef64
+detection:
+  selection:
+    EventID: 4719
+    AuditPolicyChanges|contains:
+    - '%%8448'
+    - '%%8450'
+  filter_main_guid:
+    SubcategoryGuid:
+    - '{0CCE9210-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9211-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9212-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9215-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9217-69AE-11D9-BED3-505054503030}'
+    - '{0CCE921B-69AE-11D9-BED3-505054503030}'
+    - '{0CCE922B-69AE-11D9-BED3-505054503030}'
+    - '{0CCE922F-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9230-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9235-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9236-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9237-69AE-11D9-BED3-505054503030}'
+    - '{0CCE923F-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9240-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9242-69AE-11D9-BED3-505054503030}'
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 69aeb277-f15f-4d2d-b32a-55e883609563
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_disable_event_auditing.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

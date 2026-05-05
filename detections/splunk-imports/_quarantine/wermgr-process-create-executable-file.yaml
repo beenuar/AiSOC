@@ -1,0 +1,40 @@
+id: splunk-security-content-ab3bcce0-a105-11eb-973c-acde48001122
+name: Wermgr Process Create Executable File
+description: The following analytic detects the wermgr.exe process creating an executable
+  file. It leverages Sysmon EventCode 11 to identify instances where wermgr.exe generates
+  a .exe file. This behavior is unusual because wermgr.exe is typically associated
+  with error reporting, not file creation. Such activity is significant as it may
+  indicate TrickBot malware, which injects code into wermgr.exe to execute malicious
+  actions like downloading additional payloads. If confirmed malicious, this could
+  lead to further malware infections, data exfiltration, or system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://labs.vipre.com/trickbot-and-its-modules/
+- https://whitehat.eu/incident-response-case-study-featuring-ryuk-and-trickbot-part-2/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=11 process_name = \"wermgr.exe\" TargetFilename\
+    \ = \"*.exe\"\n  | stats  min(_time) as firstTime max(_time) as lastTime count\n\
+    \    BY action dest file_name\n       file_path process_guid process_id\n    \
+    \   user_id vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `wermgr_process_create_executable_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ab3bcce0-a105-11eb-973c-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/wermgr_process_create_executable_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

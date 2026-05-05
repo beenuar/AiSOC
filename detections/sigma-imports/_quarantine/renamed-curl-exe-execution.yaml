@@ -1,0 +1,37 @@
+id: sigmahq-sigma-7530cd3d-7671-43e3-b209-976966f6ea48
+name: Renamed CURL.EXE Execution
+description: Detects the execution of a renamed "CURL.exe" binary based on the PE
+  metadata fields
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Kostastsale/status/1700965142828290260
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - OriginalFileName: curl.exe
+  - Description: The curl executable
+  filter_main_img:
+    Image|contains: \curl
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7530cd3d-7671-43e3-b209-976966f6ea48
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_curl.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

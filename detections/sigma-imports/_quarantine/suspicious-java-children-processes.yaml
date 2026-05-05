@@ -1,0 +1,43 @@
+id: sigmahq-sigma-d292e0af-9a18-420c-9525-ec0ac3936892
+name: Suspicious Java Children Processes
+description: Detects java process spawning suspicious children
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://www.tecmint.com/different-types-of-linux-shells/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    ParentImage|endswith: /java
+    CommandLine|contains:
+    - /bin/sh
+    - bash
+    - dash
+    - ksh
+    - zsh
+    - csh
+    - fish
+    - curl
+    - wget
+    - python
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d292e0af-9a18-420c-9525-ec0ac3936892
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_java_children.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

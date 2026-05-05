@@ -1,0 +1,44 @@
+id: sigmahq-sigma-94dc4390-6b7c-4784-8ffc-335334404650
+name: Dump Ntds.dit To Suspicious Location
+description: Detects potential abuse of ntdsutil to dump ntds.dit database to a suspicious
+  location
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mgreen27/status/1558223256704122882
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj574207(v=ws.11)
+logsource:
+  product: windows
+  service: application
+detection:
+  selection_root:
+    Provider_Name: ESENT
+    EventID: 325
+    Data|contains: ntds.dit
+  selection_paths:
+    Data|contains:
+    - :\ntds.dit
+    - \Appdata\
+    - \Desktop\
+    - \Downloads\
+    - \Perflogs\
+    - \Temp\
+    - \Users\Public\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 94dc4390-6b7c-4784-8ffc-335334404650
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/esent/win_esent_ntdsutil_abuse_susp_location.yml
+falsepositives:
+- Legitimate backup operation/creating shadow copies
+notes:
+  quarantine_reason: 'upstream status: test'

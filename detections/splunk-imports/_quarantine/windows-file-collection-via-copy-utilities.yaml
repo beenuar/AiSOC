@@ -1,0 +1,58 @@
+id: splunk-security-content-dbdd556d-9da8-4c42-9980-8a3ffe25a758
+name: Windows File Collection Via Copy Utilities
+description: The following analytic detects the use of Windows command-line copy utilities,
+  such as xcopy, to systematically collect files from user directories and consolidate
+  them into a centralized location on the system. This activity is often indicative
+  of malicious behavior, as threat actors frequently use such commands to gather sensitive
+  information, including documents with .doc, .docx, and .pdf extensions. The detection
+  focuses on identifying recursive copy operations targeting user folders, such as
+  Documents, Desktop, or other directories that commonly store personal or organizational
+  files. Malware that performs this behavior typically attempts to evade detection
+  by using legitimate Windows utilities, executing commands through cmd.exe or other
+  scripting hosts, and writing the collected files to directories like C:\ProgramData
+  or temporary storage locations. Once collected, the information may be staged for
+  exfiltration, used for lateral movement, or leveraged for further compromise of
+  the environment. By monitoring for these types of file collection patterns, security
+  teams can identify suspicious activity early, differentiate between normal administrative
+  tasks and potentially malicious scripts, and prevent sensitive data from being exfiltrated.
+  This analytic is particularly relevant for environments where confidential documents
+  are present and attackers may attempt to harvest them using built-in Windows tools.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1119
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/6284730
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n(\n  Processes.process_name\
+    \ IN (\"copy.exe\", \"xcopy.exe\")\n  OR\n  Processes.original_file_name IN (\"\
+    copy.exe\", \"xcopy.exe\")\n)\nProcesses.process IN (\n  \"*.7z*\",\n  \"*.bmp*\"\
+    ,\n  \"*.db*\",\n  \"*.doc*\",\n  \"*.gif*\",\n  \"*.gz*\",\n  \"*.jpg*\",\n \
+    \ \"*.log*\",\n  \"*.pdf*\",\n  \"*.png*\",\n  \"*.ppt*\",\n  \"*.rar*\",\n  \"\
+    *.rtf*\",\n  \"*.tar*\",\n  \"*.txt*\",\n  \"*.xls*\",\n  \"*.zip*\"\n)\nby Processes.action\
+    \ Processes.dest Processes.original_file_name\nProcesses.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\nProcesses.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\nProcesses.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\nProcesses.process_id Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\nProcesses.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_file_collection_via_copy_utilities_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dbdd556d-9da8-4c42-9980-8a3ffe25a758
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_file_collection_via_copy_utilities.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

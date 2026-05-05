@@ -1,0 +1,44 @@
+id: sigmahq-sigma-4cb57c2f-1f29-41f8-893d-8bed8e1c1d2f
+name: System Shutdown/Reboot - Linux
+description: Adversaries may shutdown/reboot systems to interrupt access to, or aid
+  in the destruction of, those systems.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1529
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1529/T1529.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  execve:
+    type: EXECVE
+  shutdowncmd:
+  - shutdown
+  - reboot
+  - halt
+  - poweroff
+  init:
+  - init
+  - telinit
+  initselection:
+  - 0
+  - 6
+  condition: execve and (shutdowncmd or (init and initselection))
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4cb57c2f-1f29-41f8-893d-8bed8e1c1d2f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_system_shutdown_reboot.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,50 @@
+id: splunk-security-content-0b5c9c2b-e2cb-4831-b4f1-af125ceb1386
+name: AWS Unusual Number of Failed Authentications From Ip
+description: The following analytic identifies a single source IP failing to authenticate
+  into the AWS Console with multiple valid users. It uses CloudTrail logs and calculates
+  the standard deviation for source IP, leveraging the 3-sigma rule to detect unusual
+  numbers of failed authentication attempts. This behavior is significant as it may
+  indicate a Password Spraying attack, where an adversary attempts to gain initial
+  access or elevate privileges. If confirmed malicious, this activity could lead to
+  unauthorized access, data breaches, or further exploitation within the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://www.whiteoaksecurity.com/blog/goawsconsolespray-password-spraying-tool/
+- https://softwaresecuritydotblog.wordpress.com/2019/09/28/how-to-protect-against-credential-stuffing-on-aws/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=ConsoleLogin action=failure\n  | rename eventName\
+    \ as action, eventSource as dest, userName as user, userAgent as user_agent, sourceIPAddress\
+    \ as src, userIdentity.accountId as vendor_account, awsRegion as vendor_region\n\
+    \  | bucket span=10m _time\n  | stats  dc(_raw) AS distinct_attempts values(user_name)\
+    \ as tried_accounts values(action) as action values(dest) as dest values(vendor_account)\
+    \ as vendor_account values(vendor_region) as vendor_region values(vendor_product)\
+    \ as vendor_product values(user_agent) as user_agent\n    BY _time, src\n  | eventstats\
+    \ avg(distinct_attempts) as avg_attempts , stdev(distinct_attempts) as ip_std\n\
+    \    BY _time\n  | eval upperBound=(avg_attempts+ip_std*3)\n  | eval  isOutlier=if(distinct_attempts\
+    \ > 10 and distinct_attempts >= upperBound, 1, 0)\n  | where isOutlier = 1\n \
+    \ | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_unusual_number_of_failed_authentications_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0b5c9c2b-e2cb-4831-b4f1-af125ceb1386
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_unusual_number_of_failed_authentications_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

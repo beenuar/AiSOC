@@ -1,0 +1,44 @@
+id: sigmahq-sigma-c0e0bdec-3e3d-47aa-9974-05539c999c89
+name: Registry Modification for OCI DLL Redirection
+description: 'Detects registry modifications related to ''OracleOciLib'' and ''OracleOciLibPath''
+  under ''MSDTC'' settings.
+
+  Threat actors may modify these registry keys to redirect the loading of ''oci.dll''
+  to a malicious DLL, facilitating phantom DLL hijacking via the MSDTC service.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/en-us/blog/4-ways-adversaries-hijack-dlls/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_ocilib:
+    TargetObject|endswith: \SOFTWARE\Microsoft\MSDTC\MTxOCI\OracleOciLib
+  filter_main_ocilib_file:
+    Details|contains: oci.dll
+  selection_ocilibpath:
+    TargetObject|endswith: \SOFTWARE\Microsoft\MSDTC\MTxOCI\OracleOciLibPath
+  filter_main_ocilibpath:
+    Details|contains: '%SystemRoot%\System32\'
+  condition: (selection_ocilib and not filter_main_ocilib_file) or (selection_ocilibpath
+    and not filter_main_ocilibpath)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c0e0bdec-3e3d-47aa-9974-05539c999c89
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_potential_oci_dll_redirection.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,51 @@
+id: sigmahq-sigma-5a105d34-05fc-401e-8553-272b45c1522d
+name: CobaltStrike Service Installations - System
+description: Detects known malicious service installs that appear in cases in which
+  a Cobalt Strike beacon elevates privileges or lateral movement
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1543.003
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.sans.org/webcasts/119395
+- https://www.crowdstrike.com/blog/getting-the-bacon-from-cobalt-strike-beacon/
+- https://thedfirreport.com/2021/08/29/cobalt-strike-a-defenders-guide/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_id:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection1:
+    ImagePath|contains|all:
+    - ADMIN$
+    - .exe
+  selection2:
+    ImagePath|contains|all:
+    - '%COMSPEC%'
+    - start
+    - powershell
+  selection3:
+    ImagePath|contains: powershell -nop -w hidden -encodedcommand
+  selection4:
+    ImagePath|base64offset|contains: 'IEX (New-Object Net.Webclient).DownloadString(''http://127.0.0.1:'
+  condition: selection_id and (selection1 or selection2 or selection3 or selection4)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5a105d34-05fc-401e-8553-272b45c1522d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_cobaltstrike_service_installs.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

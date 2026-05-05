@@ -1,0 +1,37 @@
+id: sigmahq-sigma-994bfd6d-0a2e-481e-a861-934069fcf5f5
+name: Active Directory Certificate Services Denied Certificate Enrollment Request
+description: 'Detects denied requests by Active Directory Certificate Services.
+
+  Example of these requests denial include issues with permissions on the certificate
+  template or invalid signatures.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1553.004
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/dd299871(v=ws.10)
+- https://www.gradenegger.eu/en/details-of-the-event-with-id-53-of-the-source-microsoft-windows-certificationauthority/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Microsoft-Windows-CertificationAuthority
+    EventID: 53
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 994bfd6d-0a2e-481e-a861-934069fcf5f5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_certification_authority/win_system_adcs_enrollment_request_denied.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

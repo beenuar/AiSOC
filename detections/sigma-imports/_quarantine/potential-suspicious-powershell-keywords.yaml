@@ -1,0 +1,47 @@
+id: sigmahq-sigma-1f49f2ab-26bc-48b3-96cc-dcffbc93eadf
+name: Potential Suspicious PowerShell Keywords
+description: Detects potentially suspicious keywords that could indicate the use of
+  a PowerShell exploitation framework
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/entering-a-covenant-net-command-and-control-e11038bcf462
+- https://github.com/PowerShellMafia/PowerSploit/blob/d943001a7defb5e0d1657085a77a0e78609be58f/CodeExecution/Invoke-ReflectivePEInjection.ps1
+- https://github.com/hlldz/Phant0m/blob/30c2935d8cf4aafda17ee2fab7cd0c4aa9a607c2/old/Invoke-Phant0m.ps1
+- https://gist.github.com/MHaggis/0dbe00ad401daa7137c81c99c268cfb7
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - System.Reflection.Assembly.Load($
+    - '[System.Reflection.Assembly]::Load($'
+    - '[Reflection.Assembly]::Load($'
+    - System.Reflection.AssemblyName
+    - Reflection.Emit.AssemblyBuilderAccess
+    - Reflection.Emit.CustomAttributeBuilder
+    - Runtime.InteropServices.UnmanagedType
+    - Runtime.InteropServices.DllImportAttribute
+    - SuspendThread
+    - rundll32
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1f49f2ab-26bc-48b3-96cc-dcffbc93eadf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_keywords.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

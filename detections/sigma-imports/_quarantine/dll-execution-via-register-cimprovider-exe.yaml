@@ -1,0 +1,36 @@
+id: sigmahq-sigma-a2910908-e86f-4687-aeba-76a5f996e652
+name: DLL Execution Via Register-cimprovider.exe
+description: Detects using register-cimprovider.exe to execute arbitrary dll file.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574
+  categories:
+  - endpoint
+references:
+- https://twitter.com/PhilipTsukerman/status/992021361106268161
+- https://lolbas-project.github.io/lolbas/Binaries/Register-cimprovider/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \register-cimprovider.exe
+    CommandLine|contains|all:
+    - -path
+    - dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a2910908-e86f-4687-aeba-76a5f996e652
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_registry_cimprovider_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

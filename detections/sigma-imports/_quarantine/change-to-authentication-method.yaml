@@ -1,0 +1,36 @@
+id: sigmahq-sigma-4d78a000-ab52-4564-88a5-7ab5242b20c7
+name: Change to Authentication Method
+description: Change to authentication method could be an indicator of an attacker
+  adding an auth method to the account so they can have continued access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  - T1098
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    LoggedByService: Authentication Methods
+    Category: UserManagement
+    OperationName: User registered security info
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4d78a000-ab52-4564-88a5-7ab5242b20c7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_change_to_authentication_method.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

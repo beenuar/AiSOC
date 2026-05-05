@@ -1,0 +1,36 @@
+id: sigmahq-sigma-6db5eaf9-88f7-4ed9-af7d-9ef2ad12f236
+name: Winget Admin Settings Modification
+description: Detects changes to the AppInstaller (winget) admin settings. Such as
+  enabling local manifest installations or disabling installer hash checks
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/Misc-Research/tree/b9596e8109dcdb16ec353f316678927e507a5b8d/LOLBINs/Winget
+- https://github.com/microsoft/winget-cli/blob/02d2f93807c9851d73eaacb4d8811a76b64b7b01/src/AppInstallerCommonCore/Public/winget/AdminSettings.h#L13
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    Image|endswith: \winget.exe
+    TargetObject|startswith: \REGISTRY\A\
+    TargetObject|endswith: \LocalState\admin_settings
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6db5eaf9-88f7-4ed9-af7d-9ef2ad12f236
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_winget_admin_settings_tampering.yml
+falsepositives:
+- The event doesn't contain information about the type of change. False positives
+  are expected with legitimate changes
+notes:
+  quarantine_reason: 'upstream status: test'

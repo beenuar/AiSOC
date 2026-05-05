@@ -1,0 +1,33 @@
+id: sigmahq-sigma-c67fc22a-0be5-4b4f-aad5-2b32c4b69523
+name: Symlink Etc Passwd
+description: Detects suspicious command lines that look as if they would create symbolic
+  links to /etc/passwd
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.001
+  categories:
+  - endpoint
+references:
+- https://www.qualys.com/2021/05/04/21nails/21nails.txt
+logsource:
+  product: linux
+detection:
+  keywords:
+  - ln -s -f /etc/passwd
+  - ln -s /etc/passwd
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c67fc22a-0be5-4b4f-aad5-2b32c4b69523
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/lnx_symlink_etc_passwd.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

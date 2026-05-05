@@ -1,0 +1,38 @@
+id: splunk-security-content-21c5af91-1a4a-4511-8603-64fb41df3fad
+name: Windows SIP Provider Inventory
+description: The following analytic identifies all SIP (Subject Interface Package)
+  providers on a Windows system using PowerShell scripted inputs. It detects SIP providers
+  by capturing DLL paths from relevant events. This activity is significant because
+  malicious SIP providers can be used to bypass trust controls, potentially allowing
+  unauthorized code execution. If confirmed malicious, this activity could enable
+  attackers to subvert system integrity, leading to unauthorized access or persistent
+  threats within the environment. Analysts should review for new and non-standard
+  paths to identify potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553.003
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/75dd5db546c143ea67703d0e86cdbbd1
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`subjectinterfacepackage` Dll=*\\*.dll | stats count min(_time) as
+    firstTime max(_time) as lastTime values(Dll) by Path host| `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)`| `windows_sip_provider_inventory_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 21c5af91-1a4a-4511-8603-64fb41df3fad
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sip_provider_inventory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

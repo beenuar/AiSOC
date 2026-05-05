@@ -1,0 +1,44 @@
+id: splunk-security-content-395ed5fe-ad13-4366-9405-a228427bdd91
+name: Windows Impair Defense Delete Win Defender Context Menu
+description: The following analytic detects the deletion of the Windows Defender context
+  menu entry from the registry. It leverages data from the Endpoint datamodel, specifically
+  monitoring registry actions where the path includes "*\\shellex\\ContextMenuHandlers\\EPP"
+  and the action is 'deleted'. This activity is significant as it is commonly associated
+  with Remote Access Trojan (RAT) malware attempting to disable security features.
+  If confirmed malicious, this could allow an attacker to impair defenses, facilitating
+  further malicious activities such as unauthorized access, persistence, and data
+  exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://blog.malwarebytes.com/malwarebytes-news/2021/02/lazyscripter-from-empire-to-double-rat/
+- https://app.any.run/tasks/45f5d114-91ea-486c-ab01-41c4093d2861/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path
+    = "*\\shellex\\ContextMenuHandlers\\EPP" Registry.action = deleted by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_impair_defense_delete_win_defender_context_menu_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 395ed5fe-ad13-4366-9405-a228427bdd91
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defense_delete_win_defender_context_menu.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

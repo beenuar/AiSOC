@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d9557b75-267b-4b43-922f-a775e2d1f792
+name: Azure Point-to-site VPN Modified or Deleted
+description: Identifies when a Point-to-site VPN is Modified or Deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName:
+    - MICROSOFT.NETWORK/P2SVPNGATEWAYS/WRITE
+    - MICROSOFT.NETWORK/P2SVPNGATEWAYS/DELETE
+    - MICROSOFT.NETWORK/P2SVPNGATEWAYS/RESET/ACTION
+    - MICROSOFT.NETWORK/P2SVPNGATEWAYS/GENERATEVPNPROFILE/ACTION
+    - MICROSOFT.NETWORK/P2SVPNGATEWAYS/DISCONNECTP2SVPNCONNECTIONS/ACTION
+    - MICROSOFT.NETWORK/P2SVPNGATEWAYS/PROVIDERS/MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/WRITE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d9557b75-267b-4b43-922f-a775e2d1f792
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_network_p2s_vpn_modified_or_deleted.yml
+falsepositives:
+- Point-to-site VPN being modified or deleted may be performed by a system administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Point-to-site VPN modified or deleted from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-829a3bdf-34da-4051-9cf4-8ed221a8ae4f
+name: Microsoft Office DLL Sideload
+description: Detects DLL sideloading of DLLs that are part of Microsoft Office from
+  non standard location
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \outllib.dll
+  filter:
+    ImageLoaded|startswith:
+    - C:\Program Files\Microsoft Office\OFFICE
+    - C:\Program Files (x86)\Microsoft Office\OFFICE
+    - C:\Program Files\Microsoft Office\Root\OFFICE
+    - C:\Program Files (x86)\Microsoft Office\Root\OFFICE
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 829a3bdf-34da-4051-9cf4-8ed221a8ae4f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_office_dlls.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

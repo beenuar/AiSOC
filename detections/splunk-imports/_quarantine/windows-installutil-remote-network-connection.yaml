@@ -1,0 +1,58 @@
+id: splunk-security-content-4fbf9270-43da-11ec-9486-acde48001122
+name: Windows InstallUtil Remote Network Connection
+description: The following analytic detects the Windows InstallUtil.exe binary making
+  a remote network connection. It leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on process and network telemetry. This activity is significant
+  because InstallUtil.exe can be exploited to download and execute malicious code,
+  bypassing application control mechanisms. If confirmed malicious, an attacker could
+  achieve code execution, potentially leading to further system compromise, data exfiltration,
+  or lateral movement within the network. Analysts should review the parent process,
+  network connections, and any associated file modifications to determine the legitimacy
+  of this activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.004/T1218.004.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\n\
+    \  where `process_installutil`\n  by _time span=1h\n  Processes.action Processes.dest\
+    \ Processes.original_file_name\n  Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n  Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n  Processes.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n  Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\n  Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| join process_id dest\n    [| tstats `security_content_summariesonly`\n\
+    \        count FROM datamodel=Network_Traffic.All_Traffic where\n        All_Traffic.dest_port\
+    \ != 0\n        by All_Traffic.action All_Traffic.app All_Traffic.bytes All_Traffic.bytes_in\
+    \ All_Traffic.bytes_out\n        All_Traffic.dest  All_Traffic.dest_ip All_Traffic.dest_port\
+    \ All_Traffic.dvc All_Traffic.protocol\n        All_Traffic.protocol_version All_Traffic.src\
+    \ All_Traffic.src_ip All_Traffic.src_port\n        All_Traffic.transport All_Traffic.user\
+    \ All_Traffic.vendor_product All_Traffic.direction All_Traffic.process_id\n  \
+    \  | `drop_dm_object_name(All_Traffic)`\n    | rename dest as command_and_control\n\
+    \    | rename src as dest]\n| table _time user src dest parent_process_name process_name\
+    \ process_path process process_id dest_port command_and_control\n| stats count\
+    \ min(_time) as firstTime\n    max(_time) as lastTime\n    values(process) as\
+    \ process\n    values(command_and_control) as command_and_control\n    by user\
+    \ dest process_name process_id dest_port parent_process_name\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_installutil_remote_network_connection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4fbf9270-43da-11ec-9486-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_installutil_remote_network_connection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

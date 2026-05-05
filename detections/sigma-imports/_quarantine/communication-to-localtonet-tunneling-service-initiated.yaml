@@ -1,0 +1,45 @@
+id: sigmahq-sigma-3ab65069-d82a-4d44-a759-466661a082d1
+name: Communication To LocaltoNet Tunneling Service Initiated
+description: 'Detects an executable initiating a network connection to "LocaltoNet"
+  tunneling sub-domains.
+
+  LocaltoNet is a reverse proxy that enables localhost services to be exposed to the
+  Internet.
+
+  Attackers have been seen to use this service for command-and-control activities
+  to bypass MFA and perimeter controls.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1090
+  - T1102
+  categories:
+  - endpoint
+references:
+- https://localtonet.com/documents/supported-tunnels
+- https://cloud.google.com/blog/topics/threat-intelligence/unc3944-targets-saas-applications
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    DestinationHostname|endswith:
+    - .localto.net
+    - .localtonet.com
+    Initiated: 'true'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3ab65069-d82a-4d44-a759-466661a082d1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_localtonet_tunnel.yml
+falsepositives:
+- Legitimate use of the LocaltoNet service.
+notes:
+  quarantine_reason: 'upstream status: test'

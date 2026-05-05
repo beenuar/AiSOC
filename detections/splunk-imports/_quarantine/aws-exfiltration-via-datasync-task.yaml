@@ -1,0 +1,41 @@
+id: splunk-security-content-05c4b09f-ea28-4c7c-a7aa-a246f665c8a2
+name: AWS Exfiltration via DataSync Task
+description: The following analytic detects the creation of an AWS DataSync task,
+  which could indicate potential data exfiltration. It leverages AWS CloudTrail logs
+  to identify the `CreateTask` event from the DataSync service. This activity is significant
+  because attackers can misuse DataSync to transfer sensitive data from a private
+  AWS location to a public one, leading to data compromise. If confirmed malicious,
+  this could result in unauthorized access to sensitive information, causing severe
+  data breaches and compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1119
+  categories:
+  - cloud
+references:
+- https://labs.nettitude.com/blog/how-to-exfiltrate-aws-ec2-data/
+- https://www.shehackske.com/how-to/data-exfiltration-on-cloud-1606/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName = CreateTask eventSource=\"datasync.amazonaws.com\"\
+    \n  | rename  requestParameters.*  as *\n  | rename user_name as user\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY signature dest\
+    \ user\n       user_agent src vendor_account\n       vendor_region vendor_product\
+    \ destinationLocationArn\n       sourceLocationArn\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `aws_exfiltration_via_datasync_task_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 05c4b09f-ea28-4c7c-a7aa-a246f665c8a2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_exfiltration_via_datasync_task.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

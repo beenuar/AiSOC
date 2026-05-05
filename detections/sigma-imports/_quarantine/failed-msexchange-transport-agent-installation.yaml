@@ -1,0 +1,34 @@
+id: sigmahq-sigma-c7d16cae-aaf3-42e5-9c1c-fb8553faa6fa
+name: Failed MSExchange Transport Agent Installation
+description: Detects a failed installation of a Exchange Transport Agent
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.002
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=8
+logsource:
+  service: msexchange-management
+  product: windows
+detection:
+  selection:
+    EventID: 6
+    Data|contains: Install-TransportAgent
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c7d16cae-aaf3-42e5-9c1c-fb8553faa6fa
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/msexchange/win_exchange_transportagent_failed.yml
+falsepositives:
+- Legitimate installations of exchange TransportAgents. AssemblyPath is a good indicator
+  for this.
+notes:
+  quarantine_reason: 'upstream status: test'

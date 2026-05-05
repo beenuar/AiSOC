@@ -1,0 +1,39 @@
+id: sigmahq-sigma-f346bbd5-2c4e-4789-a221-72de7685090d
+name: Google Cloud SQL Database Modified or Deleted
+description: Detect when a Cloud SQL DB has been modified or deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/sql/docs/mysql/admin-api/rest/v1beta4/users/update
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name:
+    - cloudsql.instances.create
+    - cloudsql.instances.delete
+    - cloudsql.users.update
+    - cloudsql.users.delete
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f346bbd5-2c4e-4789-a221-72de7685090d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_sql_database_modified_or_deleted.yml
+falsepositives:
+- SQL Database being modified or deleted may be performed by a system administrator.
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- SQL Database modified or deleted from unfamiliar users should be investigated. If
+  known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

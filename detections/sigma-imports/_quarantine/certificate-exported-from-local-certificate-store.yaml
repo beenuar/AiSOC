@@ -1,0 +1,34 @@
+id: sigmahq-sigma-58c0bff0-40a0-46e8-b5e8-b734b84d2017
+name: Certificate Exported From Local Certificate Store
+description: Detects when an application exports a certificate (and potentially the
+  private key as well) from the local Windows certificate store.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/breaking-the-chain-defending-against-certificate-services-abuse.html
+logsource:
+  product: windows
+  service: certificateservicesclient-lifecycle-system
+detection:
+  selection:
+    EventID: 1007
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 58c0bff0-40a0-46e8-b5e8-b734b84d2017
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/certificate_services_client_lifecycle_system/win_certificateservicesclient_lifecycle_system_cert_exported.yml
+falsepositives:
+- Legitimate application requesting certificate exports will trigger this. Apply additional
+  filters as needed
+notes:
+  quarantine_reason: 'upstream status: test'

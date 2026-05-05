@@ -1,0 +1,32 @@
+id: sigmahq-sigma-7100f7e3-92ce-4584-b7b7-01b40d3d4118
+name: Default Cobalt Strike Certificate
+description: Detects the presence of default Cobalt Strike certificate in the HTTPS
+  traffic
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://sergiusechel.medium.com/improving-the-network-based-detection-of-cobalt-strike-c2-servers-in-the-wild-while-reducing-the-6964205f6468
+logsource:
+  product: zeek
+  service: x509
+detection:
+  selection:
+    certificate.serial: 8BB00EE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7100f7e3-92ce-4584-b7b7-01b40d3d4118
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_default_cobalt_strike_certificate.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,51 @@
+id: mitre-car-car-2021-02-001
+name: Webshell-Indicative Process Tree
+description: A web shell is a web script placed on an openly accessible web server
+  to allow an adversary to use the server as a gatway in a network. As the shell operates,
+  commands will be issued from within the web application into the broader server
+  operating system. This analytic looks for host enumeration executables initiated
+  by any web service that would not normally be executed within that environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - Look for suspicious process tree beginning with web service
+    type: Pseudocode
+    code: "processes = search Process:Create\nsuspicious_processes = filter processes\
+      \ where (\n  (parent_exe == \"w3wp.exe\" OR\n   parent_exe == \"httpd.exe\"\
+      \ OR\n   parent_exe == \"tomcat*.exe\" OR\n   parent_exe == \"nginx.exe\" )\
+      \ AND\n  (exe == \"cmd.exe\" OR\n   exe == \"powershell.exe\" OR\n   exe ==\
+      \ \"net.exe\" OR\n   exe == \"whoami.exe\" OR\n   exe == \"hostname.exe\" OR\n\
+      \   exe == \"systeminfo.exe\" OR\n   exe == \"ipconfig.exe) )\noutput suspicious_processes\n"
+  - name: Splunk Search - webshell-indicative process tree
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1)
+
+      (ParentImage="C:\\Windows\\System32\\*w3wp.exe" OR ParentImage="*httpd.exe"
+      OR ParentImage="*tomcat*.exe" OR ParentImage="*nginx.exe")
+
+      (Image="C:\\Windows\\System32\\cmd.exe OR Image="C:\\Windows\\SysWOW64\\cmd.exe"
+      OR Image="C:\\Windows\\System32\\*\\powershell.exe OR Image="C:\\Windows\SysWOW64\\*\powershell.exe
+      OR Image="C:\\Windows\\System32\\net.exe" OR Image="C:\\Windows\\System32\\hostname.exe"
+      OR Image="C:\\Windows\\System32\\whoami.exe" OR Image="*systeminfo.exe OR Image="C:\\Windows\\System32\\ipconfig.exe")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-02-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-02-001.yaml
+notes:
+  car_status: needs_implementation

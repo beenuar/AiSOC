@@ -1,0 +1,37 @@
+id: sigmahq-sigma-bbf59793-6efb-4fa1-95ca-a7d288e52c88
+name: Winlogon Notify Key Logon Persistence
+description: 'Adversaries may abuse features of Winlogon to execute DLLs and/or executables
+  when a user logs in.
+
+  Winlogon.exe is a Windows component responsible for actions at logon/logoff as well
+  as the secure attention sequence (SAS) triggered by Ctrl-Alt-Delete.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.004/T1547.004.md#atomic-test-3---winlogon-notify-key-logon-persistence---powershell
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Notify\logon
+    Details|endswith: .dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bbf59793-6efb-4fa1-95ca-a7d288e52c88
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_winlogon_notify_key.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

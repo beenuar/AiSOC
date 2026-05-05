@@ -1,0 +1,37 @@
+id: sigmahq-sigma-090ffaad-c01a-4879-850c-6d57da98452d
+name: DNS Query To Ufile.io - DNS Client
+description: Detects DNS queries to "ufile.io", which was seen abused by malware and
+  threat actors as a method for data exfiltration
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1567.002
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/12/13/diavol-ransomware/
+logsource:
+  product: windows
+  service: dns-client
+  definition: 'Requirements: Microsoft-Windows-DNS Client Events/Operational Event
+    Log must be enabled/collected in order to receive the events.'
+detection:
+  selection:
+    EventID: 3008
+    QueryName|contains: ufile.io
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 090ffaad-c01a-4879-850c-6d57da98452d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/dns_client/win_dns_client_ufile_io.yml
+falsepositives:
+- DNS queries for "ufile" are not malicious by nature necessarily. Investigate the
+  source to determine the necessary actions to take
+notes:
+  quarantine_reason: 'upstream status: test'

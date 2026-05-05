@@ -1,0 +1,33 @@
+id: sigmahq-sigma-f64b6e9a-5d9d-48a5-8289-e1dd2b3876e1
+name: Suspicious Log Entries
+description: Detects suspicious log entries in Linux log files
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/ossec/ossec-hids/blob/f6502012b7380208db81f82311ad4a1994d39905/etc/rules/syslog_rules.xml
+logsource:
+  product: linux
+detection:
+  keywords:
+  - entered promiscuous mode
+  - Deactivating service
+  - Oversized packet received from
+  - imuxsock begins to drop messages
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f64b6e9a-5d9d-48a5-8289-e1dd2b3876e1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/lnx_shell_susp_log_entries.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

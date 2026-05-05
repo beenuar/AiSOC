@@ -1,0 +1,35 @@
+id: sigmahq-sigma-0403d67d-6227-4ea8-8145-4e72db7da120
+name: UtilityFunctions.ps1 Proxy Dll
+description: Detects the use of a Microsoft signed script executing a managed DLL
+  with PowerShell.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1216
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Scripts/UtilityFunctions/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - UtilityFunctions.ps1
+    - 'RegSnapin '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0403d67d-6227-4ea8-8145-4e72db7da120
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_utilityfunctions.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: mitre-car-car-2021-01-006
+name: Unusual Child Process spawned using DDE exploit
+description: Adversaries may use Windows Dynamic Data Exchange (DDE) to execute arbitrary
+  commands. DDE is a client-server protocol for one-time and/or continuous inter-process
+  communication (IPC) between applications. Once a link is established, applications
+  can autonomously exchange transactions consisting of strings, warm data links (notifications
+  when a data item changes), hot data links (duplications of changes to a data item),
+  and requests for command execution.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1559
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Splunk search - Unusual Child Process spawned using DDE exploit
+    type: Splunk
+    code: 'index = __your_sysmon__index__ (ParentImage="*excel.exe" OR ParentImage="*word.exe"
+      OR ParentImage="*outlook.exe") Image="*.exe"
+
+      '
+  - name: Splunk search - Unusual Child Process spawned using DDE exploit
+    type: Pseudocode
+    code: "processes = search Process:Create\ntarget_processes = filter processes\
+      \ where (\n     (parent_image=\"*excel.exe\" OR parent_image=\"*word.exe\" OR\
+      \ parent_image=\"*outlook.exe\")\n     AND image=\"*.exe\"\n     )\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-006
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-006.yaml
+notes:
+  car_status: needs_implementation

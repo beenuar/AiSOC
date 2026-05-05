@@ -1,0 +1,43 @@
+id: sigmahq-sigma-424273ea-7cf8-43a6-b712-375f925e481f
+name: Scheduled Task Executed From A Suspicious Location
+description: Detects the execution of Scheduled Tasks where the Program being run
+  is located in a suspicious location or it's an unusale program to be run from a
+  Scheduled Task
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: taskscheduler
+  definition: 'Requirements: The "Microsoft-Windows-TaskScheduler/Operational" is
+    disabled by default and needs to be enabled in order for this detection to trigger'
+detection:
+  selection:
+    EventID: 129
+    Path|contains:
+    - C:\Windows\Temp\
+    - \AppData\Local\Temp\
+    - \Desktop\
+    - \Downloads\
+    - \Users\Public\
+    - C:\Temp\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 424273ea-7cf8-43a6-b712-375f925e481f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/taskscheduler/win_taskscheduler_execution_from_susp_locations.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

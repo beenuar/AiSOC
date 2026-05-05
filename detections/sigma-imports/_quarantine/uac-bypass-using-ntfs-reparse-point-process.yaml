@@ -1,0 +1,50 @@
+id: sigmahq-sigma-39ed3c80-e6a1-431b-9df3-911ac53d08a7
+name: UAC Bypass Using NTFS Reparse Point - Process
+description: Detects the pattern of UAC Bypass using NTFS reparse point and wusa.exe
+  DLL hijacking (UACMe 36)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection1:
+    CommandLine|startswith: '"C:\Windows\system32\wusa.exe"  /quiet C:\Users\'
+    CommandLine|endswith: \AppData\Local\Temp\update.msu
+    IntegrityLevel:
+    - High
+    - System
+    - S-1-16-16384
+    - S-1-16-12288
+  selection2:
+    ParentCommandLine: '"C:\Windows\system32\dism.exe" /online /quiet /norestart /add-package
+      /packagepath:"C:\Windows\system32\pe386" /ignorecheck'
+    IntegrityLevel:
+    - High
+    - System
+    CommandLine|contains|all:
+    - C:\Users\
+    - \AppData\Local\Temp\
+    - \dismhost.exe {
+    Image|endswith: \DismHost.exe
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39ed3c80-e6a1-431b-9df3-911ac53d08a7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_ntfs_reparse_point.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

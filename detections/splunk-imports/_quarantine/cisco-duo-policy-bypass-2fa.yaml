@@ -1,0 +1,44 @@
+id: splunk-security-content-65862e8a-799a-4509-ae1c-4602aa139580
+name: Cisco Duo Policy Bypass 2FA
+description: The following analytic detects instances where a Duo policy is created
+  or updated to allow access without two-factor authentication (2FA). It identifies
+  this behavior by searching Duo administrator activity logs for policy changes that
+  set the authentication status to "Allow access without 2FA." By monitoring for these
+  specific actions, the analytic highlights potential attempts to weaken authentication
+  controls, which could be indicative of malicious activity or insider threats. This
+  behavior is critical for a SOC to identify, as bypassing 2FA significantly reduces
+  the security posture of an organization, making it easier for attackers to gain
+  unauthorized access to sensitive systems and data. Detecting and responding to such
+  policy changes promptly helps prevent potential account compromise and mitigates
+  the risk of broader security breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=policy_update OR action=policy_create\n\
+    \  | spath input=description\n  | search auth_status=\"Allow access without 2FA\"\
+    \n  | rename object as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY action actionlabel description\n       user admin_email\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_policy_bypass_2fa_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 65862e8a-799a-4509-ae1c-4602aa139580
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_policy_bypass_2fa.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

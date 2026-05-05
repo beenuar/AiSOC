@@ -1,0 +1,41 @@
+id: sigmahq-sigma-dff1e1cc-d3fd-47c8-bfc2-aeb878a754c0
+name: Shell Process Spawned by Java.EXE
+description: Detects shell spawned from Java host process, which could be a sign of
+  exploitation (e.g. log4j exploitation)
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20231230220738/https://www.lunasec.io/docs/blog/log4j-zero-day/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \java.exe
+    Image|endswith:
+    - \bash.exe
+    - \cmd.exe
+    - \powershell.exe
+    - \pwsh.exe
+  filter_main_build:
+    ParentImage|contains: build
+    CommandLine|contains: build
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dff1e1cc-d3fd-47c8-bfc2-aeb878a754c0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_java_susp_child_process_2.yml
+falsepositives:
+- Legitimate calls to system binaries
+- Company specific internal usage
+notes:
+  quarantine_reason: 'upstream status: test'

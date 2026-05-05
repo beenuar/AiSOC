@@ -1,0 +1,40 @@
+id: sigmahq-sigma-8c521530-5169-495d-a199-0a3a881ad24e
+name: NTFS Alternate Data Stream
+description: Detects writing data into NTFS alternate data streams from powershell.
+  Needs Script Block Logging.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20220614030603/http://www.powertheshell.com/ntfsstreams/
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1564.004/T1564.004.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_content:
+    ScriptBlockText|contains:
+    - set-content
+    - add-content
+  selection_stream:
+    ScriptBlockText|contains: -stream
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8c521530-5169-495d-a199-0a3a881ad24e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_ntfs_ads_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

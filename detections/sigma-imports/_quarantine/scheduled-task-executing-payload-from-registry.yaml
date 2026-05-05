@@ -1,0 +1,51 @@
+id: sigmahq-sigma-86588b36-c6d3-465f-9cee-8f9093e07798
+name: Scheduled Task Executing Payload from Registry
+description: Detects the creation of a schtasks that potentially executes a payload
+  stored in the Windows Registry using PowerShell.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/02/21/qbot-and-zerologon-lead-to-full-domain-compromise/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \schtasks.exe
+  - OriginalFileName: schtasks.exe
+  selection_cli_create:
+    CommandLine|contains: /Create
+  selection_cli_get:
+    CommandLine|contains:
+    - Get-ItemProperty
+    - ' gp '
+  selection_cli_hive:
+    CommandLine|contains:
+    - 'HKCU:'
+    - 'HKLM:'
+    - 'registry::'
+    - HKEY_
+  filter_main_encoding:
+    CommandLine|contains:
+    - FromBase64String
+    - encodedcommand
+  condition: all of selection_* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 86588b36-c6d3-465f-9cee-8f9093e07798
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_reg_loader.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

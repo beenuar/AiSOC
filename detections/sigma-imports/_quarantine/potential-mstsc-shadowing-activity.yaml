@@ -1,0 +1,35 @@
+id: sigmahq-sigma-6ba5a05f-b095-4f0a-8654-b825f4f16334
+name: Potential MSTSC Shadowing Activity
+description: Detects RDP session hijacking by using MSTSC shadowing
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1563.002
+  categories:
+  - endpoint
+references:
+- https://twitter.com/kmkz_security/status/1220694202301976576
+- https://github.com/kmkz/Pentesting/blob/47592e5e160d3b86c2024f09ef04ceb87d204995/Post-Exploitation-Cheat-Sheet
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - noconsentprompt
+    - 'shadow:'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6ba5a05f-b095-4f0a-8654-b825f4f16334
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mstsc_rdp_hijack_shadowing.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

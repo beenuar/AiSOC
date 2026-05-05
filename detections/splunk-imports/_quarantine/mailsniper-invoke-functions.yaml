@@ -1,0 +1,44 @@
+id: splunk-security-content-a36972c8-b894-11eb-9f78-acde48001122
+name: Mailsniper Invoke functions
+description: The following analytic detects the execution of known MailSniper PowerShell
+  functions on a machine. It leverages PowerShell logs (EventCode 4104) to identify
+  specific script block text associated with MailSniper activities. This behavior
+  is significant as MailSniper is often used by attackers to harvest sensitive emails
+  from compromised Exchange servers. If confirmed malicious, this activity could lead
+  to unauthorized access to sensitive email data, credential theft, and further compromise
+  of the email infrastructure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.001
+  categories:
+  - endpoint
+references:
+- https://www.blackhillsinfosec.com/introducing-mailsniper-a-tool-for-searching-every-users-email-for-sensitive-data/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*Invoke-GlobalO365MailSearch*\"\
+    , \"*Invoke-GlobalMailSearch*\", \"*Invoke-SelfSearch*\", \"*Invoke-PasswordSprayOWA*\"\
+    , \"*Invoke-PasswordSprayEWS*\",\"*Invoke-DomainHarvestOWA*\", \"*Invoke-UsernameHarvestOWA*\"\
+    ,\"*Invoke-OpenInboxFinder*\",\"*Invoke-InjectGEventAPI*\",\"*Invoke-InjectGEvent*\"\
+    ,\"*Invoke-SearchGmail*\", \"*Invoke-MonitorCredSniper*\", \"*Invoke-AddGmailRule*\"\
+    ,\"*Invoke-PasswordSprayEAS*\",\"*Invoke-UsernameHarvestEAS*\")\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `mailsniper_invoke_functions_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a36972c8-b894-11eb-9f78-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/mailsniper_invoke_functions.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

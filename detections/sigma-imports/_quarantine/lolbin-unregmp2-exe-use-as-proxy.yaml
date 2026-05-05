@@ -1,0 +1,36 @@
+id: sigmahq-sigma-727454c0-d851-48b0-8b89-385611ab0704
+name: Lolbin Unregmp2.exe Use As Proxy
+description: Detect usage of the "unregmp2.exe" binary as a proxy to launch a custom
+  version of "wmpnscfg.exe"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Unregmp2/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \unregmp2.exe
+  - OriginalFileName: unregmp2.exe
+  selection_cmd:
+    CommandLine|contains|windash: ' /HideWMP'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 727454c0-d851-48b0-8b89-385611ab0704
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_unregmp2.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

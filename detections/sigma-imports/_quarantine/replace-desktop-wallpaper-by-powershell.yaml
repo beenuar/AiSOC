@@ -1,0 +1,43 @@
+id: sigmahq-sigma-c5ac6a1e-9407-45f5-a0ce-ca9a0806a287
+name: Replace Desktop Wallpaper by Powershell
+description: 'An adversary may deface systems internal to an organization in an attempt
+  to intimidate or mislead users.
+
+  This may take the form of modifications to internal websites, or directly to user
+  systems with the replacement of the desktop wallpaper'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1491.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1491.001/T1491.001.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_1:
+    ScriptBlockText|contains|all:
+    - Get-ItemProperty
+    - 'Registry::'
+    - HKEY_CURRENT_USER\Control Panel\Desktop\
+    - WallPaper
+  selection_2:
+    ScriptBlockText|contains: SystemParametersInfo(20,0,*,3)
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c5ac6a1e-9407-45f5-a0ce-ca9a0806a287
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_wallpaper.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

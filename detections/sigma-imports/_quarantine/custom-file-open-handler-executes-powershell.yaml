@@ -1,0 +1,35 @@
+id: sigmahq-sigma-7530b96f-ad8e-431d-a04d-ac85cc461fdc
+name: Custom File Open Handler Executes PowerShell
+description: Detects the abuse of custom file open handler, executing powershell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2022/02/01/solarmarker-campaign-used-novel-registry-changes-to-establish-persistence/?cmp=30728
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: shell\open\command\
+    Details|contains|all:
+    - powershell
+    - -command
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7530b96f-ad8e-431d-a04d-ac85cc461fdc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_custom_file_open_handler_powershell_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

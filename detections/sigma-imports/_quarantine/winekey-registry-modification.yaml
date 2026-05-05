@@ -1,0 +1,33 @@
+id: sigmahq-sigma-b98968aa-dbc0-4a9c-ac35-108363cbf8d5
+name: WINEKEY Registry Modification
+description: Detects potential malicious modification of run keys by winekey or team9
+  backdoor
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547
+  categories:
+  - endpoint
+references:
+- https://www.fireeye.com/blog/threat-research/2020/10/kegtap-and-singlemalt-with-a-ransomware-chaser.html
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: Software\Microsoft\Windows\CurrentVersion\Run\Backup Mgr
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b98968aa-dbc0-4a9c-ac35-108363cbf8d5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_runkey_winekey.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

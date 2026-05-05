@@ -1,0 +1,48 @@
+id: splunk-security-content-070e9b80-6252-11eb-ae93-0242ac130002
+name: Detect Regsvr32 Application Control Bypass
+description: The following analytic identifies the abuse of Regsvr32.exe to proxy
+  execution of malicious code, specifically detecting the loading of "scrobj.dll"
+  by Regsvr32.exe. This detection leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on process creation events and command-line executions. This
+  activity is significant because Regsvr32.exe is a trusted, signed Microsoft binary,
+  often used in "Squiblydoo" attacks to bypass application control mechanisms. If
+  confirmed malicious, this technique could allow an attacker to execute arbitrary
+  code, potentially leading to system compromise and persistent access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/010/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.010/T1218.010.md
+- https://lolbas-project.github.io/lolbas/Binaries/Regsvr32/
+- https://support.microsoft.com/en-us/topic/how-to-use-the-regsvr32-tool-and-troubleshoot-regsvr32-error-messages-a98d960a-7392-e6fe-d90a-3f4e0cb543e5
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_regsvr32`\
+    \ Processes.process=*scrobj*\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_regsvr32_application_control_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 070e9b80-6252-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_regsvr32_application_control_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,59 @@
+id: sigmahq-sigma-654fcc6d-840d-4844-9b07-2c3300e54a26
+name: Legitimate Application Dropped Archive
+description: Detects programs on a Windows system that should not write an archive
+  to disk
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://github.com/Neo23x0/sysmon-config/blob/3f808d9c022c507aae21a9346afba4a59dd533b9/sysmonconfig-export-block.xml#L1326
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith:
+    - \winword.exe
+    - \excel.exe
+    - \powerpnt.exe
+    - \msaccess.exe
+    - \mspub.exe
+    - \eqnedt32.exe
+    - \visio.exe
+    - \wordpad.exe
+    - \wordview.exe
+    - \certutil.exe
+    - \certoc.exe
+    - \CertReq.exe
+    - \Desktopimgdownldr.exe
+    - \esentutl.exe
+    - \finger.exe
+    - \notepad.exe
+    - \AcroRd32.exe
+    - \RdrCEF.exe
+    - \mshta.exe
+    - \hh.exe
+    TargetFilename|endswith:
+    - .zip
+    - .rar
+    - .7z
+    - .diagcab
+    - .appx
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 654fcc6d-840d-4844-9b07-2c3300e54a26
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_legitimate_app_dropping_archive.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

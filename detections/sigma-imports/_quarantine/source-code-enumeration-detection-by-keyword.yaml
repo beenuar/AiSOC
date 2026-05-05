@@ -1,0 +1,33 @@
+id: sigmahq-sigma-953d460b-f810-420a-97a2-cfca4c98e602
+name: Source Code Enumeration Detection by Keyword
+description: Detects source code enumeration that use GET requests by keyword searches
+  in URL strings
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - application
+references:
+- https://pentester.land/tutorials/2018/10/25/source-code-disclosure-via-exposed-git-folder.html
+- https://medium.com/@logicbomb_1/bugbounty-how-i-was-able-to-download-the-source-code-of-indias-largest-telecom-service-52cf5c5640a1
+logsource:
+  category: webserver
+detection:
+  keywords:
+  - .git/
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 953d460b-f810-420a-97a2-cfca4c98e602
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_source_code_enumeration.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

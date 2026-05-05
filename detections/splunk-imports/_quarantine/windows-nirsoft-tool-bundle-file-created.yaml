@@ -1,0 +1,59 @@
+id: splunk-security-content-a2c8e8f8-18d6-4ad4-acf4-f58903bebe41
+name: Windows NirSoft Tool Bundle File Created
+description: 'The following analytic detects the creation of files associated with
+  the NirSoft
+
+  tool bundles on Windows endpoints.
+
+  NirSoft is a well-known provider of free, portable utilities that can be used for
+  various system and network tasks. However, threat actors often leverage these tools
+  for malicious purposes, such as credential harvesting, network reconnaissance, and
+  data exfiltration.
+
+  The detection focuses on the creation of specific NirSoft tool bundle files, which
+  may indicate that an attacker is preparing to use these utilities on a compromised
+  system.
+
+  Security teams should investigate any instances of these files being created, especially
+  if they are found in unexpected locations or on systems that should not be using
+  such tools.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/04/gogoogle-ransomware/
+- https://asec.ahnlab.com/en/48940/
+- https://www.trendmicro.com/en_gb/research/23/c/emotet-returns-now-adopts-binary-padding-for-evasion.html
+- https://www.welivesecurity.com/2022/06/16/how-emotet-is-changing-tactics-microsoft-tightening-office-macro-security/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count values(Filesystem.file_path)\
+    \ as file_path\n        min(_time) as firstTime\n        max(_time) as lastTime\n\
+    \nfrom datamodel=Endpoint.Filesystem where\n\n``` Increase coverage by adding\
+    \ additional Nirsoft tool bundle or tool filenames ```\n\nFilesystem.file_name\
+    \ IN (\n  \"brtools.zip\",\n  \"mailpv.zip\",\n  \"networktools.zip\",\n  \"passreccommandline.zip\"\
+    ,\n  \"passrecenc.zip\",\n  \"progtools.zip\",\n  \"rdpv.zip\",\n  \"systools.zip\"\
+    ,\n  \"webbrowserpassview.zip\"\n)\n\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\
+    \ Filesystem.file_create_time\n   Filesystem.file_hash Filesystem.file_modify_time\
+    \ Filesystem.file_name Filesystem.file_path\n   Filesystem.file_acl Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id\n   Filesystem.user Filesystem.vendor_product\n\
+    \n| `drop_dm_object_name(\"Filesystem\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_nirsoft_tool_bundle_file_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a2c8e8f8-18d6-4ad4-acf4-f58903bebe41
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_nirsoft_tool_bundle_file_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

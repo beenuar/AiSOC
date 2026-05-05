@@ -1,0 +1,34 @@
+id: sigmahq-sigma-bd1c6866-65fc-44b2-be51-5588fcff82b9
+name: Renamed Msdt.EXE Execution
+description: Detects the execution of a renamed "Msdt.exe" binary
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Msdt/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    OriginalFileName: msdt.exe
+  filter:
+    Image|endswith: \msdt.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bd1c6866-65fc-44b2-be51-5588fcff82b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_msdt.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-148431ce-4b70-403d-8525-fcc2993f29ea
+name: Potential DLL Injection Or Execution Using Tracker.exe
+description: Detects potential DLL injection and execution using "Tracker.exe"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055.001
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Tracker/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \tracker.exe
+  - Description: Tracker
+  selection_cli:
+    CommandLine|contains:
+    - ' /d '
+    - ' /c '
+  filter_msbuild1:
+    CommandLine|contains: ' /ERRORREPORT:PROMPT '
+  filter_msbuild2:
+    ParentImage|endswith:
+    - \Msbuild\Current\Bin\MSBuild.exe
+    - \Msbuild\Current\Bin\amd64\MSBuild.exe
+  condition: all of selection_* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 148431ce-4b70-403d-8525-fcc2993f29ea
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_tracker.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

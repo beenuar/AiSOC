@@ -1,0 +1,41 @@
+id: sigmahq-sigma-bb2ba6fb-95d4-4a25-89fc-30bb736c021a
+name: PowerShell Core DLL Loaded Via Office Application
+description: Detects PowerShell core DLL being loaded by an Office Product
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \excel.exe
+    - \mspub.exe
+    - \outlook.exe
+    - \onenote.exe
+    - \onenoteim.exe
+    - \powerpnt.exe
+    - \winword.exe
+    ImageLoaded|contains:
+    - \System.Management.Automation.Dll
+    - \System.Management.Automation.ni.Dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bb2ba6fb-95d4-4a25-89fc-30bb736c021a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_office_powershell_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

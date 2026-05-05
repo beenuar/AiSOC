@@ -1,0 +1,36 @@
+id: sigmahq-sigma-a607e1fe-74bf-4440-a3ec-b059b9103157
+name: AWS SecurityHub Findings Evasion
+description: Detects the modification of the findings on SecurityHub.
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1685
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/cli/latest/reference/securityhub/
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: securityhub.amazonaws.com
+    eventName:
+    - BatchUpdateFindings
+    - DeleteInsight
+    - UpdateFindings
+    - UpdateInsight
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a607e1fe-74bf-4440-a3ec-b059b9103157
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_securityhub_finding_evasion.yml
+falsepositives:
+- System or Network administrator behaviors
+- DEV, UAT, SAT environment. You should apply this rule with PROD environment only.

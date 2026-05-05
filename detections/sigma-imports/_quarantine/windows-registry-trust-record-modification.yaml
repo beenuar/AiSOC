@@ -1,0 +1,35 @@
+id: sigmahq-sigma-295a59c1-7b79-4b47-a930-df12c15fc9c2
+name: Windows Registry Trust Record Modification
+description: Alerts on trust record modification within the registry, indicating usage
+  of macros
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://outflank.nl/blog/2018/01/16/hunting-for-evil-detect-macros-being-executed/
+- http://az4n6.blogspot.com/2016/02/more-on-trust-records-macros-and.html
+- https://twitter.com/inversecos/status/1494174785621819397
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Security\Trusted Documents\TrustRecords
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 295a59c1-7b79-4b47-a930-df12c15fc9c2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_office_trust_record_modification.yml
+falsepositives:
+- This will alert on legitimate macro usage as well, additional tuning is required
+notes:
+  quarantine_reason: 'upstream status: test'

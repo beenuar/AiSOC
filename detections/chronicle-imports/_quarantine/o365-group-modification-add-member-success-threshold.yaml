@@ -1,0 +1,54 @@
+id: chronicle-detection-rules-o365-group-modification-add-member-success-threshold
+name: o365_group_modification_add_member_success_threshold
+description: o365_group_modification_add_member_success_threshold
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_group_modification_add_member_success_threshold {\n\n  meta:\n   \
+    \ author = \"Google Cloud Security\"\n    description = \"Detects when a group\
+    \ GUID in Office 365 has more users added to it by the same user than a defined\
+    \ thresold.\"\n    rule_id = \"mr_47e13870-800b-4886-b8b8-8e6b68b203b9\"\n   \
+    \ rule_name = \"Office 365 group modification add member success has exceeded\
+    \ a defined threshold\"\n    type = \"alert\"\n    platform = \"azure\"\n    data_source\
+    \ = \"o365\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n  \
+    \  $group.metadata.event_type = \"GROUP_MODIFICATION\"\n    $group.metadata.product_event_type\
+    \ = \"Add member to group.\"\n    $group.metadata.product_name = \"Office 365\"\
+    \n    $group.metadata.vendor_name = \"Microsoft\"\n    $group.security_result.action\
+    \ = \"ALLOW\"\n    $group.principal.user.userid = $user\n    $group.target.group.product_object_id\
+    \ = $guid\n\n  match:\n    $guid, $user over 5m\n\n  outcome:\n    $risk_score\
+    \ = 35\n    $event_count = count_distinct($group.metadata.id)\n    $user_agent\
+    \ = array_distinct($group.network.http.user_agent)\n    $security_summary = array_distinct($group.security_result.summary)\n\
+    \    $target_application = array_distinct($group.target.application)\n    $principal_user_userid\
+    \ = array_distinct($group.principal.user.userid)\n    $group_name = array_distinct($group.target.group.group_display_name)\n\
+    \    $group_guid = array_distinct($group.target.group.product_object_id)\n   \
+    \ $user_added = array_distinct($group.target.user.userid)\n    $user_count = count_distinct($group.target.user.userid)\n\
+    \n  condition:\n    //Modify the user_count value to suit your needs\n    $group\
+    \ and $user_count > 4\n}"
+  chronicle_rule_name: o365_group_modification_add_member_success_threshold
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_group_modification_add_member_success_threshold
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_group_modification_add_member_success_threshold.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

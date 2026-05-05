@@ -1,0 +1,45 @@
+id: sigmahq-sigma-bf344fea-d947-4ef4-9192-34d008315d3a
+name: Suspicious Shim Database Patching Activity
+description: Detects installation of new shim databases that try to patch sections
+  of known processes for potential process injection or persistence.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546.011
+  categories:
+  - endpoint
+references:
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/pillowmint-fin7s-monkey-thief/
+- https://www.fireeye.com/blog/threat-research/2017/05/fin7-shim-databases-persistence.html
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Custom\
+    TargetObject|endswith:
+    - \csrss.exe
+    - \dllhost.exe
+    - \explorer.exe
+    - \RuntimeBroker.exe
+    - \services.exe
+    - \sihost.exe
+    - \svchost.exe
+    - \taskhostw.exe
+    - \winlogon.exe
+    - \WmiPrvSe.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bf344fea-d947-4ef4-9192-34d008315d3a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_shim_database_susp_application.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: sigmahq-sigma-eed82177-38f5-4299-8a76-098d50d225ab
+name: Kubernetes Admission Controller Modification
+description: Detects when a modification (create, update or replace) action is taken
+  that affects mutating or validating webhook configurations, as they can be used
+  by an adversary to achieve persistence or exfiltrate access credentials.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1552
+  - T1552.007
+  categories:
+  - endpoint
+references:
+- https://kubernetes.io/docs/reference/config-api/apiserver-audit.v1/
+- https://security.padok.fr/en/blog/kubernetes-webhook-attackers
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    objectRef.apiGroup: admissionregistration.k8s.io
+    objectRef.resource:
+    - mutatingwebhookconfigurations
+    - validatingwebhookconfigurations
+    verb:
+    - create
+    - delete
+    - patch
+    - replace
+    - update
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: eed82177-38f5-4299-8a76-098d50d225ab
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_change_admission_controller.yml
+falsepositives:
+- Modifying the Kubernetes Admission Controller may need to be done by a system administrator.
+- Automated processes may need to take these actions and may need to be filtered.
+notes:
+  quarantine_reason: 'upstream status: test'

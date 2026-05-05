@@ -1,0 +1,54 @@
+id: splunk-security-content-7141122c-3bc2-4aaa-ab3b-7a85a0bbefc3
+name: GetWmiObject Ds Computer with PowerShell
+description: 'The following analytic detects the execution of `powershell.exe` with
+  command-line arguments that utilize the `Get-WmiObject` cmdlet to discover remote
+  systems, specifically targeting the `DS_Computer` parameter.
+
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process names and command-line executions.
+
+  This activity is significant as it indicates potential reconnaissance efforts by
+  adversaries to enumerate domain computers and gather situational awareness within
+  Active Directory.
+
+  If confirmed malicious, this behavior could allow attackers to map the network,
+  identify critical systems, and plan further attacks, potentially leading to unauthorized
+  access and data exfiltration.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    (\n    `process_powershell`\n    OR\n    `process_cmd`\n)\nAND\nProcesses.process\
+    \ = \"*Get-WmiObject*\"\nProcesses.process = \"*namespace *\"\nProcesses.process\
+    \ = \"*root\\\\directory\\\\ldap*\"\nProcesses.process = \"*class *\"\nProcesses.process\
+    \ = \"* ds_computer*\"\n\nby Processes.action Processes.dest Processes.original_file_name\n\
+    \   Processes.parent_process Processes.parent_process_exec\n   Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\n\
+    \   Processes.process Processes.process_exec Processes.process_guid\n   Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_integrity_level Processes.process_name\n\
+    \   Processes.process_path Processes.user\n   Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `getwmiobject_ds_computer_with_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7141122c-3bc2-4aaa-ab3b-7a85a0bbefc3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getwmiobject_ds_computer_with_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

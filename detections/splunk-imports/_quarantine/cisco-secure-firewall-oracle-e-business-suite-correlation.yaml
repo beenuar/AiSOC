@@ -1,0 +1,62 @@
+id: splunk-security-content-9e995d21-6870-43de-acd9-76f372bcf323
+name: Cisco Secure Firewall - Oracle E-Business Suite Correlation
+description: 'This correlation rule identifies potential exploitation attempts of
+  Oracle E-Business Suite vulnerabilities (CVE-2025-61882 and CVE-2025-61884) by correlating
+  multiple intrusion signatures from Cisco Secure Firewall Threat Defense logs.
+
+  The detection looks for specific signatures that indicate attempts to exploit the
+  TemplatePreview functionality and vulnerable SyncServlet endpoints as well as post
+  compromise activity involving Cl0p.
+
+  By correlating these signatures, the analytic aims to identify coordinated exploitation
+  attempts that may indicate an attacker is targeting Oracle E-Business Suite installations.
+
+  Security teams should investigate any instances of these correlated signatures,
+  especially if they are found in conjunction with other suspicious network activity
+  or on systems that should not be exposed to such threats.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - network
+references:
+- https://www.oracle.com/security-alerts/alert-cve-2025-61882.html
+- https://www.oracle.com/security-alerts/alert-cve-2025-61884.html
+- https://labs.watchtowr.com/well-well-well-its-another-day-oracle-e-business-suite-pre-auth-rce-chain-cve-2025-61882well-well-well-its-another-day-oracle-e-business-suite-pre-auth-rce-chain-cve-2025-61882/
+- https://cloud.google.com/blog/topics/threat-intelligence/oracle-ebusiness-suite-zero-day-exploitation
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent signature_id IN (65454,\
+    \ 65455, 65377, 65378, 65413, 65414, 65415, 65456)\n| bin _time span=5m\n| fillnull\n\
+    | stats dc(signature_id) as unique_signature_count\n        values(signature_id)\
+    \ as signature_id\n        values(signature) as signature\n        values(class_desc)\
+    \ as class_desc\n        values(MitreAttackGroups) as MitreAttackGroups\n    \
+    \    values(InlineResult) as InlineResult\n        values(InlineResultReason)\
+    \ as InlineResultReason\n        values(dest_port) as dest_port\n        values(rule)\
+    \ as rule\n        values(transport) as transport\n        values(app) as app\n\
+    \        min(_time) as firstTime\n        max(_time) as lastTime\n        sum(eval(signature_id==65454))\
+    \ as sig_template_preview\n        sum(eval(signature_id==65455)) as sig_sync_servlet\n\
+    \        sum(eval(signature_id IN (65377,65378,65413,65414,65415,65456))) as sig_exploit_activity\n\
+    \  by src dest\n| where (\n          (\n            sig_exploit_activity >= 1\n\
+    \            AND\n            (\n              sig_template_preview >= 1\n   \
+    \           OR\n              sig_sync_servlet >= 1\n            )\n         \
+    \ )\n        OR\n          (\n            sig_template_preview >= 1\n        \
+    \    AND\n            sig_sync_servlet >= 1\n          )\n        OR\n       \
+    \   unique_signature_count >= 2\n        )\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_secure_firewall___oracle_e_business_suite_correlation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9e995d21-6870-43de-acd9-76f372bcf323
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___oracle_e_business_suite_correlation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

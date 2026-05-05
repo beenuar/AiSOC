@@ -1,0 +1,43 @@
+id: sigmahq-sigma-43e26eb5-cd58-48d1-8ce9-a273f5d298d8
+name: Potential Container Discovery Via Inodes Listing
+description: Detects listing of the inodes of the "/" directory to determine if the
+  we are running inside of a container.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://blog.skyplabs.net/posts/container-detection/
+- https://stackoverflow.com/questions/20010199/how-to-determine-if-a-process-runs-inside-lxc-docker
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_ls_img:
+    Image|endswith: /ls
+  selection_ls_cli:
+  - CommandLine|endswith: ' /'
+  - CommandLine|contains: ' / '
+  selection_regex_inode:
+    CommandLine|re: (?:\s-[^-\s]{0,20}i|\s--inode\s)
+  selection_regex_dir:
+    CommandLine|re: (?:\s-[^-\s]{0,20}d|\s--directory\s)
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 43e26eb5-cd58-48d1-8ce9-a273f5d298d8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_inod_listing.yml
+falsepositives:
+- Legitimate system administrator usage of these commands
+- Some container tools or deployments may use these techniques natively to determine
+  how they proceed with execution, and will need to be filtered
+notes:
+  quarantine_reason: 'upstream status: test'

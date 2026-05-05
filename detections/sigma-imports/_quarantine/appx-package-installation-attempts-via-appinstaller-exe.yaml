@@ -1,0 +1,36 @@
+id: sigmahq-sigma-7cff77e1-9663-46a3-8260-17f2e1aa9d0a
+name: AppX Package Installation Attempts Via AppInstaller.EXE
+description: Detects DNS queries made by "AppInstaller.EXE". The AppInstaller is the
+  default handler for the "ms-appinstaller" URI. It attempts to load/install a package
+  from the referenced URL
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://twitter.com/notwhickey/status/1333900137232523264
+- https://lolbas-project.github.io/lolbas/Binaries/AppInstaller/
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    Image|startswith: C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_
+    Image|endswith: \AppInstaller.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7cff77e1-9663-46a3-8260-17f2e1aa9d0a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_appinstaller.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

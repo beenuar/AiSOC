@@ -1,0 +1,43 @@
+id: sigmahq-sigma-daf7eb81-35fd-410d-9d7a-657837e602bb
+name: Zip A Folder With PowerShell For Staging In Temp  - PowerShell Module
+description: 'Detects PowerShell scripts that make use of the "Compress-Archive" Cmdlet
+  in order to compress folders and files where the output is stored in a potentially
+  suspicious location that is used often by malware for exfiltration.
+
+  An adversary might compress data (e.g., sensitive documents) that is collected prior
+  to exfiltration in order to make it portable and minimize the amount of data sent
+  over the network.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1074.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1074.001/T1074.001.md
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection:
+    ContextInfo|contains|all:
+    - Compress-Archive -Path*-DestinationPath $env:TEMP
+    - Compress-Archive -Path*-DestinationPath*\AppData\Local\Temp\
+    - Compress-Archive -Path*-DestinationPath*:\Windows\Temp\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: daf7eb81-35fd-410d-9d7a-657837e602bb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_susp_zip_compress.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

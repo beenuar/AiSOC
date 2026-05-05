@@ -1,0 +1,44 @@
+id: splunk-security-content-5f8671b6-07a7-425d-b3da-c39a53f2a6ae
+name: Windows RDP Bitmap Cache File Creation
+description: This detection identifies the creation of Remote Desktop Protocol (RDP)
+  bitmap cache files on a Windows system, typically located in the user’s profile
+  under the Terminal Server Client cache directory. These files (*.bmc, cache*.bin)
+  are generated when a user initiates an RDP session using the built-in mstsc.exe
+  client. Their presence can indicate interactive remote access activity and may be
+  useful in detecting lateral movement or unauthorized RDP usage. Monitoring this
+  behavior is especially important, as attackers may attempt to delete or suppress
+  these artifacts to evade forensic analysis.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://medium.com/@bonguides25/how-to-clear-rdp-connections-history-in-windows-cf0ffb67f344
+- https://thelocalh0st.github.io/posts/rdp/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count  min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Filesystem where Filesystem.file_path
+    IN ("*\\Terminal Server Client\\Cache\\*.bmc", "*\\Terminal Server Client\\Cache\\cache*.bin")
+    by Filesystem.action Filesystem.dest Filesystem.file_access_time Filesystem.file_create_time
+    Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path
+    Filesystem.file_acl Filesystem.file_size Filesystem.process_guid Filesystem.process_id
+    Filesystem.user Filesystem.vendor_product | `security_content_ctime(lastTime)`
+    | `security_content_ctime(firstTime)` |`drop_dm_object_name(Filesystem)` | `windows_rdp_bitmap_cache_file_creation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 5f8671b6-07a7-425d-b3da-c39a53f2a6ae
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdp_bitmap_cache_file_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

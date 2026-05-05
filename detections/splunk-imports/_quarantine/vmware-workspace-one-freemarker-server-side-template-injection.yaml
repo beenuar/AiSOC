@@ -1,0 +1,51 @@
+id: splunk-security-content-9e5726fe-8fde-460e-bd74-cddcf6c86113
+name: VMware Workspace ONE Freemarker Server-side Template Injection
+description: 'The following analytic detects server-side template injection attempts
+  related to CVE-2022-22954 in VMware Workspace ONE.
+
+  It leverages web or proxy logs to identify HTTP GET requests to the endpoint catalog-portal/ui/oauth/verify
+  with the freemarker.template.utility.Execute command.
+
+  This activity is significant as it indicates potential exploitation attempts that
+  could lead to remote code execution.
+
+  If confirmed malicious, an attacker could execute arbitrary commands on the server,
+  leading to full system compromise, data exfiltration, or further lateral movement
+  within the network.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.cisa.gov/uscert/ncas/alerts/aa22-138b
+- https://github.com/wvu/metasploit-framework/blob/master/modules/exploits/linux/http/vmware_workspace_one_access_cve_2022_22954.rb
+- https://github.com/sherlocksecurity/VMware-CVE-2022-22954
+- https://www.vmware.com/security/advisories/VMSA-2022-0011.html
+- https://attackerkb.com/topics/BDXyTqY1ld/cve-2022-22954/rapid7-analysis
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n         count min(_time)\
+    \ as firstTime\n               max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\
+    Web.http_method=\"GET\"\nWeb.url=\"*/catalog-portal/ui/oauth/verify?error=&deviceudid=*\"\
+    \nWeb.url=\"*freemarker.template.utility.Execute*\"\nBY Web.http_user_agent Web.http_method\n\
+    \   Web.url Web.url_length\n   Web.src Web.dest sourcetype\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `vmware_workspace_one_freemarker_server_side_template_injection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9e5726fe-8fde-460e-bd74-cddcf6c86113
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/vmware_workspace_one_freemarker_server_side_template_injection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

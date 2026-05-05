@@ -1,0 +1,41 @@
+id: sigmahq-sigma-3236fcd0-b7e3-4433-b4f8-86ad61a9af2d
+name: PowerShell Download Via Net.WebClient - PowerShell Classic
+description: 'Detects PowerShell download activity, via the .DownloadFile() or .DownloadString()
+  methods of the Net.WebClient class.
+
+  This technique is often abused by attackers to download additional payloads.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/22/j/lv-ransomware-exploits-proxyshell-in-attack.html
+logsource:
+  product: windows
+  category: ps_classic_start
+detection:
+  selection_webclient:
+    Data|contains: Net.WebClient
+  selection_download:
+    Data|contains:
+    - .DownloadFile(
+    - .DownloadString(
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3236fcd0-b7e3-4433-b4f8-86ad61a9af2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_download_via_webclient.yml
+falsepositives:
+- This activity may be used by legitimate software, such as patch management tools
+  or software updaters. Investigate any such activity and apply the necessary filter.
+notes:
+  quarantine_reason: 'upstream status: test'

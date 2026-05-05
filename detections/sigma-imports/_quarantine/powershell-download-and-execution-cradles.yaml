@@ -1,0 +1,51 @@
+id: sigmahq-sigma-85b0b087-eddf-4a2b-b033-d771fa2b9775
+name: PowerShell Download and Execution Cradles
+description: Detects PowerShell download and execution cradles.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://github.com/VirtualAlllocEx/Payload-Download-Cradles/blob/88e8eca34464a547c90d9140d70e9866dcbc6a12/Download-Cradles.cmd
+- https://labs.withsecure.com/publications/fin7-target-veeam-servers
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_download:
+    CommandLine|contains:
+    - .DownloadString(
+    - .DownloadFile(
+    - 'Invoke-WebRequest '
+    - 'iwr '
+    - 'Invoke-RestMethod '
+    - 'irm '
+  selection_iex:
+    CommandLine|contains:
+    - ;iex $
+    - '| IEX'
+    - '|IEX '
+    - I`E`X
+    - I`EX
+    - IE`X
+    - 'iex '
+    - IEX (
+    - IEX(
+    - Invoke-Expression
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 85b0b087-eddf-4a2b-b033-d771fa2b9775
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_download_iex.yml
+falsepositives:
+- Some PowerShell installers were seen using similar combinations. Apply filters accordingly
+notes:
+  quarantine_reason: 'upstream status: test'

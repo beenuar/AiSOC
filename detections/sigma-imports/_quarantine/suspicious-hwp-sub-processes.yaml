@@ -1,0 +1,40 @@
+id: sigmahq-sigma-023394c4-29d5-46ab-92b8-6a534c6f447b
+name: Suspicious HWP Sub Processes
+description: Detects suspicious Hangul Word Processor (Hanword) sub processes that
+  could indicate an exploitation
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  - T1203
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://www.securitynewspaper.com/2016/11/23/technical-teardown-exploit-malware-hwp-files/
+- https://www.hybrid-analysis.com/search?query=context:74940dcc5b38f9f9b1a0fea760d344735d7d91b610e6d5bd34533dd0153402c5&from_sample=5db135000388385a7644131f&block_redirect=1
+- https://twitter.com/cyberwar_15/status/1187287262054076416
+- https://blog.alyac.co.kr/1901
+- https://en.wikipedia.org/wiki/Hangul_(word_processor)
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \Hwp.exe
+    Image|endswith: \gbb.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 023394c4-29d5-46ab-92b8-6a534c6f447b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hwp_exploits.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

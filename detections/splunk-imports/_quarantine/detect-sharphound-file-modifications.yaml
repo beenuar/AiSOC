@@ -1,0 +1,53 @@
+id: splunk-security-content-42b4b438-beed-11eb-ba1d-acde48001122
+name: Detect SharpHound File Modifications
+description: The following analytic detects the creation of files typically associated
+  with SharpHound, a reconnaissance tool used for gathering domain and trust data.
+  It leverages file modification events from the Endpoint.Filesystem data model, focusing
+  on default file naming patterns like `*_BloodHound.zip` and various JSON files.
+  This activity is significant as it indicates potential domain enumeration, which
+  is a precursor to more targeted attacks. If confirmed malicious, an attacker could
+  gain detailed insights into the domain structure, facilitating lateral movement
+  and privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  - T1069.002
+  - T1087.001
+  - T1087.002
+  - T1482
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/software/S0521/
+- https://thedfirreport.com/?s=bloodhound
+- https://github.com/BloodHoundAD/BloodHound/tree/master/Collectors
+- https://github.com/BloodHoundAD/SharpHound3
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1059.001/T1059.001.md#atomic-test-2---run-bloodhound-from-local-disk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.file_name\
+    \ IN (\"*bloodhound.zip\", \"*_computers.json\", \"*_gpos.json\", \"*_domains.json\"\
+    , \"*_users.json\", \"*_groups.json\", \"*_ous.json\", \"*_containers.json\")\n\
+    \  BY Filesystem.action Filesystem.dest Filesystem.file_access_time\n     Filesystem.file_create_time\
+    \ Filesystem.file_hash Filesystem.file_modify_time\n     Filesystem.file_name\
+    \ Filesystem.file_path Filesystem.file_acl\n     Filesystem.file_size Filesystem.process_guid\
+    \ Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_sharphound_file_modifications_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 42b4b438-beed-11eb-ba1d-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_sharphound_file_modifications.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

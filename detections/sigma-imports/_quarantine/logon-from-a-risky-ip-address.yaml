@@ -1,0 +1,36 @@
+id: sigmahq-sigma-c191e2fa-f9d6-4ccf-82af-4f2aba08359f
+name: Logon from a Risky IP Address
+description: Detects when a Microsoft Cloud App Security reported when a user signs
+  into your sanctioned apps from a risky IP address.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Log on from a risky IP address
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c191e2fa-f9d6-4ccf-82af-4f2aba08359f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_logon_from_risky_ip_address.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

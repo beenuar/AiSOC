@@ -1,0 +1,35 @@
+id: sigmahq-sigma-e9856028-fd4e-46e6-b3d1-10f7ceb95078
+name: OpenCanary - SNMP OID Request
+description: Detects instances where an SNMP service on an OpenCanary node has had
+  an OID request.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1016
+  - T1021
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 13001
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9856028-fd4e-46e6-b3d1-10f7ceb95078
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_snmp_cmd.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-ekanssnake-ransomware-sysmon-detection
+name: ekanssnake_ransomware_sysmon_detection
+description: ekanssnake_ransomware_sysmon_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ekanssnake_ransomware_sysmon_detection {\n meta:\n    author\
+    \ = \"Ariel Millahuel\"\n    description = \"EKANS/SNAKE is a Malware that attempts\
+    \ to attack ICS (Industrial Control Systems) environments  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/NaOKwNFrbyKd\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"defense_evasion, T1112\"\n\n  events:\n($selection1.metadata.product_event_type\
+    \ = \"13\" and (re.regex($selection1.target.registry.registry_key, `.*\\\\DefaultObjectStore\\\
+    \\LruList\\\\.*`) or re.regex($selection1.target.registry.registry_key, `.*\\\\\
+    DefaultObjectStore\\\\LruList\\\\00000000000002FC\\\\.*`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\DefaultObjectStore\\\\ObjectTable\\\\E8\\\\.*`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\DefaultObjectStore\\\\ObjectTable\\\\E9\\\\.*`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\CurrentVersion\\\\NetworkList\\\\Nla\\\\Cache\\\\Intranet\\\\.*`)))\n\
+    \n  condition:\n    $selection1\n}"
+  chronicle_rule_name: ekanssnake_ransomware_sysmon_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: ekanssnake_ransomware_sysmon_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/ekans_snake_ransomware__sysmon_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

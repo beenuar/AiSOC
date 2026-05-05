@@ -1,0 +1,47 @@
+id: chronicle-detection-rules-sap-sensitive-rfc-function-module-execution
+name: sap_sensitive_rfc_function_module_execution
+description: sap_sensitive_rfc_function_module_execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_sensitive_rfc_function_module_execution {\n\n  meta:\n    author =\
+    \ \"Google Cloud Security\"\n    description = \"Detects the execution of sensitive\
+    \ function modules via RFC (AUK). Targets Parameter 3 for the function module\
+    \ name.\"\n    severity = \"High\"\n    tactic = \"TA0002\"\n    technique = \"\
+    T1129\"\n\n  events:\n    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n\n  \
+    \  $e.additional.fields[\"msg_1\"] = \"AUK\"\n    $e.additional.fields[\"param3_1\"\
+    ] in %sap_sensitive_function_modules.module\n\n    $function_module = $e.additional.fields[\"\
+    param3_1\"]\n    $user = $e.principal.user.userid\n\n    not $user in %sap_admin_users.user\n\
+    \n  match:\n    $user, $function_module over 1h\n\n  outcome:\n    $risk_score\
+    \ = 75\n    $target_sid = array_distinct($e.target.application)\n    $function_group\
+    \ = array_distinct($e.additional.fields[\"param1_1\"])\n    $description = array_distinct($e.metadata.description)\n\
+    \    $t_code = array_distinct($e.security_result.detection_fields[\"slgtc_1\"\
+    ])\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_sensitive_rfc_function_module_execution
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_sensitive_rfc_function_module_execution
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_sensitive_rfc_function_module_execution.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

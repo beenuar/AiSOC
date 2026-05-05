@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-paymen45-ransomware
+name: paymen45_ransomware
+description: paymen45_ransomware
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule paymen45_ransomware {\n meta:\n    author = \"Osman Demir\"\
+    \n    description = \"Detects Paymen45 Ransomware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/xl7e1g3hoPkA\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1486, Impact\"\n\n  events:\n(($selection.metadata.product_event_type\
+    \ = \"1\" and $selection.principal.process.file.full_path = \"Paymen45.exe\" and\
+    \ $selection.target.process.file.full_path = \"C:\\\\Windows\\\\system32\\\\vssadmin.exe\"\
+    \ and $selection.target.process.command_line = \"vssadmin delete shadows /all\
+    \ /quiet\") or ($selection.metadata.product_event_type = \"11\" and $selection.target.process.file.full_path\
+    \ = \"Paymen45.exe\" and ($selection.target.file.full_path = \"C:\\\\Users\\\\\
+    admin\\\\AppData\\\\Local\\\\VirtualStore\\\\Program Files\\\\Adobe\\\\Acrobat\
+    \ Reader DC\\\\Esl\neadme.txt\" or $selection.target.file.full_path = \"C:\\\\\
+    Users\\\\admin\\\\Desktop\neadme.txt\")) or ($selection.target.file.md5 = \"4b12f4fdf07d06fb59b5619d01a293c51d32efd183d45a87459b47d5169cfe51\"\
+    \ or $selection.target.file.md5 = \"f9dc9848892b3c1ca620a7a69cce4ff5bbf03cdfd0ad12f348973ea76d4d125e\"\
+    ))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: paymen45_ransomware
+provenance:
+  source: chronicle/detection-rules
+  source_id: paymen45_ransomware
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/paymen45_ransomware.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

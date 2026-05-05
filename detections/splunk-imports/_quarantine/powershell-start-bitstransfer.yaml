@@ -1,0 +1,46 @@
+id: splunk-security-content-39e2605a-90d8-11eb-899e-acde48001122
+name: PowerShell Start-BitsTransfer
+description: The following analytic detects the execution of the PowerShell command
+  `Start-BitsTransfer`, which can be used for file transfers, including potential
+  data exfiltration. It leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process creation events and command-line arguments. This activity
+  is significant because `Start-BitsTransfer` can be abused by adversaries to upload
+  sensitive files to remote locations, posing a risk of data loss. If confirmed malicious,
+  this could lead to unauthorized data exfiltration, compromising sensitive information
+  and potentially leading to further exploitation of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://isc.sans.edu/diary/Investigating+Microsoft+BITS+Activity/23281
+- https://docs.microsoft.com/en-us/windows/win32/bits/using-windows-powershell-to-create-bits-transfer-jobs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_powershell`\
+    \ Processes.process=*start-bitstransfer*\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `powershell_start_bitstransfer_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 39e2605a-90d8-11eb-899e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_start_bitstransfer.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

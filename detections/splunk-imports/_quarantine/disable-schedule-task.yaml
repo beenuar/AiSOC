@@ -1,0 +1,45 @@
+id: splunk-security-content-db596056-3019-11ec-a9ff-acde48001122
+name: Disable Schedule Task
+description: The following analytic detects the execution of a command to disable
+  an existing scheduled task using 'schtasks.exe' with the '/change' and '/disable'
+  parameters. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process names and command-line arguments. Disabling scheduled
+  tasks is significant as it is a common tactic used by adversaries, including malware
+  like IcedID, to disable security applications and evade detection. If confirmed
+  malicious, this activity could allow attackers to persist undetected, disable critical
+  security defenses, and further compromise the targeted host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count  min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=schtasks.exe\
+    \ Processes.process=*/change*  Processes.process=*/disable*\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `disable_schedule_task_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: db596056-3019-11ec-a9ff-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disable_schedule_task.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

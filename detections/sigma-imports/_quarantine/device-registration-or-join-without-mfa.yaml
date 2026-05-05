@@ -1,0 +1,36 @@
+id: sigmahq-sigma-5afa454e-030c-4ab4-9253-a90aa7fcc581
+name: Device Registration or Join Without MFA
+description: Monitor and alert for device registration or join events where MFA was
+  not performed.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-devices#device-registrations-and-joins-outside-policy
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    ResourceDisplayName: Device Registration Service
+    conditionalAccessStatus: success
+  filter_mfa:
+    AuthenticationRequirement: multiFactorAuthentication
+  condition: selection and not filter_mfa
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5afa454e-030c-4ab4-9253-a90aa7fcc581
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_device_registration_or_join_without_mfa.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

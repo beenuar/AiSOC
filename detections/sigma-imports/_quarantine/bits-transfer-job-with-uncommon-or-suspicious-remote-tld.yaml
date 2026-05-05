@@ -1,0 +1,45 @@
+id: sigmahq-sigma-6d44fb93-e7d2-475c-9d3d-54c9c1e33427
+name: BITS Transfer Job With Uncommon Or Suspicious Remote TLD
+description: Detects a suspicious download using the BITS client from a FQDN that
+  is unusual. Adversaries may abuse BITS jobs to persistently execute or clean up
+  after malicious payloads.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1197/T1197.md
+- https://twitter.com/malmoeb/status/1535142803075960832
+logsource:
+  product: windows
+  service: bits-client
+detection:
+  selection:
+    EventID: 16403
+  filter_main_generic:
+    RemoteName|contains:
+    - .azureedge.net/
+    - .com/
+    - .sfx.ms/
+    - download.mozilla.org/
+    - cdn.onenote.net/
+    - cdn.office.net/
+    - tscdn.m365.static.microsoft/
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6d44fb93-e7d2-475c-9d3d-54c9c1e33427
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/bits_client/win_bits_client_new_transfer_via_uncommon_tld.yml
+falsepositives:
+- This rule doesn't exclude other known TLDs such as ".org" or ".net". It's recommended
+  to apply additional filters for software and scripts that leverage the BITS service
+notes:
+  quarantine_reason: 'upstream status: test'

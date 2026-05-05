@@ -1,0 +1,42 @@
+id: sigmahq-sigma-3c05e90d-7eba-4324-9972-5d7f711a60a8
+name: UAC Bypass Tools Using ComputerDefaults
+description: Detects tools such as UACMe used to bypass UAC with computerdefaults.exe
+  (UACMe 59)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    IntegrityLevel:
+    - High
+    - System
+    - S-1-16-16384
+    - S-1-16-12288
+    Image: C:\Windows\System32\ComputerDefaults.exe
+  filter:
+    ParentImage|contains:
+    - :\Windows\System32
+    - :\Program Files
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3c05e90d-7eba-4324-9972-5d7f711a60a8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_computerdefaults.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

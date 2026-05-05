@@ -1,0 +1,53 @@
+id: splunk-security-content-ff56d843-57de-4a87-b726-13b145f6bf96
+name: Cisco Duo Policy Allow Old Java
+description: 'The following analytic detects when a Duo policy is created or updated
+  to allow the use of outdated Java versions, which can introduce significant
+
+  security risks. It works by searching Duo administrator activity logs for policy
+  creation or update actions where the policy explicitly sets
+
+  ''java_remediation'' to ''no remediation'', indicating that no restrictions are
+  enforced against old Java. The analytic aggregates relevant details
+
+  such as the user, admin email, and action context for further investigation. Identifying
+  this behavior is critical for a Security Operations Center
+
+  (SOC) because allowing outdated Java can expose an organization to known vulnerabilities,
+  malware, and exploitation techniques. Attackers or malicious
+
+  insiders may attempt to weaken security controls by modifying policies to permit
+  insecure software, increasing the risk of compromise. Prompt detection
+
+  enables SOC analysts to respond quickly, revert risky changes, and mitigate potential
+  threats before they are exploited.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=policy_update OR action=policy_create\n\
+    \  | spath input=description\n  | search java_remediation=\"no remediation\"\n\
+    \  | rename object as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY action actionlabel description\n       user admin_email\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_policy_allow_old_java_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ff56d843-57de-4a87-b726-13b145f6bf96
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_policy_allow_old_java.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,41 @@
+id: splunk-security-content-4da5ce1a-f71b-4e71-bb73-c0a3c73f3c3c
+name: Linux Auditd Data Destruction Command
+description: The following analytic detects the execution of a Unix shell command
+  designed to wipe root directories on a Linux host. It leverages data from Linux
+  Auditd, focusing on the 'rm' command with force recursive deletion and the '--no-preserve-root'
+  option. This activity is significant as it indicates potential data destruction
+  attempts, often associated with malware like Awfulshred. If confirmed malicious,
+  this behavior could lead to severe data loss, system instability, and compromised
+  integrity of the affected Linux host. Immediate investigation and response are crucial
+  to mitigate potential damage.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/3718487
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/overview-of-the-cyber-weapons-used-in-the-ukraine-russia-war/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`  (proctitle = \"*rm *\" AND proctitle = \"*-rf *\" AND\
+    \ proctitle = \"*--no-preserve-root*\")\n  | rename host as dest\n  | rename comm\
+    \ as process_name\n  | rename exe as process\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY proctitle dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_data_destruction_command_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4da5ce1a-f71b-4e71-bb73-c0a3c73f3c3c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_data_destruction_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

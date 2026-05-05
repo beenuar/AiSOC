@@ -1,0 +1,37 @@
+id: sigmahq-sigma-7794fa3c-edea-4cff-bec7-267dd4770fd7
+name: Clipboard Data Collection Via OSAScript
+description: Detects possible collection of data from the clipboard via execution
+  of the osascript binary
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1115
+  - T1059.002
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/blog/how-offensive-actors-use-applescript-for-attacking-macos/
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains|all:
+    - osascript
+    - ' -e '
+    - clipboard
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7794fa3c-edea-4cff-bec7-267dd4770fd7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_clipboard_data_via_osascript.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

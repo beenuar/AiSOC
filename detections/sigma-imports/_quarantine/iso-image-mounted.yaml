@@ -1,0 +1,45 @@
+id: sigmahq-sigma-0248a7bc-8a9a-4cd8-a57e-3ae8e073a073
+name: ISO Image Mounted
+description: Detects the mount of an ISO image on an endpoint
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/vinfo/hk-en/security/news/cybercrime-and-digital-threats/malicious-spam-campaign-uses-iso-image-files-to-deliver-lokibot-and-nanocore
+- https://www.proofpoint.com/us/blog/threat-insight/threat-actor-profile-ta2719-uses-colorful-lures-deliver-rats-local-languages
+- https://twitter.com/MsftSecIntel/status/1257324139515269121
+- https://github.com/redcanaryco/atomic-red-team/blob/0f229c0e42bfe7ca736a14023836d65baa941ed2/atomics/T1553.005/T1553.005.md#atomic-test-1---mount-iso-image
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Audit Removable Storage"
+    must be configured for Success/Failure
+detection:
+  selection:
+    EventID: 4663
+    ObjectServer: Security
+    ObjectType: File
+    ObjectName|startswith: \Device\CdRom
+  filter_main_generic:
+    ObjectName:
+    - \Device\CdRom0\autorun.ico
+    - \Device\CdRom0\setup.exe
+    - \Device\CdRom0\setup64.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0248a7bc-8a9a-4cd8-a57e-3ae8e073a073
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_iso_mount.yml
+falsepositives:
+- Software installation ISO files
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,48 @@
+id: splunk-security-content-9ff4ca95-fdae-4eea-9ffa-6d8e1c202a71
+name: GitHub Organizations Repository Deleted
+description: The following analytic identifies when a repository is deleted within
+  a GitHub organization. The detection monitors GitHub Organizations audit logs for
+  repository deletion events by tracking actor details, repository information, and
+  associated metadata. This behavior is concerning for SOC teams as malicious actors
+  may attempt to delete repositories to destroy source code, intellectual property,
+  or evidence of compromise. Repository deletion can result in permanent loss of code,
+  documentation, and project history if proper backups are not maintained. Additionally,
+  unauthorized repository deletion could indicate account compromise, insider threats,
+  or attempts to disrupt business operations. The impact of a repository deletion
+  attack includes loss of intellectual property, disruption to development workflows,
+  and potential financial losses from lost work. Early detection of unauthorized repository
+  deletions allows security teams to investigate potential compromises and restore
+  from backups if needed.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  - T1195
+  categories:
+  - cloud
+references:
+- https://splunk.github.io/splunk-add-on-for-github-audit-log-monitoring/Install/
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_organizations` vendor_action=repo.destroy\n  | fillnull\n \
+    \ | stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor,\
+    \ actor_id, actor_is_bot,\n       actor_location.country_code, business, business_id,\n\
+    \       org, org_id, repo,\n       repo_id, user_agent, visibility,\n       vendor_action\n\
+    \  | eval user=actor\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `github_organizations_repository_deleted_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9ff4ca95-fdae-4eea-9ffa-6d8e1c202a71
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_organizations_repository_deleted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

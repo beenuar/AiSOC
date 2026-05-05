@@ -1,0 +1,37 @@
+id: sigmahq-sigma-c57872c7-614f-4d7f-a40d-b78c8df2d30d
+name: Assembly Loading Via CL_LoadAssembly.ps1
+description: Detects calls to "LoadAssemblyFromPath" or "LoadAssemblyFromNS" that
+  are part of the "CL_LoadAssembly.ps1" script. This can be abused to load different
+  assemblies and bypass App locker controls.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1216
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2018/01/07/executing-commands-and-bypassing-applocker-with-powershell-diagnostic-scripts/
+- https://lolbas-project.github.io/lolbas/Scripts/CL_LoadAssembly/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - 'LoadAssemblyFromPath '
+    - 'LoadAssemblyFromNS '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c57872c7-614f-4d7f-a40d-b78c8df2d30d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_cl_loadassembly.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

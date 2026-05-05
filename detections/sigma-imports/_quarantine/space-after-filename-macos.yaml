@@ -1,0 +1,35 @@
+id: sigmahq-sigma-b6e2a2e3-2d30-43b1-a4ea-071e36595690
+name: Space After Filename - macOS
+description: Detects attempts to masquerade as legitimate files by adding a space
+  to the end of the filename.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1036.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1036.006/T1036.006.md
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection1:
+    CommandLine|endswith: ' '
+  selection2:
+    Image|endswith: ' '
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b6e2a2e3-2d30-43b1-a4ea-071e36595690
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_space_after_filename.yml
+falsepositives:
+- Mistyped commands or legitimate binaries named to match the pattern
+notes:
+  quarantine_reason: 'upstream status: test'

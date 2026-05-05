@@ -1,0 +1,39 @@
+id: splunk-security-content-396de86f-25e7-4b0e-be09-a330be35249d
+name: Windows MSExchange Management Mailbox Cmdlet Usage
+description: The following analytic identifies suspicious Cmdlet usage in Exchange
+  Management logs, focusing on commands like New-MailboxExportRequest and New-ManagementRoleAssignment.
+  It leverages EventCode 1 and specific Message patterns to detect potential ProxyShell
+  and ProxyNotShell abuse. This activity is significant as it may indicate unauthorized
+  access or manipulation of mailboxes and roles, which are critical for maintaining
+  email security. If confirmed malicious, attackers could export mailbox data, assign
+  new roles, or search mailboxes, leading to data breaches and privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/f66f1d608ea046efb9157020cd34c178
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`msexchange_management` EventCode=1 Message IN (\"*New-MailboxExportRequest*\"\
+    , \"*New-ManagementRoleAssignment*\", \"*New-MailboxSearch*\", \"*Get-Recipient*\"\
+    , \"*Search-Mailbox*\")\n  | stats count min(_time) as firstTime max(_time) as\
+    \ lastTime\n    BY host Message\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | rename host AS dest\n  | `windows_msexchange_management_mailbox_cmdlet_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 396de86f-25e7-4b0e-be09-a330be35249d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_msexchange_management_mailbox_cmdlet_usage.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

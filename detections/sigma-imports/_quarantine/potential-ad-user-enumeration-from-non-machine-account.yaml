@@ -1,0 +1,51 @@
+id: sigmahq-sigma-ab6bffca-beff-4baa-af11-6733f296d57a
+name: Potential AD User Enumeration From Non-Machine Account
+description: Detects read access to a domain user from a non-machine account
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://www.specterops.io/assets/resources/an_ace_up_the_sleeve.pdf
+- http://www.stuffithoughtiknew.com/2019/02/detecting-bloodhound.html
+- https://learn.microsoft.com/en-us/windows/win32/adschema/attributes-all
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4662
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: The "Read all properties" permission on the user object
+    needs to be audited for the "Everyone" principal'
+detection:
+  selection:
+    EventID: 4662
+    ObjectType|contains: bf967aba-0de6-11d0-a285-00aa003049e2
+    AccessMask|endswith:
+    - 1?
+    - 3?
+    - 4?
+    - 7?
+    - 9?
+    - B?
+    - D?
+    - F?
+  filter_main_machine_accounts:
+    SubjectUserName|endswith: $
+  filter_main_msql:
+    SubjectUserName|startswith: MSOL_
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ab6bffca-beff-4baa-af11-6733f296d57a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_ad_user_enumeration.yml
+falsepositives:
+- Administrators configuring new users.
+notes:
+  quarantine_reason: 'upstream status: test'

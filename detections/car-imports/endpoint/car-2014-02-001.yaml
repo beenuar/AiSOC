@@ -1,0 +1,48 @@
+id: mitre-car-car-2014-02-001
+name: Service Binary Modifications
+description: 'Adversaries may modify the binary file for an existing service to achieve
+  [Persistence](https://attack.mitre.org/tactics/TA0003) while potentially [evading
+  defenses](https://attack.mitre.org/tactics/TA0005). If a newly created or modified
+  runs as a service, it may indicate APT activity. However, services are frequently
+  installed by legitimate software. A well-tuned baseline is essential to differentiating
+  between benign and malicious service modifications.
+
+
+  ### Output Description
+
+
+  The Service Name and approximate time in which changes occurred on each host'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543
+  - T1574
+  - T1569
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Registry File Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: "legitimate_installers = [\"C:\\windows\\system32\\msiexec.exe\", \"C:\\\
+      windows\\syswow64\\msiexec.exe\", ...]\n\nfile_change = search File:Create,Modify\n\
+      process = search Process:Create\nservice_process = filter processes where (parent_exe\
+      \ == \"services.exe\")\nmodified_service = join (search, filter) where (\n file_change.time\
+      \ < service_process.time and\n file_change.file_path == service_process.image_path\n\
+      )\n\nmodified_service = filter modified_service where (modified_service.file_change.image_path\
+      \ not in legitimate_installers)\noutput modified_service\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-02-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-02-001.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,56 @@
+id: sigmahq-sigma-03cc0c25-389f-4bf8-b48d-11878079f1ca
+name: Suspicious MSHTA Child Process
+description: Detects a suspicious process spawning from an "mshta.exe" process, which
+  could be indicative of a malicious HTA script execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://www.trustedsec.com/july-2015/malicious-htas/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \mshta.exe
+  selection_child:
+  - Image|endswith:
+    - \cmd.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+    - \cscript.exe
+    - \sh.exe
+    - \bash.exe
+    - \reg.exe
+    - \regsvr32.exe
+    - \bitsadmin.exe
+  - OriginalFileName:
+    - Cmd.Exe
+    - PowerShell.EXE
+    - pwsh.dll
+    - wscript.exe
+    - cscript.exe
+    - Bash.exe
+    - reg.exe
+    - REGSVR32.EXE
+    - bitsadmin.exe
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 03cc0c25-389f-4bf8-b48d-11878079f1ca
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mshta_susp_child_processes.yml
+falsepositives:
+- Printer software / driver installations
+- HP software
+notes:
+  quarantine_reason: 'upstream status: test'

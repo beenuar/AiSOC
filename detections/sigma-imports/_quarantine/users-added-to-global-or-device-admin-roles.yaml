@@ -1,0 +1,38 @@
+id: sigmahq-sigma-11c767ae-500b-423b-bae3-b234450736ed
+name: Users Added to Global or Device Admin Roles
+description: Monitor and alert for users added to device admin roles.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-devices#device-administrator-roles
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    Category: RoleManagement
+    OperationName|contains|all:
+    - Add
+    - member to role
+    TargetResources|contains:
+    - 7698a772-787b-4ac8-901f-60d6b08affd2
+    - 62e90394-69f5-4237-9190-012177145e10
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 11c767ae-500b-423b-bae3-b234450736ed
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_ad_users_added_to_device_admin_roles.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-8a3038e8-9c9d-46f8-b184-66234a160f6f
+name: Potential Remote Desktop Tunneling
+description: Detects potential use of an SSH utility to establish RDP over a reverse
+  SSH Tunnel. This can be used by attackers to enable routing of network packets that
+  would otherwise not reach their intended destination.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/potential-remote-desktop-tunneling-detected.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: :3389
+  selection_opt:
+    CommandLine|contains:
+    - ' -L '
+    - ' -P '
+    - ' -R '
+    - ' -pw '
+    - ' -ssh '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8a3038e8-9c9d-46f8-b184-66234a160f6f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_remote_desktop_tunneling.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

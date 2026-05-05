@@ -1,0 +1,37 @@
+id: sigmahq-sigma-a1b0ca4e-7835-413e-8471-3ff2b8a66be6
+name: Potential Remote Command Execution In Pod Container
+description: Detects attempts to execute remote commands, within a Pod's container
+  using e.g. the "kubectl exec" command.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1609
+  categories:
+  - endpoint
+references:
+- https://microsoft.github.io/Threat-Matrix-for-Kubernetes/techniques/Exec%20into%20container/
+logsource:
+  category: application
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    verb: create
+    objectRef.resource: pods
+    objectRef.subresource: exec
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a1b0ca4e-7835-413e-8471-3ff2b8a66be6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_exec_into_container.yml
+falsepositives:
+- Legitimate debugging activity. Investigate the identity performing the requests
+  and their authorization.
+notes:
+  quarantine_reason: 'upstream status: test'

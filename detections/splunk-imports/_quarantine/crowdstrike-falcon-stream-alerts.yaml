@@ -1,0 +1,77 @@
+id: splunk-security-content-cb6af2b3-29ab-441c-8d8d-679811c8b014
+name: CrowdStrike Falcon Stream Alerts
+description: The following analytic is to leverage alerts from CrowdStrike Falcon
+  Event Stream. This query aggregates and summarizes DetectionSummaryEvent and IdpDetectionSummaryEvent
+  alerts from CrowdStrike Falcon Event Stream, providing details such as destination,
+  user, severity, MITRE information, and Crowdstrike id and links. The evals in the
+  search do multiple things to include align the severity, ensure the user, dest,
+  title, description, MITRE fields are set properly, and the drilldowns are defined
+  based on the type of alert. The search is highly dynamic to account for different
+  alert types in which some fields may or may not be populated. Having all these fields
+  properly set ensure the appropriate risk and analyst queue fields are correctly
+  populated.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/en-us/resources/guides/crowdstrike-falcon-event-streams-add-on-for-splunk-guide-v3/
+- https://splunkbase.splunk.com/app/5082
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`crowdstrike_stream` metadata.eventType IN (XdrDetectionSummaryEvent,IdpDetectionSummaryEvent,EppDetectionSummaryEvent)\n\
+    | rename event.* as *\n| eval risk_score=case(Severity<20, 0, Severity<40 AND\
+    \ Severity>=20, 25, Severity<60 AND Severity>=40, 100, Severity<80 AND Severity>=60,\
+    \ 250, Severity>=80, 500)\n| eval user=coalesce(lower(SourceAccountName),lower(UserName))\n\
+    | eval dest=coalesce(HostNames,SourceEndpointHostName)\n| eval mitre_technique\
+    \ = case(!match(Name, \"(NGAV\n|Intel Detection)\"), Technique)\n| join type=left\
+    \ mitre_technique\n [| inputlookup append=t mitre_attack_lookup\n  | fields mitre_technique\
+    \ mitre_technique_id ]\n| eval annotations.mitre_attack = mitre_technique_id\n\
+    | eval drilldown_user = if(NOT isnull(user), if(NOT isnull(SourceAccountName),(\"\
+    event.SourceAccountName=\" + $SourceAccountName$),\"event.UserName=\" + $UserName$\
+    \ ),\"\")\n| eval drilldown_dest = if(NOT isnull(dest), if(NOT isnull(SourceEndpointHostName),(\"\
+    event.SourceEndpointHostName=\" + $SourceEndpointHostName$ +\"*\"),\"event.HostNames=\"\
+    \ + $HostNames$ +\"*\"),\"\")\n| eval drilldown_dest2 = if( NOT isnull(dest) AND\
+    \ NOT isnull(IOARuleInstanceID) AND Tactic==\"Custom Intelligence\", if(NOT isnull(SourceEndpointHostName),(\"\
+    dest=\" + $SourceEndpointHostName$ +\"*\"),\"dest=\" + $HostNames$ +\"*\"),\"\"\
+    )\n| eval annotations.drilldown_search = if(isnull(IOARuleInstanceID) AND Tactic!=\"\
+    Custom Intelligence\", \"`crowdstrike_stream` metadata.eventType=\" + $metadata.eventType$\
+    \ + \" \" + drilldown_user + \" \" + drilldown_dest, \"`crowdstrike_stream` ((metadata.eventType=\"\
+    \ + $metadata.eventType$ + \" \" + drilldown_user + \" \" + drilldown_dest + \"\
+    ) OR (event_simpleName IN (CustomIOABasicProcessDetectionInfoEvent,CustomIOADomainNameDetectionInfoEvent,CustomIOAFileWrittenDetectionInfoEvent,CustomIOANetworkConnectionDetectionInfoEvent)\
+    \ TemplateInstanceId=\" + IOARuleInstanceID + \" \" + drilldown_dest2 + \"))\"\
+    )\n| rename \"metadata.eventType\" as eventType\n| eval title = case(Name==\"\
+    NGAV\", (\"RR - CS - \" + Tactic + \" - \" + Technique),Name==\"Intel Detection\"\
+    , (\"RR - CS - \" + Name),eventType==\"IdpDetectionSummaryEvent\", (\"RR - CS\
+    \ - Identity Protection\"),1==1, (\"RR - CS - \" + Name + \" - \" + Technique)\
+    \ )\n| eval user_append = if(NOT isnull(user),\" by \" + user,\"\")\n| eval dest_append\
+    \ = if(NOT isnull(dest),\" on \" + dest,\"\")\n| eval description = case(Name==\"\
+    NGAV\", (\"CS \" + Tactic + \" - \" + Technique + \": \" + FileName),eventType==\"\
+    IdpDetectionSummaryEvent\", (\"CS IdP\" + \" - \" + Name),Name==\"Intel Detection\"\
+    , (\"CS \" + Name + \" - \" + IOCType + \": \" + IOCValue),1==1, (Objective +\
+    \ \" - \" + DetectDescription) )\n| eval description = description + user_append\
+    \ + dest_append\n| eval gid=id, display_id=FalconHostLink, file_hash=SHA256String,\
+    \ hash=MD5String, signature=IOCValue, ip='NetworkAccesses{}.RemoteAddress', process=CommandLine,\
+    \ pid=ProcessId\n| eval file_name = if(isnull('ExecutablesWritten{}.FileName'),\
+    \ FileName, 'ExecutablesWritten{}.FileName')\n| rename id as detection_id, FalconHostLink\
+    \ as detection_url\n| table _time source detection_id detection_url title risk_score\
+    \ description Severity severity HostNames dest Tactic Technique user UserName\
+    \ Objective Name DetectDescription gid, display_id, mitre_technique annotations.mitre_attack\
+    \ annotations.drilldown_search file_hash hash signature ip process pid file_name\n\
+    | `crowdstrike_falcon_stream_alerts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cb6af2b3-29ab-441c-8d8d-679811c8b014
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/crowdstrike_falcon_stream_alerts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-79df3f68-dccb-48e9-9171-b75cbc37c51d
+name: Potential Lateral Movement via Windows Remote Shell
+description: Detects a child process spawned by 'winrshost.exe', which suggests remote
+  command execution through Windows Remote Shell (WinRs) and may indicate potential
+  lateral movement activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://cardinalops.com/blog/living-off-winrm-abusing-complexity-in-remote-management/
+- https://www.ired.team/offensive-security/lateral-movement/winrs-for-lateral-movement
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \winrshost.exe
+  filter_main_conhost:
+    Image: C:\Windows\System32\conhost.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 79df3f68-dccb-48e9-9171-b75cbc37c51d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrshost_command_execution.yml
+falsepositives:
+- Legitimate use of WinRM within the organization
+notes:
+  quarantine_reason: 'upstream status: experimental'

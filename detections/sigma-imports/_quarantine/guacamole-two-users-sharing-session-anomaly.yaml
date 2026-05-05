@@ -1,0 +1,32 @@
+id: sigmahq-sigma-1edd77db-0669-4fef-9598-165bda82826d
+name: Guacamole Two Users Sharing Session Anomaly
+description: Detects suspicious session with two users present
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1212
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2020/apache-guacamole-rce/
+logsource:
+  product: linux
+  service: guacamole
+detection:
+  selection:
+  - (2 users now present)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1edd77db-0669-4fef-9598-165bda82826d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/guacamole/lnx_guacamole_susp_guacamole.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

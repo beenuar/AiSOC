@@ -1,0 +1,38 @@
+id: sigmahq-sigma-0900463c-b33b-49a8-be1d-552a3b553dae
+name: Potential Hidden Directory Creation Via NTFS INDEX_ALLOCATION Stream - CLI
+description: Detects command line containing reference to the "::$index_allocation"
+  stream, which can be used as a technique to prevent access to folders or files from
+  tooling such as "explorer.exe" or "powershell.exe"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://twitter.com/pfiatde/status/1681977680688738305
+- https://soroush.me/blog/2010/12/a-dotty-salty-directory-a-secret-place-in-ntfs-for-secret-files/
+- https://sec-consult.com/blog/detail/pentesters-windows-ntfs-tricks-collection/
+- https://github.com/redcanaryco/atomic-red-team/blob/5c3b23002d2bbede3c07e7307165fc2a235a427d/atomics/T1564.004/T1564.004.md#atomic-test-5---create-hidden-directory-via-index_allocation
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/c54dec26-1551-4d3a-a0ea-4fa40f848eb3
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains: ::$index_allocation
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0900463c-b33b-49a8-be1d-552a3b553dae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_hidden_dir_index_allocation.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

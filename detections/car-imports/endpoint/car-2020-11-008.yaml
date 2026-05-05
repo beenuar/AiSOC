@@ -1,0 +1,54 @@
+id: mitre-car-car-2020-11-008
+name: MSBuild and msxsl
+description: Trusted developer utilities such as MSBuild may be leveraged to run malicious
+  code with elevated privileges. This analytic looks for any instances of msbuild.exe,
+  which will execute any C# code placed within a given XML document; and msxsl.exe,
+  which processes xsl transformation specifications for XML files and will execute
+  a variaty of scripting languages contained within the XSL file. Both of these executables
+  are rarely used outside of Visual Studio.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - msbuild
+    type: Pseudocode
+    code: "processes = search Process:Create\ntarget_processes = filter processes\
+      \ where (\n  (exe=\"C:\\Program Files (x86)\\Microsoft Visual Studio\\*\\bin\\\
+      MSBuild.exe\" OR exe=\"C:\\Windows\\Microsoft.NET\\Framework*\\msbuild.exe\"\
+      \ OR exe=\"C:\\users\\*\\appdata\\roaming\\microsoft\\msxsl.exe\") AND\n  image_path!=\"\
+      *Microsoft Visual Studio*\")\noutput target_processes\n"
+  - name: Splunk Search - msbuild
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) (Image="C:\\Program Files (x86)\\Microsoft
+      Visual Studio\\*\\bin\\MSBuild.exe" OR Image="C:\\Windows\\Microsoft.NET\\Framework*\\msbuild.exe"
+      OR Image="C:\\users\\*\\appdata\\roaming\\microsoft\\msxsl.exe") ParentImage!="*\\Microsoft
+      Visual Studio*")
+
+      '
+  - name: LogPoint Search - msbuild
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 (image IN ["C:\Program Files (x86)\Microsoft
+      Visual Studio\*\bin\MSBuild.exe", "C:\Windows\Microsoft.NET\Framework*\msbuild.exe",
+      "C:\Users\*\appdata\roaming\microsoft\msxsl.exe") -parent_image="*\Microsoft
+      Visual Studio*")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-008
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-008.yaml
+notes:
+  car_status: needs_implementation

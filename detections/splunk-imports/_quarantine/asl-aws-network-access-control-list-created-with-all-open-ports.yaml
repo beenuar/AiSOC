@@ -1,0 +1,48 @@
+id: splunk-security-content-a2625034-c2de-44fc-b45c-7bac9c4a7974
+name: ASL AWS Network Access Control List Created with All Open Ports
+description: The following analytic detects the creation of AWS Network Access Control
+  Lists (ACLs) with all ports open to a specified CIDR. It leverages AWS CloudTrail
+  events, specifically monitoring for `CreateNetworkAclEntry` or `ReplaceNetworkAclEntry`
+  actions with rules allowing all traffic. This activity is significant because it
+  can expose the network to unauthorized access, increasing the risk of data breaches
+  and other malicious activities. If confirmed malicious, an attacker could exploit
+  this misconfiguration to gain unrestricted access to the network, potentially leading
+  to data exfiltration, service disruption, or further compromise of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.007
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=CreateNetworkAclEntry OR api.operation=ReplaceNetworkAclEntry\
+    \ status=Success\n  | spath input=api.request.data path=ruleAction output=ruleAction\n\
+    \  | spath input=api.request.data path=egress output=egress\n  | spath input=api.request.data\
+    \ path=aclProtocol output=aclProtocol\n  | spath input=api.request.data path=cidrBlock\
+    \ output=cidrBlock\n  | spath input=api.request.data path=networkAclId output=networkAclId\n\
+    \  | search ruleAction=allow AND egress=false AND aclProtocol=-1 AND cidrBlock=0.0.0.0/0\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY actor.user.uid api.operation api.service.name\n       http_request.user_agent\
+    \ src_endpoint.ip actor.user.account.uid\n       cloud.provider cloud.region networkAclId\n\
+    \       cidrBlock\n  | rename actor.user.uid as user api.operation as action api.service.name\
+    \ as dest http_request.user_agent as user_agent src_endpoint.ip as src actor.user.account.uid\
+    \ as vendor_account cloud.provider as vendor_product cloud.region as vendor_region\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `asl_aws_network_access_control_list_created_with_all_open_ports_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a2625034-c2de-44fc-b45c-7bac9c4a7974
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_network_access_control_list_created_with_all_open_ports.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

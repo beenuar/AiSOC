@@ -1,0 +1,38 @@
+id: sigmahq-sigma-0d933542-1f1f-420d-97d4-21b2c3c492d9
+name: Kubernetes Unauthorized or Unauthenticated Access
+description: 'Detects when a request to the Kubernetes API is rejected due to lack
+  of authorization or due to an expired authentication token being used.
+
+  This may indicate an attacker attempting to leverage credentials they have obtained.'
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://kubernetes.io/docs/reference/config-api/apiserver-audit.v1/
+- https://www.datadoghq.com/blog/monitor-kubernetes-audit-logs/#monitor-api-authentication-issues
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    responseStatus.code:
+    - 401
+    - 403
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0d933542-1f1f-420d-97d4-21b2c3c492d9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_unauthorized_unauthenticated_actions.yml
+falsepositives:
+- A misconfigured RBAC policy, a mistake by a valid user, or a wider issue with authentication
+  tokens can also generate these errors.
+notes:
+  quarantine_reason: 'upstream status: test'

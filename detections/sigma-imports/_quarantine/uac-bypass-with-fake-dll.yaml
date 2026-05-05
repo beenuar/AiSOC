@@ -1,0 +1,36 @@
+id: sigmahq-sigma-a5ea83a7-05a5-44c1-be2e-addccbbd8c03
+name: UAC Bypass With Fake DLL
+description: Attempts to load dismcore.dll after dropping it
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://steemit.com/utopian-io/@ah101/uac-bypassing-utility
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \dism.exe
+    ImageLoaded|endswith: \dismcore.dll
+  filter:
+    ImageLoaded: C:\Windows\System32\Dism\dismcore.dll
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a5ea83a7-05a5-44c1-be2e-addccbbd8c03
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_uac_bypass_via_dism.yml
+falsepositives:
+- Actions of a legitimate telnet client
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,51 @@
+id: sigmahq-sigma-35ba1d85-724d-42a3-889f-2e2362bcaf23
+name: AD Privileged Users or Groups Reconnaissance
+description: Detect priv users or groups recon based on 4661 eventid and known privileged
+  users or groups SIDs
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20230329163438/https://blog.menasec.net/2019/02/threat-hunting-5-detecting-enumeration.html
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: enable Object Access SAM on your Domain Controllers'
+detection:
+  selection:
+    EventID: 4661
+    ObjectType:
+    - SAM_USER
+    - SAM_GROUP
+  selection_object:
+  - ObjectName|endswith:
+    - '-512'
+    - '-502'
+    - '-500'
+    - '-505'
+    - '-519'
+    - '-520'
+    - '-544'
+    - '-551'
+    - '-555'
+  - ObjectName|contains: admin
+  filter:
+    SubjectUserName|endswith: $
+  condition: selection and selection_object and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 35ba1d85-724d-42a3-889f-2e2362bcaf23
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_account_discovery.yml
+falsepositives:
+- If source account name is not an admin then its super suspicious
+notes:
+  quarantine_reason: 'upstream status: test'

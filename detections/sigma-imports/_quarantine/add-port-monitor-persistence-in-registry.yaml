@@ -1,0 +1,51 @@
+id: sigmahq-sigma-944e8941-f6f6-4ee8-ac05-1c224e923c0e
+name: Add Port Monitor Persistence in Registry
+description: 'Adversaries may use port monitors to run an attacker supplied DLL during
+  system boot for persistence or privilege escalation.
+
+  A port monitor can be set through the AddMonitor API call to set a DLL to be loaded
+  at startup.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.010
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.010/T1547.010.md
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Control\Print\Monitors\
+    Details|endswith: .dll
+  filter_optional_cutepdf:
+    Image: C:\Windows\System32\spoolsv.exe
+    TargetObject|contains: \Control\Print\Monitors\CutePDF Writer Monitor v4.0\Driver
+    Details: cpwmon64_v40.dll
+    User|contains:
+    - AUTHORI
+    - AUTORI
+  filter_optional_monvnc:
+    TargetObject|contains: \Control\Print\Monitors\MONVNC\Driver
+  filter_optional_vnc:
+    TargetObject|contains|all:
+    - Control\Print\Environments\
+    - \Drivers\
+    - \VNC Printer
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 944e8941-f6f6-4ee8-ac05-1c224e923c0e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_add_port_monitor.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

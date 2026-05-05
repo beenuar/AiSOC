@@ -1,0 +1,46 @@
+id: splunk-security-content-13c2f6c3-10c5-4deb-9ba1-7c4460ebe4ae
+name: Overwriting Accessibility Binaries
+description: The following analytic detects modifications to Windows accessibility
+  binaries such as sethc.exe, utilman.exe, osk.exe, Magnify.exe, Narrator.exe, DisplaySwitch.exe,
+  and AtBroker.exe. It leverages filesystem activity data from the Endpoint.Filesystem
+  data model to identify changes to these specific files. This activity is significant
+  because adversaries can exploit these binaries to gain unauthorized access or execute
+  commands without logging in. If confirmed malicious, this could allow attackers
+  to bypass authentication mechanisms, potentially leading to unauthorized system
+  access and further compromise of the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.008
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime values(Filesystem.user) as user values(Filesystem.dest)
+    as dest values(Filesystem.file_path) as file_path from datamodel=Endpoint.Filesystem
+    where (Filesystem.file_path=*\\Windows\\System32\\sethc.exe* OR Filesystem.file_path=*\\Windows\\System32\\utilman.exe*
+    OR Filesystem.file_path=*\\Windows\\System32\\osk.exe* OR Filesystem.file_path=*\\Windows\\System32\\Magnify.exe*
+    OR Filesystem.file_path=*\\Windows\\System32\\Narrator.exe* OR Filesystem.file_path=*\\Windows\\System32\\DisplaySwitch.exe*
+    OR Filesystem.file_path=*\\Windows\\System32\\AtBroker.exe*) by Filesystem.action
+    Filesystem.dest Filesystem.file_access_time Filesystem.file_create_time Filesystem.file_hash
+    Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path Filesystem.file_acl
+    Filesystem.file_size Filesystem.process_guid Filesystem.process_id Filesystem.user
+    Filesystem.vendor_product | `drop_dm_object_name(Filesystem)` | `security_content_ctime(lastTime)`
+    | `security_content_ctime(firstTime)` | `overwriting_accessibility_binaries_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 13c2f6c3-10c5-4deb-9ba1-7c4460ebe4ae
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/overwriting_accessibility_binaries.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

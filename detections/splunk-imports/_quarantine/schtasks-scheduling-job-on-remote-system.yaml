@@ -1,0 +1,46 @@
+id: splunk-security-content-1297fb80-f42a-4b4a-9c8a-88c066237cf6
+name: Schtasks scheduling job on remote system
+description: The following analytic detects the use of 'schtasks.exe' to create a
+  scheduled task on a remote system, indicating potential lateral movement or remote
+  code execution. It leverages process data from Endpoint Detection and Response (EDR)
+  agents, focusing on specific command-line arguments and flags. This activity is
+  significant as it may signify an adversary's attempt to persist or execute code
+  remotely. If confirmed malicious, this could allow attackers to maintain access,
+  execute arbitrary commands, or further infiltrate the network, posing a severe security
+  risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.process_name = schtasks.exe\n        OR\n        Processes.original_file_name=schtasks.exe\n\
+    \    )\n    (Processes.process=\"*/create*\" AND Processes.process=\"*/s *\")\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `schtasks_scheduling_job_on_remote_system_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1297fb80-f42a-4b4a-9c8a-88c066237cf6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/schtasks_scheduling_job_on_remote_system.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

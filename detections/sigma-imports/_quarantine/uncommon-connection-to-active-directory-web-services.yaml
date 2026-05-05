@@ -1,0 +1,47 @@
+id: sigmahq-sigma-b3ad3c0f-c949-47a1-a30e-b0491ccae876
+name: Uncommon Connection to Active Directory Web Services
+description: Detects uncommon network connections to the Active Directory Web Services
+  (ADWS) from processes not typically associated with ADWS management.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087
+  categories:
+  - endpoint
+references:
+- https://medium.com/falconforce/soaphound-tool-to-collect-active-directory-data-via-adws-165aca78288c
+- https://github.com/FalconForceTeam/FalconFriday/blob/a9219dfcfd89836f34660223f47d766982bdce46/Discovery/ADWS_Connection_from_Unexpected_Binary-Win.md
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: true
+    DestinationPort: 9389
+  filter_main_dsac:
+    Image: C:\Windows\system32\dsac.exe
+  filter_main_ms_monitoring_agent:
+    Image: C:\Program Files\Microsoft Monitoring Agent\
+  filter_main_powershell:
+    Image|startswith:
+    - C:\Program Files\PowerShell\7\pwsh.exe
+    - C:\Program Files\PowerShell\7-preview\pwsh.ex
+    - C:\Windows\System32\WindowsPowerShell\
+    - C:\Windows\SysWOW64\WindowsPowerShell\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b3ad3c0f-c949-47a1-a30e-b0491ccae876
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_adws_unusual_connection.yml
+falsepositives:
+- ADWS is used by a number of legitimate applications that need to interact with Active
+  Directory. These applications should be added to the allow-listing to avoid false
+  positives.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-6a69f62d-ce75-4b57-8dce-6351eb55b362
+name: Esentutl Steals Browser Information
+description: One way Qbot steals sensitive information is by extracting browser data
+  from Internet Explorer and Microsoft Edge by using the built-in utility esentutl.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1005
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/02/07/qbot-likes-to-move-it-move-it/
+- https://redcanary.com/threat-detection-report/threats/qbot/
+- https://thedfirreport.com/2022/10/31/follina-exploit-leads-to-domain-compromise/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \esentutl.exe
+  - OriginalFileName: esentutl.exe
+  selection_flag:
+    CommandLine|contains|windash: -r
+  selection_webcache:
+    CommandLine|contains: \Windows\WebCache
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6a69f62d-ce75-4b57-8dce-6351eb55b362
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_esentutl_webcache.yml
+falsepositives:
+- Legitimate use
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9c8afa4d-0022-48f0-9456-3712466f9701
+name: Tap Driver Installation - Security
+description: Detects the installation of a well-known TAP driver service. This could
+  be a sign of potential preparation for data exfiltration using tunnelling techniques.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1048
+  categories:
+  - endpoint
+references:
+- https://community.openvpn.net/openvpn/wiki/ManagingWindowsTAPDrivers
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: The System Security Extension audit subcategory need
+    to be enabled to log the EID 4697'
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|contains: tap0901
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9c8afa4d-0022-48f0-9456-3712466f9701
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_tap_driver_installation.yml
+falsepositives:
+- Legitimate OpenVPN TAP installation
+notes:
+  quarantine_reason: 'upstream status: test'

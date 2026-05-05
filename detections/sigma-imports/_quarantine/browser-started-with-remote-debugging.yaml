@@ -1,0 +1,39 @@
+id: sigmahq-sigma-b3d34dc5-2efd-4ae3-845f-8ec14921f449
+name: Browser Started with Remote Debugging
+description: Detects browsers starting with the remote debugging flags. Which is a
+  technique often used to perform browser injection attacks
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1185
+  categories:
+  - endpoint
+references:
+- https://yoroi.company/wp-content/uploads/2022/05/EternityGroup_report_compressed.pdf
+- https://www.mdsec.co.uk/2022/10/analysing-lastpass-part-1/
+- https://github.com/defaultnamehere/cookie_crimes/
+- https://github.com/wunderwuzzi23/firefox-cookiemonster
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_chromium_based:
+    CommandLine|contains: ' --remote-debugging-'
+  selection_firefox:
+    Image|endswith: \firefox.exe
+    CommandLine|contains: ' -start-debugger-server'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b3d34dc5-2efd-4ae3-845f-8ec14921f449
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_browsers_remote_debugging.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

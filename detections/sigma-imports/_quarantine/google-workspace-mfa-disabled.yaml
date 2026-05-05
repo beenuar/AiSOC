@@ -1,0 +1,38 @@
+id: sigmahq-sigma-780601d1-6376-4f2a-884e-b8d45599f78c
+name: Google Workspace MFA Disabled
+description: Detects when multi-factor authentication (MFA) is disabled.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/logging/docs/audit/gsuite-audit-logging#3
+- https://developers.google.com/admin-sdk/reports/v1/appendix/activity/admin-security-settings#ENFORCE_STRONG_AUTHENTICATION
+- https://developers.google.com/admin-sdk/reports/v1/appendix/activity/admin-security-settings?hl=en#ALLOW_STRONG_AUTHENTICATION
+logsource:
+  product: gcp
+  service: google_workspace.admin
+detection:
+  selection_base:
+    eventService: admin.googleapis.com
+    eventName:
+    - ENFORCE_STRONG_AUTHENTICATION
+    - ALLOW_STRONG_AUTHENTICATION
+  selection_eventValue:
+    new_value: 'false'
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 780601d1-6376-4f2a-884e-b8d45599f78c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/gworkspace/admin/gcp_gworkspace_mfa_disabled.yml
+falsepositives:
+- MFA may be disabled and performed by a system administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

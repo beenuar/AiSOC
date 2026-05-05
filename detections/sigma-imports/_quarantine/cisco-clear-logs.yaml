@@ -1,0 +1,34 @@
+id: sigmahq-sigma-ceb407f6-8277-439b-951f-e4210e3ed956
+name: Cisco Clear Logs
+description: Clear command history in network OS which is used for defense evasion
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://www.cisco.com/c/en/us/td/docs/switches/datacenter/nexus5000/sw/command/reference/sysmgmt/n5k-sysmgmt-cr/n5k-sm_cmds_c.html
+- https://www.cisco.com/c/en/us/td/docs/ios/12_2sr/12_2sra/feature/guide/srmgtint.html#wp1127609
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - clear logging
+  - clear archive
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ceb407f6-8277-439b-951f-e4210e3ed956
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_clear_logs.yml
+falsepositives:
+- Legitimate administrators may run these commands
+notes:
+  quarantine_reason: 'upstream status: test'

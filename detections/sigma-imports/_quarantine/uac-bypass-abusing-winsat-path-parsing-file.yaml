@@ -1,0 +1,36 @@
+id: sigmahq-sigma-155dbf56-e0a4-4dd0-8905-8a98705045e8
+name: UAC Bypass Abusing Winsat Path Parsing - File
+description: Detects the pattern of UAC Bypass using a path parsing issue in winsat.exe
+  (UACMe 52)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\Users\
+    TargetFilename|endswith:
+    - \AppData\Local\Temp\system32\winsat.exe
+    - \AppData\Local\Temp\system32\winmm.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 155dbf56-e0a4-4dd0-8905-8a98705045e8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_winsat.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

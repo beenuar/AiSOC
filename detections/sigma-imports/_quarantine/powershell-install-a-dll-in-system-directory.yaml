@@ -1,0 +1,34 @@
+id: sigmahq-sigma-63bf8794-9917-45bc-88dd-e1b5abc0ecfd
+name: Powershell Install a DLL in System Directory
+description: Uses PowerShell to install/copy a file into a system directory such as
+  "System32" or "SysWOW64"
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1556.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1556.002/T1556.002.md#atomic-test-1---install-and-register-password-filter-dll
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|re: (Copy-Item|cpi) .{2,128} -Destination .{1,32}\\Windows\\(System32|SysWOW64)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 63bf8794-9917-45bc-88dd-e1b5abc0ecfd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_copy_item_system_directory.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

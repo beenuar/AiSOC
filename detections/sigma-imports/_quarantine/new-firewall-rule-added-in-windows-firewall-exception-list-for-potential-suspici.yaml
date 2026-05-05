@@ -1,0 +1,48 @@
+id: sigmahq-sigma-9e2575e7-2cb9-4da1-adc8-ed94221dca5e
+name: New Firewall Rule Added In Windows Firewall Exception List For Potential Suspicious
+  Application
+description: Detects the addition of a new rule to the Windows Firewall exception
+  list for an application located in a potentially suspicious location.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd364427(v=ws.10)
+- https://app.any.run/tasks/7123e948-c91e-49e0-a813-00e8d72ab393/#
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID:
+    - 2004
+    - 2071
+    - 2097
+    ApplicationPath|contains:
+    - :\PerfLogs\
+    - :\Temp\
+    - :\Tmp\
+    - :\Users\Public\
+    - :\Windows\Tasks\
+    - :\Windows\Temp\
+    - \AppData\Local\Temp\
+  filter_main_block:
+    Action: 2
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e2575e7-2cb9-4da1-adc8-ed94221dca5e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/firewall_as/win_firewall_as_add_rule_susp_folder.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

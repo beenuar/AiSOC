@@ -1,0 +1,52 @@
+id: splunk-security-content-105e4a69-ec55-49fc-be1f-902467435ea8
+name: Cisco AI Defense Security Alerts by Application Name
+description: The search surfaces alerts from the Cisco AI Defense product for potential
+  attacks against the AI models running in your environment. This analytic identifies
+  security events within Cisco AI Defense by examining event messages, actions, and
+  policy names. It focuses on connections and applications associated with specific
+  guardrail entities and ruleset types. By aggregating and analyzing these elements,
+  the search helps detect potential policy violations and security threats, enabling
+  proactive defense measures and ensuring network integrity.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - application
+references:
+- https://www.robustintelligence.com/blog-posts/prompt-injection-attack-on-gpt-4
+- https://docs.aws.amazon.com/prescriptive-guidance/latest/llm-prompt-engineering-best-practices/common-attacks.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_ai_defense`\n  | rename genai_application.application_name as\
+    \ application_name\n  | rename connection.connection_name as connection_name\n\
+    \  ```Aggregating data by model name, connection name, application name, application\
+    \ ID, and user ID```\n  | stats count\n      values(user_id) as user_id\n    \
+    \  values(event_message_type) as event_message_type\n      values(event_action)\
+    \ as event_action\n      values(policy.policy_name) as policy_name\n      values(event_policy_guardrail_assocs{}.policy_guardrail_assoc.guardrail_avail_entity.guardrail_entity_name)\
+    \ as guardrail_entity_name\n      values(event_policy_guardrail_assocs{}.policy_guardrail_assoc.guardrail_avail_ruleset.guardrail_ruleset_type)\
+    \ as guardrail_ruleset_type\n      by model.model_name connection_name application_name\
+    \ application_id\n  ```Evaluating severity based on policy name and guardrail\
+    \ ruleset type```\n  | eval severity=case(\n      policy_name IN (\"AI Runtime\
+    \ Latency Testing - Prompt Injection\"), \"critical\",\n      policy_name IN (\"\
+    AI Runtime Latency Testing - Code Detection\"), \"high\",\n      guardrail_ruleset_type\
+    \ IN (\"Toxicity\"), \"medium\",\n      true(), \"low\"\n  )\n  ```Calculating\
+    \ risk score based on severity level```\n  | eval risk_score=case(\n      severity=\"\
+    critical\", 100,\n      severity=\"high\", 75,\n      severity=\"medium\", 50,\n\
+    \      severity=\"low\", 25\n  )\n  | table model.model_name, user_id, event_action,\
+    \ application_id, application_name, severity, risk_score, policy_name, connection_name,\
+    \ guardrail_ruleset_type, guardrail_entity_name\n  | `cisco_ai_defense_security_alerts_by_application_name_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 105e4a69-ec55-49fc-be1f-902467435ea8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_ai_defense_security_alerts_by_application_name.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

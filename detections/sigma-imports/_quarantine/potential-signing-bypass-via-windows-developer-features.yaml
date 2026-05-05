@@ -1,0 +1,40 @@
+id: sigmahq-sigma-a383dec4-deec-4e6e-913b-ed9249670848
+name: Potential Signing Bypass Via Windows Developer Features
+description: Detects when a user enable developer features such as "Developer Mode"
+  or "Application Sideloading". Which allows the user to install untrusted packages.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://www.sentinelone.com/labs/inside-malicious-windows-apps-for-malware-deployment/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \SystemSettingsAdminFlows.exe
+  - OriginalFileName: SystemSettingsAdminFlows.EXE
+  selection_flag:
+    CommandLine|contains: TurnOnDeveloperFeatures
+  selection_options:
+    CommandLine|contains:
+    - DeveloperUnlock
+    - EnableSideloading
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a383dec4-deec-4e6e-913b-ed9249670848
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_systemsettingsadminflows_turn_on_dev_features.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

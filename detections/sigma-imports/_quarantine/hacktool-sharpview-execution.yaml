@@ -1,0 +1,123 @@
+id: sigmahq-sigma-b2317cfa-4a47-4ead-b3ff-297438c0bc2d
+name: HackTool - SharpView Execution
+description: Adversaries may look for details about the network configuration and
+  settings of systems they access or through information discovery of remote systems
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1049
+  - T1069.002
+  - T1482
+  - T1135
+  - T1033
+  categories:
+  - endpoint
+references:
+- https://github.com/tevora-threat/SharpView/
+- https://github.com/PowerShellMafia/PowerSploit/blob/d943001a7defb5e0d1657085a77a0e78609be58f/Recon/PowerView.ps1
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1049/T1049.md#atomic-test-4---system-discovery-using-sharpview
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - OriginalFileName: SharpView.exe
+  - Image|endswith: \SharpView.exe
+  - CommandLine|contains:
+    - Add-RemoteConnection
+    - Convert-ADName
+    - ConvertFrom-SID
+    - ConvertFrom-UACValue
+    - Convert-SidToName
+    - Export-PowerViewCSV
+    - Find-DomainObjectPropertyOutlier
+    - Find-DomainProcess
+    - Find-DomainShare
+    - Find-DomainUserEvent
+    - Find-DomainUserLocation
+    - Find-ForeignGroup
+    - Find-ForeignUser
+    - Find-GPOComputerAdmin
+    - Find-GPOLocation
+    - Find-Interesting
+    - Find-LocalAdminAccess
+    - Find-ManagedSecurityGroups
+    - Get-CachedRDPConnection
+    - Get-DFSshare
+    - Get-DomainComputer
+    - Get-DomainController
+    - Get-DomainDFSShare
+    - Get-DomainDNSRecord
+    - Get-DomainFileServer
+    - Get-DomainForeign
+    - Get-DomainGPO
+    - Get-DomainGroup
+    - Get-DomainGUIDMap
+    - Get-DomainManagedSecurityGroup
+    - Get-DomainObject
+    - Get-DomainOU
+    - Get-DomainPolicy
+    - Get-DomainSID
+    - Get-DomainSite
+    - Get-DomainSPNTicket
+    - Get-DomainSubnet
+    - Get-DomainTrust
+    - Get-DomainUserEvent
+    - Get-ForestDomain
+    - Get-ForestGlobalCatalog
+    - Get-ForestTrust
+    - Get-GptTmpl
+    - Get-GroupsXML
+    - Get-LastLoggedOn
+    - Get-LoggedOnLocal
+    - Get-NetComputer
+    - Get-NetDomain
+    - Get-NetFileServer
+    - Get-NetForest
+    - Get-NetGPO
+    - Get-NetGroupMember
+    - Get-NetLocalGroup
+    - Get-NetLoggedon
+    - Get-NetOU
+    - Get-NetProcess
+    - Get-NetRDPSession
+    - Get-NetSession
+    - Get-NetShare
+    - Get-NetSite
+    - Get-NetSubnet
+    - Get-NetUser
+    - Get-PathAcl
+    - Get-PrincipalContext
+    - Get-RegistryMountedDrive
+    - Get-RegLoggedOn
+    - Get-WMIRegCachedRDPConnection
+    - Get-WMIRegLastLoggedOn
+    - Get-WMIRegMountedDrive
+    - Get-WMIRegProxy
+    - Invoke-ACLScanner
+    - Invoke-CheckLocalAdminAccess
+    - Invoke-Kerberoast
+    - Invoke-MapDomainTrust
+    - Invoke-RevertToSelf
+    - Invoke-Sharefinder
+    - Invoke-UserImpersonation
+    - Remove-DomainObjectAcl
+    - Remove-RemoteConnection
+    - Request-SPNTicket
+    - Set-DomainObject
+    - Test-AdminAccess
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b2317cfa-4a47-4ead-b3ff-297438c0bc2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharpview.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

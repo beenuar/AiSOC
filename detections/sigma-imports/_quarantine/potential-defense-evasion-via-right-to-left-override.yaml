@@ -1,0 +1,44 @@
+id: sigmahq-sigma-ad691d92-15f2-4181-9aa4-723c74f9ddc3
+name: Potential Defense Evasion Via Right-to-Left Override
+description: 'Detects the presence of the "u202+E" character, which causes a terminal,
+  browser, or operating system to render text in a right-to-left sequence.
+
+  This character is used as an obfuscation and masquerading techniques by adversaries
+  to trick users into opening malicious files.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1036.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/right-to-left-override/
+- https://www.malwarebytes.com/blog/news/2014/01/the-rtlo-method
+- https://unicode-explorer.com/c/202E
+- https://tria.ge/241015-l98snsyeje/behavioral2
+- https://unprotect.it/technique/right-to-left-override-rlo-extension-spoofing/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - \u202e
+    - '[U+202E]'
+    - ‮
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ad691d92-15f2-4181-9aa4-723c74f9ddc3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_right_to_left_override.yml
+falsepositives:
+- Commandlines that contains scriptures such as arabic or hebrew might make use of
+  this character
+notes:
+  quarantine_reason: 'upstream status: test'

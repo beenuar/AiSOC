@@ -1,0 +1,37 @@
+id: sigmahq-sigma-edd3ddc3-386f-4ba5-9ada-4376b2cfa7b5
+name: Potential EACore.DLL Sideloading
+description: Detects potential DLL sideloading of "EACore.dll"
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2023/beyond-the-horizon-traveling-the-world-on-camaro-dragons-usb-flash-drives/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \EACore.dll
+  filter_main_legit_path:
+    Image|contains|all:
+    - C:\Program Files\Electronic Arts\EA Desktop\
+    - \EACoreServer.exe
+    ImageLoaded|startswith: C:\Program Files\Electronic Arts\EA Desktop\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: edd3ddc3-386f-4ba5-9ada-4376b2cfa7b5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_eacore.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,48 @@
+id: splunk-security-content-4662c6b1-0754-455e-b9ff-3ee730af3ba8
+name: Windows Modify Registry With MD5 Reg Key Name
+description: The following analytic detects potentially malicious registry modifications
+  characterized by MD5-like registry key names. It leverages the Endpoint data model
+  to identify registry entries under the SOFTWARE path with 32-character hexadecimal
+  names, a technique often used by NjRAT malware for fileless storage of keylogs and
+  .DLL plugins. This activity is significant as it can indicate the presence of NjRAT
+  or similar malware, which can lead to unauthorized data access and persistent threats
+  within the environment. If confirmed malicious, attackers could maintain persistence
+  and exfiltrate sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.njrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly`  count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where  Registry.registry_path
+    = "*\\SOFTWARE\\*" Registry.registry_value_data = "Binary Data" by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | eval dropped_reg_path
+    = split(registry_path, "\\") | eval dropped_reg_path_split_count = mvcount(dropped_reg_path)
+    | eval validation_result= if(match(registry_value_name,"^[0-9a-fA-F]{32}$"),"md5","nonmd5")
+    | where validation_result = "md5" AND dropped_reg_path_split_count <= 5 | table
+    dest user registry_path registry_value_name registry_value_data registry_key_name
+    reg_key_name dropped_reg_path_split_count validation_result | `security_content_ctime(lastTime)`
+    | `security_content_ctime(firstTime)` | `windows_modify_registry_with_md5_reg_key_name_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 4662c6b1-0754-455e-b9ff-3ee730af3ba8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_with_md5_reg_key_name.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,54 @@
+id: sigmahq-sigma-f9999590-1f94-4a34-a91e-951e47bedefd
+name: Suspicious Provlaunch.EXE Child Process
+description: Detects suspicious child processes of "provlaunch.exe" which might indicate
+  potential abuse to proxy execution.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Provlaunch/
+- https://twitter.com/0gtweet/status/1674399582162153472
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \provlaunch.exe
+  selection_child:
+  - Image|endswith:
+    - \calc.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \notepad.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  - Image|contains:
+    - :\PerfLogs\
+    - :\Temp\
+    - :\Users\Public\
+    - \AppData\Temp\
+    - \Windows\System32\Tasks\
+    - \Windows\Tasks\
+    - \Windows\Temp\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f9999590-1f94-4a34-a91e-951e47bedefd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_provlaunch_susp_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

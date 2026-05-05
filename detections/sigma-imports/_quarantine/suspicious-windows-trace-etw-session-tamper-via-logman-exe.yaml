@@ -1,0 +1,47 @@
+id: sigmahq-sigma-cd1f961e-0b96-436b-b7c6-38da4583ec00
+name: Suspicious Windows Trace ETW Session Tamper Via Logman.EXE
+description: Detects the execution of "logman" utility in order to disable or delete
+  Windows trace sessions
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  - T1685.005
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0gtweet/status/1359039665232306183?s=21
+- https://ss64.com/nt/logman.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \logman.exe
+  - OriginalFileName: Logman.exe
+  selection_action:
+    CommandLine|contains:
+    - 'stop '
+    - 'delete '
+  selection_service:
+    CommandLine|contains:
+    - Circular Kernel Context Logger
+    - EventLog-
+    - SYSMON TRACE
+    - SysmonDnsEtwSession
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cd1f961e-0b96-436b-b7c6-38da4583ec00
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_logman_disable_eventlog.yml
+falsepositives:
+- Legitimate deactivation by administrative staff
+- Installer tools that disable services, e.g. before log collection agent installation
+notes:
+  quarantine_reason: 'upstream status: test'

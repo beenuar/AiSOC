@@ -1,0 +1,46 @@
+id: splunk-security-content-d4e40b7e-aad3-4a7d-aac8-550ea5222be5
+name: Linux Cpulimit Privilege Escalation
+description: The following analytic detects the use of the 'cpulimit' command with
+  specific flags ('-l', '-f') executed with 'sudo' privileges. It leverages data from
+  Endpoint Detection and Response (EDR) agents, focusing on process command-line arguments
+  and execution details. This activity is significant because if 'cpulimit' is granted
+  sudo rights, a user can potentially execute system commands as root, leading to
+  privilege escalation. If confirmed malicious, this could allow an attacker to gain
+  root access, execute arbitrary commands, and fully compromise the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/cpulimit/
+- http://cpulimit.sourceforge.net/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process=\"\
+    *cpulimit*\"\n    AND\n    Processes.process=\"*-l*\"\n    AND\n    Processes.process=\"\
+    *-f*\"\n    AND\n    Processes.process=\"*sudo*\"\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_cpulimit_privilege_escalation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d4e40b7e-aad3-4a7d-aac8-550ea5222be5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_cpulimit_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

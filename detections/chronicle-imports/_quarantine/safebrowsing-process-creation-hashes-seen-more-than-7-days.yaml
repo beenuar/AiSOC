@@ -1,0 +1,82 @@
+id: chronicle-detection-rules-safebrowsing-process-creation-hashes-seen-more-than-7-days
+name: safebrowsing_process_creation_hashes_seen_more_than_7_days
+description: safebrowsing_process_creation_hashes_seen_more_than_7_days
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule safebrowsing_process_creation_hashes_seen_more_than_7_days {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Identify process\
+    \ and file creation using safe browsing hashes where the first and last seen are\
+    \ more than 7 days apart\"\n    rule_id = \"mr_9970945d-45cf-44ed-887a-ff876d5a072b\"\
+    \n    rule_name = \"Safebrowsing Process Creation Hashes Seen More Than 7 Days\"\
+    \n    type = \"alert\"\n    tags = \"safe browsing, first last seen\"\n    data_source\
+    \ = \"microsoft sysmon, crowdstrike\"\n    severity = \"Medium\"\n    priority\
+    \ = \"Medium\"\n\n  events:\n    ($execution.metadata.event_type = \"PROCESS_LAUNCH\"\
+    \ or $execution.metadata.event_type = \"FILE_CREATION\")\n    $execution.principal.hostname\
+    \ = $hostname\n    $execution.target.process.file.sha256 = $sha256\n\n    // Safe\
+    \ Browsing file hashes provided by GCTI Feed\n    $safebrowse.graph.entity.file.sha256\
+    \ = $sha256\n    $safebrowse.graph.metadata.entity_type = \"FILE\"\n    $safebrowse.graph.metadata.product_name\
+    \ = \"Google Safe Browsing\"\n    $safebrowse.graph.metadata.source_type = \"\
+    GLOBAL_CONTEXT\"\n\n    // derived from events ingested by Google SecOps\n   \
+    \ $seen.graph.entity.file.sha256 = $sha256\n    $seen.graph.metadata.entity_type\
+    \ = \"FILE\"\n    $seen.graph.metadata.source_type = \"DERIVED_CONTEXT\"\n   \
+    \ $seen.graph.entity.file.last_seen_time.seconds > 0\n    604800 <= $seen.graph.entity.file.last_seen_time.seconds\
+    \ - $seen.graph.entity.file.first_seen_time.seconds\n\n  match:\n    $sha256 over\
+    \ 1h\n\n  outcome:\n    $risk_score = max( if($seen.graph.entity.file.last_seen_time.seconds\
+    \ - $seen.graph.entity.file.first_seen_time.seconds > 604800 and\n        $seen.graph.entity.file.last_seen_time.seconds\
+    \ - $seen.graph.entity.file.first_seen_time.seconds < 1209600, 25, 0) +\n    \
+    \        if($seen.graph.entity.file.last_seen_time.seconds - $seen.graph.entity.file.first_seen_time.seconds\
+    \ >= 1209600 and\n                $seen.graph.entity.file.last_seen_time.seconds\
+    \ - $seen.graph.entity.file.first_seen_time.seconds < 1814400, 50, 0) +\n    \
+    \        if($seen.graph.entity.file.last_seen_time.seconds - $seen.graph.entity.file.first_seen_time.seconds\
+    \ >= 1814400 and\n                $seen.graph.entity.file.last_seen_time.seconds\
+    \ - $seen.graph.entity.file.first_seen_time.seconds < 2592000, 75, 0) +\n    \
+    \        if($seen.graph.entity.file.last_seen_time.seconds - $seen.graph.entity.file.first_seen_time.seconds\
+    \ >= 2592000, 100, 0))\n    $event_count = count_distinct($execution.metadata.id)\n\
+    \    // added to populate alert graph with additional context\n    $principal_hostname\
+    \ = array_distinct($execution.principal.hostname)\n    $principal_process_pid\
+    \ = array_distinct($execution.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($execution.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($execution.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($execution.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($execution.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($execution.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($execution.target.process.pid)\n   \
+    \ $target_process_command_line = array_distinct($execution.target.process.command_line)\n\
+    \    // Commented out principal.hostname because it is already represented in\
+    \ graph as match variable. If match changes, can uncomment to add to results\n\
+    \    //$target_process_file_sha256 = array_distinct($execution.target.process.file.sha256)\n\
+    \    $target_process_file_full_path = array_distinct($execution.target.process.file.full_path)\n\
+    \    $target_process_product_specific_process_id = array_distinct($execution.target.process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($execution.principal.user.userid)\n\
+    \    $target_file_sha256 = array_distinct($execution.target.file.sha256)\n   \
+    \ $target_file_full_path = array_distinct($execution.target.file.full_path)\n\n\
+    \  condition:\n    $execution and $safebrowse and $seen\n}"
+  chronicle_rule_name: safebrowsing_process_creation_hashes_seen_more_than_7_days
+provenance:
+  source: chronicle/detection-rules
+  source_id: safebrowsing_process_creation_hashes_seen_more_than_7_days
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/safebrowsing_process_creation_hashes_seen_more_than_7_days.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

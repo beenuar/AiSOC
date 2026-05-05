@@ -1,0 +1,41 @@
+id: splunk-security-content-b5baa09a-7a05-11ec-8da4-acde48001122
+name: Excessive File Deletion In WinDefender Folder
+description: The following analytic detects excessive file deletion events in the
+  Windows Defender folder. It leverages Sysmon EventCodes 23 and 26 to identify processes
+  deleting multiple files within this directory. This behavior is significant as it
+  may indicate an attempt to corrupt or disable Windows Defender, a key security component.
+  If confirmed malicious, this activity could allow an attacker to disable endpoint
+  protection, facilitating further malicious actions without detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN ("23","26") TargetFilename = "*\\ProgramData\\Microsoft\\Windows
+    Defender\\*" | stats count min(_time) as firstTime, max(_time) as lastTime values(file_path)
+    as file_path values(file_hash) as file_hash values(file_name) as file_name values(file_modify_time)
+    as file_modify_time values(process_name) as process_name values(process_path)
+    as process_path values(process_guid) as process_guid values(process_id) as process_id
+    values(process_exec) as process_exec by action dest dvc signature signature_id
+    user user_id vendor_product | where count >=50 | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `excessive_file_deletion_in_windefender_folder_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b5baa09a-7a05-11ec-8da4-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/excessive_file_deletion_in_windefender_folder.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

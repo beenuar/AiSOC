@@ -1,0 +1,34 @@
+id: sigmahq-sigma-460479f3-80b7-42da-9c43-2cc1d54dbccd
+name: Creation of a Local Hidden User Account by Registry
+description: Sysmon registry detection of a local hidden user account.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1387530414185664538
+logsource:
+  product: windows
+  category: registry_event
+detection:
+  selection:
+    TargetObject|contains: \SAM\SAM\Domains\Account\Users\Names\
+    TargetObject|endswith: $\(Default)
+    Image|endswith: \lsass.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 460479f3-80b7-42da-9c43-2cc1d54dbccd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_add_local_hidden_user.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,51 @@
+id: sigmahq-sigma-bbb7e38c-0b41-4a11-b306-d2a457b7ac2b
+name: Suspicious File Created In PerfLogs
+description: Detects suspicious file based on their extension being created in "C:\PerfLogs\".
+  Note that this directory mostly contains ".etl" files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://labs.withsecure.com/publications/fin7-target-veeam-servers
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\PerfLogs\
+    TargetFilename|endswith:
+    - .7z
+    - .bat
+    - .bin
+    - .chm
+    - .dll
+    - .exe
+    - .hta
+    - .lnk
+    - .ps1
+    - .psm1
+    - .py
+    - .scr
+    - .sys
+    - .vbe
+    - .vbs
+    - .zip
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bbb7e38c-0b41-4a11-b306-d2a457b7ac2b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_perflogs_susp_files.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

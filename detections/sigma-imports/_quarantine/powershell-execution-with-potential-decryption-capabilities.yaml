@@ -1,0 +1,61 @@
+id: sigmahq-sigma-434c08ba-8406-4d15-8b24-782cb071a691
+name: PowerShell Execution With Potential Decryption Capabilities
+description: Detects PowerShell commands that decrypt an ".LNK" "file to drop the
+  next stage of the malware.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2023/chinese-threat-actors-targeting-europe-in-smugx-campaign/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_cli_dir:
+    CommandLine|contains:
+    - 'Get-ChildItem '
+    - 'dir '
+    - 'gci '
+    - 'ls '
+  selection_cli_gc:
+    CommandLine|contains:
+    - 'Get-Content '
+    - 'gc '
+    - 'cat '
+    - 'type '
+    - ReadAllBytes
+  selection_cli_specific:
+  - CommandLine|contains|all:
+    - ' ^| '
+    - \*.lnk
+    - -Recurse
+    - '-Skip '
+  - CommandLine|contains|all:
+    - ' -ExpandProperty '
+    - \*.lnk
+    - WriteAllBytes
+    - ' .length '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 434c08ba-8406-4d15-8b24-782cb071a691
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_decrypt_pattern.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

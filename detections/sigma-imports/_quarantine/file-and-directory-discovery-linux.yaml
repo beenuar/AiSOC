@@ -1,0 +1,45 @@
+id: sigmahq-sigma-d3feb4ee-ff1d-4d3d-bd10-5b28a238cc72
+name: File and Directory Discovery - Linux
+description: Detects usage of system utilities such as "find", "tree", "findmnt",
+  etc, to discover files, directories and network shares.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1083/T1083.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_file_with_asterisk:
+    Image|endswith: /file
+    CommandLine|re: (.){200,}
+  selection_recursive_ls:
+    Image|endswith: /ls
+    CommandLine|contains: -R
+  selection_find_execution:
+    Image|endswith: /find
+  selection_tree_execution:
+    Image|endswith: /tree
+  selection_findmnt_execution:
+    Image|endswith: /findmnt
+  selection_locate_execution:
+    Image|endswith: /mlocate
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3feb4ee-ff1d-4d3d-bd10-5b28a238cc72
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_file_and_directory_discovery.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

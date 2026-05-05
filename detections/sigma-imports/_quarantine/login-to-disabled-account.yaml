@@ -1,0 +1,34 @@
+id: sigmahq-sigma-908655e0-25cf-4ae1-b775-1c8ce9cf43d8
+name: Login to Disabled Account
+description: Detect failed attempts to sign in to disabled accounts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    ResultType: 50057
+    ResultDescription: User account is disabled. The account has been disabled by
+      an administrator.
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 908655e0-25cf-4ae1-b775-1c8ce9cf43d8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_login_to_disabled_account.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

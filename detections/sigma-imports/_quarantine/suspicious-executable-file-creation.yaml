@@ -1,0 +1,43 @@
+id: sigmahq-sigma-74babdd6-a758-4549-9632-26535279e654
+name: Suspicious Executable File Creation
+description: 'Detect creation of suspicious executable file names.
+
+  Some strings look for suspicious file extensions, others look for filenames that
+  exploit unquoted service paths.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564
+  categories:
+  - endpoint
+references:
+- https://medium.com/@SumitVerma101/windows-privilege-escalation-part-1-unquoted-service-path-c7a011a8d8ae
+- https://app.any.run/tasks/76c69e2d-01e8-49d9-9aea-fb7cc0c4d3ad/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith:
+    - :\$Recycle.Bin.exe
+    - :\Documents and Settings.exe
+    - :\MSOCache.exe
+    - :\PerfLogs.exe
+    - :\Recovery.exe
+    - .bat.exe
+    - .sys.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 74babdd6-a758-4549-9632-26535279e654
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_executable_creation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

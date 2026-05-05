@@ -1,0 +1,43 @@
+id: splunk-security-content-d82d4af4-a0bd-11ec-9445-3e22fbd008af
+name: Kerberos User Enumeration
+description: The following analytic detects an unusual number of Kerberos Ticket Granting
+  Ticket (TGT) requests for non-existing users from a single source endpoint. It leverages
+  Event ID 4768 and identifies anomalies using the 3-sigma statistical rule. This
+  behavior is significant as it may indicate an adversary performing a user enumeration
+  attack against Active Directory. If confirmed malicious, the attacker could validate
+  a list of usernames, potentially leading to further attacks such as brute force
+  or credential stuffing, compromising the security of the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1589.002
+  categories:
+  - endpoint
+references:
+- https://github.com/ropnop/kerbrute
+- https://attack.mitre.org/techniques/T1589/002/
+- https://redsiege.com/tools-techniques/2020/04/user-enumeration-part-3-windows/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4768 Status=0x6 TargetUserName!=\"\
+    *$\"\n  | bucket span=2m _time\n  | stats dc(TargetUserName) AS unique_accounts\
+    \ values(TargetUserName) as tried_accounts values(dest) as dest\n    BY _time,\
+    \ src_ip\n  | eventstats avg(unique_accounts) as comp_avg , stdev(unique_accounts)\
+    \ as comp_std\n    BY src_ip\n  | eval upperBound=(comp_avg+comp_std*3)\n  | eval\
+    \ isOutlier=if(unique_accounts > 10 and unique_accounts >= upperBound, 1, 0)\n\
+    \  | search isOutlier=1\n  | `kerberos_user_enumeration_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d82d4af4-a0bd-11ec-9445-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/kerberos_user_enumeration.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

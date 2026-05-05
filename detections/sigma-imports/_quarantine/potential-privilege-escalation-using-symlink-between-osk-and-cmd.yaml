@@ -1,0 +1,41 @@
+id: sigmahq-sigma-e9b61244-893f-427c-b287-3e708f321c6b
+name: Potential Privilege Escalation Using Symlink Between Osk and Cmd
+description: Detects the creation of a symbolic link between "cmd.exe" and the accessibility
+  on-screen keyboard binary (osk.exe) using "mklink". This technique provides an elevated
+  command prompt to the user from the login screen without the need to log in.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546.008
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/5c1e6f1b4fafd01c8d1ece85f510160fc1275fbf/atomics/T1546.008/T1546.008.md
+- https://ss64.com/nt/mklink.html
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \cmd.exe
+  - OriginalFileName: Cmd.Exe
+  selection_cli:
+    CommandLine|contains|all:
+    - mklink
+    - \osk.exe
+    - \cmd.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9b61244-893f-427c-b287-3e708f321c6b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_mklink_osk_cmd.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

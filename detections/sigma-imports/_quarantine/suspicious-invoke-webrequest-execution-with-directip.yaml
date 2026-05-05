@@ -1,0 +1,59 @@
+id: sigmahq-sigma-1edff897-9146-48d2-9066-52e8d8f80a2f
+name: Suspicious Invoke-WebRequest Execution With DirectIP
+description: Detects calls to PowerShell with Invoke-WebRequest cmdlet using direct
+  IP access
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.huntress.com/blog/critical-vulnerabilities-in-papercut-print-management-software
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell_ise.exe
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - powershell_ise.EXE
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_commands:
+    CommandLine|contains:
+    - 'curl '
+    - Invoke-RestMethod
+    - Invoke-WebRequest
+    - ' irm '
+    - 'iwr '
+    - 'wget '
+  selection_ip:
+    CommandLine|contains:
+    - ://1
+    - ://2
+    - ://3
+    - ://4
+    - ://5
+    - ://6
+    - ://7
+    - ://8
+    - ://9
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1edff897-9146-48d2-9066-52e8d8f80a2f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_invoke_webrequest_direct_ip.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

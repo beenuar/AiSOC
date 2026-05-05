@@ -1,0 +1,40 @@
+id: splunk-security-content-fcd74532-ae54-11eb-a5ab-acde48001122
+name: Enumerate Users Local Group Using Telegram
+description: The following analytic detects a Telegram process enumerating all network
+  users in a local group. It leverages EventCode 4798, which is generated when a process
+  enumerates a user's security-enabled local groups on a computer or device. This
+  activity is significant as it may indicate an attempt to gather information on user
+  accounts, a common precursor to further malicious actions. If confirmed malicious,
+  this behavior could allow an attacker to map out user accounts, potentially leading
+  to privilege escalation or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4798
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4798  CallerProcessName = "*\\telegram.exe"
+    | stats count min(_time) as firstTime max(_time) as lastTime by user Computer
+    EventCode CallerProcessName  ProcessID SubjectUserSid SubjectDomainName  SubjectLogonId
+    | rename Computer as dest | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `enumerate_users_local_group_using_telegram_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: fcd74532-ae54-11eb-a5ab-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/enumerate_users_local_group_using_telegram.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

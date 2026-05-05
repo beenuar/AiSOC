@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8d5aca11-22b3-4f22-b7ba-90e60533e1fb
+name: Wmiexec Default Output File
+description: Detects the creation of the default output filename used by the wmiexec
+  tool
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/blog/how-to-detect-and-prevent-impackets-wmiexec/
+- https://github.com/fortra/impacket/blob/f4b848fa27654ca95bc0f4c73dbba8b9c2c9f30a/examples/wmiexec.py
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+  - TargetFilename|re: \\Windows\\__1\d{9}\.\d{1,7}$
+  - TargetFilename|re: C:\\__1\d{9}\.\d{1,7}$
+  - TargetFilename|re: D:\\__1\d{9}\.\d{1,7}$
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8d5aca11-22b3-4f22-b7ba-90e60533e1fb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_wmiexec_default_filename.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-28268a8f-191f-4c17-85b2-f5aa4fa829c3
+name: Google Cloud DNS Zone Modified or Deleted
+description: Identifies when a DNS Zone is modified or deleted in Google Cloud.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/dns/docs/reference/v1/managedZones
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name:
+    - Dns.ManagedZones.Delete
+    - Dns.ManagedZones.Update
+    - Dns.ManagedZones.Patch
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 28268a8f-191f-4c17-85b2-f5aa4fa829c3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_dns_zone_modified_or_deleted.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

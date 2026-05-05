@@ -1,0 +1,43 @@
+id: splunk-security-content-7f5fb3e1-4209-4914-90db-0ec21b936378
+name: SMB Traffic Spike
+description: The following analytic detects spikes in Server Message Block (SMB) traffic
+  connections, which are used for sharing files and resources between computers. It
+  leverages network traffic logs to monitor connections on ports 139 and 445, and
+  SMB application usage. By calculating the average and standard deviation of SMB
+  connections over the past 70 minutes, it identifies sources exceeding two standard
+  deviations from the average. This activity is significant as it may indicate potential
+  SMB-based attacks, such as ransomware or data theft. If confirmed malicious, attackers
+  could exfiltrate data or spread malware within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Network_Traffic\n\
+    \  WHERE All_Traffic.dest_port=139\n    OR\n    All_Traffic.dest_port=445\n  \
+    \  OR\n    All_Traffic.app=smb\n  BY _time span=1h, All_Traffic.src\n| `drop_dm_object_name(\"\
+    All_Traffic\")`\n| eventstats max(_time) as maxtime\n| stats count as num_data_samples\
+    \ max(eval(if(_time >= relative_time(maxtime, \"-70m@m\"), count, null))) as count\
+    \ avg(eval(if(_time<relative_time(maxtime, \"-70m@m\"), count, null))) as avg\
+    \ stdev(eval(if(_time<relative_time(maxtime, \"-70m@m\"), count, null))) as stdev\n\
+    \  BY src\n| eval upperBound=(avg+stdev*2), isOutlier=if(count > upperBound AND\
+    \ num_data_samples >=50, 1, 0)\n| where isOutlier=1\n| table src count\n| `smb_traffic_spike_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7f5fb3e1-4209-4914-90db-0ec21b936378
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/smb_traffic_spike.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

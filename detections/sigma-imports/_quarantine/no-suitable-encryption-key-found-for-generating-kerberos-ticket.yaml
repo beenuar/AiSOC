@@ -1,0 +1,43 @@
+id: sigmahq-sigma-b1e0b3f5-b62e-41be-886a-daffde446ad4
+name: No Suitable Encryption Key Found For Generating Kerberos Ticket
+description: 'Detects errors when a target server doesn''t have suitable keys for
+  generating kerberos tickets.
+
+  This issue can occur for example when a service uses a user account or a computer
+  account that is configured for only DES encryption on a computer that is running
+  Windows 7 which has DES encryption for Kerberos authentication disabled.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd348773(v=ws.10)
+- https://learn.microsoft.com/en-us/troubleshoot/windows-server/windows-security/kdc-event-16-27-des-encryption-disabled
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name:
+    - Kerberos-Key-Distribution-Center
+    - Microsoft-Windows-Kerberos-Key-Distribution-Center
+    EventID:
+    - 16
+    - 27
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b1e0b3f5-b62e-41be-886a-daffde446ad4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_kerberos_key_distribution_center/win_system_kdcsvc_tgs_no_suitable_encryption_key_found.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

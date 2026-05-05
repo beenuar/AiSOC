@@ -1,0 +1,38 @@
+id: sigmahq-sigma-1908fcc1-1b92-4272-8214-0fbaf2fa5163
+name: Malicious DLL File Dropped in the Teams or OneDrive Folder
+description: 'Detects creation of a malicious DLL file in the location where the OneDrive
+  or Team applications
+
+  Upon execution of the Teams or OneDrive application, the dropped malicious DLL file
+  ("iphlpapi.dll") is sideloaded'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://blog.cyble.com/2022/07/27/targeted-attacks-being-carried-out-via-dll-sideloading/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains|all:
+    - iphlpapi.dll
+    - \AppData\Local\Microsoft
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1908fcc1-1b92-4272-8214-0fbaf2fa5163
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_iphlpapi_dll_sideloading.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

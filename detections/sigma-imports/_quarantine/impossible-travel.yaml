@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b2572bf9-e20a-4594-b528-40bde666525a
+name: Impossible Travel
+description: Identifies user activities originating from geographically distant locations
+  within a time period shorter than the time it takes to travel from the first location
+  to the second.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#impossible-travel
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: impossibleTravel
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b2572bf9-e20a-4594-b528-40bde666525a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_impossible_travel.yml
+falsepositives:
+- Connecting to a VPN, performing activity and then dropping and performing additional
+  activity.
+notes:
+  quarantine_reason: 'upstream status: test'

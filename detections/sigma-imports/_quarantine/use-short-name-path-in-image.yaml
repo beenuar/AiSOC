@@ -1,0 +1,57 @@
+id: sigmahq-sigma-a96970af-f126-420d-90e1-d37bf25e50e1
+name: Use Short Name Path in Image
+description: Detect use of the Windows 8.3 short name. Which could be used as a method
+  to avoid Image detection
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://www.acunetix.com/blog/articles/windows-short-8-3-filenames-web-security-problem/
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/cc959352(v=technet.10)
+- https://twitter.com/frack113/status/1555830623633375232
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|contains:
+    - ~1\
+    - ~2\
+  filter_main_system_process:
+    ParentImage:
+    - C:\Windows\System32\Dism.exe
+    - C:\Windows\System32\cleanmgr.exe
+  filter_main_installers:
+  - Image|contains|all:
+    - \AppData\
+    - \Temp\
+  - Image|endswith:
+    - ~1\unzip.exe
+    - ~1\7zG.exe
+  filter_optional_webex:
+    ParentImage|endswith: \WebEx\WebexHost.exe
+  filter_optional_thor:
+    ParentImage|endswith: \thor\thor64.exe
+  filter_optional_installshield:
+  - Product: InstallShield (R)
+  - Description: InstallShield (R) Setup Engine
+  - Company: InstallShield Software Corporation
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a96970af-f126-420d-90e1-d37bf25e50e1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_ntfs_short_name_path_use_image.yml
+falsepositives:
+- Applications could use this notation occasionally which might generate some false
+  positives. In that case Investigate the parent and child process.
+notes:
+  quarantine_reason: 'upstream status: test'

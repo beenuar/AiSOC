@@ -1,0 +1,38 @@
+id: sigmahq-sigma-304afd73-55a5-4bb9-8c21-0b1fc84ea9e4
+name: PSEXEC Remote Execution File Artefact
+description: Detects creation of the PSEXEC key file. Which is created anytime a PsExec
+  command is executed. It gets written to the file system and will be recorded in
+  the USN Journal on the target system
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1136.002
+  - T1543.003
+  - T1570
+  categories:
+  - endpoint
+references:
+- https://aboutdfir.com/the-key-to-identify-psexec/
+- https://twitter.com/davisrichardg/status/1616518800584704028
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\Windows\PSEXEC-
+    TargetFilename|endswith: .key
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 304afd73-55a5-4bb9-8c21-0b1fc84ea9e4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_psexec_service_key.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

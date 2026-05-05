@@ -1,0 +1,47 @@
+id: splunk-security-content-a4f39755-b1e2-40bb-b2dc-4449c45b0bf2
+name: ASL AWS IAM AccessDenied Discovery Events
+description: The following analytic identifies excessive AccessDenied events within
+  an hour timeframe for IAM users in AWS. It leverages AWS CloudTrail logs to detect
+  multiple failed access attempts from the same source IP and user identity. This
+  activity is significant as it may indicate that an access key has been compromised
+  and is being misused for unauthorized discovery actions. If confirmed malicious,
+  this could allow attackers to gather information about the AWS environment, potentially
+  leading to further exploitation or privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1580
+  categories:
+  - cloud
+references:
+- https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-iam-permission-errors/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.response.error=AccessDenied OR api.response.error=OperationNotPermittedException\
+    \ OR api.response.error=*Unauthorized* actor.user.type=IAMUser\n  | bucket _time\
+    \ span=1h\n  | stats count as failures min(_time) as firstTime max(_time) as lastTime\
+    \ dc(api.operation) as dc_operation, dc(api.service.name) as dc_service values(api.operation)\
+    \ as api.operation values(api.service.name) as api.service.name values(http_request.user_agent)\
+    \ as http_request.user_agent values(src_endpoint.ip) as src_ip values(actor.user.account.uid)\
+    \ as actor.user.account.uid values(cloud.provider) as cloud.provider values(cloud.region)\
+    \ as cloud.region\n    BY _time actor.user.uid\n  | where failures >= 5 AND dc_operation\
+    \ >= 1 AND dc_service >= 1\n  | rename actor.user.uid as user api.operation as\
+    \ action api.service.name as dest http_request.user_agent as user_agent src_endpoint.ip\
+    \ as src actor.user.account.uid as vendor_account cloud.provider as vendor_product\
+    \ cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `asl_aws_iam_accessdenied_discovery_events_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a4f39755-b1e2-40bb-b2dc-4449c45b0bf2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_iam_accessdenied_discovery_events.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

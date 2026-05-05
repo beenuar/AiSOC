@@ -1,0 +1,33 @@
+id: sigmahq-sigma-1da8ce0b-855d-4004-8860-7d64d42063b1
+name: Apache Segmentation Fault
+description: Detects a segmentation fault error message caused by a crashing apache
+  worker process
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1499.004
+  categories:
+  - endpoint
+references:
+- http://www.securityfocus.com/infocus/1633
+logsource:
+  service: apache
+  definition: 'Requirements: Must be able to collect the error.log file'
+detection:
+  keywords:
+  - exit signal Segmentation Fault
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1da8ce0b-855d-4004-8860-7d64d42063b1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/product/apache/web_apache_segfault.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

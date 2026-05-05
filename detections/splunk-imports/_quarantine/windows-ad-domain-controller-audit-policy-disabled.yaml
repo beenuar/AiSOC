@@ -1,0 +1,44 @@
+id: splunk-security-content-fc3ccef1-60a4-4239-bd66-b279511b4d14
+name: Windows AD Domain Controller Audit Policy Disabled
+description: The following analytic detects the disabling of audit policies on a domain
+  controller. It leverages EventCode 4719 from Windows Security Event Logs to identify
+  changes where success or failure auditing is removed. This activity is significant
+  as it suggests an attacker may have gained access to the domain controller and is
+  attempting to evade detection by tampering with audit policies. If confirmed malicious,
+  this could lead to severe consequences, including data theft, privilege escalation,
+  and full network compromise. Immediate investigation is required to determine the
+  source and intent of the change.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4719
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4719 (AuditPolicyChanges IN (\"%%8448\"\
+    ,\"%%8450\",\"%%8448, %%8450\") OR Changes IN (\"Failure removed\",\"Success removed\"\
+    ,\"Success removed, Failure removed\")) dest_category=\"domain_controller\"\n\
+    \  | replace \"%%8448\" with \"Success removed\", \"%%8450\" with \"Failure removed\"\
+    , \"%%8448, %%8450\" with \"Success removed, Failure removed\" in AuditPolicyChanges\n\
+    \  | eval AuditPolicyChanges=coalesce(AuditPolicyChanges,Changes), SubcategoryGuid=coalesce(SubcategoryGuid,Subcategory_GUID)\n\
+    \  | stats min(_time) as _time values(host) as dest\n    BY AuditPolicyChanges\
+    \ SubcategoryGuid\n  | lookup advanced_audit_policy_guids GUID as SubcategoryGuid\
+    \ OUTPUT Category SubCategory\n  | `windows_ad_domain_controller_audit_policy_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fc3ccef1-60a4-4239-bd66-b279511b4d14
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_domain_controller_audit_policy_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

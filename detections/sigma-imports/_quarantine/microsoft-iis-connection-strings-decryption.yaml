@@ -1,0 +1,40 @@
+id: sigmahq-sigma-97dbf6e2-e436-44d8-abee-4261b24d3e41
+name: Microsoft IIS Connection Strings Decryption
+description: Detects use of aspnet_regiis to decrypt Microsoft IIS connection strings.
+  An attacker with Microsoft IIS web server access via a webshell or alike can decrypt
+  and dump any hardcoded connection strings, such as the MSSQL service account password
+  using aspnet_regiis command.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/microsoft-iis-connection-strings-decryption.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_name:
+  - Image|endswith: \aspnet_regiis.exe
+  - OriginalFileName: aspnet_regiis.exe
+  selection_args:
+    CommandLine|contains|all:
+    - connectionStrings
+    - ' -pdf'
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 97dbf6e2-e436-44d8-abee-4261b24d3e41
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_iis_connection_strings_decryption.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

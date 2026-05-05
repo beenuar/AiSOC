@@ -1,0 +1,44 @@
+id: splunk-security-content-5d9c6eee-988c-11eb-8253-acde48001122
+name: WinEvent Scheduled Task Created Within Public Path
+description: The following analytic detects the creation of scheduled tasks within
+  user-writable paths using Windows Security EventCode 4698. It identifies tasks registered
+  via schtasks.exe or TaskService that execute commands from directories like Public,
+  ProgramData, Temp, and AppData. This behavior is significant as it may indicate
+  an attempt to establish persistence or execute unauthorized commands. If confirmed
+  malicious, an attacker could maintain long-term access, escalate privileges, or
+  execute arbitrary code, posing a severe threat to system integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2021/irans-apt34-returns-with-an-updated-arsenal/
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=4698
+- https://redcanary.com/threat-detection-report/techniques/scheduled-task-job/
+- https://docs.microsoft.com/en-us/windows/win32/taskschd/time-trigger-example--scripting-?redirectedfrom=MSDN
+- https://app.any.run/tasks/e26f1b2e-befa-483b-91d2-e18636e2faf3/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode=4698\nTaskContent IN (\n  \"*\\\\\
+    users\\\\public\\\\*\", \"*\\\\programdata\\\\*\", \"*\\\\temp\\\\*\",\n  \"*\\\
+    \\Windows\\\\Tasks\\\\*\", \"*\\\\appdata\\\\*\", \"*\\\\perflogs\\\\*\"\n  )\n\
+    | stats count min(_time) as firstTime max(_time) as lastTime\n  by Computer, TaskName,\
+    \ TaskContent, user\n|  rename Computer as dest\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `winevent_scheduled_task_created_within_public_path_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5d9c6eee-988c-11eb-8253-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/winevent_scheduled_task_created_within_public_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

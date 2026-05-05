@@ -1,0 +1,43 @@
+id: splunk-security-content-5790a766-53b8-40d3-a696-3547b978fcf0
+name: Ngrok Reverse Proxy on Network
+description: The following analytic detects DNS queries to common Ngrok domains, indicating
+  potential use of the Ngrok reverse proxy tool. It leverages the Network Resolution
+  datamodel to identify queries to domains such as "*.ngrok.com" and "*.ngrok.io".
+  While Ngrok usage is not inherently malicious, it has been increasingly adopted
+  by adversaries for covert communication and data exfiltration. If confirmed malicious,
+  this activity could allow attackers to bypass network defenses, establish persistent
+  connections, and exfiltrate sensitive data, posing a significant threat to the network's
+  security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1090
+  - T1102
+  categories:
+  - network
+references:
+- https://www.cisa.gov/uscert/sites/default/files/publications/aa22-320a_joint_csa_iranian_government-sponsored_apt_actors_compromise_federal%20network_deploy_crypto%20miner_credential_harvester.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Network_Resolution\n  WHERE DNS.query\
+    \ IN (\"*.ngrok.com\",\"*.ngrok.io\", \"ngrok.*.tunnel.com\", \"korgn.*.lennut.com\"\
+    )\n  BY DNS.answer DNS.answer_count DNS.query\n     DNS.query_count DNS.reply_code_id\
+    \ DNS.src\n     DNS.vendor_product\n| `drop_dm_object_name(\"DNS\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `ngrok_reverse_proxy_on_network_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5790a766-53b8-40d3-a696-3547b978fcf0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/ngrok_reverse_proxy_on_network.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

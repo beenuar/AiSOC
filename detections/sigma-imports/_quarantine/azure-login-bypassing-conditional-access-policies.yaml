@@ -1,0 +1,40 @@
+id: sigmahq-sigma-13f2d3f5-6497-44a7-bf5f-dc13ffafe5dc
+name: Azure Login Bypassing Conditional Access Policies
+description: Detects a successful login to the Microsoft Intune Company Portal which
+  could allow bypassing Conditional Access Policies and InTune device trust using
+  a tool like TokenSmith.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://labs.jumpsec.com/tokensmith-bypassing-intune-compliant-device-conditional-access/
+- https://github.com/JumpsecLabs/TokenSmith
+logsource:
+  service: audit
+  product: m365
+detection:
+  selection:
+    Operation: UserLoggedIn
+    ApplicationId: 9ba1a5c7-f17a-4de9-a1f1-6178c8d51223
+    ResultStatus: Success
+    RequestType: Cmsi:Cmsi
+  filter_main_bjectid:
+    ObjectId: 0000000a-0000-0000-c000-000000000000
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 13f2d3f5-6497-44a7-bf5f-dc13ffafe5dc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/audit/microsoft365_bypass_conditional_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

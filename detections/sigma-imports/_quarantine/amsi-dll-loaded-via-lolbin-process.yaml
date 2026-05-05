@@ -1,0 +1,37 @@
+id: sigmahq-sigma-6ec86d9e-912e-4726-91a2-209359b999b9
+name: Amsi.DLL Loaded Via LOLBIN Process
+description: Detects loading of "Amsi.dll" by a living of the land process. This could
+  be an indication of a "PowerShell without PowerShell" attack
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://www.paloaltonetworks.com/blog/security-operations/stopping-powershell-without-powershell/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \amsi.dll
+    Image|endswith:
+    - \ExtExport.exe
+    - \odbcconf.exe
+    - \rundll32.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6ec86d9e-912e-4726-91a2-209359b999b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_amsi_suspicious_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

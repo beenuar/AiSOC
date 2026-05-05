@@ -1,0 +1,35 @@
+id: sigmahq-sigma-f7b5b004-dece-46e4-a4a5-f6fd0e1c6947
+name: Privileged Account Creation
+description: Detects when a new admin is created.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts#changes-to-privileged-accounts
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message|contains|all:
+    - Add user
+    - Add member to role
+    Status: Success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f7b5b004-dece-46e4-a4a5-f6fd0e1c6947
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_privileged_account_creation.yml
+falsepositives:
+- A legitimate new admin account being created
+notes:
+  quarantine_reason: 'upstream status: test'

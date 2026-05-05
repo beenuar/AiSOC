@@ -1,0 +1,37 @@
+id: sigmahq-sigma-ce5678bb-b9aa-4fb5-be4b-e57f686256ad
+name: Potential Remote Desktop Connection to Non-Domain Host
+description: Detects logons using NTLM to hosts that are potentially not part of the
+  domain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- n/a
+logsource:
+  product: windows
+  service: ntlm
+  definition: Requires events from Microsoft-Windows-NTLM/Operational
+detection:
+  selection:
+    EventID: 8001
+    TargetName|startswith: TERMSRV
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ce5678bb-b9aa-4fb5-be4b-e57f686256ad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/ntlm/win_susp_ntlm_rdp.yml
+falsepositives:
+- Host connections to valid domains, exclude these.
+- Host connections not using host FQDN.
+- Host connections to external legitimate domains.
+notes:
+  quarantine_reason: 'upstream status: test'

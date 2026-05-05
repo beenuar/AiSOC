@@ -1,0 +1,40 @@
+id: sigmahq-sigma-5f699bc5-5446-4a4a-a0b7-5ef2885a3eb4
+name: RDP Over Reverse SSH Tunnel
+description: Detects svchost hosting RDP termsvcs communicating with the loopback
+  address and on TCP port 3389
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/cyb3rops/status/1096842275437625346
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection_img:
+    Image|endswith: \svchost.exe
+    Initiated: 'true'
+    SourcePort: 3389
+  selection_destination:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - ::1/128
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5f699bc5-5446-4a4a-a0b7-5ef2885a3eb4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_rdp_reverse_tunnel.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

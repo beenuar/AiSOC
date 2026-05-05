@@ -1,0 +1,39 @@
+id: sigmahq-sigma-53d8d3e1-ca33-4012-adf3-e05a4d652e34
+name: Process Memory Dump Via Dotnet-Dump
+description: Detects the execution of "dotnet-dump" with the "collect" flag. The execution
+  could indicate potential process dumping of critical processes such as LSASS.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-dump#dotnet-dump-collect
+- https://twitter.com/bohops/status/1635288066909966338
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \dotnet-dump.exe
+  - OriginalFileName: dotnet-dump.dll
+  selection_cli:
+    CommandLine|contains: collect
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 53d8d3e1-ca33-4012-adf3-e05a4d652e34
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dotnetdump_memory_dump.yml
+falsepositives:
+- Process dumping is the expected behavior of the tool. So false positives are expected
+  in legitimate usage. The PID/Process Name of the process being dumped needs to be
+  investigated
+notes:
+  quarantine_reason: 'upstream status: test'

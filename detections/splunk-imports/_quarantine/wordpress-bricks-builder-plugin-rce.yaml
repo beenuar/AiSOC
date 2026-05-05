@@ -1,0 +1,44 @@
+id: splunk-security-content-56a8771a-3fda-4959-b81d-2f266e2f679f
+name: WordPress Bricks Builder plugin RCE
+description: The following analytic identifies potential exploitation of the WordPress
+  Bricks Builder plugin RCE vulnerability. It detects HTTP POST requests to the URL
+  path "/wp-json/bricks/v1/render_element" with a status code of 200, leveraging the
+  Web datamodel. This activity is significant as it indicates an attempt to exploit
+  CVE-2024-25600, a known vulnerability that allows remote code execution. If confirmed
+  malicious, an attacker could execute arbitrary commands on the target server, leading
+  to potential full system compromise and unauthorized access to sensitive data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1190
+- https://github.com/Tornad0007/CVE-2024-25600-Bricks-Builder-plugin-for-WordPress/blob/main/exploit.py
+- https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-25600
+- https://op-c.net/blog/cve-2024-25600-wordpresss-bricks-builder-rce-flaw-under-active-exploitation/
+- https://thehackernews.com/2024/02/wordpress-bricks-theme-under-active.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Web\n  WHERE Web.url IN (\"*/wp-json/bricks/v1/render_element\"\
+    ) Web.status=200 Web.http_method=POST\n  BY Web.src, Web.dest, Web.http_user_agent,\n\
+    \     Web.url, Web.uri_path, Web.status,\n     Web.http_method, sourcetype, source\n\
+    | `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `wordpress_bricks_builder_plugin_rce_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 56a8771a-3fda-4959-b81d-2f266e2f679f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/wordpress_bricks_builder_plugin_rce.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-089dbdf6-b960-4bcc-90e3-ffc3480c20f6
+name: File and Directory Discovery - MacOS
+description: Detects usage of system utilities to discover files and directories
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1083/T1083.md
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  select_file_with_asterisk:
+    Image: /usr/bin/file
+    CommandLine|re: (.){200,}
+  select_recursive_ls:
+    Image: /bin/ls
+    CommandLine|contains: -R
+  select_find_execution:
+    Image: /usr/bin/find
+  select_mdfind_execution:
+    Image: /usr/bin/mdfind
+  select_tree_execution|endswith:
+    Image: /tree
+  condition: 1 of select*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 089dbdf6-b960-4bcc-90e3-ffc3480c20f6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_file_and_directory_discovery.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

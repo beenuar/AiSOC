@@ -1,0 +1,44 @@
+id: splunk-security-content-57551656-ebdb-11eb-afdf-acde48001122
+name: SAM Database File Access Attempt
+description: The following analytic detects attempts to access the SAM, SYSTEM, or
+  SECURITY database files within the `windows\system32\config` directory using Windows
+  Security EventCode 4663. This detection leverages Windows Security Event logs to
+  identify unauthorized access attempts. Monitoring this activity is crucial as it
+  indicates potential credential access attempts, possibly exploiting vulnerabilities
+  like CVE-2021-36934. If confirmed malicious, an attacker could extract user passwords,
+  leading to unauthorized access, privilege escalation, and further compromise of
+  the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=4663
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4663
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-36934
+- https://github.com/GossiTheDog/HiveNightmare
+- https://github.com/JumpsecLabs/Guidance-Advice/tree/main/SAM_Permissions
+- https://en.wikipedia.org/wiki/Security_Account_Manager
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` (EventCode=4663)  ProcessName!=*\\dllhost.exe
+    ObjectName IN ("*\\Windows\\System32\\config\\SAM*","*\\Windows\\System32\\config\\SYSTEM*","*\\Windows\\System32\\config\\SECURITY*")
+    | stats values(AccessList) count by ProcessName ObjectName dest src_user | rename
+    ProcessName as process_name | `sam_database_file_access_attempt_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 57551656-ebdb-11eb-afdf-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/sam_database_file_access_attempt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

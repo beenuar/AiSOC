@@ -1,0 +1,39 @@
+id: sigmahq-sigma-c420410f-c2d8-4010-856b-dffe21866437
+name: Enable LM Hash Storage
+description: 'Detects changes to the "NoLMHash" registry value in order to allow Windows
+  to store LM Hashes.
+
+  By setting this registry value to "0" (DWORD), Windows will be allowed to store
+  a LAN manager hash of your password in Active Directory and local SAM databases.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+- https://learn.microsoft.com/en-us/troubleshoot/windows-server/windows-security/prevent-windows-store-lm-hash-password
+- https://www.sans.org/blog/protecting-privileged-domain-accounts-lm-hashes-the-good-the-bad-and-the-ugly/
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|endswith: System\CurrentControlSet\Control\Lsa\NoLMHash
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c420410f-c2d8-4010-856b-dffe21866437
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_system_lsa_nolmhash.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

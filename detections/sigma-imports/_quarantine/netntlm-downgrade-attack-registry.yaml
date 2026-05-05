@@ -1,0 +1,52 @@
+id: sigmahq-sigma-d67572a0-e2ec-45d6-b8db-c100d14b8ef2
+name: NetNTLM Downgrade Attack - Registry
+description: Detects NetNTLM downgrade attack
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20171113231705/https://www.optiv.com/blog/post-exploitation-using-netntlm-downgrade-attacks
+- https://www.ultimatewindowssecurity.com/wiki/page.aspx?spid=NSrpcservers
+logsource:
+  product: windows
+  category: registry_event
+detection:
+  selection_regkey:
+    TargetObject|contains|all:
+    - SYSTEM\
+    - ControlSet
+    - \Control\Lsa
+  selection_value_lmcompatibilitylevel:
+    TargetObject|endswith: \lmcompatibilitylevel
+    Details:
+    - DWORD (0x00000000)
+    - DWORD (0x00000001)
+    - DWORD (0x00000002)
+  selection_value_ntlmminclientsec:
+    TargetObject|endswith: \NtlmMinClientSec
+    Details:
+    - DWORD (0x00000000)
+    - DWORD (0x00000010)
+    - DWORD (0x00000020)
+    - DWORD (0x00000030)
+  selection_value_restrictsendingntlmtraffic:
+    TargetObject|endswith: \RestrictSendingNTLMTraffic
+  condition: selection_regkey and 1 of selection_value_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d67572a0-e2ec-45d6-b8db-c100d14b8ef2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_net_ntlm_downgrade.yml
+falsepositives:
+- Services or tools that set the values to more restrictive values
+notes:
+  quarantine_reason: 'upstream status: test'

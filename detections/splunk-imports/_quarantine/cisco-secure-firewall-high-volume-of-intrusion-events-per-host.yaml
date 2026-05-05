@@ -1,0 +1,47 @@
+id: splunk-security-content-9f2295a0-0dcb-4a5f-b013-8a6f2a3c11f6
+name: Cisco Secure Firewall - High Volume of Intrusion Events Per Host
+description: The following analytic detects internal systems that generate an unusually
+  high volume of intrusion detections within a 30-minute window. It leverages Cisco
+  Secure Firewall Threat Defense logs, specifically focusing on the IntrusionEvent
+  event type, to identify hosts that trigger more than 15 Snort-based signatures during
+  that time. A sudden spike in intrusion alerts originating from a single host may
+  indicate suspicious or malicious activity such as malware execution, command-and-control
+  communication, vulnerability scanning, or lateral movement. In some cases, this
+  behavior may also be caused by misconfigured or outdated software repeatedly tripping
+  detection rules. Systems exhibiting this pattern should be triaged promptly, as
+  repeated Snort rule matches from a single source are often early indicators of compromise,
+  persistence, or active exploitation attempts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1071
+  - T1595.002
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent\n| bin _time span=30m\n\
+    | stats count as TotalEvents values(signature_id) as signature_id\n        values(signature)\
+    \ as signature\n        values(dest) as dest\n        values(dest_port) as dest_port\n\
+    \        min(_time) as firstTime max(_time) as lastTime\n        by src class_desc\
+    \ MitreAttackGroups InlineResult InlineResultReason rule transport app\n| where\
+    \ TotalEvents >= 15\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___high_volume_of_intrusion_events_per_host_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9f2295a0-0dcb-4a5f-b013-8a6f2a3c11f6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___high_volume_of_intrusion_events_per_host.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

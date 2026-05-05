@@ -1,0 +1,32 @@
+id: sigmahq-sigma-48437c39-9e5f-47fb-af95-3d663c3f2919
+name: UAC Disabled
+description: Detects when an attacker tries to disable User Account Control (UAC)
+  by setting the registry value "EnableLUA" to 0.
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/7e11e9b79583545f208a6dc3fa062f2ed443d999/atomics/T1548.002/T1548.002.md
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Microsoft\Windows\CurrentVersion\Policies\System\EnableLUA
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48437c39-9e5f-47fb-af95-3d663c3f2919
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_uac_disable.yml
+falsepositives:
+- Unknown

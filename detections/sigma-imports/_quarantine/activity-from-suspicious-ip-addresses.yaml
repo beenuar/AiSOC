@@ -1,0 +1,39 @@
+id: sigmahq-sigma-a3501e8e-af9e-43c6-8cd6-9360bdaae498
+name: Activity from Suspicious IP Addresses
+description: 'Detects when a Microsoft Cloud App Security reported users were active
+  from an IP address identified as risky by Microsoft Threat Intelligence.
+
+  These IP addresses are involved in malicious activities, such as Botnet C&C, and
+  may indicate compromised account.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1573
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_detection
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Activity from suspicious IP addresses
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a3501e8e-af9e-43c6-8cd6-9360bdaae498
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_detection/microsoft365_from_susp_ip_addresses.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

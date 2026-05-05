@@ -1,0 +1,47 @@
+id: splunk-security-content-a115fba6-5514-11eb-ae93-0242ac130002
+name: Suspicious MSBuild Spawn
+description: The following analytic identifies instances where wmiprvse.exe spawns
+  msbuild.exe, which is unusual and indicative of potential misuse of a COM object.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process relationships and command-line executions. This activity is
+  significant because msbuild.exe is typically spawned by devenv.exe during legitimate
+  Visual Studio use, not by wmiprvse.exe. If confirmed malicious, this behavior could
+  indicate an attacker executing arbitrary code or scripts, potentially leading to
+  system compromise or further malicious activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1127.001
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Msbuild/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1127.001/T1127.001.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Processes.process_name)\
+    \ as process_name values(Processes.process) as process min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=wmiprvse.exe\n\
+    \    AND\n    `process_msbuild`\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `suspicious_msbuild_spawn_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a115fba6-5514-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_msbuild_spawn.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

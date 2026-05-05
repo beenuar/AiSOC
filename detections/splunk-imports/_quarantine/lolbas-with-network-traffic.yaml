@@ -1,0 +1,74 @@
+id: splunk-security-content-2820f032-19eb-497e-8642-25b04a880359
+name: LOLBAS With Network Traffic
+description: The following analytic identifies the use of Living Off the Land Binaries
+  and Scripts (LOLBAS) with network traffic. It leverages data from the Network Traffic
+  data model to detect when native Windows binaries, often abused by adversaries,
+  initiate network connections. This activity is significant as LOLBAS are frequently
+  used to download malicious payloads, enabling lateral movement, command-and-control,
+  or data exfiltration. If confirmed malicious, this behavior could allow attackers
+  to execute arbitrary code, escalate privileges, or maintain persistence within the
+  environment, posing a severe threat to organizational security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1567
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/#
+- https://www.sans.org/presentations/lolbin-detection-methods-seven-common-attacks-revealed/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Network_Traffic.All_Traffic where\n\
+    All_Traffic.app IN (\n    \"*\\\\At.exe\",\n    \"*\\\\Atbroker.exe\",\n    \"\
+    *\\\\Bash.exe\",\n    \"*\\\\Bitsadmin.exe\",\n    \"*\\\\Certoc.exe\",\n    \"\
+    *\\\\certutil.exe\",\n    \"*\\\\cmd.exe\",\n    \"*\\\\Cmstp.exe\",\n    \"*\\\
+    \\cscript.exe\",\n    \"*\\\\Diskshadow.exe\",\n    \"*\\\\Dnscmd.exe\",\n   \
+    \ \"*\\\\Extexport.exe\",\n    \"*\\\\Forfiles.exe\",\n    \"*\\\\Ftp.exe\",\n\
+    \    \"*\\\\Gpscript.exe\",\n    \"*\\\\Hh.exe\",\n    \"*\\\\Ie4uinit.exe\",\n\
+    \    \"*\\\\Ieexec.exe\",\n    \"*\\\\Infdefaultinstall.exe\",\n    \"*\\\\Installutil.exe\"\
+    ,\n    \"*\\\\makecab.exe\",\n    \"*\\\\Mavinject.exe\",\n    \"*\\\\Microsoft.Workflow.Compiler.exe\"\
+    ,\n    \"*\\\\Msbuild.exe\",\n    \"*\\\\Msconfig.exe\",\n    \"*\\\\Msdt.exe\"\
+    ,\n    \"*\\\\Mshta.exe\",\n    \"*\\\\Msiexec.exe\",\n    \"*\\\\Netsh.exe\"\
+    ,\n    \"*\\\\notepad.exe\",\n    \"*\\\\Odbcconf.exe\",\n    \"*\\\\OfflineScannerShell.exe\"\
+    ,\n    \"*\\\\Pcalua.exe\",\n    \"*\\\\Pcwrun.exe\",\n    \"*\\\\Pnputil.exe\"\
+    ,\n    \"*\\\\powershell_ise.exe\",\n    \"*\\\\powershell.exe\",\n    \"*\\\\\
+    Presentationhost.exe\",\n    \"*\\\\pwsh.exe\",\n    \"*\\\\Rasautou.exe\",\n\
+    \    \"*\\\\Regasm.exe\",\n    \"*\\\\Register-cimprovider.exe\",\n    \"*\\\\\
+    Regsvcs.exe\",\n    \"*\\\\Regsvr32.exe\",\n    \"*\\\\Runonce.exe\",\n    \"\
+    *\\\\Runscripthelper.exe\",\n    \"*\\\\Schtasks.exe\",\n    \"*\\\\Scriptrunner.exe\"\
+    ,\n    \"*\\\\SettingSyncHost.exe\",\n    \"*\\\\Stordiag.exe\",\n    \"*\\\\\
+    Syncappvpublishingserver.exe\",\n    \"*\\\\Ttdinject.exe\",\n    \"*\\\\Tttracer.exe\"\
+    ,\n    \"*\\\\Verclsid.exe\",\n    \"*\\\\Wab.exe\",\n    \"*\\\\Wmic.exe\",\n\
+    \    \"*\\\\WorkFolders.exe\",\n    \"*\\\\Wuauclt.exe\",\n    \"*\\\\Xwizard.exe\"\
+    \n    )\n\nNOT All_Traffic.dest_ip IN (\n        \"10.0.0.0/8\", \"172.16.0.0/12\"\
+    , \"192.168.0.0/16\", \"100.64.0.0/10\",\n        \"127.0.0.0/8\", \"169.254.0.0/16\"\
+    , \"192.0.0.0/24\", \"192.0.0.0/29\", \"192.0.0.8/32\",\n        \"192.0.0.9/32\"\
+    , \"192.0.0.10/32\", \"192.0.0.170/32\", \"192.0.0.171/32\", \"192.0.2.0/24\"\
+    ,\n        \"192.31.196.0/24\", \"192.52.193.0/24\", \"192.88.99.0/24\", \"224.0.0.0/4\"\
+    , \"192.175.48.0/24\",\n        \"198.18.0.0/15\", \"198.51.100.0/24\", \"203.0.113.0/24\"\
+    , \"240.0.0.0/4\"\n        )\n\nby All_Traffic.action All_Traffic.app All_Traffic.dest\
+    \ All_Traffic.dest_ip All_Traffic.dest_port\n   All_Traffic.direction All_Traffic.dvc\
+    \ All_Traffic.protocol All_Traffic.protocol_version\n   All_Traffic.src All_Traffic.src_ip\
+    \ All_Traffic.src_port All_Traffic.transport All_Traffic.user\n   All_Traffic.vendor_product\n\
+    \n| `drop_dm_object_name(All_Traffic)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| rex field=app \".*\\\\\\(?<process_name>.*)$\"\
+    \n| `lolbas_with_network_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2820f032-19eb-497e-8642-25b04a880359
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/lolbas_with_network_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

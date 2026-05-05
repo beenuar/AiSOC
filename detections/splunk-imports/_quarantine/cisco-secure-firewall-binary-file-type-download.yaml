@@ -1,0 +1,51 @@
+id: splunk-security-content-24b2c2e3-2ff7-4a23-b814-87f8a62028cd
+name: Cisco Secure Firewall - Binary File Type Download
+description: 'The following analytic detects file downloads involving executable,
+  archive, or scripting-related file types that are commonly used in malware delivery.
+
+  These file types include formats like PE executables, shell scripts, autorun files,
+  installers, and known testing samples such as EICAR.
+
+  This detection leverages Cisco Secure Firewall Threat Defense logs and enriches
+  the results using a filetype lookup to provide context.
+
+  If confirmed malicious, these downloads could indicate the initial infection vector,
+  malware staging, or scripting abuse.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  - T1059
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=FileEvent FileDirection=\"Download\"\
+    \nFileType IN (\"ISHIELD_MSI\", \"BINHEX\", \"BINARY_DATA\", \"ELF\", \"MACHO\"\
+    , \"JARPACK\", \"TORRENT\", \"AUTORUN\", \"EICAR\", \"LNK\", \"SCR\", \"UNIX_SCRIPT\"\
+    )\n| lookup cisco_secure_firewall_filetype_lookup Name as FileType OUTPUT Description\n\
+    | stats count min(_time) as firstTime max(_time) as lastTime\n        values(uri)\
+    \ as uri\n        values(ClientApplication) as ClientApplication\n        values(file_hash)\
+    \ as file_hash\n        values(SHA_Disposition) as SHA_Disposition\n        by\
+    \ FileDirection FileType src dest app file_name ThreatName dest_port Description\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table firstTime lastTime src dest dest_port FileDirection FileType Description\
+    \ uri file_name file_hash app ClientApplication SHA_Disposition ThreatName\n|\
+    \ `cisco_secure_firewall___binary_file_type_download_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 24b2c2e3-2ff7-4a23-b814-87f8a62028cd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___binary_file_type_download.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

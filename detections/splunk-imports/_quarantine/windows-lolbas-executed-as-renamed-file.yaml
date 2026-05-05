@@ -1,0 +1,49 @@
+id: splunk-security-content-fd496996-7d9e-4894-8d40-bb85b6192dc6
+name: Windows LOLBAS Executed As Renamed File
+description: The following analytic identifies a LOLBAS process being executed where
+  it's process name does not match it's original file name attribute. Processes that
+  have been renamed and executed may be an indicator that an adversary is attempting
+  to evade defenses or execute malicious code. The LOLBAS project documents Windows
+  native binaries that can be abused by threat actors to perform tasks like executing
+  malicious code.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1036/
+- https://attack.mitre.org/techniques/T1036/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '|  tstats `security_content_summariesonly` latest(Processes.parent_process)
+    as parent_process, latest(Processes.process) as process, latest(Processes.process_guid)
+    as process_guid count, min(_time) AS firstTime, max(_time) AS lastTime FROM datamodel=Endpoint.Processes
+    where NOT Processes.original_file_name IN("-","unknown") AND NOT Processes.process_path
+    IN ("*\\Program Files*","*\\PROGRA~*","*\\Windows\\System32\\*","*\\Windows\\Syswow64\\*")
+    by Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec Processes.process_guid Processes.process_hash Processes.process_id
+    Processes.process_integrity_level Processes.process_name Processes.process_path
+    Processes.user Processes.user_id Processes.vendor_product |`drop_dm_object_name(Processes)`
+    | where NOT match(process_name, "(?i)".original_file_name) | lookup lolbas_file_path
+    lolbas_file_name as original_file_name OUTPUT description as desc | search desc!="false"
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_lolbas_executed_as_renamed_file_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: fd496996-7d9e-4894-8d40-bb85b6192dc6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_lolbas_executed_as_renamed_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-224f140f-3553-4cd1-af78-13d81bf9f7cc
+name: Potential RDP Session Hijacking Activity
+description: Detects potential RDP Session Hijacking activity on Windows systems
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Moti_B/status/909449115477659651
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \tscon.exe
+  - OriginalFileName: tscon.exe
+  selection_integrity:
+    IntegrityLevel:
+    - System
+    - S-1-16-16384
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 224f140f-3553-4cd1-af78-13d81bf9f7cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_tscon_rdp_session_hijacking.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

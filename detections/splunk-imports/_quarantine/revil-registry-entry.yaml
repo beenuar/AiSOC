@@ -1,0 +1,45 @@
+id: splunk-security-content-e3d3f57a-c381-11eb-9e35-acde48001122
+name: Revil Registry Entry
+description: The following analytic identifies suspicious modifications in the registry
+  entry, specifically targeting paths used by malware like REVIL. It detects changes
+  in registry paths such as `SOFTWARE\\WOW6432Node\\Facebook_Assistant` and `SOFTWARE\\WOW6432Node\\BlackLivesMatter`.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on registry modifications linked to process GUIDs. This activity is significant
+  as it indicates potential malware persistence mechanisms, often used by advanced
+  persistent threats (APTs) and ransomware. If confirmed malicious, this could allow
+  attackers to maintain persistence, encrypt files, and store critical ransomware-related
+  information on compromised hosts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://krebsonsecurity.com/2021/05/a-closer-look-at-the-darkside-ransomware-gang/
+- https://www.mcafee.com/blogs/other-blogs/mcafee-labs/mcafee-atr-analyzes-sodinokibi-aka-revil-ransomware-as-a-service-what-the-code-tells-us/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry
+    WHERE (Registry.registry_path="*\\SOFTWARE\\WOW6432Node\\Facebook_Assistant\\*"
+    OR Registry.registry_path="*\\SOFTWARE\\WOW6432Node\\BlackLivesMatter*") by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `revil_registry_entry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e3d3f57a-c381-11eb-9e35-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/revil_registry_entry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-d9047477-0359-48c9-b8c7-792cedcdc9c4
+name: PUA - NirCmd Execution As LOCAL SYSTEM
+description: Detects the use of NirCmd tool for command execution as SYSTEM user
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.nirsoft.net/utils/nircmd.html
+- https://www.winhelponline.com/blog/run-program-as-system-localsystem-account-windows/
+- https://www.nirsoft.net/utils/nircmd2.html#using
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: ' runassystem '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d9047477-0359-48c9-b8c7-792cedcdc9c4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_nircmd_as_system.yml
+falsepositives:
+- Legitimate use by administrators
+notes:
+  quarantine_reason: 'upstream status: test'

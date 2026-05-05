@@ -1,0 +1,44 @@
+id: splunk-security-content-ff86077c-9212-11eb-a1e6-acde48001122
+name: Disabling CMD Application
+description: The following analytic detects modifications to the registry that disable
+  the CMD prompt application. It leverages data from the Endpoint.Registry data model,
+  specifically looking for changes to the "DisableCMD" registry value. This activity
+  is significant because disabling CMD can hinder an analyst's ability to investigate
+  and remediate threats, a tactic often used by malware such as RATs, Trojans, or
+  Worms. If confirmed malicious, this could prevent security teams from using CMD
+  for directory and file traversal, complicating incident response and allowing the
+  attacker to maintain persistence.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://any.run/report/ea4ea08407d4ee72e009103a3b77e5a09412b722fdef67315ea63f22011152af/a866d7b1-c236-4f26-a391-5ae32213dfc4#registry
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\SOFTWARE\\Policies\\Microsoft\\Windows\\System\\DisableCMD" Registry.registry_value_data
+    = "0x00000001") by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data)
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `disabling_cmd_application_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ff86077c-9212-11eb-a1e6-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disabling_cmd_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

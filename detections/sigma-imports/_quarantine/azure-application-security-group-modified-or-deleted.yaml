@@ -1,0 +1,38 @@
+id: sigmahq-sigma-835747f1-9329-40b5-9cc3-97d465754ce6
+name: Azure Application Security Group Modified or Deleted
+description: Identifies when a application security group is modified or deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName:
+    - MICROSOFT.NETWORK/APPLICATIONSECURITYGROUPS/WRITE
+    - MICROSOFT.NETWORK/APPLICATIONSECURITYGROUPS/DELETE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 835747f1-9329-40b5-9cc3-97d465754ce6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_application_security_group_modified_or_deleted.yml
+falsepositives:
+- Application security group being modified or deleted may be performed by a system
+  administrator.
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Application security group modified or deleted from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

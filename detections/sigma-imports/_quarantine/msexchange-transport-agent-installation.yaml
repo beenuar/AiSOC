@@ -1,0 +1,33 @@
+id: sigmahq-sigma-83809e84-4475-4b69-bc3e-4aad8568612f
+name: MSExchange Transport Agent Installation
+description: Detects the Installation of a Exchange Transport Agent
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.002
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=7
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains: Install-TransportAgent
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 83809e84-4475-4b69-bc3e-4aad8568612f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_msexchange_transport_agent.yml
+falsepositives:
+- Legitimate installations of exchange TransportAgents. AssemblyPath is a good indicator
+  for this.
+notes:
+  quarantine_reason: 'upstream status: test'

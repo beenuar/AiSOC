@@ -1,0 +1,35 @@
+id: sigmahq-sigma-102e11e3-2db5-4c9e-bc26-357d42585d21
+name: Bulk Deletion Changes To Privileged Account Permissions
+description: Detects when a user is removed from a privileged role. Bulk changes should
+  be investigated.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-identity-management#azure-ad-roles-assignment
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message:
+    - Remove eligible member (permanent)
+    - Remove eligible member (eligible)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 102e11e3-2db5-4c9e-bc26-357d42585d21
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_priviledged_role_assignment_bulk_change.yml
+falsepositives:
+- Legtimate administrator actions of removing members from a role
+notes:
+  quarantine_reason: 'upstream status: test'

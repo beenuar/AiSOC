@@ -1,0 +1,34 @@
+id: sigmahq-sigma-50cb47b8-2c33-4b23-a2e9-4600657d9746
+name: Loading Diagcab Package From Remote Path
+description: Detects loading of diagcab packages from a remote path, as seen in DogWalk
+  vulnerability
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/nas_bench/status/1539679555908141061
+- https://twitter.com/j00sean/status/1537750439701225472
+logsource:
+  product: windows
+  service: diagnosis-scripted
+detection:
+  selection:
+    EventID: 101
+    PackagePath|contains: \\\\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 50cb47b8-2c33-4b23-a2e9-4600657d9746
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/diagnosis/scripted/win_diagnosis_scripted_load_remote_diagcab.yml
+falsepositives:
+- Legitimate package hosted on a known and authorized remote location
+notes:
+  quarantine_reason: 'upstream status: test'

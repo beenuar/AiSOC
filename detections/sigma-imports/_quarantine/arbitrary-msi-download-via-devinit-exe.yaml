@@ -1,0 +1,37 @@
+id: sigmahq-sigma-90d50722-0483-4065-8e35-57efaadd354d
+name: Arbitrary MSI Download Via Devinit.EXE
+description: Detects a certain command line flag combination used by "devinit.exe",
+  which can be abused as a LOLBIN to download arbitrary MSI packages on a Windows
+  system
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mrd0x/status/1460815932402679809
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Devinit/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - ' -t msi-install '
+    - ' -i http'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 90d50722-0483-4065-8e35-57efaadd354d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_devinit_lolbin_usage.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

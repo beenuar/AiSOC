@@ -1,0 +1,47 @@
+id: sigmahq-sigma-d26ce60c-2151-403c-9a42-49420d87b5e4
+name: HackTool Service Registration or Execution
+description: Detects installation or execution of services
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_eid:
+    Provider_Name: Service Control Manager
+    EventID:
+    - 7045
+    - 7036
+  selection_service_name:
+    ServiceName|contains:
+    - cachedump
+    - DumpSvc
+    - gsecdump
+    - pwdump
+    - UACBypassedService
+    - WCE SERVICE
+    - WCESERVICE
+    - winexesvc
+  selection_service_image:
+    ImagePath|contains: bypass
+  condition: selection_eid and 1 of selection_service_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d26ce60c-2151-403c-9a42-49420d87b5e4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_hacktools.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

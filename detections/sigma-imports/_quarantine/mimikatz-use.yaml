@@ -1,0 +1,59 @@
+id: sigmahq-sigma-06d71506-7beb-4f22-8888-e2e5e2ca7fd8
+name: Mimikatz Use
+description: This method detects mimikatz keywords in different Eventlogs (some of
+  them only appear in older Mimikatz version that are however still used by different
+  threat groups)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  - T1003.004
+  - T1003.001
+  - T1003.006
+  categories:
+  - endpoint
+references:
+- https://tools.thehacker.recipes/mimikatz/modules
+logsource:
+  product: windows
+detection:
+  keywords:
+  - dpapi::masterkey
+  - eo.oe.kiwi
+  - event::clear
+  - event::drop
+  - gentilkiwi.com
+  - kerberos::golden
+  - kerberos::ptc
+  - kerberos::ptt
+  - kerberos::tgt
+  - Kiwi Legit Printer
+  - 'lsadump::'
+  - mimidrv.sys
+  - \mimilib.dll
+  - misc::printnightmare
+  - misc::shadowcopies
+  - misc::skeleton
+  - privilege::backup
+  - privilege::debug
+  - privilege::driver
+  - 'sekurlsa::'
+  filter:
+    EventID: 15
+  condition: keywords and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 06d71506-7beb-4f22-8888-e2e5e2ca7fd8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/win_alert_mimikatz_keywords.yml
+falsepositives:
+- Naughty administrators
+- AV Signature updates
+- Files with Mimikatz in their filename
+notes:
+  quarantine_reason: 'upstream status: test'

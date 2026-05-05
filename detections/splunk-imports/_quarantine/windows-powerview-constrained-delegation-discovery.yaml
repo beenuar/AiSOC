@@ -1,0 +1,47 @@
+id: splunk-security-content-86dc8176-6e6c-42d6-9684-5444c6557ab3
+name: Windows PowerView Constrained Delegation Discovery
+description: The following analytic detects the use of PowerView commandlets to discover
+  Windows endpoints with Kerberos Constrained Delegation. It leverages PowerShell
+  Script Block Logging (EventCode=4104) to identify specific commandlets like `Get-DomainComputer`
+  or `Get-NetComputer` with the `-TrustedToAuth` parameter. This activity is significant
+  as it indicates potential reconnaissance efforts by adversaries or Red Teams to
+  map out privileged delegation settings in Active Directory. If confirmed malicious,
+  this could allow attackers to identify high-value targets for further exploitation,
+  potentially leading to privilege escalation or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+- https://adsecurity.org/?p=1667
+- https://docs.microsoft.com/en-us/defender-for-identity/cas-isp-unconstrained-kerberos
+- https://www.guidepointsecurity.com/blog/delegating-like-a-boss-abusing-kerberos-delegation-in-active-directory/
+- https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/constrained-delegation
+- https://www.cyberark.com/resources/threat-research-blog/weakness-within-kerberos-delegation
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-DomainComputer*\"\
+    \ OR ScriptBlockText = \"*Get-NetComputer*\") AND (ScriptBlockText = \"*-TrustedToAuth*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powerview_constrained_delegation_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 86dc8176-6e6c-42d6-9684-5444c6557ab3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powerview_constrained_delegation_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

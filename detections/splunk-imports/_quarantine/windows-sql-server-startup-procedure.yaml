@@ -1,0 +1,41 @@
+id: splunk-security-content-7bec7c5c-2262-4adb-ba56-c8028512bc58
+name: Windows SQL Server Startup Procedure
+description: This detection identifies when a startup procedure is registered or executed
+  in SQL Server. Startup procedures automatically execute when SQL Server starts,
+  making them an attractive persistence mechanism for attackers. The detection monitors
+  for suspicious stored procedure names and patterns that may indicate malicious activity,
+  such as attempts to execute operating system commands or gain elevated privileges.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/sp-procoption-transact-sql
+- https://www.netspi.com/blog/technical-blog/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/
+- https://attack.mitre.org/techniques/T1505/001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_application` EventCode=17135 | rex field=EventData_Xml
+    "<Data>(?<startup_procedure>[^<]+)</Data>" | rename host as dest | eval risk_score=case(
+    match(lower(startup_procedure), "xp_|sp_|cmdshell|shell|exec"), 90, true(), 70
+    ) | eval risk_message="SQL Server startup procedure ''".startup_procedure."''
+    was launched on host ".dest | stats count min(_time) as firstTime max(_time) as
+    lastTime by dest EventCode startup_procedure risk_message risk_score | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_sql_server_startup_procedure_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7bec7c5c-2262-4adb-ba56-c8028512bc58
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sql_server_startup_procedure.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

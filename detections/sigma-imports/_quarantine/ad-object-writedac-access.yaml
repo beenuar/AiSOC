@@ -1,0 +1,39 @@
+id: sigmahq-sigma-028c7842-4243-41cd-be6f-12f3cf1a26c7
+name: AD Object WriteDAC Access
+description: Detects WRITE_DAC access to a domain object
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/180815-ADObjectAccessReplication/notebook.html
+- https://threathunterplaybook.com/library/windows/active_directory_replication.html
+- https://threathunterplaybook.com/hunts/windows/190101-ADModDirectoryReplication/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4662
+    ObjectServer: DS
+    AccessMask: '0x40000'
+    ObjectType:
+    - 19195a5b-6da0-11d0-afd3-00c04fd930c9
+    - domainDNS
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 028c7842-4243-41cd-be6f-12f3cf1a26c7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_ad_object_writedac_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

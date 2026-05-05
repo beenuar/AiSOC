@@ -1,0 +1,39 @@
+id: splunk-security-content-7b87c556-0ca4-47e0-b84c-6cd62a0a3e90
+name: Linux Auditd Change File Owner To Root
+description: The following analytic detects the use of the 'chown' command to change
+  a file owner to 'root' on a Linux system. It leverages Linux Auditd telemetry, specifically
+  monitoring command-line executions and process details. This activity is significant
+  as it may indicate an attempt to escalate privileges by adversaries, malware, or
+  red teamers. If confirmed malicious, this action could allow an attacker to gain
+  root-level access, leading to full control over the compromised host and potential
+  persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.002
+  categories:
+  - endpoint
+references:
+- https://unix.stackexchange.com/questions/101073/how-to-change-permissions-from-root-user-to-all-users
+- https://askubuntu.com/questions/617850/changing-from-user-to-superuser
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` proctitle = \"*chown *root*\"\n  | rename host as dest\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY proctitle\
+    \ dest\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_change_file_owner_to_root_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7b87c556-0ca4-47e0-b84c-6cd62a0a3e90
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_change_file_owner_to_root.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

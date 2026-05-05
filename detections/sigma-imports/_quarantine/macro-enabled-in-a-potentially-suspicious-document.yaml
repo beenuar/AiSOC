@@ -1,0 +1,42 @@
+id: sigmahq-sigma-a166f74e-bf44-409d-b9ba-ea4b2dd8b3cd
+name: Macro Enabled In A Potentially Suspicious Document
+description: Detects registry changes to Office trust records where the path is located
+  in a potentially suspicious location
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://twitter.com/inversecos/status/1494174785621819397
+- Internal Research
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_value:
+    TargetObject|contains: \Security\Trusted Documents\TrustRecords
+  selection_paths:
+    TargetObject|contains:
+    - /AppData/Local/Microsoft/Windows/INetCache/
+    - /AppData/Local/Temp/
+    - /PerfLogs/
+    - C:/Users/Public/
+    - file:///D:/
+    - file:///E:/
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a166f74e-bf44-409d-b9ba-ea4b2dd8b3cd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_trust_record_susp_location.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

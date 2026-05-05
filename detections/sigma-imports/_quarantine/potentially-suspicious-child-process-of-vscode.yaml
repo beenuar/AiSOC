@@ -1,0 +1,65 @@
+id: sigmahq-sigma-5a3164f2-b373-4152-93cf-090b13c12d27
+name: Potentially Suspicious Child Process Of VsCode
+description: Detects uncommon or suspicious child processes spawning from a VsCode
+  "code.exe" process. This could indicate an attempt of persistence via VsCode tasks
+  or terminal profiles.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://twitter.com/nas_bench/status/1618021838407495681
+- https://twitter.com/nas_bench/status/1618021415852335105
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \code.exe
+  selection_children_images:
+    Image|endswith:
+    - \calc.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \cscript.exe
+    - \wscript.exe
+  selection_children_cli:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    - \cmd.exe
+    CommandLine|contains:
+    - Invoke-Expressions
+    - IEX
+    - Invoke-Command
+    - ICM
+    - DownloadString
+    - rundll32
+    - regsvr32
+    - wscript
+    - cscript
+  selection_children_paths:
+    Image|contains:
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - :\Temp\
+  condition: selection_parent and 1 of selection_children_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5a3164f2-b373-4152-93cf-090b13c12d27
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vscode_child_processes_anomalies.yml
+falsepositives:
+- In development environment where VsCode is used heavily. False positives may occur
+  when developers use task to compile or execute different types of code. Remove or
+  add processes accordingly
+notes:
+  quarantine_reason: 'upstream status: test'

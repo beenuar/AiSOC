@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-rdp-over-reverse-ssh-tunnel-wfp
+name: rdp_over_reverse_ssh_tunnel_wfp
+description: rdp_over_reverse_ssh_tunnel_wfp
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule rdp_over_reverse_ssh_tunnel_wfp {\n meta:\n    author = \"\
+    Samir Bousseaden\"\n    description = \"Detects svchost hosting RDP termsvcs communicating\
+    \ with the loopback address and on TCP port 3389  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/284JD7CFSKOt\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/16\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"defense_evasion, command_and_control, t1076, car.2013-07-002\"\
+    \n\n  events:\n($selection.metadata.product_event_type = \"5156\" and (($selection.principal.port\
+    \ = \"3389\" and (re.regex($selection.target.ip, `127\\..*`) or $selection.target.ip\
+    \ = \"::1\")) or ($selection.target.port = \"3389\" and (re.regex($selection.principal.ip,\
+    \ `127\\..*`) or $selection.principal.ip = \"::1\"))))\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: rdp_over_reverse_ssh_tunnel_wfp
+provenance:
+  source: chronicle/detection-rules
+  source_id: rdp_over_reverse_ssh_tunnel_wfp
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/rdp_over_reverse_ssh_tunnel_wfp.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

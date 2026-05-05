@@ -1,0 +1,42 @@
+id: sigmahq-sigma-c90362e0-2df3-4e61-94fe-b37615814cb1
+name: Potential Persistence Via Netsh Helper DLL - Registry
+description: Detects changes to the Netsh registry key to add a new DLL value. This
+  change might be an indication of a potential persistence attempt by adding a malicious
+  Netsh helper
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.007
+  categories:
+  - endpoint
+references:
+- https://www.ired.team/offensive-security/persistence/t1128-netsh-helper-dll
+- https://pentestlab.blog/2019/10/29/persistence-netsh-helper-dll/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\Microsoft\NetSh
+    Details|contains: .dll
+  filter_main_poqexec:
+    Image: C:\Windows\System32\poqexec.exe
+    Details:
+    - ipmontr.dll
+    - iasmontr.dll
+    - ippromon.dll
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c90362e0-2df3-4e61-94fe-b37615814cb1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_netsh_helper_dll_potential_persistence.yml
+falsepositives:
+- Legitimate helper added by different programs and the OS
+notes:
+  quarantine_reason: 'upstream status: test'

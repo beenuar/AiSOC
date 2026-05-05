@@ -1,0 +1,33 @@
+id: sigmahq-sigma-6bba49bf-7f8c-47d6-a1bb-6b4dece4640e
+name: Suspicious RASdial Activity
+description: Detects suspicious process related to rasdial.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://twitter.com/subTee/status/891298217907830785
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: rasdial.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6bba49bf-7f8c-47d6-a1bb-6b4dece4640e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rasdial_execution.yml
+falsepositives:
+- False positives depend on scripts and administrative tools used in the monitored
+  environment
+notes:
+  quarantine_reason: 'upstream status: test'

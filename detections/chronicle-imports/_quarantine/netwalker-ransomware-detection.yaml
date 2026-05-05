@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-netwalker-ransomware-detection
+name: netwalker_ransomware_detection
+description: netwalker_ransomware_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule netwalker_ransomware_detection {\n meta:\n    author = \"\
+    Emir Erdogan\"\n    description = \"Netwalker is a ransomware formerly called\
+    \ Mailto that has become active recently as it targets the enterprise and government\
+    \ agencies. Two widely reported attacks related to Netwalker are the ones on the\
+    \ Toll Group and the Champaign Urbana Public Health District (CHUPD) in Illinois.\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/enTUnGxlNjxr\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/03/23\"\n    product = \"windows\"\n    mitre\
+    \ = \"t1486\"\n\n  events:\n(re.regex($selection.target.process.file.full_path,\
+    \ `.*vssadmin\\.exe`) and re.regex($selection.principal.process.file.full_path,\
+    \ `.*qeSw\\.exe`) and $selection.target.process.command_line = \"vssadmin.exe\
+    \ delete shadows /all /quiet\")\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: netwalker_ransomware_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: netwalker_ransomware_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/netwalker_ransomware_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

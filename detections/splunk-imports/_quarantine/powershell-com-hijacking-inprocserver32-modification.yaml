@@ -1,0 +1,44 @@
+id: splunk-security-content-ea61e291-af05-4716-932a-67faddb6ae6f
+name: Powershell COM Hijacking InprocServer32 Modification
+description: The following analytic detects attempts to modify or add a Component
+  Object Model (COM) entry to the InProcServer32 path within the registry using PowerShell.
+  It leverages PowerShell ScriptBlock Logging (EventCode 4104) to identify suspicious
+  script blocks that target the InProcServer32 registry path. This activity is significant
+  because modifying COM objects can be used for persistence or privilege escalation
+  by attackers. If confirmed malicious, this could allow an attacker to execute arbitrary
+  code or maintain persistent access to the compromised system, posing a severe security
+  risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1546.015
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1546/015/
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+- https://blog.cluster25.duskrise.com/2022/09/23/in-the-footsteps-of-the-fancy-bear-powerpoint-graphite/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1546.015/T1546.015.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`powershell` EventCode=4104 ScriptBlockText = "*Software\\Classes\\CLSID\\*\\InProcServer32*"
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by dest
+    signature signature_id user_id vendor_product EventID Guid Opcode Name Path ProcessID
+    ScriptBlockId ScriptBlockText | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `powershell_com_hijacking_inprocserver32_modification_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ea61e291-af05-4716-932a-67faddb6ae6f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_com_hijacking_inprocserver32_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

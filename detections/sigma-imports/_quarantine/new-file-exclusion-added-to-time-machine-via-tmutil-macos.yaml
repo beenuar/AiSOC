@@ -1,0 +1,40 @@
+id: sigmahq-sigma-9acf45ed-3a26-4062-bf08-56857613eb52
+name: New File Exclusion Added To Time Machine Via Tmutil - MacOS
+description: 'Detects the addition of a new file or path exclusion to MacOS Time Machine
+  via the "tmutil" utility.
+
+  An adversary could exclude a path from Time Machine backups to prevent certain files
+  from being backed up.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1490/T1490.md#atomic-test-12---disable-time-machine
+- https://www.loobins.io/binaries/tmutil/
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_img:
+  - Image|endswith: /tmutil
+  - CommandLine|contains: tmutil
+  selection_cmd:
+    CommandLine|contains: addexclusion
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9acf45ed-3a26-4062-bf08-56857613eb52
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_tmutil_exclude_file_from_backup.yml
+falsepositives:
+- Legitimate administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

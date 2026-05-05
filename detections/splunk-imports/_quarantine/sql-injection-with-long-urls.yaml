@@ -1,0 +1,51 @@
+id: splunk-security-content-e0aad4cf-0790-423b-8328-7564d0d938f9
+name: SQL Injection with Long URLs
+description: The following analytic detects long URLs containing multiple SQL commands,
+  indicating a potential SQL injection attack. This detection leverages web traffic
+  data, specifically targeting web server destinations with URLs longer than 1024
+  characters or HTTP user agents longer than 200 characters. SQL injection is significant
+  as it allows attackers to manipulate a web application's database, potentially leading
+  to unauthorized data access or modification. If confirmed malicious, this activity
+  could result in data breaches, unauthorized access, and complete system compromise.
+  Immediate investigation and validation of alerts are crucial to mitigate these risks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Web\n\
+    \  WHERE Web.dest_category=web_server\n    AND\n    (Web.url_length > 1024\n \
+    \   OR\n    Web.http_user_agent_length > 200)\n  BY Web.src Web.dest Web.url\n\
+    \     Web.url_length Web.http_user_agent\n| `drop_dm_object_name(\"Web\")`\n|\
+    \ eval url=lower(url)\n| eval num_sql_cmds=mvcount(split(url, \"alter%20table\"\
+    )) + mvcount(split(url, \"between\")) + mvcount(split(url, \"create%20table\"\
+    )) + mvcount(split(url, \"create%20database\")) + mvcount(split(url, \"create%20index\"\
+    )) + mvcount(split(url, \"create%20view\")) + mvcount(split(url, \"delete\"))\
+    \ + mvcount(split(url, \"drop%20database\")) + mvcount(split(url, \"drop%20index\"\
+    )) + mvcount(split(url, \"drop%20table\")) + mvcount(split(url, \"exists\")) +\
+    \ mvcount(split(url, \"exec\")) + mvcount(split(url, \"group%20by\")) + mvcount(split(url,\
+    \ \"having\")) + mvcount(split(url, \"insert%20into\")) + mvcount(split(url, \"\
+    inner%20join\")) + mvcount(split(url, \"left%20join\")) + mvcount(split(url, \"\
+    right%20join\")) + mvcount(split(url, \"full%20join\")) + mvcount(split(url, \"\
+    select\")) + mvcount(split(url, \"distinct\")) + mvcount(split(url, \"select%20top\"\
+    )) + mvcount(split(url, \"union\")) + mvcount(split(url, \"xp_cmdshell\")) - 24\n\
+    | where num_sql_cmds > 3\n| `sql_injection_with_long_urls_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e0aad4cf-0790-423b-8328-7564d0d938f9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/sql_injection_with_long_urls.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

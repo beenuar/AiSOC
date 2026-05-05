@@ -1,0 +1,35 @@
+id: sigmahq-sigma-d94a35f0-7a29-45f6-90a0-80df6159967c
+name: Cisco Denial of Service
+description: Detect a system being shutdown or put into different boot mode
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1495
+  - T1529
+  - T1565.001
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - shutdown
+  - config-register 0x2100
+  - config-register 0x2142
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d94a35f0-7a29-45f6-90a0-80df6159967c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_dos.yml
+falsepositives:
+- Legitimate administrators may run these commands, though rarely.
+notes:
+  quarantine_reason: 'upstream status: test'

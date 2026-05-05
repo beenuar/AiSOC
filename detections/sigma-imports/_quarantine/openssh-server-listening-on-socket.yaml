@@ -1,0 +1,39 @@
+id: sigmahq-sigma-3ce8e9a4-bc61-4c9b-8e69-d7e2492a8781
+name: OpenSSH Server Listening On Socket
+description: Detects scenarios where an attacker enables the OpenSSH server and server
+  starts to listening on SSH socket.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.004
+  categories:
+  - endpoint
+references:
+- https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack/tree/master/TA0008-Lateral%20Movement/T1021.004-Remote%20Service%20SSH
+- https://winaero.com/enable-openssh-server-windows-10/
+- https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse
+- https://virtualizationreview.com/articles/2020/05/21/ssh-server-on-windows-10.aspx
+- https://medium.com/threatpunter/detecting-adversary-tradecraft-with-image-load-event-logging-and-eql-8de93338c16
+logsource:
+  product: windows
+  service: openssh
+detection:
+  selection:
+    EventID: 4
+    process: sshd
+    payload|startswith: 'Server listening on '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3ce8e9a4-bc61-4c9b-8e69-d7e2492a8781
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/openssh/win_sshd_openssh_server_listening_on_socket.yml
+falsepositives:
+- Legitimate administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

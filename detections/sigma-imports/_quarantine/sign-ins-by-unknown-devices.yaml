@@ -1,0 +1,35 @@
+id: sigmahq-sigma-4d136857-6a1a-432a-82fc-5dd497ee5e7c
+name: Sign-ins by Unknown Devices
+description: Monitor and alert for Sign-ins by unknown devices from non-Trusted locations.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-devices#non-compliant-device-sign-in
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    AuthenticationRequirement: singleFactorAuthentication
+    ResultType: 0
+    NetworkLocationDetails: '[]'
+    DeviceDetail.deviceId: ''
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4d136857-6a1a-432a-82fc-5dd497ee5e7c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_sign_ins_from_unknown_devices.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

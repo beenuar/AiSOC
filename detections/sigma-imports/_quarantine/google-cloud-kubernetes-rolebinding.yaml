@@ -1,0 +1,49 @@
+id: sigmahq-sigma-0322d9f2-289a-47c2-b5e1-b63c90901a3e
+name: Google Cloud Kubernetes RoleBinding
+description: Detects the creation or patching of potential malicious RoleBinding.
+  This includes RoleBindings and ClusterRoleBinding.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://github.com/elastic/detection-rules/pull/1267
+- https://kubernetes.io/docs/reference/kubernetes-api/authorization-resources/cluster-role-v1/#ClusterRole
+- https://cloud.google.com/kubernetes-engine/docs/how-to/role-based-access-control
+- https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+- https://cloud.google.com/kubernetes-engine/docs/how-to/audit-logging
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name:
+    - io.k8s.authorization.rbac.v*.clusterrolebindings.create
+    - io.k8s.authorization.rbac.v*.rolebindings.create
+    - io.k8s.authorization.rbac.v*.clusterrolebindings.patch
+    - io.k8s.authorization.rbac.v*.rolebindings.patch
+    - io.k8s.authorization.rbac.v*.clusterrolebindings.update
+    - io.k8s.authorization.rbac.v*.rolebindings.update
+    - io.k8s.authorization.rbac.v*.clusterrolebindings.delete
+    - io.k8s.authorization.rbac.v*.rolebindings.delete
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0322d9f2-289a-47c2-b5e1-b63c90901a3e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_kubernetes_rolebinding.yml
+falsepositives:
+- RoleBindings and ClusterRoleBinding being modified or deleted may be performed by
+  a system administrator. Verify whether the user identity, user agent, and/or hostname
+  should be making changes in your environment.
+- RoleBindings and ClusterRoleBinding modified or deleted from unfamiliar users should
+  be investigated. If known behavior is causing false positives, it can be exempted
+  from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

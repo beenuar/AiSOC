@@ -1,0 +1,46 @@
+id: splunk-security-content-f5ab595e-28e5-4327-8077-5008ba97c850
+name: Linux SSH Authorized Keys Modification
+description: The following analytic detects the modification of SSH Authorized Keys
+  on Linux systems. It leverages process execution data from Endpoint Detection and
+  Response (EDR) agents, specifically monitoring commands like "bash" and "cat" interacting
+  with "authorized_keys" files. This activity is significant as adversaries often
+  modify SSH Authorized Keys to establish persistent access to compromised endpoints.
+  If confirmed malicious, this behavior could allow attackers to maintain unauthorized
+  access, bypassing traditional authentication mechanisms and potentially leading
+  to further exploitation or data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.004
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/lateral-movement-with-secure-shell/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1098.004/T1098.004.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ IN (\"bash\",\"cat\") Processes.process IN (\"*/authorized_keys*\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_ssh_authorized_keys_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f5ab595e-28e5-4327-8077-5008ba97c850
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_ssh_authorized_keys_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

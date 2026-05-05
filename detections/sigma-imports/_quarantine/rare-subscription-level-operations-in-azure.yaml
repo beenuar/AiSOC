@@ -1,0 +1,39 @@
+id: sigmahq-sigma-c1182e02-49a3-481c-b3de-0fadc4091488
+name: Rare Subscription-level Operations In Azure
+description: Identifies IPs from which users grant access to other users on azure
+  resources and alerts when a previously unseen source IP address is used.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - cloud
+references:
+- https://github.com/Azure/Azure-Sentinel/blob/e534407884b1ec5371efc9f76ead282176c9e8bb/Detections/AzureActivity/RareOperations.yaml
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  keywords:
+  - Microsoft.DocumentDB/databaseAccounts/listKeys/action
+  - Microsoft.Maps/accounts/listKeys/action
+  - Microsoft.Media/mediaservices/listKeys/action
+  - Microsoft.CognitiveServices/accounts/listKeys/action
+  - Microsoft.Storage/storageAccounts/listKeys/action
+  - Microsoft.Compute/snapshots/write
+  - Microsoft.Network/networkSecurityGroups/write
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c1182e02-49a3-481c-b3de-0fadc4091488
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_rare_operations.yml
+falsepositives:
+- Valid change
+notes:
+  quarantine_reason: 'upstream status: test'

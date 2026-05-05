@@ -1,0 +1,36 @@
+id: sigmahq-sigma-35b781cc-1a08-4a5a-80af-42fd7c315c6b
+name: Discovery Using AzureHound
+description: Detects AzureHound (A BloodHound data collector for Microsoft Azure)
+  activity via the default User-Agent that is used during its operation after successful
+  authentication.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087.004
+  - T1526
+  categories:
+  - cloud
+references:
+- https://github.com/BloodHoundAD/AzureHound
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    userAgent|contains: azurehound
+    ResultType: 0
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 35b781cc-1a08-4a5a-80af-42fd7c315c6b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_azurehound_discovery.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

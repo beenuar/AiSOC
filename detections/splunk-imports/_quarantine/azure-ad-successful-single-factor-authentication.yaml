@@ -1,0 +1,43 @@
+id: splunk-security-content-a560e7f6-1711-4353-885b-40be53101fcd
+name: Azure AD Successful Single-Factor Authentication
+description: The following analytic identifies a successful single-factor authentication
+  event against Azure Active Directory. It leverages Azure SignInLogs data, specifically
+  focusing on events where single-factor authentication succeeded. This activity is
+  significant as it may indicate a misconfiguration, policy violation, or potential
+  account takeover attempt. If confirmed malicious, an attacker could gain unauthorized
+  access to the account, potentially leading to data breaches, privilege escalation,
+  or further exploitation within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1078/004/
+- https://docs.microsoft.com/en-us/azure/active-directory/authentication/concept-mfa-howitworks*
+- https://www.forbes.com/sites/daveywinder/2020/07/08/new-dark-web-audit-reveals-15-billion-stolen-logins-from-100000-breaches-passwords-hackers-cybercrime/?sh=69927b2a180f
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs properties.authenticationRequirement=singleFactorAuthentication\
+    \ properties.authenticationDetails{}.succeeded=true\n  | rename properties.* as\
+    \ *\n  | rename userAgent as user_agent\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest user src\n       vendor_account\
+    \ vendor_product user_agent\n       signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_successful_single_factor_authentication_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a560e7f6-1711-4353-885b-40be53101fcd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_successful_single_factor_authentication.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

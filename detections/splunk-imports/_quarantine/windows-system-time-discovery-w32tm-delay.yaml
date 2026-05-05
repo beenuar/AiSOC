@@ -1,0 +1,50 @@
+id: splunk-security-content-b2cc69e7-11ba-42dc-a269-59c069a48870
+name: Windows System Time Discovery W32tm Delay
+description: The following analytic identifies the use of the w32tm.exe utility with
+  the /stripchart function, which is indicative of DCRat malware delaying its payload
+  execution. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on specific command-line arguments used by w32tm.exe. This activity
+  is significant as it may indicate an attempt to evade detection by delaying malicious
+  actions such as C2 communication and beaconing. If confirmed malicious, this behavior
+  could allow an attacker to maintain persistence and execute further malicious activities
+  undetected.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1124
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/405538
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.dcrat
+- https://www.mandiant.com/resources/analyzing-dark-crystal-rat-backdoor
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name = w32tm.exe Processes.process= \"* /stripchart\
+    \ *\" Processes.process= \"* /computer:localhost *\" Processes.process= \"* /period:*\"\
+    \ Processes.process= \"* /dataonly *\" Processes.process= \"* /samples:*\"\n \
+    \ BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_system_time_discovery_w32tm_delay_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b2cc69e7-11ba-42dc-a269-59c069a48870
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_system_time_discovery_w32tm_delay.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

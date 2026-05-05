@@ -1,0 +1,75 @@
+id: sigmahq-sigma-8823e85d-31d8-473e-b7f4-92da070f0fc6
+name: Suspicious ShellExec_RunDLL Call Via Ordinal
+description: 'Detects suspicious call to the "ShellExec_RunDLL" exported function
+  of SHELL32.DLL through the ordinal number to launch other commands.
+
+  Adversary might only use the ordinal number in order to bypass existing detection
+  that alert on usage of ShellExec_RunDLL on CommandLine.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/raspberry-robin/
+- https://www.microsoft.com/en-us/security/blog/2022/10/27/raspberry-robin-worm-part-of-larger-ecosystem-facilitating-pre-ransomware-activity/
+- https://github.com/SigmaHQ/sigma/issues/1009
+- https://strontic.github.io/xcyclopedia/library/shell32.dll-65DA072F25DE83D9F83653E3FEA3644D.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent_img:
+    ParentCommandLine|contains: SHELL32.DLL
+  selection_parent_ordinal:
+    ParentCommandLine|contains:
+    - '#568'
+    - '#570'
+    - '#572'
+    - '#576'
+  selection_susp_cli_parent:
+  - ParentCommandLine|contains:
+    - comspec
+    - iex
+    - Invoke-
+    - msiexec
+    - odbcconf
+    - regsvr32
+  - ParentCommandLine|contains:
+    - \Desktop\
+    - \ProgramData\
+    - \Temp\
+    - \Users\Public\
+  selection_susp_child_img:
+    Image|endswith:
+    - \bash.exe
+    - \bitsadmin.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \curl.exe
+    - \mshta.exe
+    - \msiexec.exe
+    - \msxsl.exe
+    - \odbcconf.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \schtasks.exe
+    - \wmic.exe
+    - \wscript.exe
+  condition: all of selection_parent_* and 1 of selection_susp_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8823e85d-31d8-473e-b7f4-92da070f0fc6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_susp_shellexec_ordinal_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

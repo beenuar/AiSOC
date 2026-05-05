@@ -1,0 +1,44 @@
+id: sigmahq-sigma-347906f3-e207-4d18-ae5b-a9403d6bcdef
+name: Netsh Allow Group Policy on Microsoft Defender Firewall
+description: Adversaries may modify system firewalls in order to bypass controls limiting
+  network usage
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.004/T1562.004.md#atomic-test-3---allow-smb-and-rdp-on-microsoft-defender-firewall
+- https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/netsh-advfirewall-firewall-control-firewall-behavior
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \netsh.exe
+  - OriginalFileName: netsh.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - advfirewall
+    - firewall
+    - set
+    - rule
+    - group=
+    - new
+    - enable=Yes
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 347906f3-e207-4d18-ae5b-a9403d6bcdef
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_netsh_fw_enable_group_rule.yml
+falsepositives:
+- Legitimate administration activity
+notes:
+  quarantine_reason: 'upstream status: test'

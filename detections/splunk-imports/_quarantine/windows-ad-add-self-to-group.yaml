@@ -1,0 +1,36 @@
+id: splunk-security-content-065f2701-b7ea-42f5-9ec4-fbc2261165f9
+name: Windows AD add Self to Group
+description: This analytic detects instances where a user adds themselves to an Active
+  Directory (AD) group. This activity is a common indicator of privilege escalation,
+  where a user attempts to gain unauthorized access to higher privileges or sensitive
+  resources. By monitoring AD logs, this detection identifies such suspicious behavior,
+  which could be part of a larger attack strategy aimed at compromising critical systems
+  and data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode IN (4728)\n  | where user=src_user\n\
+    \  | stats min(_time) as _time dc(user) as usercount, values(user) as user values(user_category)\
+    \ as user_category values(src_user_category) as src_user_category values(dvc)\
+    \ as dvc\n    BY signature, Group_Name, src_user,\n       dest\n  | `windows_ad_add_self_to_group_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 065f2701-b7ea-42f5-9ec4-fbc2261165f9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_add_self_to_group.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

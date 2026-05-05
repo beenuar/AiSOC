@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b3cec4e7-6901-4b0d-a02d-8ab2d8eb818b
+name: File Time Attribute Change - Linux
+description: Detect file time attribute change to hide new or changes to existing
+  files.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.006/T1070.006.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  execve:
+    type: EXECVE
+  touch:
+  - touch
+  selection2:
+  - -t
+  - -acmr
+  - -d
+  - -r
+  condition: execve and touch and selection2
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b3cec4e7-6901-4b0d-a02d-8ab2d8eb818b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_change_file_time_attr.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

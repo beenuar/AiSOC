@@ -1,0 +1,38 @@
+id: sigmahq-sigma-05ebafc8-7aa2-4bcd-a269-2aec93f9e842
+name: Add New Download Source To Winget
+description: Detects usage of winget to add new additional download sources
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+- https://github.com/nasbench/Misc-Research/tree/b9596e8109dcdb16ec353f316678927e507a5b8d/LOLBINs/Winget
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \winget.exe
+  - OriginalFileName: winget.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - 'source '
+    - 'add '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 05ebafc8-7aa2-4bcd-a269-2aec93f9e842
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winget_add_custom_source.yml
+falsepositives:
+- False positive are expected with legitimate sources
+notes:
+  quarantine_reason: 'upstream status: test'

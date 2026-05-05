@@ -1,0 +1,46 @@
+id: splunk-security-content-10d62950-0de5-4199-a710-cff9ea79b413
+name: Elevated Group Discovery with PowerView
+description: The following analytic detects the execution of the `Get-DomainGroupMember`
+  cmdlet from PowerView, identified through PowerShell Script Block Logging (EventCode=4104).
+  This cmdlet is used to enumerate members of elevated domain groups such as Domain
+  Admins and Enterprise Admins. Monitoring this activity is crucial as it indicates
+  potential reconnaissance efforts by adversaries to identify high-privileged users
+  within the domain. If confirmed malicious, this activity could lead to targeted
+  attacks on privileged accounts, facilitating further compromise and lateral movement
+  within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-DomainGroupMember/
+- https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/appendix-b--privileged-accounts-and-groups-in-active-directory
+- https://attack.mitre.org/techniques/T1069/002/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-DomainGroupMember*\"\
+    ) AND ScriptBlockText IN (\"*Domain Admins*\",\"*Enterprise Admins*\", \"*Schema\
+    \ Admins*\", \"*Account Operators*\" , \"*Server Operators*\", \"*Protected Users*\"\
+    ,  \"*Dns Admins*\")\n  | fillnull\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ EventID\n       Guid Opcode Name\n       Path ProcessID ScriptBlockId\n    \
+    \   ScriptBlockText\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `elevated_group_discovery_with_powerview_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 10d62950-0de5-4199-a710-cff9ea79b413
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/elevated_group_discovery_with_powerview.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

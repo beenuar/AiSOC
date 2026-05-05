@@ -1,0 +1,41 @@
+id: splunk-security-content-77f41d9e-b8be-47e3-ab35-5776f5ec1d20
+name: User Discovery With Env Vars PowerShell Script Block
+description: The following analytic detects the use of PowerShell environment variables
+  to identify the current logged user by leveraging PowerShell Script Block Logging
+  (EventCode=4104). This method monitors script blocks containing `$env:UserName`
+  or `[System.Environment]::UserName`. Identifying this activity is significant as
+  adversaries and Red Teams may use it for situational awareness and Active Directory
+  discovery on compromised endpoints. If confirmed malicious, this activity could
+  allow attackers to gain insights into user context, aiding in further exploitation
+  and lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1033/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*$env:UserName*\"\
+    \ OR ScriptBlockText = \"*[System.Environment]::UserName*\")\n  | fillnull\n \
+    \ | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `user_discovery_with_env_vars_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 77f41d9e-b8be-47e3-ab35-5776f5ec1d20
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/user_discovery_with_env_vars_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

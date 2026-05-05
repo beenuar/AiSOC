@@ -1,0 +1,43 @@
+id: sigmahq-sigma-36388120-b3f1-4ce9-b50b-280d9a7f4c04
+name: Kaspersky Endpoint Security Stopped Via CommandLine - Linux
+description: 'Detects execution of the Kaspersky init.d stop script on Linux systems
+  either directly or via systemctl.
+
+  This activity may indicate a manual interruption of the antivirus service by an
+  administrator, or it could be a sign of potential tampering or evasion attempts
+  by malicious actors.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://support.kaspersky.com/KES4Linux/12.0.0/en-US/197929.htm
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - /systemctl
+    - /bash
+    - /sh
+    CommandLine|contains|all:
+    - stop
+    - kesl
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 36388120-b3f1-4ce9-b50b-280d9a7f4c04
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_av_kaspersky_av_disabled.yml
+falsepositives:
+- System administrator manually stopping Kaspersky services
+notes:
+  quarantine_reason: 'upstream status: experimental'

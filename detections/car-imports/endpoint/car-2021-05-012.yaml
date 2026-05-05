@@ -1,0 +1,45 @@
+id: mitre-car-car-2021-05-012
+name: Create Service In Suspicious File Path
+description: This detection is to identify a creation of "user mode service" where
+  the service file path is located in non-common service folder in windows.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode – Service in Suspicious File Path
+    type: Pseudocode
+    code: 'services = search Service:create
+
+      suspicious_services = filter services where image_path = "*\.exe" AND image_path
+      does not contain ["C:\\Windows\\*", "%windir%\\*", "C:\\Program File*", "C:\\Programdata\\*",
+      "%systemroot%\\*"] )
+
+      output suspicious_services
+
+      '
+  - name: Splunk code
+    type: Splunk
+    code: ' `wineventlog_system` EventCode=7045  Service_File_Name = "*\.exe" NOT
+      (Service_File_Name IN ("C:\\Windows\\*", "%windir%\\*", "C:\\Program File*",
+      "C:\\Programdata\\*", "%systemroot%\\*")) Service_Type = "user mode service"
+      | stats count min(_time) as firstTime max(_time) as lastTime by EventCode Service_File_Name
+      Service_Name Service_Start_Type Service_Type'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-05-012
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-05-012.yaml
+notes:
+  car_status: needs_implementation

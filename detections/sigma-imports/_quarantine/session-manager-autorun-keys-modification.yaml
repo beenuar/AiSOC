@@ -1,0 +1,47 @@
+id: sigmahq-sigma-046218bd-e0d8-4113-a3c3-895a12b2b298
+name: Session Manager Autorun Keys Modification
+description: Detects modification of autostart extensibility point (ASEP) in registry.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  - T1546.009
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md
+- https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns
+- https://gist.github.com/GlebSukhodolskiy/0fc5fa5f482903064b448890db1eaf9d
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  session_manager_base:
+    TargetObject|contains: \System\CurrentControlSet\Control\Session Manager
+  session_manager:
+    TargetObject|contains:
+    - \SetupExecute
+    - \S0InitialCommand
+    - \KnownDlls
+    - \Execute
+    - \BootExecute
+    - \AppCertDlls
+  filter:
+    Details: (Empty)
+  condition: session_manager_base and session_manager and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 046218bd-e0d8-4113-a3c3-895a12b2b298
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_asep_reg_keys_modification_session_manager.yml
+falsepositives:
+- Legitimate software automatically (mostly, during installation) sets up autorun
+  keys for legitimate reason
+- Legitimate administrator sets up autorun keys for legitimate reason
+notes:
+  quarantine_reason: 'upstream status: test'

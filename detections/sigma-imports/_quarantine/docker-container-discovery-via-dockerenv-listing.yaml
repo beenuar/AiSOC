@@ -1,0 +1,44 @@
+id: sigmahq-sigma-11701de9-d5a5-44aa-8238-84252f131895
+name: Docker Container Discovery Via Dockerenv Listing
+description: Detects listing or file reading of ".dockerenv" which can be a sing of
+  potential container discovery
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://blog.skyplabs.net/posts/container-detection/
+- https://stackoverflow.com/questions/20010199/how-to-determine-if-a-process-runs-inside-lxc-docker
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+    - /cat
+    - /dir
+    - /find
+    - /ls
+    - /stat
+    - /test
+    - grep
+    CommandLine|endswith: .dockerenv
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 11701de9-d5a5-44aa-8238-84252f131895
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_dockerenv_recon.yml
+falsepositives:
+- Legitimate system administrator usage of these commands
+- Some container tools or deployments may use these techniques natively to determine
+  how they proceed with execution, and will need to be filtered
+notes:
+  quarantine_reason: 'upstream status: test'

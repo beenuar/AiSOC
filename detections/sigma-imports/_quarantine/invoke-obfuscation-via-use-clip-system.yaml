@@ -1,0 +1,35 @@
+id: sigmahq-sigma-63e3365d-4824-42d8-8b82-e56810fefa0c
+name: Invoke-Obfuscation Via Use Clip - System
+description: Detects Obfuscated Powershell via use Clip.exe in Scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains: (Clipboard|i
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 63e3365d-4824-42d8-8b82-e56810fefa0c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_use_clip_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

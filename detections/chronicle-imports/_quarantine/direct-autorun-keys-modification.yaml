@@ -1,0 +1,76 @@
+id: chronicle-detection-rules-direct-autorun-keys-modification
+name: direct_autorun_keys_modification
+description: direct_autorun_keys_modification
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule direct_autorun_keys_modification {\n\n  meta:\n    author = \"Victor Sergeev,\
+    \ Daniil Yugoslavskiy, oscd.community\"\n    description = \"Detects direct modification\
+    \ of autostart extensibility point (ASEP) in registry using reg.exe\"\n    reference\
+    \ = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_reg_direct_asep_registry_keys_modification.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Direct Autorun Keys Modification\"\n    rule_id = \"mr_b031bea5-d00b-43ae-a74c-b4df380262e8\"\
+    \n    sigma_uuid = \"24357373-078f-44ed-9ac4-6d334a668a11\"\n    sigma_status\
+    \ = \"test\"\n    tactic = \"TA0003\"\n    technique = \"T1547.001\"\n    type\
+    \ = \"Detection\"\n    data_source = \"Windows Event Logs\"\n    platform = \"\
+    Windows\"\n    severity = \"Medium\"\n    priority = \"Medium\"\n    false_positives\
+    \ = \"Legitimate software automatically sets up autorun keys for legitimate reasons\"\
+    \n\n  events:\n    $process.metadata.event_type = \"PROCESS_LAUNCH\"\n    re.regex($process.target.process.file.full_path,\
+    \ `\\\\reg\\.exe$`) nocase\n    strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"add\")\n    (\n      strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run\") or\n    \
+    \  strings.contains(strings.to_lower($process.target.process.command_line), \"\
+    \\\\software\\\\microsoft\\\\windows nt\\\\currentversion\\\\winlogon\\\\userinit\"\
+    ) or\n      strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"\\\\software\\\\microsoft\\\\windows nt\\\\currentversion\\\\winlogon\\\\\
+    shell\") or\n      strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"\\\\software\\\\microsoft\\\\windows nt\\\\currentversion\\\\windows\") or\n\
+    \      strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\explorer\\\\user\
+    \ shell folders\") or\n      strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"\\\\system\\\\currentcontrolset\\\\control\\\\safeboot\\\\alternateshell\"\
+    )\n    )\n\n    $process.principal.hostname = $hostname\n\n  match:\n    $hostname\
+    \ over 5m\n\n  outcome:\n    //example usage of specifying test user and hostname\
+    \ to adjust risk score\n    $risk_score = max(if($process.principal.user.userid\
+    \ = \"user\" and $process.principal.hostname = \"hostname\", 0, 15))\n    $principal_process_pid\
+    \ = array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specfic_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specfic_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specfic_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n    $log_type = array_distinct(strings.concat($process.metadata.log_type,\"\
+    /\",$process.metadata.product_event_type))\n\n  condition:\n    $process\n}"
+  chronicle_rule_name: direct_autorun_keys_modification
+provenance:
+  source: chronicle/detection-rules
+  source_id: direct_autorun_keys_modification
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/direct_autorun_keys_modification.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

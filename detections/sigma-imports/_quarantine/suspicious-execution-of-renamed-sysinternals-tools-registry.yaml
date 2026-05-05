@@ -1,0 +1,72 @@
+id: sigmahq-sigma-f50f3c09-557d-492d-81db-9064a8d4e211
+name: Suspicious Execution Of Renamed Sysinternals Tools - Registry
+description: Detects the creation of the "accepteula" key related to the Sysinternals
+  tools being created from executables with the wrong name (e.g. a renamed Sysinternals
+  tool)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|contains:
+    - \Active Directory Explorer
+    - \Handle
+    - \LiveKd
+    - \ProcDump
+    - \Process Explorer
+    - \PsExec
+    - \PsLoggedon
+    - \PsLoglist
+    - \PsPasswd
+    - \PsPing
+    - \PsService
+    - \SDelete
+    TargetObject|endswith: \EulaAccepted
+  filter:
+    Image|endswith:
+    - \ADExplorer.exe
+    - \ADExplorer64.exe
+    - \handle.exe
+    - \handle64.exe
+    - \livekd.exe
+    - \livekd64.exe
+    - \procdump.exe
+    - \procdump64.exe
+    - \procexp.exe
+    - \procexp64.exe
+    - \PsExec.exe
+    - \PsExec64.exe
+    - \PsLoggedon.exe
+    - \PsLoggedon64.exe
+    - \psloglist.exe
+    - \psloglist64.exe
+    - \pspasswd.exe
+    - \pspasswd64.exe
+    - \PsPing.exe
+    - \PsPing64.exe
+    - \PsService.exe
+    - \PsService64.exe
+    - \sdelete.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f50f3c09-557d-492d-81db-9064a8d4e211
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_pua_sysinternals_renamed_execution_via_eula.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

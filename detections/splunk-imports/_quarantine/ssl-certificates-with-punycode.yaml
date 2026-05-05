@@ -1,0 +1,46 @@
+id: splunk-security-content-696694df-5706-495a-81f2-79501fa11b90
+name: SSL Certificates with Punycode
+description: The following analytic detects SSL certificates with Punycode domains
+  in the SSL issuer email domain, identified by the prefix "xn--". It leverages the
+  Certificates Datamodel to flag these domains and uses CyberChef for decoding. This
+  activity is significant as Punycode can be used for domain spoofing and phishing
+  attacks. If confirmed malicious, attackers could deceive users and systems, potentially
+  leading to unauthorized access and data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1573
+  categories:
+  - network
+references:
+- https://www.splunk.com/en_us/blog/security/nothing-puny-about-cve-2022-3602.html
+- https://www.openssl.org/blog/blog/2022/11/01/email-address-overflows/
+- https://community.emergingthreats.net/t/out-of-band-ruleset-update-summary-2022-11-01/117
+- https://github.com/corelight/CVE-2022-3602/tree/master/scripts
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Certificates.All_Certificates\n  BY All_Certificates.SSL.ssl_issuer_email_domain\
+    \ All_Certificates.SSL.ssl_issuer All_Certificates.SSL.ssl_subject_email\n   \
+    \  All_Certificates.SSL.dest All_Certificates.SSL.src All_Certificates.SSL.sourcetype\n\
+    \     All_Certificates.SSL.ssl_subject_email_domain\n| `drop_dm_object_name(\"\
+    All_Certificates.SSL\")`\n| eval punycode=if(like(ssl_issuer_email_domain,\"%xn--%\"\
+    ),1,0)\n| where punycode=1\n| cyberchef infield=\"ssl_issuer_email_domain\" outfield=\"\
+    convertedPuny\" jsonrecipe=\"[{\"op\":\"From Punycode\",\"args\":[true]}]\"\n\
+    | table ssl_issuer_email_domain convertedPuny ssl_issuer ssl_subject_email dest\
+    \ src sourcetype ssl_subject_email_domain\n| `ssl_certificates_with_punycode_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 696694df-5706-495a-81f2-79501fa11b90
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/ssl_certificates_with_punycode.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

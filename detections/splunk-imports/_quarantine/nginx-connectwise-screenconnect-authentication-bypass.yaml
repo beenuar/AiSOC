@@ -1,0 +1,44 @@
+id: splunk-security-content-b3f7a803-e802-448b-8eb2-e796b223bccc
+name: Nginx ConnectWise ScreenConnect Authentication Bypass
+description: The following analytic detects attempts to exploit the ConnectWise ScreenConnect
+  CVE-2024-1709 vulnerability, which allows attackers to bypass authentication via
+  alternate paths or channels. It leverages Nginx access logs to identify web requests
+  to the SetupWizard.aspx page, indicating potential exploitation. This activity is
+  significant as it can lead to unauthorized administrative access and remote code
+  execution. If confirmed malicious, attackers could create administrative users and
+  gain full control over the affected ScreenConnect instance, posing severe security
+  risks. Immediate remediation by updating to version 23.9.8 or above is recommended.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://docs.splunk.com/Documentation/AddOns/released/NGINX/Sourcetypes
+- https://gist.github.com/MHaggis/26f59108b04da8f1d870c9cc3a3c8eec
+- https://www.huntress.com/blog/a-catastrophe-for-control-understanding-the-screenconnect-authentication-bypass
+- https://www.huntress.com/blog/detection-guidance-for-connectwise-cwe-288-2
+- https://www.connectwise.com/company/trust/security-bulletins/connectwise-screenconnect-23.9.8
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`nginx_access_logs` uri_path IN (\"*/SetupWizard.aspx/*\",\"*/SetupWizard/\"\
+    ) status=200 http_method=POST\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY src, dest, http_user_agent,\n       url, uri_path, status,\n\
+    \       http_method, sourcetype, source\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `nginx_connectwise_screenconnect_authentication_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b3f7a803-e802-448b-8eb2-e796b223bccc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/nginx_connectwise_screenconnect_authentication_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

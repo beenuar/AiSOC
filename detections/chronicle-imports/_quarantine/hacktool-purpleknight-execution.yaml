@@ -1,0 +1,68 @@
+id: chronicle-detection-rules-hacktool-purpleknight-execution
+name: hacktool_purpleknight_execution
+description: hacktool_purpleknight_execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule hacktool_purpleknight_execution {\n\n    meta:\n      author = \"Georg\
+    \ Lauenstein - suresecure GmbH\"\n      description = \"This detection rule identifies\
+    \ the execution of the Purple Knight tool, a free Active Directory security assessment\
+    \ utility developed by Semperis. Purple Knight is designed to scan for AD vulnerabilities,\
+    \ misconfigurations, and common attack paths. While it is a legitimate tool used\
+    \ by defenders, its execution in production environments may also indicate red\
+    \ team activity or unauthorized reconnaissance by adversaries attempting to map\
+    \ domain weaknesses.\"\n      rule_id = \"mr_69e428bb-c946-4e3f-abb8-0e28316f2389\"\
+    \n      rule_name = \"Purple Knight Tool Execution Detected\"\n      tactic =\
+    \ \"TA0007\"\n      technique = \"T1087\"\n      references = \"https://www.purple-knight.com/\"\
+    \n      type = \"alert\"\n      platform = \"Windows, EDR\"\n      data_source\
+    \ = \"Microsoft Sysmon, Windows Event Logs\"\n      severity = \"Medium\"  //\
+    \ Adjust based on your risk assessment\n      priority = \"Medium\"  // Adjust\
+    \ based on your incident response process\n\n    events:\n      $purple_knight.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n      (\n        $purple_knight.target.process.file.full_path\
+    \ = /\\\\PurpleKnight\\.exe$/ nocase or\n        $purple_knight.principal.process.file.full_path\
+    \ = /\\\\PurpleKnight\\.exe$/ nocase or\n        $purple_knight.principal.process.command_line\
+    \ = /PurpleKnight/ nocase\n      )\n\n    // Capture the hostname where the event\
+    \ occurred\n    $purple_knight.principal.hostname = $hostname\n\n    match:\n\
+    \      $hostname over 10m\n\n    outcome:\n      $risk_score = max(65)\n     \
+    \ $event_count = count_distinct($purple_knight.metadata.id)\n      $principal_process_pid\
+    \ = array_distinct($purple_knight.principal.process.pid)\n      $principal_process_command_line\
+    \ = array_distinct($purple_knight.principal.process.command_line)\n      $principal_process_file_sha256\
+    \ = array_distinct($purple_knight.principal.process.file.sha256)\n      $principal_process_file_full_path\
+    \ = array_distinct($purple_knight.principal.process.file.full_path)\n      $principal_process_product_specific_process_id\
+    \ = array_distinct($purple_knight.principal.process.product_specific_process_id)\n\
+    \      $principal_process_parent_process_product_specific_process_id = array_distinct($purple_knight.principal.process.parent_process.product_specific_process_id)\n\
+    \      $target_process_pid = array_distinct($purple_knight.target.process.pid)\n\
+    \      $target_process_command_line = array_distinct($purple_knight.target.process.command_line)\n\
+    \      $target_process_file_sha256 = array_distinct($purple_knight.target.process.file.sha256)\n\
+    \      $target_process_file_full_path = array_distinct($purple_knight.target.process.file.full_path)\n\
+    \      $target_process_product_specific_process_id = array_distinct($purple_knight.target.process.product_specific_process_id)\n\
+    \      $principal_user_userid = array_distinct($purple_knight.principal.user.userid)\n\
+    \n    condition:\n      $purple_knight\n}"
+  chronicle_rule_name: hacktool_purpleknight_execution
+provenance:
+  source: chronicle/detection-rules
+  source_id: hacktool_purpleknight_execution
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/hacktool_purpleknight_execution.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,59 @@
+id: splunk-security-content-8728d224-9cd5-4aa7-b75f-f8520a569979
+name: Cisco Duo Set User Status to Bypass 2FA
+description: 'The following analytic detects instances where a Duo user''s status
+  is changed to "Bypass" for 2FA, specifically when the
+
+  previous status was "Active." This behavior is identified by analyzing Duo activity
+  logs for user update actions, extracting
+
+  the status transitions, and filtering for cases where a user is set to bypass multi-factor
+  authentication. This is a critical
+
+  event for a Security Operations Center (SOC) to monitor, as bypassing 2FA significantly
+  weakens account security and may
+
+  indicate malicious insider activity or account compromise. Attackers or unauthorized
+  administrators may exploit this change to
+
+  disable strong authentication controls, increasing the risk of unauthorized access
+  to sensitive systems and data. Early detection
+
+  of such changes enables rapid investigation and response, helping to prevent potential
+  breaches and limit the impact of
+
+  credential-based attacks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_activity` action.name=user_update\n  | spath input=target.details\
+    \ path=status output=status\n  | spath input=old_target.details path=status output=old_status\n\
+    \  | search status=Bypass old_status=Active\n  | rename target.name as user access_device.ip.address\
+    \ as src_ip\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY access_device.browser access_device.browser_version src_ip\n       access_device.location.city\
+    \ access_device.location.country access_device.location.state\n       access_device.os\
+    \ access_device.os_version action.name\n       actor.details actor.name actor.type\n\
+    \       old_target.details target.details status\n       old_status user\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_set_user_status_to_bypass_2fa_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8728d224-9cd5-4aa7-b75f-f8520a569979
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_set_user_status_to_bypass_2fa.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

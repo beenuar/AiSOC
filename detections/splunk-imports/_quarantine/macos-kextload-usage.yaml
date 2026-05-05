@@ -1,0 +1,43 @@
+id: splunk-security-content-9d680775-84a6-4625-a8ea-8182b9427ce4
+name: MacOS Kextload Usage
+description: 'Detects execution of the kextload command on macOS systems. The kextload
+  utility is used to manually load kernel extensions (KEXTs) into the macOS kernel,
+  which can introduce privileged code at the kernel level.
+
+  While legitimate for driver installation and system administration, misuse may indicate
+  attempts to install unauthorized, malicious, or persistence-enabling kernel extensions.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://osquery.readthedocs.io/en/stable/deployment/process-auditing/
+- https://www.unix.com/man_page/osx/8/kextload/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    Processes.process_name = \"kextload\"\n\nAND NOT\n\nProcesses.process IN (\n \
+    \   \"*-help*\",\n    \"* -h *\"\n)\n\nby Processes.dest Processes.original_file_name\
+    \ Processes.parent_process_id\n   Processes.process Processes.process_exec Processes.process_guid\n\
+    \   Processes.process_hash Processes.process_id\n   Processes.process_current_directory\
+    \ Processes.process_name\n   Processes.process_path Processes.user\n   Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `macos_kextload_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9d680775-84a6-4625-a8ea-8182b9427ce4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_kextload_usage.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

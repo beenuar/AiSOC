@@ -1,0 +1,35 @@
+id: sigmahq-sigma-fa277e82-9b78-42dd-b05c-05555c7b6015
+name: Enable Local Manifest Installation With Winget
+description: Detects changes to the AppInstaller (winget) policy. Specifically the
+  activation of the local manifest installation, which allows a user to install new
+  packages via custom manifests.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/Misc-Research/tree/b9596e8109dcdb16ec353f316678927e507a5b8d/LOLBINs/Winget
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|endswith: \AppInstaller\EnableLocalManifestFiles
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fa277e82-9b78-42dd-b05c-05555c7b6015
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_winget_enable_local_manifest.yml
+falsepositives:
+- Administrators or developers might enable this for testing purposes or to install
+  custom private packages
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,49 @@
+id: sigmahq-sigma-431a1fdb-4799-4f3b-91c3-a683b003fc49
+name: New Kernel Driver Via SC.EXE
+description: Detects creation of a new service (kernel driver) with the type "kernel"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://www.aon.com/cyber-solutions/aon_cyber_labs/yours-truly-signed-av-driver-weaponizing-an-antivirus-driver/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \sc.exe
+    CommandLine|contains:
+    - create
+    - config
+    CommandLine|contains|all:
+    - binPath
+    - type
+    - kernel
+  filter_optional_avira_driver:
+  - CommandLine|contains|all:
+    - create netprotection_network_filter
+    - 'type= kernel start= '
+    - binPath= System32\drivers\netprotection_network_filter
+    - DisplayName= netprotection_network_filter
+    - group= PNP_TDI tag= yes
+  - CommandLine|contains|all:
+    - create avelam binpath=C:\Windows\system32\drivers\avelam.sys
+    - type=kernel start=boot error=critical group=Early-Launch
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 431a1fdb-4799-4f3b-91c3-a683b003fc49
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sc_new_kernel_driver.yml
+falsepositives:
+- Rare legitimate installation of kernel drivers via sc.exe
+notes:
+  quarantine_reason: 'upstream status: test'

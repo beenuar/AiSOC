@@ -1,0 +1,35 @@
+id: sigmahq-sigma-2d510d8d-912b-45c5-b1df-36faa3d8c3f4
+name: NetSupport Manager Service Install
+description: Detects NetSupport Manager service installation on the target system.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- http://resources.netsupportsoftware.com/resources/manualpdfs/nsm_manual_uk.pdf
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_root:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection_service:
+  - ImagePath|contains: \NetSupport Manager\client32.exe
+  - ServiceName: Client32
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2d510d8d-912b-45c5-b1df-36faa3d8c3f4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_netsupport_manager.yml
+falsepositives:
+- Legitimate use of the tool
+notes:
+  quarantine_reason: 'upstream status: test'

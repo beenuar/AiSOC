@@ -1,0 +1,45 @@
+id: sigmahq-sigma-38a1ac5f-9c74-47d2-a345-dd6f5eb4e7c8
+name: HKTL - SharpSuccessor Privilege Escalation Tool Execution
+description: 'Detects the execution of SharpSuccessor, a tool used to exploit the
+  BadSuccessor attack for privilege escalation in WinServer 2025 Active Directory
+  environments.
+
+  Successful usage of this tool can let the attackers gain the domain admin privileges
+  by exploiting the BadSuccessor vulnerability.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://github.com/logangoins/SharpSuccessor
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \SharpSuccessor.exe
+  - OriginalFileName: SharpSuccessor.exe
+  - CommandLine|contains: SharpSuccessor
+  - CommandLine|contains|all:
+    - ' add '
+    - ' /impersonate'
+    - ' /path'
+    - ' /account'
+    - ' /name'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 38a1ac5f-9c74-47d2-a345-dd6f5eb4e7c8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharpsuccessor_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

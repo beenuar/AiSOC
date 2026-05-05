@@ -1,0 +1,50 @@
+id: sigmahq-sigma-4e2ed651-1906-4a59-a78a-18220fca1b22
+name: PUA - NirCmd Execution
+description: Detects the use of NirCmd tool for command execution, which could be
+  the result of legitimate administrative activity
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.nirsoft.net/utils/nircmd.html
+- https://www.winhelponline.com/blog/run-program-as-system-localsystem-account-windows/
+- https://www.nirsoft.net/utils/nircmd2.html#using
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_org:
+  - Image|endswith: \NirCmd.exe
+  - OriginalFileName: NirCmd.exe
+  selection_cmd:
+    CommandLine|contains:
+    - ' execmd '
+    - '.exe script '
+    - '.exe shexec '
+    - ' runinteractive '
+  combo_exec:
+    CommandLine|contains:
+    - ' exec '
+    - ' exec2 '
+  combo_exec_params:
+    CommandLine|contains:
+    - ' show '
+    - ' hide '
+  condition: 1 of selection_* or all of combo_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4e2ed651-1906-4a59-a78a-18220fca1b22
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_nircmd.yml
+falsepositives:
+- Legitimate use by administrators
+notes:
+  quarantine_reason: 'upstream status: test'

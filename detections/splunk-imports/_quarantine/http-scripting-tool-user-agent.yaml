@@ -1,0 +1,43 @@
+id: splunk-security-content-04430b4e-5ca8-4e88-98b5-d6bcf54f8393
+name: HTTP Scripting Tool User Agent
+description: This Splunk query analyzes web access logs to identify and categorize
+  non-browser user agents, detecting various types of security tools, scripting languages,
+  automation frameworks, and suspicious patterns. This activity can signify malicious
+  actors attempting to interact with web endpoints in non-standard ways.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - application
+references:
+- https://portswigger.net/web-security/request-smuggling#what-is-http-request-smuggling
+- https://portswigger.net/research/http1-must-die
+- https://www.vaadata.com/blog/what-is-http-request-smuggling-exploitations-and-security-best-practices/
+- https://www.securityweek.com/new-http-request-smuggling-attacks-impacted-cdns-major-orgs-millions-of-websites/
+- https://github.com/SigmaHQ/sigma/blob/master/rules/web/proxy_generic/proxy_ua_hacktool.yml
+- https://help.aikido.dev/zen-firewall/miscellaneous/bot-protection-details
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`nginx_access_logs`\n  | eval http_user_agent = lower(http_user_agent)\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `drop_dm_object_name(Web)`\n  | lookup scripting_tools_user_agents tool_user_agent\
+    \ AS http_user_agent OUTPUT tool\n  | where isnotnull(tool)\n  | rename dest_ip\
+    \ as dest\n  | stats count min(firstTime) as first_seen max(lastTime) as last_seen\
+    \ values(tool) as tool\n    BY http_user_agent dest src_ip\n       status\n  |\
+    \ `http_scripting_tool_user_agent_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 04430b4e-5ca8-4e88-98b5-d6bcf54f8393
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/http_scripting_tool_user_agent.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

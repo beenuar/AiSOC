@@ -1,0 +1,48 @@
+id: sigmahq-sigma-d00a9a72-2c09-4459-ad03-5e0a23351e36
+name: Suspicious LDAP-Attributes Used
+description: Detects the usage of particular AttributeLDAPDisplayNames, which are
+  known for data exchange via LDAP by the tool LDAPFragger and are additionally not
+  commonly used in companies.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1001.003
+  categories:
+  - endpoint
+references:
+- https://medium.com/@ivecodoe/detecting-ldapfragger-a-newly-released-cobalt-strike-beacon-using-ldap-for-c2-communication-c274a7f00961
+- https://blog.fox-it.com/2020/03/19/ldapfragger-command-and-control-over-ldap-attributes/
+- https://github.com/fox-it/LDAPFragger
+logsource:
+  product: windows
+  service: security
+  definition: The "Audit Directory Service Changes" logging policy must be configured
+    in order to receive events. Audit events are generated only for objects with configured
+    system access control lists (SACLs). Audit events are generated only for objects
+    with configured system access control lists (SACLs) and only when accessed in
+    a manner that matches their SACL settings. This policy covers the following events
+    ids - 5136, 5137, 5138, 5139, 5141. Note that the default policy does not cover
+    User objects. For that a custom AuditRule need to be setup (See https://github.com/OTRF/Set-AuditRule)
+detection:
+  selection:
+    EventID: 5136
+    AttributeValue|contains: '*'
+    AttributeLDAPDisplayName:
+    - primaryInternationalISDNNumber
+    - otherFacsimileTelephoneNumber
+    - primaryTelexNumber
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d00a9a72-2c09-4459-ad03-5e0a23351e36
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_ldap_dataexchange.yml
+falsepositives:
+- Companies, who may use these default LDAP-Attributes for personal information
+notes:
+  quarantine_reason: 'upstream status: test'

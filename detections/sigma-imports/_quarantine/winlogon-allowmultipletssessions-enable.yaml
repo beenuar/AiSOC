@@ -1,0 +1,38 @@
+id: sigmahq-sigma-f7997770-92c3-4ec9-b112-774c4ef96f96
+name: Winlogon AllowMultipleTSSessions Enable
+description: 'Detects when the ''AllowMultipleTSSessions'' value is enabled.
+
+  Which allows for multiple Remote Desktop connection sessions to be opened at once.
+
+  This is often used by attacker as a way to connect to an RDP session without disconnecting
+  the other users'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- http://blog.talosintelligence.com/2022/09/lazarus-three-rats.html
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Microsoft\Windows NT\CurrentVersion\Winlogon\AllowMultipleTSSessions
+    Details|endswith: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f7997770-92c3-4ec9-b112-774c4ef96f96
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_winlogon_allow_multiple_tssessions.yml
+falsepositives:
+- Legitimate use of the multi session functionality
+notes:
+  quarantine_reason: 'upstream status: test'

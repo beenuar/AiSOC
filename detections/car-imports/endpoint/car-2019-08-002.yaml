@@ -1,0 +1,53 @@
+id: mitre-car-car-2019-08-002
+name: Active Directory Dumping via NTDSUtil
+description: 'The NTDSUtil tool may be used to dump a Microsoft Active Directory database
+  to disk for processing with a credential access tool such as Mimikatz. This is performed
+  by launching `ntdsutil.exe` as a privileged user with command line arguments indicating
+  that media should be created for offline Active Directory installation and specifying
+  a folder path. This process will create a copy of the Active Directory database,
+  `ntds.dit`, to the specified folder path.
+
+
+  This requires filesystem data to determine whether files have been created.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: File
+detection:
+  implementations:
+  - name: NTDSUtil - File Create
+    type: Pseudocode
+    code: "files = search File:Create\nntds_dump = filter files where (\n  file_name\
+      \ = \"ntds.dit\"  and\n  image_path = \"*ntdsutil.exe\")\noutput ntds_dump\n"
+  - name: NTDSUtil - File Create
+    type: Splunk
+    code: 'index=__your_sysmon_index__ EventCode=11 TargetFilename="*ntds.dit" Image="*ntdsutil.exe"
+
+      '
+  - name: NTDSUtil - File Create
+    type: EQL
+    code: 'file where file_name == "ntds.dit" and process_name == "ntdsutil.exe"
+
+      '
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=11 file="*ntds.dit" source_image="*ntdsutil.exe"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-08-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-08-002.yaml
+notes:
+  car_status: needs_implementation

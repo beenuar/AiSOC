@@ -1,0 +1,39 @@
+id: sigmahq-sigma-37e8d358-6408-4853-82f4-98333fca7014
+name: Remote Access Tool - NetSupport Execution From Unusual Location
+description: Detects execution of client32.exe (NetSupport RAT) from an unusual location
+  (outside of 'C:\Program Files')
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/misbehaving-rats/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \client32.exe
+  - Product|contains: NetSupport Remote Control
+  - OriginalFileName|contains: client32.exe
+  - Hashes|contains: IMPHASH=a9d50692e95b79723f3e76fcf70d023e
+  filter:
+    Image|startswith:
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 37e8d358-6408-4853-82f4-98333fca7014
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_remote_access_tools_netsupport_susp_exec.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

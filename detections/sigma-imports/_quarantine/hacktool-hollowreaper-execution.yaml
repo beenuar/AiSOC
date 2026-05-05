@@ -1,0 +1,36 @@
+id: sigmahq-sigma-85d23b42-9a9d-4f8f-b3d7-d2733c1d58f5
+name: HackTool - HollowReaper Execution
+description: 'Detects usage of HollowReaper, a process hollowing shellcode launcher
+  used for stealth payload execution through process hollowing.
+
+  It replaces the memory of a legitimate process with custom shellcode, allowing the
+  attacker to execute payloads under the guise of trusted binaries.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055.012
+  categories:
+  - endpoint
+references:
+- https://github.com/vari-sh/RedTeamGrimoire/tree/b5e7635d34db6e1f0398d8847e8f293186e947c5/HollowReaper
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \HollowReaper.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 85d23b42-9a9d-4f8f-b3d7-d2733c1d58f5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_hollowreaper.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

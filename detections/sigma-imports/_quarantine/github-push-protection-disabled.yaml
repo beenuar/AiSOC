@@ -1,0 +1,43 @@
+id: sigmahq-sigma-ccd55945-badd-4bae-936b-823a735d37dd
+name: Github Push Protection Disabled
+description: Detects if the push protection feature is disabled for an organization,
+  enterprise, repositories or custom pattern rules.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://docs.github.com/en/enterprise-cloud@latest/code-security/secret-scanning/push-protection-for-repositories-and-organizations
+- https://thehackernews.com/2024/03/github-rolls-out-default-secret.html
+logsource:
+  product: github
+  service: audit
+  definition: 'Requirements: The audit log streaming feature must be enabled to be
+    able to receive such logs. You can enable following the documentation here: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-audit-log-streaming'
+detection:
+  selection:
+    action:
+    - business_secret_scanning_custom_pattern_push_protection.disabled
+    - business_secret_scanning_push_protection.disable
+    - business_secret_scanning_push_protection.disabled_for_new_repos
+    - org.secret_scanning_custom_pattern_push_protection_disabled
+    - org.secret_scanning_push_protection_disable
+    - org.secret_scanning_push_protection_new_repos_disable
+    - repository_secret_scanning_custom_pattern_push_protection.disabled
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ccd55945-badd-4bae-936b-823a735d37dd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/github/audit/github_push_protection_disabled.yml
+falsepositives:
+- Allowed administrative activities.
+notes:
+  quarantine_reason: 'upstream status: test'

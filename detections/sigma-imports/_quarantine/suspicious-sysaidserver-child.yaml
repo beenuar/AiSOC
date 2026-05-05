@@ -1,0 +1,36 @@
+id: sigmahq-sigma-60bfeac3-0d35-4302-8efb-1dd16f715bc6
+name: Suspicious SysAidServer Child
+description: Detects suspicious child processes of SysAidServer (as seen in MERCURY
+  threat actor intrusions)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1210
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/08/25/mercury-leveraging-log4j-2-vulnerabilities-in-unpatched-systems-to-target-israeli-organizations/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith:
+    - \java.exe
+    - \javaw.exe
+    ParentCommandLine|contains: SysAidServer
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 60bfeac3-0d35-4302-8efb-1dd16f715bc6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_java_sysaidserver_susp_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

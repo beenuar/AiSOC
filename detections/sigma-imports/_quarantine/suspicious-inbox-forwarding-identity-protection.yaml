@@ -1,0 +1,34 @@
+id: sigmahq-sigma-27e4f1d6-ae72-4ea0-8a67-77a73a289c3d
+name: Suspicious Inbox Forwarding Identity Protection
+description: Indicates suspicious rules such as an inbox rule that forwards a copy
+  of all emails to an external address
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#suspicious-inbox-forwarding
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: suspiciousInboxForwarding
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 27e4f1d6-ae72-4ea0-8a67-77a73a289c3d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_inbox_forwarding_rule.yml
+falsepositives:
+- A legitimate forwarding rule.
+notes:
+  quarantine_reason: 'upstream status: test'

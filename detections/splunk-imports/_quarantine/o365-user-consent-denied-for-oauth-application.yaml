@@ -1,0 +1,46 @@
+id: splunk-security-content-2d8679ef-b075-46be-8059-c25116cb1072
+name: O365 User Consent Denied for OAuth Application
+description: The following analytic identifies instances where a user has denied consent
+  to an OAuth application seeking permissions within the Office 365 environment. This
+  detection leverages O365 audit logs, focusing on events related to user consent
+  actions. By filtering for denied consent actions associated with OAuth applications,
+  it captures instances where users have actively rejected permission requests. This
+  activity is significant as it may indicate users spotting potentially suspicious
+  or unfamiliar applications. If confirmed malicious, it suggests an attempt by a
+  potentially harmful application to gain unauthorized access, which was proactively
+  blocked by the user.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1528/
+- https://www.microsoft.com/en-us/security/blog/2022/09/22/malicious-oauth-applications-used-to-compromise-email-servers-and-spread-spam/
+- https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/protect-against-consent-phishing
+- https://learn.microsoft.com/en-us/defender-cloud-apps/investigate-risky-oauth
+- https://www.alteredsecurity.com/post/introduction-to-365-stealer
+- https://github.com/AlteredSecurity/365-Stealer
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_graph` status.errorCode=65004\n  | rename userPrincipalName as\
+    \ user\n  | rename ipAddress as src_ip\n  | stats min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY user src_ip appDisplayName\n       status.failureReason\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_user_consent_denied_for_oauth_application_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2d8679ef-b075-46be-8059-c25116cb1072
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_user_consent_denied_for_oauth_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

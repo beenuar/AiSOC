@@ -1,0 +1,43 @@
+id: splunk-security-content-1cd983c8-8fd6-11ec-a09d-acde48001122
+name: Windows Disable Notification Center
+description: The following analytic detects the modification of the Windows registry
+  to disable the Notification Center on a host machine. It leverages data from the
+  Endpoint.Registry data model, specifically looking for changes to the "DisableNotificationCenter"
+  registry value set to "0x00000001." This activity is significant because disabling
+  the Notification Center can be a tactic used by RAT malware to hide its presence
+  and subsequent actions. If confirmed malicious, this could allow an attacker to
+  operate stealthily, potentially leading to further system compromise and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://tccontre.blogspot.com/2020/01/remcos-rat-evading-windows-defender-av.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Registry\n  WHERE (\n       \
+    \ Registry.registry_value_name= \"DisableNotificationCenter\" Registry.registry_value_data\
+    \ = \"0x00000001\"\n    )\n  BY Registry.action Registry.dest Registry.process_guid\n\
+    \     Registry.process_id Registry.registry_hive Registry.registry_path\n    \
+    \ Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name\n\
+    \     Registry.registry_value_type Registry.status Registry.user\n     Registry.vendor_product\n\
+    | `drop_dm_object_name(Registry)`\n| where isnotnull(registry_value_data)\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_disable_notification_center_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1cd983c8-8fd6-11ec-a09d-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disable_notification_center.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

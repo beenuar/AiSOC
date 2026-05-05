@@ -1,0 +1,34 @@
+id: sigmahq-sigma-8f668cc4-c18e-45fe-ad00-624a981cf88a
+name: Okta Application Sign-On Policy Modified or Deleted
+description: Detects when an application Sign-on Policy is modified or deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType:
+    - application.policy.sign_on.update
+    - application.policy.sign_on.rule.delete
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8f668cc4-c18e-45fe-ad00-624a981cf88a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_application_sign_on_policy_modified_or_deleted.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

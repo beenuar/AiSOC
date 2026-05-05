@@ -1,0 +1,35 @@
+id: sigmahq-sigma-30aed7b6-d2c1-4eaf-9382-b6bc43e50c57
+name: File Deletion
+description: Detects file deletion using "rm", "shred" or "unlink" commands which
+  are used often by adversaries to delete files left behind by the actions of their
+  intrusion activity
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.004/T1070.004.md
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - /rm
+    - /shred
+    - /unlink
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 30aed7b6-d2c1-4eaf-9382-b6bc43e50c57
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_file_deletion.yml
+falsepositives:
+- Legitimate administration activities

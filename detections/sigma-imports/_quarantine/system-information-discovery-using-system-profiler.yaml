@@ -1,0 +1,51 @@
+id: sigmahq-sigma-4809c683-059b-4935-879d-36835986f8cf
+name: System Information Discovery Using System_Profiler
+description: 'Detects the execution of "system_profiler" with specific "Data Types"
+  that have been seen being used by threat actors and malware. It provides system
+  hardware and software configuration information.
+
+  This process is primarily used for system information discovery. However, "system_profiler"
+  can also be used to determine if virtualization software is being run for defense
+  evasion purposes.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  - T1497.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_za/research/20/k/new-macos-backdoor-connected-to-oceanlotus-surfaces.html
+- https://www.sentinelone.com/wp-content/uploads/pdf-gen/1630910064/20-common-tools-techniques-used-by-macos-threat-actors-malware.pdf
+- https://ss64.com/mac/system_profiler.html
+- https://objective-see.org/blog/blog_0x62.html
+- https://www.welivesecurity.com/2019/04/09/oceanlotus-macos-malware-update/
+- https://gist.github.com/nasbench/9a1ba4bc7094ea1b47bc42bf172961af
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: /system_profiler
+  - CommandLine|contains: system_profiler
+  selection_cmd:
+    CommandLine|contains:
+    - SPApplicationsDataType
+    - SPHardwareDataType
+    - SPNetworkDataType
+    - SPUSBDataType
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4809c683-059b-4935-879d-36835986f8cf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_system_profiler_discovery.yml
+falsepositives:
+- Legitimate administrative activities
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: splunk-security-content-4477f3ea-a28f-11eb-b762-acde48001122
+name: Multiple Archive Files Http Post Traffic
+description: The following analytic detects the high-frequency exfiltration of archive
+  files via HTTP POST requests. It leverages HTTP stream logs to identify specific
+  archive file headers within the request body. This activity is significant as it
+  often indicates data exfiltration by APTs or trojan spyware after data collection.
+  If confirmed malicious, this behavior could lead to the unauthorized transfer of
+  sensitive data to an attacker’s command and control server, potentially resulting
+  in severe data breaches and loss of confidential information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1560/001/
+- https://www.mandiant.com/resources/apt39-iranian-cyber-espionage-group-focused-on-personal-information
+- https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`stream_http` http_method=POST\n  | eval archive_hdr1=substr(form_data,1,2)\n\
+    \  | eval archive_hdr2 = substr(form_data,1,4)\n  | stats values(form_data) as\
+    \ http_request_body min(_time) as firstTime max(_time) as lastTime count\n   \
+    \ BY src_ip dest_ip http_method\n       http_user_agent uri_path url\n       bytes_in\
+    \ bytes_out archive_hdr1\n       archive_hdr2\n  | where count >20 AND (archive_hdr1\
+    \ = \"7z\" OR archive_hdr1 = \"PK\" OR archive_hdr2=\"Rar!\")\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `multiple_archive_files_http_post_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4477f3ea-a28f-11eb-b762-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/multiple_archive_files_http_post_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

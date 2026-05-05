@@ -1,0 +1,34 @@
+id: sigmahq-sigma-dde85b37-40cd-4a94-b00c-0b8794f956b5
+name: Remote Task Creation via ATSVC Named Pipe - Zeek
+description: Detects remote task creation via at.exe or API interacting with ATSVC
+  namedpipe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.002
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20230409194125/https://blog.menasec.net/2019/03/threat-hunting-25-scheduled-tasks-for.html
+logsource:
+  product: zeek
+  service: smb_files
+detection:
+  selection:
+    path: \\\*\IPC$
+    name: atsvc
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dde85b37-40cd-4a94-b00c-0b8794f956b5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_smb_converted_win_atsvc_task.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

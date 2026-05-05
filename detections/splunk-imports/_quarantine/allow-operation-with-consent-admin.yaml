@@ -1,0 +1,46 @@
+id: splunk-security-content-7de17d7a-c9d8-11eb-a812-acde48001122
+name: Allow Operation with Consent Admin
+description: The following analytic detects a registry modification that allows the
+  'Consent Admin' to perform operations requiring elevation without user consent or
+  credentials. It leverages data from the Endpoint.Registry data model, specifically
+  monitoring changes to the 'ConsentPromptBehaviorAdmin' value within the Windows
+  Policies System registry path. This activity is significant as it indicates a potential
+  privilege escalation attempt, which could allow an attacker to execute high-privilege
+  tasks without user approval. If confirmed malicious, this could lead to unauthorized
+  administrative access and control over the compromised machine, posing a severe
+  security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-gpsb/341747f5-6b5d-4d30-85fc-fa1cc04038d4
+- https://www.trendmicro.com/vinfo/no/threat-encyclopedia/malware/Ransom.Win32.MRDEC.MRA/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\Microsoft\\Windows\\CurrentVersion\\Policies\\System*" Registry.registry_value_name
+    = ConsentPromptBehaviorAdmin Registry.registry_value_data = "0x00000000") by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name  Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `allow_operation_with_consent_admin_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7de17d7a-c9d8-11eb-a812-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/allow_operation_with_consent_admin.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

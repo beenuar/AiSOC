@@ -1,0 +1,41 @@
+id: sigmahq-sigma-3761e026-f259-44e6-8826-719ed8079408
+name: Linux Network Service Scanning - Auditd
+description: Detects enumeration of local or remote network services.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1046/T1046.md
+logsource:
+  product: linux
+  service: auditd
+  definition: Configure these rules https://github.com/Neo23x0/auditd/blob/e181243a7c708e9d579557d6f80e0ed3d3483b89/audit.rules#L182-L183
+detection:
+  selection:
+    type: SYSCALL
+    exe|endswith:
+    - /telnet
+    - /nmap
+    - /netcat
+    - /nc
+    - /ncat
+    - /nc.openbsd
+    key: network_connect_4
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3761e026-f259-44e6-8826-719ed8079408
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/syscall/lnx_auditd_network_service_scanning.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

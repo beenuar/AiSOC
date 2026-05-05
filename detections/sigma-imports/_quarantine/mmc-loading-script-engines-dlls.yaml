@@ -1,0 +1,42 @@
+id: sigmahq-sigma-a9c73e8b-3b2d-4c45-8ef2-5f9a9c9998ad
+name: MMC Loading Script Engines DLLs
+description: 'Detects when the Microsoft Management Console (MMC) loads the DLL libraries
+  like vbscript, jscript etc which might indicate an attempt
+
+  to execute malicious scripts within a trusted system process for bypassing application
+  whitelisting or defense evasion.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1218.014
+  categories:
+  - endpoint
+references:
+- https://tria.ge/241015-l98snsyeje/behavioral2
+- https://www.elastic.co/security-labs/grimresource
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \mmc.exe
+    ImageLoaded|endswith:
+    - \vbscript.dll
+    - \jscript.dll
+    - \jscript9.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a9c73e8b-3b2d-4c45-8ef2-5f9a9c9998ad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_win_mmc_loads_script_engine_dll.yml
+falsepositives:
+- Legitimate MMC operations or extensions loading these libraries
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,75 @@
+id: sigmahq-sigma-86157017-c2b1-4d4a-8c33-93b8e67e4af4
+name: Potential Suspicious Change To Sensitive/Critical Files
+description: 'Detects changes of sensitive and critical files. Monitors files that
+  you don''t expect to change without planning on Linux system.
+
+  These files include, but are not limited to, system configuration files, authentication
+  files, and critical application files.
+
+  Attackers often target these files to maintain persistence, escalate privileges,
+  or disrupt system operations.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1565.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/azure/defender-for-cloud/file-integrity-monitoring-overview#which-files-should-i-monitor
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img_1:
+    Image|endswith:
+    - /cat
+    - /echo
+    - /grep
+    - /head
+    - /more
+    - /tail
+    CommandLine|contains: '>'
+  selection_img_2:
+    Image|endswith:
+    - /emacs
+    - /nano
+    - /sed
+    - /vi
+    - /vim
+  selection_paths:
+    CommandLine|contains:
+    - /bin/login
+    - /bin/passwd
+    - /boot/
+    - /etc/*.conf
+    - /etc/cron.
+    - /etc/crontab
+    - /etc/hosts
+    - /etc/init.d
+    - /etc/sudoers
+    - /opt/bin/
+    - /sbin
+    - /usr/bin/
+    - /usr/local/bin/
+  filter_main_mdadm.conf:
+    Image|endswith: /bin/sed
+    CommandLine|startswith:
+    - sed -i /^*
+    - sed -ne s/^
+    CommandLine|endswith: /etc/mdadm/mdadm.conf
+  condition: 1 of selection_img_* and selection_paths and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 86157017-c2b1-4d4a-8c33-93b8e67e4af4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_sensitive_file_access.yml
+falsepositives:
+- Some false positives are to be expected on user or administrator machines. Apply
+  additional filters as needed.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,55 @@
+id: sigmahq-sigma-3109530e-ab47-4cc6-a953-cac5ebcc93ae
+name: ADS Zone.Identifier Deleted By Uncommon Application
+description: Detects the deletion of the "Zone.Identifier" ADS by an uncommon process.
+  Attackers can leverage this in order to bypass security restrictions that make use
+  of the ADS such as Microsoft Office apps.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- https://securityliterate.com/how-malware-abuses-the-zone-identifier-to-circumvent-detection-and-analysis/
+- Internal Research
+logsource:
+  product: windows
+  category: file_delete
+detection:
+  selection:
+    TargetFilename|endswith: :Zone.Identifier
+  filter_main_generic:
+    Image:
+    - C:\Program Files\PowerShell\7-preview\pwsh.exe
+    - C:\Program Files\PowerShell\7\pwsh.exe
+    - C:\Windows\explorer.exe
+    - C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    - C:\Windows\SysWOW64\explorer.exe
+    - C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
+  filter_optional_browsers_chrome:
+    Image:
+    - C:\Program Files (x86)\Google\Chrome\Application\chrome.exe
+    - C:\Program Files\Google\Chrome\Application\chrome.exe
+  filter_optional_browsers_firefox:
+    Image:
+    - C:\Program Files (x86)\Mozilla Firefox\firefox.exe
+    - C:\Program Files\Mozilla Firefox\firefox.exe
+  filter_optional_browsers_msedge:
+    Image:
+    - C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+    - C:\Program Files\Microsoft\Edge\Application\msedge.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3109530e-ab47-4cc6-a953-cac5ebcc93ae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_zone_identifier_ads_uncommon.yml
+falsepositives:
+- Other third party applications not listed.
+notes:
+  quarantine_reason: 'upstream status: test'

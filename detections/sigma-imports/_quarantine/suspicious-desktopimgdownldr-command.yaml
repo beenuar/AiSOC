@@ -1,0 +1,44 @@
+id: sigmahq-sigma-bb58aa4a-b80b-415a-a2c0-2f65a4c81009
+name: Suspicious Desktopimgdownldr Command
+description: Detects a suspicious Microsoft desktopimgdownldr execution with parameters
+  used to download files from the Internet
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://labs.sentinelone.com/living-off-windows-land-a-new-native-file-downldr/
+- https://twitter.com/SBousseaden/status/1278977301745741825
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection1:
+    CommandLine|contains: ' /lockscreenurl:'
+  selection1_filter:
+    CommandLine|contains:
+    - .jpg
+    - .jpeg
+    - .png
+  selection_reg:
+    CommandLine|contains|all:
+    - reg delete
+    - \PersonalizationCSP
+  condition: ( selection1 and not selection1_filter ) or selection_reg
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bb58aa4a-b80b-415a-a2c0-2f65a4c81009
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_desktopimgdownldr_susp_execution.yml
+falsepositives:
+- False positives depend on scripts and administrative tools used in the monitored
+  environment
+notes:
+  quarantine_reason: 'upstream status: test'

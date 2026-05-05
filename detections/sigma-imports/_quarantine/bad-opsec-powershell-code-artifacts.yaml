@@ -1,0 +1,48 @@
+id: sigmahq-sigma-8d31a8ce-46b5-4dd6-bdc3-680931f1db86
+name: Bad Opsec Powershell Code Artifacts
+description: 'focuses on trivial artifacts observed in variants of prevalent offensive
+  ps1 payloads, including
+
+  Cobalt Strike Beacon, PoshC2, Powerview, Letmein, Empire, Powersploit, and other
+  attack payloads
+
+  that often undergo minimal changes by attackers due to bad opsec.'
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://newtonpaul.com/analysing-fileless-malware-cobalt-strike-beacon/
+- https://labs.sentinelone.com/top-tier-russian-organized-cybercrime-group-unveils-fileless-stealthy-powertrick-backdoor-for-high-value-targets/
+- https://www.mdeditor.tw/pl/pgRt
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_4103:
+    Payload|contains:
+    - $DoIt
+    - harmj0y
+    - mattifestation
+    - _RastaMouse
+    - tifkin_
+    - '0xdeadbeef'
+  condition: selection_4103
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8d31a8ce-46b5-4dd6-bdc3-680931f1db86
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_bad_opsec_artifacts.yml
+falsepositives:
+- Moderate-to-low; Despite the shorter length/lower entropy for some of these, because
+  of high specificity, fp appears to be fairly limited in many environments.
+notes:
+  quarantine_reason: 'upstream status: test'

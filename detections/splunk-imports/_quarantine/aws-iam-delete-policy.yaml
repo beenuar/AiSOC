@@ -1,0 +1,41 @@
+id: splunk-security-content-ec3a9362-92fe-11eb-99d0-acde48001122
+name: AWS IAM Delete Policy
+description: The following analytic detects the deletion of an IAM policy in AWS.
+  It leverages AWS CloudTrail logs to identify `DeletePolicy` events, excluding those
+  from AWS internal services. This activity is significant as unauthorized policy
+  deletions can disrupt access controls and weaken security postures. If confirmed
+  malicious, an attacker could remove critical security policies, potentially leading
+  to privilege escalation, unauthorized access, or data exfiltration. Monitoring this
+  behavior helps ensure that only authorized changes are made to IAM policies, maintaining
+  the integrity and security of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeletePolicy.html
+- https://docs.aws.amazon.com/cli/latest/reference/iam/delete-policy.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=DeletePolicy (userAgent!=*.amazonaws.com)\n\
+    \  | rename user_name as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY signature dest user\n       user_agent src vendor_account\n\
+    \       vendor_region vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `aws_iam_delete_policy_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ec3a9362-92fe-11eb-99d0-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_iam_delete_policy.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,56 @@
+id: mitre-car-car-2014-11-003
+name: Debuggers for Accessibility Applications
+description: 'The Windows Registry location `HKLM\Software\Microsoft\Windows NT\CurrentVersion\Image
+  File Execution Options` allows for parameters to be set for applications during
+  execution. One feature used by malicious actors is the "Debugger" option. When a
+  key has this value enabled, a Debugging command line can be specified. Windows will
+  launch the Debugging command line, and pass the original command line in as an argument.
+  Adversaries can set a Debugger for [Accessibility Applications](https://attack.mitre.org/techniques/T1546/008).
+  The analytic looks for the original command line as an argument to the Debugger.
+  When the strings "sethc.exe", "utilman.exe", "osk.exe", "narrator.exe", and "Magnify.exe"
+  are detected in the arguments, but not as the main executable, it is very likely
+  that a Debugger is set.
+
+
+  This analytic could depend on the possibility of the known strings used as arguments
+  for other applications used in the day-to-day environment. Although the chance of
+  the string "sethc.exe" being used as an argument for another application is unlikely,
+  it still is a possibility.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      debuggers = filter process where (command_line match "$.* .*(sethc{{pipe}}utilman{{pipe}}osk{{pipe}}narrator{{pipe}}magnify)\.exe")
+
+      output debuggers
+
+      '
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 command IN ["$* *sethc.exe", "$* *utilman.exe",
+      "$* *osk.exe", "$* *narrator.exe", "$* *magnify.exe"]
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-11-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-11-003.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-944f6adb-7a99-4c69-80c1-b712579e93e6
+name: Suspicious Browser Activity
+description: Indicates anomalous behavior based on suspicious sign-in activity across
+  multiple tenants from different countries in the same browser
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#suspicious-browser
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: suspiciousBrowser
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 944f6adb-7a99-4c69-80c1-b712579e93e6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_suspicious_browser.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins from the user.
+notes:
+  quarantine_reason: 'upstream status: test'

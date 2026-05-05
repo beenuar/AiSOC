@@ -1,0 +1,43 @@
+id: sigmahq-sigma-259df6bc-003f-4306-9f54-4ff1a08fa38e
+name: Potential Perl Reverse Shell Execution
+description: Detects execution of the perl binary with the "-e" flag and common strings
+  related to potential reverse shell activity
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+- https://www.revshells.com/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img:
+    Image|endswith: /perl
+    CommandLine|contains: ' -e '
+  selection_content:
+  - CommandLine|contains|all:
+    - fdopen(
+    - ::Socket::INET
+  - CommandLine|contains|all:
+    - Socket
+    - connect
+    - open
+    - exec
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 259df6bc-003f-4306-9f54-4ff1a08fa38e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_perl_reverse_shell.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

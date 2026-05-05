@@ -1,0 +1,34 @@
+id: sigmahq-sigma-3a9fa2ec-30bc-4ebd-b49e-7c9cff225502
+name: VsCode Powershell Profile Modification
+description: Detects the creation or modification of a vscode related powershell profile
+  which could indicate suspicious activity as the profile can be used as a mean of
+  persistence
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.013
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.2
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: \Microsoft.VSCode_profile.ps1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3a9fa2ec-30bc-4ebd-b49e-7c9cff225502
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_vscode_powershell_profile.yml
+falsepositives:
+- Legitimate use of the profile by developers or administrators
+notes:
+  quarantine_reason: 'upstream status: test'

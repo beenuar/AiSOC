@@ -1,0 +1,37 @@
+id: sigmahq-sigma-13cfeb75-9e33-4d04-b0f7-ab8faaa95a59
+name: Windows Update Error
+description: Detects Windows update errors including installation failures and connection
+  issues. Defenders should observe this in case critical update KBs aren't installed.
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1584
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/EVTX-ETW-Resources/blob/f1b010ce0ee1b71e3024180de1a3e67f99701fe4/ETWProvidersManifests/Windows10/1903/W10_1903_Pro_20200714_18362.959/WEPExplorer/Microsoft-Windows-WindowsUpdateClient.xml
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Microsoft-Windows-WindowsUpdateClient
+    EventID:
+    - 16
+    - 20
+    - 24
+    - 213
+    - 217
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 13cfeb75-9e33-4d04-b0f7-ab8faaa95a59
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_windows_update_client/win_system_susp_system_update_error.yml
+falsepositives:
+- Unknown

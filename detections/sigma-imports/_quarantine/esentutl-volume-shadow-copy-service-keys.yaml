@@ -1,0 +1,37 @@
+id: sigmahq-sigma-5aad0995-46ab-41bd-a9ff-724f41114971
+name: Esentutl Volume Shadow Copy Service Keys
+description: Detects the volume shadow copy service initialization and processing
+  via esentutl. Registry keys such as HKLM\\System\\CurrentControlSet\\Services\\VSS\\Diag\\VolSnap\\Volume
+  are captured.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1003.002/T1003.002.md#atomic-test-3---esentutlexe-sam-copy
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: System\CurrentControlSet\Services\VSS
+    Image|endswith: esentutl.exe
+  filter:
+    TargetObject|contains: System\CurrentControlSet\Services\VSS\Start
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5aad0995-46ab-41bd-a9ff-724f41114971
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_esentutl_volume_shadow_copy_service_keys.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

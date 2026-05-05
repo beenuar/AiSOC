@@ -1,0 +1,42 @@
+id: sigmahq-sigma-ded2b07a-d12f-4284-9b76-653e37b6c8b0
+name: Potentially Suspicious Ping/Copy Command Combination
+description: Detects uncommon and potentially suspicious one-liner command containing
+  both "ping" and "copy" at the same time, which is usually used by malware.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_cmd:
+  - Image|endswith: \cmd.exe
+  - OriginalFileName: Cmd.Exe
+  selection_action:
+    CommandLine|contains|all:
+    - ping
+    - 'copy '
+  selection_cli_1:
+    CommandLine|contains|windash: ' -n '
+  selection_cli_2:
+    CommandLine|contains|windash: ' -y '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ded2b07a-d12f-4284-9b76-653e37b6c8b0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_ping_copy_combined_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-oilrig-neuron-sysmon-behavior
+name: oilrig_neuron_sysmon_behavior
+description: oilrig_neuron_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule oilrig_neuron_sysmon_behavior {\n meta:\n    author = \"\
+    Lee Archinal\"\n    description = \"This content detects characteristics of the\
+    \ executable used by the APT known as OilRIg dubed Neuron.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Hmfm1x2NoGxj\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/01/24\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, t1059\"\n\n  events:\n((($selection1.metadata.product_event_type\
+    \ = \"11\" and ($selection1.target.file.full_path = \"C:\\\\ProgramData\\\\Mozilla\\\
+    \\updates\\\\Mozilla-x86-ui.exe\" or $selection1.target.file.full_path = \"C:\\\
+    \\ProgramData\\\\Mozilla\\\\updates\\\\System.Web.Helpers.dll\")) or ($selection1.metadata.product_event_type\
+    \ = \"13\" and ($selection1.target.registry.registry_key = \"HKLM\\\\System\\\\\
+    CurrentControlSet\\\\Control\\\\Windows\\\\EnvironmentAdditionalSet\" or re.regex($selection1.target.registry.registry_key,\
+    \ `HKLM\\\\SOFTWARE\\\\Mozilla\\\\Input\\\\Locales\\\\loc_3c01\\\\InputMethods\\\
+    \\1.*`) or $selection1.target.registry.registry_key = \"HKLM\\\\System\\\\CurrentControlSet\\\
+    \\Control\\\\Windows\\\\EnvironmentAdditionalSet\"))) or ($selection1.metadata.product_event_type\
+    \ = \"1\" and $selection1.target.process.file.full_path = \"FonDUE.EXE\"))\n\n\
+    \  condition:\n    $selection1\n}"
+  chronicle_rule_name: oilrig_neuron_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: oilrig_neuron_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/oilrig_neuron__sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

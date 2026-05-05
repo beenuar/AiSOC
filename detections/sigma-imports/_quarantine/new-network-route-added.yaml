@@ -1,0 +1,34 @@
+id: sigmahq-sigma-c803b2ce-c4a2-4836-beae-b112010390b1
+name: New Network Route Added
+description: Detects the addition of a new network route to a route table in AWS.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.001
+  categories:
+  - cloud
+references:
+- https://www.gorillastack.com/blog/real-time-events/important-aws-cloudtrail-security-events-tracking/
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: ec2.amazonaws.com
+    eventName: CreateRoute
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c803b2ce-c4a2-4836-beae-b112010390b1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_new_route_added.yml
+falsepositives:
+- New VPC Creation requiring setup of a new route table
+- New subnets added requiring routing setup
+notes:
+  quarantine_reason: 'upstream status: test'

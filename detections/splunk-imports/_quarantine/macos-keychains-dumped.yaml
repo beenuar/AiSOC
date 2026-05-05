@@ -1,0 +1,61 @@
+id: splunk-security-content-dcb45a09-5e6f-441e-b2f8-cbbf923e36d9
+name: MacOS Keychains Dumped
+description: 'Detects command-line attempts to access or dump macOS Keychain data
+  using native utilities or direct file access.
+
+  This includes credential dumping via the `security` utility (e.g. `dump-keychain
+  -d`), bulk certificate export using `security find-certificate`, and direct file
+  copying of Keychain database files using utilities such as `cat`.
+
+  Keychain files are located in `~/Library/Keychains/`, `/Library/Keychains/`, and
+  `/Network/Library/Keychains/`.
+
+  This technique is commonly associated with post-exploitation credential harvesting,
+  where an attacker with local access seeks to escalate privileges or move laterally
+  by obtaining stored credentials for applications, Wi-Fi networks, system services,
+  and certificates.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1555.001
+  categories:
+  - endpoint
+references:
+- https://osquery.readthedocs.io/en/stable/deployment/process-auditing/
+- https://gist.github.com/hfeeki/88c12f01d00534e09a84
+- https://ss64.com/mac/security-keychain-settings.html
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1555.001/T1555.001.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n        values(Processes.parent_process) AS parent_process\n\
+    \        values(Processes.parent_process_exec) AS parent_process_exec\n      \
+    \  values(Processes.parent_process_id) AS parent_process_id\n        values(Processes.parent_process_name)\
+    \ AS parent_process_name\n        values(Processes.parent_process_path) AS parent_process_path\n\
+    \nFROM datamodel=Endpoint.Processes WHERE\n(\n    Processes.process_path=\"/usr/bin/security\"\
+    \n    AND\n    (\n        (\n            Processes.process=\"*dump-keychain*\"\
+    \n            Processes.process=\"*-d*\"\n        )\n        OR\n        (\n \
+    \           Processes.process=\"*find-certificate*\"\n            Processes.process=\"\
+    *-p*\"\n        )\n    )\n)\nOR\nProcesses.process=\"*keychaindump*\"\nOR\n(\n\
+    \    Processes.process_name IN (\n        \"cat\",\n        \"cp\",\n        \"\
+    dd\",\n        \"mv\"\n    )\n    Processes.process=\"*Library/Keychains/*\"\n\
+    \    Processes.process=\"*.keychain*\"\n)\nby Processes.action Processes.dest\
+    \ Processes.process Processes.process_hash\nProcesses.process_id Processes.process_name\
+    \ Processes.process_path\nProcesses.user Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `macos_keychains_dumped_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dcb45a09-5e6f-441e-b2f8-cbbf923e36d9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_keychains_dumped.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

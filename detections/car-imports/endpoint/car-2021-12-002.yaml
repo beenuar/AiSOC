@@ -1,0 +1,79 @@
+id: mitre-car-car-2021-12-002
+name: Modification of Default Startup Folder in the Registry Key 'Common Startup'
+description: Detection of the modification of the registry key `Common Startup` located
+  in `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell
+  Folders\` and `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User
+  Shell Folders\`. When a user logs on, any files located in the Startup Folder are
+  launched. Attackers may modify these folders with other files in order to evade
+  detection set on these default folders. This detection focuses on EventIDs 4688
+  and 1 for process creation and EventID 4657 for the modification of the Registry
+  Keys.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547
+  - T1112
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process,Registry
+detection:
+  implementations:
+  - name: Common Startup Registry Key Modification
+    type: Pseudocode
+    code: 'processes = search Process:create
+
+      logon_reg_processes = filter processes where (command_line CONTAINS("*reg*")
+      AND command_line CONTAINS("*add*") AND command_line CONTAINS("*/d*") OR (command_line
+      CONTAINS("*Set-ItemProperty*") AND command_line CONTAINS("*-value*")) AND command_line
+      CONTAINS("*Common Startup*"))
+
+      reg_keys = search Registry:value_edit
+
+      logon_reg_keys = filter reg_keys where value="Common Startup"
+
+      output logon_reg_processes, logon_reg_keys
+
+      '
+  - name: Splunk Search - Modification of default Startup Folder in the Registry Key
+      "Common Startup"
+    type: Splunk
+    code: '(((EventCode="4688" OR EventCode="1") (CommandLine="*reg*" AND CommandLine="*add*"
+      AND CommandLine="*/d*") OR (CommandLine="*Set-ItemProperty*" AND CommandLine="*-value*")
+      CommandLine="*Common Startup*") OR ((EventCode="4657" ObjectValueName="Common
+      Startup") OR (EventCode="13" TargetObject="*Common Startup")))
+
+      '
+  - name: Elastic Search - Modification of default Startup Folder in the Registry
+      Key "Common Startup"
+    type: Elastic
+    code: '((EventLog:"Security" AND (winlog.event_id:"4688" OR winlog.event_id:"1")
+      AND ((process.command_line:*reg* AND process.command_line:*add* AND process.command_line:*\/d*)
+      OR (process.command_line:*Set\-ItemProperty* AND process.command_line:*\-value*))
+      AND process.command_line:*Common\ Startup*) OR (winlog.event_id:"4657" AND winlog.event_data.ObjectValueName:"Common\
+      Startup") OR (winlog.event_id:"13" AND winlog.event_data.TargetObject:"*Common
+      Startup"))
+
+      '
+  - name: LogPoint Search - Modification of default Startup Folder in the Registry
+      Key "Common Startup"
+    type: LogPoint
+    code: '((EventLog="Security" (event_id="4688" OR event_id="1") ((CommandLine="*reg*"
+      CommandLine="*add*" CommandLine="*/d*") OR (CommandLine="*Set-ItemProperty*"
+      CommandLine="*-value*")) CommandLine="*Common Startup*") OR (event_id="4657"
+      ObjectValueName="Common Startup") OR (event_id="13" TargetObject="*Common Startup"))
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-12-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-12-002.yaml
+notes:
+  car_status: needs_implementation

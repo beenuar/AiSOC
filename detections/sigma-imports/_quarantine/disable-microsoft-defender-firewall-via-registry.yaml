@@ -1,0 +1,35 @@
+id: sigmahq-sigma-974515da-6cc5-4c95-ae65-f97f9150ec7f
+name: Disable Microsoft Defender Firewall via Registry
+description: Adversaries may disable or modify system firewalls in order to bypass
+  controls limiting network usage
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.004/T1562.004.md#atomic-test-2---disable-microsoft-defender-firewall-via-registry
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Services\SharedAccess\Parameters\FirewallPolicy\
+    TargetObject|endswith: \EnableFirewall
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 974515da-6cc5-4c95-ae65-f97f9150ec7f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disable_defender_firewall.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

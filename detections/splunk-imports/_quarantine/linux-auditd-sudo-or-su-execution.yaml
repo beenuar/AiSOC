@@ -1,0 +1,38 @@
+id: splunk-security-content-817a5c89-5b92-4818-a22d-aa35e1361afe
+name: Linux Auditd Sudo Or Su Execution
+description: The following analytic detects the execution of the "sudo" or "su" command
+  on a Linux operating system. It leverages data from Linux Auditd, focusing on process
+  names and parent process names. This activity is significant because "sudo" and
+  "su" commands are commonly used by adversaries to elevate privileges, potentially
+  leading to unauthorized access or control over the system. If confirmed malicious,
+  this activity could allow attackers to execute commands with root privileges, leading
+  to severe security breaches, data exfiltration, or further system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1548/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`  proctitle IN (\"*sudo *\", \"*su *\")\n  | rename host\
+    \ as dest\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY proctitle dest\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_sudo_or_su_execution_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 817a5c89-5b92-4818-a22d-aa35e1361afe
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_sudo_or_su_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

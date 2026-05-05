@@ -1,0 +1,40 @@
+id: sigmahq-sigma-952ed57c-8f99-453d-aee0-53a49c22f95d
+name: Potential AVKkid.DLL Sideloading
+description: Detects potential DLL sideloading of "AVKkid.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2023/beyond-the-horizon-traveling-the-world-on-camaro-dragons-usb-flash-drives/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \AVKkid.dll
+  filter_main_legit_path:
+    Image|contains:
+    - C:\Program Files (x86)\G DATA\
+    - C:\Program Files\G DATA\
+    Image|endswith: \AVKKid.exe
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\G DATA\
+    - C:\Program Files\G DATA\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 952ed57c-8f99-453d-aee0-53a49c22f95d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_avkkid.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

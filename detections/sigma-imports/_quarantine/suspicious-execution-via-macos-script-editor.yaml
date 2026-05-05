@@ -1,0 +1,63 @@
+id: sigmahq-sigma-6e4dcdd1-e48b-42f7-b2d8-3b413fc58cb4
+name: Suspicious Execution via macOS Script Editor
+description: Detects when the macOS Script Editor utility spawns an unusual child
+  process.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  - T1566.002
+  - T1059
+  - T1059.002
+  - T1204
+  - T1204.001
+  - T1553
+  categories:
+  - endpoint
+references:
+- https://github.com/elastic/protections-artifacts/commit/746086721fd385d9f5c6647cada1788db4aea95f#diff-7f541fbc4a4a28a92970e8bf53effea5bd934604429112c920affb457f5b2685
+- https://wojciechregula.blog/post/macos-red-teaming-initial-access-via-applescript-url/
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection_parent:
+    ParentImage|endswith: /Script Editor
+  selection_img:
+  - Image|endswith:
+    - /curl
+    - /bash
+    - /sh
+    - /zsh
+    - /dash
+    - /fish
+    - /osascript
+    - /mktemp
+    - /chmod
+    - /php
+    - /nohup
+    - /openssl
+    - /plutil
+    - /PlistBuddy
+    - /xattr
+    - /sqlite
+    - /funzip
+    - /popen
+  - Image|contains:
+    - python
+    - perl
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6e4dcdd1-e48b-42f7-b2d8-3b413fc58cb4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_susp_execution_macos_script_editor.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

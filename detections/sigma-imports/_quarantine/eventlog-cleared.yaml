@@ -1,0 +1,45 @@
+id: sigmahq-sigma-a62b37e0-45d3-48d9-a517-90c1a1b0186b
+name: Eventlog Cleared
+description: One of the Windows Eventlogs has been cleared. e.g. caused by "wevtutil
+  cl" command execution
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685.005
+  categories:
+  - endpoint
+references:
+- https://twitter.com/deviouspolack/status/832535435960209408
+- https://www.hybrid-analysis.com/sample/027cc450ef5f8c5f653329641ec1fed91f694e0d229928963b30f6b0d7d3a745?environmentId=100
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 104
+    Provider_Name: Microsoft-Windows-Eventlog
+  filter_main_covered:
+    Channel:
+    - Microsoft-Windows-PowerShell/Operational
+    - Microsoft-Windows-Sysmon/Operational
+    - PowerShellCore/Operational
+    - Security
+    - System
+    - Windows PowerShell
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a62b37e0-45d3-48d9-a517-90c1a1b0186b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_eventlog/win_system_eventlog_cleared.yml
+falsepositives:
+- Rollout of log collection agents (the setup routine often includes a reset of the
+  local Eventlog)
+- System provisioning (system reset before the golden image creation)
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,61 @@
+id: splunk-security-content-d436f9e7-0ee7-4a47-864b-6dea2c4e2752
+name: Windows Exchange Autodiscover SSRF Abuse
+description: This analytic identifies potential exploitation attempts of ProxyShell
+  (CVE-2021-34473, CVE-2021-34523, CVE-2021-31207) and ProxyNotShell (CVE-2022-41040,
+  CVE-2022-41082) vulnerabilities in Microsoft Exchange Server. The detection focuses
+  on identifying the SSRF attack patterns used in these exploit chains. The analytic
+  monitors for suspicious POST requests to /autodiscover/autodiscover.json endpoints
+  that may indicate attempts to enumerate LegacyDN attributes as part of initial reconnaissance.
+  It also detects requests containing X-Rps-CAT parameters that could indicate attempts
+  to impersonate Exchange users and access the PowerShell backend. Additionally, it
+  looks for MAPI requests that may be used to obtain user SIDs, along with suspicious
+  user agents (particularly Python-based) commonly used in automated exploit attempts.
+  If successful, these attacks can lead to remote code execution as SYSTEM, allowing
+  attackers to deploy webshells, access mailboxes, or gain persistent access to the
+  Exchange server and potentially the broader network environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.gteltsc.vn/blog/warning-new-attack-campaign-utilized-a-new-0day-rce-vulnerability-on-microsoft-exchange-server-12715.html
+- https://msrc-blog.microsoft.com/2022/09/29/customer-guidance-for-reported-zero-day-vulnerabilities-in-microsoft-exchange-server/
+- https://twitter.com/GossiTheDog/status/1575762721353916417?s=20&t=67gq9xCWuyPm1VEm8ydfyA
+- https://twitter.com/cglyer/status/1575793769814728705?s=20&t=67gq9xCWuyPm1VEm8ydfyA
+- https://www.gteltsc.vn/blog/warning-new-attack-campaign-utilized-a-new-0day-rce-vulnerability-on-microsoft-exchange-server-12715.html
+- https://research.splunk.com/stories/proxyshell/
+- https://splunk.github.io/splunk-add-on-for-microsoft-iis/
+- https://highon.coffee/blog/ssrf-cheat-sheet/
+- https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+- https://m365internals.com/2022/10/18/hunting-and-responding-to-proxyshell-attacks/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Web\n  WHERE (\n        Web.status=200\n\
+    \    )\n    AND Web.http_method=POST\n  BY Web.src Web.status Web.uri_path\n \
+    \    Web.dest Web.http_method Web.uri_query\n     Web.http_user_agent\n| `drop_dm_object_name(\"\
+    Web\")`\n| eval is_autodiscover=if(like(lower(uri_path),\"%autodiscover/autodiscover.json%\"\
+    ),1,0)\n| eval has_rps_cat=if(like(lower(uri_query),\"%x-rps-cat=%\"),1,0)\n|\
+    \ eval exchange_backend=if(like(lower(uri_query),\"%/powershell/?%\"),1,0)\n|\
+    \ eval mapi=if(like(uri_query,\"%/mapi/%\"),1,0)\n| eval suspicious_agent=if(match(lower(http_user_agent),\
+    \ \"python\n| urllib\"),1,0)\n| addtotals fieldname=Score is_autodiscover, has_rps_cat,\
+    \ exchange_backend, mapi, suspicious_agent\n| where Score >= 3\n| fields Score,\
+    \ src, dest, status, uri_query, uri_path, http_method, http_user_agent\n| `windows_exchange_autodiscover_ssrf_abuse_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d436f9e7-0ee7-4a47-864b-6dea2c4e2752
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/windows_exchange_autodiscover_ssrf_abuse.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-1a9bb21a-1bb5-42d7-aa05-3219c7c8f47d
+name: PUA - Advanced IP/Port Scanner Update Check
+description: Detect the update check performed by Advanced IP/Port Scanner utilities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1590
+  categories:
+  - network
+references:
+- https://www.advanced-ip-scanner.com/
+- https://www.advanced-port-scanner.com/
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri|contains: /checkupdate.php
+    c-uri-query|contains|all:
+    - lng=
+    - ver=
+    - beta=
+    - type=
+    - rmode=
+    - product=
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a9bb21a-1bb5-42d7-aa05-3219c7c8f47d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_pua_advanced_ip_scanner_update_check.yml
+falsepositives:
+- Expected if you legitimately use the Advanced IP or Port Scanner utilities in your
+  environement.
+notes:
+  quarantine_reason: 'upstream status: test'

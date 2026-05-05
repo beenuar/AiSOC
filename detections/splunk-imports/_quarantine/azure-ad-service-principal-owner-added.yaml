@@ -1,0 +1,43 @@
+id: splunk-security-content-7ddf2084-6cf3-4a44-be83-474f7b73c701
+name: Azure AD Service Principal Owner Added
+description: The following analytic detects the addition of a new owner to a Service
+  Principal within an Azure AD tenant. It leverages Azure Active Directory events
+  from the AuditLog log category to identify this activity. This behavior is significant
+  because Service Principals do not support multi-factor authentication or conditional
+  access policies, making them a target for adversaries seeking persistence or privilege
+  escalation. If confirmed malicious, this activity could allow attackers to maintain
+  access to the Azure AD environment with single-factor authentication, potentially
+  leading to unauthorized access and control over critical resources.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` operationName=\"Add owner to application\"\n  |\
+    \ rename properties.* as *\n  | rename initiatedBy.user.userPrincipalName as initiatedBy\n\
+    \  | rename targetResources{}.userPrincipalName as newOwner\n  | rename targetResources{}.modifiedProperties{}.newValue\
+    \ as displayName\n  | eval displayName = mvindex(displayName,1)\n  | where initiatedBy!=newOwner\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product initiatedBy\n    \
+    \   result newOwner displayName\n       signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_service_principal_owner_added_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7ddf2084-6cf3-4a44-be83-474f7b73c701
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_service_principal_owner_added.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

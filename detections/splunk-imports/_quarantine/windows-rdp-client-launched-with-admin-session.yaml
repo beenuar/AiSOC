@@ -1,0 +1,51 @@
+id: splunk-security-content-1af84ac8-05ea-4f11-8541-b2d1e45a7744
+name: Windows RDP Client Launched with Admin Session
+description: This detection identifies the execution of the Windows Remote Desktop
+  Client (mstsc.exe) with the "/v" and /admin command-line arguments. The "/v" flag
+  specifies the remote host to connect to, while the /admin flag initiates a connection
+  to the target system’s console session, often used for administrative purposes.
+  This combination may indicate that a user or attacker is performing privileged remote
+  access, potentially to manage a system without disrupting existing user sessions.
+  While such usage may be legitimate for IT administrators, it is less common in typical
+  user behavior. Threat actors may abuse this capability during lateral movement to
+  maintain stealthy access to high-value systems. Monitoring for this pattern can
+  help detect interactive hands-on-keyboard activity, privilege abuse, or attempts
+  to access critical infrastructure without leaving typical login traces associated
+  with non-admin RDP sessions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://medium.com/@bonguides25/how-to-clear-rdp-connections-history-in-windows-cf0ffb67f344
+- https://thelocalh0st.github.io/posts/rdp/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ = \"mstsc.exe\" Processes.process = \"*/v:*\" Processes.process = \"*/admin*\"\
+    \n  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_rdp_client_launched_with_admin_session_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1af84ac8-05ea-4f11-8541-b2d1e45a7744
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdp_client_launched_with_admin_session.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

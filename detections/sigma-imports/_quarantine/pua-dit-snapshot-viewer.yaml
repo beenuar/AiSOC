@@ -1,0 +1,35 @@
+id: sigmahq-sigma-d3b70aad-097e-409c-9df2-450f80dc476b
+name: PUA - DIT Snapshot Viewer
+description: Detects the use of Ditsnap tool, an inspection tool for Active Directory
+  database, ntds.dit.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/06/21/snatch-ransomware/
+- https://web.archive.org/web/20201124182207/https://github.com/yosqueoy/ditsnap
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \ditsnap.exe
+  - CommandLine|contains: ditsnap.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3b70aad-097e-409c-9df2-450f80dc476b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_ditsnap.yml
+falsepositives:
+- Legitimate admin usage
+notes:
+  quarantine_reason: 'upstream status: test'

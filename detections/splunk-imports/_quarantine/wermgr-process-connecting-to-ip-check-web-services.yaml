@@ -1,0 +1,45 @@
+id: splunk-security-content-ed313326-a0f9-11eb-a89c-acde48001122
+name: Wermgr Process Connecting To IP Check Web Services
+description: The following analytic detects the wermgr.exe process attempting to connect
+  to known IP check web services. It leverages Sysmon EventCode 22 to identify DNS
+  queries made by wermgr.exe to specific IP check services. This activity is significant
+  because wermgr.exe is typically used for Windows error reporting, and its connection
+  to these services may indicate malicious code injection, often associated with malware
+  like Trickbot. If confirmed malicious, this behavior could allow attackers to recon
+  the infected machine's IP address, aiding in further exploitation and evasion tactics.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1590.005
+  categories:
+  - network
+references:
+- https://labs.vipre.com/trickbot-and-its-modules/
+- https://whitehat.eu/incident-response-case-study-featuring-ryuk-and-trickbot-part-2/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode =22 process_name = wermgr.exe QueryName IN (\"*wtfismyip.com\"\
+    , \"*checkip.amazonaws.com\", \"*ipecho.net\", \"*ipinfo.io\", \"*api.ipify.org\"\
+    , \"*icanhazip.com\", \"*ip.anysrc.com\",\"*api.ip.sb\", \"ident.me\", \"www.myexternalip.com\"\
+    , \"*zen.spamhaus.org\", \"*cbl.abuseat.org\", \"*b.barracudacentral.org\",\"\
+    *dnsbl-1.uceprotect.net\", \"*spam.dnsbl.sorbs.net\")\n  | stats  min(_time) as\
+    \ firstTime max(_time) as lastTime count\n    BY answer answer_count dvc\n   \
+    \    process_exec process_guid process_name\n       query query_count reply_code_id\n\
+    \       signature signature_id src\n       user_id vendor_product QueryName\n\
+    \       QueryResults QueryStatus\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `wermgr_process_connecting_to_ip_check_web_services_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ed313326-a0f9-11eb-a89c-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/wermgr_process_connecting_to_ip_check_web_services.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

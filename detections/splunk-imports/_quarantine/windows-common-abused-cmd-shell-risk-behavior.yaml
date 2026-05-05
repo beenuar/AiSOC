@@ -1,0 +1,60 @@
+id: splunk-security-content-e99fcc4f-c6b0-4443-aa2a-e3c85126ec9a
+name: Windows Common Abused Cmd Shell Risk Behavior
+description: The following analytic identifies instances where four or more distinct
+  detection analytics are associated with malicious command line behavior on a specific
+  host. This detection leverages the Command Line Interface (CLI) data from various
+  sources to identify suspicious activities. This behavior is significant as it often
+  indicates attempts to execute malicious commands, access sensitive data, install
+  backdoors, or perform other nefarious actions. If confirmed malicious, attackers
+  could gain unauthorized control, exfiltrate information, escalate privileges, or
+  launch further attacks within the network, leading to severe compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222
+  - T1049
+  - T1033
+  - T1529
+  - T1016
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/from-macros-to-no-macros-continuous-malware-improvements-by-qakbot.html
+- https://www.splunk.com/en_us/blog/security/dark-crystal-rat-agent-deep-dive.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE source\
+    \ IN (\"*Windows Cmdline Tool Execution From Non-Shell Process*\", \"*Windows\
+    \ System Network Config Discovery Display DNS*\", \"*Local Account Discovery With\
+    \ Wmic*\", \"*Windows Group Discovery Via Net*\", \"*Windows Create Local Administrator\
+    \ Account Via Net*\", \"*Windows User Discovery Via Net*\", \"*Icacls Deny Command*\"\
+    , \"*ICACLS Grant Command*\", \"*Windows Proxy Via Netsh*\", \"*Processes launching\
+    \ netsh*\", \"*Disabling Firewall with Netsh*\", \"*Windows System Network Connections\
+    \ Discovery Netsh*\", \"*Network Connection Discovery With Arp*\", \"*Windows\
+    \ System Discovery Using ldap Nslookup*\", \"*Windows System Shutdown CommandLine*\"\
+    )\n  BY All_Risk.risk_object All_Risk.risk_object_type All_Risk.annotations.mitre_attack.mitre_tactic\n\
+    | `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 4\n| `windows_common_abused_cmd_shell_risk_behavior_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e99fcc4f-c6b0-4443-aa2a-e3c85126ec9a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_common_abused_cmd_shell_risk_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

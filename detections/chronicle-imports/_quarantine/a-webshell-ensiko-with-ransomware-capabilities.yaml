@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-a-webshell-ensiko-with-ransomware-capabilities
+name: a_webshell_ensiko_with_ransomware_capabilities
+description: a_webshell_ensiko_with_ransomware_capabilities
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule a_webshell_ensiko_with_ransomware_capabilities {\n meta:\n\
+    \    author = \"Osman Demir\"\n    description = \"Ensiko is a PHP web shell with\
+    \ ransomware capabilities that targets various platforms such as Linux, Windows,\
+    \ macOS, or any other platform that has PHP installed. The malware has the capability\
+    \ to remotely control the system and accept commands to perform malicious activities\
+    \ on the infected machine.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/COgjQByoceJW\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"webserver\"\n   \
+    \ mitre = \"T1505, Persistence\"\n\n  events:\n(($selection.network.http.method\
+    \ = \"POST\" and $selection.network.http.response_code = \"200\" and (re.regex($selection.target.url,\
+    \ `.*/webshell/shell\\.php`) or re.regex($selection.target.url, `.*/webshell/shell\\\
+    .php\\?ganteng`)) and ($selection.target.url = \"passwrd=RaBiitch&action=login&hide=&usrname=RaBiitch\"\
+    \ or $selection.target.url = \"key=password&method=1&submit=Submit\")) or $selection.target.file.md5\
+    \ = \"5fdbf87b7f74327e9132b5edb5c217bdcf49fe275945d502ad675c1dd46e3db5\")\n\n\
+    \  condition:\n    $selection\n}"
+  chronicle_rule_name: a_webshell_ensiko_with_ransomware_capabilities
+provenance:
+  source: chronicle/detection-rules
+  source_id: a_webshell_ensiko_with_ransomware_capabilities
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/webserver/a_webshell__ensiko__with_ransomware_capabilities.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

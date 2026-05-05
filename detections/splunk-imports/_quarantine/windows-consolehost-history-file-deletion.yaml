@@ -1,0 +1,40 @@
+id: splunk-security-content-a203040e-f8fd-49bb-8424-d2fabf277322
+name: Windows ConsoleHost History File Deletion
+description: The following analytic detects the deletion of the ConsoleHost_history.txt
+  file, which stores command history for PowerShell sessions. Attackers may attempt
+  to remove this file to cover their tracks and evade detection during post-exploitation
+  activities. This detection focuses on file deletion commands executed via PowerShell,
+  Command Prompt, or scripting languages that specifically target ConsoleHost_history.txt,
+  typically located at %APPDATA%\Microsoft\Windows\PowerShell\PSReadline\ConsoleHost_history.txt.
+  Identifying such activity can help uncover potential anti-forensic behavior and
+  suspicious administrative actions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-071a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN ("23","26") TargetFilename = "*\\Microsoft\\Windows\\PowerShell\\PSReadline\\ConsoleHost_history.txt"
+    | stats count min(_time) as firstTime, max(_time) as lastTime by action dest dvc
+    file_path file_hash file_name file_modify_time process_name process_exec process_id
+    process_path user_id vendor_product process_guid signature signature_id user |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_consolehost_history_file_deletion_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: a203040e-f8fd-49bb-8424-d2fabf277322
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_consolehost_history_file_deletion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

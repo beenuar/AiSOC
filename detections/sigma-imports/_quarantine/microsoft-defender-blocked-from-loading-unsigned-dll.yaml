@@ -1,0 +1,39 @@
+id: sigmahq-sigma-0b0ea3cc-99c8-4730-9c53-45deee2a4c86
+name: Microsoft Defender Blocked from Loading Unsigned DLL
+description: Detects Code Integrity (CI) engine blocking Microsoft Defender's processes
+  (MpCmdRun and NisSrv) from loading unsigned DLLs which may be an attempt to sideload
+  arbitrary DLL
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/blog/living-off-windows-defender-lockbit-ransomware-sideloads-cobalt-strike-through-microsoft-security-tool
+logsource:
+  product: windows
+  service: security-mitigations
+detection:
+  selection:
+    EventID:
+    - 11
+    - 12
+    ProcessPath|endswith:
+    - \MpCmdRun.exe
+    - \NisSrv.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0b0ea3cc-99c8-4730-9c53-45deee2a4c86
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security_mitigations/win_security_mitigations_defender_load_unsigned_dll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

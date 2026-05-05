@@ -1,0 +1,48 @@
+id: sigmahq-sigma-c1337eb8-921a-4b59-855b-4ba188ddcc42
+name: Deletion of Volume Shadow Copies via WMI with PowerShell - PS Script
+description: Detects deletion of Windows Volume Shadow Copies with PowerShell code
+  and Get-WMIObject. This technique is used by numerous ransomware families such as
+  Sodinokibi/REvil
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1490/T1490.md#atomic-test-5---windows---delete-volume-shadow-copies-via-wmi-with-powershell
+- https://www.elastic.co/guide/en/security/current/volume-shadow-copy-deletion-via-powershell.html
+logsource:
+  category: ps_script
+  product: windows
+detection:
+  selection_get:
+    ScriptBlockText|contains:
+    - Get-WmiObject
+    - gwmi
+    - Get-CimInstance
+    - gcim
+  selection_shadowcopy:
+    ScriptBlockText|contains: Win32_ShadowCopy
+  selection_delete:
+    ScriptBlockText|contains:
+    - .Delete()
+    - Remove-WmiObject
+    - rwmi
+    - Remove-CimInstance
+    - rcim
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c1337eb8-921a-4b59-855b-4ba188ddcc42
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_win32_shadowcopy_deletion.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

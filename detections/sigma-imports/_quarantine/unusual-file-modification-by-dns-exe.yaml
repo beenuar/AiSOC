@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9f383dc0-fdeb-4d56-acbc-9f9f4f8f20f3
+name: Unusual File Modification by dns.exe
+description: Detects an unexpected file being modified by dns.exe which my indicate
+  activity related to remote code execution or other forms of exploitation as seen
+  in CVE-2020-1350 (SigRed)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/unusual-file-modification-by-dns-exe.html
+logsource:
+  category: file_change
+  product: windows
+detection:
+  selection:
+    Image|endswith: \dns.exe
+  filter:
+    TargetFilename|endswith: \dns.log
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9f383dc0-fdeb-4d56-acbc-9f9f4f8f20f3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_change/file_change_win_unusual_modification_by_dns_exe.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

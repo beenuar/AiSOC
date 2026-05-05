@@ -1,0 +1,34 @@
+id: sigmahq-sigma-c633622e-cab9-4eaa-bb13-66a1d68b3e47
+name: New Virtual Smart Card Created Via TpmVscMgr.EXE
+description: Detects execution of "Tpmvscmgr.exe" to create a new virtual smart card.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/identity-protection/virtual-smart-cards/virtual-smart-card-tpmvscmgr
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith: \tpmvscmgr.exe
+    OriginalFileName: TpmVscMgr.exe
+  selection_cli:
+    CommandLine|contains: create
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c633622e-cab9-4eaa-bb13-66a1d68b3e47
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_tpmvscmgr_add_virtual_smartcard.yml
+falsepositives:
+- Legitimate usage by an administrator
+notes:
+  quarantine_reason: 'upstream status: test'

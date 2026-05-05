@@ -1,0 +1,48 @@
+id: sigmahq-sigma-4c0aaedc-154c-4427-ada0-d80ef9c9deb6
+name: Process Access via TrolleyExpress Exclusion
+description: Detects a possible process memory dump that uses the white-listed Citrix
+  TrolleyExpress.exe filename as a way to dump the lsass process memory
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_xpn_/status/1491557187168178176
+- https://www.youtube.com/watch?v=Ie831jF0bb0
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - \TrolleyExpress 7
+    - \TrolleyExpress 8
+    - \TrolleyExpress 9
+    - \TrolleyExpress.exe 7
+    - \TrolleyExpress.exe 8
+    - \TrolleyExpress.exe 9
+    - '\TrolleyExpress.exe -ma '
+  renamed:
+    Image|endswith: \TrolleyExpress.exe
+  filter_renamed:
+    OriginalFileName|contains: CtxInstall
+  filter_empty:
+    OriginalFileName: null
+  condition: selection or ( renamed and not 1 of filter* )
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4c0aaedc-154c-4427-ada0-d80ef9c9deb6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_citrix_trolleyexpress_procdump.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

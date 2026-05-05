@@ -1,0 +1,34 @@
+id: sigmahq-sigma-53330955-dc52-487f-a3a2-da24dcff99b5
+name: New BgInfo.EXE Custom DB Path Registry Configuration
+description: Detects setting of a new registry database value related to BgInfo configuration.
+  Attackers can for example set this value to save the results of the commands executed
+  by BgInfo in order to exfiltrate information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Software\Winternals\BGInfo\Database
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 53330955-dc52-487f-a3a2-da24dcff99b5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_bginfo_custom_db.yml
+falsepositives:
+- Legitimate use of external DB to save the results
+notes:
+  quarantine_reason: 'upstream status: test'

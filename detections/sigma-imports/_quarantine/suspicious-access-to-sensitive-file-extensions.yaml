@@ -1,0 +1,45 @@
+id: sigmahq-sigma-91c945bc-2ad1-4799-a591-4d00198a1215
+name: Suspicious Access to Sensitive File Extensions
+description: Detects known sensitive file extensions accessed on a network share
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1039
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5145
+    RelativeTargetName|endswith:
+    - .bak
+    - .dmp
+    - .edb
+    - .kirbi
+    - .msg
+    - .nsf
+    - .nst
+    - .oab
+    - .ost
+    - .pst
+    - .rdp
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 91c945bc-2ad1-4799-a591-4d00198a1215
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_raccess_sensitive_fext.yml
+falsepositives:
+- Help Desk operator doing backup or re-imaging end user machine or backup software
+- Users working with these data types or exchanging message files
+notes:
+  quarantine_reason: 'upstream status: test'

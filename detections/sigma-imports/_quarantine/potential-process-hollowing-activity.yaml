@@ -1,0 +1,45 @@
+id: sigmahq-sigma-c4b890e5-8d8c-4496-8c66-c805753817cd
+name: Potential Process Hollowing Activity
+description: Detects when a memory process image does not match the disk image, indicative
+  of process hollowing.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055.012
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SecurePeacock/status/1486054048390332423?s=20
+- https://www.bleepingcomputer.com/news/microsoft/microsoft-sysmon-now-detects-malware-process-tampering-attempts/
+logsource:
+  product: windows
+  category: process_tampering
+detection:
+  selection:
+    Type: Image is replaced
+  filter_main_generic:
+    Image|contains:
+    - :\Program Files (x86)
+    - :\Program Files\
+    - :\Windows\System32\wbem\WMIADAP.exe
+    - :\Windows\SysWOW64\wbem\WMIADAP.exe
+  filter_optional_opera:
+    Image|contains: \AppData\Local\Programs\Opera\
+    Image|endswith: \opera.exe
+  filter_optional_edge:
+    Image|endswith: \WindowsApps\MicrosoftEdge.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c4b890e5-8d8c-4496-8c66-c805753817cd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_tampering/proc_tampering_susp_process_hollowing.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

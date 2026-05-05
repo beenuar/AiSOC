@@ -1,0 +1,67 @@
+id: chronicle-detection-rules-aws-privilege-escalation-using-iam-login-profile
+name: aws_privilege_escalation_using_iam_login_profile
+description: aws_privilege_escalation_using_iam_login_profile
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule aws_privilege_escalation_using_iam_login_profile {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detect when a user creates\
+    \ or updates a login profile for another user and escalates privileges using this\
+    \ new user from the same IP.\"\n    rule_id = \"mr_b0d13079-dbe7-4c19-a8e9-23f98655a29b\"\
+    \n    rule_name = \"AWS Privilege Escalation Using IAM Login Profile\"\n    mitre_attack_tactic\
+    \ = \"Persistence\"\n    mitre_attack_technique = \"Cloud Account\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1136/003/\"\n    mitre_attack_version\
+    \ = \"v13.1\"\n    type = \"Alert\"\n    data_source = \"AWS CloudTrail\"\n  \
+    \  platform = \"AWS\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \    $profile.metadata.vendor_name = \"AMAZON\"\n    $profile.metadata.product_name\
+    \ = \"AWS CloudTrail\"\n    $profile.metadata.product_event_type = \"CreateLoginProfile\"\
+    \ or $profile.metadata.product_event_type = \"UpdateLoginProfile\"\n    $profile.security_result.action=\
+    \ \"ALLOW\"\n    $profile.principal.user.userid = $p_userid\n    $profile.target.user.userid\
+    \ = $t_userid\n\n    $login.metadata.vendor_name = \"AMAZON\"\n    $login.metadata.product_name\
+    \ = \"AWS CloudTrail\"\n    $login.metadata.event_type = \"USER_LOGIN\"\n    $login.metadata.product_event_type\
+    \ = \"ConsoleLogin\"\n    $login.security_result.action= \"ALLOW\"\n\n    //Same\
+    \ IP address\n    $login.principal.ip = $profile.principal.ip\n\n    //User created\
+    \ and logged in\n    $profile.principal.user.user_display_name != $profile.target.user.userid\n\
+    \    $login.target.user.user_display_name = $profile.target.user.userid\n\n  \
+    \  $profile.metadata.event_timestamp.seconds < $login.metadata.event_timestamp.seconds\n\
+    \n  match:\n    $p_userid over 1h\n\n  outcome:\n    $risk_score = max(35)\n \
+    \   $mitre_attack_tactic = \"Persistence\"\n    $mitre_attack_technique = \"Cloud\
+    \ Account\"\n    $mitre_attack_technique_id = \"T1136.003\"\n    $event_count\
+    \ = count_distinct($login.metadata.id)\n    $network_http_user_agent = array_distinct($login.network.http.user_agent)\n\
+    \    $principal_ip = array_distinct($login.principal.ip)\n    $principal_ip_country\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_display_name = array_distinct($login.principal.user.user_display_name)\n\
+    \    $dc_principal_user_display_name = count_distinct($login.principal.user.user_display_name)\n\
+    \    $is_mfa_used = array_distinct($login.principal.user.attribute.labels[\"mfaAuthenticated\"\
+    ])\n    $target_resource_name = array_distinct($login.target.resource.name)\n\
+    \    $target_resource_product_object_id = array_distinct($login.target.resource.product_object_id)\n\
+    \n  condition:\n    $profile and $login\n}"
+  chronicle_rule_name: aws_privilege_escalation_using_iam_login_profile
+provenance:
+  source: chronicle/detection-rules
+  source_id: aws_privilege_escalation_using_iam_login_profile
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/aws/cloudtrail/aws_privilege_escalation_using_iam_login_profile.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,65 @@
+id: splunk-security-content-70a050a2-8537-488a-a628-b60a9558d96a
+name: O365 Email Send Attachments Excessive Volume
+description: The following analytic identifies when an O365 email account sends an
+  excessive number of email attachments to external recipients within a short period
+  (within 1 hour). This behavior may indicate a compromised account where the threat
+  actor is attempting to exfiltrate data from the mailbox. Threat actors may attempt
+  to transfer data through email as a simple means of exfiltration from the compromised
+  mailbox. Some account owner legitimate behaviors can trigger this alert, however
+  these actions may not be aligned with organizational expectations / best practice
+  behaviors.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.008
+  - T1485
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/
+- https://www.hhs.gov/sites/default/files/help-desk-social-engineering-sector-alert-tlpclear.pdf
+- https://intelligence.abnormalsecurity.com/attack-library/threat-actor-convincingly-impersonates-employee-requesting-direct-deposit-update-in-likely-ai-generated-attack
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_messagetrace` Status=Delivered\n| eval mailtime = _time\n| bin\
+    \ _time span=1hr\n| eval user = lower(SenderAddress), recipient = lower(RecipientAddress)\n\
+    | eval InternetMessageId = lower(MessageId)\n| join InternetMessageId, user, _time\
+    \ max=0\n  [\n  | search `o365_management_activity` Workload=Exchange Operation\
+    \ IN (\"Send\",\"SendAs\",\"SendOnBehalf\")\n  | eval user = lower(UserId), sender\
+    \ = lower(CASE(isnotnull(SendAsUserSmtp),SendAsUserSmtp,isnotnull(SendOnBehalfOfUserSmtp),SendOnBehalfOfUserSmtp,true(),MailboxOwnerUPN)),\
+    \ subject = trim(CASE(Operation IN (\"Send\",\"SendAs\",\"SendOnBehalf\"),'Item.Subject',Operation\
+    \ IN (\"SoftDelete\",\"HardDelete\"),'AffectedItems{}.Subject')), -time = _time,file_name\
+    \ = trim(CASE(Operation IN (\"Send\",\"SendAs\",\"SendOnBehalf\"),split('Item.Attachments',\"\
+    ; \"),Operation IN (\"SoftDelete\",\"HardDelete\"),split('AffectedItems{}.Attachments',\"\
+    ; \"))), file_size = CASE(Operation IN (\"Send\",\"SendAs\",\"SendOnBehalf\"),round(tonumber('Item.SizeInBytes')/1024/1024,2),true(),round(tonumber(replace(file_name,\
+    \ \"(.+)\\s\\((\\d+)(b\\)$)\", \"\\2\"))/1024/1024,2)), InternetMessageId = lower('Item.InternetMessageId')\n\
+    \  | bin _time span=1hr\n  | eval file_name = mvfilter(NOT match(file_name, \"\
+    \\.jpg |\\.png |\\.jpeg |\\.gif \"))\n  | search file_name=*\n  | stats values(sender)\
+    \ as sender, values(ClientIPAddress) as src, values(ClientInfoString) as http_user_agent,\
+    \ values(Operation) as signature, values(file_name) as file_name, sum(file_size)\
+    \ as file_size, values(Folder.Path) as file_path, min(-time) as firstTime, max(-time)\
+    \ as lastTime, dc(file_name) as count by _time,user,InternetMessageId\n  | where\
+    \ count > 25\n  | eval file_name = mvjoin(file_name,\"||\")\n  ]\n| eval file_name\
+    \ = split(file_name,\"||\")\n| stats values(sender) as sender, values(recipient)\
+    \ as recipient, values(http_user_agent) as http_user_agent, values(signature)\
+    \ as signature, values(file_name) as file_name, max(file_size) as file_size, min(firstTime)\
+    \ as firstTime, max(lastTime) as lastTime max(count) as count by subject,user,Organization,InternetMessageId\n\
+    | eval recipient = mvmap(recipient, if(match(mvindex(split(lower(recipient),\"\
+    @\"),1),mvindex(split(lower(user),\"@\"),1)), null(),recipient))\n| search recipient\
+    \ = *\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `o365_email_send_attachments_excessive_volume_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 70a050a2-8537-488a-a628-b60a9558d96a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_send_attachments_excessive_volume.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

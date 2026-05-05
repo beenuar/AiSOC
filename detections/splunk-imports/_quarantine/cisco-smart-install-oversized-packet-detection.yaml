@@ -1,0 +1,47 @@
+id: splunk-security-content-3b8d2b4f-4e1e-4a9e-9b43-8a7a3a9c7e21
+name: Cisco Smart Install Oversized Packet Detection
+description: 'This analytic detects oversized Cisco Smart Install (SMI) protocol messages
+  by inspecting traffic to TCP port 4786
+
+  within the Network_Traffic data model. Abnormally large SMI payloads have been associated
+  with exploitation and
+
+  protocol abuse (e.g., CVE-2018-0171; activity reported by the "Static Tundra" threat
+  actor). Monitoring message
+
+  sizes over time can help identify possible attempts at remote code execution, denial
+  of service, or reconnaissance
+
+  against Cisco devices exposing Smart Install.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - network
+references:
+- https://blog.talosintelligence.com/static-tundra/
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180328-smi2
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n    avg(All_Traffic.packets)\
+    \ as avg_packets,\n    max(All_Traffic.bytes) as max_bytes\n    from datamodel=Network_Traffic\n\
+    \    where All_Traffic.dest_port=4786 AND All_Traffic.transport=tcp\n    by All_Traffic.src_ip,\
+    \ All_Traffic.dest_ip, _time span=1h\n| `drop_dm_object_name(\"All_Traffic\")`\n\
+    | where max_bytes > 500\n| eval severity=case(max_bytes>1400, \"critical\", max_bytes>1000,\
+    \ \"high\", 1=1, \"medium\")\n| `cisco_smart_install_oversized_packet_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3b8d2b4f-4e1e-4a9e-9b43-8a7a3a9c7e21
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_smart_install_oversized_packet_detection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-d93129cd-1ee0-479f-bc03-ca6f129882e3
+name: Powershell Detect Virtualization Environment
+description: 'Adversaries may employ various system checks to detect and avoid virtualization
+  and analysis environments.
+
+  This may include changing behaviors based on the results of checks for the presence
+  of artifacts indicative of a virtual machine environment (VME) or sandbox'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1497.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1497.001/T1497.001.md
+- https://techgenix.com/malicious-powershell-scripts-evade-detection/
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_action:
+    ScriptBlockText|contains:
+    - Get-WmiObject
+    - gwmi
+  selection_module:
+    ScriptBlockText|contains:
+    - MSAcpi_ThermalZoneTemperature
+    - Win32_ComputerSystem
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d93129cd-1ee0-479f-bc03-ca6f129882e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_detect_vm_env.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

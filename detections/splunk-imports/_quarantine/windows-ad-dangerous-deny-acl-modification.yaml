@@ -1,0 +1,59 @@
+id: splunk-security-content-8e897153-2ebd-4cb2-85d3-09ad57db2fb7
+name: Windows AD Dangerous Deny ACL Modification
+description: This detection identifies an Active Directory access-control list (ACL)
+  modification event, which applies permissions that deny the ability to enumerate
+  permissions of the object.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  - T1484
+  categories:
+  - endpoint
+references:
+- https://happycamper84.medium.com/sneaky-persistence-via-hidden-objects-in-ad-1c91fc37bf54
+- https://www.youtube.com/watch?v=_nGpZ1ydzS8
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5136 | stats min(_time) as _time values(eval(if(OperationType=="%%14675",AttributeValue,null)))
+    as old_value values(eval(if(OperationType=="%%14674",AttributeValue,null))) as
+    new_value values(OperationType) as OperationType values(dest) as dest by ObjectClass
+    ObjectDN OpCorrelationID src_user SubjectLogonId  | rex field=old_value max_match=10000
+    "\((?P<old_values>.*?)\)"  | rex field=new_value max_match=10000 "\((?P<new_ace>.*?)\)"  |
+    mvexpand new_ace  | where NOT new_ace IN (old_values)  | rex field=new_ace "(?P<aceType>.*?);(?P<aceFlags>.*?);(?P<aceAccessRights>.*?);(?P<aceObjectGuid>.*?);(?P<aceInheritedTypeGuid>.*?);(?P<aceSid>.*?)$"  |
+    rex max_match=100 field=aceAccessRights "(?P<AccessRights>[A-Z]{2})"  | rex max_match=100
+    field=aceFlags "(?P<aceFlags>[A-Z]{2})"  | lookup msad_guid_lookup guid as aceObjectGuid
+    OUTPUT displayName as ControlAccessRights  | lookup ace_access_rights_lookup access_rights_string
+    as AccessRights OUTPUT access_rights_value  | lookup ace_type_lookup ace_type_string
+    as aceType OUTPUT ace_type_value as aceType | lookup ace_flag_lookup flag_string
+    as aceFlags OUTPUT flag_value as ace_flag_value ``` Optional SID resolution lookups
+    | lookup identity_lookup_expanded objectSid as aceSid OUTPUT downLevelDomainName
+    as user  | lookup admon_groups_def objectSid as aceSid OUTPUT cn as group ```
+    | lookup builtin_groups_lookup builtin_group_string  as aceSid OUTPUT builtin_group_name
+    as builtin_group | eval aceType=coalesce(ace_type_value,aceType), aceFlags=coalesce(ace_flag_value,"This
+    object only"), aceAccessRights=if(aceAccessRights="CCDCLCSWRPWPDTLOCRSDRCWDWO","Full
+    control",coalesce(access_rights_value,AccessRights)), aceControlAccessRights=coalesce(ControlAccessRights,aceObjectGuid),
+    user=coalesce(user, group, builtin_group, aceSid) | stats values(aceType) as aceType
+    values(aceFlags) as aceFlags values(aceControlAccessRights) as aceControlAccessRights
+    values(aceAccessRights) as aceAccessRights values(new_ace) as new_ace values(aceInheritedTypeGuid)
+    as aceInheritedTypeGuid by _time ObjectClass ObjectDN src_user SubjectLogonId
+    user OpCorrelationID | eval aceControlAccessRights=if(mvcount(aceControlAccessRights)=1
+    AND aceControlAccessRights="","All rights",''aceControlAccessRights'') | search
+    aceType IN ("Access denied",D) AND aceAccessRights IN ("Full control","Read permissions",RC)
+    | `windows_ad_dangerous_deny_acl_modification_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 8e897153-2ebd-4cb2-85d3-09ad57db2fb7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_dangerous_deny_acl_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

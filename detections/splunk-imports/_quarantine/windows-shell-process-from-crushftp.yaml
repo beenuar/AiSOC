@@ -1,0 +1,51 @@
+id: splunk-security-content-459628e3-1b00-4e9b-9e5b-7da8961aea35
+name: Windows Shell Process from CrushFTP
+description: The following analytic identifies instances where CrushFTP's service
+  process (crushftpservice.exe) spawns shell processes like cmd.exe or powershell.exe.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process creation events. This activity is significant because CrushFTP
+  should not normally spawn interactive shell processes during regular operations.
+  If confirmed malicious, this behavior could indicate successful exploitation of
+  vulnerabilities like CVE-2025-31161, potentially allowing attackers to execute arbitrary
+  commands with the privileges of the CrushFTP service.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1059.003
+  - T1190
+  - T1505
+  categories:
+  - endpoint
+references:
+- https://nvd.nist.gov/vuln/detail/CVE-2025-31161
+- https://www.crushftp.com/crush11wiki/Wiki.jsp?page=Update
+- https://www.huntress.com/blog/crushftp-cve-2025-31161-auth-bypass-and-post-exploitation
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Processes.process_name)\
+    \ as process_name values(Processes.process) as process min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=crushftpservice.exe\n\
+    \    AND\n    `process_cmd`\n    OR\n    `process_powershell`\n  BY Processes.dest\
+    \ Processes.parent_process Processes.original_file_name\n     Processes.user Processes.action\
+    \ Processes.parent_process_exec\n     Processes.parent_process_guid Processes.parent_process_id\
+    \ Processes.parent_process_path\n     Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n     Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_path\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_shell_process_from_crushftp_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 459628e3-1b00-4e9b-9e5b-7da8961aea35
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_shell_process_from_crushftp.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

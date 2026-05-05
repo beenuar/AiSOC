@@ -1,0 +1,44 @@
+id: sigmahq-sigma-90dcf730-1b71-4ae7-9ffc-6fcf62bd0132
+name: Suspicious ZipExec Execution
+description: ZipExec is a Proof-of-Concept (POC) tool to wrap binary-based tools into
+  a password-protected zip file.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1451237393017839616
+- https://github.com/Tylous/ZipExec
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  run:
+    CommandLine|contains|all:
+    - /generic:Microsoft_Windows_Shell_ZipFolder:filename=
+    - .zip
+    - '/pass:'
+    - '/user:'
+  delete:
+    CommandLine|contains|all:
+    - /delete
+    - Microsoft_Windows_Shell_ZipFolder:filename=
+    - .zip
+  condition: run or delete
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 90dcf730-1b71-4ae7-9ffc-6fcf62bd0132
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_zipexec.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

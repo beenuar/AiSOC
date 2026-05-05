@@ -1,0 +1,61 @@
+id: chronicle-detection-rules-default-rdp-port-changed-to-non-standard-port
+name: default_rdp_port_changed_to_non_standard_port
+description: default_rdp_port_changed_to_non_standard_port
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule default_rdp_port_changed_to_non_standard_port {\n\n  meta:\n    author\
+    \ = \"frack113\"\n    description = \"Detects changes to the default RDP port.\
+    \ Remote desktop is a common feature in operating systems. It allows a user to\
+    \ log into a remote system using an interactive session with a graphical user\
+    \ interface. Microsoft refers to its implementation of the Remote Desktop Protocol\
+    \ (RDP) as Remote Desktop Services (RDS).\"\n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/registry/registry_set/registry_set_change_rdp_port.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Default RDP Port Changed to Non Standard Port\"\n    rule_id\
+    \ = \"mr_13e82052-08dc-4475-b0df-d22fc689e4c8\"\n    sigma_uuid = \"509e84b9-a71a-40e0-834f-05470369bd1e\"\
+    \n    sigma_status = \"test\"\n    tactic = \"TA0003\"\n    technique = \"T1547.010\"\
+    \n    type = \"Detection\"\n    data_source = \"Sysmon\"\n    platform = \"Windows\"\
+    \n    severity = \"High\"\n    priority = \"High\"\n    false_positives = \"Unknown\"\
+    \n\n  events:\n    $reg.metadata.event_type = \"REGISTRY_MODIFICATION\"\n    re.regex($reg.target.registry.registry_key,\
+    \ `\\\\control\\\\terminal server\\\\winstations\\\\rdp-tcp\\\\portnumber$`) nocase\n\
+    \    NOT $reg.target.registry.registry_value_data  = \"DWORD (0x00000d3d)\" //3389\n\
+    \n    $reg.principal.hostname = $hostname\n\n  match:\n    $hostname over 5m\n\
+    \n  outcome:\n    //example usage of specifying test user and hostname to adjust\
+    \ risk score\n    $risk_score = max(if($reg.principal.user.userid = \"user\" and\
+    \ $reg.principal.hostname = \"hostname\", 0, 15))\n    $principal_hostname = array_distinct($reg.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($reg.principal.process.pid)\n   \
+    \ $principal_process_file_full_path = array_distinct($reg.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($reg.principal.process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($reg.principal.user.userid)\n   \
+    \ $target_registry_key = array_distinct($reg.target.registry.registry_key)\n \
+    \   $target_registry_value_data = array_distinct($reg.target.registry.registry_value_data)\n\
+    \    $log_type = array_distinct(strings.concat($reg.metadata.log_type,\"/\",$reg.metadata.product_event_type))\n\
+    \n  condition:\n    $reg\n}"
+  chronicle_rule_name: default_rdp_port_changed_to_non_standard_port
+provenance:
+  source: chronicle/detection-rules
+  source_id: default_rdp_port_changed_to_non_standard_port
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/default_rdp_port_changed_to_non_standard_port.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

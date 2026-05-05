@@ -1,0 +1,44 @@
+id: sigmahq-sigma-15c7904e-6ad1-4a45-9b46-5fb25df37fd2
+name: Malicious PE Execution by Microsoft Visual Studio Debugger
+description: 'There is an option for a MS VS Just-In-Time Debugger "vsjitdebugger.exe"
+  to launch specified executable and attach a debugger.
+
+  This option may be used adversaries to execute malicious code by signed verified
+  binary.
+
+  The debugger is installed alongside with Microsoft Visual Studio package.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/pabraeken/status/990758590020452353
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Vsjitdebugger/
+- https://learn.microsoft.com/en-us/visualstudio/debugger/debug-using-the-just-in-time-debugger?view=vs-2019
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \vsjitdebugger.exe
+  reduction1:
+    Image|endswith: \vsimmersiveactivatehelper*.exe
+  reduction2:
+    Image|endswith: \devenv.exe
+  condition: selection and not (reduction1 or reduction2)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 15c7904e-6ad1-4a45-9b46-5fb25df37fd2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_use_of_vsjitdebugger_bin.yml
+falsepositives:
+- The process spawned by vsjitdebugger.exe is uncommon.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-cdfa73b6-3c9d-4bb8-97f8-ddbd8921f5c5
+name: Potential Unconstrained Delegation Discovery Via Get-ADComputer - ScriptBlock
+description: Detects the use of the "Get-ADComputer" cmdlet in order to identify systems
+  which are configured for unconstrained delegation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  - T1558
+  - T1589.002
+  categories:
+  - endpoint
+references:
+- https://pentestlab.blog/2022/03/21/unconstrained-delegation/
+- https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-adcomputer?view=windowsserver2022-ps
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enable'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - -Properties*TrustedForDelegation
+    - -Properties*TrustedToAuthForDelegation
+    - -Properties*msDS-AllowedToDelegateTo
+    - -Properties*PrincipalsAllowedToDelegateToAccount
+    - -LDAPFilter*(userAccountControl:1.2.840.113556.1.4.803:=524288)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cdfa73b6-3c9d-4bb8-97f8-ddbd8921f5c5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_potential_unconstrained_delegation_discovery.yml
+falsepositives:
+- Legitimate use of the library for administrative activity
+notes:
+  quarantine_reason: 'upstream status: experimental'

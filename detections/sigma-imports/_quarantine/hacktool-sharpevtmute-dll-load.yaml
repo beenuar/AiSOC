@@ -1,0 +1,33 @@
+id: sigmahq-sigma-49329257-089d-46e6-af37-4afce4290685
+name: HackTool - SharpEvtMute DLL Load
+description: Detects the load of EvtMuteHook.dll, a key component of SharpEvtHook,
+  a tool that tampers with the Windows event logs
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://github.com/bats3c/EvtMute
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Hashes|contains: IMPHASH=330768A4F172E10ACB6287B87289D83B
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 49329257-089d-46e6-af37-4afce4290685
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_hktl_sharpevtmute.yml
+falsepositives:
+- Other DLLs with the same Imphash
+notes:
+  quarantine_reason: 'upstream status: test'

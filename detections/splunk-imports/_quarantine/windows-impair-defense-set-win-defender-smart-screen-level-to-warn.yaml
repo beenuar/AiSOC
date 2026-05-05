@@ -1,0 +1,44 @@
+id: splunk-security-content-cc2a3425-2703-47e7-818f-3dca1b0bc56f
+name: Windows Impair Defense Set Win Defender Smart Screen Level To Warn
+description: The following analytic detects modifications to the Windows registry
+  that set the Windows Defender SmartScreen level to "warn." This detection leverages
+  data from the Endpoint.Registry data model, specifically monitoring changes to the
+  ShellSmartScreenLevel registry value. This activity is significant because altering
+  SmartScreen settings to "warn" can reduce immediate suspicion from users, allowing
+  potentially malicious executables to run with just a warning prompt. If confirmed
+  malicious, this could enable attackers to execute harmful files, increasing the
+  risk of successful malware deployment and subsequent system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://x.com/malmoeb/status/1742604217989415386?s=20
+- https://github.com/undergroundwires/privacy.sexy
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path=
+    "*\\Microsoft\\Windows\\System\\ShellSmartScreenLevel" Registry.registry_value_data="Warn"
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_impair_defense_set_win_defender_smart_screen_level_to_warn_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: cc2a3425-2703-47e7-818f-3dca1b0bc56f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defense_set_win_defender_smart_screen_level_to_warn.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

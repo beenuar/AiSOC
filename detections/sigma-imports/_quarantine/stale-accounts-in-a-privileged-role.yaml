@@ -1,0 +1,33 @@
+id: sigmahq-sigma-e402c26a-267a-45bd-9615-bd9ceda6da85
+name: Stale Accounts In A Privileged Role
+description: Identifies when an account hasn't signed in during the past n number
+  of days.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-how-to-configure-security-alerts#potential-stale-accounts-in-a-privileged-role
+logsource:
+  product: azure
+  service: pim
+detection:
+  selection:
+    riskEventType: staleSignInAlertIncident
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e402c26a-267a-45bd-9615-bd9ceda6da85
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/privileged_identity_management/azure_pim_account_stale.yml
+falsepositives:
+- Investigate if potential generic account that cannot be removed.
+notes:
+  quarantine_reason: 'upstream status: test'

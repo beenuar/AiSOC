@@ -1,0 +1,50 @@
+id: sigmahq-sigma-0ed75b9c-c73b-424d-9e7d-496cd565fbe0
+name: Security Software Discovery - MacOs
+description: Detects usage of system utilities (only grep for now) to discover security
+  software discovery
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1518.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1518.001/T1518.001.md
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  image:
+    Image: /usr/bin/grep
+  selection_cli_1:
+    CommandLine|contains:
+    - nessusd
+    - santad
+    - CbDefense
+    - falcond
+    - td-agent
+    - packetbeat
+    - filebeat
+    - auditbeat
+    - osqueryd
+    - BlockBlock
+    - LuLu
+  selection_cli_2:
+    CommandLine|contains|all:
+    - Little
+    - Snitch
+  condition: image and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0ed75b9c-c73b-424d-9e7d-496cd565fbe0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_security_software_discovery.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-114e7f1c-f137-48c8-8f54-3088c24ce4b9
+name: Remote Access Tool - AnyDesk Silent Installation
+description: Detects AnyDesk Remote Desktop silent installation. Which can be used
+  by attackers to gain remote access.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://twitter.com/TheDFIRReport/status/1423361119926816776?s=20
+- https://support.anydesk.com/Automatic_Deployment
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - --install
+    - --start-with-win
+    - --silent
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 114e7f1c-f137-48c8-8f54-3088c24ce4b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_remote_access_tools_anydesk_silent_install.yml
+falsepositives:
+- Legitimate deployment of AnyDesk
+notes:
+  quarantine_reason: 'upstream status: test'

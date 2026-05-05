@@ -1,0 +1,72 @@
+id: splunk-security-content-c9687a28-39ad-43c6-8bcf-eaf061ba0cbe
+name: Windows Privilege Escalation User Process Spawn System Process
+description: 'The following analytic detects when a process with low, medium, or high
+  integrity spawns a system integrity process from a user-controlled location.
+
+  This behavior is indicative of privilege escalation attempts where attackers elevate
+  their privileges to SYSTEM level from a user-controlled process or service.
+
+  The detection leverages Sysmon data, specifically Event ID 15, to identify such
+  transitions.
+
+  Monitoring this activity is crucial as it can signify an attacker gaining SYSTEM-level
+  access, potentially leading to full control over the affected system, unauthorized
+  access to sensitive data, and further malicious activities.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  - T1548
+  - T1134
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1068/
+- https://vuls.cert.org/confluence/display/Wiki/2021/06/21/Finding+Privilege+Escalation+Vulnerabilities+in+Windows+using+Process+Monitor
+- https://redcanary.com/blog/getsystem-offsec/
+- https://atomicredteam.io/privilege-escalation/T1134.001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \nfrom datamodel=Endpoint.Processes where\n\nProcesses.process_integrity_level\
+    \ IN (\n    \"low\",\n    \"medium\",\n    \"high\"\n)\nProcesses.process_path\
+    \ IN (\n    \"*\\\\\\\\*\",\n    \"*\\\\ProgramData\\\\*\",\n    \"*\\\\Temp\\\
+    \\*\",\n    \"*\\\\Users\\\\*\"\n)\nNOT Processes.user IN (\n    \"*SYSTEM\",\n\
+    \    \"*LOCAL SERVICE\",\n    \"*NETWORK SERVICE\",\n    \"DWM-*\",\n    \"*$\"\
+    \n)\n\nby Processes.action Processes.dest Processes.original_file_name\n   Processes.parent_process\
+    \ Processes.parent_process_exec\n   Processes.parent_process_guid Processes.parent_process_id\n\
+    \   Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid\n   Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n   Processes.process_name Processes.process_path\
+    \ Processes.user\n   Processes.user_id Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | eval join_guid = process_guid\n\n| join max=0 dest join_guid [\n\n        |\
+    \ tstats `security_content_summariesonly`\n          count max(_time) as lastTime\n\
+    \n        from datamodel=Endpoint.Processes where\n\n        Processes.process_integrity_level=\"\
+    system\"\n        Processes.parent_process_path IN (\n            \"*\\\\\\\\\
+    *\",\n            \"*\\\\ProgramData\\\\*\",\n            \"*\\\\Temp\\\\*\",\n\
+    \            \"*\\\\Users\\\\*\"\n        )\n\n        by Processes.dest Processes.user\
+    \ Processes.parent_process_guid\n           Processes.process_name Processes.process\
+    \ Processes.process_path\n           Processes.process_integrity_level Processes.process_current_directory\n\
+    \n        | `drop_dm_object_name(Processes)`\n        | rename parent_process_guid\
+    \ as join_guid, process* as system_process*, user as system_user\n    ]\n| fields\
+    \ dest user parent_process parent_process_name parent_process_guid\n         process\
+    \ process_name process_guid process_integrity_level process_path\n         process_current_directory\
+    \ system_process_name system_process system_process_path\n         system_process_integrity_level\
+    \ system_process_current_directory system_user\n         firstTime lastTime count\n\
+    \n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_privilege_escalation_user_process_spawn_system_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c9687a28-39ad-43c6-8bcf-eaf061ba0cbe
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_privilege_escalation_user_process_spawn_system_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

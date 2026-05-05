@@ -1,0 +1,44 @@
+id: splunk-security-content-00524d1f-a032-46f5-9108-e7d9f01bfb3c
+name: Windows Screen Capture in TEMP folder
+description: The following analytic detects the creation of screen capture files by
+  the Braodo stealer malware. This stealer is known to capture screenshots of the
+  victim's desktop as part of its data theft activities. The detection focuses on
+  identifying unusual screen capture activity, especially when images are saved in
+  directories often used by malware, such as temporary or hidden folders. Monitoring
+  for these files helps to quickly identify malicious screen capture attempts, allowing
+  security teams to respond and mitigate potential information exposure before sensitive
+  data is compromised.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1113
+  categories:
+  - endpoint
+references:
+- https://x.com/suyog41/status/1825869470323056748
+- https://g0njxa.medium.com/from-vietnam-to-united-states-malware-fraud-and-dropshipping-98b7a7b2c36d
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '|tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Filesystem where Filesystem.file_name
+    IN ("screenshot.png", "screenshot.jpg","screenshot.bmp") Filesystem.file_path
+    = "*\\temp\\*" by Filesystem.action Filesystem.dest Filesystem.file_access_time
+    Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name
+    Filesystem.file_path Filesystem.file_acl Filesystem.file_size Filesystem.process_guid
+    Filesystem.process_id Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_screen_capture_in_temp_folder_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 00524d1f-a032-46f5-9108-e7d9f01bfb3c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_screen_capture_in_temp_folder.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

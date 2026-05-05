@@ -1,0 +1,43 @@
+id: splunk-security-content-2e891cbe-0426-11ec-9c9c-acde48001122
+name: GetLocalUser with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-LocalUser` PowerShell
+  commandlet using PowerShell Script Block Logging (EventCode=4104). This commandlet
+  lists all local users on a system. The detection leverages script block text from
+  PowerShell logs to identify this activity. Monitoring this behavior is significant
+  as adversaries and Red Teams may use it to enumerate local users for situational
+  awareness and Active Directory discovery. If confirmed malicious, this activity
+  could lead to further reconnaissance, enabling attackers to identify potential targets
+  for privilege escalation or lateral movement.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1087.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1087/001/
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-LocalUser*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `getlocaluser_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2e891cbe-0426-11ec-9c9c-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getlocaluser_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

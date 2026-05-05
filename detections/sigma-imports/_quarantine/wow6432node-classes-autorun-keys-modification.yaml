@@ -1,0 +1,52 @@
+id: sigmahq-sigma-18f2065c-d36c-464a-a748-bcf909acb2e3
+name: Wow6432Node Classes Autorun Keys Modification
+description: Detects modification of autostart extensibility point (ASEP) in registry.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md
+- https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns
+- https://gist.github.com/GlebSukhodolskiy/0fc5fa5f482903064b448890db1eaf9d
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  wow_classes_base:
+    TargetObject|contains: \Software\Wow6432Node\Classes
+  wow_classes:
+    TargetObject|contains:
+    - \Folder\ShellEx\ExtShellFolderViews
+    - \Folder\ShellEx\DragDropHandlers
+    - \Folder\ShellEx\ColumnHandlers
+    - \Directory\Shellex\DragDropHandlers
+    - \Directory\Shellex\CopyHookHandlers
+    - \CLSID\{AC757296-3522-4E11-9862-C17BE5A1767E}\Instance
+    - \CLSID\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\Instance
+    - \CLSID\{7ED96837-96F0-4812-B211-F13C24117ED3}\Instance
+    - \CLSID\{083863F1-70DE-11d0-BD40-00A0C911CE86}\Instance
+    - \AllFileSystemObjects\ShellEx\DragDropHandlers
+    - \ShellEx\PropertySheetHandlers
+    - \ShellEx\ContextMenuHandlers
+  filter:
+    Details: (Empty)
+  condition: wow_classes_base and wow_classes and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 18f2065c-d36c-464a-a748-bcf909acb2e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_asep_reg_keys_modification_wow6432node_classes.yml
+falsepositives:
+- Legitimate software automatically (mostly, during installation) sets up autorun
+  keys for legitimate reason
+- Legitimate administrator sets up autorun keys for legitimate reason
+notes:
+  quarantine_reason: 'upstream status: test'

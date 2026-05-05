@@ -1,0 +1,41 @@
+id: splunk-security-content-88bf127c-613e-4579-99e4-c4d4b02f3840
+name: F5 TMUI Authentication Bypass
+description: The following analytic detects attempts to exploit the CVE-2023-46747
+  vulnerability, an authentication bypass flaw in F5 BIG-IP's Configuration utility
+  (TMUI). It identifies this activity by monitoring for specific URI paths such as
+  "*/mgmt/tm/auth/user/*" with the PATCH method and a 200 status code. This behavior
+  is significant for a SOC as it indicates potential unauthorized access attempts,
+  leading to remote code execution. If confirmed malicious, an attacker could gain
+  unauthorized access, execute arbitrary code, steal data, disrupt systems, or conduct
+  further malicious activities within the network.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - application
+references:
+- https://www.praetorian.com/blog/refresh-compromising-f5-big-ip-with-request-smuggling-cve-2023-46747/
+- https://github.com/projectdiscovery/nuclei-templates/blob/3b0bb71bd627c6c3139e1d06c866f8402aa228ae/http/cves/2023/CVE-2023-46747.yaml
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.url IN (\"*/mgmt/tm/auth/user/*\") Web.http_method=PATCH\
+    \ Web.status=200\n  BY Web.http_user_agent, Web.status Web.http_method,\n    \
+    \ Web.url, Web.url_length, Web.src,\n     Web.dest, sourcetype\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `f5_tmui_authentication_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 88bf127c-613e-4579-99e4-c4d4b02f3840
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/f5_tmui_authentication_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

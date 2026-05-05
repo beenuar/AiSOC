@@ -1,0 +1,59 @@
+id: sigmahq-sigma-dd8756e7-a3a0-4768-b47e-8f545d1a751c
+name: Suspicious LNK Command-Line Padding with Whitespace Characters
+description: 'Detects exploitation of LNK file command-line length discrepancy, where
+  attackers hide malicious commands beyond the 260-character UI limit while the actual
+  command-line argument field supports 4096 characters using whitespace padding (e.g.,
+  0x20, 0x09-0x0D).
+
+  Adversaries insert non-printable whitespace characters (e.g., Line Feed \x0A, Carriage
+  Return \x0D) to pad the visible section of the LNK file, pushing malicious commands
+  past the UI-visible boundary.
+
+  The hidden payload, executed at runtime but invisible in Windows Explorer properties,
+  enables stealthy execution and evasion—commonly used for social engineering attacks.
+
+  This rule flags suspicious use of such padding observed in real-world attacks.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://syedhasan010.medium.com/forensics-analysis-of-an-lnk-file-da68a98b8415
+- https://thehackernews.com/2025/03/unpatched-windows-zero-day-flaw.html
+- https://www.trendmicro.com/en_us/research/25/c/windows-shortcut-zero-day-exploit.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - ParentImage|endswith: \explorer.exe
+  - ParentCommandLine|contains: .lnk
+  selection_cmd:
+  - CommandLine|contains:
+    - '                 '
+    - \u0009
+    - \u000A
+    - \u0011
+    - \u0012
+    - \u0013
+    - \u000B
+    - \u000C
+    - \u000D
+  - CommandLine|re: \n\n\n\n\n\n
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dd8756e7-a3a0-4768-b47e-8f545d1a751c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_lnk_exec_hidden_cmd.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

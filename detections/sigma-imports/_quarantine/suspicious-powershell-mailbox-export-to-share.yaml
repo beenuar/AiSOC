@@ -1,0 +1,38 @@
+id: sigmahq-sigma-889719ef-dd62-43df-86c3-768fb08dc7c0
+name: Suspicious PowerShell Mailbox Export to Share
+description: Detects usage of the powerShell New-MailboxExportRequest Cmdlet to exports
+  a mailbox to a remote or local share, as used in ProxyShell exploitations
+severity: critical
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://youtu.be/5mqid-7zp8k?t=2481
+- https://blog.orange.tw/2021/08/proxylogon-a-new-attack-surface-on-ms-exchange-part-1.html
+- https://peterjson.medium.com/reproducing-the-proxyshell-pwn2own-exploit-49743a4ea9a1
+- https://m365internals.com/2022/10/07/hunting-in-on-premises-exchange-server-logs/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - New-MailboxExportRequest
+    - ' -Mailbox '
+    - ' -FilePath \\\\'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 889719ef-dd62-43df-86c3-768fb08dc7c0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_mailboxexport_share.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

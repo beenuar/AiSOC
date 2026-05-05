@@ -1,0 +1,55 @@
+id: sigmahq-sigma-771d1eb5-9587-4568-95fb-9ec44153a012
+name: PUA - NSudo Execution
+description: Detects the use of NSudo tool for command execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20221019044836/https://nsudo.m2team.org/en-us/
+- https://www.winhelponline.com/blog/run-program-as-system-localsystem-account-windows/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \NSudo.exe
+    - \NSudoLC.exe
+    - \NSudoLG.exe
+  - OriginalFileName:
+    - NSudo.exe
+    - NSudoLC.exe
+    - NSudoLG.exe
+  selection_cli:
+    CommandLine|contains:
+    - '-U:S '
+    - '-U:T '
+    - '-U:E '
+    - '-P:E '
+    - '-M:S '
+    - '-M:H '
+    - '-U=S '
+    - '-U=T '
+    - '-U=E '
+    - '-P=E '
+    - '-M=S '
+    - '-M=H '
+    - -ShowWindowMode:Hide
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 771d1eb5-9587-4568-95fb-9ec44153a012
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_nsudo.yml
+falsepositives:
+- Legitimate use by administrators
+notes:
+  quarantine_reason: 'upstream status: test'

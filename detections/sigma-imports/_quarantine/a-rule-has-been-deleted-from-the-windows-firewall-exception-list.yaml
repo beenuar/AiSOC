@@ -1,0 +1,47 @@
+id: sigmahq-sigma-c187c075-bb3e-4c62-b4fa-beae0ffc211f
+name: A Rule Has Been Deleted From The Windows Firewall Exception List
+description: Detects when a single rules or all of the rules have been deleted from
+  the Windows Defender Firewall
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-r2-and-2008/dd364427(v=ws.10)
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID:
+    - 2006
+    - 2052
+  filter_main_generic:
+    ModifyingApplication|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+    - C:\Windows\WinSxS\
+  filter_main_svchost:
+    ModifyingApplication: C:\Windows\System32\svchost.exe
+  filter_optional_msmpeng:
+    ModifyingApplication|startswith: C:\ProgramData\Microsoft\Windows Defender\Platform\
+    ModifyingApplication|endswith: \MsMpEng.exe
+  filter_main_null:
+    ModifyingApplication: null
+  filter_main_empty:
+    ModifyingApplication: ''
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c187c075-bb3e-4c62-b4fa-beae0ffc211f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/firewall_as/win_firewall_as_delete_rule.yml
+notes:
+  quarantine_reason: 'upstream status: test'

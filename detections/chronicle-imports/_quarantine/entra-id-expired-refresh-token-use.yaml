@@ -1,0 +1,52 @@
+id: chronicle-detection-rules-entra-id-expired-refresh-token-use
+name: entra_id_expired_refresh_token_use
+description: entra_id_expired_refresh_token_use
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_expired_refresh_token_use {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Identify Entra ID OAuth refresh tokens\
+    \ are attempted to be used but have expired. This could be because the token hasn't\
+    \ been used for 90 days or it has been revoked\"\n    rule_id = \"mr_88826f0a-e964-4d11-8765-8732ae83b1f1\"\
+    \n    rule_name = \"Hunt for Expired Tokens Attempting to sign-in to Entra ID\"\
+    \n    tactic = \"TA0008\"\n    technique = \"T1550.001\"\n    type = \"Hunt\"\n\
+    \    data_source = \"Azure Activity\"\n    platform = \"Azure\"\n    severity\
+    \ = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $login.metadata.product_name = \"Azure Activity\"\n  \
+    \  $login.metadata.product_event_type = \"Sign-in activity\"\n    $login.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $login.security_result.action = \"BLOCK\"\n    //$login.metadata.description\
+    \ = \"Fresh auth token is needed. Have the user re-sign using fresh credentials.\"\
+    \n    $login.security_result.action_details = \"50173\"\n    $login.principal.user.userid\
+    \ = $userid\n\n  match:\n    $userid over 15m\n\n  outcome:\n    $risk_score =\
+    \ 15\n    $event_count = count_distinct($login.metadata.id)\n    $principal_ip\
+    \ = array_distinct($login.principal.ip)\n    $user_agent = array_distinct($login.network.http.user_agent)\n\
+    \    $target_application = array_distinct($login.target.application)\n\n  condition:\n\
+    \    $login\n}"
+  chronicle_rule_name: entra_id_expired_refresh_token_use
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_expired_refresh_token_use
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_expired_refresh_token_use.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

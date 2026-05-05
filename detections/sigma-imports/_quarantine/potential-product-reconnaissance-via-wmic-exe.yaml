@@ -1,0 +1,42 @@
+id: sigmahq-sigma-15434e33-5027-4914-88d5-3d4145ec25a9
+name: Potential Product Reconnaissance Via Wmic.EXE
+description: Detects the execution of WMIC in order to get a list of firewall and
+  antivirus products
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2023/03/06/2022-year-in-review/
+- https://www.yeahhub.com/list-installed-programs-version-path-windows/
+- https://learn.microsoft.com/en-us/answers/questions/253555/software-list-inventory-wmic-product
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \wmic.exe
+  - OriginalFileName: wmic.exe
+  selection_cli:
+    CommandLine|contains: Product
+  filter_main_call_operations:
+    CommandLine|contains:
+    - ' uninstall'
+    - ' install'
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 15434e33-5027-4914-88d5-3d4145ec25a9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_recon_product.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-judgement-panda-exfil-activity
+name: judgement_panda_exfil_activity
+description: judgement_panda_exfil_activity
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule judgement_panda_exfil_activity {\n meta:\n    author = \"\
+    Florian Roth\"\n    description = \"Detects Russian group activity as described\
+    \ in Global Threat Report 2019 by Crowdstrike  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/YpQlxpB0evj5\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/21\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"credential_access, t1081, t1003\"\n\
+    \n  events:\n(($selection1.metadata.product_event_type = \"4688\" or $selection1.metadata.product_event_type\
+    \ = \"1\") and ((re.regex($selection1.target.process.file.full_path, `.*\\\\xcopy\\\
+    .exe`) and re.regex($selection1.target.process.command_line, `.* /S /E /C /Q /H\
+    \ \\\\.*`)) or (re.regex($selection1.target.process.file.full_path, `.*\\\\adexplorer\\\
+    .exe`) and re.regex($selection1.target.process.command_line, `.* -snapshot \\\"\
+    \\\" c:\\\\users\\\\.*`))))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: judgement_panda_exfil_activity
+provenance:
+  source: chronicle/detection-rules
+  source_id: judgement_panda_exfil_activity
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/judgement_panda_exfil_activity.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

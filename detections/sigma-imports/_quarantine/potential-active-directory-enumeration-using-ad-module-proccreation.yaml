@@ -1,0 +1,45 @@
+id: sigmahq-sigma-70bc5215-526f-4477-963c-a47a5c9ebd12
+name: Potential Active Directory Enumeration Using AD Module - ProcCreation
+description: Detects usage of the "Import-Module" cmdlet to load the "Microsoft.ActiveDirectory.Management.dl"
+  DLL. Which is often used by attackers to perform AD enumeration.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/samratashok/ADModule
+- https://twitter.com/cyb3rops/status/1617108657166061568?s=20
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_cmdlet:
+    CommandLine|contains:
+    - 'Import-Module '
+    - 'ipmo '
+  selection_dll:
+    CommandLine|contains: Microsoft.ActiveDirectory.Management.dll
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 70bc5215-526f-4477-963c-a47a5c9ebd12
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_active_directory_module_dll_import.yml
+falsepositives:
+- Legitimate use of the library for administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

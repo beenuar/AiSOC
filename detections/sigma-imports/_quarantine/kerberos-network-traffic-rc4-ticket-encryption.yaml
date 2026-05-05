@@ -1,0 +1,36 @@
+id: sigmahq-sigma-503fe26e-b5f2-4944-a126-eab405cc06e5
+name: Kerberos Network Traffic RC4 Ticket Encryption
+description: Detects kerberos TGS request using RC4 encryption which may be indicative
+  of kerberoasting
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=3458
+logsource:
+  product: zeek
+  service: kerberos
+detection:
+  selection:
+    request_type: TGS
+    cipher: rc4-hmac
+  computer_acct:
+    service|startswith: $
+  condition: selection and not computer_acct
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 503fe26e-b5f2-4944-a126-eab405cc06e5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_susp_kerberos_rc4.yml
+falsepositives:
+- Normal enterprise SPN requests activity
+notes:
+  quarantine_reason: 'upstream status: test'

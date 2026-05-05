@@ -1,0 +1,43 @@
+id: sigmahq-sigma-39f919f3-980b-4e6f-a975-8af7e507ef2b
+name: Critical Hive In Suspicious Location Access Bits Cleared
+description: 'Detects events from the Kernel-General ETW indicating that the access
+  bits of a hive with a system like hive name located in the temp directory have been
+  reset.
+
+  This occurs when an application tries to access a hive and the hive has not be recognized
+  since the last 7 days (by default).
+
+  Registry hive dumping utilities such as QuarksPwDump were seen emitting this behavior.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/Misc-Research/blob/b20da2336de0f342d31ef4794959d28c8d3ba5ba/ETW/Microsoft-Windows-Kernel-General.md
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 16
+    Provider_Name: Microsoft-Windows-Kernel-General
+    HiveName|contains:
+    - \Temp\SAM
+    - \Temp\SECURITY
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39f919f3-980b-4e6f-a975-8af7e507ef2b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_kernel_general/win_system_susp_critical_hive_location_access_bits_cleared.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

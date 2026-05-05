@@ -1,0 +1,44 @@
+id: sigmahq-sigma-dfe8b941-4e54-4242-b674-6b613d521962
+name: Startup Item File Created - MacOS
+description: 'Detects the creation of a startup item plist file, that automatically
+  get executed at boot initialization to establish persistence.
+
+  Adversaries may use startup items automatically executed at boot initialization
+  to establish persistence.
+
+  Startup items execute during the final phase of the boot process and contain shell
+  scripts or other executable files along with configuration information used by the
+  system to determine the execution order for all startup items.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1037.005
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1037.005/T1037.005.md
+- https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/StartupItems.html
+logsource:
+  category: file_event
+  product: macos
+detection:
+  selection:
+    TargetFilename|startswith:
+    - /Library/StartupItems/
+    - /System/Library/StartupItems
+    TargetFilename|endswith: .plist
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dfe8b941-4e54-4242-b674-6b613d521962
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/file_event/file_event_macos_susp_startup_item_created.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

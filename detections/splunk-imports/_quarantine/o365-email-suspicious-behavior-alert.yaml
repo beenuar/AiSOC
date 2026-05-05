@@ -1,0 +1,41 @@
+id: splunk-security-content-85c7555a-05af-4322-81aa-76b4ddf52baa
+name: O365 Email Suspicious Behavior Alert
+description: The following analytic identifies when one of O365 the built-in security
+  detections for suspicious email behaviors are triggered.  These alerts often indicate
+  that an attacker may have compromised a mailbox within the environment. Any detections
+  from built-in Office 365 capabilities should be monitored and responded to appropriately.
+  Certain premium Office 365 capabilities further enhance these detection and response
+  functions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/purview/alert-policies
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=SecurityComplianceCenter Operation=AlertEntityGenerated\
+    \ Name IN (\"Suspicious email sending patterns detected\",\"User restricted from\
+    \ sending email\",\"Suspicious Email Forwarding Activity\",\"Email sending limit\
+    \ exceeded\")\n  | fromjson Data\n  | rename Name as signature, AlertId as signature_id,\
+    \ ObjectId as user\n  | fillnull\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest user src\n       vendor_account vendor_product signature\n\
+    \       signature_id\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_email_suspicious_behavior_alert_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 85c7555a-05af-4322-81aa-76b4ddf52baa
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_suspicious_behavior_alert.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

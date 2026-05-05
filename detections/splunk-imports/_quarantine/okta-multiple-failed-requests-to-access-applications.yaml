@@ -1,0 +1,53 @@
+id: splunk-security-content-1c21fed1-7000-4a2e-9105-5aaafa437247
+name: Okta Multiple Failed Requests to Access Applications
+description: The following analytic detects multiple failed attempts to access applications
+  in Okta, potentially indicating the reuse of a stolen web session cookie. It leverages
+  Okta logs to evaluate policy and SSO events, aggregating data by user, session,
+  and IP. The detection triggers when more than half of the app sign-on attempts are
+  unsuccessful across multiple applications. This activity is significant as it may
+  indicate an attempt to bypass authentication mechanisms. If confirmed malicious,
+  it could lead to unauthorized access to sensitive applications and data, posing
+  a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1550.004
+  - T1538
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1538
+- https://attack.mitre.org/techniques/T1550/004
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`okta` target{}.type=AppInstance (eventType=policy.evaluate_sign_on
+    outcome.result=CHALLENGE) OR (eventType=user.authentication.sso outcome.result=SUCCESS)
+    | eval targets=mvzip(''target{}.type'', ''target{}.displayName'', ": ") | eval
+    targets=mvfilter(targets LIKE "AppInstance%") | stats count min(_time) as _time
+    values(outcome.result) as outcome.result dc(eval(if(eventType="policy.evaluate_sign_on",targets,NULL)))
+    as total_challenges sum(eval(if(eventType="user.authentication.sso",1,0))) as
+    total_successes by authenticationContext.externalSessionId targets actor.alternateId
+    client.ipAddress | search total_challenges > 0 | stats min(_time) as _time values(*)
+    as * sum(total_challenges) as total_challenges sum(total_successes) as total_successes
+    values(eval(if("outcome.result"="SUCCESS",targets,NULL))) as success_apps values(eval(if(":outcome.result"!="SUCCESS",targets,NULL)))
+    as no_success_apps by authenticationContext.externalSessionId actor.alternateId
+    client.ipAddress | fillnull | eval ratio=round(total_successes/total_challenges,2),
+    severity="HIGH", mitre_technique_id="T1538", description="actor.alternateId".
+    " from " . "client.ipAddress" . " seen opening " . total_challenges . " chiclets/apps
+    with " . total_successes . " challenges successfully passed" | fields - count,
+    targets | search ratio < 0.5 total_challenges > 2 | `okta_multiple_failed_requests_to_access_applications_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 1c21fed1-7000-4a2e-9105-5aaafa437247
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_multiple_failed_requests_to_access_applications.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

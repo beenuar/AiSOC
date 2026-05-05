@@ -1,0 +1,42 @@
+id: sigmahq-sigma-106d7cbd-80ff-4985-b682-a7043e5acb72
+name: Loading of Kernel Module via Insmod
+description: 'Detects loading of kernel modules with insmod command.
+
+  Loadable Kernel Modules (LKMs) are pieces of code that can be loaded and unloaded
+  into the kernel upon demand.
+
+  Adversaries may use LKMs to obtain persistence within the system or elevate the
+  privileges.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.006/T1547.006.md
+- https://linux.die.net/man/8/insmod
+- https://man7.org/linux/man-pages/man8/kmod.8.html
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SYSCALL
+    comm: insmod
+    exe: /usr/bin/kmod
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 106d7cbd-80ff-4985-b682-a7043e5acb72
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/syscall/lnx_auditd_load_module_insmod.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

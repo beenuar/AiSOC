@@ -1,0 +1,36 @@
+id: sigmahq-sigma-bd132164-884a-48f1-aa2d-c6d646b04c69
+name: Microsoft 365 - Potential Ransomware Activity
+description: Detects when a Microsoft Cloud App Security reported when a user uploads
+  files to the cloud that might be infected with ransomware.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Potential ransomware activity
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bd132164-884a-48f1-aa2d-c6d646b04c69
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_potential_ransomware_activity.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

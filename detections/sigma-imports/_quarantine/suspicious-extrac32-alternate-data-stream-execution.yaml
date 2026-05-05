@@ -1,0 +1,35 @@
+id: sigmahq-sigma-4b13db67-0c45-40f1-aba8-66a1a7198a1e
+name: Suspicious Extrac32 Alternate Data Stream Execution
+description: Extract data from cab file and hide it in an alternate data stream
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Extrac32/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - extrac32.exe
+    - .cab
+    CommandLine|re: :[^\\]
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4b13db67-0c45-40f1-aba8-66a1a7198a1e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_extrac32_ads.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

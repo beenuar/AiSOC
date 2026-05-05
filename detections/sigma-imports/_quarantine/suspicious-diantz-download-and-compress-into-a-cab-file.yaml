@@ -1,0 +1,36 @@
+id: sigmahq-sigma-185d7418-f250-42d0-b72e-0c8b70661e93
+name: Suspicious Diantz Download and Compress Into a CAB File
+description: Download and compress a remote file and store it in a cab file on local
+  machine.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Diantz/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - diantz.exe
+    - ' \\\\'
+    - .cab
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 185d7418-f250-42d0-b72e-0c8b70661e93
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_diantz_remote_cab.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

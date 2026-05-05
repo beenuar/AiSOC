@@ -1,0 +1,40 @@
+id: chronicle-detection-rules-possible-bind-or-reverse-shell-via-netcat-auditbeat-for-linux
+name: possible_bind_or_reverse_shell_via_netcat_auditbeat_for_linux
+description: possible_bind_or_reverse_shell_via_netcat_auditbeat_for_linux
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_bind_or_reverse_shell_via_netcat_auditbeat_for_linux\
+    \ {\n meta:\n    author = \"Roman Ranskyi\"\n    description = \"Detects possible\
+    \ bind or reverse shell via \\\"classic\\\" netcat tool. For rule usage, you must\
+    \ be install auditbeat.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/4pqSLAxPuT7R\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"linux\"\n    service\
+    \ = \"auditbeat\"\n    mitre = \"Command And Control, t1008, Execution, t1059,\
+    \ t1072\"\n\n  events:\n(($netcat_shell.target.process.command_line = \"netcat\"\
+    \ or $netcat_shell.target.process.command_line = \"nc\") and (($netcat_shell.network.direction\
+    \ = \"listening\" or $netcat_shell.network.direction = \"outbound\" or $netcat_shell.network.direction\
+    \ = \"outgoing\") or ($netcat_shell.target.process.command_line = \"-e\" or $netcat_shell.target.process.command_line\
+    \ = \"/bin/bash\" or $netcat_shell.target.process.command_line = \"/bin/sh\" or\
+    \ $netcat_shell.target.process.command_line = \"-nv\")))\n\n  condition:\n   \
+    \ $netcat_shell\n}"
+  chronicle_rule_name: possible_bind_or_reverse_shell_via_netcat_auditbeat_for_linux
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_bind_or_reverse_shell_via_netcat_auditbeat_for_linux
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/linux/possible_bind_or_reverse_shell_via_netcat__auditbeat_for_linux.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,61 @@
+id: splunk-security-content-3cb56e57-5642-4638-907f-8dfde9afb889
+name: Windows AD Domain Root ACL Deletion
+description: ACL deletion performed on the domain root object, significant AD change
+  with high impact. Following MS guidance all changes at this level should be reviewed.
+  Drill into the logonID within EventCode 4624 for information on the source device
+  during triage.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  - T1484
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/secauthz/ace-strings
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/1522b774-6464-41a3-87a5-1e5633c3fbbb
+- https://trustedsec.com/blog/a-hitchhackers-guide-to-dacl-based-detections-part-1-a
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5136 ObjectClass=domainDNS  | stats
+    min(_time) as _time values(eval(if(OperationType=="%%14675",AttributeValue,null)))
+    as old_value values(eval(if(OperationType=="%%14674",AttributeValue,null))) as
+    new_value values(OperationType) as OperationType values(dest) as dest by ObjectClass
+    ObjectDN OpCorrelationID src_user SubjectLogonId  | rex field=old_value max_match=10000
+    "\((?P<old_values>.*?)\)"  | rex field=new_value max_match=10000 "\((?P<new_values>.*?)\)"  |
+    mvexpand old_values  | where NOT old_values IN (new_values)  | rex field=old_values
+    "(?P<aceType>.*?);(?P<aceFlags>.*?);(?P<aceAccessRights>.*?);(?P<aceObjectGuid>.*?);;(?P<aceSid>.*?)$"  |
+    rex max_match=100 field=aceAccessRights "(?P<AccessRights>[A-Z]{2})"  | rex max_match=100
+    field=aceFlags "(?P<aceFlags>[A-Z]{2})"  | lookup msad_guid_lookup guid as aceObjectGuid
+    OUTPUT displayName as ControlAccessRights  | lookup ace_access_rights_lookup access_rights_string
+    as AccessRights OUTPUT access_rights_value  | lookup ace_type_lookup ace_type_string
+    as aceType OUTPUT ace_type_value  | lookup ace_flag_lookup flag_string as aceFlags
+    OUTPUT flag_value as ace_flag_value ``` Optional SID resolution lookups | lookup
+    identity_lookup_expanded objectSid as aceSid OUTPUT downLevelDomainName as user  |
+    lookup admon_groups_def objectSid as aceSid OUTPUT cn as group ``` | lookup builtin_groups_lookup
+    builtin_group_string  as aceSid OUTPUT builtin_group_name as builtin_group | eval
+    aceType=coalesce(ace_type_value,aceType), aceFlags=coalesce(ace_flag_value,"This
+    object only"), aceAccessRights=if(aceAccessRights="CCDCLCSWRPWPDTLOCRSDRCWDWO","Full
+    control",coalesce(access_rights_value,AccessRights)), aceControlAccessRights=coalesce(ControlAccessRights,aceObjectGuid),
+    user=coalesce(user, group, builtin_group, aceSid) | stats values(aceType) as aceType
+    values(aceFlags) as aceFlags(inheritance) values(aceControlAccessRights) as aceControlAccessRights
+    values(aceAccessRights) as aceAccessRights values(old_values) as old_values by
+    _time ObjectClass ObjectDN src_user SubjectLogonId user OpCorrelationID | eval
+    aceControlAccessRights=if(mvcount(aceControlAccessRights)=1 AND aceControlAccessRights="","All
+    rights",''aceControlAccessRights'') | `windows_ad_domain_root_acl_deletion_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 3cb56e57-5642-4638-907f-8dfde9afb889
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_domain_root_acl_deletion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

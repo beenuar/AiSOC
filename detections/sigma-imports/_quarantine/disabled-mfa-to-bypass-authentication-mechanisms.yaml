@@ -1,0 +1,35 @@
+id: sigmahq-sigma-7ea78478-a4f9-42a6-9dcd-f861816122bf
+name: Disabled MFA to Bypass Authentication Mechanisms
+description: Detection for when multi factor authentication has been disabled, which
+  might indicate a malicious activity to bypass authentication mechanisms.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/active-directory/authentication/howto-mfa-userstates
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    eventSource: AzureActiveDirectory
+    eventName: Disable Strong Authentication.
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7ea78478-a4f9-42a6-9dcd-f861816122bf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_mfa_disabled.yml
+falsepositives:
+- Authorized modification by administrators
+notes:
+  quarantine_reason: 'upstream status: test'

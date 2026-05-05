@@ -1,0 +1,50 @@
+id: sigmahq-sigma-27ba3207-dd30-4812-abbf-5d20c57d474e
+name: Suspicious Chromium Browser Instance Executed With Custom Extension
+description: Detects a suspicious process spawning a Chromium based browser process
+  with the 'load-extension' flag to start an instance with a custom extension
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1176.001
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/chromeloader/
+- https://emkc.org/s/RJjuLa
+- https://www.mandiant.com/resources/blog/lnk-between-browsers
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+    Image|endswith:
+    - \brave.exe
+    - \chrome.exe
+    - \msedge.exe
+    - \opera.exe
+    - \vivaldi.exe
+    CommandLine|contains: --load-extension=
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 27ba3207-dd30-4812-abbf-5d20c57d474e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_browsers_chromium_susp_load_extension.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

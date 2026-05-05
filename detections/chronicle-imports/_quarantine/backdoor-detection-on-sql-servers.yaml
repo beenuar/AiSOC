@@ -1,0 +1,53 @@
+id: chronicle-detection-rules-backdoor-detection-on-sql-servers
+name: backdoor_detection_on_sql_servers
+description: backdoor_detection_on_sql_servers
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule backdoor_detection_on_sql_servers {\n meta:\n    author =\
+    \ \"Furkan Celik\"\n    description = \"An attack targeting the aviation industry\
+    \ has been identified. You can detect the url and ip list of this attack by installing\
+    \ backdoor on SQL servers on your system.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Ov3SO6d6u76i\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/04/01\"\n    product = \"proxy\"\n    mitre\
+    \ = \"T1086, T1083, T1132, T1088\"\n\n  events:\n(($selection.target.url = \"\
+    a.vollar.ga\" or $selection.target.url = \"aa.vollar.ga\" or $selection.target.url\
+    \ = \"b.vollar.ga\" or $selection.target.url = \"c.vollar.ga\" or $selection.target.url\
+    \ = \"ca.vollar.gad.vollar.ga\" or $selection.target.url = \"da.vollar.ga\" or\
+    \ $selection.target.url = \"f.vollar.ga\" or $selection.target.url = \"h.vollar.ga\"\
+    \ or $selection.target.url = \"ja.vollar.ga\" or $selection.target.url = \"k.vollar.ga\"\
+    \ or $selection.target.url = \"m.vollar.ga\" or $selection.target.url = \"ma.vollar.ga\"\
+    \ or $selection.target.url = \"n.vollar.ga\" or $selection.target.url = \"na.vollar.ga\"\
+    \ or $selection.target.url = \"o.vollar.ga\" or $selection.target.url = \"oa.vollar.ga\"\
+    \ or $selection.target.url = \"ob.vollar.ga\" or $selection.target.url = \"s.vollar.ga\"\
+    \ or $selection.target.url = \"sa.vollar.ga\" or $selection.target.url = \"t.vollar.ga\"\
+    \ or $selection.target.url = \"ta.vollar.ga\" or $selection.target.url = \"v.vollar.ga\"\
+    \ or $selection.target.url = \"x.vollar.ga\" or $selection.target.url = \"xa.vollar.ga\"\
+    \ or $selection.target.url = \"z.vollar.ga\") and ($selection.principal.ip = \"\
+    183.131.3.196\" or $selection.principal.ip = \"192.37.90.118\" or $selection.principal.ip\
+    \ = \"39.109.116.162\" or $selection.principal.ip = \"154.221.26.108\" or $selection.principal.ip\
+    \ = \"103.53.211.94\" or $selection.principal.ip = \"185.172.66.203\" or $selection.principal.ip\
+    \ = \"51.105.249.223\" or $selection.principal.ip = \"154.211.14.66\" or $selection.principal.ip\
+    \ = \"154.221.19.221\" or $selection.principal.ip = \"145.239.23.7\" or $selection.principal.ip\
+    \ = \"180.97.220.5\" or $selection.principal.ip = \"207.180.202.208\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: backdoor_detection_on_sql_servers
+provenance:
+  source: chronicle/detection-rules
+  source_id: backdoor_detection_on_sql_servers
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/proxy/backdoor_detection_on_sql_servers.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

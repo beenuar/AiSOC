@@ -1,0 +1,44 @@
+id: splunk-security-content-7a0dda67-4cc7-4113-b3bd-b3f1489a98bf
+name: Windows SharePoint Spinstall0 Webshell File Creation
+description: This detection identifies the creation or modification of the "spinstall0.aspx"
+  webshell file in Microsoft SharePoint directories. This file is a known indicator
+  of compromise associated with the exploitation of CVE-2025-53770 (ToolShell vulnerability).
+  Attackers exploit the vulnerability to drop webshells that provide persistent access
+  to compromised SharePoint servers, allowing them to execute arbitrary commands,
+  access sensitive data, and move laterally within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://research.eye.security/sharepoint-under-siege/
+- https://www.cisa.gov/news-events/alerts/2025/07/20/microsoft-releases-guidance-exploitation-sharepoint-vulnerability-cve-2025-53770
+- https://msrc.microsoft.com/blog/2025/07/customer-guidance-for-sharepoint-vulnerability-cve-2025-53770/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats count min(_time) as firstTime max(_time) as lastTime from
+    datamodel=Endpoint.Filesystem where Filesystem.file_name="spinstall0.aspx" AND
+    (Filesystem.file_path="*\\microsoft shared\\Web Server Extensions\\16\\TEMPLATE\\LAYOUTS*"
+    OR Filesystem.file_path="*\\microsoft shared\\Web Server Extensions\\15\\TEMPLATE\\LAYOUTS*")
+    by Filesystem.dest Filesystem.user Filesystem.file_create_time Filesystem.file_name
+    Filesystem.file_path Filesystem.action Filesystem.process_guid Filesystem.process_id
+    Filesystem.vendor_product | `drop_dm_object_name(Filesystem)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_sharepoint_spinstall0_webshell_file_creation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7a0dda67-4cc7-4113-b3bd-b3f1489a98bf
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sharepoint_spinstall0_webshell_file_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

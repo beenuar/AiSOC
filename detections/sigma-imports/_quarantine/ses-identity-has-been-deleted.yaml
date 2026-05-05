@@ -1,0 +1,35 @@
+id: sigmahq-sigma-20f754db-d025-4a8f-9d74-e0037e999a9a
+name: SES Identity Has Been Deleted
+description: Detects an instance of an SES identity being deleted via the "DeleteIdentity"
+  event. This may be an indicator of an adversary removing the account that carried
+  out suspicious or malicious activities
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - cloud
+references:
+- https://unit42.paloaltonetworks.com/compromised-cloud-compute-credentials/
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: ses.amazonaws.com
+    eventName: DeleteIdentity
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 20f754db-d025-4a8f-9d74-e0037e999a9a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_delete_identity.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

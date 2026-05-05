@@ -1,0 +1,52 @@
+id: sigmahq-sigma-afe52666-401e-4a02-b4ff-5d128990b8cb
+name: Suspicious Greedy Compression Using Rar.EXE
+description: Detects RAR usage that creates an archive from a suspicious folder, either
+  a system folder or one of the folders often used by attackers for staging purposes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://decoded.avast.io/martinchlumecky/png-steganography
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_opt_1:
+  - Image|endswith: \rar.exe
+  - Description: Command line RAR
+  selection_opt_2:
+    CommandLine|contains:
+    - '.exe a '
+    - ' a -m'
+  selection_cli_flags:
+    CommandLine|contains|all:
+    - ' -hp'
+    - ' -r '
+  selection_cli_folders:
+    CommandLine|contains:
+    - ' ?:\\\*.'
+    - ' ?:\\\\\*.'
+    - ' ?:\$Recycle.bin\'
+    - ' ?:\PerfLogs\'
+    - ' ?:\Temp'
+    - ' ?:\Users\Public\'
+    - ' ?:\Windows\'
+    - ' %public%'
+  condition: 1 of selection_opt_* and all of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: afe52666-401e-4a02-b4ff-5d128990b8cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rar_susp_greedy_compression.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

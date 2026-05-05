@@ -1,0 +1,43 @@
+id: splunk-security-content-4ff9767b-fdf2-489c-83a5-c6c34412d72e
+name: Windows Modify Registry DontShowUI
+description: The following analytic detects modifications to the Windows Error Reporting
+  registry key "DontShowUI" to suppress error reporting dialogs. It leverages data
+  from the Endpoint datamodel's Registry node to identify changes where the registry
+  value is set to 0x00000001. This activity is significant as it is commonly associated
+  with DarkGate malware, which uses this modification to avoid detection during its
+  installation. If confirmed malicious, this behavior could allow attackers to maintain
+  a low profile, avoiding user alerts and potentially enabling further malicious activities
+  without user intervention.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.darkgate
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path
+    = "*\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\DontShowUI"  Registry.registry_value_data
+    = 0x00000001 by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_modify_registry_dontshowui_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 4ff9767b-fdf2-489c-83a5-c6c34412d72e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_dontshowui.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

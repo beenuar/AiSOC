@@ -1,0 +1,31 @@
+id: sigmahq-sigma-b6c718dd-8f53-4b9f-98d8-93fdca966969
+name: New Okta User Created
+description: Detects new user account creation
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  service: okta
+  product: okta
+detection:
+  selection:
+    eventType: user.lifecycle.create
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b6c718dd-8f53-4b9f-98d8-93fdca966969
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_user_created.yml
+falsepositives:
+- Legitimate and authorized user creation
+notes:
+  quarantine_reason: 'upstream status: test'

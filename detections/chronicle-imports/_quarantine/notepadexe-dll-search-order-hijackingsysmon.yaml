@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-notepadexe-dll-search-order-hijackingsysmon
+name: notepadexe_dll_search_order_hijackingsysmon
+description: notepadexe_dll_search_order_hijackingsysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule notepadexe_dll_search_order_hijackingsysmon {\n meta:\n \
+    \   author = \"Den Iuzvyk\"\n    description = \"notepad++.exe DLL search order\
+    \ hijacking  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/f4mYKTC1T7yd\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"sysmon\"\n    product\
+    \ = \"windows\"\n    mitre = \"persistence, defense_evasion, t1073, t1038\"\n\n\
+    \  events:\n(($selection.metadata.product_event_type = \"7\" and re.regex($selection.target.process.file.full_path,\
+    \ `.*notepad\\+\\+\\.exe`) and re.regex($selection.target.process.file.full_path,\
+    \ `.*dbghelp\\.dll`)) and not (re.regex($selection.target.process.file.full_path,\
+    \ `.*Windows\\\\System32.*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: notepadexe_dll_search_order_hijackingsysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: notepadexe_dll_search_order_hijackingsysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/notepad___exe_dll_search_order_hijacking_sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

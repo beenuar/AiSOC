@@ -1,0 +1,38 @@
+id: sigmahq-sigma-bae2865c-5565-470d-b505-9496c87d0c30
+name: SMB Spoolss Name Piped Usage
+description: Detects the use of the spoolss named pipe over SMB. This can be used
+  to trigger the authentication via NTLM of any machine that has the spoolservice
+  enabled.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/hunting-in-active-directory-unconstrained-delegation-forests-trusts-71f2b33688e1
+- https://dirkjanm.io/a-different-way-of-abusing-zerologon/
+- https://twitter.com/_dirkjan/status/1309214379003588608
+logsource:
+  product: zeek
+  service: smb_files
+detection:
+  selection:
+    path|endswith: IPC$
+    name: spoolss
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bae2865c-5565-470d-b505-9496c87d0c30
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_dce_rpc_smb_spoolss_named_pipe.yml
+falsepositives:
+- Domain Controllers that are sometimes, commonly although should not be, acting as
+  printer servers too
+notes:
+  quarantine_reason: 'upstream status: test'

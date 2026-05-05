@@ -1,0 +1,36 @@
+id: sigmahq-sigma-7021255e-5db3-4946-a8b9-0ba7a4644a69
+name: Potential Provisioning Registry Key Abuse For Binary Proxy Execution - REG
+description: Detects potential abuse of the provisioning registry key for indirect
+  command execution through "Provlaunch.exe".
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Provlaunch/
+- https://twitter.com/0gtweet/status/1674399582162153472
+logsource:
+  category: registry_set
+  product: windows
+  definition: 'Requirements: The registry key "\SOFTWARE\Microsoft\Provisioning\Commands\"
+    and its subkey must be monitored'
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\Microsoft\Provisioning\Commands\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7021255e-5db3-4946-a8b9-0ba7a4644a69
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_provisioning_command_abuse.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

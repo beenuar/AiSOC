@@ -1,0 +1,44 @@
+id: sigmahq-sigma-2fdaf50b-9fd5-449f-ba69-f17248119af6
+name: Network Connection Initiated via Finger.EXE
+description: 'Detects network connections via finger.exe, which can be abused by threat
+  actors to retrieve remote commands for execution on Windows devices.
+
+  In one ClickFix malware campaign, adversaries leveraged the finger protocol to fetch
+  commands from a remote server.
+
+  Since the finger utility is not commonly used in modern Windows environments, its
+  presence already raises suspicion.
+
+  Investigating such network connections can also help identify potential malicious
+  infrastructure used by threat actors'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/decades-old-finger-protocol-abused-in-clickfix-malware-attacks/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    Image|endswith: \finger.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2fdaf50b-9fd5-449f-ba69-f17248119af6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_finger.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

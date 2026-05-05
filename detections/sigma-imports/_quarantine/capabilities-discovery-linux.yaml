@@ -1,0 +1,36 @@
+id: sigmahq-sigma-d8d97d51-122d-4cdd-9e2f-01b4b4933530
+name: Capabilities Discovery - Linux
+description: Detects usage of "getcap" binary. This is often used during recon activity
+  to determine potential binaries that can be abused as GTFOBins or other.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/SaiSathvik1/Linux-Privilege-Escalation-Notes
+- https://github.com/carlospolop/PEASS-ng
+- https://github.com/diego-treitos/linux-smart-enumeration
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /getcap
+    CommandLine|contains: ' -r '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d8d97d51-122d-4cdd-9e2f-01b4b4933530
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_capa_discovery.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

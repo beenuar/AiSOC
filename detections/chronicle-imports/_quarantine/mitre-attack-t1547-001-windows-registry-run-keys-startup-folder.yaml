@@ -1,0 +1,63 @@
+id: chronicle-detection-rules-mitre-attack-t1547-001-windows-registry-run-keys-startup-folder
+name: mitre_attack_T1547_001_windows_registry_run_keys_startup_folder
+description: mitre_attack_T1547_001_windows_registry_run_keys_startup_folder
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2021 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule mitre_attack_T1547_001_windows_registry_run_keys_startup_folder\n{\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Creation or changes\
+    \ of the registry AutoStart Execution Point (ASEP) / run keys\"\n    reference\
+    \ = \"https://attack.mitre.org/techniques/T1547/001/\"\n    yara_version = \"\
+    YL2.0\"\n    rule_version = \"1.0\"\n\n  events:\n    (\n      $e1.metadata.event_type\
+    \ = \"REGISTRY_CREATION\" or\n      $e1.metadata.event_type = \"REGISTRY_MODIFICATION\"\
+    \n    )\n    and\n    (\n      re.regex($e1.target.registry.registry_key, `(HKCU|HKEY_CURRENT_USER)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\(Run|RunOnce)`) nocase\
+    \ or\n      re.regex($e1.target.registry.registry_key, `(HKCU|HKEY_CURRENT_USER)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\(User )?Shell\
+    \ Folders`) nocase or\n      re.regex($e1.target.registry.registry_key, `(HKCU|HKEY_CURRENT_USER)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\
+    \\Run`) nocase or\n      re.regex($e1.target.registry.registry_key, `(HKCU|HKEY_CURRENT_USER)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunServices(Once)?`) nocase\
+    \ or\n      re.regex($e1.target.registry.registry_key, `(HKCU|HKEY_CURRENT_USER)\\\
+    \\Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows`) nocase or\n\
+    \n      re.regex($e1.target.registry.registry_key, `(HKLM|HKEY_LOCAL_MACHINE)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\(Run|RunOnce|RunOnceEx)`)\
+    \ nocase or\n      re.regex($e1.target.registry.registry_key, `(HKLM|HKEY_LOCAL_MACHINE)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\(User )?Shell\
+    \ Folders`) nocase or\n      re.regex($e1.target.registry.registry_key, `(HKLM|HKEY_LOCAL_MACHINE)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\
+    \\Run`) nocase or\n      re.regex($e1.target.registry.registry_key, `(HKLM|HKEY_LOCAL_MACHINE)\\\
+    \\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunServices(Once)?`) nocase\
+    \ or\n      re.regex($e1.target.registry.registry_key, `(HKLM|HKEY_LOCAL_MACHINE)\\\
+    \\Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon\\\\(Shell|Userinit)`)\
+    \ nocase or\n\n      re.regex($e1.target.registry.registry_key, `(HKLM|HKEY_LOCAL_MACHINE)\\\
+    \\System\\\\CurrentControlSet\\\\Control\\\\Session Manager`) nocase\n    )\n\n\
+    \  condition:\n    $e1\n}"
+  chronicle_rule_name: mitre_attack_T1547_001_windows_registry_run_keys_startup_folder
+provenance:
+  source: chronicle/detection-rules
+  source_id: mitre_attack_T1547_001_windows_registry_run_keys_startup_folder
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/mitre_attack/T1547_001_windows_registry_run_keys_startup_folder.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

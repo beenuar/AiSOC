@@ -1,0 +1,41 @@
+id: sigmahq-sigma-5496ff55-42ec-4369-81cb-00f417029e25
+name: Multifactor Authentication Interrupted
+description: Identifies user login with multifactor authentication failures, which
+  might be an indication an attacker has the password for the account but can't pass
+  the MFA challenge.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1110
+  - T1621
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection_50074:
+    ResultType: 50074
+    ResultDescription|contains: Strong Auth required
+  selection_500121:
+    ResultType: 500121
+    ResultDescription|contains: Authentication failed during strong authentication
+      request
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5496ff55-42ec-4369-81cb-00f417029e25
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_mfa_interrupted.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

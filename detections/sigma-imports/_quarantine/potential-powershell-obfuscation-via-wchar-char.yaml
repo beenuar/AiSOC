@@ -1,0 +1,35 @@
+id: sigmahq-sigma-e312efd0-35a1-407f-8439-b8d434b438a6
+name: Potential PowerShell Obfuscation Via WCHAR/CHAR
+description: Detects suspicious encoded character syntax often used for defense evasion
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0gtweet/status/1281103918693482496
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - '[char]0x'
+    - (WCHAR)0x
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e312efd0-35a1-407f-8439-b8d434b438a6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_obfuscation_via_utf8.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

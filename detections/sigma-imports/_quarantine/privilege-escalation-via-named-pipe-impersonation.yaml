@@ -1,0 +1,43 @@
+id: sigmahq-sigma-9bd04a79-dabe-4f1f-a5ff-92430265c96b
+name: Privilege Escalation via Named Pipe Impersonation
+description: Detects a remote file copy attempt to a hidden network share. This may
+  indicate lateral movement or data staging activity.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/privilege-escalation-via-named-pipe-impersonation.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_name:
+  - Image|endswith:
+    - \cmd.exe
+    - \powershell.exe
+  - OriginalFileName:
+    - Cmd.Exe
+    - PowerShell.EXE
+  selection_args:
+    CommandLine|contains|all:
+    - echo
+    - '>'
+    - \\\\.\\pipe\\
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9bd04a79-dabe-4f1f-a5ff-92430265c96b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_priv_escalation_via_named_pipe.yml
+falsepositives:
+- Other programs that cause these patterns (please report)
+notes:
+  quarantine_reason: 'upstream status: test'

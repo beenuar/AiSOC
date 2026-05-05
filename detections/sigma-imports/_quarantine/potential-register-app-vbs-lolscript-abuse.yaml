@@ -1,0 +1,43 @@
+id: sigmahq-sigma-28c8f68b-098d-45af-8d43-8089f3e35403
+name: Potential Register_App.Vbs LOLScript Abuse
+description: Detects potential abuse of the "register_app.vbs" script that is part
+  of the Windows SDK. The script offers the capability to register new VSS/VDS Provider
+  as a COM+ application. Attackers can use this to install malicious DLLs for persistence
+  and execution.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/sblmsrsn/status/1456613494783160325?s=20
+- https://github.com/microsoft/Windows-classic-samples/blob/7cbd99ac1d2b4a0beffbaba29ea63d024ceff700/Samples/Win7Samples/winbase/vss/vsssampleprovider/register_app.vbs
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \cscript.exe
+    - \wscript.exe
+  - OriginalFileName:
+    - cscript.exe
+    - wscript.exe
+  selection_cli:
+    CommandLine|contains: '.vbs -register '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 28c8f68b-098d-45af-8d43-8089f3e35403
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolscript_register_app.yml
+falsepositives:
+- Other VB scripts that leverage the same starting command line flags
+notes:
+  quarantine_reason: 'upstream status: test'

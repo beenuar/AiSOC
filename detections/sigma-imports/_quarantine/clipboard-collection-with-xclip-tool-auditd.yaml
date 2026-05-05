@@ -1,0 +1,47 @@
+id: sigmahq-sigma-214e7e6c-f21b-47ff-bb6f-551b2d143fcf
+name: Clipboard Collection with Xclip Tool - Auditd
+description: 'Detects attempts to collect data stored in the clipboard from users
+  with the usage of xclip tool.
+
+  Xclip has to be installed.
+
+  Highly recommended using rule on servers, due to high usage of clipboard utilities
+  on user workstations.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1115
+  categories:
+  - endpoint
+references:
+- https://linux.die.net/man/1/xclip
+- https://www.cyberciti.biz/faq/xclip-linux-insert-files-command-output-intoclipboard/
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0: xclip
+    a1:
+    - -selection
+    - -sel
+    a2:
+    - clipboard
+    - clip
+    a3: -o
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 214e7e6c-f21b-47ff-bb6f-551b2d143fcf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_clipboard_collection.yml
+falsepositives:
+- Legitimate usage of xclip tools
+notes:
+  quarantine_reason: 'upstream status: test'

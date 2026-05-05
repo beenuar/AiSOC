@@ -1,0 +1,36 @@
+id: sigmahq-sigma-1cb0c6ce-3d00-44fc-ab9c-6d6d577bf20b
+name: DNS Query To Devtunnels Domain
+description: Detects DNS query requests to Devtunnels domains. Attackers can abuse
+  that feature to establish a reverse shell or persistence on a machine.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1572
+  categories:
+  - endpoint
+references:
+- https://blueteamops.medium.com/detecting-dev-tunnels-16f0994dc3e2
+- https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/security
+- https://cydefops.com/devtunnels-unleashed
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryName|endswith: .devtunnels.ms
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1cb0c6ce-3d00-44fc-ab9c-6d6d577bf20b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_devtunnels_communication.yml
+falsepositives:
+- Legitimate use of Devtunnels will also trigger this.
+notes:
+  quarantine_reason: 'upstream status: test'

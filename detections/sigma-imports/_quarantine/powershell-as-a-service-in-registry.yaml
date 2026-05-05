@@ -1,0 +1,36 @@
+id: sigmahq-sigma-4a5f5a5e-ac01-474b-9b4e-d61298c9df1d
+name: PowerShell as a Service in Registry
+description: Detects that a powershell code is written to the registry as a service.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Services\
+    TargetObject|endswith: \ImagePath
+    Details|contains:
+    - powershell
+    - pwsh
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4a5f5a5e-ac01-474b-9b4e-d61298c9df1d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_powershell_as_service.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

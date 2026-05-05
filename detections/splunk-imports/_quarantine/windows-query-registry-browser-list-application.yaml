@@ -1,0 +1,42 @@
+id: splunk-security-content-45ebd21c-f4bf-4ced-bd49-d25b6526cebb
+name: Windows Query Registry Browser List Application
+description: The following analytic detects a suspicious process accessing the registry
+  entries for default internet browsers. It leverages Windows Security Event logs,
+  specifically event code 4663, to identify access attempts to these registry paths.
+  This activity is significant because adversaries can exploit this registry key to
+  gather information about installed browsers and their settings, potentially leading
+  to the theft of sensitive data such as login credentials and browsing history. If
+  confirmed malicious, this behavior could enable attackers to exfiltrate sensitive
+  information and compromise user accounts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1012
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.redline_stealer
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4663 object_file_path IN ("*\\SOFTWARE\\Clients\\StartMenuInternet\\*",
+    "*\\SOFTWARE\\Clients\\StartMenuInternet\\*") AND NOT process_path IN ("*:\\Windows\\System32\\*",
+    "*:\\Windows\\SysWow64\\*", *:\\Windows\\WinSxS\\*, "*:\\Program Files\\*", "*:\\Program
+    Files (x86)\\*") | stats count min(_time) as firstTime max(_time) as lastTime
+    by object_file_name object_file_path process_name process_path  process_id EventCode
+    dest | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_query_registry_browser_list_application_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 45ebd21c-f4bf-4ced-bd49-d25b6526cebb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_query_registry_browser_list_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

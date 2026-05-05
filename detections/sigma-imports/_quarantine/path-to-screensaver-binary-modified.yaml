@@ -1,0 +1,38 @@
+id: sigmahq-sigma-67a6c006-3fbe-46a7-9074-2ba3b82c3000
+name: Path To Screensaver Binary Modified
+description: Detects value modification of registry key containing path to binary
+  used as screensaver.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1546.002/T1546.002.md
+- https://www.welivesecurity.com/wp-content/uploads/2017/08/eset-gazer.pdf
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Control Panel\Desktop\SCRNSAVE.EXE
+  filter:
+    Image|endswith:
+    - \rundll32.exe
+    - \explorer.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 67a6c006-3fbe-46a7-9074-2ba3b82c3000
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_modify_screensaver_binary_path.yml
+falsepositives:
+- Legitimate modification of screensaver
+notes:
+  quarantine_reason: 'upstream status: test'

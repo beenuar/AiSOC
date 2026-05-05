@@ -1,0 +1,41 @@
+id: sigmahq-sigma-044ba588-dff4-4918-9808-3f95e8160606
+name: Copy .DMP/.DUMP Files From Remote Share Via Cmd.EXE
+description: Detects usage of the copy builtin cmd command to copy files with the
+  ".dmp"/".dump" extension from a remote share
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/09/26/bumblebee-round-two/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \cmd.exe
+  - OriginalFileName: Cmd.Exe
+  selection_cli:
+    CommandLine|contains|all:
+    - 'copy '
+    - ' \\\\'
+    CommandLine|contains:
+    - .dmp
+    - .dump
+    - .hdmp
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 044ba588-dff4-4918-9808-3f95e8160606
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_copy_dmp_from_share.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

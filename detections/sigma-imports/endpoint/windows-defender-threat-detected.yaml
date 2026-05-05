@@ -1,0 +1,34 @@
+id: sigmahq-sigma-57b649ef-ff42-4fb0-8bf6-62da243a1708
+name: Windows Defender Threat Detected
+description: Detects actions taken by Windows Defender malware detection engines
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID:
+    - 1006
+    - 1015
+    - 1116
+    - 1117
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 57b649ef-ff42-4fb0-8bf6-62da243a1708
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/windefend/win_defender_threat.yml
+falsepositives:
+- Unlikely

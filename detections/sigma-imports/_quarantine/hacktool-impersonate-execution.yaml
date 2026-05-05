@@ -1,0 +1,45 @@
+id: sigmahq-sigma-cf0c254b-22f1-4b2b-8221-e137b3c0af94
+name: HackTool - Impersonate Execution
+description: Detects execution of the Impersonate tool. Which can be used to manipulate
+  tokens on a Windows computers remotely (PsExec/WmiExec) or interactively
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.001
+  - T1134.003
+  categories:
+  - endpoint
+references:
+- https://sensepost.com/blog/2022/abusing-windows-tokens-to-compromise-active-directory-without-touching-lsass/
+- https://github.com/sensepost/impersonate
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_commandline_exe:
+    CommandLine|contains: impersonate.exe
+  selection_commandline_opt:
+    CommandLine|contains:
+    - ' list '
+    - ' exec '
+    - ' adduser '
+  selection_hash:
+    Hashes|contains:
+    - MD5=9520714AB576B0ED01D1513691377D01
+    - SHA256=E81CC96E2118DC4FBFE5BAD1604E0AC7681960143E2101E1A024D52264BB0A8A
+    - IMPHASH=0A358FFC1697B7A07D0E817AC740DF62
+  condition: all of selection_commandline_* or selection_hash
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cf0c254b-22f1-4b2b-8221-e137b3c0af94
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_impersonate.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

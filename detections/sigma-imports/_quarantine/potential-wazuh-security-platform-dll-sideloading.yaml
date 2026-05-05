@@ -1,0 +1,45 @@
+id: sigmahq-sigma-db77ce78-7e28-4188-9337-cf30e2b3ba9f
+name: Potential Wazuh Security Platform DLL Sideloading
+description: Detects potential DLL side loading of DLLs that are part of the Wazuh
+  security platform
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/23/c/iron-tiger-sysupdate-adds-linux-targeting.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith:
+    - \libwazuhshared.dll
+    - \libwinpthread-1.dll
+  filter_main_generic:
+    ImageLoaded|startswith:
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+  filter_optional_mingw64:
+    ImageLoaded|contains:
+    - \AppData\Local\
+    - \ProgramData\
+    ImageLoaded|endswith: \mingw64\bin\libwinpthread-1.dll
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db77ce78-7e28-4188-9337-cf30e2b3ba9f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_wazuh.yml
+falsepositives:
+- Many legitimate applications leverage this DLL. (Visual Studio, JetBrains, Ruby,
+  Anaconda, GithubDesktop, etc.)
+notes:
+  quarantine_reason: 'upstream status: test'

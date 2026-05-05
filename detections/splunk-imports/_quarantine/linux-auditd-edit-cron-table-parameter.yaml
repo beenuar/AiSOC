@@ -1,0 +1,40 @@
+id: splunk-security-content-f4bb7321-7e64-4d1e-b1aa-21f8b019a91f
+name: Linux Auditd Edit Cron Table Parameter
+description: The following analytic detects the suspicious editing of cron jobs in
+  Linux using the crontab command-line parameter (-e). It identifies this activity
+  by monitoring command-line executions involving 'crontab' and the edit parameter.
+  This behavior is significant for a SOC as cron job manipulations can indicate unauthorized
+  persistence attempts or scheduled malicious actions. If confirmed malicious, this
+  activity could lead to system compromise, unauthorized access, or broader network
+  compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1053/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=SYSCALL syscall IN (\"rename\", \"execve\") (comm\
+    \ IN (\"crontab\") OR exe IN (\"*/crontab\")) success=yes AND NOT (UID IN(\"daemon\"\
+    ))\n  | rename host as dest\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY comm exe syscall\n       uid ppid pid\n       dest\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_edit_cron_table_parameter_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f4bb7321-7e64-4d1e-b1aa-21f8b019a91f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_edit_cron_table_parameter.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

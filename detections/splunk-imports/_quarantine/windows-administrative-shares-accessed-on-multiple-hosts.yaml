@@ -1,0 +1,43 @@
+id: splunk-security-content-d92f2d95-05fb-48a7-910f-4d3d61ab8655
+name: Windows Administrative Shares Accessed On Multiple Hosts
+description: The following analytic detects a source computer accessing Windows administrative
+  shares (C$, Admin$, IPC$) on 30 or more remote endpoints within a 5-minute window.
+  It leverages Event IDs 5140 and 5145 from file share events. This behavior is significant
+  as it may indicate an adversary enumerating network shares to locate sensitive files,
+  a common tactic used by threat actors. If confirmed malicious, this activity could
+  lead to unauthorized access to critical data, lateral movement, and potential compromise
+  of multiple systems within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1135
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1135/
+- https://en.wikipedia.org/wiki/Administrative_share
+- https://thedfirreport.com/2023/01/23/sharefinder-how-threat-actors-discover-file-shares/
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5140
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5145
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5140 OR EventCode=5145 (ShareName="\\\\*\\ADMIN$"
+    OR ShareName="\\\\*\\IPC$" OR ShareName="\\\\*\\C$") | bucket span=5m _time |
+    stats dc(Computer) AS unique_targets values(Computer) as host_targets values(ShareName)
+    as shares values(dest) as dest by _time, IpAddress, SubjectUserName, EventCode
+    | where unique_targets > 30 | `windows_administrative_shares_accessed_on_multiple_hosts_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d92f2d95-05fb-48a7-910f-4d3d61ab8655
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_administrative_shares_accessed_on_multiple_hosts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

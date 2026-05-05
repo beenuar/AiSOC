@@ -1,0 +1,86 @@
+id: chronicle-detection-rules-low-prevalence-hash-on-process-launch-low-prevalence-domain-accessed
+name: low_prevalence_hash_on_process_launch_low_prevalence_domain_accessed
+description: low_prevalence_hash_on_process_launch_low_prevalence_domain_accessed
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule low_prevalence_hash_on_process_launch_low_prevalence_domain_accessed {\n\
+    \n  meta:\n    author = \"Google Cloud Security\"\n    description = \"Detects\
+    \ when a low prevalence hash is seen during a process launch event, and a low\
+    \ prevalence domain is accessed within 10m.\"\n    rule_id = \"mr_0624f9fb-8c73-4b8c-8651-b88ed736c862\"\
+    \n    rule_name = \"Low Prevalence Hash On Process Launch Low Prevalence Domain\
+    \ Accessed\"\n    type = \"alert\"\n    tags = \"prevalence\"\n    data_source\
+    \ = \"zscalar, microsoft sysmon\"\n    severity = \"Low\"\n    priority = \"Low\"\
+    \n\n  events:\n    // Process Launch\n    $process.metadata.event_type = \"PROCESS_LAUNCH\"\
+    \n    $process.principal.ip = $ip\n    $process.target.file.sha256 != \"\"\n \
+    \   $process.target.file.sha256 = $sha256\n\n    // File Prevalence Criteria\n\
+    \    $fileprev.graph.metadata.entity_type = \"FILE\"\n    $fileprev.graph.metadata.source_type\
+    \ = \"DERIVED_CONTEXT\"\n    $fileprev.graph.entity.file.prevalence.day_count\
+    \ = 10\n    $fileprev.graph.entity.file.prevalence.rolling_max > 0\n    //Adjust\
+    \ rolling_max for a different threshold as needed\n    $fileprev.graph.entity.file.prevalence.rolling_max\
+    \ <= 2\n    //Join process event to file prevalence entity\n    $fileprev.graph.entity.file.sha256\
+    \ = $sha256\n\n    // Network HTTP\n    $http.metadata.event_type = \"NETWORK_HTTP\"\
+    \n    $http.principal.ip = $ip\n    $http.target.hostname = $hostname\n    //\
+    \ Filter out URLs with RFC 1918 IP addresses\n    not net.ip_in_range_cidr($http.target.ip,\
+    \ \"127.0.0.1/32\")\n    not net.ip_in_range_cidr($http.target.ip, \"10.0.0.0/8\"\
+    )\n    not net.ip_in_range_cidr($http.target.ip, \"172.16.0.0/12\")\n    not net.ip_in_range_cidr($http.target.ip,\
+    \ \"192.168.0.0/16\")\n    // Only match valid FQDN, filter out background non-routable\
+    \ noise\n    re.regex($http.target.hostname, `(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\\
+    .)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]`)\n\n    // Domain Prevalence Criteria\n  \
+    \  $domainprev.graph.metadata.entity_type = \"DOMAIN_NAME\"\n    $domainprev.graph.metadata.source_type\
+    \ = \"DERIVED_CONTEXT\"\n    $domainprev.graph.entity.domain.prevalence.day_count\
+    \ = 10\n    $domainprev.graph.entity.domain.prevalence.rolling_max > 0\n    //\
+    \ Adjust rolling_max for a different threshold as needed\n    $domainprev.graph.entity.domain.prevalence.rolling_max\
+    \ < 2\n    // Join network event to domain entity\n    $domainprev.graph.entity.domain.name\
+    \ = $hostname\n\n    // Apply timing element to force the process to occur before\
+    \ the http\n    $process.metadata.event_timestamp.seconds <= $http.metadata.event_timestamp.seconds\n\
+    \n  match:\n    $ip over 10m\n\n  outcome:\n    $risk_score = max(\n        //\
+    \ increment risk score based upon rolling_max prevalence\n        if ( $domainprev.graph.entity.domain.prevalence.rolling_max\
+    \ >= 10, 10) +\n        if ( $domainprev.graph.entity.domain.prevalence.rolling_max\
+    \ >= 2 and $domainprev.graph.entity.domain.prevalence.rolling_max <= 9 , 20) +\n\
+    \        if ( $domainprev.graph.entity.domain.prevalence.rolling_max = 1, 30)\n\
+    \    )\n    // added to populate alert graph with additional context\n    // Commented\
+    \ out principal.ip because it is already represented in graph as match variable.\
+    \ If match changes, can uncomment to add to results\n    //$principal_ip = array_distinct($http.principal.ip)\n\
+    \    $target_ip = array_distinct($http.target.ip)\n    $principal_process_pid\
+    \ = array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n    $target_url = array_distinct($http.target.url)\n\
+    \n  condition:\n    $process and $fileprev and $http and $domainprev\n}"
+  chronicle_rule_name: low_prevalence_hash_on_process_launch_low_prevalence_domain_accessed
+provenance:
+  source: chronicle/detection-rules
+  source_id: low_prevalence_hash_on_process_launch_low_prevalence_domain_accessed
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/low_prevalence_hash_on_process_launch_low_prevalence_domain_accessed.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

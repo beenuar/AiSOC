@@ -1,0 +1,38 @@
+id: sigmahq-sigma-c5b20776-639a-49bf-94c7-84f912b91c15
+name: Netcat The Powershell Version
+description: Adversaries may use a non-application layer protocol for communication
+  between host and C2 server or among infected hosts within a network
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1095
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://nmap.org/ncat/
+- https://github.com/besimorhino/powercat
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1095/T1095.md
+logsource:
+  product: windows
+  category: ps_classic_start
+detection:
+  selection:
+    Data|contains:
+    - 'powercat '
+    - powercat.ps1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c5b20776-639a-49bf-94c7-84f912b91c15
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_powercat.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

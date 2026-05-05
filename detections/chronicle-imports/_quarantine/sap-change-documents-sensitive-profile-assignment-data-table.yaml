@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-sap-change-documents-sensitive-profile-assignment-data-table
+name: sap_change_documents_sensitive_profile_assignment_data_table
+description: sap_change_documents_sensitive_profile_assignment_data_table
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_change_documents_sensitive_profile_assignment_data_table {\n\n    meta:\n\
+    \        author = \"Google Cloud Security\"\n        description = \"Detects the\
+    \ assignment of highly privileged SAP profiles via Change Documents.\"\n     \
+    \   severity = \"Critical\"\n        tactic = \"TA0004\"\n        technique =\
+    \ \"T1098\"\n\n    events:\n        $e.metadata.log_type = \"SAP_CHANGE_DOCUMENT\"\
+    \n        $e.target.resource.attribute.labels[\"TABKEY\"] in %sap_sensitive_profiles.profile\n\
+    \        $e.target.resource.name = \"IDENTITY\"\n\n        $principal_user = $e.principal.user.userid\n\
+    \n\n    match:\n        $principal_user over 30m\n\n    outcome:\n        $target_user\
+    \ = array_distinct($e.target.resource.product_object_id)\n        $tcode = array_distinct($e.target.application)\n\
+    \        $tabname = array_distinct($e.target.resource.attribute.labels[\"TABNAME\"\
+    ])\n        $sensitive_profile_assigned = array_distinct($e.target.resource.attribute.labels[\"\
+    TABKEY\"])\n\n    condition:\n        $e\n\n}"
+  chronicle_rule_name: sap_change_documents_sensitive_profile_assignment_data_table
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_change_documents_sensitive_profile_assignment_data_table
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_change_documents_sensitive_profile_assignment_data_table.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

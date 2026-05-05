@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-rdp-login-from-localhost
+name: rdp_login_from_localhost
+description: rdp_login_from_localhost
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule rdp_login_from_localhost {\n meta:\n    author = \"Thomas\
+    \ Patzke\"\n    description = \"RDP login with localhost source address may be\
+    \ a tunnelled login  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/0fYJxulh13jk\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"Lateral Movement, t1076, Command And Control,\
+    \ t1071, t1043\"\n\n  events:\n($selection.metadata.product_event_type = \"4624\"\
+    \ and $selection.extensions.auth.mechanism = \"10\" and ($selection.principal.ip\
+    \ = \"::1\" or $selection.principal.ip = \"127.0.0.1\"))\n\n  condition:\n   \
+    \ $selection\n}"
+  chronicle_rule_name: rdp_login_from_localhost
+provenance:
+  source: chronicle/detection-rules
+  source_id: rdp_login_from_localhost
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/rdp_login_from_localhost.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

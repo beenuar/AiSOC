@@ -1,0 +1,49 @@
+id: sigmahq-sigma-6d8c3d20-a5e1-494f-8412-4571d716cf5c
+name: Communication To Uncommon Destination Ports
+description: Detects programs that connect to uncommon destination ports
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1571
+  categories:
+  - endpoint
+references:
+- https://docs.google.com/spreadsheets/d/17pSTDNpa0sf6pHeRhusvWG6rThciE8CsXTSlDUAZDyo
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    DestinationPort:
+    - 8080
+    - 8888
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  filter_optional_sys_directories:
+    Image|startswith:
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6d8c3d20-a5e1-494f-8412-4571d716cf5c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_susp_malware_callback_ports_uncommon.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

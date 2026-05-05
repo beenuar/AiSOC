@@ -1,0 +1,34 @@
+id: sigmahq-sigma-5a44727c-3b85-4713-8c44-4401d5499629
+name: Replay Attack Detected
+description: Detects possible Kerberos Replay Attack on the domain controllers when
+  "KRB_AP_ERR_REPEAT" Kerberos response is sent to the client
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1558
+  categories:
+  - endpoint
+references:
+- https://github.com/Yamato-Security/EnableWindowsLogSettings/blob/7f6d755d45ac7cc9fc35b0cbf498e6aa4ef19def/ConfiguringSecurityLogAuditPolicies.md
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4649
+logsource:
+  service: security
+  product: windows
+detection:
+  selection:
+    EventID: 4649
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5a44727c-3b85-4713-8c44-4401d5499629
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_replay_attack_detected.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

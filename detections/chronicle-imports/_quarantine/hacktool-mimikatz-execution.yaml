@@ -1,0 +1,84 @@
+id: chronicle-detection-rules-hacktool-mimikatz-execution
+name: hacktool_mimikatz_execution
+description: hacktool_mimikatz_execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule hacktool_mimikatz_execution {\n\n  meta:\n    author = \"Teymur Kheirkhabarov,\
+    \ oscd.community, David ANDRE (additional keywords), Tim Shelton\"\n    description\
+    \ = \"Detection well-known mimikatz command line arguments\"\n    reference =\
+    \ \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_hktl_mimikatz_command_line.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"HackTool - Mimikatz Execution\"\n    sigma_uuid = \"a642964e-bead-4bed-8910-1bb4d63e3b4d\"\
+    \n    sigma_status = \"test\"\n    rule_id = \"mr_d173bc90-2dcf-418d-a40c-bb7792f6300a\"\
+    \n    tactic = \"TA0006\"\n    technique = \"T1003.001\"\n    type = \"Detection\"\
+    \n    data_source = \"Sysmon\"\n    platform = \"Windows\"\n    severity = \"\
+    High\"\n    priority = \"High\"\n    false_positives = \"Unlikely\"\n\n  events:\n\
+    \    $process.metadata.event_type = \"PROCESS_LAUNCH\"\n    (\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"dumpcreds\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"mimikatz\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::aadcookie\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::detours\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::memssp\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::mflt\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::ncroutemon\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::ngcsign\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::printnightmare\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::skeleton\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::preshutdown\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::mstsc\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"::multirdp\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"rpc::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"token::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"crypto::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"dpapi::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"sekurlsa::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"kerberos::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"lsadump::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"privilege::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"process::\") or\n        strings.contains(strings.to_lower($process.target.process.command_line),\
+    \ \"vault::\")\n    )\n    $process.principal.hostname = $hostname\n\n  match:\n\
+    \    $hostname over 5m\n\n  outcome:\n    //example usage of specifying test user\
+    \ and hostname to adjust risk score\n    $risk_score = max(if($process.principal.user.userid\
+    \ = \"user\" and $process.principal.hostname = \"hostname\", 0, 15))\n    $principal_process_pid\
+    \ = array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specfic_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specfic_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specfic_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n    $log_type = array_distinct(strings.concat($process.metadata.log_type,\"\
+    /\",$process.metadata.product_event_type))\n\n  condition:\n    $process\n}"
+  chronicle_rule_name: hacktool_mimikatz_execution
+provenance:
+  source: chronicle/detection-rules
+  source_id: hacktool_mimikatz_execution
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/hacktool_mimikatz_execution.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-e13f668e-7f95-443d-98d2-1816a7648a7b
+name: Detected Windows Software Discovery
+description: Adversaries may attempt to enumerate software for a variety of reasons,
+  such as figuring out what security measures are present or if the compromised system
+  has a version of software that is vulnerable.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1518
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1518/T1518.md
+- https://github.com/harleyQu1nn/AggressorScripts
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \reg.exe
+    CommandLine|contains|all:
+    - query
+    - \software\
+    - /v
+    - svcversion
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e13f668e-7f95-443d-98d2-1816a7648a7b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_software_discovery.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

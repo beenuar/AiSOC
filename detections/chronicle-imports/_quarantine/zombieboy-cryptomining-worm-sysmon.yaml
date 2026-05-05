@@ -1,0 +1,59 @@
+id: chronicle-detection-rules-zombieboy-cryptomining-worm-sysmon
+name: zombieboy_cryptomining_worm_sysmon
+description: zombieboy_cryptomining_worm_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule zombieboy_cryptomining_worm_sysmon {\n meta:\n    author\
+    \ = \"Alexandr Yampolskyi, SOC Prime\"\n    description = \"ZombieBoy CryptoMining\
+    \ Worm Detector.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/NZnQa3F8pKPe\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/07/18\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and ($selection.target.file.md5 = \"049fc01447f15e02fff88a2b10f1518c8489e97b2c26006b4962ff5005e460dc\"\
+    \ or $selection.target.file.md5 = \"22f105dc2e2574ba3ea2ac4152391ce3bbaaa415a9660c251638281bbc5e8f33\"\
+    \ or $selection.target.file.md5 = \"2628242abba9b99baf26dadc071739fed2559bb7251d69ab81edc404d4bae602\"\
+    \ or $selection.target.file.md5 = \"27c5e2f35a5fb9272c3ed7c746927ce8c61b3ce02fed7551129dc2a32bf20773\"\
+    \ or $selection.target.file.md5 = \"27d4684511314ef9631e162e1bdc5170185689abf16f7f28ba5ae397ba601197\"\
+    \ or $selection.target.file.md5 = \"38d7d4f6a712bff4ab212848802f5f9c\" or $selection.target.file.md5\
+    \ = \"5d33434111ee36d754155c1d236e65aa78eaa605587715a5931b1c1ed3a54745\" or $selection.target.file.md5\
+    \ = \"5ea00496a4073982855f81e463a887d6a8ef263c87bb203161e2db3f50cfc8c0\" or $selection.target.file.md5\
+    \ = \"65cd6ab10712cfeb82872d6d3648a99636c9e0fff5728a0fc34497142c952173\" or $selection.target.file.md5\
+    \ = \"673bb55f781aaef382f4f9c9a748690d8b1045864151adaf67a4c0ab669e4700\" or $selection.target.file.md5\
+    \ = \"6de21f2fd11d68b305b5e10d97b3f27e\" or $selection.target.file.md5 = \"7327ef046fe62a26e5571c36b5c2c417\"\
+    \ or $selection.target.file.md5 = \"785a7f6e1cd40b50ad788e5d7d3c8465\" or $selection.target.file.md5\
+    \ = \"79c6ead6fa4f4addd7f2f019716dd6ca\" or $selection.target.file.md5 = \"7bb89b498beab4402d5cc8602c484a309ece50aa94c14f0a43f091f43b09f88f\"\
+    \ or $selection.target.file.md5 = \"7bc7d0fafd40438989c0445db8b3886868847da88979e35feebea9ff1b0655cb\"\
+    \ or $selection.target.file.md5 = \"842133ddc2d57fd0f78491b7ba39a34d\" or $selection.target.file.md5\
+    \ = \"865cea806bc95acd56d215b2c3c3b892d9715495bdcf272b2bf2106326c13a30\" or $selection.target.file.md5\
+    \ = \"876c2c8a45414c143e2fc5622d6cfe84050a45ae052ca9263beab280778ae380\" or $selection.target.file.md5\
+    \ = \"8b532b41c25958f04495ca43d1f2a57f6d11fd3d6401f8d971e1299683828e52\" or $selection.target.file.md5\
+    \ = \"91ebe2de7fcb922c794a891ff8987124\" or $selection.target.file.md5 = \"9a46a3ae2c3762964c5cbb63b62d7dee\"\
+    \ or $selection.target.file.md5 = \"a178196089fadecf8314e36fab17884f6894bdddd6e238652f99909a93db93a2\"\
+    \ or $selection.target.file.md5 = \"a3ae8a77a1f238e7b5ebd3dd3953912d9e5ae8fdf5cee6a536e7eba658ee2e1e\"\
+    \ or $selection.target.file.md5 = \"bb0a0a06f3bff97a1e7de8909d26c0ecb5161ea3882f587163d422042d9196a5\"\
+    \ or $selection.target.file.md5 = \"cc4a5ed98d8f4074ee700f5762ee0745f365605b90c62746990566413a7bf63e\"\
+    \ or $selection.target.file.md5 = \"dfc0ea5813e78492bc78d134d1d8372ca9d04ad563835d890614cd11b2555dd3\"\
+    \ or $selection.target.file.md5 = \"f1e23e2428f0f162c05bd259be133a1957438901a10041c128c3f63b72dd91d6\"\
+    \ or $selection.target.file.md5 = \"fd2c2cf66b166807470cbe2eafb3e0fab5947937f243fca87651d04bb6c9fd2d\"\
+    ))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: zombieboy_cryptomining_worm_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: zombieboy_cryptomining_worm_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/zombieboy_cryptomining_worm__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

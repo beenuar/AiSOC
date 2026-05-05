@@ -1,0 +1,41 @@
+id: sigmahq-sigma-cb0fe7c5-f3a3-484d-aa25-d350a7912729
+name: Suspicious Driver/DLL Installation Via Odbcconf.EXE
+description: Detects execution of "odbcconf" with the "INSTALLDRIVER" action where
+  the driver doesn't contain a ".dll" extension. This is often used as a defense evasion
+  method.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.008
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Odbcconf/
+- https://web.archive.org/web/20191023232753/https://twitter.com/Hexacorn/status/1187143326673330176
+- https://www.hexacorn.com/blog/2020/08/23/odbcconf-lolbin-trifecta/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \odbcconf.exe
+  - OriginalFileName: odbcconf.exe
+  selection_cli:
+    CommandLine|contains: 'INSTALLDRIVER '
+  filter_main_dll_ext:
+    CommandLine|contains: .dll
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cb0fe7c5-f3a3-484d-aa25-d350a7912729
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_odbcconf_driver_install_susp.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

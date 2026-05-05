@@ -1,0 +1,44 @@
+id: sigmahq-sigma-34aa0252-6039-40ff-951f-939fd6ce47d8
+name: Suspicious Keyboard Layout Load
+description: Detects the keyboard preload installation with a suspicious keyboard
+  layout, e.g. Chinese, Iranian or Vietnamese layout load in user session on systems
+  maintained by US staff only
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- https://renenyffenegger.ch/notes/Windows/registry/tree/HKEY_CURRENT_USER/Keyboard-Layout/Preload/index
+- https://github.com/SwiftOnSecurity/sysmon-config/pull/92/files
+logsource:
+  category: registry_set
+  product: windows
+  definition: 'Requirements: Sysmon config that monitors \Keyboard Layout\Preload
+    subkey of the HKLU hives - see https://github.com/SwiftOnSecurity/sysmon-config/pull/92/files'
+detection:
+  selection_registry:
+    TargetObject|contains:
+    - \Keyboard Layout\Preload\
+    - \Keyboard Layout\Substitutes\
+    Details|contains:
+    - 00000429
+    - 00050429
+    - 0000042a
+  condition: selection_registry
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 34aa0252-6039-40ff-951f-939fd6ce47d8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_susp_keyboard_layout_load.yml
+falsepositives:
+- Administrators or users that actually use the selected keyboard layouts (heavily
+  depends on the organisation's user base)
+notes:
+  quarantine_reason: 'upstream status: test'

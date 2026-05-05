@@ -1,0 +1,47 @@
+id: splunk-security-content-2c568c34-bb57-4b43-9d75-19c605b98e70
+name: Windows Create Local Administrator Account Via Net
+description: The following analytic detects the creation of a local administrator
+  account using the "net.exe" command. It leverages Endpoint Detection and Response
+  (EDR) data to identify processes named "net.exe" with the "/add" parameter and keywords
+  related to administrator accounts. This activity is significant as it may indicate
+  an attacker attempting to gain persistent access or escalate privileges. If confirmed
+  malicious, this could lead to unauthorized access, data theft, or further system
+  compromise. Review the process details, user context, and related artifacts to determine
+  the legitimacy of the activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_net`\n\
+    \    AND\n    Processes.process=*/add*\n    AND\n    Processes.process IN (\"\
+    *administrators*\", \"*administratoren*\", \"*administrateurs*\", \"*administrador*\"\
+    , \"*amministratori*\", \"*administratorer*\", \"*Rendszergazda*\", \"*Администратор*\"\
+    , \"*Administratör*\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_create_local_administrator_account_via_net_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2c568c34-bb57-4b43-9d75-19c605b98e70
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_create_local_administrator_account_via_net.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

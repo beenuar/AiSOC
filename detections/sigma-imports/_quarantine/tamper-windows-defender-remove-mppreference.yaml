@@ -1,0 +1,39 @@
+id: sigmahq-sigma-07e3cb2c-0608-410d-be4b-1511cb1a0448
+name: Tamper Windows Defender Remove-MpPreference
+description: Detects attempts to remove Windows Defender configurations using the
+  'MpPreference' cmdlet
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/windows-10-controlled-folder-access-event-search/ba-p/2326088
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_remove:
+    CommandLine|contains: Remove-MpPreference
+  selection_tamper:
+    CommandLine|contains:
+    - '-ControlledFolderAccessProtectedFolders '
+    - '-AttackSurfaceReductionRules_Ids '
+    - '-AttackSurfaceReductionRules_Actions '
+    - '-CheckForSignaturesBeforeRunningScan '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07e3cb2c-0608-410d-be4b-1511cb1a0448
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_remove_mppreference.yml
+falsepositives:
+- Legitimate PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

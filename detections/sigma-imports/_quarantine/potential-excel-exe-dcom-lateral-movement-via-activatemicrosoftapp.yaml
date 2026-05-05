@@ -1,0 +1,44 @@
+id: sigmahq-sigma-551d9c1f-816c-445b-a7a6-7a3864720d60
+name: Potential Excel.EXE DCOM Lateral Movement Via ActivateMicrosoftApp
+description: Detects suspicious child processes of Excel which could be an indicator
+  of lateral movement leveraging the "ActivateMicrosoftApp" Excel DCOM object.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/lateral-movement-abuse-the-power-of-dcom-excel-application-3c016d0d9922
+- https://github.com/grayhatkiller/SharpExShell
+- https://learn.microsoft.com/en-us/office/vba/api/excel.xlmsapplication
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \excel.exe
+  selection_child:
+  - OriginalFileName:
+    - foxprow.exe
+    - schdplus.exe
+    - winproj.exe
+  - Image|endswith:
+    - \foxprow.exe
+    - \schdplus.exe
+    - \winproj.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 551d9c1f-816c-445b-a7a6-7a3864720d60
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_office_excel_dcom_lateral_movement.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,50 @@
+id: sigmahq-sigma-7b582f1a-b318-4c6a-bf4e-66fe49bf55a5
+name: Remote Access Tool - ScreenConnect Potential Suspicious Remote Command Execution
+description: Detects potentially suspicious child processes launched via the ScreenConnect
+  client service.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/telegram-malware-iranian-espionage
+- https://docs.connectwise.com/ConnectWise_Control_Documentation/Get_started/Host_client/View_menu/Backstage_mode
+- https://www.huntress.com/blog/slashandgrab-screen-connect-post-exploitation-in-the-wild-cve-2024-1709-cve-2024-1708
+- https://www.trendmicro.com/en_us/research/24/b/threat-actor-groups-including-black-basta-are-exploiting-recent-.html
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentCommandLine|contains|all:
+    - :\Windows\TEMP\ScreenConnect\
+    - run.cmd
+    Image|endswith:
+    - \bitsadmin.exe
+    - \cmd.exe
+    - \curl.exe
+    - \dllhost.exe
+    - \net.exe
+    - \nltest.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \rundll32.exe
+    - \wevtutil.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7b582f1a-b318-4c6a-bf4e-66fe49bf55a5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_remote_access_tools_screenconnect_remote_execution_susp.yml
+falsepositives:
+- If the script being executed make use of any of the utilities mentioned in the detection
+  then they should filtered out or allowed.
+notes:
+  quarantine_reason: 'upstream status: test'

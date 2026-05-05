@@ -1,0 +1,42 @@
+id: splunk-security-content-9a3e57e7-33f4-470e-b25d-165baa6e8357
+name: Windows Computer Account With SPN
+description: The following analytic detects the addition of Service Principal Names
+  (SPNs) HOST and RestrictedKrbHost to a computer account, indicative of KrbRelayUp
+  behavior. This detection leverages Windows Security Event Logs, specifically EventCode
+  4741, to identify changes in SPNs. This activity is significant as it is commonly
+  associated with Kerberos-based attacks, which can be used to escalate privileges
+  or perform lateral movement within a network. If confirmed malicious, this behavior
+  could allow an attacker to impersonate services, potentially leading to unauthorized
+  access to sensitive resources.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558
+  categories:
+  - endpoint
+references:
+- https://www.trustedsec.com/blog/an-attack-path-mapping-approach-to-cves-2021-42287-and-2021-42278
+- https://github.com/Dec0ne/KrbRelayUp
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4741 NewUacValue=\"0x80\" ServicePrincipalNames\
+    \ IN (\"*HOST/*\",\"*RestrictedKrbHost/*\")\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime values(EventCode),values(TargetDomainName),values(PrimaryGroupId),\
+    \ values(OldUacValue), values(NewUacValue),values(SamAccountName),values(DnsHostName),values(ServicePrincipalNames)\n\
+    \    BY dest Logon_ID subject\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_computer_account_with_spn_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9a3e57e7-33f4-470e-b25d-165baa6e8357
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_computer_account_with_spn.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

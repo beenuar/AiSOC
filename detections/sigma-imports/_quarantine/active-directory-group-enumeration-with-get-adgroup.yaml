@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8c3a6607-b7dc-4f0d-a646-ef38c00b76ee
+name: Active Directory Group Enumeration With Get-AdGroup
+description: Detects usage of the "Get-AdGroup" cmdlet to enumerate Groups within
+  Active Directory
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1018/T1018.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - 'Get-AdGroup '
+    - -Filter
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8c3a6607-b7dc-4f0d-a646-ef38c00b76ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_get_adgroup.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-d474c8fe-bb69-4ea0-b7d9-f682b56d52d3
+name: HackTool - Doppelanger LSASS Dumper Execution
+description: Detects the execution of the Doppelanger hacktool which is used to dump
+  LSASS memory via process cloning while evading common detection methods
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://labs.yarix.com/2025/06/doppelganger-an-advanced-lsass-dumper-with-process-cloning/
+- https://github.com/vari-sh/RedTeamGrimoire/tree/668e0357072546065729ad623f8c02f7be21bb08/Doppelganger
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \Doppelganger.exe
+  - Hashes|contains:
+    - IMPHASH=AB94D5217896ADCD765A06B2D52F0AEB
+    - IMPHASH=65F0EA61156EE0C2A35421926F0C7F78
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d474c8fe-bb69-4ea0-b7d9-f682b56d52d3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_doppelganger.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

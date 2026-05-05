@@ -1,0 +1,42 @@
+id: sigmahq-sigma-4833155a-4053-4c9c-a997-777fcea0baa7
+name: SQLite Firefox Profile Data DB Access
+description: Detect usage of the "sqlite" binary to query databases in Firefox and
+  other Gecko-based browsers for potential data stealing.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1539
+  - T1005
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1539/T1539.md#atomic-test-1---steal-firefox-cookies-windows
+- https://blog.cyble.com/2022/04/21/prynt-stealer-a-new-info-stealer-performing-clipper-and-keylogger-activities/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_sql:
+  - Product: SQLite
+  - Image|endswith:
+    - \sqlite.exe
+    - \sqlite3.exe
+  selection_firefox:
+    CommandLine|contains:
+    - cookies.sqlite
+    - places.sqlite
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4833155a-4053-4c9c-a997-777fcea0baa7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sqlite_firefox_gecko_profile_data.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

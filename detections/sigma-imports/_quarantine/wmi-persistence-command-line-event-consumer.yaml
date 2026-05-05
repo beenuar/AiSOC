@@ -1,0 +1,33 @@
+id: sigmahq-sigma-05936ce2-ee05-4dae-9d03-9a391cf2d2c6
+name: WMI Persistence - Command Line Event Consumer
+description: Detects WMI command line event consumers
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546.003
+  categories:
+  - endpoint
+references:
+- https://www.eideon.com/2018-03-02-THL03-WMIBackdoors/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image: C:\Windows\System32\wbem\WmiPrvSE.exe
+    ImageLoaded|endswith: \wbemcons.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 05936ce2-ee05-4dae-9d03-9a391cf2d2c6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_wmi_persistence_commandline_event_consumer.yml
+falsepositives:
+- Unknown (data set is too small; further testing needed)
+notes:
+  quarantine_reason: 'upstream status: test'

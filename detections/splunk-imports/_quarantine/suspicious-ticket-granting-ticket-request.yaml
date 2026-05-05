@@ -1,0 +1,44 @@
+id: splunk-security-content-d77d349e-6269-11ec-9cfe-acde48001122
+name: Suspicious Ticket Granting Ticket Request
+description: The following analytic detects suspicious Kerberos Ticket Granting Ticket
+  (TGT) requests that may indicate exploitation of CVE-2021-42278 and CVE-2021-42287.
+  It leverages Event ID 4781 (account name change) and Event ID 4768 (TGT request)
+  to identify sequences where a newly renamed computer account requests a TGT. This
+  behavior is significant as it could represent an attempt to escalate privileges
+  by impersonating a Domain Controller. If confirmed malicious, this activity could
+  allow attackers to gain elevated access and potentially control over the domain
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.002
+  categories:
+  - endpoint
+references:
+- https://exploit.ph/cve-2021-42287-cve-2021-42278-weaponisation.html
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42278
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42287
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` (EventCode=4781 OldTargetUserName=\"*$\" NewTargetUserName!=\"\
+    *$\") OR (EventCode=4768 TargetUserName!=\"*$\")\n  | eval RenamedComputerAccount\
+    \ = coalesce(NewTargetUserName, TargetUserName)\n  | transaction RenamedComputerAccount\
+    \ startswith=(EventCode=4781) endswith=(EventCode=4768)\n  | eval short_lived=case((duration<2),\"\
+    TRUE\")\n  | search short_lived = TRUE\n  | table _time, Computer, EventCode,\
+    \ TargetUserName, RenamedComputerAccount, short_lived\n  | rename Computer as\
+    \ dest\n  | `suspicious_ticket_granting_ticket_request_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d77d349e-6269-11ec-9cfe-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_ticket_granting_ticket_request.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

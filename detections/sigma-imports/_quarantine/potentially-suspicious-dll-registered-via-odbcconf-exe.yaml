@@ -1,0 +1,41 @@
+id: sigmahq-sigma-ba4cfc11-d0fa-4d94-bf20-7c332c412e76
+name: Potentially Suspicious DLL Registered Via Odbcconf.EXE
+description: Detects execution of "odbcconf" with the "REGSVR" action where the DLL
+  in question doesn't contain a ".dll" extension. Which is often used as a method
+  to evade defenses.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.008
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/odbc/odbcconf-exe?view=sql-server-ver16
+- https://lolbas-project.github.io/lolbas/Binaries/Odbcconf/
+- https://www.trendmicro.com/en_us/research/17/h/backdoor-carrying-emails-set-sights-on-russian-speaking-businesses.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \odbcconf.exe
+  - OriginalFileName: odbcconf.exe
+  selection_cli:
+    CommandLine|contains: 'REGSVR '
+  filter_main_dll_ext:
+    CommandLine|contains: .dll
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ba4cfc11-d0fa-4d94-bf20-7c332c412e76
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_odbcconf_register_dll_regsvr_susp.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

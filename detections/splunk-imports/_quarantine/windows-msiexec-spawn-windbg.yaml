@@ -1,0 +1,45 @@
+id: splunk-security-content-9a18f7c2-1fe3-47b8-9467-8b3976770a30
+name: Windows MSIExec Spawn WinDBG
+description: The following analytic identifies the unusual behavior of MSIExec spawning
+  WinDBG. It detects this activity by analyzing endpoint telemetry data, specifically
+  looking for instances where 'msiexec.exe' is the parent process of 'windbg.exe'.
+  This behavior is significant as it may indicate an attempt to debug or tamper with
+  system processes, which is uncommon in typical user activity and could signify malicious
+  intent. If confirmed malicious, this activity could allow an attacker to manipulate
+  or inspect running processes, potentially leading to privilege escalation or persistence
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.007
+  categories:
+  - endpoint
+references:
+- https://github.com/PaloAltoNetworks/Unit42-timely-threat-intel/blob/main/2023-10-25-IOCs-from-DarkGate-activity.txt
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=msiexec.exe\
+    \ Processes.process_name=windbg.exe\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_msiexec_spawn_windbg_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9a18f7c2-1fe3-47b8-9467-8b3976770a30
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_msiexec_spawn_windbg.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

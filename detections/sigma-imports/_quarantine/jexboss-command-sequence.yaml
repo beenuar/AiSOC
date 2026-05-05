@@ -1,0 +1,33 @@
+id: sigmahq-sigma-8ec2c8b4-557a-4121-b87c-5dfb3a602fae
+name: JexBoss Command Sequence
+description: Detects suspicious command sequence that JexBoss
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- https://www.us-cert.gov/ncas/analysis-reports/AR18-312A
+logsource:
+  product: linux
+detection:
+  keywords:
+    '|all':
+    - bash -c /bin/bash
+    - '&/dev/tcp/'
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8ec2c8b4-557a-4121-b87c-5dfb3a602fae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/lnx_susp_jexboss.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

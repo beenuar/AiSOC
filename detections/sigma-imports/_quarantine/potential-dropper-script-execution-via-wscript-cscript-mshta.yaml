@@ -1,0 +1,63 @@
+id: sigmahq-sigma-cea72823-df4d-4567-950c-0b579eaf0846
+name: Potential Dropper Script Execution Via WScript/CScript/MSHTA
+description: Detects wscript/cscript/mshta executions of scripts located in user directories
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2023/10/30/netsupport-intrusion-results-in-domain-compromise/
+- https://redcanary.com/blog/gootloader/
+- https://www.microsoft.com/en-us/security/blog/2025/03/06/malvertising-campaign-leads-to-info-stealers-hosted-on-github/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_exec:
+    Image|endswith:
+    - \wscript.exe
+    - \cscript.exe
+    - \mshta.exe
+  selection_paths:
+    CommandLine|contains:
+    - :\Perflogs\
+    - :\Temp\
+    - :\Tmp\
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \AppData\Local\Temp\
+    - \AppData\Roaming\Temp\
+    - \Start Menu\Programs\Startup\
+    - \Temporary Internet
+    - \Windows\Temp
+    - '%LocalAppData%\Temp\'
+    - '%TEMP%'
+    - '%TMP%'
+  selection_ext:
+    CommandLine|contains:
+    - .hta
+    - .js
+    - .jse
+    - .vba
+    - .vbe
+    - .vbs
+    - .wsf
+    - .wsh
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cea72823-df4d-4567-950c-0b579eaf0846
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wscript_cscript_mshta_dropper.yml
+falsepositives:
+- Some installers might generate a similar behavior. An initial baseline is required
+notes:
+  quarantine_reason: 'upstream status: test'

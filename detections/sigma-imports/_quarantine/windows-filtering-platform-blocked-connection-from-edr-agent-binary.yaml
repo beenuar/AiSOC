@@ -1,0 +1,109 @@
+id: sigmahq-sigma-bacf58c6-e199-4040-a94f-95dea0f1e45a
+name: Windows Filtering Platform Blocked Connection From EDR Agent Binary
+description: 'Detects a Windows Filtering Platform (WFP) blocked connection event
+  involving common Endpoint Detection and Response (EDR) agents.
+
+  Adversaries may use WFP filters to prevent Endpoint Detection and Response (EDR)
+  agents from reporting security events.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/netero1010/EDRSilencer
+- https://github.com/amjcyber/EDRNoiseMaker
+- https://ghoulsec.medium.com/misc-series-4-forensics-on-edrsilencer-events-428b20b3f983
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Audit Filtering Platform Connection needs to be enabled'
+detection:
+  selection:
+    EventID: 5157
+    Application|endswith:
+    - \AmSvc.exe
+    - \cb.exe
+    - \CETASvc.exe
+    - \CNTAoSMgr.exe
+    - \CrAmTray.exe
+    - \CrsSvc.exe
+    - \CSFalconContainer.exe
+    - \CSFalconService.exe
+    - \CybereasonAV.exe
+    - \CylanceSvc.exe
+    - \cyserver.exe
+    - \CyveraService.exe
+    - \CyvrFsFlt.exe
+    - \EIConnector.exe
+    - \elastic-agent.exe
+    - \elastic-endpoint.exe
+    - \EndpointBasecamp.exe
+    - \ExecutionPreventionSvc.exe
+    - \filebeat.exe
+    - \fortiedr.exe
+    - \hmpalert.exe
+    - \hurukai.exe
+    - \LogProcessorService.exe
+    - \mcsagent.exe
+    - \mcsclient.exe
+    - \MsMpEng.exe
+    - \MsSense.exe
+    - \Ntrtscan.exe
+    - \PccNTMon.exe
+    - \QualysAgent.exe
+    - \RepMgr.exe
+    - \RepUtils.exe
+    - \RepUx.exe
+    - \RepWAV.exe
+    - \RepWSC.exe
+    - \sedservice.exe
+    - \SenseCncProxy.exe
+    - \SenseIR.exe
+    - \SenseNdr.exe
+    - \SenseSampleUploader.exe
+    - \SentinelAgent.exe
+    - \SentinelAgentWorker.exe
+    - \SentinelBrowserNativeHost.exe
+    - \SentinelHelperService.exe
+    - \SentinelServiceHost.exe
+    - \SentinelStaticEngine.exe
+    - \SentinelStaticEngineScanner.exe
+    - \sfc.exe
+    - \sophos ui.exe
+    - \sophosfilescanner.exe
+    - \sophosfs.exe
+    - \sophoshealth.exe
+    - \sophosips.exe
+    - \sophosLivequeryservice.exe
+    - \sophosnetfilter.exe
+    - \sophosntpservice.exe
+    - \sophososquery.exe
+    - \sspservice.exe
+    - \TaniumClient.exe
+    - \TaniumCX.exe
+    - \TaniumDetectEngine.exe
+    - \TMBMSRV.exe
+    - \TmCCSF.exe
+    - \TmListen.exe
+    - \TmWSCSvc.exe
+    - \Traps.exe
+    - \winlogbeat.exe
+    - \WSCommunicator.exe
+    - \xagt.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bacf58c6-e199-4040-a94f-95dea0f1e45a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/object_access/win_security_wfp_endpoint_agent_blocked.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

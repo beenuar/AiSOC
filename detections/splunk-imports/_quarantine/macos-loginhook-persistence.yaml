@@ -1,0 +1,44 @@
+id: splunk-security-content-a04832e7-9d1d-49b1-a684-e31bcd775c77
+name: MacOS LoginHook Persistence
+description: 'Identifies attempts to configure a macOS LoginHook via the defaults
+  utility. LoginHooks enable automatic execution of a script or program upon user
+  login and have historically been abused for persistence.
+
+  Creation or modification of this setting may indicate an attempt to establish startup
+  execution outside standard LaunchAgent mechanisms.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1037.002
+  categories:
+  - endpoint
+references:
+- https://osquery.readthedocs.io/en/stable/deployment/process-auditing/
+- https://www.loobins.io/binaries/defaults/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    Processes.process = \"*defaults *\"\nProcesses.process = \"*write*\"\nProcesses.process\
+    \ = \"*loginwindow*\"\nProcesses.process = \"*loginhook*\"\n\nby Processes.dest\
+    \ Processes.original_file_name Processes.parent_process_id\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid\n   Processes.process_hash Processes.process_id\n\
+    \   Processes.process_current_directory Processes.process_name\n   Processes.process_path\
+    \ Processes.user\n   Processes.user_id Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `macos_loginhook_persistence_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a04832e7-9d1d-49b1-a684-e31bcd775c77
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_loginhook_persistence.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

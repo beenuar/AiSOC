@@ -1,0 +1,35 @@
+id: sigmahq-sigma-f14e169e-9978-4c69-acb3-1cff8200bc36
+name: Suspicious GrpConv Execution
+description: Detects the suspicious execution of a utility to convert Windows 3.x
+  .grp files or for persistence purposes by malicious software or actors
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547
+  categories:
+  - endpoint
+references:
+- https://twitter.com/0gtweet/status/1526833181831200770
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - grpconv.exe -o
+    - grpconv -o
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f14e169e-9978-4c69-acb3-1cff8200bc36
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_susp_grpconv.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

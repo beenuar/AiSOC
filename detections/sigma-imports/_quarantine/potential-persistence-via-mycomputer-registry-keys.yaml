@@ -1,0 +1,35 @@
+id: sigmahq-sigma-8fbe98a8-8f9d-44f8-aa71-8c572e29ef06
+name: Potential Persistence Via MyComputer Registry Keys
+description: Detects modification to the "Default" value of the "MyComputer" key and
+  subkeys to point to a custom binary that will be launched whenever the associated
+  action is executed (see reference section for example)
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2017/01/18/beyond-good-ol-run-key-part-55/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Microsoft\Windows\CurrentVersion\Explorer\MyComputer
+    TargetObject|endswith: (Default)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8fbe98a8-8f9d-44f8-aa71-8c572e29ef06
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_mycomputer.yml
+falsepositives:
+- Unlikely but if you experience FPs add specific processes and locations you would
+  like to monitor for
+notes:
+  quarantine_reason: 'upstream status: test'

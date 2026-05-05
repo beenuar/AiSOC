@@ -1,0 +1,44 @@
+id: splunk-security-content-b2215bfb-6171-4137-af17-1a02fdd8d043
+name: Windows Impair Defense Disable Defender Protocol Recognition
+description: The following analytic detects modifications to the Windows registry
+  that disable the Windows Defender protocol recognition feature. It leverages data
+  from the Endpoint.Registry data model, specifically looking for changes to the "DisableProtocolRecognition"
+  setting. This activity is significant because disabling protocol recognition can
+  hinder Windows Defender's ability to detect and respond to malware or suspicious
+  software. If confirmed malicious, this action could allow an attacker to bypass
+  antivirus defenses, facilitating further malicious activities such as data exfiltration
+  or system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://x.com/malmoeb/status/1742604217989415386?s=20
+- https://github.com/undergroundwires/privacy.sexy
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path=
+    "*\\Windows Defender\\NIS\\DisableProtocolRecognition" Registry.registry_value_data="0x00000001"
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_impair_defense_disable_defender_protocol_recognition_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b2215bfb-6171-4137-af17-1a02fdd8d043
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defense_disable_defender_protocol_recognition.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

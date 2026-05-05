@@ -1,0 +1,72 @@
+id: sigmahq-sigma-a35f5a72-f347-4e36-8895-9869b0d5fc6d
+name: Suspicious Program Location Whitelisted In Firewall Via Netsh.EXE
+description: Detects Netsh command execution that whitelists a program located in
+  a suspicious location in the Windows Firewall
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1686.003
+  categories:
+  - endpoint
+references:
+- https://www.virusradar.com/en/Win32_Kasidet.AD/description
+- https://www.hybrid-analysis.com/sample/07e789f4f2f3259e7559fdccb36e96814c2dbff872a21e1fa03de9ee377d581f?environmentId=100
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \netsh.exe
+  - OriginalFileName: netsh.exe
+  selection_cli:
+  - CommandLine|contains|all:
+    - firewall
+    - add
+    - allowedprogram
+  - CommandLine|contains|all:
+    - advfirewall
+    - firewall
+    - add
+    - rule
+    - action=allow
+    - program=
+  selection_paths:
+    CommandLine|contains:
+    - :\$Recycle.bin\
+    - :\RECYCLER.BIN\
+    - :\RECYCLERS.BIN\
+    - :\SystemVolumeInformation\
+    - :\Temp\
+    - :\Users\Default\
+    - :\Users\Desktop\
+    - :\Users\Public\
+    - :\Windows\addins\
+    - :\Windows\cursors\
+    - :\Windows\debug\
+    - :\Windows\drivers\
+    - :\Windows\fonts\
+    - :\Windows\help\
+    - :\Windows\system32\tasks\
+    - :\Windows\Tasks\
+    - :\Windows\Temp\
+    - \Downloads\
+    - \Local Settings\Temporary Internet Files\
+    - \Temporary Internet Files\Content.Outlook\
+    - '%Public%\'
+    - '%TEMP%'
+    - '%TMP%'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a35f5a72-f347-4e36-8895-9869b0d5fc6d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_netsh_fw_allow_program_in_susp_location.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

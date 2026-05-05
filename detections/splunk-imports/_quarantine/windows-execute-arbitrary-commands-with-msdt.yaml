@@ -1,0 +1,53 @@
+id: splunk-security-content-e1d5145f-38fe-42b9-a5d5-457796715f97
+name: Windows Execute Arbitrary Commands with MSDT
+description: The following analytic detects arbitrary command execution using Windows
+  msdt.exe, a Diagnostics Troubleshooting Wizard. It leverages Endpoint Detection
+  and Response (EDR) data to identify instances where msdt.exe is invoked via the
+  ms-msdt:/ protocol handler to retrieve a remote payload. This activity is significant
+  as it can indicate an exploitation attempt leveraging msdt.exe to execute arbitrary
+  commands, potentially leading to unauthorized code execution. If confirmed malicious,
+  this could allow an attacker to execute arbitrary code, escalate privileges, or
+  persist within the environment, posing a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://isc.sans.edu/diary/rss/28694
+- https://doublepulsar.com/follina-a-microsoft-office-code-execution-vulnerability-1a47fce5629e
+- https://twitter.com/nao_sec/status/1530196847679401984?s=20&t=ZiXYI4dQuA-0_dzQzSUb3A
+- https://app.any.run/tasks/713f05d2-fe78-4b9d-a744-f7c133e3fafb/
+- https://www.virustotal.com/gui/file/4a24048f81afbe9fb62e7a6a49adbd1faf41f266b5f9feecdceb567aec096784/detection
+- https://strontic.github.io/xcyclopedia/library/msdt.exe-152D4C9F63EFB332CCB134C6953C0104.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=msdt.exe\
+    \ Processes.process IN (\"*msdt*\",\"*ms-msdt:*\",\"*ms-msdt:/id*\",\"*ms-msdt:-id*\"\
+    ,\"*/id*\")\n    AND\n    (Processes.process=\"*IT_BrowseForFile=*\"\n    OR\n\
+    \    Processes.process=\"*IT_RebrowseForFile=*\"\n    OR\n    Processes.process=\"\
+    *.xml*\")\n    AND\n    Processes.process=\"*PCWDiagnostic*\"\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_execute_arbitrary_commands_with_msdt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e1d5145f-38fe-42b9-a5d5-457796715f97
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_execute_arbitrary_commands_with_msdt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,49 @@
+id: sigmahq-sigma-18249279-932f-45e2-b37a-8925f2597670
+name: Process Initiated Network Connection To Ngrok Domain
+description: 'Detects an executable initiating a network connection to "ngrok" domains.
+
+  Attackers were seen using this "ngrok" in order to store their second stage payloads
+  and malware.
+
+  While communication with such domains can be legitimate, often times is a sign of
+  either data exfiltration by malicious actors or additional download.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1567
+  - T1572
+  - T1102
+  categories:
+  - endpoint
+references:
+- https://ngrok.com/
+- https://ngrok.com/blog-post/new-ngrok-domains
+- https://www.virustotal.com/gui/file/cca0c1182ac114b44dc52dd2058fcd38611c20bb6b5ad84710681d38212f835a/
+- https://www.rnbo.gov.ua/files/2023_YEAR/CYBERCENTER/november/APT29%20attacks%20Embassies%20using%20CVE-2023-38831%20-%20report%20en.pdf
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    DestinationHostname|endswith:
+    - .ngrok-free.app
+    - .ngrok-free.dev
+    - .ngrok.app
+    - .ngrok.dev
+    - .ngrok.io
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 18249279-932f-45e2-b37a-8925f2597670
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_ngrok.yml
+falsepositives:
+- Legitimate use of the ngrok service.
+notes:
+  quarantine_reason: 'upstream status: test'

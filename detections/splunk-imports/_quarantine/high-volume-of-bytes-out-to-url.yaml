@@ -1,0 +1,41 @@
+id: splunk-security-content-c8a6b56d-16dd-4e9c-b4bd-527742ead98d
+name: High Volume of Bytes Out to Url
+description: The following analytic detects a high volume of outbound web traffic,
+  specifically over 1GB of data sent to a URL within a 2-minute window. It leverages
+  the Web data model to identify significant uploads by analyzing the sum of bytes
+  out. This activity is significant as it may indicate potential data exfiltration
+  by malware or malicious insiders. If confirmed as malicious, this behavior could
+  lead to unauthorized data transfer, resulting in data breaches and loss of sensitive
+  information. Immediate investigation is required to determine the legitimacy of
+  the transfer and mitigate any potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1567/
+- https://www.trendmicro.com/en_us/research/20/l/pawn-storm-lack-of-sophistication-as-a-strategy.html
+- https://www.bleepingcomputer.com/news/security/hacking-group-s-new-malware-abuses-google-and-facebook-services/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats  `security_content_summariesonly` count sum(Web.bytes_out)\
+    \ as sum_bytes_out values(Web.user) as user values(Web.app) as app values(Web.dest)\
+    \ as dest FROM datamodel=Web\n  BY _time span=2m Web.url\n     Web.src sourcetype\n\
+    | search sum_bytes_out > 1070000000\n| `drop_dm_object_name(\"Web\")`\n| `high_volume_of_bytes_out_to_url_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c8a6b56d-16dd-4e9c-b4bd-527742ead98d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/high_volume_of_bytes_out_to_url.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

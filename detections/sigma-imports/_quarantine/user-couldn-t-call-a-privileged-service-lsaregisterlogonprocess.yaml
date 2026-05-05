@@ -1,0 +1,36 @@
+id: sigmahq-sigma-6daac7fc-77d1-449a-a71a-e6b4d59a0e54
+name: User Couldn't Call a Privileged Service 'LsaRegisterLogonProcess'
+description: The 'LsaRegisterLogonProcess' function verifies that the application
+  making the function call is a logon process by checking that it has the SeTcbPrivilege
+  privilege set. Possible Rubeus tries to get a handle to LSA.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/hunting-in-active-directory-unconstrained-delegation-forests-trusts-71f2b33688e1
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4673
+    Service: LsaRegisterLogonProcess()
+    Keywords: '0x8010000000000000'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6daac7fc-77d1-449a-a71a-e6b4d59a0e54
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_user_couldnt_call_priv_service_lsaregisterlogonprocess.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

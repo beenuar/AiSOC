@@ -1,0 +1,47 @@
+id: sigmahq-sigma-2a0a169d-cc66-43ce-9ae2-6e678e54e46a
+name: Registry Modification Attempt Via VBScript - PowerShell
+description: 'Detects attempts to modify the registry using VBScript''s CreateObject("Wscript.shell")
+  and RegWrite methods embedded within PowerShell scripts or commands.
+
+  Threat actors commonly embed VBScript code within PowerShell to perform registry
+  modifications, attempting to evade detection that monitors for direct registry access
+  through traditional tools.
+
+  This technique can be used for persistence, defense evasion, and privilege escalation
+  by modifying registry keys without using regedit.exe, reg.exe, or PowerShell''s
+  native registry cmdlets.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  - T1059.005
+  categories:
+  - endpoint
+references:
+- https://www.linkedin.com/posts/mauricefielenbach_livingofftheland-redteam-persistence-activity-7344801774182051843-TE00/
+- https://www.nextron-systems.com/2025/07/29/detecting-the-most-popular-mitre-persistence-method-registry-run-keys-startup-folder/
+- https://detect.fyi/hunting-fileless-malware-in-the-windows-registry-1339ccde00ad
+logsource:
+  category: ps_script
+  product: windows
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - CreateObject
+    - Wscript.shell
+    - .RegWrite
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2a0a169d-cc66-43ce-9ae2-6e678e54e46a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_vbscript_registry_modification.yml
+falsepositives:
+- Some legitimate admin or install scripts may use these processes for registry modifications.
+notes:
+  quarantine_reason: 'upstream status: experimental'

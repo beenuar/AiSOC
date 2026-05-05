@@ -1,0 +1,37 @@
+id: sigmahq-sigma-4aafb0fa-bff5-4b9d-b99e-8093e659c65f
+name: Writing Local Admin Share
+description: 'Aversaries may use to interact with a remote network share using Server
+  Message Block (SMB).
+
+  This technique is used by post-exploitation frameworks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1021.002/T1021.002.md#atomic-test-4---execute-command-writing-output-to-local-admin-share
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains|all:
+    - \\\\127.0.0
+    - \ADMIN$\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4aafb0fa-bff5-4b9d-b99e-8093e659c65f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_writing_local_admin_share.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

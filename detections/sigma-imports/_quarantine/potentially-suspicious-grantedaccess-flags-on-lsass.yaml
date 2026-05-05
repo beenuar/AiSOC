@@ -1,0 +1,126 @@
+id: sigmahq-sigma-a18dd26b-6450-46de-8c91-9659150cf088
+name: Potentially Suspicious GrantedAccess Flags On LSASS
+description: Detects process access requests to LSASS process with potentially suspicious
+  access flags
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights
+- https://onedrive.live.com/view.aspx?resid=D026B4699190F1E6!2843&ithint=file%2cpptx&app=PowerPoint&authkey=!AMvCRTKB_V1J5ow
+- https://web.archive.org/web/20230208123920/https://cyberwardog.blogspot.com/2017/03/chronicles-of-threat-hunter-hunting-for_22.html
+- https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+- https://web.archive.org/web/20230420013146/http://security-research.dyndns.org/pub/slides/FIRST2017/FIRST-2017_Tom-Ueltschi_Sysmon_FINAL_notes.pdf
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection_target:
+    TargetImage|endswith: \lsass.exe
+  selection_access:
+  - GrantedAccess|endswith:
+    - '30'
+    - '50'
+    - '70'
+    - '90'
+    - B0
+    - D0
+    - F0
+    - '18'
+    - '38'
+    - '58'
+    - '78'
+    - '98'
+    - B8
+    - D8
+    - F8
+    - 1A
+    - 3A
+    - 5A
+    - 7A
+    - 9A
+    - BA
+    - DA
+    - FA
+    - '0x14C2'
+  - GrantedAccess|startswith:
+    - '0x100000'
+    - '0x1418'
+    - '0x1438'
+    - '0x143a'
+    - '0x1f0fff'
+    - '0x1f1fff'
+    - '0x1f2fff'
+    - '0x1f3fff'
+    - '0x40'
+  filter_main_generic:
+    SourceImage|contains:
+    - :\Program Files (x86)\
+    - :\Program Files\
+    - :\Windows\System32\
+    - :\Windows\SysWOW64\
+  filter_optional_malwarebytes:
+    SourceImage|endswith: :\ProgramData\MALWAREBYTES\MBAMSERVICE\ctlrupdate\mbupdatr.exe
+  filter_optional_vscode:
+    SourceImage|endswith: \AppData\Local\Programs\Microsoft VS Code\Code.exe
+  filter_main_windefend_1:
+    SourceImage|contains: :\ProgramData\Microsoft\Windows Defender\
+    SourceImage|endswith: \MsMpEng.exe
+  filter_main_windefend_2:
+    CallTrace|contains|all:
+    - '|?:\ProgramData\Microsoft\Windows Defender\Definition Updates\{'
+    - '}\mpengine.dll+'
+    GrantedAccess: '0x1418'
+  filter_main_windefend_3:
+    CallTrace|contains:
+    - '|c:\program files\windows defender\mprtp.dll'
+    - '|c:\program files\windows defender\MpClient.dll'
+  filter_optional_vmwaretools:
+    SourceImage|contains: :\ProgramData\VMware\VMware Tools\
+    SourceImage|endswith: \vmtoolsd.exe
+  filter_optional_sysinternals_process_explorer:
+    SourceImage|endswith:
+    - \PROCEXP64.EXE
+    - \PROCEXP.EXE
+    GrantedAccess: '0x40'
+  filter_optional_mbami:
+    SourceImage|endswith: \MBAMInstallerService.exe
+    GrantedAccess: '0x40'
+  filter_optional_nextron:
+    SourceImage|endswith:
+    - \aurora-agent-64.exe
+    - \aurora-agent.exe
+    - \thor.exe
+    - \thor64.exe
+    GrantedAccess: '0x40'
+  filter_main_explorer:
+    SourceImage|endswith: \explorer.exe
+    GrantedAccess: '0x401'
+  filter_optional_sysinternals_handle:
+    SourceImage|endswith:
+    - \handle.exe
+    - \handle64.exe
+    GrantedAccess: '0x40'
+  filter_optional_webex:
+    SourceImage|endswith: \AppData\Local\WebEx\WebexHost.exe
+    GrantedAccess: '0x401'
+  filter_optional_steam_apps:
+    SourceImage|contains: \SteamLibrary\steamapps\
+  condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a18dd26b-6450-46de-8c91-9659150cf088
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_lsass_susp_access_flag.yml
+falsepositives:
+- Legitimate software such as AV and EDR
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: chronicle-detection-rules-fireeye-red-team-tool-g2js-suspicious-process-tree
+name: fireeye_red_team_tool__g2js_suspicious_process_tree
+description: fireeye_red_team_tool__g2js_suspicious_process_tree
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule fireeye_red_team_tool__g2js_suspicious_process_tree {\n meta:\n\
+    \    author = \"Sittikorn S, FireEye\"\n    description = \"This rule has been\
+    \ ported from Fireeye's HXIOC format to SIGMA. It detects the Fireeye tool GadgetToJScript(G2JS).\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/2CudqsJPVCUh\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/12/11\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, defense_evasion, t1218.005,\
+    \ t1059\"\n\n  events:\n((re.regex($selection.target.process.file.full_path, `.*userinit\\\
+    .exe.*`) or re.regex($selection.target.process.file.full_path, `.*colorcpl\\.exe.*`))\
+    \ and (re.regex($selection.principal.process.file.full_path, `.*mshta\\.exe.*`)\
+    \ or re.regex($selection.principal.process.file.full_path, `.*cscript\\.exe.*`)\
+    \ or re.regex($selection.principal.process.file.full_path, `.*wscript\\.exe.*`))\
+    \ and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: fireeye_red_team_tool__g2js_suspicious_process_tree
+provenance:
+  source: chronicle/detection-rules
+  source_id: fireeye_red_team_tool__g2js_suspicious_process_tree
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/fireeye_red_team_tool___g2js_suspicious_process_tree.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

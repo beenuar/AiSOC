@@ -1,0 +1,31 @@
+id: sigmahq-sigma-304810ed-8853-437f-9e36-c4975c3dfd7e
+name: HackTool - BabyShark Agent Default URL Pattern
+description: Detects Baby Shark C2 Framework default communication patterns
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://nasbench.medium.com/understanding-detecting-c2-frameworks-babyshark-641be4595845
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri|contains: momyshark\?key=
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 304810ed-8853-437f-9e36-c4975c3dfd7e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_hktl_baby_shark_default_agent_url.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

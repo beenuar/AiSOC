@@ -1,0 +1,40 @@
+id: splunk-security-content-1234abcd-5678-90ef-1234-56789abcdef0
+name: Windows AppX Deployment Package Installation Success
+description: This analytic detects successful MSIX/AppX package installations on Windows
+  systems by monitoring EventID 854 in the Microsoft-Windows-AppXDeployment-Server/Operational
+  log. This event is generated when an MSIX/AppX package has been successfully installed
+  on a system. While most package installations are legitimate, monitoring these events
+  can help identify unauthorized or suspicious package installations, especially when
+  correlated with other events such as unsigned package installations (EventID 603
+  with Flags=8388608) or full trust package installations (EventID 400 with HasFullTrust=true).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/appxpkg/troubleshooting
+- https://www.appdeploynews.com/packaging-types/msix/troubleshooting-an-msix-package/
+- https://www.advancedinstaller.com/msix-installation-or-launching-errors-and-fixes.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_appxdeploymentserver` EventCode=854\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime values(Path) as PackagePath\n    BY dvc\
+    \ EventCode user_id\n  | rename dvc as dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_appx_deployment_package_installation_success_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1234abcd-5678-90ef-1234-56789abcdef0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_appx_deployment_package_installation_success.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

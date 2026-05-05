@@ -1,0 +1,46 @@
+id: sigmahq-sigma-af5732ed-764e-489d-826d-0447c8b36242
+name: Windows MSIX Package Support Framework AI_STUBS Execution
+description: 'Detects execution of Advanced Installer MSIX Package Support Framework
+  (PSF) components, specifically AI_STUBS executables with original filename ''popupwrapper.exe''.
+
+  This activity may indicate malicious MSIX packages build with Advanced Installer
+  leveraging the Package Support Framework to bypass application control restrictions.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1553.005
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/threat-intelligence/msix-installers/
+- https://redcanary.com/threat-detection-report/techniques/installer-packages/
+- https://learn.microsoft.com/en-us/windows/msix/package/package-support-framework
+- https://www.splunk.com/en_us/blog/security/msix-weaponization-threat-detection-splunk.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \AI_STUBS\AiStubX64Elevated.exe
+    - \AI_STUBS\AiStubX86Elevated.exe
+    - \AI_STUBS\AiStubX64.exe
+    - \AI_STUBS\AiStubX86.exe
+    OriginalFileName: popupwrapper.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: af5732ed-764e-489d-826d-0447c8b36242
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_msix_ai_stub_execution.yml
+falsepositives:
+- Legitimate applications packaged with Advanced Installer using Package Support Framework
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-129966c9-de17-4334-a123-8b58172e664d
+name: Potential Windows Defender AV Bypass Via Dump64.EXE Rename
+description: 'Detects when a user is potentially trying to bypass the Windows Defender
+  AV by renaming a tool to dump64.exe and placing it in the Visual Studio folder.
+
+  Currently the rule is covering only usage of procdump but other utilities can be
+  added in order to increase coverage.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mrd0x/status/1460597833917251595
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_dump:
+    Image|startswith: :\Program Files
+    Image|contains: \Microsoft Visual Studio\
+    Image|endswith: \dump64.exe
+  selection_tools_procdump:
+  - OriginalFileName: procdump
+  - CommandLine|contains:
+    - ' -ma '
+    - ' -mp '
+  condition: selection_dump and 1 of selection_tools_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 129966c9-de17-4334-a123-8b58172e664d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dump64_defender_av_bypass_rename.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

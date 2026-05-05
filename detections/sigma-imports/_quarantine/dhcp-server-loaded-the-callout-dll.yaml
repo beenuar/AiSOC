@@ -1,0 +1,36 @@
+id: sigmahq-sigma-13fc89a9-971e-4ca6-b9dc-aa53a445bf40
+name: DHCP Server Loaded the CallOut DLL
+description: This rule detects a DHCP server in which a specified Callout DLL (in
+  registry) was loaded
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://blog.3or.de/mimilib-dhcp-server-callout-dll-injection.html
+- https://technet.microsoft.com/en-us/library/cc726884(v=ws.10).aspx
+- https://msdn.microsoft.com/de-de/library/windows/desktop/aa363389(v=vs.85).aspx
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 1033
+    Provider_Name: Microsoft-Windows-DHCP-Server
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 13fc89a9-971e-4ca6-b9dc-aa53a445bf40
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/microsoft_windows_dhcp_server/win_system_susp_dhcp_config.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

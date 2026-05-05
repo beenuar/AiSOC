@@ -1,0 +1,36 @@
+id: sigmahq-sigma-09438caa-07b1-4870-8405-1dbafe3dad95
+name: Azure Subscription Permission Elevation Via ActivityLogs
+description: 'Detects when a user has been elevated to manage all Azure Subscriptions.
+
+  This change should be investigated immediately if it isn''t planned.
+
+  This setting could allow an attacker access to Azure subscriptions in your environment.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations#microsoftauthorization
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName: MICROSOFT.AUTHORIZATION/ELEVATEACCESS/ACTION
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 09438caa-07b1-4870-8405-1dbafe3dad95
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_subscription_permissions_elevation_via_activitylogs.yml
+falsepositives:
+- If this was approved by System Administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

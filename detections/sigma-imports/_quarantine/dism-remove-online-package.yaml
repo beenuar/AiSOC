@@ -1,0 +1,42 @@
+id: sigmahq-sigma-43e32da2-fdd0-4156-90de-50dfd62636f9
+name: Dism Remove Online Package
+description: Deployment Image Servicing and Management tool. DISM is used to enumerate,
+  install, uninstall, configure, and update features and packages in Windows images
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md#atomic-test-26---disable-windows-defender-with-dism
+- https://www.trendmicro.com/en_us/research/22/h/ransomware-actor-abuses-genshin-impact-anti-cheat-driver-to-kill-antivirus.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_dismhost:
+    Image|endswith: \DismHost.exe
+    ParentCommandLine|contains|all:
+    - /Online
+    - /Disable-Feature
+  selection_dism:
+    Image|endswith: \Dism.exe
+    CommandLine|contains|all:
+    - /Online
+    - /Disable-Feature
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 43e32da2-fdd0-4156-90de-50dfd62636f9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dism_remove.yml
+falsepositives:
+- Legitimate script
+notes:
+  quarantine_reason: 'upstream status: test'

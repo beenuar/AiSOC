@@ -1,0 +1,36 @@
+id: sigmahq-sigma-8a4519e8-e64a-40b6-ae85-ba8ad2177559
+name: Renamed BrowserCore.EXE Execution
+description: Detects process creation with a renamed BrowserCore.exe (used to extract
+  Azure tokens)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1528
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/mariuszbit/status/1531631015139102720
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    OriginalFileName: BrowserCore.exe
+  filter_realbrowsercore:
+    Image|endswith: \BrowserCore.exe
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8a4519e8-e64a-40b6-ae85-ba8ad2177559
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_browsercore.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

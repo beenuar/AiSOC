@@ -1,0 +1,40 @@
+id: sigmahq-sigma-ee6cea48-c5b6-4304-a332-10fc6446f484
+name: Potential appverifUI.DLL Sideloading
+description: Detects potential DLL sideloading of "appverifUI.dll"
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20220519091349/https://fatrodzianko.com/2020/02/15/dll-side-loading-appverif-exe/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \appverifUI.dll
+  filter_main_legit_path:
+    Image:
+    - C:\Windows\SysWOW64\appverif.exe
+    - C:\Windows\System32\appverif.exe
+    ImageLoaded|startswith:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\WinSxS\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ee6cea48-c5b6-4304-a332-10fc6446f484
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_appverifui.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-056c7317-9a09-4bd4-9067-d051312752ea
+name: Powershell Executed From Headless ConHost Process
+description: 'Detects the use of powershell commands from headless ConHost window.
+
+  The "--headless" flag hides the windows from the user upon execution.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1059.003
+  - T1564.003
+  categories:
+  - endpoint
+references:
+- https://www.huntress.com/blog/fake-browser-updates-lead-to-boinc-volunteer-computing-software
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \conhost.exe
+  - OriginalFileName: CONHOST.EXE
+  selection_cli:
+    CommandLine|contains|all:
+    - --headless
+    - powershell
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 056c7317-9a09-4bd4-9067-d051312752ea
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_conhost_headless_powershell.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

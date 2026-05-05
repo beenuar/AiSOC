@@ -1,0 +1,41 @@
+id: sigmahq-sigma-47b3bbd4-1bf7-48cc-84ab-995362aaa75a
+name: Shell Execution via Git - Linux
+description: Detects the use of the "git" utility to execute a shell. Such behavior
+  may be associated with privilege escalation, unauthorized command execution, or
+  to break out from restricted environments.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/git/#shell
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    ParentImage|endswith: /git
+    ParentCommandLine|contains|all:
+    - ' -p '
+    - help
+    CommandLine|contains:
+    - bash 0<&1
+    - dash 0<&1
+    - sh 0<&1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 47b3bbd4-1bf7-48cc-84ab-995362aaa75a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_git_shell_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

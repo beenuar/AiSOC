@@ -1,0 +1,38 @@
+id: sigmahq-sigma-18749301-f1c5-4efc-a4c3-276ff1f5b6f8
+name: Use of VSIISExeLauncher.exe
+description: The "VSIISExeLauncher.exe" binary part of the Visual Studio/VS Code can
+  be used to execute arbitrary binaries
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/VSIISExeLauncher/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \VSIISExeLauncher.exe
+  - OriginalFileName: VSIISExeLauncher.exe
+  selection_cli:
+    CommandLine|contains:
+    - ' -p '
+    - ' -a '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 18749301-f1c5-4efc-a4c3-276ff1f5b6f8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_vsiisexelauncher.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

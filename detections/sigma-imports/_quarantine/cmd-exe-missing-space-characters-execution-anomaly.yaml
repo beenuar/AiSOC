@@ -1,0 +1,77 @@
+id: sigmahq-sigma-a16980c2-0c56-4de0-9a79-17971979efdd
+name: Cmd.EXE Missing Space Characters Execution Anomaly
+description: 'Detects Windows command lines that miss a space before or after the
+  /c flag when running a command using the cmd.exe.
+
+  This could be a sign of obfuscation of a fat finger problem (typo by the developer).'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/cyb3rops/status/1562072617552678912
+- https://ss64.com/nt/cmd.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection1:
+    CommandLine|contains:
+    - cmd.exe/c
+    - \cmd/c
+    - '"cmd/c'
+    - cmd.exe/k
+    - \cmd/k
+    - '"cmd/k'
+    - cmd.exe/r
+    - \cmd/r
+    - '"cmd/r'
+  selection2:
+    CommandLine|contains:
+    - /cwhoami
+    - /cpowershell
+    - /cschtasks
+    - /cbitsadmin
+    - /ccertutil
+    - /kwhoami
+    - /kpowershell
+    - /kschtasks
+    - /kbitsadmin
+    - /kcertutil
+  selection3:
+    CommandLine|contains:
+    - cmd.exe /c
+    - cmd /c
+    - cmd.exe /k
+    - cmd /k
+    - cmd.exe /r
+    - cmd /r
+  filter_generic:
+    CommandLine|contains:
+    - 'cmd.exe /c '
+    - 'cmd /c '
+    - 'cmd.exe /k '
+    - 'cmd /k '
+    - 'cmd.exe /r '
+    - 'cmd /r '
+  filter_fp:
+  - CommandLine|contains: AppData\Local\Programs\Microsoft VS Code\resources\app\node_modules
+  - CommandLine|endswith: cmd.exe/c .
+  - CommandLine: cmd.exe /c
+  condition: 1 of selection* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a16980c2-0c56-4de0-9a79-17971979efdd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_no_space_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

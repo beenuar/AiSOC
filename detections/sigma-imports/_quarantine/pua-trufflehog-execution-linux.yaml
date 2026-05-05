@@ -1,0 +1,53 @@
+id: sigmahq-sigma-d7a650c4-226c-451e-948f-cc490db506aa
+name: PUA - TruffleHog Execution - Linux
+description: 'Detects execution of TruffleHog, a tool used to search for secrets in
+  different platforms like Git, Jira, Slack, SharePoint, etc. that could be used maliciously.
+
+  While it is a legitimate tool, intended for use in CI pipelines and security assessments,
+
+  It was observed in the Shai-Hulud malware campaign targeting npm packages to steal
+  sensitive information.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://github.com/trufflesecurity/trufflehog
+- https://www.getsafety.com/blog-posts/shai-hulud-npm-attack
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img:
+    Image|endswith: /trufflehog
+  selection_cli_platform:
+    CommandLine|contains:
+    - ' docker --image '
+    - ' Git '
+    - ' GitHub '
+    - ' Jira '
+    - ' Slack '
+    - ' Confluence '
+    - ' SharePoint '
+    - ' s3 '
+    - ' gcs '
+  selection_cli_verified:
+    CommandLine|contains: ' --results=verified'
+  condition: selection_img or all of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7a650c4-226c-451e-948f-cc490db506aa
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_pua_trufflehog.yml
+falsepositives:
+- Legitimate use of TruffleHog by security teams or developers.
+notes:
+  quarantine_reason: 'upstream status: experimental'

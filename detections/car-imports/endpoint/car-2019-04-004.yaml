@@ -1,0 +1,72 @@
+id: mitre-car-car-2019-04-004
+name: Credential Dumping via Mimikatz
+description: 'Credential dumpers like Mimikatz can be loaded into memory and from
+  there read data from another processes. This analytic looks for instances where
+  processes are requesting specific permissions to read parts of the LSASS process
+  in order to detect when credential dumping is occurring. One weakness is that all
+  current implementations are “overtuned” to look for common access patterns used
+  by Mimikatz.
+
+
+  *This requires information about process access, e.g. Sysmon Event ID 10. That currently
+  doesn’t have a CAR data model mapping, since we currently lack any open/access actions
+  for Processes. If this changes, we will update the data model requirements.*'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references:
+- Credit to [Cyb3rWard0g](https://github.com/Cyb3rWard0g/ThreatHunter-Playbook/blob/master/playbooks/windows/06_credential_access/credential_dumping_T1003/credentials_from_memory/mimikatz_logonpasswords.md),
+  dim0x69 (blog.3or.de), and Mark Russinovich for providing much of the information
+  used to construct these analytics.
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Common Mimikatz GrantedAccess Patterns
+    type: splunk
+    code: 'index=__your_sysmon_data__ EventCode=10
+
+      TargetImage="C:\\WINDOWS\\system32\\lsass.exe"
+
+      (GrantedAccess=0x1410 OR GrantedAccess=0x1010 OR GrantedAccess=0x1438 OR GrantedAccess=0x143a
+      OR GrantedAccess=0x1418)
+
+      CallTrace="C:\\windows\\SYSTEM32\\ntdll.dll+*|C:\\windows\\System32\\KERNELBASE.dll+20edd|UNKNOWN(*)"
+
+      | table _time hostname user SourceImage GrantedAccess
+
+      '
+  - name: Outliers
+    type: splunk
+    code: "earliest=-d@d latest=now() index=__your_sysmon_data__\n  EventCode=10\n\
+      \  TargetImage=\"C:\\\\WINDOWS\\\\system32\\\\lsass.exe\"\n  (GrantedAccess=0x1410\
+      \ OR GrantedAccess=0x1010 OR GrantedAccess=0x1438 OR GrantedAccess=0x143a OR\
+      \ GrantedAccess=0x1418)\n| search NOT [ search earliest=-7d@d latest=-2d@d index=__your_sysmon_data__\
+      \ EventCode=10 TargetImage=\"C:\\\\WINDOWS\\\\system32\\\\lsass.exe\" (GrantedAccess=0x1410\
+      \ OR GrantedAccess=0x1010 OR GrantedAccess=0x1438 OR GrantedAccess=0x143a OR\
+      \ GrantedAccess=0x1418)\n  | dedup SourceImage\n  | fields SourceImage ]\n|\
+      \ table  _time hostname user SourceImage GrantedAccess\n"
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=10 image="C:\Windows\system32\lsass.exe"
+      (access="0x1410" OR access="0x1010" OR access="0x1438" OR access="0x143a" OR
+      access="0x1418") call_trace="C:\windows\SYSTEM32\ntdll.dll+*|C:\windows\System32\KERNELBASE.dll+20edd|UNKNOWN(*)"
+
+      | fields log_ts, host, user, source_image, access
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-04-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-04-004.yaml
+notes:
+  car_status: needs_implementation

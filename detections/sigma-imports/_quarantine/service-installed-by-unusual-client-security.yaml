@@ -1,0 +1,40 @@
+id: sigmahq-sigma-c4e92a97-a9ff-4392-9d2d-7a4c642768ca
+name: Service Installed By Unusual Client - Security
+description: Detects a service installed by a client which has PID 0 or whose parent
+  has PID 0
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/windows-service-installed-via-an-unusual-client.html
+- https://www.x86matthew.com/view_post?id=create_svc_rpc
+- https://twitter.com/SBousseaden/status/1490608838701166596
+logsource:
+  service: security
+  product: windows
+  definition: 'Requirements: The System Security Extension audit subcategory need
+    to be enabled to log the EID 4697'
+detection:
+  selection_eid:
+    EventID: 4697
+  selection_pid:
+  - ClientProcessId: 0
+  - ParentProcessId: 0
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c4e92a97-a9ff-4392-9d2d-7a4c642768ca
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_service_installation_by_unusal_client.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

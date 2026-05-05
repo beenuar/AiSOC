@@ -1,0 +1,47 @@
+id: splunk-security-content-ccf4b61b-1b26-4f2e-a089-f2009c569c57
+name: Windows Binary Proxy Execution Mavinject DLL Injection
+description: The following analytic detects the use of mavinject.exe for DLL injection
+  into running processes, identified by specific command-line parameters such as /INJECTRUNNING
+  and /HMODULE. This detection leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on process names and command-line executions. This activity
+  is significant because it indicates potential arbitrary code execution, a common
+  tactic for malware deployment and persistence. If confirmed malicious, this could
+  allow attackers to execute unauthorized code, escalate privileges, and maintain
+  persistence within the environment, posing a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.013
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/013/
+- https://posts.specterops.io/mavinject-exe-functionality-deconstructed-c29ab2cf5c0e
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218/T1218.md#atomic-test-1---mavinject---inject-dll-into-running-process
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=mavinject.exe\
+    \ Processes.process IN (\"*injectrunning*\", \"*hmodule=0x*\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_binary_proxy_execution_mavinject_dll_injection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ccf4b61b-1b26-4f2e-a089-f2009c569c57
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_binary_proxy_execution_mavinject_dll_injection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

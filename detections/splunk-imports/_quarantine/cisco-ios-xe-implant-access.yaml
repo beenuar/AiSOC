@@ -1,0 +1,45 @@
+id: splunk-security-content-07c36cda-6567-43c3-bc1a-89dff61e2cd9
+name: Cisco IOS XE Implant Access
+description: 'The following analytic identifies the potential exploitation of the
+  Cisco IOS XE vulnerability, CVE-2023-20198, in the Web User Interface.
+
+  It monitors POST requests to the "/webui/logoutconfirm.html?logon_hash=*" endpoint
+  using the Web datamodel.
+
+  This activity can be significant as it indicates potential access request to the
+  implant
+
+  If confirmed malicious, attackers could maintain privileged access, compromising
+  the device''s integrity and security.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://blog.talosintelligence.com/active-exploitation-of-cisco-ios-xe-software/
+- https://github.com/vulncheck-oss/cisco-ios-xe-implant-scanner
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\nWeb.url=\"*/webui/logoutconfirm.html?logon_hash=*\"\
+    \nWeb.http_method=POST\nWeb.status=200\n\nBY Web.http_user_agent Web.status Web.http_method\n\
+    \   Web.url Web.url_length Web.src Web.dest\n| `drop_dm_object_name(\"Web\")`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_ios_xe_implant_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 07c36cda-6567-43c3-bc1a-89dff61e2cd9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/cisco_ios_xe_implant_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

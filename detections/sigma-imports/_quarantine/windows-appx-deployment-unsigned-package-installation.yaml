@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9a025188-6f2d-42f8-bb2f-d3a83d24a5af
+name: Windows AppX Deployment Unsigned Package Installation
+description: Detects attempts to install unsigned MSIX/AppX packages using the -AllowUnsigned
+  parameter via AppXDeployment-Server events
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  - T1553.005
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/powershell/module/appx/add-appxpackage
+- https://www.splunk.com/en_us/blog/security/msix-weaponization-threat-detection-splunk.html
+logsource:
+  product: windows
+  service: appxdeployment-server
+detection:
+  selection:
+    EventID: 603
+    Flags: '8388608'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9a025188-6f2d-42f8-bb2f-d3a83d24a5af
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/appxdeployment_server/win_appxpackaging_server_unsigned_package_installation.yml
+falsepositives:
+- Legitimate installation of unsigned packages for legitimate purposes such as development
+  or testing
+notes:
+  quarantine_reason: 'upstream status: experimental'

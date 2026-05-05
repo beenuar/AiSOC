@@ -1,0 +1,49 @@
+id: sigmahq-sigma-4931188c-178e-4ee7-a348-39e8a7a56821
+name: Filter Driver Unloaded Via Fltmc.EXE
+description: Detect filter driver unloading activity via fltmc.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  - T1685
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://www.darkoperator.com/blog/2018/10/5/operating-offensively-against-sysmon
+- https://www.cybereason.com/blog/threat-analysis-report-lockbit-2.0-all-paths-lead-to-ransom
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \fltMC.exe
+  - OriginalFileName: fltMC.exe
+  selection_cli:
+    CommandLine|contains: unload
+  filter_optional_avira:
+    ParentImage|contains:
+    - \AppData\Local\Temp\
+    - :\Windows\Temp\
+    ParentImage|endswith: \endpoint-protection-installer-x64.tmp
+    CommandLine|endswith:
+    - unload rtp_filesystem_filter
+    - unload rtp_filter
+  filter_optional_manageengine:
+    ParentImage: C:\Program Files (x86)\ManageEngine\uems_agent\bin\dcfaservice64.exe
+    CommandLine|endswith: unload DFMFilter
+  condition: all of selection_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4931188c-178e-4ee7-a348-39e8a7a56821
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_fltmc_unload_driver.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

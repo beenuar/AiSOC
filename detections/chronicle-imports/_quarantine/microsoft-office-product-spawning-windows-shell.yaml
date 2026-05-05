@@ -1,0 +1,60 @@
+id: chronicle-detection-rules-microsoft-office-product-spawning-windows-shell
+name: microsoft_office_product_spawning_windows_shell
+description: microsoft_office_product_spawning_windows_shell
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule microsoft_office_product_spawning_windows_shell {\n meta:\n\
+    \    author = \"Michael Haag, Florian Roth, Markus Neis\"\n    description = \"\
+    Detects a Windows command line executable started from Microsoft Word, Excel,\
+    \ Powerpoint, Publisher and Visio.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/lwexYHEkDFrE\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/04/06\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, defense_evasion, t1059,\
+    \ t1202, car.2013-02-003, car.2014-04-003\"\n\n  events:\n((re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\WINWORD\\.EXE`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\EXCEL\\.EXE`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\POWERPNT\\.exe`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\MSPUB\\.exe`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\VISIO\\.exe`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\OUTLOOK\\.EXE`)) and (re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\cmd\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\
+    \\powershell\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\
+    \\wscript\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\\
+    cscript\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\\
+    sh\\.exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\bash\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\scrcons\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\schtasks\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\regsvr32\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\hh\\.exe`)\
+    \ or re.regex($selection.target.process.file.full_path, `.*\\\\wmic\\.exe`) or\
+    \ re.regex($selection.target.process.file.full_path, `.*\\\\mshta\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\rundll32\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\msiexec\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\forfiles\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\scriptrunner\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\mftrace\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\AppVLP\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\svchost\\.exe`)) and ($selection.metadata.product_event_type = \"4688\"\
+    \ or $selection.metadata.product_event_type = \"1\"))\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: microsoft_office_product_spawning_windows_shell
+provenance:
+  source: chronicle/detection-rules
+  source_id: microsoft_office_product_spawning_windows_shell
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/microsoft_office_product_spawning_windows_shell.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,40 @@
+id: splunk-security-content-c026e3dd-7e18-4abb-8f41-929e836efe74
+name: Detect Excessive Account Lockouts From Endpoint
+description: The following analytic detects endpoints causing a high number of account
+  lockouts within a short period. It leverages the Windows security event logs ingested
+  into the `Change` datamodel, specifically under the `Account_Management` node, to
+  identify and count lockout events. This activity is significant as it may indicate
+  a brute-force attack or misconfigured system causing repeated authentication failures.
+  If confirmed malicious, this behavior could lead to account lockouts, disrupting
+  user access and potentially indicating an ongoing attack attempting to compromise
+  user credentials.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.002
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(All_Changes.user) as user FROM datamodel=Change.All_Changes\n\
+    \  WHERE All_Changes.result=\"*lock*\"\n  BY All_Changes.dest All_Changes.result\n\
+    | `drop_dm_object_name(\"All_Changes\")`\n| `drop_dm_object_name(\"Account_Management\"\
+    )`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | search count > 5\n| `detect_excessive_account_lockouts_from_endpoint_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c026e3dd-7e18-4abb-8f41-929e836efe74
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_excessive_account_lockouts_from_endpoint.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-ddb26b76-4447-4807-871f-1b035b2bfa5d
+name: Persistence Via Sudoers.d Files
+description: 'Detects the creation or modification of files within the "sudoers.d"
+  directory on Linux systems.
+
+  Such activity may indicate an attempt to establish or maintain privilege escalation
+  by granting specific users elevated permissions.
+
+  Unauthorized changes to sudoers files are a common technique used by attackers to
+  persist administrative access.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://github.com/h3xduck/TripleCross/blob/1f1c3e0958af8ad9f6ebe10ab442e75de33e91de/apps/deployer.sh
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection:
+    TargetFilename|startswith: /etc/sudoers.d/
+  filter_main_dpkg:
+    Image|endswith: /usr/bin/dpkg
+    TargetFilename: /etc/sudoers.d/README.dpkg-new
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ddb26b76-4447-4807-871f-1b035b2bfa5d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/file_event/file_event_lnx_persistence_sudoers_files.yml
+falsepositives:
+- Creation of legitimate files in sudoers.d folder as part of administrator work
+notes:
+  quarantine_reason: 'upstream status: test'

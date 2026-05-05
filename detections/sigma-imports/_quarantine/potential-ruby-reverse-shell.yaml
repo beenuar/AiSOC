@@ -1,0 +1,47 @@
+id: sigmahq-sigma-b8bdac18-c06e-4016-ac30-221553e74f59
+name: Potential Ruby Reverse Shell
+description: Detects execution of ruby with the "-e" flag and calls to "socket" related
+  functions. This could be an indication of a potential attempt to setup a reverse
+  shell
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+- https://www.revshells.com/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|contains: ruby
+    CommandLine|contains|all:
+    - ' -e'
+    - rsocket
+    - TCPSocket
+    CommandLine|contains:
+    - ' ash'
+    - ' bash'
+    - ' bsh'
+    - ' csh'
+    - ' ksh'
+    - ' pdksh'
+    - ' sh'
+    - ' tcsh'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b8bdac18-c06e-4016-ac30-221553e74f59
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_ruby_reverse_shell.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

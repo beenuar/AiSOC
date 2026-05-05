@@ -1,0 +1,40 @@
+id: sigmahq-sigma-1f358e2e-cb63-43c3-b575-dfb072a6814f
+name: System and Hardware Information Discovery
+description: Detects system information discovery commands
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1082/T1082.md#atomic-test-4---linux-vm-check-via-hardware
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name:
+    - /sys/class/dmi/id/bios_version
+    - /sys/class/dmi/id/product_name
+    - /sys/class/dmi/id/chassis_vendor
+    - /proc/scsi/scsi
+    - /proc/ide/hd0/model
+    - /proc/version
+    - /etc/*version
+    - /etc/*release
+    - /etc/issue
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1f358e2e-cb63-43c3-b575-dfb072a6814f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_system_info_discovery2.yml
+falsepositives:
+- Legitimate administration activities

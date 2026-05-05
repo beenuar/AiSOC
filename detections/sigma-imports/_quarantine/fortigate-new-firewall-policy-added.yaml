@@ -1,0 +1,37 @@
+id: sigmahq-sigma-f24ab7a8-f09a-4319-82c1-915586aa642b
+name: FortiGate - New Firewall Policy Added
+description: Detects the addition of a new firewall policy on a Fortinet FortiGate
+  Firewall.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://www.fortiguard.com/psirt/FG-IR-24-535
+- https://docs.fortinet.com/document/fortigate/7.6.4/fortios-log-message-reference/398/event
+- https://docs.fortinet.com/document/fortigate/7.6.4/cli-reference/333889629/config-firewall-policy
+- https://docs.fortinet.com/document/fortigate/7.6.4/fortios-log-message-reference/44547/44547-logid-event-config-objattr
+logsource:
+  product: fortigate
+  service: event
+detection:
+  selection:
+    action: Add
+    cfgpath: firewall.policy
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f24ab7a8-f09a-4319-82c1-915586aa642b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/fortinet/fortigate/fortinet_fortigate_new_firewall_policy_added.yml
+falsepositives:
+- A firewall policy can be added for legitimate purposes.
+notes:
+  quarantine_reason: 'upstream status: experimental'

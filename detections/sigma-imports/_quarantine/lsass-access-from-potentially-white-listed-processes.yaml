@@ -1,0 +1,67 @@
+id: sigmahq-sigma-4be8b654-0c01-4c9d-a10c-6b28467fc651
+name: LSASS Access From Potentially White-Listed Processes
+description: Detects a possible process memory dump that uses a white-listed filename
+  like TrolleyExpress.exe as a way to dump the LSASS process memory without Microsoft
+  Defender interference
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_xpn_/status/1491557187168178176
+- https://www.ired.team/offensive-security/credential-access-and-credential-dumping/dump-credentials-from-lsass-process-without-mimikatz
+- https://twitter.com/mrd0x/status/1460597833917251595
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: \lsass.exe
+    SourceImage|endswith:
+    - \TrolleyExpress.exe
+    - \ProcessDump.exe
+    - \dump64.exe
+    GrantedAccess|endswith:
+    - '10'
+    - '30'
+    - '50'
+    - '70'
+    - '90'
+    - B0
+    - D0
+    - F0
+    - '18'
+    - '38'
+    - '58'
+    - '78'
+    - '98'
+    - B8
+    - D8
+    - F8
+    - 1A
+    - 3A
+    - 5A
+    - 7A
+    - 9A
+    - BA
+    - DA
+    - FA
+    - '0x14C2'
+    - FF
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4be8b654-0c01-4c9d-a10c-6b28467fc651
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_lsass_whitelisted_process_names.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

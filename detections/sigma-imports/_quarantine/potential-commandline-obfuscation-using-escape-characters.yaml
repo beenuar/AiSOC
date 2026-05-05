@@ -1,0 +1,38 @@
+id: sigmahq-sigma-f0cdd048-82dc-4f7a-8a7a-b87a52b6d0fd
+name: Potential Commandline Obfuscation Using Escape Characters
+description: Detects potential commandline obfuscation using known escape characters
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1140
+  categories:
+  - endpoint
+references:
+- https://twitter.com/vysecurity/status/885545634958385153
+- https://twitter.com/Hexacorn/status/885553465417756673
+- https://twitter.com/Hexacorn/status/885570278637678592
+- https://www.mandiant.com/resources/blog/obfuscation-wild-targeted-attackers-lead-way-evasion-techniques
+- https://web.archive.org/web/20190213114956/http://www.windowsinspired.com/understanding-the-command-line-string-and-arguments-received-by-a-windows-program/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - h^t^t^p
+    - h"t"t"p
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f0cdd048-82dc-4f7a-8a7a-b87a52b6d0fd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_cli_obfuscation_escape_char.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

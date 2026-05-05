@@ -1,0 +1,37 @@
+id: sigmahq-sigma-4c7f49ee-2638-43bb-b85b-ce676c30b260
+name: Assembly DLL Creation Via AspNetCompiler
+description: Detects the creation of new DLL assembly files by "aspnet_compiler.exe",
+  which could be a sign of "aspnet_compiler" abuse to proxy execution through a build
+  provider.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith: \aspnet_compiler.exe
+    TargetFilename|contains|all:
+    - \Temporary ASP.NET Files\
+    - \assembly\tmp\
+    - .dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4c7f49ee-2638-43bb-b85b-ce676c30b260
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_aspnet_temp_files.yml
+falsepositives:
+- Legitimate assembly compilation using a build provider
+notes:
+  quarantine_reason: 'upstream status: test'

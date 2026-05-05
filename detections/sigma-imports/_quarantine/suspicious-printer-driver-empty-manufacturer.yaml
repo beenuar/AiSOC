@@ -1,0 +1,45 @@
+id: sigmahq-sigma-e0813366-0407-449a-9869-a2db1119dc41
+name: Suspicious Printer Driver Empty Manufacturer
+description: Detects a suspicious printer driver installation with an empty Manufacturer
+  value
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1410545674773467140
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains|all:
+    - \Control\Print\Environments\Windows x64\Drivers
+    - \Manufacturer
+    Details: (Empty)
+  filter_cutepdf:
+    TargetObject|contains: \CutePDF Writer v4.0\
+  filter_vnc:
+    TargetObject|contains:
+    - \VNC Printer (PS)\
+    - \VNC Printer (UD)\
+  filter_pdf24:
+    TargetObject|contains: \Version-3\PDF24\
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e0813366-0407-449a-9869-a2db1119dc41
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_susp_printer_driver.yml
+falsepositives:
+- Alerts on legitimate printer drivers that do not set any more details in the Manufacturer
+  value
+notes:
+  quarantine_reason: 'upstream status: test'

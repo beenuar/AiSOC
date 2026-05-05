@@ -1,0 +1,62 @@
+id: sigmahq-sigma-91e69562-2426-42ce-a647-711b8152ced6
+name: AADInternals PowerShell Cmdlets Execution - PsScript
+description: Detects ADDInternals Cmdlet execution. A tool for administering Azure
+  AD and Office 365. Which can be abused by threat actors to attack Azure AD or Office
+  365.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://o365blog.com/aadinternals/
+- https://github.com/Gerenios/AADInternals
+logsource:
+  product: windows
+  category: ps_script
+  definition: Script Block Logging must be enable
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Add-AADInt
+    - ConvertTo-AADInt
+    - Disable-AADInt
+    - Enable-AADInt
+    - Export-AADInt
+    - Find-AADInt
+    - Get-AADInt
+    - Grant-AADInt
+    - Initialize-AADInt
+    - Install-AADInt
+    - Invoke-AADInt
+    - Join-AADInt
+    - New-AADInt
+    - Open-AADInt
+    - Read-AADInt
+    - Register-AADInt
+    - Remove-AADInt
+    - Reset-AADInt
+    - Resolve-AADInt
+    - Restore-AADInt
+    - Save-AADInt
+    - Search-AADInt
+    - Send-AADInt
+    - Set-AADInt
+    - Start-AADInt
+    - Unprotect-AADInt
+    - Update-AADInt
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 91e69562-2426-42ce-a647-711b8152ced6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_aadinternals_cmdlets_execution.yml
+falsepositives:
+- Legitimate use of the library for administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

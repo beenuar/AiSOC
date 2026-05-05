@@ -1,0 +1,48 @@
+id: splunk-security-content-d25d2c3d-d9d8-40ec-8fdf-e86fe155a3da
+name: Remote Process Instantiation via WMI
+description: The following analytic detects the execution of wmic.exe with parameters
+  to spawn a process on a remote system. It leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on command-line executions and process telemetry
+  mapped to the `Processes` node of the `Endpoint` data model. This activity is significant
+  as WMI can be abused for lateral movement and remote code execution, often used
+  by adversaries and Red Teams. If confirmed malicious, this could allow attackers
+  to execute arbitrary code on remote systems, facilitating further compromise and
+  lateral spread within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1047/
+- https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/create-method-in-class-win32-process
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_wmic`\
+    \ (Processes.process=\"*/node:*\"\n    AND\n    Processes.process=\"*process*\"\
+    \n    AND\n    Processes.process=\"*call*\"\n    AND\n    Processes.process=\"\
+    *create*\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `remote_process_instantiation_via_wmi_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d25d2c3d-d9d8-40ec-8fdf-e86fe155a3da
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/remote_process_instantiation_via_wmi.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

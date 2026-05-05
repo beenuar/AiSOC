@@ -1,0 +1,60 @@
+id: sigmahq-sigma-8f3ab69a-aa22-4943-aa58-e0a52fdf6818
+name: User Shell Folders Registry Modification via CommandLine
+description: 'Detects modifications to User Shell Folders registry values via reg.exe
+  or PowerShell, which could indicate persistence attempts.
+
+  Attackers may modify User Shell Folders registry values to point to malicious executables
+  or scripts that will be executed during startup.
+
+  This technique is often used to maintain persistence on a compromised system by
+  ensuring that malicious payloads are executed automatically.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.welivesecurity.com/en/eset-research/muddywater-snakes-riverbank/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    - \reg.exe
+  - OriginalFileName:
+    - powershell.exe
+    - pwsh.dll
+    - reg.exe
+  selection_cli_action:
+    CommandLine|contains:
+    - ' add '
+    - New-ItemProperty
+    - Set-ItemProperty
+    - 'si '
+  selection_cli_paths_root:
+    CommandLine|contains:
+    - \Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders
+    - \Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders
+  selection_cli_paths_suffix:
+    CommandLine|contains: Startup
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8f3ab69a-aa22-4943-aa58-e0a52fdf6818
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_user_shell_folders_registry_modification.yml
+falsepositives:
+- Usage of reg.exe or PowerShell to modify User Shell Folders for legitimate purposes;
+  but rare.
+notes:
+  quarantine_reason: 'upstream status: experimental'

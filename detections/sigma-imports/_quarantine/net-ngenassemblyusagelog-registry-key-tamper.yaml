@@ -1,0 +1,40 @@
+id: sigmahq-sigma-28036918-04d3-423d-91c0-55ecf99fb892
+name: NET NGenAssemblyUsageLog Registry Key Tamper
+description: 'Detects changes to the NGenAssemblyUsageLog registry key.
+
+  .NET Usage Log output location can be controlled by setting the NGenAssemblyUsageLog
+  CLR configuration knob in the Registry or by configuring an environment variable
+  (as described in the next section).
+
+  By simplify specifying an arbitrary value (e.g. fake output location or junk data)
+  for the expected value, a Usage Log file for the .NET execution context will not
+  be created.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2021/03/16/investigating-net-clr-usage-log-tampering-techniques-for-edr-evasion/
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|endswith: SOFTWARE\Microsoft\.NETFramework\NGenAssemblyUsageLog
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 28036918-04d3-423d-91c0-55ecf99fb892
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_net_cli_ngenassemblyusagelog.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

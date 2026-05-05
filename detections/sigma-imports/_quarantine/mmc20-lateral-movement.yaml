@@ -1,0 +1,37 @@
+id: sigmahq-sigma-f1f3bf22-deb2-418d-8cce-e1a45e46a5bd
+name: MMC20 Lateral Movement
+description: Detects MMC20.Application Lateral Movement; specifically looks for the
+  spawning of the parent MMC.exe with a command line of "-Embedding" as a child of
+  svchost.exe
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://enigma0x3.net/2017/01/05/lateral-movement-using-the-mmc20-application-com-object/
+- https://drive.google.com/file/d/1lKya3_mLnR3UQuCoiYruO3qgu052_iS_/view?usp=sharing
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \svchost.exe
+    Image|endswith: \mmc.exe
+    CommandLine|contains: -Embedding
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f1f3bf22-deb2-418d-8cce-e1a45e46a5bd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mmc_mmc20_lateral_movement.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-muddywater-apt-proxy
+name: muddywater_apt_proxy
+description: muddywater_apt_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule muddywater_apt_proxy {\n meta:\n    author = \"Alexandr Yampolskyi,\
+    \ SOC Prime\"\n    description = \"MuddyWater APT Detector.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/01RzFtYR4i2N\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/28\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071\"\n\n  events:\n($selectionURL.target.url = \"\
+    https://savephotos.net/e6N0RQ80\" or $selectionURL.target.url = \"http://sagawa-zz.com/sagawa.apk\"\
+    \ or re.regex($selectionURL.target.url, `http://59\\.105\\.6\\.230//servlet/.*`)\
+    \ or $selectionURL.target.url = \"http://118.160.115.74/admin/index.jsp\")\n\n\
+    \  condition:\n    $selectionURL\n}"
+  chronicle_rule_name: muddywater_apt_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: muddywater_apt_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/proxy/muddywater_apt__proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

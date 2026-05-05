@@ -1,0 +1,38 @@
+id: sigmahq-sigma-9c8c7000-3065-44a8-a555-79bcba5d9955
+name: MSDT Execution Via Answer File
+description: Detects execution of "msdt.exe" using an answer file which is simulating
+  the legitimate way of calling msdt via "pcwrun.exe" (For example from the compatibility
+  tab).
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Msdt/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \msdt.exe
+    CommandLine|contains: \WINDOWS\diagnostics\index\PCWDiagnostic.xml
+    CommandLine|contains|windash: ' -af '
+  filter_main_pcwrun:
+    ParentImage|endswith: \pcwrun.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9c8c7000-3065-44a8-a555-79bcba5d9955
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_msdt_answer_file_exec.yml
+falsepositives:
+- Possible undocumented parents of "msdt" other than "pcwrun".
+notes:
+  quarantine_reason: 'upstream status: test'

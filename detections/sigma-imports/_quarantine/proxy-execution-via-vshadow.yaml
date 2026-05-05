@@ -1,0 +1,44 @@
+id: sigmahq-sigma-d7c75059-2901-4578-b209-8837fd31c6a8
+name: Proxy Execution via Vshadow
+description: 'Detects the invocation of vshadow.exe with the -exec parameter that
+  executes a specified script or command after the shadow copies are created but before
+  the VShadow tool exits.
+
+  VShadow is a command-line tool that you can use to create and manage volume shadow
+  copies. While legitimate backup or administrative scripts may use this flag,
+
+  attackers can leverage this parameter to proxy the execution of malware.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Vshadow/
+- https://learn.microsoft.com/en-us/windows/win32/vss/vshadow-tool-and-sample
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \vshadow.exe
+  - OriginalFileName: vshadow.exe
+  selection_cli:
+    CommandLine|contains: -exec
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7c75059-2901-4578-b209-8837fd31c6a8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vshadow_exec.yml
+falsepositives:
+- System backup or administrator tools
+- Legitimate administrative scripts
+notes:
+  quarantine_reason: 'upstream status: experimental'

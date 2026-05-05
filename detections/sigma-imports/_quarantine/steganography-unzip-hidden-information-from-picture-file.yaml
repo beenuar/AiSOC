@@ -1,0 +1,37 @@
+id: sigmahq-sigma-edd595d7-7895-4fa7-acb3-85a18a8772ca
+name: Steganography Unzip Hidden Information From Picture File
+description: Detects extracting of zip file from image file
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027.003
+  categories:
+  - endpoint
+references:
+- https://zerotoroot.me/steganography-hiding-a-zip-in-a-jpeg-file/
+logsource:
+  product: linux
+  service: auditd
+detection:
+  commands:
+    type: EXECVE
+    a0: unzip
+  a1:
+    a1|endswith:
+    - .jpg
+    - .png
+  condition: commands and a1
+provenance:
+  source: SigmaHQ/sigma
+  source_id: edd595d7-7895-4fa7-acb3-85a18a8772ca
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_unzip_hidden_zip_files_steganography.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

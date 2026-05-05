@@ -1,0 +1,65 @@
+id: chronicle-detection-rules-onelogin-otp-brute-force-attack
+name: onelogin_otp_brute_force_attack
+description: onelogin_otp_brute_force_attack
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule onelogin_otp_brute_force_attack {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects a successful login after multiple failed\
+    \ OTP intents\"\n    rule_id = \"mr_cc37e0cf-c8c5-4e46-be0e-b2b992775500\"\n \
+    \   rule_name = \"OneLogin OTP Bruteforce Attack\"\n    reference = \"https://www.onelogin.com/blog/brute-force-attacks\"\
+    \n    mitre_attack_tactic = \"Credential Access\"\n    mitre_attack_technique\
+    \ = \"Brute Force\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1110/\"\
+    \n    mitre_attack_version = \"v15.1\"\n    type = \"Alert\"\n    data_source\
+    \ = \"OneLogin\"\n    severity = \"High\"\n    priority = \"High\"\n\n  events:\n\
+    \    $failed_otp.metadata.event_type = \"USER_RESOURCE_ACCESS\"\n    $failed_otp.metadata.product_name\
+    \ = \"ONELOGIN_SSO\"\n    $failed_otp.metadata.vendor_name = \"ONELOGIN\"\n  \
+    \  $failed_otp.metadata.product_event_type = \"1002\" //failed otp challenge\n\
+    \    $failed_otp.principal.user.userid = $userid\n\n    $success_otp.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $success_otp.metadata.product_name = \"ONELOGIN_SSO\"\n\
+    \    $success_otp.metadata.vendor_name = \"ONELOGIN\"\n    $success_otp.metadata.product_event_type\
+    \ = \"1400\" //User verified otp device\n    $success_otp.principal.user.userid\
+    \ = $userid\n\n    $login.metadata.event_type = \"USER_LOGIN\"\n    $login.metadata.product_name\
+    \ = \"ONELOGIN_SSO\"\n    $login.metadata.vendor_name = \"ONELOGIN\"\n    $login.metadata.product_event_type\
+    \ = \"5\" //User logged into onelogin\n    $login.principal.user.userid = $userid\n\
+    \n    $failed_otp.metadata.event_timestamp.seconds <= $success_otp.metadata.event_timestamp.seconds\n\
+    \    $success_otp.metadata.event_timestamp.seconds <= $login.metadata.event_timestamp.seconds\n\
+    \n  match:\n    $userid over 15m\n\n  outcome:\n    $risk_score = max(75)\n  \
+    \  $mitre_attack_tactic = \"Credential Access\"\n    $mitre_attack_technique =\
+    \ \"Brute Force\"\n    $target_user_agent = array_distinct($login.network.http.user_agent)\n\
+    \    $principal_ip = array_distinct($login.principal.ip)\n    $principal_ip_country\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_user_display_name = array_distinct($login.principal.user.user_display_name)\n\
+    \    $target_user_userid = array_distinct($login.target.user.userid)\n    $otp_device_name\
+    \ = array_distinct($success_otp.additional.fields[\"otp_device_name\"])\n    $otp_device_id\
+    \ = array_distinct($success_otp.principal.asset_id)\n\n  condition:\n    #failed_otp\
+    \ >= 4 and $success_otp and $login\n}"
+  chronicle_rule_name: onelogin_otp_brute_force_attack
+provenance:
+  source: chronicle/detection-rules
+  source_id: onelogin_otp_brute_force_attack
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/onelogin/onelogin_otp_brute_force_attack.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

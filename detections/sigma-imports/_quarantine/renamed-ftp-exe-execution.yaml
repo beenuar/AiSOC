@@ -1,0 +1,36 @@
+id: sigmahq-sigma-277a4393-446c-449a-b0ed-7fdc7795244c
+name: Renamed FTP.EXE Execution
+description: Detects the execution of a renamed "ftp.exe" binary based on the PE metadata
+  fields
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Ftp/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_original:
+    OriginalFileName: ftp.exe
+  filter_img:
+    Image|endswith: \ftp.exe
+  condition: selection_original and not filter_img
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 277a4393-446c-449a-b0ed-7fdc7795244c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_ftp.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

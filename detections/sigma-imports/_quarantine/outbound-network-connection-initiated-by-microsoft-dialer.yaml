@@ -1,0 +1,56 @@
+id: sigmahq-sigma-37e4024a-6c80-4d8f-b95d-2e7e94f3a8d1
+name: Outbound Network Connection Initiated By Microsoft Dialer
+description: 'Detects outbound network connection initiated by Microsoft Dialer.
+
+  The Microsoft Dialer, also known as Phone Dialer, is a built-in utility application
+  included in various versions of the Microsoft Windows operating system. Its primary
+  function is to provide users with a graphical interface for managing phone calls
+  via a modem or a phone line connected to the computer.
+
+  This is an outdated process in the current conext of it''s usage and is a common
+  target for info stealers for process injection, and is used to make C2 connections,
+  common example is "Rhadamanthys"'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - endpoint
+references:
+- https://tria.ge/240301-rk34sagf5x/behavioral2
+- https://app.any.run/tasks/6720b85b-9c53-4a12-b1dc-73052a78477d
+- https://research.checkpoint.com/2023/rhadamanthys-v0-5-0-a-deep-dive-into-the-stealers-components/
+- https://strontic.github.io/xcyclopedia/library/dialer.exe-0B69655F912619756C704A0BF716B61F.html
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: :\Windows\System32\dialer.exe
+    Initiated: 'true'
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 37e4024a-6c80-4d8f-b95d-2e7e94f3a8d1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_dialer_initiated_connection.yml
+falsepositives:
+- In Modern Windows systems, unable to see legitimate usage of this process, However,
+  if an organization has legitimate purpose for this there can be false positives.
+notes:
+  quarantine_reason: 'upstream status: test'

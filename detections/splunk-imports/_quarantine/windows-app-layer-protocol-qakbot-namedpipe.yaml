@@ -1,0 +1,44 @@
+id: splunk-security-content-63a2c15e-9448-43c5-a4a8-9852266aaada
+name: Windows App Layer Protocol Qakbot NamedPipe
+description: The following analytic detects a suspicious process creating or connecting
+  to a potential Qakbot named pipe. It leverages Sysmon EventCodes 17 and 18, focusing
+  on specific processes known to be abused by Qakbot and identifying randomly generated
+  named pipes in GUID form. This activity is significant as Qakbot malware uses named
+  pipes for inter-process communication after code injection, facilitating data theft.
+  If confirmed malicious, this behavior could indicate a Qakbot infection, leading
+  to unauthorized data access and potential exfiltration from the compromised host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/wermgr.exe-0F652BF7ADA772981E8AAB0D108FCC92.html
+- https://www.trellix.com/en-us/about/newsroom/stories/research/demystifying-qbot-malware.html
+- https://www.elastic.co/security-labs/qbot-malware-analysis
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN (17, 18) EventType IN ( "CreatePipe", "ConnectPipe")
+    Image IN ("*\\calc.exe", "*\\notepad.exe", "*\\rdpclip.exe", "*\\explorer.exe",
+    "*\\wermgr.exe", "*\\ping.exe", "*\\OneDriveSetup.exe", "*\\dxdiag.exe", "*\\mobsync.exe",
+    "*\\msra.exe", "*\\xwizard.exe") | regex PipeName="^\\\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{8}"
+    | stats  min(_time) as firstTime max(_time) as lastTime count by dest dvc pipe_name
+    process_exec process_guid process_id process_name process_path signature signature_id
+    user_id vendor_product Image PipeName | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `windows_app_layer_protocol_qakbot_namedpipe_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 63a2c15e-9448-43c5-a4a8-9852266aaada
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_app_layer_protocol_qakbot_namedpipe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

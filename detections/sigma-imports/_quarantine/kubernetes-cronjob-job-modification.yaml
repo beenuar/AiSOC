@@ -1,0 +1,49 @@
+id: sigmahq-sigma-0c9b3bda-41a6-4442-9345-356ae86343dc
+name: Kubernetes CronJob/Job Modification
+description: 'Detects when a Kubernetes CronJob or Job is created or modified.
+
+  A Kubernetes Job creates one or more pods to accomplish a specific task, and a CronJob
+  creates Jobs on a recurring schedule.
+
+  An adversary can take advantage of this Kubernetes object to schedule Jobs to run
+  containers that execute malicious code within a cluster, allowing them to achieve
+  persistence.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://kubernetes.io/docs/reference/config-api/apiserver-audit.v1/
+- https://www.redhat.com/en/blog/protecting-kubernetes-against-mitre-attck-persistence#technique-33-kubernetes-cronjob
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    objectRef.apiGroup: batch
+    objectRef.resource:
+    - cronjobs
+    - jobs
+    verb:
+    - create
+    - delete
+    - patch
+    - replace
+    - update
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0c9b3bda-41a6-4442-9345-356ae86343dc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_cronjob_modification.yml
+falsepositives:
+- Modifying a Kubernetes Job or CronJob may need to be done by a system administrator.
+- Automated processes may need to take these actions and may need to be filtered.
+notes:
+  quarantine_reason: 'upstream status: test'

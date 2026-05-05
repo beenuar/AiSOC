@@ -1,0 +1,36 @@
+id: sigmahq-sigma-41f6531d-af6e-4c6e-918f-b946f2b85a36
+name: Potential Persistence Via LSA Extensions
+description: 'Detects when an attacker modifies the "REG_MULTI_SZ" value named "Extensions"
+  to include a custom DLL to achieve persistence via lsass.
+
+  The "Extensions" list contains filenames of DLLs being automatically loaded by lsass.exe.
+  Each DLL has its InitializeLsaExtension() method called after loading.'
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://persistence-info.github.io/Data/lsaaextension.html
+- https://twitter.com/0gtweet/status/1476286368385019906
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \SYSTEM\CurrentControlSet\Control\LsaExtensionConfig\LsaSrv\Extensions
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 41f6531d-af6e-4c6e-918f-b946f2b85a36
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_lsa_extension.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

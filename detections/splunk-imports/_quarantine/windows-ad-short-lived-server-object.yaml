@@ -1,0 +1,46 @@
+id: splunk-security-content-193769d3-1e33-43a9-970e-ad4a88256cdb
+name: Windows AD Short Lived Server Object
+description: The following analytic identifies the creation and quick deletion of
+  a Domain Controller (DC) object within 30 seconds in an Active Directory environment,
+  indicative of a potential DCShadow attack. This detection leverages Windows Security
+  Event Codes 5137 and 5141, analyzing the duration between these events. This activity
+  is significant as DCShadow allows attackers with privileged access to register a
+  rogue DC, enabling unauthorized changes to AD objects, including credentials. If
+  confirmed malicious, this could lead to unauthorized AD modifications, compromising
+  the integrity and security of the entire domain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1207
+  categories:
+  - endpoint
+references:
+- https://www.dcshadow.com/
+- https://attack.mitre.org/techniques/T1207/
+- https://stealthbits.com/blog/detecting-dcshadow-with-event-logs/
+- https://pentestlab.blog/2018/04/16/dcshadow/
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5137
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5141
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5137 OR EventCode=5141 ObjectDN=\"\
+    *CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration*\"\n  | transaction\
+    \ ObjectDN startswith=(EventCode=5137) endswith=(EventCode=5141)\n  | eval short_lived=case((duration<30),\"\
+    TRUE\")\n  | search short_lived = TRUE\n  | stats values(ObjectDN) values(signature)\
+    \ values(EventCode)\n    BY _time, Computer, SubjectUserName,\n       dest\n \
+    \ | `windows_ad_short_lived_server_object_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 193769d3-1e33-43a9-970e-ad4a88256cdb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_short_lived_server_object.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

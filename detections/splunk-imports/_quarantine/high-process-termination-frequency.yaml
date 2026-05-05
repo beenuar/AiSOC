@@ -1,0 +1,42 @@
+id: splunk-security-content-17cd75b2-8666-11eb-9ab4-acde48001122
+name: High Process Termination Frequency
+description: The following analytic identifies a high frequency of process termination
+  events on a computer within a short period. It leverages Sysmon EventCode 5 logs
+  to detect instances where 15 or more processes are terminated within a 3-second
+  window. This behavior is significant as it is commonly associated with ransomware
+  attempting to avoid exceptions during file encryption. If confirmed malicious, this
+  activity could indicate an active ransomware attack, potentially leading to widespread
+  file encryption and significant data loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/fin11-email-campaigns-precursor-for-ransomware-data-theft
+- https://blog.virustotal.com/2020/11/keep-your-friends-close-keep-ransomware.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=5\n  | bin _time span=3s\n  | stats values(process)\
+    \ as process values(process_exec) as process_exec values(process_guid) as process_guid\
+    \ values(process_id) as process_id values(process_name) as process_name values(process_path)\
+    \ as process_path values(user_id) as user_id min(_time) as firstTime max(_time)\
+    \ as lastTime count\n    BY _time dest EventCode\n       ProcessID signature signature_id\n\
+    \       vendor_product\n  | where count >= 15\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `high_process_termination_frequency_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 17cd75b2-8666-11eb-9ab4-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/high_process_termination_frequency.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

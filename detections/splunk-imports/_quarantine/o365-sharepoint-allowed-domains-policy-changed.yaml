@@ -1,0 +1,46 @@
+id: splunk-security-content-b0cc6fa8-39b1-49ac-a4fe-f2f2a668e06c
+name: O365 SharePoint Allowed Domains Policy Changed
+description: The following analytic identifies when the allowed domain settings for
+  O365 SharePoint have been changed. With Azure AD B2B collaboration, users and administrators
+  can invite external users to collaborate with internal users. External guest account
+  invitations may also need access to OneDrive/SharePoint resources. These changed
+  should be monitored by security teams as they could potentially lead to unauthorized
+  access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/sharepoint/external-sharing-overview
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=SharePoint Operation=SharingPolicyChanged
+    "ModifiedProperties{}.Name"=AllowDomainList | eval signature_id = CorrelationId,
+    signature=Operation, src = ClientIP, user = UserId, object_name=''ModifiedProperties{}.Name'',
+    object_attrs_new = split(replace(''ModifiedProperties{}.NewValue'',"\.\.\.",""),","),
+    object_attrs_old = split(replace(''ModifiedProperties{}.OldValue'',"\.\.\.",""),",")
+    | fillnull | stats values(object_attrs_new) as object_attrs_new, values(object_attrs_old)
+    as object_attrs_old, values(src) as src, count, min(_time) as firstTime, max(_time)
+    as lastTime by user,signature,signature_id,object_name,dest,action,vendor_account,vendor_product
+    | eval diff_add=mvmap(object_attrs_new,if(isnull(mvfind(object_attrs_old,object_attrs_new)),object_attrs_new,null))
+    | eval diff_remove=mvmap(object_attrs_old,if(isnull(mvfind(object_attrs_new,object_attrs_old)),object_attrs_old,null))
+    | eval result = case(isnotnull(diff_add),"Added ".mvjoin(diff_add,","),isnotnull(diff_remove),"Removed
+    ".mvjoin(diff_remove,",")), action = case(isnotnull(diff_add),"created",isnotnull(diff_remove),"deleted")
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `o365_sharepoint_allowed_domains_policy_changed_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b0cc6fa8-39b1-49ac-a4fe-f2f2a668e06c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_sharepoint_allowed_domains_policy_changed.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

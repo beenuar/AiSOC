@@ -1,0 +1,42 @@
+id: sigmahq-sigma-953945c5-22fe-4a92-9f8a-a9edc1e522da
+name: Abuse of Service Permissions to Hide Services Via Set-Service - PS
+description: Detects usage of the "Set-Service" powershell cmdlet to configure a new
+  SecurityDescriptor that allows a service to be hidden from other utilities such
+  as "sc.exe", "Get-Service"...etc. (Works only in powershell 7)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.011
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Alh4zr3d/status/1580925761996828672
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/set-service?view=powershell-7.2
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - 'Set-Service '
+    - DCLCWPDTSD
+    ScriptBlockText|contains:
+    - '-SecurityDescriptorSddl '
+    - '-sd '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 953945c5-22fe-4a92-9f8a-a9edc1e522da
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_using_set_service_to_hide_services.yml
+falsepositives:
+- Rare intended use of hidden services
+- Rare FP could occur due to the non linearity of the ScriptBlockText log
+notes:
+  quarantine_reason: 'upstream status: test'

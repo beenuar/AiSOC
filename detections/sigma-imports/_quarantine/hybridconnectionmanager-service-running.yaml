@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b55d23e5-6821-44ff-8a6e-67218891e49f
+name: HybridConnectionManager Service Running
+description: Rule to detect the Hybrid Connection Manager service running on an endpoint.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1554
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Cyb3rWard0g/status/1381642789369286662
+logsource:
+  product: windows
+  service: microsoft-servicebus-client
+detection:
+  selection:
+    EventID:
+    - 40300
+    - 40301
+    - 40302
+  keywords:
+  - HybridConnection
+  - sb://
+  - servicebus.windows.net
+  - HybridConnectionManage
+  condition: selection and keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b55d23e5-6821-44ff-8a6e-67218891e49f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/servicebus/win_hybridconnectionmgr_svc_running.yml
+falsepositives:
+- Legitimate use of Hybrid Connection Manager via Azure function apps.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-5de03871-5d46-4539-a82d-3aa992a69a83
+name: Registry Disable System Restore
+description: Detects the modification of the registry to disable a system restore
+  on the computer
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1490/T1490.md#atomic-test-9---disable-system-restore-through-registry
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \Policies\Microsoft\Windows NT\SystemRestore
+    - \Microsoft\Windows NT\CurrentVersion\SystemRestore
+    TargetObject|endswith:
+    - DisableConfig
+    - DisableSR
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5de03871-5d46-4539-a82d-3aa992a69a83
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disable_system_restore.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-8bc063d5-3a3a-4f01-a140-bc15e55e8437
+name: Suspicious GetTypeFromCLSID ShellExecute
+description: Detects suspicious Powershell code that execute COM Objects
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.015
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1546.015/T1546.015.md#atomic-test-2---powershell-execute-com-object
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - ::GetTypeFromCLSID(
+    - .ShellExecute(
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8bc063d5-3a3a-4f01-a140-bc15e55e8437
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_gettypefromclsid.yml
+falsepositives:
+- Legitimate PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

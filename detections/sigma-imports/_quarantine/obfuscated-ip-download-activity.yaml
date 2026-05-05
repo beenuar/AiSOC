@@ -1,0 +1,61 @@
+id: sigmahq-sigma-cb5a2333-56cf-4562-8fcb-22ba1bca728d
+name: Obfuscated IP Download Activity
+description: Detects use of an encoded/obfuscated version of an IP address (hex, octal...)
+  in an URL combined with a download command
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://h.43z.one/ipconverter/
+- https://twitter.com/Yasser_Elsnbary/status/1553804135354564608
+- https://twitter.com/fr0s7_/status/1712780207105404948
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_command:
+    CommandLine|contains:
+    - Invoke-WebRequest
+    - 'iwr '
+    - Invoke-RestMethod
+    - 'irm '
+    - 'wget '
+    - 'curl '
+    - DownloadFile
+    - DownloadString
+  selection_ip_1:
+    CommandLine|contains:
+    - ' 0x'
+    - //0x
+    - .0x
+    - .00x
+  selection_ip_2:
+    CommandLine|contains|all:
+    - http://%
+    - '%2e'
+  selection_ip_3:
+  - CommandLine|re: https?://[0-9]{1,3}\.[0-9]{1,3}\.0[0-9]{3,4}
+  - CommandLine|re: https?://[0-9]{1,3}\.0[0-9]{3,7}
+  - CommandLine|re: https?://0[0-9]{3,11}
+  - CommandLine|re: https?://(?:0[0-9]{1,11}\.){3}0[0-9]{1,11}
+  - CommandLine|re: https?://0[0-9]{1,11}
+  - CommandLine|re: ' [0-7]{7,13}'
+  filter_main_valid_ip:
+    CommandLine|re: https?://(?:(?:25[0-5]|(?:2[0-4]|1\d|[1-9])?\d)(?:\.|\b)){4}
+  condition: selection_command and 1 of selection_ip_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cb5a2333-56cf-4562-8fcb-22ba1bca728d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_obfuscated_ip_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

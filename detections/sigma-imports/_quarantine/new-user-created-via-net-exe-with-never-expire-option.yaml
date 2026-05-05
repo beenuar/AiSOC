@@ -1,0 +1,43 @@
+id: sigmahq-sigma-b9f0e6f5-09b4-4358-bae4-08408705bd5c
+name: New User Created Via Net.EXE With Never Expire Option
+description: Detects creation of local users via the net.exe command with the option
+  "never expire"
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/07/11/select-xmrig-from-sqlserver/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \net.exe
+    - \net1.exe
+  - OriginalFileName:
+    - net.exe
+    - net1.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - user
+    - add
+    - expires:never
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b9f0e6f5-09b4-4358-bae4-08408705bd5c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_net_user_add_never_expire.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

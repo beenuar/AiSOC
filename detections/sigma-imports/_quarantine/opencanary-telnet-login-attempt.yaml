@@ -1,0 +1,35 @@
+id: sigmahq-sigma-512cff7a-683a-43ad-afe0-dd398e872f36
+name: OpenCanary - Telnet Login Attempt
+description: Detects instances where a Telnet service on an OpenCanary node has had
+  a login attempt.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1133
+  - T1078
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 6001
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 512cff7a-683a-43ad-afe0-dd398e872f36
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_telnet_login_attempt.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

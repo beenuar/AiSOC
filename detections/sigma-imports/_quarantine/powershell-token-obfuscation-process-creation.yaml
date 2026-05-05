@@ -1,0 +1,36 @@
+id: sigmahq-sigma-deb9b646-a508-44ee-b7c9-d8965921c6b6
+name: Powershell Token Obfuscation - Process Creation
+description: Detects TOKEN OBFUSCATION technique from Invoke-Obfuscation
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027.009
+  categories:
+  - endpoint
+references:
+- https://github.com/danielbohannon/Invoke-Obfuscation
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - CommandLine|re: \w+`(?:\w+|-|.)`[\w+|\s]
+  - CommandLine|re: '"(?:\{\d\})+"\s*-f'
+  - CommandLine|re: (?i)\$\{`?e`?n`?v`?:`?p`?a`?t`?h`?\}
+  filter_main_envpath:
+    CommandLine|contains: ${env:path}
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: deb9b646-a508-44ee-b7c9-d8965921c6b6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_token_obfuscation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

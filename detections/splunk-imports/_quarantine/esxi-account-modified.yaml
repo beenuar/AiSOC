@@ -1,0 +1,38 @@
+id: splunk-security-content-b5e3b024-a7bb-4019-8975-46cf54485e78
+name: ESXi Account Modified
+description: This detection identifies the creation, deletion, or modification of
+  a local user account on an ESXi host. This activity may indicate unauthorized access,
+  indicator removal, or persistence attempts by an attacker seeking to establish or
+  maintain control of the host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  - T1078
+  - T1098
+  categories:
+  - application
+references:
+- https://detect.fyi/detecting-and-responding-to-esxi-compromise-with-splunk-f33998ce7823
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*esxcli system account*" Message IN ("*-i *","*--id*")
+    NOT Message="*[shell*" | rex field=_raw "Z (?<dest>[\w\.]+)\s.*: \[(?<initial_user>\w+)]:\s.+-i[d]*\s(?<modified_user>[\w_\-0-9]+)"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest initial_user
+    modified_user | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `esxi_account_modified_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b5e3b024-a7bb-4019-8975-46cf54485e78
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_account_modified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

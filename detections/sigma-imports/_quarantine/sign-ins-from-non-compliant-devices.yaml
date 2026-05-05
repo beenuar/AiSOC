@@ -1,0 +1,32 @@
+id: sigmahq-sigma-4f77e1d7-3982-4ee0-8489-abf2d6b75284
+name: Sign-ins from Non-Compliant Devices
+description: Monitor and alert for sign-ins where the device was non-compliant.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-devices#non-compliant-device-sign-in
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    DeviceDetail.isCompliant: 'false'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4f77e1d7-3982-4ee0-8489-abf2d6b75284
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_ad_sign_ins_from_noncompliant_devices.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

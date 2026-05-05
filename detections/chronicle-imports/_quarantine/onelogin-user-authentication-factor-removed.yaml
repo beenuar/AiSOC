@@ -1,0 +1,57 @@
+id: chronicle-detection-rules-onelogin-user-authentication-factor-removed
+name: onelogin_user_authentication_factor_removed
+description: onelogin_user_authentication_factor_removed
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule onelogin_user_authentication_factor_removed {\n\n  meta:\n    author =\
+    \ \"Google Cloud Security\"\n    description = \"Detects when a user removes an\
+    \ authentication factor or otp device.\"\n    rule_id = \"mr_1b251f11-1699-4707-9027-a279dea7d47e\"\
+    \n    rule_name = \"OneLogin User Authentication Factor Removed\"\n    reference\
+    \ = \"https://onelogin.service-now.com/kb_view_customer.do?sysparm_article=KB0010426\"\
+    \n    mitre_attack_tactic = \"Defense Evasion\"\n    mitre_attack_technique =\
+    \ \"Modify Authentication Process: Multi-Factor Authentication\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1556/006/\"\n    mitre_attack_version\
+    \ = \"v15.1\"\n    type = \"Alert\"\n    data_source = \"OneLogin\"\n    severity\
+    \ = \"High\"\n    priority = \"High\"\n\n  events:\n     $user.metadata.event_type\
+    \ = \"USER_RESOURCE_ACCESS\"\n     $user.metadata.product_name = \"ONELOGIN_SSO\"\
+    \n     $user.metadata.vendor_name = \"ONELOGIN\"\n     $user.metadata.product_event_type\
+    \ = \"24\" //otp_device deregistered for user\n\n  outcome:\n    $risk_score =\
+    \ max(75)\n    $mitre_attack_tactic = \"Defense Evasion\"\n    $mitre_attack_technique\
+    \ = \"Modify Authentication Process: Multi-Factor Authentication\"\n    $principal_user_userid\
+    \ = array_distinct($user.principal.user.userid)\n    $principal_user_user_display_name\
+    \ = array_distinct($user.principal.user.user_display_name)\n    $principal_user_email_addresses\
+    \ = array_distinct($user.principal.user.email_addresses)\n    $principal_ip =\
+    \ array_distinct($user.principal.ip)\n    $principal_ip_country = array_distinct($user.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($user.principal.ip_geo_artifact.location.state)\n\
+    \    $target_user_userid = array_distinct($user.target.user.userid)\n    $otp_device_name\
+    \ = array_distinct($user.additional.fields[\"otp_device_name\"])\n\n  condition:\n\
+    \    $user\n}"
+  chronicle_rule_name: onelogin_user_authentication_factor_removed
+provenance:
+  source: chronicle/detection-rules
+  source_id: onelogin_user_authentication_factor_removed
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/onelogin/onelogin_user_authentication_factor_removed.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

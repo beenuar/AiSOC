@@ -1,0 +1,44 @@
+id: mitre-car-car-2016-04-005
+name: Remote Desktop Logon
+description: A remote desktop logon, through [RDP](https://attack.mitre.org/techniques/T1021/001),
+  may be typical of a system administrator or IT support, but only from select workstations.
+  Monitoring remote desktop logons and comparing to known/approved originating systems
+  can detect lateral movement of an adversary.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Login
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: '[EventCode] == 4624 and
+
+      [AuthenticationPackageName] == ''Negotiate'' and
+
+      [Severity] == "Information" and
+
+      [LogonType] == 10'
+  - name: ''
+    type: Sigma
+    code: ''
+  - name: ''
+    type: LogPoint
+    code: norm_id=WinServer event_id=4624 package="Negotiate" log_level="INFO" logon_type=10
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2016-04-005
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2016-04-005.yaml
+notes:
+  car_status: needs_implementation

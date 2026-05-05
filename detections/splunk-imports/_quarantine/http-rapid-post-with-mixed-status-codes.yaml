@@ -1,0 +1,42 @@
+id: splunk-security-content-c8c987d6-3a1a-4555-9a52-eea0741b6113
+name: HTTP Rapid POST with Mixed Status Codes
+description: This detection identifies rapid-fire POST request attacks where an attacker
+  sends more than 20 POST requests within a 5-second window, potentially attempting
+  to exploit race conditions or overwhelm request handling. The pattern is particularly
+  suspicious when responses vary in size or status codes, indicating successful exploitation
+  attempts or probing for vulnerable endpoints.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1190
+  - T1595
+  categories:
+  - application
+references:
+- https://portswigger.net/web-security/request-smuggling#what-is-http-request-smuggling
+- https://portswigger.net/research/http1-must-die
+- https://www.vaadata.com/blog/what-is-http-request-smuggling-exploitations-and-security-best-practices/
+- https://www.securityweek.com/new-http-request-smuggling-attacks-impacted-cdns-major-orgs-millions-of-websites/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`nginx_access_logs` http_method=\"POST\"\n  | bin _time span=5s\n \
+    \ | rename dest_ip as dest\n  | stats count, values(status) as status_codes, values(bytes_out)\
+    \ as bytes_out, values(uri_path) as uris\n    BY _time, src_ip, dest,\n      \
+    \ http_user_agent\n  | where count>20\n  | table _time, dest, src_ip, count, status_codes,\
+    \ bytes_out, http_user_agent\n  | `http_rapid_post_with_mixed_status_codes_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c8c987d6-3a1a-4555-9a52-eea0741b6113
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/http_rapid_post_with_mixed_status_codes.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

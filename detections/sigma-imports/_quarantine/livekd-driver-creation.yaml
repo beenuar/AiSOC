@@ -1,0 +1,35 @@
+id: sigmahq-sigma-16fe46bb-4f64-46aa-817d-ff7bec4a2352
+name: LiveKD Driver Creation
+description: Detects the creation of the LiveKD driver, which is used for live kernel
+  debugging
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename: C:\Windows\System32\drivers\LiveKdD.SYS
+    Image|endswith:
+    - \livekd.exe
+    - \livek64.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 16fe46bb-4f64-46aa-817d-ff7bec4a2352
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_livekd_driver.yml
+falsepositives:
+- Legitimate usage of LiveKD for debugging purposes will also trigger this
+notes:
+  quarantine_reason: 'upstream status: test'

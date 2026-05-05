@@ -1,0 +1,54 @@
+id: chronicle-detection-rules-ryuk-sample-sysmon-behavior
+name: ryuk_sample__sysmon_behavior
+description: ryuk_sample__sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ryuk_sample__sysmon_behavior {\n meta:\n    author = \"Lee\
+    \ Archinal\"\n    description = \"This content detects characteristics of a recent\
+    \ sample of Ryuk malware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/NmICNE0Bnx4q\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/03/16\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Impact, T1490\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"1\" and (((((($selection1.target.process.file.full_path = \"hveffNueElan.exe\"\
+    \ or $selection1.target.process.file.full_path = \"mBXRPRuhYlan.exe\") or ($selection1.target.process.file.full_path\
+    \ = \"icacls.exe\" and re.regex($selection1.target.process.command_line, `icacls\
+    \ C:.* /grant Everyone:F /T /C /Qþþ`))) or ($selection1.target.process.file.full_path\
+    \ = \"cmd.exe\" and ($selection1.target.process.command_line = \"cmd.exe /c bcdedit\
+    \ /set {default} recoveryenabled No & bcdedit /set {default}\" or $selection1.target.process.command_line\
+    \ = \"cmd.exe /c WMIC.exe shadowcopy delete\" or $selection1.target.process.command_line\
+    \ = \"cmd.exe /c vssadmin.exe Delete Shadows /all /quiet\" or re.regex($selection1.target.process.command_line,\
+    \ `C:\\\\Windows\\\\System32\\\\cmd\\.exe /C REG ADD \\\"HKEY_CURRENT_USER\\\\\
+    SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run /v EV /t REG_SZ /d .*\
+    \ /f /reg:64`)))) or ($selection1.target.process.file.full_path = \"bcdedit.exe\"\
+    \ and ($selection1.target.process.command_line = \"bcdedit /set {default}\" or\
+    \ $selection1.target.process.command_line = \"bcdedit /set {default} recoveryenabled\
+    \ No\"))) or ($selection1.target.process.file.full_path = \"net.exe\" and $selection1.target.process.command_line\
+    \ = \"C:\\\\Windows\\\\System32\\\\net.exe stop samss /y\")) or ($selection1.target.process.file.full_path\
+    \ = \"reg.exe\" and re.regex($selection1.target.process.command_line, `REG ADD\
+    \ HKEY_CURRENT_USER\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\\
+    Run /v EV /t REG_SZ /d .* /f /reg:64`)))) or ($selection1.metadata.product_event_type\
+    \ = \"13\" and re.regex($selection1.target.registry.registry_key, `REGISTRY\\\\\
+    USER\\\\S-1-5-21-638615289-2068236702-2426684043-1000\\\\Software\\\\Microsoft\\\
+    \\Windows\\\\CurrentVersion\\\\Run\\\\EV .*`) and re.regex($selection1.metadata.description,\
+    \ `.*`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: ryuk_sample__sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: ryuk_sample__sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/ryuk_sample___sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

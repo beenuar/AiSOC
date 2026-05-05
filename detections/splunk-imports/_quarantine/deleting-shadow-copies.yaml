@@ -1,0 +1,47 @@
+id: splunk-security-content-b89919ed-ee5f-492c-b139-95dbb162039e
+name: Deleting Shadow Copies
+description: The following analytic detects the deletion of shadow copies using the
+  vssadmin.exe or wmic.exe utilities. It leverages data from Endpoint Detection and
+  Response (EDR) agents, focusing on process names and command-line arguments. This
+  activity is significant because deleting shadow copies is a common tactic used by
+  attackers to prevent recovery and hide their tracks. If confirmed malicious, this
+  action could hinder incident response efforts and allow attackers to maintain persistence
+  and cover their activities, making it crucial for security teams to investigate
+  promptly.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://blogs.vmware.com/security/2022/10/lockbit-3-0-also-known-as-lockbit-black.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Processes.process)\
+    \ as process values(Processes.parent_process) as parent_process min(_time) as\
+    \ firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE\
+    \ (\n        Processes.process_name=vssadmin.exe\n        OR\n        Processes.process_name=wmic.exe\n\
+    \    )\n    Processes.process=*delete* Processes.process=*shadow*\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `deleting_shadow_copies_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b89919ed-ee5f-492c-b139-95dbb162039e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/deleting_shadow_copies.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

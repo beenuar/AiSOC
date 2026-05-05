@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b86d356d-6093-443d-971c-9b07db583c68
+name: Suspicious Curl Change User Agents - Linux
+description: Detects a suspicious curl process start on linux with set useragent options
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - endpoint
+references:
+- https://curl.se/docs/manpage.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /curl
+    CommandLine|contains:
+    - ' -A '
+    - ' --user-agent '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b86d356d-6093-443d-971c-9b07db583c68
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_curl_useragent.yml
+falsepositives:
+- Scripts created by developers and admins
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

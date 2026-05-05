@@ -1,0 +1,41 @@
+id: splunk-security-content-20db5f70-34b4-4e83-8926-fa26119de173
+name: Windows IIS Components Get-WebGlobalModule Module Query
+description: The following analytic identifies the execution of the PowerShell cmdlet
+  Get-WebGlobalModule, which lists all IIS Modules installed on a system. It leverages
+  PowerShell input data to detect this activity by capturing the module names and
+  the image paths of the DLLs. This activity is significant for a SOC because it can
+  indicate an attempt to enumerate installed IIS modules, which could be a precursor
+  to exploiting vulnerabilities or misconfigurations. If confirmed malicious, this
+  could allow an attacker to gain insights into the web server's configuration, potentially
+  leading to further exploitation or privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/9.3.2411/get-windows-data/monitor-windows-data-with-powershell-scripts
+- https://gist.github.com/MHaggis/64396dfd9fc3734e1d1901a8f2f07040
+- https://github.com/redcanaryco/atomic-red-team/tree/master/atomics/T1505.004
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`iis_get_webglobalmodule`\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY host name image\n  | rename host as dest\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_iis_components_get_webglobalmodule_module_query_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 20db5f70-34b4-4e83-8926-fa26119de173
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_iis_components_get_webglobalmodule_module_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

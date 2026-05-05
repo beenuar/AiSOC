@@ -1,0 +1,45 @@
+id: sigmahq-sigma-401e5d00-b944-11ea-8f9a-00163ecd60ae
+name: AppLocker Prevented Application or Script from Running
+description: Detects when AppLocker prevents the execution of an Application, DLL,
+  Script, MSI, or Packaged-App from running.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  - T1059.001
+  - T1059.003
+  - T1059.005
+  - T1059.006
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/what-is-applocker
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/using-event-viewer-with-applocker
+- https://nxlog.co/documentation/nxlog-user-guide/applocker.html
+logsource:
+  product: windows
+  service: applocker
+detection:
+  selection:
+    EventID:
+    - 8004
+    - 8007
+    - 8022
+    - 8025
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 401e5d00-b944-11ea-8f9a-00163ecd60ae
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/applocker/win_applocker_application_was_prevented_from_running.yml
+falsepositives:
+- Unlikely, since this event notifies about blocked application execution. Tune your
+  applocker rules to avoid blocking legitimate applications.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-sap-sensitive-role-assignment-correlation
+name: sap_sensitive_role_assignment_correlation
+description: sap_sensitive_role_assignment_correlation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_sensitive_role_assignment_correlation {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Correlates SAP Change Documents with\
+    \ Security Audit logs to detect sensitive role assignments and self-assignments.\"\
+    \n    severity = \"Medium\"\n    tactic = \"TA0004\"\n    technique = \"T1098\"\
+    \n\n  events:\n    $change.metadata.log_type = \"SAP_CHANGE_DOCUMENT\"\n    $change.target.resource.name\
+    \ = \"PFCG\"\n    $change.target.resource.attribute.labels[\"TABNAME\"] = \"AGR_USERS\"\
+    \n    $change.target.resource.attribute.labels[\"CHANGE_IND\"] = \"I\"\n\n   \
+    \ $client = $change.target.resource.attribute.labels[\"MANDANT\"]\n    $target_user\
+    \ = $change.target.resource.attribute.labels[\"TABKEY\"]\n\n    //joining on user\
+    \ value\n    $user = $change.principal.user.userid\n    $user = $audit.principal.user.userid\n\
+    \n    $audit.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n    $client = $audit.target.resource.attribute.labels[\"\
+    slgmand\"]\n\n    not $user in %sap_admin_users.user\n\n  match:\n    $user, $client\
+    \ over 30m\n\n  outcome:\n    $assigned_role = array_distinct($change.target.resource.product_object_id)\n\
+    \    $principal_ip = array_distinct($audit.principal.ip)\n    $audit_description\
+    \ = array_distinct($audit.metadata.description)\n\n  condition:\n    $change and\
+    \ $audit\n}"
+  chronicle_rule_name: sap_sensitive_role_assignment_correlation
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_sensitive_role_assignment_correlation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_sensitive_role_assignment_correlation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

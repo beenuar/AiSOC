@@ -1,0 +1,37 @@
+id: sigmahq-sigma-70ad0861-d1fe-491c-a45f-fa48148a300d
+name: File Download via CertOC.EXE
+description: Detects when a user downloads a file by using CertOC.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Certoc/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \certoc.exe
+  - OriginalFileName: CertOC.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - -GetCACAPS
+    - http
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 70ad0861-d1fe-491c-a45f-fa48148a300d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_certoc_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

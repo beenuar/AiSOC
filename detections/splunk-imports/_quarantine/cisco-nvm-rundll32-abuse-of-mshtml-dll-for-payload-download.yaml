@@ -1,0 +1,61 @@
+id: splunk-security-content-18f0d27d-569e-4bc4-96e1-09b214fa73c0
+name: Cisco NVM - Rundll32 Abuse of MSHTML.DLL for Payload Download
+description: 'This analytic detects suspicious use of `rundll32.exe` in combination
+  with `mshtml.dll` and the export `RunHTMLApplication`.
+
+  This behavior is often observed in malware to execute JavaScript or VBScript in
+  memory, enabling payload staging or
+
+  bypassing script execution policies and bypassing the usage of the "mshta.exe" binary.
+
+  The detection leverages Cisco Network Visibility Module telemetry which offers network
+  flow activity
+
+  along with process information such as command-line arguments
+
+  If confirmed malicious, this activity may indicate initial access or payload download.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Rundll32/
+- https://redcanary.com/blog/threat-detection/threat-research-questions/
+- https://twitter.com/n1nj4sec/status/1421190238081277959
+- https://hyp3rlinx.altervista.org/advisories/MICROSOFT_WINDOWS_DEFENDER_TROJAN.WIN32.POWESSERE.G_MITIGATION_BYPASS_PART2.txt
+- http://hyp3rlinx.altervista.org/advisories/MICROSOFT_WINDOWS_DEFENDER_DETECTION_BYPASS.txt
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_network_visibility_module_flowdata`\nprocess_name = \"rundll32.exe\"\
+    \nprocess_arguments = \"*mshtml*\"\nprocess_arguments IN (\"*135*\", \"*RunHTMLApplication*\"\
+    )\n| stats count min(_time) as firstTime max(_time) as lastTime\n        values(parent_process_arguments)\
+    \ as parent_process_arguments\n        values(process_arguments) as process_arguments\n\
+    \        values(parent_process_hash) as parent_process_hash\n        values(process_hash)\
+    \ as process_hash\n        values(module_name_list) as module_name_list\n    \
+    \    values(module_hash_list) as module_hash_list\n        values(dest_port) as\
+    \ dest_port\n        values(aliul) as additional_logged_in_users_list\n      \
+    \  values(dest_hostname) as dest_hostname\n        by src dest parent_process_path\
+    \ parent_process_integrity_level process_path process_name process_integrity_level\
+    \ process_id transport\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table\n  parent_process_integrity_level parent_process_path parent_process_arguments\
+    \ parent_process_hash\n  process_integrity_level process_path process_name process_arguments\
+    \ process_hash process_id\n  additional_logged_in_users_list module_name_list\
+    \ module_hash_list\n  src dest_hostname dest dest_port transport firstTime lastTime\n\
+    | `cisco_nvm___rundll32_abuse_of_mshtml_dll_for_payload_download_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 18f0d27d-569e-4bc4-96e1-09b214fa73c0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cisco_nvm___rundll32_abuse_of_mshtml_dll_for_payload_download.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

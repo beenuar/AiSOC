@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-covid19-ransomware-detection
+name: covid19_ransomware_detection
+description: covid19_ransomware_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule covid19_ransomware_detection {\n meta:\n    author = \"Osman\
+    \ Demir\"\n    description = \"Covid19 Ransomware Detection  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Eu4ylhtTfcjb\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"t1471, impact\"\n\n  events:\n(($selection.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection.principal.process.file.full_path, `.*\\\\winword\\\
+    .exe`) and re.regex($selection.target.process.file.full_path, `.*\\\\cmd\\.exe`)\
+    \ and re.regex($selection.principal.process.file.full_path, `.*\\\\cmd\\.exe`)\
+    \ and re.regex($selection.target.process.file.full_path, `.*\\\\reg\\.exe`) and\
+    \ $selection.target.process.command_line = \"reg delete \\\"HKCU\\\\Software\\\
+    \\Microsoft\\\\Office\\\\14.0\\\\Word\\\\Resiliency\\\" /F\" and $selection.metadata.product_event_type\
+    \ = \"11\" and re.regex($selection.target.process.file.full_path, `.*\\\\winword\\\
+    .exe`) and re.regex($selection.target.file.full_path, `.*\\\\AppData\\\\Local\\\
+    \\Temp\\\\20200323-sitrep-63-covid-19\\.doc`) and $selection.metadata.product_event_type\
+    \ = \"3\" and $selection.target.process.file.full_path = \"C:\\\\Users\\\\admin\\\
+    \\AppData\\\\Local\\\\svchost.exe\") or (($selection.target.file.md5 = \"2779863A173FF975148CB3156EE593CB5719A0AB238EA7C9E0B0CA3B5A4A9326\"\
+    \ or $selection.target.file.md5 = \"62D38F19E67013CE7B2A84CB17362C77E2F13134EE3F8743CBADDE818483E617\"\
+    \ or $selection.target.file.md5 = \"FA84EE006B205F105DF40DD2ABCF238653F8CEF0\"\
+    \ or $selection.target.file.md5 = \"994A67D5D6341173AD95BC6F5D795FD0\") or $selection.target.ip\
+    \ = \"31.170.167.123\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: covid19_ransomware_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: covid19_ransomware_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/covid19_ransomware_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

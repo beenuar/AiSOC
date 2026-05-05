@@ -1,0 +1,39 @@
+id: sigmahq-sigma-75edd216-1939-4c73-8d61-7f3a0d85b5cc
+name: File Download Via InstallUtil.EXE
+description: Detects use of .NET InstallUtil.exe in order to download arbitrary files.
+  The files will be written to "%LOCALAPPDATA%\Microsoft\Windows\INetCache\IE\"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://github.com/LOLBAS-Project/LOLBAS/pull/239
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \InstallUtil.exe
+  - OriginalFileName: InstallUtil.exe
+  selection_cli:
+    CommandLine|contains:
+    - ftp://
+    - http://
+    - https://
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 75edd216-1939-4c73-8d61-7f3a0d85b5cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_installutil_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

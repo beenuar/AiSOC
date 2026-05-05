@@ -1,0 +1,33 @@
+id: sigmahq-sigma-03f4ca17-de95-428d-a75a-4ee78b047256
+name: HackTool - Impacket File Indicators
+description: Detects file creation events with filename patterns used by Impacket.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2025/05/19/another-confluence-bites-the-dust-falling-to-elpaco-team-ransomware/
+- https://github.com/fortra/impacket
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection_names_re:
+    TargetFilename|re: \\sessionresume_[a-zA-Z]{8}$
+  condition: selection_names_re
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 03f4ca17-de95-428d-a75a-4ee78b047256
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_impacket_file_indicators.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

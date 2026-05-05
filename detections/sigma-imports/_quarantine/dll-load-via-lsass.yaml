@@ -1,0 +1,41 @@
+id: sigmahq-sigma-b3503044-60ce-4bf4-bbcb-e3db98788823
+name: DLL Load via LSASS
+description: Detects a method to load DLL via LSASS process using an undocumented
+  Registry key
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.008
+  categories:
+  - endpoint
+references:
+- https://blog.xpnsec.com/exploring-mimikatz-part-1/
+- https://twitter.com/SBousseaden/status/1183745981189427200
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \CurrentControlSet\Services\NTDS\DirectoryServiceExtPt
+    - \CurrentControlSet\Services\NTDS\LsaDbExtPt
+  filter_domain_controller:
+    Image: C:\Windows\system32\lsass.exe
+    Details:
+    - '%%systemroot%%\system32\ntdsa.dll'
+    - '%%systemroot%%\system32\lsadb.dll'
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b3503044-60ce-4bf4-bbcb-e3db98788823
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_susp_lsass_dll_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-53acd925-2003-440d-a1f3-71a5253fe237
+name: Anonymous IP Address
+description: Indicates sign-ins from an anonymous IP address, for example, using an
+  anonymous browser or VPN.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/graph/api/resources/riskdetection?view=graph-rest-1.0
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#anonymous-ip-address
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: anonymizedIPAddress
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 53acd925-2003-440d-a1f3-71a5253fe237
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_anonymous_ip_address.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins
+notes:
+  quarantine_reason: 'upstream status: test'

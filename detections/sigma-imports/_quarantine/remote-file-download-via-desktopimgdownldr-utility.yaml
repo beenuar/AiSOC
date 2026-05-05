@@ -1,0 +1,36 @@
+id: sigmahq-sigma-214641c2-c579-4ecb-8427-0cf19df6842e
+name: Remote File Download Via Desktopimgdownldr Utility
+description: Detects the desktopimgdownldr utility being used to download a remote
+  file. An adversary may use desktopimgdownldr to download arbitrary files as an alternative
+  to certutil.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/remote-file-download-via-desktopimgdownldr-utility.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \desktopimgdownldr.exe
+    ParentImage|endswith: \desktopimgdownldr.exe
+    CommandLine|contains: /lockscreenurl:http
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 214641c2-c579-4ecb-8427-0cf19df6842e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_desktopimgdownldr_remote_file_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

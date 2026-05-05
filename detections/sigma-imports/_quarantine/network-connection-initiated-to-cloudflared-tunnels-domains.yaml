@@ -1,0 +1,44 @@
+id: sigmahq-sigma-7cd1dcdc-6edf-4896-86dc-d1f19ad64903
+name: Network Connection Initiated To Cloudflared Tunnels Domains
+description: 'Detects network connections to Cloudflared tunnels domains initiated
+  by a process on the system.
+
+  Attackers can abuse that feature to establish a reverse shell or persistence on
+  a machine.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567
+  - T1572
+  categories:
+  - endpoint
+references:
+- https://defr0ggy.github.io/research/Abusing-Cloudflared-A-Proxy-Service-To-Host-Share-Applications/
+- https://www.guidepointsecurity.com/blog/tunnel-vision-cloudflared-abused-in-the-wild/
+- Internal Research
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    DestinationHostname|endswith:
+    - .v2.argotunnel.com
+    - protocol-v2.argotunnel.com
+    - trycloudflare.com
+    - update.argotunnel.com
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7cd1dcdc-6edf-4896-86dc-d1f19ad64903
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_cloudflared_communication.yml
+falsepositives:
+- Legitimate use of cloudflare tunnels will also trigger this.
+notes:
+  quarantine_reason: 'upstream status: test'

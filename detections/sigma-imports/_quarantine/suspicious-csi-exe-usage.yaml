@@ -1,0 +1,46 @@
+id: sigmahq-sigma-40b95d31-1afc-469e-8d34-9a3a667d058e
+name: Suspicious Csi.exe Usage
+description: Csi.exe is a signed binary from Microsoft that comes with Visual Studio
+  and provides C# interactive capabilities. It can be used to run C# code from a file
+  passed as a parameter in command line. Early version of this utility provided with
+  Microsoft “Roslyn” Community Technology Preview was named 'rcsi.exe'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1072
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Csi/
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Rcsi/
+- https://enigma0x3.net/2016/11/21/bypassing-application-whitelisting-by-using-rcsi-exe/
+- https://twitter.com/Z3Jpa29z/status/1317545798981324801
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \csi.exe
+    - \rcsi.exe
+  - OriginalFileName:
+    - csi.exe
+    - rcsi.exe
+  selection_cli:
+    Company: Microsoft Corporation
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 40b95d31-1afc-469e-8d34-9a3a667d058e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_csi_execution.yml
+falsepositives:
+- Legitimate usage by software developers
+notes:
+  quarantine_reason: 'upstream status: test'

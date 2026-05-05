@@ -1,0 +1,49 @@
+id: splunk-security-content-c0ed2aca-5666-45b3-813f-ddfac3f3eda0
+name: Windows MOVEit Transfer Writing ASPX
+description: The following analytic detects the creation of new ASPX files in the
+  MOVEit Transfer application's "wwwroot" directory. It leverages endpoint data on
+  process and filesystem activity to identify processes responsible for creating these
+  files. This activity is significant as it may indicate exploitation of a critical
+  zero-day vulnerability in MOVEit Transfer, used by threat actors to install malicious
+  ASPX files. If confirmed malicious, this could lead to exfiltration of sensitive
+  data, including user credentials and file metadata, posing a severe risk to the
+  organization's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://community.progress.com/s/article/MOVEit-Transfer-Critical-Vulnerability-31May2023
+- https://www.reddit.com/r/sysadmin/comments/13wxuej/critical_vulnerability_moveit_file_transfer/
+- https://www.bleepingcomputer.com/news/security/new-moveit-transfer-zero-day-mass-exploited-in-data-theft-attacks/
+- https://www.reddit.com/r/sysadmin/comments/13wxuej/critical_vulnerability_moveit_file_transfer/
+- https://www.mandiant.com/resources/blog/zero-day-moveit-data-theft
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime FROM datamodel=Endpoint.Filesystem where\n  Filesystem.file_path\
+    \ IN (\"*\\\\MOVEitTransfer\\\\wwwroot\\\\*\") AND\n  Filesystem.file_name IN(\"\
+    *.ashx\", \"*.asp*\")\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\
+    \ Filesystem.file_create_time\nFilesystem.file_hash Filesystem.file_modify_time\
+    \ Filesystem.file_name Filesystem.file_path\nFilesystem.file_acl Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id\nFilesystem.user Filesystem.vendor_product\n\
+    | `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(firstTime)`\n|\
+    \ `security_content_ctime(lastTime)`\n| `windows_moveit_transfer_writing_aspx_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c0ed2aca-5666-45b3-813f-ddfac3f3eda0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_moveit_transfer_writing_aspx.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

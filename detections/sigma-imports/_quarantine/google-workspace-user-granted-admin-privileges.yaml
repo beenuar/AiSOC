@@ -1,0 +1,36 @@
+id: sigmahq-sigma-2d1b83e4-17c6-4896-a37b-29140b40a788
+name: Google Workspace User Granted Admin Privileges
+description: Detects when an Google Workspace user is granted admin privileges.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/logging/docs/audit/gsuite-audit-logging#3
+- https://developers.google.com/admin-sdk/reports/v1/appendix/activity/admin-user-settings#GRANT_ADMIN_PRIVILEGE
+logsource:
+  product: gcp
+  service: google_workspace.admin
+detection:
+  selection:
+    eventService: admin.googleapis.com
+    eventName:
+    - GRANT_DELEGATED_ADMIN_PRIVILEGES
+    - GRANT_ADMIN_PRIVILEGE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2d1b83e4-17c6-4896-a37b-29140b40a788
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/gworkspace/admin/gcp_gworkspace_user_granted_admin_privileges.yml
+falsepositives:
+- Google Workspace admin role privileges, may be modified by system administrators.
+notes:
+  quarantine_reason: 'upstream status: test'

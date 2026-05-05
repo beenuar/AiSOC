@@ -1,0 +1,44 @@
+id: splunk-security-content-104658f4-afdc-499e-9719-17243f9826f1
+name: Excessive DNS Failures
+description: The following analytic identifies excessive DNS query failures by counting
+  DNS responses that do not indicate success, triggering when there are more than
+  50 occurrences. It leverages the Network_Resolution data model, focusing on DNS
+  reply codes that signify errors. This activity is significant because a high number
+  of DNS failures can indicate potential network misconfigurations, DNS poisoning
+  attempts, or malware communication issues. If confirmed malicious, this activity
+  could lead to disrupted network services, hindered communication, or data exfiltration
+  attempts by attackers.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Network_Resolution\n\
+    \  WHERE nodename=DNS \"DNS.reply_code\"!=\"No Error\" \"DNS.reply_code\"!=\"\
+    NoError\" DNS.reply_code!=\"unknown\" NOT \"DNS.query\"=\"*.arpa\" \"DNS.query\"\
+    =\"*.*\"\n  BY \"DNS.src\" \"DNS.query\" \"DNS.reply_code\"\n| `drop_dm_object_name(\"\
+    DNS\")`\n| lookup cim_corporate_web_domain_lookup domain as query OUTPUT domain\n\
+    | where isnull(domain)\n| lookup update=true alexa_lookup_by_str domain as query\
+    \ OUTPUT rank\n| where isnull(rank)\n| eventstats max(count) as mc\n  BY src reply_code\n\
+    | eval mode_query=if(count=mc, query, null())\n| stats sum(count) as count values(mode_query)\
+    \ as query values(mc) as max_query_count\n  BY src reply_code\n| where count>50\n\
+    | `get_asset(src)`\n| `excessive_dns_failures_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 104658f4-afdc-499e-9719-17243f9826f1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/excessive_dns_failures.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

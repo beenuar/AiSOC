@@ -1,0 +1,71 @@
+id: splunk-security-content-0dbcac64-963c-11ec-bf04-acde48001122
+name: Windows File Without Extension In Critical Folder
+description: This analytic detects the creation of files without extensions in critical
+  Windows system and driver-related directories, including but not limited to System32\Drivers,
+  Windows\WinSxS, and other known Windows driver storage and loading paths. The detection
+  has been expanded to comprehensively cover all commonly abused and legitimate Windows
+  driver folder locations, increasing visibility into attempts to stage or deploy
+  kernel-mode components. The analytic leverages telemetry from the Endpoint.Filesystem
+  data model, with a focus on file creation events and file path analysis. File creation
+  activity in these directories—particularly involving extensionless files—is highly
+  suspicious, as it may indicate the presence of destructive or stealthy malware.
+  This behavior is consistent with malware families such as HermeticWiper, which deploy
+  kernel driver components into trusted Windows driver directories to obtain low-level
+  access and execute destructive payloads. If confirmed malicious, this activity can
+  result in severe system compromise, including the deployment of malicious drivers,
+  boot-sector or filesystem destruction, and ultimately system inoperability and irreversible
+  data loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://blog.talosintelligence.com/2022/02/threat-advisory-hermeticwiper.html
+- https://www.splunk.com/en_us/blog/security/detecting-hermeticwiper.html
+- https://learn.microsoft.com/en-us/answers/questions/2184241/where-does-windows-installation-search-for-drivers
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Filesystem
+
+    where Filesystem.file_path IN("*\\System32\\drivers\\*", "*\\syswow64\\drivers\\*",
+    "*\\WINDOWS\\inf\\*","*\\Program Files*", "*\\WINDOWS\\System32\\DriverStore\\*","*:\\Windows\\WinSxS\\*","*\\ProgramData\\Microsoft\\Windows
+    Defender\\Definition Updates\\*","*\\ProgramData\\Microsoft\\Windows Defender\\Platform\\*","*\\Windows\\servicing\\*",
+    "*\\Windows\\ELAMBKUP\\*","*\\Windows\\Boot\\*","*\\System32\\Boot\\*","*\\System32\\Recovery\\*",
+    "C:\\AMD\\*", "C:\\OEM\\*")
+
+    by Filesystem.action Filesystem.dest Filesystem.file_access_time Filesystem.file_create_time
+
+    Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path
+
+    Filesystem.file_acl Filesystem.file_size Filesystem.process_guid Filesystem.process_id
+
+    Filesystem.user Filesystem.vendor_product
+
+    | `drop_dm_object_name(Filesystem)`
+
+    | rex field="file_name" "\.(?<extension>[^\.]*$)"
+
+    | where isnull(extension)
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `windows_file_without_extension_in_critical_folder_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0dbcac64-963c-11ec-bf04-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_file_without_extension_in_critical_folder.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

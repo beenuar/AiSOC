@@ -1,0 +1,36 @@
+id: sigmahq-sigma-ac8866c7-ce44-46fd-8c17-b24acff96ca8
+name: HybridConnectionManager Service Installation - Registry
+description: Detects the installation of the Azure Hybrid Connection Manager service
+  to allow remote code execution from Azure function.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1608
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Cyb3rWard0g/status/1381642789369286662
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection1:
+    TargetObject|contains: \Services\HybridConnectionManager
+  selection2:
+    EventType: SetValue
+    Details|contains: Microsoft.HybridConnectionManager.Listener.exe
+  condition: selection1 or selection2
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ac8866c7-ce44-46fd-8c17-b24acff96ca8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_hybridconnectionmgr_svc_installation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,52 @@
+id: splunk-security-content-a34aae96-ccf8-4aef-952c-3ea21444444d
+name: System Processes Run From Unexpected Locations
+description: The following analytic identifies system processes running from unexpected
+  locations outside of paths such as `C:\Windows\System32\` or `C:\Windows\SysWOW64`.
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  process paths, names, and hashes. This activity is significant as it may indicate
+  a malicious process attempting to masquerade as a legitimate system process. If
+  confirmed malicious, this behavior could allow an attacker to execute code, escalate
+  privileges, or maintain persistence within the environment, posing a significant
+  security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1036.003/T1036.003.yaml
+- https://attack.mitre.org/techniques/T1036/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\
+    \ max(_time) as lastTime\n  FROM datamodel=Endpoint.Processes where\n  NOT Processes.process_path\
+    \ IN (\n    \"*:\\\\$WINDOWS.~BT\\\\*\",\n    \"*:\\\\$WinREAgent\\\\*\",\n  \
+    \  \"*:\\\\Program Files \\(x86\\)\\\\Windows Kits\\\\10\\\\App Certification\
+    \ Kit\\\\*\",\n    \"*:\\\\Windows\\\\SoftwareDistribution\\\\*\",\n    \"*:\\\
+    \\Windows\\\\System32\\\\*\",\n    \"*:\\\\Windows\\\\SystemTemp\\\\*\",\n   \
+    \ \"*:\\\\Windows\\\\SysWOW64\\\\*\",\n    \"*:\\\\Windows\\\\uus\\\\*\",\n  \
+    \  \"*:\\\\Windows\\\\WinSxS\\\\*\"\n  )\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n   Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process\n   Processes.process_exec Processes.process_guid Processes.process_hash\n\
+    \   Processes.process_id Processes.process_integrity_level Processes.process_name\n\
+    \   Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| lookup update=true is_windows_system_file\
+    \ filename as process_name OUTPUT systemFile\n| search systemFile=true\n| `system_processes_run_from_unexpected_locations_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a34aae96-ccf8-4aef-952c-3ea21444444d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/system_processes_run_from_unexpected_locations.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

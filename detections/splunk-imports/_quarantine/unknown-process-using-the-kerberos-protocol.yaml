@@ -1,0 +1,55 @@
+id: splunk-security-content-c91a0852-9fbb-11ec-af44-acde48001122
+name: Unknown Process Using The Kerberos Protocol
+description: The following analytic identifies a non-lsass.exe process making an outbound
+  connection on port 88, which is typically used by the Kerberos authentication protocol.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process and network traffic logs. This activity is significant because,
+  under normal circumstances, only the lsass.exe process should interact with the
+  Kerberos Distribution Center. If confirmed malicious, this behavior could indicate
+  an adversary attempting to abuse the Kerberos protocol, potentially leading to unauthorized
+  access or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1550
+  categories:
+  - endpoint
+references:
+- https://stealthbits.com/blog/how-to-detect-overpass-the-hash-attacks/
+- https://www.thehacker.recipes/ad/movement/kerberos/ptk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name!=lsass.exe\n  BY _time Processes.action Processes.dest\n\
+    \     Processes.original_file_name Processes.parent_process Processes.parent_process_exec\n\
+    \     Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name\n\
+    \     Processes.parent_process_path Processes.process Processes.process_exec\n\
+    \     Processes.process_guid Processes.process_hash Processes.process_id\n   \
+    \  Processes.process_integrity_level Processes.process_name Processes.process_path\n\
+    \     Processes.user Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | join  process_id dest [\n| tstats `security_content_summariesonly` count FROM\
+    \ datamodel=Network_Traffic.All_Traffic\n  WHERE All_Traffic.dest_port = 88\n\
+    \  BY All_Traffic.action All_Traffic.app All_Traffic.bytes\n     All_Traffic.bytes_in\
+    \ All_Traffic.bytes_out All_Traffic.dest\n     All_Traffic.dest_ip All_Traffic.dest_port\
+    \ All_Traffic.dvc\n     All_Traffic.protocol All_Traffic.protocol_version All_Traffic.src\n\
+    \     All_Traffic.src_ip All_Traffic.src_port All_Traffic.transport\n     All_Traffic.user\
+    \ All_Traffic.vendor_product All_Traffic.direction\n     All_Traffic.process_id\n\
+    | `drop_dm_object_name(All_Traffic)`\n| rename src as dest ]\n| table _time dest\
+    \ parent_process_name process_name process_path process process_id dest_port\n\
+    | `unknown_process_using_the_kerberos_protocol_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c91a0852-9fbb-11ec-af44-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/unknown_process_using_the_kerberos_protocol.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

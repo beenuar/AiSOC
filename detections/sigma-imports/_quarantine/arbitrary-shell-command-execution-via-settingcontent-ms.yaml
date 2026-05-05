@@ -1,0 +1,37 @@
+id: sigmahq-sigma-24de4f3b-804c-4165-b442-5a06a2302c7e
+name: Arbitrary Shell Command Execution Via Settingcontent-Ms
+description: The .SettingContent-ms file type was introduced in Windows 10 and allows
+  a user to create "shortcuts" to various Windows 10 setting pages. These files are
+  simply XML and contain paths to various Windows 10 settings binaries.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/the-tale-of-settingcontent-ms-files-f1ea253e4d39
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: .SettingContent-ms
+  filter:
+    CommandLine|contains: immersivecontrolpanel
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 24de4f3b-804c-4165-b442-5a06a2302c7e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_arbitrary_shell_execution_via_settingcontent.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

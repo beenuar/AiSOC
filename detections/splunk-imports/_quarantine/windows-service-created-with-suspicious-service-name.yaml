@@ -1,0 +1,58 @@
+id: splunk-security-content-35eb6d19-a497-400c-93c5-645562804b11
+name: Windows Service Created with Suspicious Service Name
+description: The following analytic detects the creation of a Windows Service with
+  a known suspicious or malicious name using Windows Event ID 7045. It leverages logs
+  from the `wineventlog_system` to identify these services installations. This activity
+  is significant as adversaries, including those deploying Clop ransomware, often
+  create malicious services for lateral movement, remote code execution, persistence,
+  and execution. If confirmed malicious, this could allow attackers to maintain persistence,
+  execute arbitrary code, and potentially escalate privileges, posing a severe threat
+  to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1569/002/
+- https://github.com/BishopFox/sliver/blob/71f94928bf36c1557ea5fbeffa161b71116f56b2/client/command/exec/psexec.go#LL61C5-L61C16
+- https://www.microsoft.com/en-us/security/blog/2022/08/24/looking-for-the-sliver-lining-hunting-for-emerging-command-and-control-frameworks/
+- https://github.com/mthcht/awesome-lists/blob/main/Lists/suspicious_windows_services_names_list.csv
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_system` EventCode=7045
+
+    | stats values(ImagePath) as process, count, min(_time) as firstTime, max(_time)
+    as lastTime values(EventCode) as signature by Computer, ServiceName, StartType,
+    ServiceType, UserID
+
+    | eval process_name = replace(mvindex(split(process,"\\"),-1), "\"", "")
+
+    | rename Computer as dest, ServiceName as object_name, ServiceType as object_type,
+    UserID as user_id
+
+    | lookup windows_suspicious_services service_name as object_name
+
+    | where isnotnull(tool_name)
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `windows_service_created_with_suspicious_service_name_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 35eb6d19-a497-400c-93c5-645562804b11
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_service_created_with_suspicious_service_name.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

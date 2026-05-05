@@ -1,0 +1,66 @@
+id: chronicle-detection-rules-ms-graph-authorization-policy
+name: ms_graph_authorization_policy
+description: ms_graph_authorization_policy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ms_graph_authorization_policy {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"The authorization policy of Entra ID (User Settings)\
+    \ contains information about who can create applications, invite guest users and\
+    \ more. It's not something that is generally modified or reviewed except by administrators\
+    \ so it's worth knowing who may be requesting this endpoint.\"\n    rule_id =\
+    \ \"mr_c6fbfec1-5185-4f7d-aedf-1f23662b547e\"\n    rule_name = \"Hunt for authorization\
+    \ policy API calls in the Microsoft Graph\"\n    assumption = \"Additional tuning\
+    \ of admin consoles and user agent strings may be needed.\"\n    reference = \"\
+    https://github.com/dafthack/GraphRunner/blob/main/GraphRunner.ps1\"\n    type\
+    \ = \"Hunt\"\n    data_source = \"MS Graph Activity Logs\"\n    platform = \"\
+    Azure\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $api.metadata.event_type\
+    \ = \"NETWORK_HTTP\"\n    $api.metadata.product_event_type = \"Microsoft Graph\
+    \ Activity\"\n    // by default graphrunner leverages the beta API\n    re.regex($api.target.url,\
+    \ `^https://graph.microsoft.com/.*/policies/authorizationPolicy$`) nocase\n  \
+    \  //Can be tuned for specific User Agent strings being used - by default GraphRunner\
+    \ does not forge the UA for this action\n    //$api.network.http.user_agent =\
+    \ /PowerShell/ nocase\n    $api.network.http.method = \"GET\"\n    $api.network.http.response_code\
+    \ = 200\n    //Used to filter admin consoles and/or internal Microsoft addresses\
+    \ as needed, the following IP CIDR blocks are part of Azure for instance\n   \
+    \ //$api.principal.ip != \"10.10.10.10\"\n    NOT (\n        net.ip_in_range_cidr($api.principal.ip,\
+    \ \"20.7.0.0/16\") or\n        net.ip_in_range_cidr($api.principal.ip, \"20.22.0.0/16\"\
+    ) or\n        net.ip_in_range_cidr($api.principal.ip, \"20.96.0.0/16\")\n    )\n\
+    \    //User to filter user GUIDs if needed\n    //$api.principal.user.userid !=\
+    \ \"b4358ba5-03ab-4643-95c0-353f672a6416\"\n    $api.principal.ip = $ip\n    $api.network.session_id\
+    \ = $session\n\n  match:\n    $ip, $session over 5m\n\n  outcome:\n    $risk_score\
+    \ = 35\n    $event_count = count_distinct($api.metadata.id)\n    $requesting_user_guid\
+    \ = array_distinct($api.principal.user.userid)\n    $requesting_ip = array_distinct($api.principal.ip)\n\
+    \    $user_agent = array_distinct($api.network.http.user_agent)\n    $location\
+    \ = array_distinct($api.principal.location.name)\n    $principal_userid = array_distinct($api.principal.user.userid)\n\
+    \    $target_application_id_guid = array_distinct($api.target.resource.product_object_id)\n\
+    \    $session_id = array_distinct($api.network.session_id)\n    $target_url =\
+    \ array_distinct($api.target.url)\n\n  condition:\n    $api\n}"
+  chronicle_rule_name: ms_graph_authorization_policy
+provenance:
+  source: chronicle/detection-rules
+  source_id: ms_graph_authorization_policy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/graph_activity/ms_graph_authorization_policy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

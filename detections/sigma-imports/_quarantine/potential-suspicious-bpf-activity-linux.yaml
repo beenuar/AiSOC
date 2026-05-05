@@ -1,0 +1,32 @@
+id: sigmahq-sigma-0fadd880-6af3-4610-b1e5-008dc3a11b8a
+name: Potential Suspicious BPF Activity - Linux
+description: Detects the presence of "bpf_probe_write_user" BPF helper-generated warning
+  messages. Which could be a sign of suspicious eBPF activity on the system.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/ebpf-malware/
+- https://man7.org/linux/man-pages/man7/bpf-helpers.7.html
+logsource:
+  product: linux
+detection:
+  selection:
+  - bpf_probe_write_user
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0fadd880-6af3-4610-b1e5-008dc3a11b8a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/builtin/lnx_potential_susp_ebpf_activity.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

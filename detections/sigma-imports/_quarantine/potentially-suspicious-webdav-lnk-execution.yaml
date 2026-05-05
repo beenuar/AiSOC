@@ -1,0 +1,42 @@
+id: sigmahq-sigma-1412aa78-a24c-4abd-83df-767dfb2c5bbe
+name: Potentially Suspicious WebDAV LNK Execution
+description: Detects possible execution via LNK file accessed on a WebDAV server.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1204
+  categories:
+  - endpoint
+references:
+- https://www.trellix.com/en-us/about/newsroom/stories/research/beyond-file-search-a-novel-method.html
+- https://micahbabinski.medium.com/search-ms-webdav-and-chill-99c5b23ac462
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \explorer.exe
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+    CommandLine|contains: \DavWWWRoot\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1412aa78-a24c-4abd-83df-767dfb2c5bbe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_webdav_lnk_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

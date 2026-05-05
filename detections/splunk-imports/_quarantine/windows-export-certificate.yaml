@@ -1,0 +1,38 @@
+id: splunk-security-content-d8ddfa9b-b724-4df9-9dbe-f34cc0936714
+name: Windows Export Certificate
+description: The following analytic detects the export of a certificate from the Windows
+  Certificate Store. It leverages the Certificates Lifecycle log channel, specifically
+  event ID 1007, to identify this activity. Monitoring certificate exports is crucial
+  as certificates can be used for authentication to VPNs or private resources. If
+  malicious actors export certificates, they could potentially gain unauthorized access
+  to sensitive systems or data, leading to significant security breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.004
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://atomicredteam.io/defense-evasion/T1553.004/#atomic-test-4---install-root-ca-on-windows
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`certificateservices_lifecycle` EventCode=1007\n  | xmlkv UserData_Xml\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY Computer,\
+    \ SubjectName, UserData_Xml\n  | rename Computer as dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_export_certificate_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d8ddfa9b-b724-4df9-9dbe-f34cc0936714
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_export_certificate.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

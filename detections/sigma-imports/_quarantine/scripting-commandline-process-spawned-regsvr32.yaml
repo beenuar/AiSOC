@@ -1,0 +1,47 @@
+id: sigmahq-sigma-ab37a6ec-6068-432b-a64e-2c7bf95b1d22
+name: Scripting/CommandLine Process Spawned Regsvr32
+description: Detects various command line and scripting engines/processes such as
+  "PowerShell", "Wscript", "Cmd", etc. spawning a "regsvr32" instance.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20171001085340/https://subt0x10.blogspot.com/2017/04/bypass-application-whitelisting-script.html
+- https://app.any.run/tasks/34221348-072d-4b70-93f3-aa71f6ebecad/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell_ise.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+    Image|endswith: \regsvr32.exe
+  filter_main_rpcproxy:
+    ParentImage: C:\Windows\System32\cmd.exe
+    CommandLine|endswith: ' /s C:\Windows\System32\RpcProxy\RpcProxy.dll'
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ab37a6ec-6068-432b-a64e-2c7bf95b1d22
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_regsvr32_susp_parent.yml
+falsepositives:
+- Legitimate ".bat", ".hta", ".ps1" or ".vbs" scripts leverage legitimately often.
+  Apply additional filter and exclusions as necessary
+- Some legitimate Windows services
+notes:
+  quarantine_reason: 'upstream status: test'

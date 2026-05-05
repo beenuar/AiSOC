@@ -1,0 +1,45 @@
+id: sigmahq-sigma-7090adee-82e2-4269-bd59-80691e7c6338
+name: Console CodePage Lookup Via CHCP
+description: Detects use of chcp to look up the system locale value as part of host
+  discovery
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1614.001
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/04/04/stolen-images-campaign-ends-in-conti-ransomware/
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chcp
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \cmd.exe
+    ParentCommandLine|contains|windash:
+    - ' -c '
+    - ' -r '
+    - ' -k '
+    Image|endswith: \chcp.com
+    CommandLine|endswith:
+    - chcp
+    - 'chcp '
+    - 'chcp  '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7090adee-82e2-4269-bd59-80691e7c6338
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_chcp_codepage_lookup.yml
+falsepositives:
+- During Anaconda update the 'conda.exe' process will eventually execution the 'chcp'
+  command.
+- Discord was seen using chcp to look up code pages
+notes:
+  quarantine_reason: 'upstream status: test'

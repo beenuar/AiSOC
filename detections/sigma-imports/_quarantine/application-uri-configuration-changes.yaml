@@ -1,0 +1,38 @@
+id: sigmahq-sigma-0055ad1f-be85-4798-83cf-a6da17c993b3
+name: Application URI Configuration Changes
+description: 'Detects when a configuration change is made to an applications URI.
+
+  URIs for domain names that no longer exist (dangling URIs), not using HTTPS, wildcards
+  at the end of the domain, URIs that are no unique to that app, or URIs that point
+  to domains you do not control should be investigated.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1528
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#application-configuration-changes
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Update Application Sucess- Property Name AppAddress
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0055ad1f-be85-4798-83cf-a6da17c993b3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_uri_modifications.yml
+falsepositives:
+- When and administrator is making legitimate URI configuration changes to an application.
+  This should be a planned event.
+notes:
+  quarantine_reason: 'upstream status: test'

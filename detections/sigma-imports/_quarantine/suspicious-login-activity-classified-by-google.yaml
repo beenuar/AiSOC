@@ -1,0 +1,41 @@
+id: sigmahq-sigma-38360161-76c4-4283-842e-efcf997dafc8
+name: Suspicious Login Activity Classified By Google
+description: Detects Google Workspace login activity that's classified as suspicious
+  by Google.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/logging/docs/audit/gsuite-audit-logging
+- https://cloud.google.com/logging/docs/audit/understanding-audit-logs
+- https://developers.google.com/workspace/admin/reports/v1/appendix/activity/login#suspicious_login
+- https://developers.google.com/workspace/admin/reports/v1/appendix/activity/login#suspicious_login_less_secure_app
+- https://developers.google.com/workspace/admin/reports/v1/appendix/activity/login#suspicious_programmatic_login
+logsource:
+  product: gcp
+  service: google_workspace.login
+detection:
+  selection:
+    protoPayload.Servicename: login.googleapis.com
+    protoPayload.metadata.event.eventName:
+    - suspicious_login_less_secure_app
+    - suspicious_login
+    - suspicious_programmatic_login
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 38360161-76c4-4283-842e-efcf997dafc8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/gworkspace/login/gcp_gworkspace_suspicious_login.yml
+falsepositives:
+- Legitimate logins
+notes:
+  quarantine_reason: 'upstream status: experimental'

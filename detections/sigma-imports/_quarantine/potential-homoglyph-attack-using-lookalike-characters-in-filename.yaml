@@ -1,0 +1,92 @@
+id: sigmahq-sigma-4f1707b1-b50b-45b4-b5a2-3978b5a5d0d6
+name: Potential Homoglyph Attack Using Lookalike Characters in Filename
+description: 'Detects the presence of unicode characters which are homoglyphs, or
+  identical in appearance, to ASCII letter characters.
+
+  This is used as an obfuscation and masquerading techniques. Only "perfect" homoglyphs
+  are included; these are characters that
+
+  are indistinguishable from ASCII characters and thus may make excellent candidates
+  for homoglyph attack characters.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/threat-detection-report/threats/socgholish/#threat-socgholish
+- http://www.irongeek.com/homoglyph-attack-generator.php
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection_upper:
+    TargetFilename|contains:
+    - А
+    - В
+    - Е
+    - К
+    - М
+    - Н
+    - О
+    - Р
+    - С
+    - Т
+    - Х
+    - Ѕ
+    - І
+    - Ј
+    - Ү
+    - Ӏ
+    - Ԍ
+    - Ԛ
+    - Ԝ
+    - Α
+    - Β
+    - Ε
+    - Ζ
+    - Η
+    - Ι
+    - Κ
+    - Μ
+    - Ν
+    - Ο
+    - Ρ
+    - Τ
+    - Υ
+    - Χ
+  selection_lower:
+    TargetFilename|contains:
+    - а
+    - е
+    - о
+    - р
+    - с
+    - х
+    - ѕ
+    - і
+    - ӏ
+    - ј
+    - һ
+    - ԁ
+    - ԛ
+    - ԝ
+    - ο
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4f1707b1-b50b-45b4-b5a2-3978b5a5d0d6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_homoglyph_filename.yml
+falsepositives:
+- File names with legitimate Cyrillic text. Will likely require tuning (or not be
+  usable) in countries where these alphabets are in use.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,55 @@
+id: splunk-security-content-6b1b84c4-3834-4dee-b062-9b79bdb31d15
+name: Windows Process Execution From RDP Share
+description: 'The following analytic identifies process executions originating from
+  RDP shares on Windows endpoints.
+
+  Remote Desktop Protocol (RDP) shares, typically accessed via the "tsclient" path,
+  allow users to share files between their local machine and a remote desktop session.
+  However, threat actors may exploit RDP shares to execute malicious processes or
+  transfer harmful files onto a compromised system.
+
+  This detection focuses on identifying any process executions that originate from
+  RDP shares, which could indicate unauthorized access or malicious activity.
+
+  Security teams should investigate any instances of such process executions, especially
+  if they are found on systems that should not be using RDP shares or if the executed
+  processes are unfamiliar or suspicious.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  - T1105
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://jsac.jpcert.or.jp/archive/2024/pdf/JSAC2024_2_7_hara_shoji_higashi_vickie-su_nick-dai_en.pdf
+- https://thedfirreport.com/2020/04/04/gogoogle-ransomware/
+- https://www.welivesecurity.com/2022/09/30/amazon-themed-campaigns-lazarus-netherlands-belgium/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n\n  count min(_time) as\
+    \ firstTime\n        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes\
+    \ where\n\nProcesses.process = \"*\\\\\\\\tsclient\\\\*\"\n\nby Processes.action\
+    \ Processes.dest Processes.original_file_name Processes.parent_process\nProcesses.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\nProcesses.parent_process_name\
+    \ Processes.parent_process_path Processes.process Processes.process_exec\nProcesses.process_guid\
+    \ Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    Processes.process_name Processes.process_path Processes.user Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_process_execution_from_rdp_share_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6b1b84c4-3834-4dee-b062-9b79bdb31d15
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_process_execution_from_rdp_share.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

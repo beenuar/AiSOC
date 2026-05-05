@@ -1,0 +1,36 @@
+id: sigmahq-sigma-c83bf4b5-cdf0-437c-90fa-43d734f7c476
+name: Run PowerShell Script from Redirected Input Stream
+description: Detects PowerShell script execution via input stream redirect
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://github.com/LOLBAS-Project/LOLBAS/blob/4db780e0f0b2e2bb8cb1fa13e09196da9b9f1834/yml/LOLUtilz/OSBinaries/Powershell.yml
+- https://twitter.com/Moriarty_Meng/status/984380793383370752
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    CommandLine|re: \s-\s*<
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c83bf4b5-cdf0-437c-90fa-43d734f7c476
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_run_script_from_input_stream.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

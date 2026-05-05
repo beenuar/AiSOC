@@ -1,0 +1,45 @@
+id: splunk-security-content-121b0b11-f8ac-4ed6-a132-3800ca4fc07a
+name: Detect AWS Console Login by User from New City
+description: The following analytic identifies AWS console login events by users from
+  a new city within the last hour. It leverages AWS CloudTrail events and compares
+  them against a lookup file of previously seen user locations. This activity is significant
+  for a SOC as it may indicate unauthorized access or credential compromise, especially
+  if the login originates from an unusual location. If confirmed malicious, this could
+  lead to unauthorized access to AWS resources, data exfiltration, or further exploitation
+  within the cloud environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1535
+  - T1586.003
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats earliest(_time) as firstTime latest(_time) as lastTime FROM\
+    \ datamodel=Authentication\n  WHERE Authentication.signature=ConsoleLogin\n  BY\
+    \ Authentication.user Authentication.src\n| iplocation Authentication.src\n| `drop_dm_object_name(Authentication)`\n\
+    | rename City as justSeenCity\n| table firstTime lastTime user justSeenCity\n\
+    | join user type=outer [\n| inputlookup previously_seen_users_console_logins\n\
+    | rename City as previouslySeenCity\n| stats min(firstTime) AS earliestseen\n\
+    \  BY user previouslySeenCity\n| fields earliestseen user previouslySeenCity]\n\
+    | eval userCity=if(firstTime >= relative_time(now(), \"-24h@h\"), \"New City\"\
+    ,\"Previously Seen City\")\n| where userCity = \"New City\"\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| table firstTime lastTime user previouslySeenCity\
+    \ justSeenCity userCity\n| `detect_aws_console_login_by_user_from_new_city_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 121b0b11-f8ac-4ed6-a132-3800ca4fc07a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_aws_console_login_by_user_from_new_city.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

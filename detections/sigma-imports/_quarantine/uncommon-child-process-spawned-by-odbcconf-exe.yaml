@@ -1,0 +1,38 @@
+id: sigmahq-sigma-8e3c7994-131e-4ba5-b6ea-804d49113a26
+name: Uncommon Child Process Spawned By Odbcconf.EXE
+description: Detects an uncommon child process of "odbcconf.exe" binary which normally
+  shouldn't have any child processes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.008
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/odbc/odbcconf-exe?view=sql-server-ver16
+- https://lolbas-project.github.io/lolbas/Binaries/Odbcconf/
+- https://medium.com/@cyberjyot/t1218-008-dll-execution-using-odbcconf-exe-803fa9e08dac
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \odbcconf.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8e3c7994-131e-4ba5-b6ea-804d49113a26
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_odbcconf_uncommon_child_process.yml
+falsepositives:
+- In rare occurrences where "odbcconf" crashes. It might spawn a "werfault" process
+- Other child processes will depend on the DLL being registered by actions like "regsvr".
+  In case where the DLLs have external calls (which should be rare). Other child processes
+  might spawn and additional filters need to be applied.
+notes:
+  quarantine_reason: 'upstream status: test'

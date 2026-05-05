@@ -1,0 +1,55 @@
+id: splunk-security-content-0a69fdaa-a2b8-11eb-b16d-acde48001122
+name: Excessive Usage of NSLOOKUP App
+description: The following analytic detects excessive usage of the nslookup application,
+  which may indicate potential DNS exfiltration attempts. It leverages Sysmon EventCode
+  1 to monitor process executions, specifically focusing on nslookup.exe. The detection
+  identifies outliers by comparing the frequency of nslookup executions against a
+  calculated threshold. This activity is significant as it can reveal attempts by
+  malware or APT groups to exfiltrate data via DNS queries. If confirmed malicious,
+  this behavior could allow attackers to stealthily transfer sensitive information
+  out of the network, bypassing traditional data exfiltration defenses.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/fin7-spear-phishing-campaign-targets-personnel-involved-sec-filings
+- https://www.varonis.com/blog/dns-tunneling
+- https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count as numNsLookup min(_time)\
+    \ as firstTime max(_time) as lastTime values(Processes.action) as action values(Processes.original_file_name)\
+    \ as original_file_name values(Processes.parent_process_exec) as parent_process_exec\
+    \ values(Processes.parent_process_guid) as parent_process_guid values(Processes.parent_process_name)\
+    \ as parent_process_name values(Processes.parent_process_path) as parent_process_path\
+    \ values(Processes.process) as process values(Processes.process_exec) as process_exec\
+    \ values(Processes.process_guid) as process_guid values(Processes.process_hash)\
+    \ as process_hash values(Processes.process_id) as process_id values(Processes.process_integrity_level)\
+    \ as process_integrity_level values(Processes.process_path) as process_path values(Processes.user_id)\
+    \ as user_id values(Processes.vendor_product) as vendor_product values(Processes.parent_process)\
+    \ as parent_process values(Processes.process_name) as process_name values(Processes.parent_process_id)\
+    \ as parent_process_id values(Processes.user) as user FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name = \"nslookup.exe\"\n  BY Processes.dest _time\
+    \ span=1m\n| `drop_dm_object_name(Processes)`\n| eventstats avg(numNsLookup) as\
+    \ avgNsLookup, stdev(numNsLookup) as stdNsLookup, count as numSlots\n  BY dest\n\
+    | eval upperThreshold=(avgNsLookup + stdNsLookup *3)\n| eval isOutlier=if(numNsLookup\
+    \ > 20 and numNsLookup >= upperThreshold, 1, 0)\n| search isOutlier=1\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `excessive_usage_of_nslookup_app_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0a69fdaa-a2b8-11eb-b16d-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/excessive_usage_of_nslookup_app.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

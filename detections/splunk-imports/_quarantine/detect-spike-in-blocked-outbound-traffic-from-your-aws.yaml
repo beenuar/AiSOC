@@ -1,0 +1,52 @@
+id: splunk-security-content-d3fffa37-492f-487b-a35d-c60fcb2acf01
+name: Detect Spike in blocked Outbound Traffic from your AWS
+description: The following analytic identifies spikes in blocked outbound network
+  connections originating from within your AWS environment. It leverages VPC Flow
+  Logs data from CloudWatch, focusing on blocked actions from internal IP ranges to
+  external destinations. This detection is significant as it can indicate potential
+  exfiltration attempts or misconfigurations leading to data leakage. If confirmed
+  malicious, such activity could allow attackers to bypass network defenses, leading
+  to unauthorized data transfer or communication with malicious external entities.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudwatchlogs_vpcflow` action=blocked (src_ip=10.0.0.0/8 OR src_ip=172.16.0.0/12\
+    \ OR src_ip=192.168.0.0/16) ( dest_ip!=10.0.0.0/8 AND dest_ip!=172.16.0.0/12 AND\
+    \ dest_ip!=192.168.0.0/16)  [search  `cloudwatchlogs_vpcflow` action=blocked (src_ip=10.0.0.0/8\
+    \ OR src_ip=172.16.0.0/12 OR src_ip=192.168.0.0/16) ( dest_ip!=10.0.0.0/8 AND\
+    \ dest_ip!=172.16.0.0/12 AND dest_ip!=192.168.0.0/16)\n  | stats count as numberOfBlockedConnections\n\
+    \    BY src_ip\n  | inputlookup baseline_blocked_outbound_connections append=t\n\
+    \  | fields - latestCount\n  | stats values(*) as *\n    BY src_ip\n  | rename\
+    \ numberOfBlockedConnections as latestCount\n  | eval newAvgBlockedConnections=avgBlockedConnections\
+    \ + (latestCount-avgBlockedConnections)/720\n  | eval newStdevBlockedConnections=sqrt(((pow(stdevBlockedConnections,\
+    \ 2)*719 + (latestCount-newAvgBlockedConnections)*(latestCount-avgBlockedConnections))/720))\n\
+    \  | eval avgBlockedConnections=coalesce(newAvgBlockedConnections, avgBlockedConnections),\
+    \ stdevBlockedConnections=coalesce(newStdevBlockedConnections, stdevBlockedConnections),\
+    \ numDataPoints=if(isnull(latestCount), numDataPoints, numDataPoints+1)\n  | table\
+    \ src_ip, latestCount, numDataPoints, avgBlockedConnections, stdevBlockedConnections\n\
+    \  | outputlookup baseline_blocked_outbound_connections\n  | eval dataPointThreshold\
+    \ = 5, deviationThreshold = 3\n  | eval isSpike=if((latestCount > avgBlockedConnections+deviationThreshold*stdevBlockedConnections)\
+    \ AND numDataPoints > dataPointThreshold, 1, 0)\n  | where isSpike=1\n  | table\
+    \ src_ip]\n  | stats values(dest_ip) as dest_ip, values(interface_id) as \"resourceId\"\
+    \ count as numberOfBlockedConnections, dc(dest_ip) as uniqueDestConnections\n\
+    \    BY src_ip\n  | `detect_spike_in_blocked_outbound_traffic_from_your_aws_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d3fffa37-492f-487b-a35d-c60fcb2acf01
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_spike_in_blocked_outbound_traffic_from_your_aws.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

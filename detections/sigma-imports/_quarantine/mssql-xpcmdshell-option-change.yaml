@@ -1,0 +1,36 @@
+id: sigmahq-sigma-d08dd86f-681e-4a00-a92c-1db218754417
+name: MSSQL XPCmdshell Option Change
+description: Detects when the MSSQL "xp_cmdshell" stored procedure setting is changed.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/
+- https://thedfirreport.com/2022/07/11/select-xmrig-from-sqlserver/
+logsource:
+  product: windows
+  service: application
+detection:
+  selection:
+    Provider_Name|contains: MSSQL
+    EventID: 15457
+    Data|contains: xp_cmdshell
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d08dd86f-681e-4a00-a92c-1db218754417
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/mssqlserver/win_mssql_xp_cmdshell_change.yml
+falsepositives:
+- Legitimate enable/disable of the setting
+- Note that since the event contain the change for both values. This means that this
+  will trigger on both enable and disable
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: splunk-security-content-a7131dae-34e3-11ec-a2de-acde48001122
+name: Gdrive suspicious file sharing
+description: The following analytic identifies suspicious file-sharing activity on
+  Google Drive, where internal users share documents with more than 50 external recipients.
+  It leverages GSuite Drive logs, focusing on changes in user access and filtering
+  for emails outside the organization's domain. This activity is significant as it
+  may indicate compromised accounts or intentional data exfiltration. If confirmed
+  malicious, this behavior could lead to unauthorized access to sensitive information,
+  data leaks, and potential compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - cloud
+references:
+- https://www.splunk.com/en_us/blog/security/investigating-gsuite-phishing-attacks-with-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gsuite_drive` name=change_user_access\n  | rename parameters.* as\
+    \ *\n  | search email = \"*@yourdomain.com\" target_user != \"*@yourdomain.com\"\
+    \n  | stats count values(owner) as owner values(target_user) as target values(doc_type)\
+    \ as doc_type values(doc_title) as doc_title dc(target_user) as distinct_target\n\
+    \    BY src_ip email\n  | where distinct_target > 50\n  | `gdrive_suspicious_file_sharing_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a7131dae-34e3-11ec-a2de-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gdrive_suspicious_file_sharing.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

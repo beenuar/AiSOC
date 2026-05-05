@@ -1,0 +1,35 @@
+id: sigmahq-sigma-85254a62-22be-4239-b79c-2ec17e566c37
+name: F5 BIG-IP iControl Rest API Command Execution - Webserver
+description: Detects POST requests to the F5 BIG-IP iControl Rest API "bash" endpoint,
+  which allows the execution of commands on the BIG-IP
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://f5-sdk.readthedocs.io/en/latest/apidoc/f5.bigip.tm.util.html#module-f5.bigip.tm.util.bash
+- https://community.f5.com/t5/technical-forum/icontrolrest-11-5-execute-bash-command/td-p/203029
+- https://community.f5.com/t5/technical-forum/running-bash-commands-via-rest-api/td-p/272516
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-method: POST
+    cs-uri-query|endswith: /mgmt/tm/util/bash
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 85254a62-22be-4239-b79c-2ec17e566c37
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_f5_tm_utility_bash_api_request.yml
+falsepositives:
+- Legitimate usage of the BIG IP REST API to execute command for administration purposes
+notes:
+  quarantine_reason: 'upstream status: test'

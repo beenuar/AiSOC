@@ -1,0 +1,46 @@
+id: sigmahq-sigma-61a7697c-cb79-42a8-a2ff-5f0cdfae0130
+name: Potential CobaltStrike Service Installations - Registry
+description: Detects known malicious service installs that appear in cases in which
+  a Cobalt Strike beacon elevates privileges or lateral movement.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1543.003
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.sans.org/webcasts/tech-tuesday-workshop-cobalt-strike-detection-log-analysis-119395
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_key:
+  - TargetObject|contains: \System\CurrentControlSet\Services
+  - TargetObject|contains|all:
+    - \System\ControlSet
+    - \Services
+  selection_details:
+  - Details|contains|all:
+    - ADMIN$
+    - .exe
+  - Details|contains|all:
+    - '%COMSPEC%'
+    - start
+    - powershell
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 61a7697c-cb79-42a8-a2ff-5f0cdfae0130
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_cobaltstrike_service_installs.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

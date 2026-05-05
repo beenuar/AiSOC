@@ -1,0 +1,51 @@
+id: sigmahq-sigma-d6b5520d-3934-48b4-928c-2aa3f92d6963
+name: Important Windows Service Terminated With Error
+description: Detects important or interesting Windows services that got terminated
+  for whatever reason
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_eid:
+    Provider_Name: Service Control Manager
+    EventID: 7023
+  selection_name:
+  - param1|contains:
+    - ' Antivirus'
+    - ' Firewall'
+    - Application Guard
+    - BitLocker Drive Encryption Service
+    - Encrypting File System
+    - Microsoft Defender
+    - Threat Protection
+    - Windows Event Log
+  - Binary|contains:
+    - 770069006e0064006500660065006e006400
+    - 4500760065006e0074004c006f006700
+    - 6d0070007300730076006300
+    - 530065006e0073006500
+    - '450046005300'
+    - '420044004500530056004300'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d6b5520d-3934-48b4-928c-2aa3f92d6963
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_terminated_error_important.yml
+falsepositives:
+- Rare false positives could occur since service termination could happen due to multiple
+  reasons
+notes:
+  quarantine_reason: 'upstream status: test'

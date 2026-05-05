@@ -1,0 +1,49 @@
+id: splunk-security-content-1a058296-7c68-4d66-9560-464764d6e26c
+name: Windows RDP Server Registry Deletion
+description: This detection identifies the deletion of registry keys under HKEY_CURRENT_USER\Software\Microsoft\Terminal
+  Server Client\Servers\, which store records of previously connected remote systems
+  via Remote Desktop Protocol (RDP). These keys are created automatically when a user
+  connects to a remote host using the native Windows RDP client (mstsc.exe) and can
+  be valuable forensic artifacts for tracking remote access activity. Malicious actors
+  aware of this behavior may delete these keys after using RDP to hide evidence of
+  their activity and avoid detection during incident response. This form of artifact
+  cleanup is a known defense evasion technique, often performed during or after lateral
+  movement. Legitimate users rarely delete these keys manually, making such actions
+  highly suspicious—especially when correlated with RDP usage, unusual logon behavior,
+  or other signs of compromise. Detecting the deletion of these registry entries can
+  provide crucial insight into attempts to cover tracks following interactive remote
+  access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- https://medium.com/@bonguides25/how-to-clear-rdp-connections-history-in-windows-cf0ffb67f344
+- https://thelocalh0st.github.io/posts/rdp/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path="*\\Microsoft\\Terminal
+    Server Client\\Servers\\*" Registry.action = deleted by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | `security_content_ctime(lastTime)` | `security_content_ctime(firstTime)`
+    | `windows_rdp_server_registry_deletion_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 1a058296-7c68-4d66-9560-464764d6e26c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdp_server_registry_deletion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

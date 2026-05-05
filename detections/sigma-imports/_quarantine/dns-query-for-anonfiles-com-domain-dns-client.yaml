@@ -1,0 +1,36 @@
+id: sigmahq-sigma-29f171d7-aa47-42c7-9c7b-3c87938164d9
+name: DNS Query for Anonfiles.com Domain - DNS Client
+description: Detects DNS queries for anonfiles.com, which is an anonymous file upload
+  platform often used for malicious purposes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1567.002
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/vinfo/us/security/news/ransomware-spotlight/ransomware-spotlight-blackbyte
+logsource:
+  product: windows
+  service: dns-client
+  definition: 'Requirements: Microsoft-Windows-DNS Client Events/Operational Event
+    Log must be enabled/collected in order to receive the events.'
+detection:
+  selection:
+    EventID: 3008
+    QueryName|contains: .anonfiles.com
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 29f171d7-aa47-42c7-9c7b-3c87938164d9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/dns_client/win_dns_client_anonymfiles_com.yml
+falsepositives:
+- Rare legitimate access to anonfiles.com
+notes:
+  quarantine_reason: 'upstream status: test'

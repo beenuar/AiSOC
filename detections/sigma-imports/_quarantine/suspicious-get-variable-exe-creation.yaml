@@ -1,0 +1,40 @@
+id: sigmahq-sigma-0c3fac91-5627-46e8-a6a8-a0d7b9b8ae1b
+name: Suspicious Get-Variable.exe Creation
+description: 'Get-Variable is a valid PowerShell cmdlet
+
+  WindowsApps is by default in the path where PowerShell is executed.
+
+  So when the Get-Variable command is issued on PowerShell execution, the system first
+  looks for the Get-Variable executable in the path and executes the malicious binary
+  instead of looking for the PowerShell cmdlet.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://blog.malwarebytes.com/threat-intelligence/2022/04/colibri-loader-combines-task-scheduler-and-powershell-in-clever-persistence-technique/
+- https://www.joesandbox.com/analysis/465533/0/html
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: Local\Microsoft\WindowsApps\Get-Variable.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0c3fac91-5627-46e8-a6a8-a0d7b9b8ae1b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_get_variable.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,53 @@
+id: splunk-security-content-c32fab32-6aaf-492d-bfaf-acbed8e50cdf
+name: ProxyShell ProxyNotShell Behavior Detected
+description: The following analytic identifies potential exploitation of Windows Exchange
+  servers via ProxyShell or ProxyNotShell vulnerabilities, followed by post-exploitation
+  activities such as running nltest, Cobalt Strike, Mimikatz, and adding new users.
+  It leverages data from multiple analytic stories, requiring at least five distinct
+  sources to trigger, thus reducing noise. This activity is significant as it indicates
+  a high likelihood of an active compromise, potentially leading to unauthorized access,
+  privilege escalation, and persistent threats within the environment. If confirmed
+  malicious, attackers could gain control over the Exchange server, exfiltrate data,
+  and maintain long-term access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.gteltsc.vn/blog/warning-new-attack-campaign-utilized-a-new-0day-rce-vulnerability-on-microsoft-exchange-server-12715.html
+- https://msrc-blog.microsoft.com/2022/09/29/customer-guidance-for-reported-zero-day-vulnerabilities-in-microsoft-exchange-server/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.analyticstories) as analyticstories\
+    \ values(All_Risk.annotations.mitre_attack.mitre_technique_id) as annotations.mitre_attack.mitre_technique_id,\
+    \ dc(All_Risk.annotations.mitre_attack.mitre_technique_id) as mitre_technique_id_count,\
+    \ values(All_Risk.tag) as tag, values(source) as source, dc(source) as source_count\
+    \ dc(All_Risk.analyticstories) as dc_analyticstories FROM datamodel=Risk.All_Risk\n\
+    \  WHERE All_Risk.analyticstories IN (\"ProxyNotShell\",\"ProxyShell\")\n    OR\n\
+    \    (All_Risk.analyticstories IN (\"ProxyNotShell\",\"ProxyShell\")\n    AND\n\
+    \    All_Risk.analyticstories=\"Cobalt Strike\") All_Risk.risk_object_type=\"\
+    system\"\n  BY _time span=1h All_Risk.risk_object\n     All_Risk.risk_object_type\n\
+    | `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >=5\n| `proxyshell_proxynotshell_behavior_detected_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c32fab32-6aaf-492d-bfaf-acbed8e50cdf
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/proxyshell_proxynotshell_behavior_detected.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

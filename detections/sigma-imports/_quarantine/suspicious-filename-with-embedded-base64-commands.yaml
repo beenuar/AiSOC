@@ -1,0 +1,39 @@
+id: sigmahq-sigma-179b3686-6271-4d87-807d-17d843a8af73
+name: Suspicious Filename with Embedded Base64 Commands
+description: 'Detects files with specially crafted filenames that embed Base64-encoded
+  bash payloads designed to execute when processed by shell scripts.
+
+  These filenames exploit shell interpretation quirks to trigger hidden commands,
+  a technique observed in VShell malware campaigns.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://www.trellix.com/blogs/research/the-silent-fileless-threat-of-vshell/
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains:
+    - '{echo'
+    - '{base64,-d}'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 179b3686-6271-4d87-807d-17d843a8af73
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/file_event/file_event_lnx_susp_filename_with_embedded_base64_command.yml
+falsepositives:
+- Legitimate files with similar naming patterns (very unlikely).
+notes:
+  quarantine_reason: 'upstream status: experimental'

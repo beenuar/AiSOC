@@ -1,0 +1,46 @@
+id: sigmahq-sigma-32e19d25-4aed-4860-a55a-be99cb0bf7ed
+name: Possible DC Shadow Attack
+description: Detects DCShadow via create new SPN
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1207
+  categories:
+  - endpoint
+references:
+- https://twitter.com/gentilkiwi/status/1003236624925413376
+- https://gist.github.com/gentilkiwi/dcc132457408cf11ad2061340dcb53c2
+- https://web.archive.org/web/20180203014709/https://blog.alsid.eu/dcshadow-explained-4510f52fc19d?gi=c426ac876c48
+logsource:
+  product: windows
+  service: security
+  definition: The "Audit Directory Service Changes" logging policy must be configured
+    in order to receive events. Audit events are generated only for objects with configured
+    system access control lists (SACLs). Audit events are generated only for objects
+    with configured system access control lists (SACLs) and only when accessed in
+    a manner that matches their SACL settings. This policy covers the following events
+    ids - 5136, 5137, 5138, 5139, 5141. Note that the default policy does not cover
+    User objects. For that a custom AuditRule need to be setup (See https://github.com/OTRF/Set-AuditRule)
+detection:
+  selection1:
+    EventID: 4742
+    ServicePrincipalNames|contains: GC/
+  selection2:
+    EventID: 5136
+    AttributeLDAPDisplayName: servicePrincipalName
+    AttributeValue|startswith: GC/
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 32e19d25-4aed-4860-a55a-be99cb0bf7ed
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_possible_dc_shadow.yml
+falsepositives:
+- Valid on domain controllers; exclude known DCs
+notes:
+  quarantine_reason: 'upstream status: test'

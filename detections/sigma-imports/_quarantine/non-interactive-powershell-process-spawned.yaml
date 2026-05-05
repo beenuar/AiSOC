@@ -1,0 +1,55 @@
+id: sigmahq-sigma-f4bbd493-b796-416e-bbf2-121235348529
+name: Non Interactive PowerShell Process Spawned
+description: Detects non-interactive PowerShell activity by looking at the "powershell"
+  process with a non-user GUI process such as "explorer.exe" as a parent.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20200925032237/https://threathunterplaybook.com/notebooks/windows/02_execution/WIN-190410151110.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  filter_main_generic:
+    ParentImage|endswith:
+    - :\Windows\explorer.exe
+    - :\Windows\System32\CompatTelRunner.exe
+    - :\Windows\SysWOW64\explorer.exe
+  filter_main_windows_update:
+    ParentImage: :\$WINDOWS.~BT\Sources\SetupHost.exe
+  filter_optional_vscode:
+    ParentImage|endswith: \AppData\Local\Programs\Microsoft VS Code\Code.exe
+    ParentCommandLine|contains: ' --ms-enable-electron-run-as-node '
+  filter_optional_terminal:
+    ParentImage|contains: :\Program Files\WindowsApps\Microsoft.WindowsTerminal_
+    ParentImage|endswith: \WindowsTerminal.exe
+  filter_optional_defender:
+    ParentImage|endswith: :\Program Files\Windows Defender Advanced Threat Protection\SenseIR.exe
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f4bbd493-b796-416e-bbf2-121235348529
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_non_interactive_execution.yml
+falsepositives:
+- Likely. Many admin scripts and tools leverage PowerShell in their BAT or VB scripts
+  which may trigger this rule often. It is best to add additional filters or use this
+  to hunt for anomalies
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-905d389b-b853-46d0-9d3d-dea0d3a3cd49
+name: AWS STS AssumeRole Misuse
+description: Identifies the suspicious use of AssumeRole. Attackers could move laterally
+  and escalate privileges.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1548
+  - T1550
+  - T1550.001
+  categories:
+  - cloud
+references:
+- https://github.com/elastic/detection-rules/pull/1214
+- https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    userIdentity.type: AssumedRole
+    userIdentity.sessionContext.sessionIssuer.type: Role
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 905d389b-b853-46d0-9d3d-dea0d3a3cd49
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_sts_assumerole_misuse.yml
+falsepositives:
+- AssumeRole may be done by a system or network administrator. Verify whether the
+  user identity, user agent, and/or hostname should be making changes in your environment.
+- AssumeRole from unfamiliar users or hosts should be investigated. If known behavior
+  is causing false positives, it can be exempted from the rule.
+- Automated processes that uses Terraform may lead to false positives.
+notes:
+  quarantine_reason: 'upstream status: test'

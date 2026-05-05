@@ -1,0 +1,35 @@
+id: sigmahq-sigma-258b6593-215d-4a26-a141-c8e31c1299a6
+name: Anomalous User Activity
+description: Indicates that there are anomalous patterns of behavior like suspicious
+  changes to the directory.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#anomalous-user-activity
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: anomalousUserActivity
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 258b6593-215d-4a26-a141-c8e31c1299a6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_anomalous_user.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins from the user.
+notes:
+  quarantine_reason: 'upstream status: test'

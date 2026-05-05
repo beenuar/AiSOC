@@ -1,0 +1,85 @@
+id: sigmahq-sigma-9d15044a-7cfe-4d23-8085-6ebc11df7685
+name: Potential Persistence Via Visual Studio Tools for Office
+description: Detects persistence via Visual Studio Tools for Office (VSTO) add-ins
+  in Office applications.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1137.006
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_vivami/status/1347925307643355138
+- https://vanmieghem.io/stealth-outlook-persistence/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \Software\Microsoft\Office\Outlook\Addins\
+    - \Software\Microsoft\Office\Word\Addins\
+    - \Software\Microsoft\Office\Excel\Addins\
+    - \Software\Microsoft\Office\Powerpoint\Addins\
+    - \Software\Microsoft\VSTO\Security\Inclusion\
+  filter_main_system:
+    Image:
+    - C:\Windows\System32\msiexec.exe
+    - C:\Windows\SysWOW64\msiexec.exe
+    - C:\Windows\System32\regsvr32.exe
+    - C:\Windows\SysWOW64\regsvr32.exe
+  filter_main_office_click_to_run:
+    Image|startswith:
+    - C:\Program Files\Common Files (x86)\Microsoft Shared\ClickToRun\
+    - C:\Program Files\Common Files\Microsoft Shared\ClickToRun\
+    Image|endswith: \OfficeClickToRun.exe
+  filter_main_integrator:
+    Image:
+    - C:\Program Files (x86)\Microsoft Office\root\integration\integrator.exe
+    - C:\Program Files\Microsoft Office\root\integration\integrator.exe
+  filter_main_office_apps:
+    Image|startswith:
+    - C:\Program Files\Microsoft Office\OFFICE
+    - C:\Program Files (x86)\Microsoft Office\OFFICE
+    - C:\Program Files\Microsoft Office\Root\OFFICE
+    - C:\Program Files (x86)\Microsoft Office\Root\OFFICE
+    - C:\PROGRA~2\MICROS~2\Office
+    Image|endswith:
+    - \excel.exe
+    - \Integrator.exe
+    - \OneNote.exe
+    - \outlook.exe
+    - \powerpnt.exe
+    - \Teams.exe
+    - \visio.exe
+    - \winword.exe
+  filter_main_vsto:
+    Image|startswith:
+    - C:\Program Files\Common Files\Microsoft Shared\VSTO\
+    - C:\Program Files (x86)\Microsoft Shared\VSTO\
+    Image|endswith: \VSTOInstaller.exe
+  filter_optional_avg:
+    Image:
+    - C:\Program Files\AVG\Antivirus\RegSvr.exe
+    - C:\Program Files (x86)\AVG\Antivirus\RegSvr.exe
+    TargetObject|contains: \Microsoft\Office\Outlook\Addins\Antivirus.AsOutExt\
+  filter_optional_avast:
+    Image:
+    - C:\Program Files\Avast Software\Avast\RegSvr.exe
+    - C:\Program Files (x86)\Avast Software\Avast\RegSvr.exe
+    TargetObject|contains: \Microsoft\Office\Outlook\Addins\Avast.AsOutExt\
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9d15044a-7cfe-4d23-8085-6ebc11df7685
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_office_vsto.yml
+falsepositives:
+- Legitimate Addin Installation
+notes:
+  quarantine_reason: 'upstream status: test'

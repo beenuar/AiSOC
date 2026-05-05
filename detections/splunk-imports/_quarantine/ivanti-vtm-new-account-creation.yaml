@@ -1,0 +1,38 @@
+id: splunk-security-content-b04be6e5-2002-4349-8742-52285635b8f5
+name: Ivanti VTM New Account Creation
+description: This analytic detects potential exploitation of the Ivanti Virtual Traffic
+  Manager (vTM) authentication bypass vulnerability (CVE-2024-7593) to create new
+  administrator accounts. The vulnerability allows unauthenticated remote attackers
+  to bypass authentication on the admin panel and create new admin users. This detection
+  looks for suspicious new account creation events in the Ivanti vTM audit logs that
+  lack expected authentication details, which may indicate exploitation attempts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://www.ivanti.com/security/security-advisories/ivanti-virtual-traffic-manager-vtm-cve-2024-7593
+- https://nvd.nist.gov/vuln/detail/CVE-2024-7593
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`ivanti_vtm_audit` OPERATION=\"adduser\" MODGROUP=\"admin\" IP=\"!!ABSENT!!\"\
+    \n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY IP, MODUSER,\
+    \ OPERATION,\n       MODGROUP, AUTH\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `ivanti_vtm_new_account_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b04be6e5-2002-4349-8742-52285635b8f5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ivanti_vtm_new_account_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

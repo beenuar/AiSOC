@@ -1,0 +1,47 @@
+id: splunk-security-content-60df805d-4605-41c8-bbba-57baa6a4eb97
+name: Windows Replication Through Removable Media
+description: The following analytic detects the creation or dropping of executable
+  or script files in the root directory of a removable drive. It leverages data from
+  the Endpoint.Filesystem datamodel, focusing on specific file types and their creation
+  paths. This activity is significant as it may indicate an attempt to spread malware,
+  such as ransomware, via removable media. If confirmed malicious, this behavior could
+  lead to unauthorized code execution, lateral movement, or persistence within the
+  network, potentially compromising sensitive data and systems.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1091
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1204/002/
+- https://www.fortinet.com/blog/threat-research/chaos-ransomware-variant-sides-with-russia
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '|tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Filesystem where Filesystem.file_name
+    IN ("*.exe", "*.dll", "*.sys", "*.com", "*.vbs", "*.vbe", "*.js", "*.bat", "*.cmd",
+    "*.pif", "*.lnk", "*.url") by Filesystem.action Filesystem.dest Filesystem.file_access_time
+    Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name
+    Filesystem.file_path Filesystem.file_acl Filesystem.file_size Filesystem.process_guid
+    Filesystem.process_id Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | eval dropped_file_path = split(file_path, "\\") | eval dropped_file_path_split_count
+    = mvcount(dropped_file_path) | eval root_drive = mvindex(dropped_file_path,0)
+    | where LIKE(root_drive, "%:") AND dropped_file_path_split_count = 2  AND root_drive!=
+    "C:" | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_replication_through_removable_media_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 60df805d-4605-41c8-bbba-57baa6a4eb97
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_replication_through_removable_media.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

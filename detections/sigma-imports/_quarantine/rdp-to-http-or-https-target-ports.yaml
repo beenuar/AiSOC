@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b1e5da3b-ca8e-4adf-915c-9921f3d85481
+name: RDP to HTTP or HTTPS Target Ports
+description: Detects svchost hosting RDP termsvcs communicating to target systems
+  on TCP port 80 or 443
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/tekdefense/status/1519711183162556416?s=12&t=OTsHCBkQOTNs1k3USz65Zg
+- https://www.mandiant.com/resources/bypassing-network-restrictions-through-rdp-tunneling
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \svchost.exe
+    Initiated: 'true'
+    SourcePort: 3389
+    DestinationPort:
+    - 80
+    - 443
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b1e5da3b-ca8e-4adf-915c-9921f3d85481
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_rdp_to_http.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

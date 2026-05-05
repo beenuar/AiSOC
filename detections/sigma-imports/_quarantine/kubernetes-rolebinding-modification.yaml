@@ -1,0 +1,42 @@
+id: sigmahq-sigma-10b97915-ec8d-455f-a815-9a78926585f6
+name: Kubernetes Rolebinding Modification
+description: Detects when a Kubernetes Rolebinding is created or modified.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://kubernetes.io/docs/reference/config-api/apiserver-audit.v1/
+- https://medium.com/@seifeddinerajhi/kubernetes-rbac-privilege-escalation-exploits-and-mitigations-26c07629eeab
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    objectRef.apiGroup: rbac.authorization.k8s.io
+    objectRef.resource:
+    - clusterrolebindings
+    - rolebindings
+    verb:
+    - create
+    - delete
+    - patch
+    - replace
+    - update
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 10b97915-ec8d-455f-a815-9a78926585f6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_rolebinding_modification.yml
+falsepositives:
+- Modifying a Kubernetes Rolebinding may need to be done by a system administrator.
+- Automated processes may need to take these actions and may need to be filtered.
+notes:
+  quarantine_reason: 'upstream status: test'

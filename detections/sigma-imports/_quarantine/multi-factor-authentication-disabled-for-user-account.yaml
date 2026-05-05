@@ -1,0 +1,41 @@
+id: sigmahq-sigma-b18454c8-0be3-41f7-86bc-9c614611b839
+name: Multi Factor Authentication Disabled For User Account
+description: 'Detects changes to the "StrongAuthenticationRequirement" value, where
+  the state is set to "0" or "Disabled".
+
+  Threat actors were seen disabling multi factor authentication for users in order
+  to maintain or achieve access to the account. Also see in SIM Swap attacks.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://www.sans.org/blog/defending-against-scattered-spider-and-the-com-with-cybercrime-intelligence/
+logsource:
+  product: azure
+  service: auditlogs
+  definition: 'Requirements: The TargetResources array needs to be mapped accurately
+    in order for this rule to work'
+detection:
+  selection:
+    LoggedByService: Core Directory
+    Category: UserManagement
+    OperationName: Update user
+    TargetResources.ModifiedProperties.DisplayName: StrongAuthenticationRequirement
+    TargetResources.ModifiedProperties.NewValue|contains: State":0
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b18454c8-0be3-41f7-86bc-9c614611b839
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_user_account_mfa_disable.yml
+falsepositives:
+- Legitimate authorized activity.
+notes:
+  quarantine_reason: 'upstream status: test'

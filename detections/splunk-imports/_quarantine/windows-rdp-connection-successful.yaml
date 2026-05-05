@@ -1,0 +1,39 @@
+id: splunk-security-content-ceaed840-56b3-4a70-b8e1-d762b1c5c08c
+name: Windows RDP Connection Successful
+description: The following analytic detects successful Remote Desktop Protocol (RDP)
+  connections by monitoring EventCode 1149 from the Windows TerminalServices RemoteConnectionManager
+  Operational log. This detection is significant as successful RDP connections can
+  indicate remote access to a system, which may be leveraged by attackers to control
+  or exfiltrate data. If confirmed malicious, this activity could lead to unauthorized
+  access, data theft, or further lateral movement within the network. Monitoring successful
+  RDP connections is crucial for identifying potential security breaches and mitigating
+  risks promptly.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1563.002
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/138c6bf563bacbda4a2524f089773706
+- https://doublepulsar.com/rdp-hijacking-how-to-hijack-rds-and-remoteapp-sessions-transparently-to-move-through-an-da2a1e73a5f6
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`remoteconnectionmanager` EventCode=1149\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY Computer, user_id\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | rename Computer as dest\n  | `windows_rdp_connection_successful_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ceaed840-56b3-4a70-b8e1-d762b1c5c08c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdp_connection_successful.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

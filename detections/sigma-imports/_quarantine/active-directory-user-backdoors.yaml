@@ -1,0 +1,57 @@
+id: sigmahq-sigma-300bac00-e041-4ee2-9c36-e262656a6ecc
+name: Active Directory User Backdoors
+description: Detects scenarios where one can control another users or computers account
+  without having to use their credentials.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://msdn.microsoft.com/en-us/library/cc220234.aspx
+- https://adsecurity.org/?p=3466
+- https://blog.harmj0y.net/redteaming/another-word-on-delegation/
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Audit Policy : Account Management > Audit User Account
+    Management, Group Policy : Computer Configuration\Windows Settings\Security Settings\Advanced
+    Audit Policy Configuration\Audit Policies\Account Management\Audit User Account
+    Management, DS Access > Audit Directory Service Changes, Group Policy : Computer
+    Configuration\Windows Settings\Security Settings\Advanced Audit Policy Configuration\Audit
+    Policies\DS Access\Audit Directory Service Changes'
+detection:
+  selection1:
+    EventID: 4738
+  filter_empty:
+    AllowedToDelegateTo:
+    - ''
+    - '-'
+  filter_null:
+    AllowedToDelegateTo: null
+  selection_5136_1:
+    EventID: 5136
+    AttributeLDAPDisplayName: msDS-AllowedToDelegateTo
+  selection_5136_2:
+    EventID: 5136
+    ObjectClass: user
+    AttributeLDAPDisplayName: servicePrincipalName
+  selection_5136_3:
+    EventID: 5136
+    AttributeLDAPDisplayName: msDS-AllowedToActOnBehalfOfOtherIdentity
+  condition: (selection1 and not 1 of filter_*) or 1 of selection_5136_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 300bac00-e041-4ee2-9c36-e262656a6ecc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_alert_ad_user_backdoors.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

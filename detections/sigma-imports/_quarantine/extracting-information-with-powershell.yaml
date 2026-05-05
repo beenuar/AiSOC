@@ -1,0 +1,44 @@
+id: sigmahq-sigma-bd5971a7-626d-46ab-8176-ed643f694f68
+name: Extracting Information with PowerShell
+description: 'Adversaries may search local file systems and remote file shares for
+  files containing insecurely stored credentials.
+
+  These can be files created by users to store their own credentials, shared credential
+  stores for a group of individuals,
+
+  configuration files containing passwords for a system or service, or source code/binary
+  files containing embedded passwords.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.001/T1552.001.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - ls
+    - ' -R'
+    - 'select-string '
+    - '-Pattern '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bd5971a7-626d-46ab-8176-ed643f694f68
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_extracting.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

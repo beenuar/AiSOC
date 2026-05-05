@@ -1,0 +1,43 @@
+id: splunk-security-content-0b6bc75c-05d1-4101-9fc3-97e706168f24
+name: O365 Mailbox Email Forwarding Enabled
+description: The following analytic identifies instances where email forwarding has
+  been enabled on mailboxes within an Office 365 environment. It detects this activity
+  by monitoring the Set-Mailbox operation within the o365_management_activity logs,
+  specifically looking for changes to the ForwardingAddress or ForwardingSmtpAddress
+  parameters. This activity is significant as unauthorized email forwarding can lead
+  to data exfiltration and unauthorized access to sensitive information. If confirmed
+  malicious, attackers could intercept and redirect emails, potentially compromising
+  confidential communications and leading to data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/003/
+- https://learn.microsoft.com/en-us/exchange/recipients/user-mailboxes/email-forwarding?view=exchserver-2019
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation=Set-Mailbox | eval match1=mvfind(''Parameters{}.Name'',"ForwardingAddress")
+    | eval match2=mvfind(''Parameters{}.Name'', "ForwardingSmtpAddress") | where match1>=
+    0 OR match2>= 0 | eval ForwardTo=coalesce(ForwardingAddress,ForwardingSmtpAddress)
+    | search ForwardTo!="" | rename user_id as user | stats count earliest(_time)
+    as firstTime latest(_time) as lastTime values(ForwardTo) as ForwardTo by signature
+    dest user src vendor_account vendor_product object ObjectId | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_mailbox_email_forwarding_enabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0b6bc75c-05d1-4101-9fc3-97e706168f24
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_mailbox_email_forwarding_enabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

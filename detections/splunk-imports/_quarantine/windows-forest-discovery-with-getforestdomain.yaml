@@ -1,0 +1,42 @@
+id: splunk-security-content-a14803b2-4bd9-4c08-8b57-c37980edebe8
+name: Windows Forest Discovery with GetForestDomain
+description: The following analytic detects the execution of the `Get-ForestDomain`
+  cmdlet, a component of the PowerView toolkit used for Windows domain enumeration.
+  It leverages PowerShell Script Block Logging (EventCode=4104) to identify this activity.
+  Detecting `Get-ForestDomain` is significant because adversaries and Red Teams use
+  it to gather detailed information about Active Directory forest and domain configurations.
+  If confirmed malicious, this activity could enable attackers to understand the domain
+  structure, facilitating lateral movement or privilege escalation within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-ForestDomain/
+- https://attack.mitre.org/techniques/T1087/002/
+- https://book.hacktricks.xyz/windows-hardening/basic-powershell-for-pentesters/powerview
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Get-ForestDomain*\"\
+    \n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_forest_discovery_with_getforestdomain_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a14803b2-4bd9-4c08-8b57-c37980edebe8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_forest_discovery_with_getforestdomain.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

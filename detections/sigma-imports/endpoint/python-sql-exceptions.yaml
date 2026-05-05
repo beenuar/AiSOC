@@ -1,0 +1,33 @@
+id: sigmahq-sigma-19aefed0-ffd4-47dc-a7fc-f8b1425e84f9
+name: Python SQL Exceptions
+description: Generic rule for SQL exceptions in Python according to PEP 249
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://www.python.org/dev/peps/pep-0249/#exceptions
+logsource:
+  category: application
+  product: python
+detection:
+  keywords:
+  - DataError
+  - IntegrityError
+  - ProgrammingError
+  - OperationalError
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 19aefed0-ffd4-47dc-a7fc-f8b1425e84f9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/python/app_python_sql_exceptions.yml
+falsepositives:
+- Application bugs

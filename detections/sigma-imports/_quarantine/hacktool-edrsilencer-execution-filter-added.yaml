@@ -1,0 +1,38 @@
+id: sigmahq-sigma-98054878-5eab-434c-85d4-72d4e5a3361b
+name: HackTool - EDRSilencer Execution - Filter Added
+description: Detects execution of EDRSilencer, a tool that abuses the Windows Filtering
+  Platform (WFP) to block the outbound traffic of running EDR agents based on specific
+  hardcoded filter names.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/netero1010/EDRSilencer
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Audit Filtering Platform Policy Change needs to be enabled'
+detection:
+  selection:
+    EventID:
+    - 5441
+    - 5447
+    FilterName|contains: Custom Outbound Filter
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 98054878-5eab-434c-85d4-72d4e5a3361b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_hktl_edr_silencer.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

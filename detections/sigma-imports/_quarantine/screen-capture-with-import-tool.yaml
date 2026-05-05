@@ -1,0 +1,52 @@
+id: sigmahq-sigma-dbe4b9c5-c254-4258-9688-d6af0b7967fd
+name: Screen Capture with Import Tool
+description: 'Detects adversary creating screen capture of a desktop with Import Tool.
+
+  Highly recommended using rule on servers, due to high usage of screenshot utilities
+  on user workstations.
+
+  ImageMagick must be installed.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1113
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1113/T1113.md
+- https://linux.die.net/man/1/import
+- https://imagemagick.org/
+logsource:
+  product: linux
+  service: auditd
+detection:
+  import:
+    type: EXECVE
+    a0: import
+  import_window_root:
+    a1: -window
+    a2: root
+    a3|endswith:
+    - .png
+    - .jpg
+    - .jpeg
+  import_no_window_root:
+    a1|endswith:
+    - .png
+    - .jpg
+    - .jpeg
+  condition: import and (import_window_root or import_no_window_root)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dbe4b9c5-c254-4258-9688-d6af0b7967fd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_screencapture_import.yml
+falsepositives:
+- Legitimate use of screenshot utility
+notes:
+  quarantine_reason: 'upstream status: test'

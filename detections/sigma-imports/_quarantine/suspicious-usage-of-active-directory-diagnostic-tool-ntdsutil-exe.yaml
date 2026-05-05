@@ -1,0 +1,44 @@
+id: sigmahq-sigma-a58353df-af43-4753-bad0-cd83ef35eef5
+name: Suspicious Usage Of Active Directory Diagnostic Tool (ntdsutil.exe)
+description: Detects execution of ntdsutil.exe to perform different actions such as
+  restoring snapshots...etc.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc731620(v=ws.11)
+- https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/espionage-asia-governments
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \ntdsutil.exe
+  - OriginalFileName: ntdsutil.exe
+  selection_cli:
+  - CommandLine|contains|all:
+    - snapshot
+    - 'mount '
+  - CommandLine|contains|all:
+    - ac
+    - ' i'
+    - ' ntds'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a58353df-af43-4753-bad0-cd83ef35eef5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ntdsutil_susp_usage.yml
+falsepositives:
+- Legitimate usage to restore snapshots
+- Legitimate admin activity
+notes:
+  quarantine_reason: 'upstream status: test'

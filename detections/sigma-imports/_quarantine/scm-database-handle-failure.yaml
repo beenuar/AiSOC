@@ -1,0 +1,37 @@
+id: sigmahq-sigma-13addce7-47b2-4ca0-a98f-1de964d1d669
+name: SCM Database Handle Failure
+description: Detects non-system users failing to get a handle of the SCM database.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1010
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190826-RemoteSCMHandle/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4656
+    ObjectType: SC_MANAGER OBJECT
+    ObjectName: ServicesActive
+    AccessMask: '0xf003f'
+  filter:
+    SubjectLogonId: '0x3e4'
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 13addce7-47b2-4ca0-a98f-1de964d1d669
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_scm_database_handle_failure.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

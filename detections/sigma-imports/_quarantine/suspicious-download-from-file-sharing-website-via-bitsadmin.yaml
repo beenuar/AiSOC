@@ -1,0 +1,78 @@
+id: sigmahq-sigma-8518ed3d-f7c9-4601-a26c-f361a4256a0c
+name: Suspicious Download From File-Sharing Website Via Bitsadmin
+description: Detects usage of bitsadmin downloading a file from a suspicious domain
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1197
+  - T1036.003
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://blog.netspi.com/15-ways-to-download-a-file/#bitsadmin
+- https://isc.sans.edu/diary/22264
+- https://lolbas-project.github.io/lolbas/Binaries/Bitsadmin/
+- https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/ransomware-hive-conti-avoslocker
+- https://www.cisa.gov/uscert/ncas/alerts/aa22-321a
+- https://www.microsoft.com/en-us/security/blog/2024/01/17/new-ttps-observed-in-mint-sandstorm-campaign-targeting-high-profile-individuals-at-universities-and-research-orgs/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \bitsadmin.exe
+  - OriginalFileName: bitsadmin.exe
+  selection_flags:
+    CommandLine|contains:
+    - ' /transfer '
+    - ' /create '
+    - ' /addfile '
+  selection_domain:
+    CommandLine|contains:
+    - .githubusercontent.com
+    - anonfiles.com
+    - cdn.discordapp.com
+    - ddns.net
+    - dl.dropboxusercontent.com
+    - ghostbin.co
+    - github.com
+    - glitch.me
+    - gofile.io
+    - hastebin.com
+    - mediafire.com
+    - mega.nz
+    - onrender.com
+    - pages.dev
+    - paste.ee
+    - pastebin.com
+    - pastebin.pl
+    - pastetext.net
+    - privatlab.com
+    - privatlab.net
+    - send.exploit.in
+    - sendspace.com
+    - storage.googleapis.com
+    - storjshare.io
+    - supabase.co
+    - temp.sh
+    - transfer.sh
+    - trycloudflare.com
+    - ufile.io
+    - w3spaces.com
+    - workers.dev
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8518ed3d-f7c9-4601-a26c-f361a4256a0c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bitsadmin_download_file_sharing_domains.yml
+falsepositives:
+- Some legitimate apps use this, but limited.
+notes:
+  quarantine_reason: 'upstream status: test'

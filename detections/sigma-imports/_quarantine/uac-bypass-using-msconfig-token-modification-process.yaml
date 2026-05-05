@@ -1,0 +1,38 @@
+id: sigmahq-sigma-ad92e3f9-7eb6-460e-96b1-582b0ccbb980
+name: UAC Bypass Using MSConfig Token Modification - Process
+description: Detects the pattern of UAC Bypass using a msconfig GUI hack (UACMe 55)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    IntegrityLevel:
+    - High
+    - System
+    - S-1-16-16384
+    - S-1-16-12288
+    ParentImage|endswith: \AppData\Local\Temp\pkgmgr.exe
+    CommandLine: '"C:\Windows\system32\msconfig.exe" -5'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ad92e3f9-7eb6-460e-96b1-582b0ccbb980
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_msconfig_gui.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

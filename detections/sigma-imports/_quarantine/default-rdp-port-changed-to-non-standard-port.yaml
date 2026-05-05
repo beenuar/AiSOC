@@ -1,0 +1,40 @@
+id: sigmahq-sigma-509e84b9-a71a-40e0-834f-05470369bd1e
+name: Default RDP Port Changed to Non Standard Port
+description: 'Detects changes to the default RDP port.
+
+  Remote desktop is a common feature in operating systems. It allows a user to log
+  into a remote system using an interactive session with a graphical user interface.
+
+  Microsoft refers to its implementation of the Remote Desktop Protocol (RDP) as Remote
+  Desktop Services (RDS).'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.010
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1021.001/T1021.001.md
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Control\Terminal Server\WinStations\RDP-Tcp\PortNumber
+  filter_main_port:
+    Details: DWORD (0x00000d3d)
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 509e84b9-a71a-40e0-834f-05470369bd1e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_change_rdp_port.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-973ef012-8f1a-4c40-93b4-7e659a5cd17f
+name: Periodic Backup For System Registry Hives Enabled
+description: 'Detects the enabling of the "EnablePeriodicBackup" registry value. Once
+  enabled, The OS will backup System registry hives on restarts to the "C:\Windows\System32\config\RegBack"
+  folder. Windows creates a "RegIdleBackup" task to manage subsequent backups.
+
+  Registry backup was a default behavior on Windows and was disabled as of "Windows
+  10, version 1803".'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1113
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/system-registry-no-backed-up-regback-folder
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Control\Session Manager\Configuration Manager\EnablePeriodicBackup
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 973ef012-8f1a-4c40-93b4-7e659a5cd17f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_enable_periodic_backup.yml
+falsepositives:
+- Legitimate need for RegBack feature by administrators.
+notes:
+  quarantine_reason: 'upstream status: test'

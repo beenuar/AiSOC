@@ -1,0 +1,48 @@
+id: splunk-security-content-a081836a-ba4d-11eb-8593-acde48001122
+name: WinRM Spawning a Process
+description: The following analytic detects suspicious processes spawned by WinRM
+  (wsmprovhost.exe). It leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on specific child processes like cmd.exe, powershell.exe, and others.
+  This activity is significant as it may indicate exploitation attempts of vulnerabilities
+  like CVE-2021-31166, which could lead to system instability or compromise. If confirmed
+  malicious, attackers could execute arbitrary commands, escalate privileges, or maintain
+  persistence, posing a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/blob/9b7fb0c0f3af2e53ed483e29e0d0f88ccf1c08ca/rules/windows/process_access/win_susp_shell_spawn_from_winrm.yml
+- https://www.zerodayinitiative.com/blog/2021/5/17/cve-2021-31166-a-wormable-code-execution-bug-in-httpsys
+- https://github.com/0vercl0k/CVE-2021-31166/blob/main/cve-2021-31166.py
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=wsmprovhost.exe\
+    \ Processes.process_name IN (\"cmd.exe\",\"sh.exe\",\"bash.exe\",\"powershell.exe\"\
+    ,\"pwsh.exe\",\"schtasks.exe\",\"certutil.exe\",\"whoami.exe\",\"bitsadmin.exe\"\
+    ,\"scp.exe\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `winrm_spawning_a_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a081836a-ba4d-11eb-8593-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/winrm_spawning_a_process.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

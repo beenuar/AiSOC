@@ -1,0 +1,65 @@
+id: chronicle-detection-rules-network-http-low-prevalence-domain-access
+name: network_http_low_prevalence_domain_access
+description: network_http_low_prevalence_domain_access
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule network_http_low_prevalence_domain_access {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Detects network web access to a low\
+    \ prevalence domain\"\n    rule_id = \"mr_c376478e-1c93-4d27-8bea-a56c3c0052f5\"\
+    \n    rule_name = \"Network HTTP Low Prevalence Domain Access\"\n    type = \"\
+    alert\"\n    tags = \"prevalence\"\n    data_source = \"zscalar\"\n    severity\
+    \ = \"Critical\"\n    priority = \"Critical\"\n\n  events:\n    $http.metadata.event_type\
+    \ = \"NETWORK_HTTP\"\n    $http.principal.ip = $ip\n    // filter out URLs with\
+    \ RFC 1918 IP addresses, i.e., internal assets\n    not re.regex($http.target.hostname,\
+    \ `(127(?:\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$)|(10(?:\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$)|(192\\\
+    .168(?:\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){2}$)|(172\\.(?:1[6-9]|2\\d|3[0-1])(?:\\\
+    .(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){2})`)\n    // only match valid FQDN,\
+    \ filter out background non-routable noise\n    re.regex($http.target.hostname,\
+    \ `(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]`)\n\
+    \    $http.target.hostname = $domain_name\n\n    $prevalence.graph.entity.domain.name\
+    \ = $domain_name\n    // derived from events ingested by Google SecOps\n    $prevalence.graph.metadata.entity_type\
+    \ = \"DOMAIN_NAME\"\n    $prevalence.graph.metadata.source_type = \"DERIVED_CONTEXT\"\
+    \n    $prevalence.graph.entity.domain.prevalence.day_count = 10\n    // tune prevalence\
+    \ as fits your results\n    $prevalence.graph.entity.domain.prevalence.rolling_max\
+    \ > 0\n    $prevalence.graph.entity.domain.prevalence.rolling_max <= 3\n\n  match:\n\
+    \    $ip over 1h\n\n  outcome:\n    $risk_score = max(\n      // increment risk\
+    \ score based upon rolling_max prevalence\n      if ( $prevalence.graph.entity.domain.prevalence.rolling_max\
+    \ >= 10, 10) +\n      if ( $prevalence.graph.entity.domain.prevalence.rolling_max\
+    \ >= 2 and $prevalence.graph.entity.domain.prevalence.rolling_max <= 9 , 20) +\n\
+    \      if ( $prevalence.graph.entity.domain.prevalence.rolling_max = 1, 30)\n\
+    \    )\n    $event_count = count_distinct($http.metadata.id)\n    $domain_list\
+    \ = array_distinct($domain_name)\n    $domain_count = count_distinct($domain_name)\n\
+    \    // added to populate alert graph with additional context\n    $principal_hostname\
+    \ = array_distinct($http.principal.hostname)\n    $target_hostname = array_distinct($http.target.hostname)\n\
+    \    $principal_user_userid = array_distinct($http.principal.user.userid)\n  \
+    \  $target_url = array_distinct($http.target.url)\n\n\n  condition:\n    $http\
+    \ and $prevalence\n}"
+  chronicle_rule_name: network_http_low_prevalence_domain_access
+provenance:
+  source: chronicle/detection-rules
+  source_id: network_http_low_prevalence_domain_access
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/network_http_low_prevalence_domain_access.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

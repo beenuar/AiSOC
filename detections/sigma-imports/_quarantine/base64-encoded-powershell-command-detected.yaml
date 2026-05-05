@@ -1,0 +1,35 @@
+id: sigmahq-sigma-e32d4572-9826-4738-b651-95fa63747e8a
+name: Base64 Encoded PowerShell Command Detected
+description: Detects usage of the "FromBase64String" function in the commandline which
+  is used to decode a base64 encoded string
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1140
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/Neo23x0/6af876ee72b51676c82a2db8d2cd3639
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: ::FromBase64String(
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e32d4572-9826-4738-b651-95fa63747e8a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_frombase64string.yml
+falsepositives:
+- Administrative script libraries
+notes:
+  quarantine_reason: 'upstream status: test'

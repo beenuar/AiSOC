@@ -1,0 +1,45 @@
+id: splunk-security-content-1297fb80-f42a-4b4a-9c8a-88c066437cf6
+name: Schtasks used for forcing a reboot
+description: The following analytic detects the use of 'schtasks.exe' to schedule
+  forced system reboots using the 'shutdown' and '/create' flags. It leverages endpoint
+  process data to identify instances where these specific command-line arguments are
+  used. This activity is significant because it may indicate an adversary attempting
+  to disrupt operations or force a reboot to execute further malicious actions. If
+  confirmed malicious, this could lead to system downtime, potential data loss, and
+  provide an attacker with an opportunity to execute additional payloads or evade
+  detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name=schtasks.exe Processes.process=\"*shutdown*\"\
+    \ Processes.process=\"*/create *\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `schtasks_used_for_forcing_a_reboot_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1297fb80-f42a-4b4a-9c8a-88c066437cf6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/schtasks_used_for_forcing_a_reboot.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-b056de1a-6e6e-4e40-a67e-97c9808cf41b
+name: AWS Route 53 Domain Transferred to Another Account
+description: Detects when a request has been made to transfer a Route 53 domain to
+  another AWS account.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://github.com/elastic/detection-rules/blob/c76a39796972ecde44cb1da6df47f1b6562c9770/rules/integrations/aws/persistence_route_53_domain_transferred_to_another_account.toml
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: route53.amazonaws.com
+    eventName: TransferDomainToAnotherAwsAccount
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b056de1a-6e6e-4e40-a67e-97c9808cf41b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_route_53_domain_transferred_to_another_account.yml
+falsepositives:
+- A domain may be transferred to another AWS account by a system or network administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment. Domain transfers from unfamiliar users or hosts should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

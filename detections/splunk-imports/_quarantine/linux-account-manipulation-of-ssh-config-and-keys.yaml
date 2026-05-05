@@ -1,0 +1,45 @@
+id: splunk-security-content-73a56508-1cf5-4df7-b8d9-5737fbdc27d2
+name: Linux Account Manipulation Of SSH Config and Keys
+description: The following analytic detects the deletion of SSH keys on a Linux machine.
+  It leverages filesystem event logs to identify when files within "/etc/ssh/*" or
+  "~/.ssh/*" are deleted. This activity is significant because attackers may delete
+  or modify SSH keys to evade security measures or as part of a destructive payload,
+  similar to the AcidRain malware. If confirmed malicious, this behavior could lead
+  to impaired security features, hindered forensic investigations, or further unauthorized
+  access, necessitating immediate investigation to identify the responsible process
+  and user.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/labs/acidrain-a-modem-wiper-rains-down-on-europe/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.action=deleted\n\
+    \    AND\n    Filesystem.file_path IN (\"/etc/ssh/*\", \"~/.ssh/*\")\n  BY Filesystem.action\
+    \ Filesystem.dest Filesystem.file_access_time\n     Filesystem.file_create_time\
+    \ Filesystem.file_hash Filesystem.file_modify_time\n     Filesystem.file_name\
+    \ Filesystem.file_path Filesystem.file_acl\n     Filesystem.file_size Filesystem.process_guid\
+    \ Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_account_manipulation_of_ssh_config_and_keys_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 73a56508-1cf5-4df7-b8d9-5737fbdc27d2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_account_manipulation_of_ssh_config_and_keys.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

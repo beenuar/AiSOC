@@ -1,0 +1,32 @@
+id: sigmahq-sigma-5af54681-df95-4c26-854f-2565e13cfab0
+name: Successful Account Login Via WMI
+description: Detects successful logon attempts performed with WMI
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    ProcessName|endswith: \WmiPrvSE.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5af54681-df95-4c26-854f-2565e13cfab0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_susp_wmi_login.yml
+falsepositives:
+- Monitoring tools
+- Legitimate system administration

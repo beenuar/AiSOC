@@ -1,0 +1,31 @@
+id: sigmahq-sigma-ea9bf0fa-edec-4fb8-8b78-b119f2528186
+name: Windows Defender AMSI Trigger Detected
+description: Detects triggering of AMSI by Windows Defender.
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/amsi/how-amsi-helps
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID: 1116
+    SourceName: AMSI
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ea9bf0fa-edec-4fb8-8b78-b119f2528186
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/windefend/win_defender_malware_detected_amsi_source.yml
+falsepositives:
+- Unlikely

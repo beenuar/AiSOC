@@ -1,0 +1,36 @@
+id: sigmahq-sigma-3aff0be0-7802-4a7e-a4fa-c60c74bc5e1d
+name: Lolbas OneDriveStandaloneUpdater.exe Proxy Download
+description: 'Detects setting a custom URL for OneDriveStandaloneUpdater.exe to download
+  a file from the Internet without executing any
+
+  anomalous executables with suspicious arguments. The downloaded file will be in
+  C:\Users\redacted\AppData\Local\Microsoft\OneDrive\StandaloneUpdaterreSignInSettingsConfig.json'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/OneDriveStandaloneUpdater/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\Microsoft\OneDrive\UpdateOfficeConfig\UpdateRingSettingURLFromOC
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3aff0be0-7802-4a7e-a4fa-c60c74bc5e1d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_lolbin_onedrivestandaloneupdater.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

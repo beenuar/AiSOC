@@ -1,0 +1,38 @@
+id: sigmahq-sigma-9f6a34b4-2688-4eb7-a7f5-e39fef573d0e
+name: Suspicious Windows Strings In URI
+description: Detects suspicious Windows strings in URI which could indicate possible
+  exfiltration or webshell communication
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - application
+references:
+- https://thedfirreport.com/2022/06/06/will-the-real-msiexec-please-stand-up-exploit-leads-to-data-exfiltration/
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-uri-query|contains:
+    - =C:/Users
+    - =C:/Program%20Files
+    - =C:/Windows
+    - =C%3A%5CUsers
+    - =C%3A%5CProgram%20Files
+    - =C%3A%5CWindows
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9f6a34b4-2688-4eb7-a7f5-e39fef573d0e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_susp_windows_path_uri.yml
+falsepositives:
+- Legitimate application and websites that use windows paths in their URL
+notes:
+  quarantine_reason: 'upstream status: test'

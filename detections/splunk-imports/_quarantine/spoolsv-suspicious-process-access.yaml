@@ -1,0 +1,47 @@
+id: splunk-security-content-799b606e-da81-11eb-93f8-acde48001122
+name: Spoolsv Suspicious Process Access
+description: The following analytic detects suspicious process access by spoolsv.exe,
+  potentially indicating exploitation of the PrintNightmare vulnerability (CVE-2021-34527).
+  It leverages Sysmon EventCode 10 to identify when spoolsv.exe accesses critical
+  system files or processes like rundll32.exe with elevated privileges. This activity
+  is significant as it may signal an attempt to gain unauthorized privilege escalation
+  on a vulnerable machine. If confirmed malicious, an attacker could achieve elevated
+  privileges, leading to further system compromise, persistent access, or unauthorized
+  control over the affected environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://github.com/cube0x0/impacket/commit/73b9466c17761384ece11e1028ec6689abad6818
+- https://www.truesec.com/hub/blog/fix-for-printnightmare-cve-2021-1675-exploit-to-keep-your-print-servers-running-while-a-patch-is-not-available
+- https://www.truesec.com/hub/blog/exploitable-critical-rce-vulnerability-allows-regular-users-to-fully-compromise-active-directory-printnightmare-cve-2021-1675
+- https://www.reddit.com/r/msp/comments/ob6y02/critical_vulnerability_printnightmare_exposes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=10 SourceImage = "*\\spoolsv.exe" CallTrace = "*\\Windows\\system32\\spool\\DRIVERS\\x64\\*"
+    TargetImage IN ("*\\rundll32.exe", "*\\spoolsv.exe") GrantedAccess = 0x1fffff
+    | stats count min(_time) as firstTime max(_time) as lastTime by CallTrace EventID
+    GrantedAccess Guid Opcode ProcessID SecurityID SourceImage SourceProcessGUID SourceProcessId
+    TargetImage TargetProcessGUID TargetProcessId UserID dest granted_access parent_process_exec
+    parent_process_guid parent_process_id parent_process_name parent_process_path
+    process_exec process_guid process_id process_name process_path signature signature_id
+    user_id vendor_product | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `spoolsv_suspicious_process_access_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 799b606e-da81-11eb-93f8-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/spoolsv_suspicious_process_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

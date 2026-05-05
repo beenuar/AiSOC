@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-malicious-utilization-of-mofcompexe-via-cmd
+name: malicious_utilization_of_mofcompexe_via_cmd
+description: malicious_utilization_of_mofcompexe_via_cmd
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule malicious_utilization_of_mofcompexe_via_cmd {\n meta:\n \
+    \   author = \"Ariel Millahuel\"\n    description = \"Detects the invocation of\
+    \ mofcomp.exe via CMD in order to execute an malicious script  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/gi7fSTwClhB3\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, S0106\"\n\n  events:\n($selection1.target.process.file.full_path\
+    \ = \"cmd.exe\" and ($selection1.metadata.product_event_type = \"4688\" or $selection1.metadata.product_event_type\
+    \ = \"1\") and ((re.regex($selection1.target.process.command_line, `.* cmd /c\
+    \ mofcomp\\.exe C:\\\\Windows\\\\temp.*\\.rar .*`) or re.regex($selection1.target.process.command_line,\
+    \ `.* cmd /c del C:\\\\Windows\\\\temp.*\\.rar .*`) or re.regex($selection1.target.process.command_line,\
+    \ `.* cmd /c mofcomp\\.exe C:\\\\Windows\\\\temp.*\\..*  .*`) or re.regex($selection1.target.process.command_line,\
+    \ `.* cmd /c del C:\\\\Windows\\\\temp.*\\..* .*`)) or (re.regex($selection1.target.process.command_line,\
+    \ `.* cmd /c mofcomp\\.exe C:\\\\Users.*\\\\AppData\\\\Local\\\\Temp.*\\..* .*`)\
+    \ or re.regex($selection1.target.process.command_line, `.* cmd /c del C:\\\\Users.*\\\
+    \\AppData\\\\Local\\\\Temp.*\\..* .*`))))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: malicious_utilization_of_mofcompexe_via_cmd
+provenance:
+  source: chronicle/detection-rules
+  source_id: malicious_utilization_of_mofcompexe_via_cmd
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/malicious_utilization_of_mofcomp_exe_via_cmd.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

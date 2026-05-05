@@ -1,0 +1,35 @@
+id: sigmahq-sigma-4bb80281-3756-4ec8-a88e-523c5a6fda9e
+name: New Root Certificate Authority Added
+description: Detects newly added root certificate authority to an AzureAD tenant to
+  support certificate based authentication.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - cloud
+references:
+- https://posts.specterops.io/passwordless-persistence-and-privilege-escalation-in-azure-98a01310be3f
+- https://goodworkaround.com/2022/02/15/digging-into-azure-ad-certificate-based-authentication/
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    OperationName: Set Company Information
+    TargetResources.modifiedProperties.newValue|contains: TrustedCAsForPasswordlessAuth
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4bb80281-3756-4ec8-a88e-523c5a6fda9e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_ad_new_root_ca_added.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

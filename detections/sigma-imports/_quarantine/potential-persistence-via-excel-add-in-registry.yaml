@@ -1,0 +1,37 @@
+id: sigmahq-sigma-961e33d1-4f86-4fcf-80ab-930a708b2f82
+name: Potential Persistence Via Excel Add-in - Registry
+description: Detect potential persistence via the creation of an excel add-in (XLL)
+  file to make it run automatically when Excel is started.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1137.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/4ae9580a1a8772db87a1b6cdb0d03e5af231e966/atomics/T1137.006/T1137.006.md
+- https://labs.withsecure.com/publications/add-in-opportunities-for-office-persistence
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|contains: Software\Microsoft\Office\
+    TargetObject|endswith: \Excel\Options
+    Details|startswith: '/R '
+    Details|endswith: .xll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 961e33d1-4f86-4fcf-80ab-930a708b2f82
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_xll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: sigmahq-sigma-c172b7b5-f3a1-4af2-90b7-822c63df86cb
+name: Mask System Power Settings Via Systemctl
+description: 'Detects the use of systemctl mask to disable system power management
+  targets such as suspend, hibernate, or hybrid sleep.
+
+  Adversaries may mask these targets to prevent a system from entering sleep or shutdown
+  states, ensuring their malicious processes remain active and uninterrupted.
+
+  This behavior can be associated with persistence or defense evasion, as it impairs
+  normal system power operations to maintain long-term access or avoid termination
+  of malicious activity.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1653
+  categories:
+  - endpoint
+references:
+- https://www.man7.org/linux/man-pages/man1/systemctl.1.html
+- https://linux-audit.com/systemd/faq/what-is-the-difference-between-systemctl-disable-and-systemctl-mask/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_systemctl:
+    Image|endswith: /systemctl
+    CommandLine|contains: ' mask'
+  selection_power_options:
+    CommandLine|contains:
+    - suspend.target
+    - hibernate.target
+    - hybrid-sleep.target
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c172b7b5-f3a1-4af2-90b7-822c63df86cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_systemctl_mask_power_settings.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

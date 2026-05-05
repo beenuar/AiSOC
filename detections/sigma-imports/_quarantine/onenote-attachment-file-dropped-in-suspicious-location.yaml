@@ -1,0 +1,43 @@
+id: sigmahq-sigma-7fd164ba-126a-4d9c-9392-0d4f7c243df0
+name: OneNote Attachment File Dropped In Suspicious Location
+description: Detects creation of files with the ".one"/".onepkg" extension in suspicious
+  or uncommon locations. This could be a sign of attackers abusing OneNote attachments
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/hackers-now-use-microsoft-onenote-attachments-to-spread-malware/
+- https://blog.osarmor.com/319/onenote-attachment-delivers-asyncrat-malware/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains:
+    - \AppData\Local\Temp\
+    - \Users\Public\
+    - \Windows\Temp\
+    - :\Temp\
+    TargetFilename|endswith:
+    - .one
+    - .onepkg
+  filter_main_onenote:
+    Image|contains: :\Program Files\Microsoft Office\
+    Image|endswith: \ONENOTE.EXE
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7fd164ba-126a-4d9c-9392-0d4f7c243df0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_onenote_files_in_susp_locations.yml
+falsepositives:
+- Legitimate usage of ".one" or ".onepkg" files from those locations
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,46 @@
+id: splunk-security-content-69078d8c-0de6-45de-bb00-14e78e042fd6
+name: GitHub Organizations Disable Dependabot
+description: The following analytic detects when a user disables Dependabot security
+  features within a GitHub repository. Dependabot helps automatically identify and
+  fix security vulnerabilities in dependencies. The detection monitors GitHub Enterprise
+  logs for configuration changes that disable Dependabot functionality. This behavior
+  could indicate an attacker attempting to prevent the automatic detection of vulnerable
+  dependencies, which would allow them to exploit known vulnerabilities that would
+  otherwise be patched. For a SOC, identifying the disabling of security features
+  like Dependabot is critical as it may be a precursor to supply chain attacks where
+  attackers exploit vulnerable dependencies. The impact could be severe if vulnerabilities
+  remain unpatched, potentially leading to code execution, data theft, or other compromises
+  through the software supply chain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1195
+  categories:
+  - cloud
+references:
+- https://splunk.github.io/splunk-add-on-for-github-audit-log-monitoring/Install/
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_organizations` vendor_action=repository_vulnerability_alerts.disable\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY actor, actor_id, actor_ip,\n       actor_is_bot, actor_location.country_code,\
+    \ business,\n       business_id, org, org_id,\n       repo, repo_id, user,\n \
+    \      user_agent, user_id, vendor_action\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_organizations_disable_dependabot_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 69078d8c-0de6-45de-bb00-14e78e042fd6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_organizations_disable_dependabot.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

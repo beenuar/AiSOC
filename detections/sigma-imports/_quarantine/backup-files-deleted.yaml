@@ -1,0 +1,49 @@
+id: sigmahq-sigma-06125661-3814-4e03-bfa2-1e4411c60ac3
+name: Backup Files Deleted
+description: Detects deletion of files with extensions often used for backup files.
+  Adversaries may delete or remove built-in operating system data and turn off services
+  designed to aid in the recovery of a corrupted system to prevent recovery.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1490/T1490.md#atomic-test-6---windows---delete-backup-files
+logsource:
+  product: windows
+  category: file_delete
+detection:
+  selection:
+    Image|endswith:
+    - \cmd.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wt.exe
+    - \rundll32.exe
+    - \regsvr32.exe
+    TargetFilename|endswith:
+    - .VHD
+    - .bac
+    - .bak
+    - .wbcat
+    - .bkf
+    - .set
+    - .win
+    - .dsk
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 06125661-3814-4e03-bfa2-1e4411c60ac3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_backup_file.yml
+falsepositives:
+- Legitimate usage
+notes:
+  quarantine_reason: 'upstream status: test'

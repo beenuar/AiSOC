@@ -1,0 +1,45 @@
+id: sigmahq-sigma-6adfbf8f-52be-4444-9bac-81b539624146
+name: Shell Execution via Find - Linux
+description: Detects the use of the find command to execute a shell. Such behavior
+  may be associated with privilege escalation, unauthorized command execution, or
+  exploitation attempt.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/find/#shell
+- https://www.elastic.co/guide/en/security/current/linux-restricted-shell-breakout-via-linux-binary-s.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img:
+    Image|endswith: /find
+    CommandLine|contains|all:
+    - ' . '
+    - -exec
+  selection_cli:
+    CommandLine|contains:
+    - /bin/bash
+    - /bin/dash
+    - /bin/fish
+    - /bin/sh
+    - /bin/zsh
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6adfbf8f-52be-4444-9bac-81b539624146
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_find_shell_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

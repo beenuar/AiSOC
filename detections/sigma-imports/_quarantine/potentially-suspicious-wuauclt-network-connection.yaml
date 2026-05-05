@@ -1,0 +1,70 @@
+id: sigmahq-sigma-c649a6c7-cd8c-4a78-9c04-000fc76df954
+name: Potentially Suspicious Wuauclt Network Connection
+description: 'Detects the use of the Windows Update Client binary (wuauclt.exe) to
+  proxy execute code and making network connections.
+
+  One could easily make the DLL spawn a new process and inject to it to proxy the
+  network connection and bypass this rule.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://dtm.uk/wuauclt/
+logsource:
+  category: network_connection
+  product: windows
+  definition: 'Requirements: The CommandLine field enrichment is required in order
+    for this rule to be used.'
+detection:
+  selection:
+    Image|contains: wuauclt
+    CommandLine|contains: ' /RunHandlerComServer'
+  filter_main_ip:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 169.254.0.0/16
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  filter_main_msrange:
+    DestinationIp|cidr:
+    - 20.184.0.0/13
+    - 20.192.0.0/10
+    - 23.79.0.0/16
+    - 51.10.0.0/15
+    - 51.103.0.0/16
+    - 51.104.0.0/15
+    - 52.224.0.0/11
+  filter_main_uus:
+    CommandLine|contains:
+    - :\Windows\UUS\Packages\Preview\amd64\updatedeploy.dll /ClassId
+    - :\Windows\UUS\amd64\UpdateDeploy.dll /ClassId
+  filter_main_winsxs:
+    CommandLine|contains|all:
+    - :\Windows\WinSxS\
+    - '\UpdateDeploy.dll /ClassId '
+  filter_main_cli_null:
+    CommandLine: null
+  filter_main_cli_empty:
+    CommandLine: ''
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c649a6c7-cd8c-4a78-9c04-000fc76df954
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_wuauclt_network_connection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

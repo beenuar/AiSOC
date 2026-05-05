@@ -1,0 +1,62 @@
+id: chronicle-detection-rules-github-invitation-sent-to-non-company-email-domain
+name: github_invitation_sent_to_non_company_email_domain
+description: github_invitation_sent_to_non_company_email_domain
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule github_invitation_sent_to_non_company_email_domain {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects when an invitation\
+    \ to join a GitHub enterprise or organization is sent to a non-company email address.\
+    \ This rule can be customized to alert you when a GitHub invitation is sent to\
+    \ an unexpected domain i.e. not one of your company's domains used for email.\"\
+    \n    rule_id = \"mr_c191df42-006f-485a-b037-f0cbf737bdd4\"\n    rule_name = \"\
+    GitHub Invitation Sent To Non Company Email Domain\"\n    assumption = \"Your\
+    \ GitHub enterprise audit log settings are configured to log the source IP address\
+    \ for events. Reference: https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/displaying-ip-addresses-in-the-audit-log-for-your-organization\"\
+    \n    type = \"alert\"\n    severity = \"High\"\n    priority = \"High\"\n   \
+    \ platform = \"GitHub\"\n    data_source = \"github\"\n    reference = \"https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise\"\
+    \n\n  events:\n    $github.metadata.vendor_name = \"GITHUB\" nocase\n    $github.metadata.product_name\
+    \ = \"GITHUB\"\n    (\n        $github.metadata.product_event_type = \"business.invite_admin\"\
+    \ or\n        $github.metadata.product_event_type = \"business.invite_billing_manager\"\
+    \ or\n        $github.metadata.product_event_type = \"org.invite_member\"\n  \
+    \  )\n\n    // Filter events based on the invitee's email address. Customize the\
+    \ regex expression to fit your environment i.e. alert on invites sent to domains\
+    \ that are not managed by your company\n    $github.extracted.fields[\"invitee_email\"\
+    ] != /@my-company-domain-name\\.com/ nocase\n    $github.extracted.fields[\"invitee_email\"\
+    ] = $invitee_email\n\n  match:\n    $invitee_email over 30m\n\n  outcome:\n  \
+    \  $risk_score = max(85)\n    $event_count = count_distinct($github.metadata.id)\n\
+    \    $principal_ip = array_distinct($github.principal.ip)\n    $principal_user_userid\
+    \ = array_distinct($github.principal.user.userid)\n    $principal_ip_country =\
+    \ array_distinct($github.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($github.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_ip_city = array_distinct($github.principal.location.city)\n  \
+    \  $security_result_summary = array_distinct($github.security_result.summary)\n\
+    \n  condition:\n    $github\n}"
+  chronicle_rule_name: github_invitation_sent_to_non_company_email_domain
+provenance:
+  source: chronicle/detection-rules
+  source_id: github_invitation_sent_to_non_company_email_domain
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/github/github_invitation_sent_to_non_company_email_domain.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

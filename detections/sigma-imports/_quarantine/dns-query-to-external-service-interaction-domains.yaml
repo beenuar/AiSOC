@@ -1,0 +1,64 @@
+id: sigmahq-sigma-aff715fa-4dd5-497a-8db3-910bea555566
+name: DNS Query to External Service Interaction Domains
+description: Detects suspicious DNS queries to external service interaction domains
+  often used for out-of-band interactions after successful RCE
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1595.002
+  categories:
+  - network
+references:
+- https://twitter.com/breakersall/status/1533493587828260866
+- https://www.bitdefender.com/en-us/blog/businessinsights/bitdefender-advisory-critical-unauthenticated-rce-windows-server-update-services-cve-2025-59287
+- https://github.com/SigmaHQ/sigma/pull/5724#issuecomment-3466382234
+logsource:
+  category: dns
+detection:
+  selection:
+    query|endswith:
+    - .burpcollaborator.net
+    - .canarytokens.com
+    - .ceye.io
+    - .ddns.1443.eu.org
+    - .ddns.bypass.eu.org
+    - .ddns.xn--gg8h.eu.org
+    - .digimg.store
+    - .dns.su18.org
+    - .dnshook.site
+    - .dnslog.cn
+    - .dnslog.ink
+    - .instances.httpworkbench.com
+    - .interact.sh
+    - .log.dnslog.pp.ua
+    - .log.dnslog.qzz.io
+    - .log.dnslogs.dpdns.org
+    - .log.javaweb.org
+    - .log.nat.cloudns.ph
+    - .oast.fun
+    - .oast.live
+    - .oast.me
+    - .oast.online
+    - .oast.pro
+    - .oast.site
+    - .oastify.com
+    - .p8.lol
+    - .requestbin.net
+  filter_main_polling:
+    query|contains: polling.oastify.com
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aff715fa-4dd5-497a-8db3-910bea555566
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/dns/net_dns_external_service_interaction_domains.yml
+falsepositives:
+- Legitimate security scanning.
+notes:
+  quarantine_reason: 'upstream status: test'

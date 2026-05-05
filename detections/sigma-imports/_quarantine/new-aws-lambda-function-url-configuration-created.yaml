@@ -1,0 +1,43 @@
+id: sigmahq-sigma-ec541962-c05a-4420-b9ea-84de072d18f4
+name: New AWS Lambda Function URL Configuration Created
+description: 'Detects when a user creates a Lambda function URL configuration, which
+  could be used to expose the function to the internet and potentially allow unauthorized
+  access to the function''s IAM role for AWS API calls.
+
+  This could give an adversary access to the privileges associated with the Lambda
+  service role that is attached to that function.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/lambda/latest/dg/API_CreateFunctionUrlConfig.html
+- https://cloud.hacktricks.xyz/pentesting-cloud/aws-security/aws-privilege-escalation/aws-lambda-privesc
+- https://www.wiz.io/blog/how-to-set-secure-defaults-on-aws
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: lambda.amazonaws.com
+    eventName: CreateFunctionUrlConfig
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ec541962-c05a-4420-b9ea-84de072d18f4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_lambda_function_url.yml
+falsepositives:
+- Creating a Lambda function URL configuration may be performed by a system administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Creating a Lambda function URL configuration from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: experimental'

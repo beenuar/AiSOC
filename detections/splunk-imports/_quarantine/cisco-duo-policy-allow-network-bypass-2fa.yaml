@@ -1,0 +1,56 @@
+id: splunk-security-content-2593f641-6192-4f3d-b96c-2bd1c706215f
+name: Cisco Duo Policy Allow Network Bypass 2FA
+description: 'The following analytic detects when a Duo policy is created or updated
+  to allow network-based bypass of two-factor authentication (2FA).
+
+  It identifies this behavior by searching Duo administrator logs for policy creation
+  or update actions where the networks_allow field is present,
+
+  indicating that specific networks have been permitted to bypass 2FA requirements.
+  This is achieved by parsing the event description and
+
+  filtering for relevant policy changes, then aggregating the results by user and
+  administrator details. Detecting this behavior is critical
+
+  for a Security Operations Center (SOC) because allowing network-based 2FA bypass
+  can significantly weaken authentication controls, potentially
+
+  enabling unauthorized access if a trusted network is compromised or misconfigured.
+  Attackers or malicious insiders may exploit this policy
+
+  change to circumvent 2FA protections, increasing the risk of account takeover and
+  lateral movement within the environment. Prompt detection
+
+  enables SOC analysts to investigate and respond to potentially risky policy modifications
+  before they can be leveraged for malicious purposes.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=policy_update OR action=policy_create\n\
+    \  | spath input=description\n  | search networks_allow=*\n  | rename object as\
+    \ user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY\
+    \ action actionlabel description\n       user admin_email networks_allow\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_policy_allow_network_bypass_2fa_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2593f641-6192-4f3d-b96c-2bd1c706215f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_policy_allow_network_bypass_2fa.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

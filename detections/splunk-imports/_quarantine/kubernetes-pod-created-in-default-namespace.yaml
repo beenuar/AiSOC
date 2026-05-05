@@ -1,0 +1,40 @@
+id: splunk-security-content-3d6b1a81-367b-42d5-a925-6ef90b6b9f1e
+name: Kubernetes Pod Created in Default Namespace
+description: The following analytic detects the creation of Kubernetes pods in the
+  default, kube-system, or kube-public namespaces. It leverages Kubernetes audit logs
+  to identify pod creation events within these specific namespaces. This activity
+  is significant for a SOC as it may indicate an attacker attempting to hide their
+  presence or evade defenses. Unauthorized pod creation in these namespaces can suggest
+  a successful cluster breach, potentially leading to privilege escalation, persistent
+  access, or further malicious activities within the cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` objectRef.resource=pods verb=create objectRef.namespace\
+    \ IN (\"default\", \"kube-system\", \"kube-public\")\n  | fillnull\n  | stats\
+    \ count\n    BY objectRef.name objectRef.namespace objectRef.resource\n      \
+    \ requestReceivedTimestamp requestURI responseStatus.code\n       sourceIPs{}\
+    \ stage user.groups{}\n       user.uid user.username userAgent\n       verb\n\
+    \  | rename sourceIPs{} as src_ip, user.username as user\n  | `kubernetes_pod_created_in_default_namespace_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3d6b1a81-367b-42d5-a925-6ef90b6b9f1e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_pod_created_in_default_namespace.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

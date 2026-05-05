@@ -1,0 +1,44 @@
+id: chronicle-detection-rules-mitre-attack-t1548-002-windows-uac-bypass
+name: mitre_attack_T1548_002_windows_uac_bypass
+description: mitre_attack_T1548_002_windows_uac_bypass
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2021 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule mitre_attack_T1548_002_windows_uac_bypass\n{\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Net use commands for SMB/Windows\
+    \ admin shares\"\n    reference = \"https://attack.mitre.org/techniques/T1021/002/\"\
+    \n    yara_version = \"YL2.0\"\n    rule_version = \"1.0\"\n\n  events:\n    (\n\
+    \      $e1.metadata.event_type = \"PROCESS_LAUNCH\" and\n      re.regex($e1.principal.process.command_line,\
+    \ `reg\\.exe add hkcu\\\\software\\\\classes\\\\mscfile\\\\shell\\\\open\\\\command\
+    \ /ve /d.* /f`) nocase\n    )\n    or\n    (\n      re.regex($e1.principal.process.command_line,\
+    \ `powershell.exe`) nocase and\n      re.regex($e1.target.registry.registry_key,\
+    \ `\\\\software\\\\classes\\\\mscfile\\\\shell\\\\open\\\\command`) nocase\n \
+    \   )\n\n  condition:\n    $e1\n}"
+  chronicle_rule_name: mitre_attack_T1548_002_windows_uac_bypass
+provenance:
+  source: chronicle/detection-rules
+  source_id: mitre_attack_T1548_002_windows_uac_bypass
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/mitre_attack/T1548_002_windows_uac_bypass.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

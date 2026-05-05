@@ -1,0 +1,35 @@
+id: sigmahq-sigma-71c276aa-49cd-43d2-b920-2dcd3e6962d5
+name: Service Installed By Unusual Client - System
+description: Detects a service installed by a client which has PID 0 or whose parent
+  has PID 0
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/windows-service-installed-via-an-unusual-client.html
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ProcessId: 0
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 71c276aa-49cd-43d2-b920-2dcd3e6962d5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_sups_unusal_client.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-e52cb31c-10ed-4aea-bcb7-593c9f4a315b
+name: UAC Bypass via Windows Firewall Snap-In Hijack
+description: Detects attempts to bypass User Account Control (UAC) by hijacking the
+  Microsoft Management Console (MMC) Windows Firewall snap-in
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/uac-bypass-via-windows-firewall-snap-in-hijack.html#uac-bypass-via-windows-firewall-snap-in-hijack
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \mmc.exe
+    ParentCommandLine|contains: WF.msc
+  filter:
+    Image|endswith: \WerFault.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e52cb31c-10ed-4aea-bcb7-593c9f4a315b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_hijacking_firwall_snap_in.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

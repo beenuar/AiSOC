@@ -1,0 +1,35 @@
+id: sigmahq-sigma-be4d9c86-d702-4030-b52e-c7859110e5e8
+name: Activity From Anonymous IP Address
+description: Identifies that users were active from an IP address that has been identified
+  as an anonymous proxy IP address.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#activity-from-anonymous-ip-address
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: riskyIPAddress
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: be4d9c86-d702-4030-b52e-c7859110e5e8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_anonymous_ip_activity.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins from the user.
+notes:
+  quarantine_reason: 'upstream status: test'

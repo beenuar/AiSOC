@@ -1,0 +1,57 @@
+id: sigmahq-sigma-bb780e0c-16cf-4383-8383-1e5471db6cf9
+name: Suspicious XOR Encoded PowerShell Command
+description: Detects presence of a potentially xor encoded powershell command
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1140
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse?slide=65
+- https://redcanary.com/blog/yellow-cockatoo/
+- https://zero2auto.com/2020/05/19/netwalker-re/
+- https://mez0.cc/posts/cobaltstrike-powershell-exec/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  - Description: Windows PowerShell
+  - Product: PowerShell Core 6
+  selection_cli_xor:
+    CommandLine|contains: bxor
+  selection_cli_other:
+    CommandLine|contains:
+    - ForEach
+    - for(
+    - 'for '
+    - '-join '
+    - -join'
+    - -join"
+    - -join`
+    - ::Join
+    - '[char]'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bb780e0c-16cf-4383-8383-1e5471db6cf9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_xor_commandline.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

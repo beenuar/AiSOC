@@ -1,0 +1,43 @@
+id: splunk-security-content-8976744a-ae7a-46a4-8128-690df85c2af4
+name: Windows Visual Basic Commandline Compiler DNSQuery
+description: The following analytic detects instances where vbc.exe, the Visual Basic
+  Command Line Compiler, initiates DNS queries. Normally, vbc.exe operates locally
+  to compile Visual Basic code and does not require internet access or to perform
+  DNS lookups. Therefore, any observed DNS activity originating from vbc.exe is highly
+  suspicious and indicative of potential malicious activity. This behavior often suggests
+  that a malicious payload is masquerading as the legitimate vbc.exe process to establish
+  command-and-control (C2) communication, resolve domains for data exfiltration, or
+  download additional stages of malware. Security teams should investigate the process's
+  parent, command-line arguments, and the resolved domains for further indicators
+  of compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-266a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=22 process_name=\"vbc.exe\"\n  | rename dvc as dest\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY answer\
+    \ answer_count dest\n       process_exec process_guid process_name\n       query\
+    \ query_count reply_code_id\n       signature signature_id src\n       user_id\
+    \ vendor_product QueryName\n       QueryResults QueryStatus\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_visual_basic_commandline_compiler_dnsquery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8976744a-ae7a-46a4-8128-690df85c2af4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_visual_basic_commandline_compiler_dnsquery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

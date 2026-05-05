@@ -1,0 +1,36 @@
+id: sigmahq-sigma-51e33403-2a37-4d66-a574-1fda1782cc31
+name: RDP Login from Localhost
+description: RDP login with localhost source address may be a tunnelled login
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://www.fireeye.com/blog/threat-research/2019/01/bypassing-network-restrictions-through-rdp-tunneling.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 10
+    IpAddress:
+    - ::1
+    - 127.0.0.1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 51e33403-2a37-4d66-a574-1fda1782cc31
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_rdp_localhost_login.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

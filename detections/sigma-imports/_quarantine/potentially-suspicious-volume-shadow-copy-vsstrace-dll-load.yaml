@@ -1,0 +1,54 @@
+id: sigmahq-sigma-48bfd177-7cf2-412b-ad77-baf923489e82
+name: Potentially Suspicious Volume Shadow Copy Vsstrace.dll Load
+description: Detects the image load of VSS DLL by uncommon executables
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/ORCx41/DeleteShadowCopies
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \vsstrace.dll
+  filter_main_windows:
+  - Image:
+    - C:\Windows\explorer.exe
+    - C:\Windows\ImmersiveControlPanel\SystemSettings.exe
+  - Image|startswith:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\Temp\{
+    - C:\Windows\WinSxS\
+    - C:\ProgramData\Package Cache\{
+  filter_main_program_files:
+    Image|startswith:
+    - C:\Program Files\
+    - C:\Program Files (x86)\
+  filter_optional_recovery:
+    Image|startswith: C:\$WinREAgent\Scratch\
+  filter_main_null_image:
+    Image: null
+  filter_optional_avira:
+    Image|contains|all:
+    - \temp\is-
+    - \avira_system_speedup.tmp
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48bfd177-7cf2-412b-ad77-baf923489e82
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_dll_vsstrace_susp_load.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-darkgate-cryptocurrency-mining-and-ransomware-campaign-sysmon
+name: darkgate_cryptocurrency_mining_and_ransomware_campaign_sysmon
+description: darkgate_cryptocurrency_mining_and_ransomware_campaign_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule darkgate_cryptocurrency_mining_and_ransomware_campaign_sysmon\
+    \ {\n meta:\n    author = \"Alexandr Yampolskyi, SOC Prime\"\n    description\
+    \ = \"DarkGate Cryptocurrency Mining and Ransomware Campaign Detector.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/Slv2yNGM96oy\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/13\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, Impact, t1486\"\n\n  events:\n\
+    ($selection.metadata.product_event_type = \"1\" and ($selection.target.file.md5\
+    \ = \"3340013b0f00fe0c9e99411f722f8f3f0baf9ae4f40ac78796a6d4d694b46d7b\" or $selection.target.file.md5\
+    \ = \"0c3ef20ede53efbe5eebca50171a589731a17037147102838bdb4a41c33f94e5\" or $selection.target.file.md5\
+    \ = \"3340013b0f00fe0c9e99411f722f8f3f0baf9ae4f40ac78796a6d4d694b46d7b\" or $selection.target.file.md5\
+    \ = \"0c3ef20ede53efbe5eebca50171a589731a17037147102838bdb4a41c33f94e5\" or $selection.target.file.md5\
+    \ = \"52c47a529e4ddd0778dde84b7f54e1aea326d9f8eeb4ba4961a87835a3d29866\" or $selection.target.file.md5\
+    \ = \"b0542a719c6b2fc575915e9e4c58920cf999ba5c3f5345617818a9dc14a378b4\" or $selection.target.file.md5\
+    \ = \"dadd0ec8806d506137889d7f1595b3b5447c1ea30159432b1952fa9551ecfba5\" or $selection.target.file.md5\
+    \ = \"c88eab30fa03c44b567bcb4e659a60ee0fe5d98664816c70e3b6e8d79169cbea\" or $selection.target.file.md5\
+    \ = \"2264c2f2c2d5a0d6d62c33cadb848305a8fff81cdd79c4d7560021cfb304a121\" or $selection.target.file.md5\
+    \ = \"3c68facf01aede7bcd8c2aea853324a2e6a0ec8b026d95c7f50a46d77334c2d2\" or $selection.target.file.md5\
+    \ = \"a146f84a0179124d96a707f192f4c06c07690e745cffaef521fcda9633766a44\" or $selection.target.file.md5\
+    \ = \"abc35bb943462312437f0c4275b012e8ec03899ab86d353143d92cbefedd7f9d\" or $selection.target.file.md5\
+    \ = \"908f2dfed6c122b46e946fe8839feb9218cb095f180f86c43659448e2f709fc7\" or $selection.target.file.md5\
+    \ = \"3491bc6df27858257db26b913da8c35c83a0e48cf80de701a45a30a30544706d\"))\n\n\
+    \  condition:\n    $selection\n}"
+  chronicle_rule_name: darkgate_cryptocurrency_mining_and_ransomware_campaign_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: darkgate_cryptocurrency_mining_and_ransomware_campaign_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/sysmon/darkgate_cryptocurrency_mining_and_ransomware_campaign__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

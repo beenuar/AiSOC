@@ -1,0 +1,36 @@
+id: sigmahq-sigma-c3e76af5-4ce0-4a14-9c9a-25ceb8fda182
+name: WerFault LSASS Process Memory Dump
+description: Detects WerFault creating a dump file with a name that indicates that
+  the dump file could be an LSASS process memory, which contains user credentials
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://github.com/helpsystems/nanodump
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image: C:\WINDOWS\system32\WerFault.exe
+    TargetFilename|contains:
+    - \lsass
+    - lsass.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c3e76af5-4ce0-4a14-9c9a-25ceb8fda182
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_lsass_werfault_dump.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

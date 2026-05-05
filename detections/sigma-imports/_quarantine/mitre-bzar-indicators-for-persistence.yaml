@@ -1,0 +1,51 @@
+id: sigmahq-sigma-53389db6-ba46-48e3-a94c-e0f2cefe1583
+name: MITRE BZAR Indicators for Persistence
+description: Windows DCE-RPC functions which indicate a persistence techniques on
+  the remote system. All credit for the Zeek mapping of the suspicious endpoint/operation
+  field goes to MITRE.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.004
+  categories:
+  - endpoint
+references:
+- https://github.com/mitre-attack/bzar#indicators-for-attck-persistence
+logsource:
+  product: zeek
+  service: dce_rpc
+detection:
+  op1:
+    endpoint: spoolss
+    operation: RpcAddMonitor
+  op2:
+    endpoint: spoolss
+    operation: RpcAddPrintProcessor
+  op3:
+    endpoint: IRemoteWinspool
+    operation: RpcAsyncAddMonitor
+  op4:
+    endpoint: IRemoteWinspool
+    operation: RpcAsyncAddPrintProcessor
+  op5:
+    endpoint: ISecLogon
+    operation: SeclCreateProcessWithLogonW
+  op6:
+    endpoint: ISecLogon
+    operation: SeclCreateProcessWithLogonExW
+  condition: 1 of op*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 53389db6-ba46-48e3-a94c-e0f2cefe1583
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_dce_rpc_mitre_bzar_persistence.yml
+falsepositives:
+- Windows administrator tasks or troubleshooting
+- Windows management scripts or software
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-f663a6d9-9d1b-49b8-b2b1-0637914d199a
+name: Narrator's Feedback-Hub Persistence
+description: Detects abusing Windows 10 Narrator's Feedback-Hub
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://giuliocomi.blogspot.com/2019/10/abusing-windows-10-narrators-feedback.html
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection1:
+    EventType: DeleteValue
+    TargetObject|endswith: \AppXypsaf9f1qserqevf0sws76dx4k9a5206\Shell\open\command\DelegateExecute
+  selection2:
+    TargetObject|endswith: \AppXypsaf9f1qserqevf0sws76dx4k9a5206\Shell\open\command\(Default)
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f663a6d9-9d1b-49b8-b2b1-0637914d199a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_narrator_feedback_persistance.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-74176142-4684-4d8a-8b0a-713257e7df8e
+name: Potential Active Directory Enumeration Using AD Module - PsModule
+description: Detects usage of the "Import-Module" cmdlet to load the "Microsoft.ActiveDirectory.Management.dl"
+  DLL. Which is often used by attackers to perform AD enumeration.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/samratashok/ADModule
+- https://twitter.com/cyb3rops/status/1617108657166061568?s=20
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_cmdlet:
+    Payload|contains:
+    - 'Import-Module '
+    - 'ipmo '
+  selection_dll:
+    Payload|contains: Microsoft.ActiveDirectory.Management.dll
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 74176142-4684-4d8a-8b0a-713257e7df8e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_active_directory_module_dll_import.yml
+falsepositives:
+- Legitimate use of the library for administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

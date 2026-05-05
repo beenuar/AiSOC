@@ -1,0 +1,43 @@
+id: splunk-security-content-f87b5062-b405-11eb-a889-acde48001122
+name: CMLUA Or CMSTPLUA UAC Bypass
+description: The following analytic detects the use of COM objects like CMLUA or CMSTPLUA
+  to bypass User Account Control (UAC). It leverages Sysmon EventCode 7 to identify
+  the loading of specific DLLs (CMLUA.dll, CMSTPLUA.dll, CMLUAUTIL.dll) by processes
+  not typically associated with these libraries. This activity is significant as it
+  indicates an attempt to gain elevated privileges, a common tactic used by ransomware
+  adversaries. If confirmed malicious, this could allow attackers to execute code
+  with administrative rights, leading to potential system compromise and further malicious
+  activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=7  ImageLoaded IN ("*\\CMLUA.dll", "*\\CMSTPLUA.dll",
+    "*\\CMLUAUTIL.dll") NOT(process_name IN("CMSTP.exe", "CMMGR32.exe")) NOT(Image
+    IN("*\\windows\\*", "*\\program files*")) | fillnull | stats count min(_time)
+    as firstTime max(_time) as lastTime by Image ImageLoaded dest loaded_file loaded_file_path
+    original_file_name process_exec process_guid process_hash process_id process_name
+    process_path service_dll_signature_exists service_dll_signature_verified signature
+    signature_id user_id vendor_product | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `cmlua_or_cmstplua_uac_bypass_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: f87b5062-b405-11eb-a889-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cmlua_or_cmstplua_uac_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

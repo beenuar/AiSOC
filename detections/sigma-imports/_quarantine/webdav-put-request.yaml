@@ -1,0 +1,41 @@
+id: sigmahq-sigma-705072a5-bb6f-4ced-95b6-ecfa6602090b
+name: WebDav Put Request
+description: A General detection for WebDav user-agent being used to PUT files on
+  a WebDav network share. This could be an indicator of exfiltration.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - endpoint
+references:
+- https://github.com/OTRF/detection-hackathon-apt29/issues/17
+logsource:
+  product: zeek
+  service: http
+detection:
+  selection:
+    user_agent|contains: WebDAV
+    method: PUT
+  filter:
+    id.resp_h|cidr:
+    - 10.0.0.0/8
+    - 127.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 705072a5-bb6f-4ced-95b6-ecfa6602090b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_http_webdav_put_request.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

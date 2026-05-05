@@ -1,0 +1,45 @@
+id: splunk-security-content-0bbfb79c-a755-49a5-a38a-1128d0a452f1
+name: Linux Auditd File And Directory Discovery
+description: The following analytic detects suspicious file and directory discovery
+  activities, which may indicate an attacker's effort to locate sensitive documents
+  and files on a compromised system. This behavior often precedes data exfiltration,
+  as adversaries seek to identify valuable or confidential information for theft.
+  By identifying unusual or unauthorized attempts to browse or enumerate files and
+  directories, this analytic helps security teams detect potential reconnaissance
+  or preparatory actions by an attacker, enabling timely intervention to prevent data
+  breaches or unauthorized access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+- https://github.com/peass-ng/PEASS-ng/tree/master/linPEAS
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`  execve_command IN (\"*grep*\", \"*find*\") AND execve_command\
+    \ IN (\"*.tif*\", \"*.tiff*\", \"*.gif*\", \"*.jpeg*\", \"*.jpg*\", \"*.jif*\"\
+    , \"*.jfif*\", \"*.jp2*\", \"*.jpx*\", \"*.j2k*\", \"*.j2c*\", \"*.fpx*\", \"\
+    *.pcd*\", \"*.png*\", \"*.flv*\", \"*.pdf*\", \"*.mp4*\", \"*.mp3*\", \"*.gifv*\"\
+    , \"*.avi*\", \"*.mov*\", \"*.mpeg*\", \"*.wav*\", \"*.doc*\", \"*.docx*\", \"\
+    *.xls*\", \"*.xlsx*\", \"*.svg*\")\n  | rename host as dest\n  | rename comm as\
+    \ process_name\n  | rename exe as process\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY argc execve_command dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_file_and_directory_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0bbfb79c-a755-49a5-a38a-1128d0a452f1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_file_and_directory_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-4db60cc0-36fb-42b7-9b58-a5b53019fb74
+name: AWS CloudTrail Important Change
+description: Detects disabling, deleting and updating of a Trail
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685.002
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/awscloudtrail/latest/userguide/best-practices-security.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_source:
+    eventSource: cloudtrail.amazonaws.com
+    eventName:
+    - StopLogging
+    - UpdateTrail
+    - DeleteTrail
+  condition: selection_source
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4db60cc0-36fb-42b7-9b58-a5b53019fb74
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_disable_logging.yml
+falsepositives:
+- Valid change in a Trail
+notes:
+  quarantine_reason: 'upstream status: test'

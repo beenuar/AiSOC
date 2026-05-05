@@ -1,0 +1,34 @@
+id: sigmahq-sigma-259e5a6a-b8d2-4c38-86e2-26c5e651361d
+name: PsExec Service File Creation
+description: Detects default PsExec service filename which indicates PsExec service
+  installation and execution
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.jpcert.or.jp/english/pub/sr/ir_research.html
+- https://jpcertcc.github.io/ToolAnalysisResultSheet
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \PSEXESVC.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 259e5a6a-b8d2-4c38-86e2-26c5e651361d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_psexec_service.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

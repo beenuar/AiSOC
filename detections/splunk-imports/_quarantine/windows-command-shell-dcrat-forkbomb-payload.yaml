@@ -1,0 +1,55 @@
+id: splunk-security-content-2bb1a362-7aa8-444a-92ed-1987e8da83e1
+name: Windows Command Shell DCRat ForkBomb Payload
+description: The following analytic detects the execution of a DCRat "forkbomb" payload,
+  which spawns multiple cmd.exe processes that launch notepad.exe instances in quick
+  succession. This detection leverages Endpoint Detection and Response (EDR) data,
+  focusing on the rapid creation of cmd.exe and notepad.exe processes within a 30-second
+  window. This activity is significant as it indicates a potential DCRat infection,
+  a known Remote Access Trojan (RAT) with destructive capabilities. If confirmed malicious,
+  this behavior could lead to system instability, resource exhaustion, and potential
+  disruption of services.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/405538
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.dcrat
+- https://www.mandiant.com/resources/analyzing-dark-crystal-rat-backdoor
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.user) as\
+    \ user values(Processes.action) as action values(Processes.parent_process_exec)\
+    \ as parent_process_exec values(Processes.parent_process_guid) as parent_process_guid\
+    \ values(Processes.parent_process_id) as parent_process_id values(Processes.parent_process_path)\
+    \ as parent_process_path values(Processes.process) as process values(Processes.process_exec)\
+    \ as process_exec values(Processes.process_guid) as process_guid values(Processes.process_hash)\
+    \ as process_hash values(Processes.process_id) as process_id values(Processes.process_integrity_level)\
+    \ as process_integrity_level values(Processes.process_path) as process_path values(Processes.user_id)\
+    \ as user_id values(Processes.vendor_product) as vendor_product dc(Processes.parent_process_id)\
+    \ as parent_process_id_count dc(Processes.process_id) as process_id_count min(_time)\
+    \ as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE\
+    \ Processes.parent_process_name= \"cmd.exe\" (Processes.process_name = \"notepad.exe\"\
+    \n    OR\n    Processes.original_file_name= \"notepad.exe\") Processes.parent_process\
+    \ = \"*.bat*\"\n  BY Processes.parent_process_name Processes.process_name Processes.original_file_name\n\
+    \     Processes.parent_process Processes.dest Processes.user\n     _time span=30s\n\
+    | where parent_process_id_count>= 10 AND process_id_count >=10\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_command_shell_dcrat_forkbomb_payload_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2bb1a362-7aa8-444a-92ed-1987e8da83e1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_command_shell_dcrat_forkbomb_payload.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

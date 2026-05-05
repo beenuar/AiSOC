@@ -1,0 +1,259 @@
+id: sigmahq-sigma-75e33ce3-ae32-4dcc-9aa8-a2a3029d6f84
+name: Office Application Initiated Network Connection To Non-Local IP
+description: 'Detects an office application (Word, Excel, PowerPoint)  that initiate
+  a network connection to a non-private IP addresses.
+
+  This rule aims to detect traffic similar to one seen exploited in CVE-2021-42292.
+
+  This rule will require an initial baseline and tuning that is specific to your organization.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  categories:
+  - endpoint
+references:
+- https://corelight.com/blog/detecting-cve-2021-42292
+- https://learn.microsoft.com/de-de/microsoft-365/enterprise/urls-and-ip-address-ranges?view=o365-worldwide
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \excel.exe
+    - \outlook.exe
+    - \powerpnt.exe
+    - \winword.exe
+    - \wordview.exe
+    Initiated: 'true'
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  filter_main_msrange_generic:
+    DestinationIp|cidr:
+    - 2.16.56.0/23
+    - 2.17.248.0/21
+    - 13.107.240.0/21
+    - 20.184.0.0/13
+    - 23.61.224.0/20
+    - 20.192.0.0/10
+    - 23.72.0.0/13
+    - 23.3.88.0/22
+    - 23.216.132.0/22
+    - 40.76.0.0/14
+    - 51.10.0.0/15
+    - 51.103.0.0/16
+    - 51.104.0.0/15
+    - 51.142.136.0/22
+    - 52.160.0.0/11
+    - 95.101.96.0/21
+    - 204.79.197.0/24
+  filter_main_msrange_exchange_1:
+    DestinationIp|cidr:
+    - 13.107.4.0/22
+    - 13.107.6.152/31
+    - 13.107.18.10/31
+    - 13.107.42.0/23
+    - 13.107.128.0/22
+    - 23.35.224.0/20
+    - 23.53.40.0/22
+    - 23.103.160.0/20
+    - 23.216.76.0/22
+    - 40.96.0.0/13
+    - 40.104.0.0/15
+    - 52.96.0.0/14
+    - 131.253.33.215/32
+    - 132.245.0.0/16
+    - 150.171.32.0/22
+    - 204.79.197.215/32
+    - 2603:1006::/40
+    - 2603:1016::/36
+    - 2603:1026::/36
+    - 2603:1036::/36
+    - 2603:1046::/36
+    - 2603:1056::/36
+    - 2620:1ec:4::152/128
+    - 2620:1ec:4::153/128
+    - 2620:1ec:c::10/128
+    - 2620:1ec:c::11/128
+    - 2620:1ec:d::10/128
+    - 2620:1ec:d::11/128
+    - 2620:1ec:8f0::/46
+    - 2620:1ec:900::/46
+    - 2620:1ec:a92::152/128
+    - 2620:1ec:a92::153/128
+    DestinationPort:
+    - 80
+    - 443
+  filter_main_msrange_exchange_2:
+    DestinationIp|cidr:
+    - 13.107.6.152/31
+    - 13.107.18.10/31
+    - 13.107.128.0/22
+    - 23.103.160.0/20
+    - 40.96.0.0/13
+    - 40.104.0.0/15
+    - 52.96.0.0/14
+    - 131.253.33.215/32
+    - 132.245.0.0/16
+    - 150.171.32.0/22
+    - 204.79.197.215/32
+    - 2603:1006::/40
+    - 2603:1016::/36
+    - 2603:1026::/36
+    - 2603:1036::/36
+    - 2603:1046::/36
+    - 2603:1056::/36
+    - 2620:1ec:4::152/128
+    - 2620:1ec:4::153/128
+    - 2620:1ec:c::10/128
+    - 2620:1ec:c::11/128
+    - 2620:1ec:d::10/128
+    - 2620:1ec:d::11/128
+    - 2620:1ec:8f0::/46
+    - 2620:1ec:900::/46
+    - 2620:1ec:a92::152/128
+    - 2620:1ec:a92::153/128
+    DestinationPort:
+    - 143
+    - 587
+    - 993
+    - 995
+    Protocol: tcp
+  filter_main_msrange_exchange_3:
+    DestinationIp|cidr:
+    - 40.92.0.0/15
+    - 40.107.0.0/16
+    - 52.100.0.0/14
+    - 52.238.78.88/32
+    - 104.47.0.0/17
+    - 2a01:111:f400::/48
+    - 2a01:111:f403::/48
+    DestinationPort: 443
+  filter_main_msrange_exchange_4:
+    DestinationIp|cidr:
+    - 40.92.0.0/15
+    - 40.107.0.0/16
+    - 52.100.0.0/14
+    - 52.238.78.88/32
+    - 104.47.0.0/17
+    - 2a01:111:f400::/48
+    - 2a01:111:f403::/48
+    DestinationPort: 25
+  filter_main_msrange_sharepoint_1:
+    DestinationIp|cidr:
+    - 13.107.136.0/22
+    - 40.108.128.0/17
+    - 52.104.0.0/14
+    - 104.146.128.0/17
+    - 150.171.40.0/22
+    - 2603:1061:1300::/40
+    - 2620:1ec:8f8::/46
+    - 2620:1ec:908::/46
+    - 2a01:111:f402::/48
+    DestinationPort:
+    - 80
+    - 443
+    Protocol: tcp
+  filter_main_msrange_office_1:
+    DestinationIp|cidr:
+    - 13.107.6.171/32
+    - 13.107.18.15/32
+    - 13.107.140.6/32
+    - 20.64.0.0/10
+    - 52.108.0.0/14
+    - 52.244.37.168/32
+    - 2603:1006:1400::/40
+    - 2603:1016:2400::/40
+    - 2603:1026:2400::/40
+    - 2603:1036:2400::/40
+    - 2603:1046:1400::/40
+    - 2603:1056:1400::/40
+    - 2603:1063:2000::/38
+    - 2620:1ec:c::15/128
+    - 2620:1ec:8fc::6/128
+    - 2620:1ec:a92::171/128
+    - 2a01:111:f100:2000::a83e:3019/128
+    - 2a01:111:f100:2002::8975:2d79/128
+    - 2a01:111:f100:2002::8975:2da8/128
+    - 2a01:111:f100:7000::6fdd:6cd5/128
+    - 2a01:111:f100:a004::bfeb:88cf/128
+    DestinationPort:
+    - 80
+    - 443
+    Protocol: tcp
+  filter_main_msrange_office_2:
+    DestinationIp|cidr:
+    - 172.128.0.0/10
+    - 20.20.32.0/19
+    - 20.103.156.88/32
+    - 20.190.128.0/18
+    - 20.231.128.0/19
+    - 40.126.0.0/18
+    - 57.150.0.0/15
+    - 2603:1006:2000::/48
+    - 2603:1007:200::/48
+    - 2603:1016:1400::/48
+    - 2603:1017::/48
+    - 2603:1026:3000::/48
+    - 2603:1027:1::/48
+    - 2603:1036:3000::/48
+    - 2603:1037:1::/48
+    - 2603:1046:2000::/48
+    - 2603:1047:1::/48
+    - 2603:1056:2000::/48
+    - 2603:1057:2::/48
+    DestinationPort:
+    - 80
+    - 443
+    Protocol: tcp
+  filter_main_msrange_office_3:
+    DestinationIp|cidr:
+    - 13.64.0.0/11
+    - 13.107.6.192/32
+    - 13.107.9.192/32
+    - 13.89.179.14/32
+    - 20.40.0.0/14
+    - 20.48.0.0/12
+    - 20.64.0.0/12
+    - 52.123.0.0/16
+    - 52.108.0.0/14
+    - 52.136.0.0/13
+    - 57.150.0.0/15
+    - 80.239.150.67/32
+    - 2620:1ec:4::192/128
+    - 2620:1ec:a92::192/128
+    DestinationPort: 443
+    Protocol: tcp
+  filter_main_destination_host:
+    DestinationHostname|endswith: .deploy.static.akamaitechnologies.com
+    DestinationPort: 443
+    Protocol: tcp
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 75e33ce3-ae32-4dcc-9aa8-a2a3029d6f84
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_office_outbound_non_local_ip.yml
+falsepositives:
+- You may have to tune certain domains out that Excel may call out to, such as microsoft
+  or other business use case domains.
+- Office documents commonly have templates that refer to external addresses, like
+  "sharepoint.ourcompany.com" may have to be tuned.
+- It is highly recommended to baseline your activity and tune out common business
+  use cases.
+notes:
+  quarantine_reason: 'upstream status: test'

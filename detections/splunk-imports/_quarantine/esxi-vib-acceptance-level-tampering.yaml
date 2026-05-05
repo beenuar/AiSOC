@@ -1,0 +1,34 @@
+id: splunk-security-content-d051d94f-c792-445e-b5d2-0b904f93ac09
+name: ESXi VIB Acceptance Level Tampering
+description: This detection identifies changes to the VIB (vSphere Installation Bundle)
+  acceptance level on an ESXi host. Modifying the acceptance level, such as setting
+  it to CommunitySupported, lowers the system's integrity enforcement and may allow
+  the installation of unsigned or unverified software.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*esxcli software acceptance set*" Message="*shell*"
+    | rex field=_raw "\]: \[(?<user>\w+)\]:(?<command>.+)" | rex field=_raw "Z (?<dest>[\w\.]+)\s"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest user command
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_vib_acceptance_level_tampering_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d051d94f-c792-445e-b5d2-0b904f93ac09
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_vib_acceptance_level_tampering.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

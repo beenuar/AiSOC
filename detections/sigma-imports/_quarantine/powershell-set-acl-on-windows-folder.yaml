@@ -1,0 +1,51 @@
+id: sigmahq-sigma-0944e002-e3f6-4eb5-bf69-3a3067b53d73
+name: PowerShell Set-Acl On Windows Folder
+description: Detects PowerShell scripts to set the ACL to a file in the Windows folder
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/set-acl?view=powershell-5.1
+- https://github.com/redcanaryco/atomic-red-team/blob/74438b0237d141ee9c99747976447dc884cb1a39/atomics/T1505.005/T1505.005.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  selection_cmdlet:
+    CommandLine|contains|all:
+    - 'Set-Acl '
+    - '-AclObject '
+  selection_paths:
+    CommandLine|contains:
+    - -Path "C:\Windows
+    - -Path 'C:\Windows
+    - -Path %windir%
+    - -Path $env:windir
+  selection_permissions:
+    CommandLine|contains:
+    - FullControl
+    - Allow
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0944e002-e3f6-4eb5-bf69-3a3067b53d73
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_set_acl_susp_location.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

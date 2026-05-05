@@ -1,0 +1,41 @@
+id: sigmahq-sigma-8344c0e5-5783-47cc-9cf9-a0f7fd03e6cf
+name: Potential Discovery Activity Using Find - Linux
+description: Detects usage of "find" binary in a suspicious manner to perform discovery
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/SaiSathvik1/Linux-Privilege-Escalation-Notes
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /find
+    CommandLine|contains:
+    - -perm -4000
+    - -perm -2000
+    - -perm 0777
+    - -perm -222
+    - -perm -o w
+    - -perm -o x
+    - -perm -u=s
+    - -perm -g=s
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8344c0e5-5783-47cc-9cf9-a0f7fd03e6cf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_find_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

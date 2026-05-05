@@ -1,0 +1,46 @@
+id: splunk-security-content-0130a0df-83a1-4647-9011-841e950ff302
+name: Windows PowerSploit GPP Discovery
+description: The following analytic detects the execution of the Get-GPPPassword PowerShell
+  cmdlet, which is used to search for unsecured credentials in Group Policy Preferences
+  (GPP). This detection leverages PowerShell Script Block Logging to identify specific
+  script block text associated with this cmdlet. Monitoring this activity is crucial
+  as it can indicate an attempt to retrieve and decrypt stored credentials from SYSVOL,
+  potentially leading to unauthorized access. If confirmed malicious, this activity
+  could allow an attacker to escalate privileges or move laterally within the network
+  by exploiting exposed credentials.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.006
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1552/006/
+- https://pentestlab.blog/2017/03/20/group-policy-preferences/
+- https://adsecurity.org/?p=2288
+- https://www.hackingarticles.in/credential-dumping-group-policy-preferences-gpp/
+- https://adsecurity.org/?p=2288
+- https://support.microsoft.com/en-us/topic/ms14-025-vulnerability-in-group-policy-preferences-could-allow-elevation-of-privilege-may-13-2014-60734e15-af79-26ca-ea53-8cd617073c30
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  (ScriptBlockText=Get-GPPPassword OR ScriptBlockText=Get-CachedGPPPassword)\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powersploit_gpp_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0130a0df-83a1-4647-9011-841e950ff302
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powersploit_gpp_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

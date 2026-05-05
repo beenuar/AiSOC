@@ -1,0 +1,44 @@
+id: splunk-security-content-f63c34fe-a435-11eb-935a-acde48001122
+name: Executable File Written in Administrative SMB Share
+description: The following analytic detects executable files (.exe or .dll) being
+  written to Windows administrative SMB shares (Admin$, IPC$, C$). It leverages Windows
+  Security Event Logs with EventCode 5145 to identify this activity. This behavior
+  is significant as it is commonly used by tools like PsExec/PaExec for staging binaries
+  before creating and starting services on remote endpoints, a technique often employed
+  for lateral movement and remote code execution. If confirmed malicious, this activity
+  could allow an attacker to execute arbitrary code remotely, potentially compromising
+  additional systems within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1021/002/
+- https://www.rapid7.com/blog/post/2013/03/09/psexec-demystified/
+- https://labs.vipre.com/trickbot-and-its-modules/
+- https://whitehat.eu/incident-response-case-study-featuring-ryuk-and-trickbot-part-2/
+- https://thedfirreport.com/2023/05/22/icedid-macro-ends-in-nokoyawa-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5145 RelativeTargetName IN ("*.exe","*.dll")
+    ObjectType=File ShareName IN ("\\\\*\\C$","\\\\*\\IPC$","\\\\*\\admin$") AccessMask=
+    "0x2" | stats min(_time) as firstTime max(_time) as lastTime count by EventCode
+    ShareName RelativeTargetName ObjectType AccessMask src_user src_port IpAddress
+    dest | `security_content_ctime(firstTime)`  | `executable_file_written_in_administrative_smb_share_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: f63c34fe-a435-11eb-935a-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/executable_file_written_in_administrative_smb_share.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

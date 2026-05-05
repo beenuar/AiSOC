@@ -1,0 +1,46 @@
+id: splunk-security-content-accb0712-c381-11eb-8e5b-acde48001122
+name: Modification Of Wallpaper
+description: The following analytic detects the modification of registry keys related
+  to the desktop wallpaper settings. It leverages Sysmon EventCode 13 to identify
+  changes to the "Control Panel\\Desktop\\Wallpaper" and "Control Panel\\Desktop\\WallpaperStyle"
+  registry keys, especially when the modifying process is not explorer.exe or involves
+  suspicious file paths like temp or public directories. This activity is significant
+  as it can indicate ransomware behavior, such as the REVIL ransomware, which changes
+  the wallpaper to display a ransom note. If confirmed malicious, this could signify
+  a compromised machine and the presence of ransomware, leading to potential data
+  encryption and extortion.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1491
+  categories:
+  - endpoint
+references:
+- https://krebsonsecurity.com/2021/05/a-closer-look-at-the-darkside-ransomware-gang/
+- https://www.mcafee.com/blogs/other-blogs/mcafee-labs/mcafee-atr-analyzes-sodinokibi-aka-revil-ransomware-as-a-service-what-the-code-tells-us/
+- https://news.sophos.com/en-us/2020/04/24/lockbit-ransomware-borrows-tricks-to-keep-up-with-revil-and-maze/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode =13  (TargetObject IN ("*\\Control Panel\\Desktop\\Wallpaper","*\\Control
+    Panel\\Desktop\\WallpaperStyle") AND Image != "*\\explorer.exe") OR (TargetObject
+    IN ("*\\Control Panel\\Desktop\\Wallpaper","*\\Control Panel\\Desktop\\WallpaperStyle")
+    AND Details IN ("*\\temp\\*", "*\\users\\public\\*")) | stats count min(_time)
+    as firstTime max(_time) as lastTime by action dest process_guid process_id registry_hive
+    registry_path registry_key_name registry_value_data registry_value_name status
+    user_id vendor_product | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `modification_of_wallpaper_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: accb0712-c381-11eb-8e5b-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/modification_of_wallpaper.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

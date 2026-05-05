@@ -1,0 +1,45 @@
+id: sigmahq-sigma-39a80702-d7ca-4a83-b776-525b1f86a36d
+name: Potential Secure Deletion with SDelete
+description: Detects files that have extensions commonly seen while SDelete is used
+  to wipe files.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  - T1027.005
+  - T1485
+  - T1553.002
+  categories:
+  - endpoint
+references:
+- https://jpcertcc.github.io/ToolAnalysisResultSheet/details/sdelete.htm
+- https://www.jpcert.or.jp/english/pub/sr/ir_research.html
+- https://learn.microsoft.com/en-gb/sysinternals/downloads/sdelete
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID:
+    - 4656
+    - 4663
+    - 4658
+    ObjectName|endswith:
+    - .AAA
+    - .ZZZ
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39a80702-d7ca-4a83-b776-525b1f86a36d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_sdelete_potential_secure_deletion.yml
+falsepositives:
+- Legitimate usage of SDelete
+- Files that are interacted with that have these extensions legitimately
+notes:
+  quarantine_reason: 'upstream status: test'

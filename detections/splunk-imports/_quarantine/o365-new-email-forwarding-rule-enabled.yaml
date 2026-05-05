@@ -1,0 +1,46 @@
+id: splunk-security-content-ac7c4d0a-06a3-4278-aa59-88a5e537f981
+name: O365 New Email Forwarding Rule Enabled
+description: The following analytic identifies the creation of new email forwarding
+  rules in an Office 365 environment via the UpdateInboxRules operation. It leverages
+  Office 365 management activity events to detect rules that forward emails to external
+  recipients by examining the OperationProperties for specific forwarding actions.
+  This activity is significant as it may indicate unauthorized email redirection,
+  potentially leading to data exfiltration. If confirmed malicious, attackers could
+  intercept sensitive communications, leading to data breaches and information leakage.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange Operation=UpdateInboxRules
+    | eval match1=mvfind(''OperationProperties{}.Value'', "ForwardToRecipientsAction")
+    | eval match2=mvfind(''OperationProperties{}.Value'', "ForwardAsAttachmentToRecipientsAction")
+    | eval match3=mvfind(''OperationProperties{}.Value'', "RedirectToRecipientsAction")
+    | eval index = mvfind(''OperationProperties{}.Name'', "ServerRule") | where match1>=0
+    OR match2>= 0 OR match3>= 0 | eval ServerRule = mvindex(''OperationProperties{}.Value'',index-1)
+    | spath input=ServerRule path=Actions{}.Recipients{}.Values{}.Value output=valueExtracted
+    | mvexpand valueExtracted | search valueExtracted="*@*.*" | eval ForwardTo=if(match(valueExtracted,"^[^@]+@[^@]+\\.[^@]+$"),
+    valueExtracted, null) | dedup ForwardTo | where isnotnull(ForwardTo) | fillnull
+    | stats count min(_time) as firstTime max(_time) as lastTime values(Name) as Name
+    by signature dest user src vendor_account vendor_product ForwardTo | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_new_email_forwarding_rule_enabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ac7c4d0a-06a3-4278-aa59-88a5e537f981
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_new_email_forwarding_rule_enabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

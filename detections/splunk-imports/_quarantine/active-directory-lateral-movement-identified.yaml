@@ -1,0 +1,48 @@
+id: splunk-security-content-6aa6f9dd-adfe-45a8-8f74-c4c7a0d7d037
+name: Active Directory Lateral Movement Identified
+description: The following analytic identifies potential lateral movement activities
+  within an organization's Active Directory (AD) environment. It detects this activity
+  by correlating multiple analytics from the Active Directory Lateral Movement analytic
+  story within a specified time frame. This is significant for a SOC as lateral movement
+  is a common tactic used by attackers to expand their access within a network, posing
+  a substantial risk. If confirmed malicious, this activity could allow attackers
+  to escalate privileges, access sensitive information, and persist within the environment,
+  leading to severe security breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1210
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/tactics/TA0008/
+- https://research.splunk.com/stories/active_directory_lateral_movement/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.analyticstories=\"\
+    Active Directory Lateral Movement\" All_Risk.risk_object_type=\"system\"\n  BY\
+    \ All_Risk.risk_object All_Risk.risk_object_type All_Risk.annotations.mitre_attack.mitre_tactic\n\
+    | `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 4\n| `active_directory_lateral_movement_identified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6aa6f9dd-adfe-45a8-8f74-c4c7a0d7d037
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/active_directory_lateral_movement_identified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

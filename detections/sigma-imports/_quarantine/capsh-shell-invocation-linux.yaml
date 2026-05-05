@@ -1,0 +1,34 @@
+id: sigmahq-sigma-db1ac3be-f606-4e3a-89e0-9607cbe6b98a
+name: Capsh Shell Invocation - Linux
+description: Detects the use of the "capsh" utility to invoke a shell.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/capsh/#shell
+- https://www.elastic.co/guide/en/security/current/linux-restricted-shell-breakout-via-linux-binary-s.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /capsh
+    CommandLine|endswith: ' --'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db1ac3be-f606-4e3a-89e0-9607cbe6b98a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_capsh_shell_invocation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-scanner-poc-for-cve20190708-rdp-rce-vuln
+name: scanner_poc_for_cve20190708_rdp_rce_vuln
+description: scanner_poc_for_cve20190708_rdp_rce_vuln
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule scanner_poc_for_cve20190708_rdp_rce_vuln {\n meta:\n    author\
+    \ = \"Florian Roth (rule), Adam Bradbury (idea)\"\n    description = \"Detects\
+    \ the use of a scanner by zerosum0x0 that discovers targets vulnerable to  CVE-2019-0708\
+    \ RDP RCE aka BlueKeep  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/dxSqHBcCVylk\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/06/02\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"lateral_movement, t1210, car.2013-07-002\"\n\n\
+    \  events:\n($selection.metadata.product_event_type = \"4625\" and $selection.principal.user.user_display_name\
+    \ = \"AAAAAAA\")\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: scanner_poc_for_cve20190708_rdp_rce_vuln
+provenance:
+  source: chronicle/detection-rules
+  source_id: scanner_poc_for_cve20190708_rdp_rce_vuln
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/proactive_exploit_detection/windows/scanner_poc_for_cve_2019_0708_rdp_rce_vuln.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

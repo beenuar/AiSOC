@@ -1,0 +1,34 @@
+id: sigmahq-sigma-b26647de-4feb-4283-af6b-6117661283c5
+name: Powershell Suspicious Win32_PnPEntity
+description: Adversaries may attempt to gather information about attached peripheral
+  devices and components connected to a computer system.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1120
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1120/T1120.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains: Win32_PnPEntity
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b26647de-4feb-4283-af6b-6117661283c5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_win32_pnpentity.yml
+falsepositives:
+- Admin script
+notes:
+  quarantine_reason: 'upstream status: test'

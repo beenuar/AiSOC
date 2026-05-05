@@ -1,0 +1,44 @@
+id: splunk-security-content-e4602172-db86-4315-86df-da66fb40bcde
+name: Windows Unusual SysWOW64 Process Run System32 Executable
+description: The following analytic detects an unusual process execution pattern where
+  a process running from C:\Windows\SysWOW64\ attempts to execute a binary from C:\Windows\System32\.
+  In a typical Windows environment, 32-bit processes under SysWOW64 should primarily
+  interact with 32-bit binaries within the same directory. However, an execution flow
+  where a 32-bit process spawns a 64-bit binary from System32 can indicate potential
+  process injection, privilege escalation, evasion techniques, or unauthorized execution
+  hijacking.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.009
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_nl/research/24/k/earth-estries.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where Processes.process_path
+    = "*\\Windows\\SysWOW64\\*" AND Processes.process = "*windows\\system32\\*" by
+    Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec Processes.process_guid Processes.process_hash Processes.process_id
+    Processes.process_integrity_level Processes.process_name Processes.process_path
+    Processes.user Processes.user_id Processes.vendor_product | `drop_dm_object_name(Processes)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_unusual_syswow64_process_run_system32_executable_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e4602172-db86-4315-86df-da66fb40bcde
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unusual_syswow64_process_run_system32_executable.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

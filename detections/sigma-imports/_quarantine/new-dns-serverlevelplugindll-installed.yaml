@@ -1,0 +1,36 @@
+id: sigmahq-sigma-e61e8a88-59a9-451c-874e-70fcc9740d67
+name: New DNS ServerLevelPluginDll Installed
+description: Detects the installation of a DNS plugin DLL via ServerLevelPluginDll
+  parameter in registry, which can be used to execute code in context of the DNS server
+  (restart required)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://medium.com/@esnesenon/feature-not-bug-dnsadmin-to-dc-compromise-in-one-line-a0f779b8dc83
+- https://blog.3or.de/hunting-dns-server-level-plugin-dll-injection.html
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|endswith: \services\DNS\Parameters\ServerLevelPluginDll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e61e8a88-59a9-451c-874e-70fcc9740d67
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_dns_server_level_plugin_dll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

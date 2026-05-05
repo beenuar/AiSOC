@@ -1,0 +1,45 @@
+id: sigmahq-sigma-63d1ccc0-2a43-4f4b-9289-361b308991ff
+name: Wab/Wabmig Unusual Parent Or Child Processes
+description: Detects unusual parent or children of the wab.exe (Windows Contacts)
+  and Wabmig.exe (Microsoft Address Book Import Tool) processes as seen being used
+  with bumblebee activity
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/bumblebee-loader-cybercrime
+- https://thedfirreport.com/2022/09/26/bumblebee-round-two/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith:
+    - \WmiPrvSE.exe
+    - \svchost.exe
+    - \dllhost.exe
+    Image|endswith:
+    - \wab.exe
+    - \wabmig.exe
+  selection_child:
+    ParentImage|endswith:
+    - \wab.exe
+    - \wabmig.exe
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 63d1ccc0-2a43-4f4b-9289-361b308991ff
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wab_unusual_parents.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

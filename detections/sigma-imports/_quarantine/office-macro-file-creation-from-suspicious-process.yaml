@@ -1,0 +1,55 @@
+id: sigmahq-sigma-b1c50487-1967-4315-a026-6491686d860e
+name: Office Macro File Creation From Suspicious Process
+description: Detects the creation of a office macro file from a a suspicious process
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1566.001/T1566.001.md
+- https://learn.microsoft.com/en-us/deployoffice/compat/office-file-format-reference
+logsource:
+  category: file_event
+  product: windows
+  definition: 'Requirements: The "ParentImage" field is not available by default on
+    EID 11 of Sysmon logs. To be able to use this rule to the full extent you need
+    to enriche the log with additional ParentImage data'
+detection:
+  selection_cmd:
+  - Image|endswith:
+    - \cscript.exe
+    - \mshta.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  - ParentImage|endswith:
+    - \cscript.exe
+    - \mshta.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  selection_ext:
+    TargetFilename|endswith:
+    - .docm
+    - .dotm
+    - .xlsm
+    - .xltm
+    - .potm
+    - .pptm
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b1c50487-1967-4315-a026-6491686d860e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_macro_files_from_susp_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

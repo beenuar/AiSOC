@@ -1,0 +1,33 @@
+id: sigmahq-sigma-3d27f6dd-1c74-4687-b4fa-ca849d128d1c
+name: Office Application Startup - Office Test
+description: Detects the addition of office test registry that allows a user to specify
+  an arbitrary DLL that will be executed every time an Office application is started
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1137.002
+  categories:
+  - endpoint
+references:
+- https://unit42.paloaltonetworks.com/unit42-technical-walkthrough-office-test-persistence-method-used-in-recent-sofacy-attacks/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Software\Microsoft\Office test\Special\Perf
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3d27f6dd-1c74-4687-b4fa-ca849d128d1c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_office_test_regadd.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-9e02c8ec-02b9-43e8-81eb-34a475ba7965
+name: Network Connection Initiated To BTunnels Domains
+description: 'Detects network connections to BTunnels domains initiated by a process
+  on the system.
+
+  Attackers can abuse that feature to establish a reverse shell or persistence on
+  a machine.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567
+  - T1572
+  categories:
+  - endpoint
+references:
+- https://defr0ggy.github.io/research/Utilizing-BTunnel-For-Data-Exfiltration/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    DestinationHostname|endswith: .btunnel.co.in
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e02c8ec-02b9-43e8-81eb-34a475ba7965
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_btunnels.yml
+falsepositives:
+- Legitimate use of BTunnels will also trigger this.
+notes:
+  quarantine_reason: 'upstream status: test'

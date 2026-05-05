@@ -1,0 +1,46 @@
+id: sigmahq-sigma-204b17ae-4007-471b-917b-b917b315c5db
+name: Greedy File Deletion Using Del
+description: Detects execution of the "del" builtin command to remove files using
+  greedy/wildcard expression. This is often used by malware to delete content of folders
+  that perhaps contains the initial malware infection or to delete evidence.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- https://www.joesandbox.com/analysis/509330/0/html#1044F3BDBE3BB6F734E357235F4D5898582D
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/erase
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \cmd.exe
+  - OriginalFileName: Cmd.Exe
+  selection_del:
+    CommandLine|contains:
+    - 'del '
+    - 'erase '
+  selection_extensions:
+    CommandLine|contains:
+    - \\\*.au3
+    - \\\*.dll
+    - \\\*.exe
+    - \\\*.js
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 204b17ae-4007-471b-917b-b917b315c5db
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_del_greedy_deletion.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

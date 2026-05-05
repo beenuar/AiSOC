@@ -1,0 +1,44 @@
+id: sigmahq-sigma-815cd91b-7dbc-4247-841a-d7dd1392b0a8
+name: Sysmon Configuration Error
+description: Detects when an adversary is trying to hide it's action from Sysmon logging
+  based on error messages
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md
+- https://talesfrominfosec.blogspot.com/2017/12/killing-sysmon-silently.html
+logsource:
+  product: windows
+  category: sysmon_error
+detection:
+  selection_error:
+    Description|contains:
+    - Failed to open service configuration with error
+    - Failed to connect to the driver to update configuration
+  filter_generic_english:
+    Description|contains|all:
+    - Failed to open service configuration with error
+    - 'Last error: The media is write protected.'
+  filter_by_errorcode:
+    Description|contains:
+    - Failed to open service configuration with error 19
+    - Failed to open service configuration with error 93
+  condition: selection_error and not 1 of filter*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 815cd91b-7dbc-4247-841a-d7dd1392b0a8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/sysmon/sysmon_config_modification_error.yml
+falsepositives:
+- Legitimate administrative action
+notes:
+  quarantine_reason: 'upstream status: test'

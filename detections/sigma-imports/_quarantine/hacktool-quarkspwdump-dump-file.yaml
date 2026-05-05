@@ -1,0 +1,34 @@
+id: sigmahq-sigma-847def9e-924d-4e90-b7c4-5f581395a2b4
+name: HackTool - QuarksPwDump Dump File
+description: Detects a dump file written by QuarksPwDump password dumper
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://jpcertcc.github.io/ToolAnalysisResultSheet/details/QuarksPWDump.htm
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains|all:
+    - \AppData\Local\Temp\SAM-
+    - .dmp
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 847def9e-924d-4e90-b7c4-5f581395a2b4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_hktl_quarkspw_filedump.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

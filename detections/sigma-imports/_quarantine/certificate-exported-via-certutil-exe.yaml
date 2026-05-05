@@ -1,0 +1,37 @@
+id: sigmahq-sigma-3ffd6f51-e6c1-47b7-94b4-c1e61d4117c5
+name: Certificate Exported Via Certutil.EXE
+description: Detects the execution of the certutil with the "exportPFX" flag which
+  allows the utility to export certificates.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/a-golden-saml-journey-solarwinds-continued.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \certutil.exe
+  - OriginalFileName: CertUtil.exe
+  selection_cli:
+    CommandLine|contains|windash: '-exportPFX '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3ffd6f51-e6c1-47b7-94b4-c1e61d4117c5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_certutil_export_pfx.yml
+falsepositives:
+- There legitimate reasons to export certificates. Investigate the activity to determine
+  if it's benign
+notes:
+  quarantine_reason: 'upstream status: test'

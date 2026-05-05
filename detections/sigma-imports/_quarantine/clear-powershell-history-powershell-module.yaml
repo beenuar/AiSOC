@@ -1,0 +1,48 @@
+id: sigmahq-sigma-f99276ad-d122-4989-a09a-d00904a5f9d2
+name: Clear PowerShell History - PowerShell Module
+description: Detects keywords that could indicate clearing PowerShell history
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/hook-s3c/7363a856c3cdbadeb71085147f042c1a
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_1a_payload:
+    Payload|contains:
+    - del
+    - Remove-Item
+    - rm
+  selection_1b_payload:
+    Payload|contains: (Get-PSReadlineOption).HistorySavePath
+  selection_payload_2:
+    Payload|contains|all:
+    - Set-PSReadlineOption
+    - –HistorySaveStyle
+    - SaveNothing
+  selection_payload_3:
+    Payload|contains|all:
+    - Set-PSReadlineOption
+    - -HistorySaveStyle
+    - SaveNothing
+  condition: 1 of selection_payload_* or all of selection_1*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f99276ad-d122-4989-a09a-d00904a5f9d2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_clear_powershell_history.yml
+falsepositives:
+- Legitimate PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

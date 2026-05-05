@@ -1,0 +1,50 @@
+id: splunk-security-content-85096389-a443-42df-b89d-200efbb1b560
+name: AWS S3 Exfiltration Behavior Identified
+description: The following analytic identifies potential AWS S3 exfiltration behavior
+  by correlating multiple risk events related to Collection and Exfiltration techniques.
+  It leverages risk events from AWS sources, focusing on instances where two or more
+  unique analytics and distinct MITRE ATT&CK IDs are triggered for a specific risk
+  object. This activity is significant as it may indicate an ongoing data exfiltration
+  attempt, which is critical for security teams to monitor. If confirmed malicious,
+  this could lead to unauthorized access and theft of sensitive information, compromising
+  the organization's data integrity and confidentiality.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1537
+  categories:
+  - cloud
+references:
+- https://labs.nettitude.com/blog/how-to-exfiltrate-aws-ec2-data/
+- https://stratus-red-team.cloud/attack-techniques/AWS/aws.exfiltration.ec2-share-ebs-snapshot/
+- https://hackingthe.cloud/aws/enumeration/loot_public_ebs_snapshots/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count values(All_Risk.risk_message) as risk_message\
+    \ FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.annotations.mitre_attack.mitre_tactic\
+    \ = \"collection\"\n    OR\n    All_Risk.annotations.mitre_attack.mitre_tactic\
+    \ = \"exfiltration\" source = *AWS*\n  BY All_Risk.risk_object\n| `drop_dm_object_name(All_Risk)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 2 and mitre_tactic_id_count>=2\n| `aws_s3_exfiltration_behavior_identified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 85096389-a443-42df-b89d-200efbb1b560
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_s3_exfiltration_behavior_identified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-e09aed7a-09e0-4c9a-90dd-f0d52507347e
+name: Windows WebDAV User Agent
+description: Detects WebDav DownloadCradle
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://mgreen27.github.io/posts/2018/04/02/DownloadCradle.html
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent|startswith: Microsoft-WebDAV-MiniRedir/
+    cs-method: GET
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e09aed7a-09e0-4c9a-90dd-f0d52507347e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_downloadcradle_webdav.yml
+falsepositives:
+- Administrative scripts that download files from the Internet
+- Administrative scripts that retrieve certain website contents
+- Legitimate WebDAV administration
+notes:
+  quarantine_reason: 'upstream status: test'

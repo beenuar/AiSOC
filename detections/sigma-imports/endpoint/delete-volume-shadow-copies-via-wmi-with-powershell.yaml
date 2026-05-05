@@ -1,0 +1,37 @@
+id: sigmahq-sigma-87df9ee1-5416-453a-8a08-e8d4a51e9ce1
+name: Delete Volume Shadow Copies Via WMI With PowerShell
+description: Shadow Copies deletion using operating systems utilities via PowerShell
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1490/T1490.md
+- https://www.fortinet.com/blog/threat-research/stomping-shadow-copies-a-second-look-into-deletion-methods
+logsource:
+  product: windows
+  category: ps_classic_start
+detection:
+  selection:
+    Data|contains|all:
+    - Get-WmiObject
+    - Win32_ShadowCopy
+    Data|contains:
+    - Delete()
+    - Remove-WmiObject
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 87df9ee1-5416-453a-8a08-e8d4a51e9ce1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_delete_volume_shadow_copies.yml
+falsepositives:
+- Legitimate Administrator deletes Shadow Copies using operating systems utilities
+  for legitimate reason

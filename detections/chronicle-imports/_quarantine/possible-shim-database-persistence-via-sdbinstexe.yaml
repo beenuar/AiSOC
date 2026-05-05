@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-possible-shim-database-persistence-via-sdbinstexe
+name: possible_shim_database_persistence_via_sdbinstexe
+description: possible_shim_database_persistence_via_sdbinstexe
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_shim_database_persistence_via_sdbinstexe {\n meta:\n\
+    \    author = \"Markus Neis, Den Iuzvyk\"\n    description = \"Detects installation\
+    \ of a new shim using sdbinst.exe. A shim can be used to load malicious DLLs into\
+    \ applications.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/BUTmMgSdr90c\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/01/16\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"persistence, t1138\"\n\n  events:\n\
+    (re.regex($selection.target.process.file.full_path, `.*\\\\sdbinst\\.exe`) and\
+    \ ($selection.target.process.command_line = \"-q\" or $selection.target.process.command_line\
+    \ = \"-p\") and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: possible_shim_database_persistence_via_sdbinstexe
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_shim_database_persistence_via_sdbinstexe
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/possible_shim_database_persistence_via_sdbinst_exe.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

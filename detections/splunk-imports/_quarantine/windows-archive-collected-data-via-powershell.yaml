@@ -1,0 +1,39 @@
+id: splunk-security-content-74c5a3b0-27a7-463c-9d00-1a5bb12cb7b5
+name: Windows Archive Collected Data via Powershell
+description: The following analytic detects the use of PowerShell scripts to archive
+  files into a temporary folder. It leverages PowerShell Script Block Logging, specifically
+  monitoring for the `Compress-Archive` command targeting the `Temp` directory. This
+  activity is significant as it may indicate an adversary's attempt to collect and
+  compress data for exfiltration. If confirmed malicious, this behavior could lead
+  to unauthorized data access and exfiltration, posing a severe risk to sensitive
+  information and overall network security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1560
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`powershell` EventCode=4104 ScriptBlockText = "*Compress-Archive*"  ScriptBlockText
+    = "*\\Temp\\*" | fillnull | stats count min(_time) as firstTime max(_time) as
+    lastTime by dest signature signature_id user_id vendor_product EventID Guid Opcode
+    Name Path ProcessID ScriptBlockId ScriptBlockText | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_archive_collected_data_via_powershell_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 74c5a3b0-27a7-463c-9d00-1a5bb12cb7b5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_archive_collected_data_via_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,33 @@
+id: sigmahq-sigma-b9e1f193-d236-4451-aaae-2f3d2102120d
+name: Cisco Sniffing
+description: Show when a monitor or a span/rspan is setup or modified
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1040
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - monitor capture point
+  - set span
+  - set rspan
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b9e1f193-d236-4451-aaae-2f3d2102120d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_net_sniff.yml
+falsepositives:
+- Admins may setup new or modify old spans, or use a monitor for troubleshooting
+notes:
+  quarantine_reason: 'upstream status: test'

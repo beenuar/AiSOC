@@ -1,0 +1,54 @@
+id: splunk-security-content-23e5b797-378d-45d6-ab3e-d034ca12a99b
+name: LLM Model File Creation
+description: 'Detects the creation of Large Language Model (LLM) files on Windows
+  endpoints by monitoring file creation events for specific model file formats and
+  extensions commonly used by local AI frameworks.
+
+  This detection identifies potential shadow AI deployments, unauthorized model downloads,
+  and rogue LLM infrastructure by detecting file creation patterns associated with
+  quantized models (.gguf, .ggml), safetensors model format files, and Ollama Modelfiles.
+
+  These file types are characteristic of local inference frameworks such as Ollama,
+  llama.cpp, GPT4All, LM Studio, and similar tools that enable running LLMs locally
+  without cloud dependencies.
+
+  Organizations can use this detection to identify potential data exfiltration risks,
+  policy violations related to unapproved AI usage, and security blind spots created
+  by decentralized AI deployments that bypass enterprise governance and monitoring.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon
+- https://www.ibm.com/think/topics/shadow-ai
+- https://www.splunk.com/en_us/blog/artificial-intelligence/splunk-technology-add-on-for-ollama.html
+- https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count\n    min(_time) as\
+    \ firstTime\n    max(_time) as lastTime\nfrom datamodel=Endpoint.Filesystem\n\
+    where Filesystem.file_name IN (\n    \"*.gguf*\",\n    \"*ggml*\",\n    \"*Modelfile*\"\
+    ,\n    \"*safetensors*\"\n)\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\
+    \ Filesystem.file_create_time\n   Filesystem.file_hash Filesystem.file_modify_time\
+    \ Filesystem.file_name Filesystem.file_path\n   Filesystem.file_acl Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id\n   Filesystem.user Filesystem.vendor_product\n\
+    | `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(firstTime)`\n|\
+    \ `security_content_ctime(lastTime)`\n| `llm_model_file_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 23e5b797-378d-45d6-ab3e-d034ca12a99b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/llm_model_file_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-ed5d72a6-f8f4-479d-ba79-02f6a80d7471
+name: Potential LethalHTA Technique Execution
+description: Detects potential LethalHTA technique where the "mshta.exe" is spawned
+  by an "svchost.exe" process
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://codewhitesec.blogspot.com/2018/07/lethalhta.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \svchost.exe
+    Image|endswith: \mshta.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ed5d72a6-f8f4-479d-ba79-02f6a80d7471
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mshta_lethalhta_technique.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

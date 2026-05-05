@@ -1,0 +1,51 @@
+id: sigmahq-sigma-746c86fb-ccda-4816-8997-01386263acc4
+name: Container Residence Discovery Via Proc Virtual FS
+description: Detects potential container discovery via listing of certain kernel features
+  in the "/proc" virtual filesystem
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://blog.skyplabs.net/posts/container-detection/
+- https://stackoverflow.com/questions/20010199/how-to-determine-if-a-process-runs-inside-lxc-docker
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_tools:
+    Image|endswith:
+    - awk
+    - /cat
+    - grep
+    - /head
+    - /less
+    - /more
+    - /nl
+    - /tail
+  selection_procfs_kthreadd:
+    CommandLine|contains: /proc/2/
+  selection_procfs_target:
+    CommandLine|contains: /proc/
+    CommandLine|endswith:
+    - /cgroup
+    - /sched
+  condition: selection_tools and 1 of selection_procfs_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 746c86fb-ccda-4816-8997-01386263acc4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_container_residence_discovery.yml
+falsepositives:
+- Legitimate system administrator usage of these commands
+- Some container tools or deployments may use these techniques natively to determine
+  how they proceed with execution, and will need to be filtered
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b236190c-1c61-41e9-84b3-3fe03f6d76b0
+name: Potential Regsvr32 Commandline Flag Anomaly
+description: Detects a potential command line flag anomaly related to "regsvr32" in
+  which the "/i" flag is used without the "/n" which should be uncommon.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  categories:
+  - endpoint
+references:
+- https://twitter.com/sbousseaden/status/1282441816986484737?s=12
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \regsvr32.exe
+    CommandLine|contains|windash: ' -i:'
+  filter_main_flag:
+    CommandLine|contains|windash: ' -n '
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b236190c-1c61-41e9-84b3-3fe03f6d76b0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_regsvr32_flags_anomaly.yml
+falsepositives:
+- Administrator typo might cause some false positives
+notes:
+  quarantine_reason: 'upstream status: test'

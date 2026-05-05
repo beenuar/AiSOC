@@ -1,0 +1,38 @@
+id: sigmahq-sigma-a70dcb37-3bee-453a-99df-d0c683151be6
+name: Firewall Rule Update Via Netsh.EXE
+description: Detects execution of netsh with the "advfirewall" and the "set" option
+  in order to set new values for properties of a existing rule
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://ss64.com/nt/netsh.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \netsh.exe
+  - OriginalFileName: netsh.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' firewall '
+    - ' set '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a70dcb37-3bee-453a-99df-d0c683151be6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_netsh_fw_set_rule.yml
+falsepositives:
+- Legitimate administration activity
+- Software installations and removal
+notes:
+  quarantine_reason: 'upstream status: test'

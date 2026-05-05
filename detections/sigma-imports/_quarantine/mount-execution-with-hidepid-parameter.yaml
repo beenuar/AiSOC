@@ -1,0 +1,38 @@
+id: sigmahq-sigma-ec52985a-d024-41e3-8ff6-14169039a0b3
+name: Mount Execution With Hidepid Parameter
+description: Detects execution of the "mount" command with "hidepid" parameter to
+  make invisible processes to other users from the system
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564
+  categories:
+  - endpoint
+references:
+- https://blogs.blackberry.com/
+- https://www.cyberciti.biz/faq/linux-hide-processes-from-other-users/
+- https://twitter.com/Joseliyo_Jstnk/status/1620131033474822144
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /mount
+    CommandLine|contains|all:
+    - hidepid=2
+    - ' -o '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ec52985a-d024-41e3-8ff6-14169039a0b3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_mount_hidepid.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

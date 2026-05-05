@@ -1,0 +1,41 @@
+id: sigmahq-sigma-db014773-7375-4f4e-b83b-133337c0ffee
+name: AWS IAM S3Browser Templated S3 Bucket Policy Creation
+description: Detects S3 browser utility creating Inline IAM policy containing default
+  S3 bucket name placeholder value of "<YOUR-BUCKET-NAME>".
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.009
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://permiso.io/blog/s/unmasking-guivil-new-cloud-threat-actor
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName: PutUserPolicy
+    userAgent|contains: S3 Browser
+    requestParameters|contains|all:
+    - '"arn:aws:s3:::<YOUR-BUCKET-NAME>/*"'
+    - '"s3:GetObject"'
+    - '"Allow"'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db014773-7375-4f4e-b83b-133337c0ffee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_iam_s3browser_templated_s3_bucket_policy_creation.yml
+falsepositives:
+- Valid usage of S3 browser with accidental creation of default Inline IAM policy
+  without changing default S3 bucket name placeholder value
+notes:
+  quarantine_reason: 'upstream status: test'

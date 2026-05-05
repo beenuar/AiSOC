@@ -1,0 +1,37 @@
+id: sigmahq-sigma-42c575ea-e41e-41f1-b248-8093c3e82a28
+name: PsExec Service Installation
+description: Detects PsExec service installation and execution events
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.jpcert.or.jp/english/pub/sr/ir_research.html
+- https://jpcertcc.github.io/ToolAnalysisResultSheet
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_eid:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection_service:
+  - ServiceName: PSEXESVC
+  - ImagePath|endswith: \PSEXESVC.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 42c575ea-e41e-41f1-b248-8093c3e82a28
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_sysinternals_psexec.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,64 @@
+id: sigmahq-sigma-a7664b14-75fb-4a50-a223-cb9bc0afbacf
+name: HackTool - RemoteKrbRelay Execution
+description: Detects the use of RemoteKrbRelay, a Kerberos relaying tool via CommandLine
+  flags and PE metadata.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://github.com/CICADA8-Research/RemoteKrbRelay
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \RemoteKrbRelay.exe
+  - OriginalFileName: RemoteKrbRelay.exe
+  selection_cli_required:
+    CommandLine|contains|all:
+    - ' -clsid '
+    - ' -target '
+    - ' -victim '
+  selection_cli_attack_smb:
+    CommandLine|contains|all:
+    - '-smb '
+    - '--smbkeyword '
+    CommandLine|contains:
+    - interactive
+    - secrets
+    - service-add
+  selection_cli_attack_rbcd_main:
+    CommandLine|contains: '-rbcd '
+  selection_cli_attack_rbcd_options:
+    CommandLine|contains:
+    - '-cn '
+    - '--computername '
+  selection_cli_attack_changepass:
+    CommandLine|contains: '-chp '
+    CommandLine|contains|all:
+    - '-chpPass '
+    - '-chpUser '
+  selection_cli_attack_addgrpname:
+    CommandLine|contains|all:
+    - '-addgroupmember '
+    - '-group '
+    - '-groupuser '
+  condition: selection_img or selection_cli_required or all of selection_cli_attack_rbcd_*
+    or selection_cli_attack_changepass or selection_cli_attack_addgrpname or selection_cli_attack_smb
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a7664b14-75fb-4a50-a223-cb9bc0afbacf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_krbrelay_remote.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

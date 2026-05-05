@@ -1,0 +1,39 @@
+id: splunk-security-content-5f1d2ea7-eec0-4790-8b24-6875312ad492
+name: Linux Auditd File Permission Modification Via Chmod
+description: The following analytic detects suspicious file permission modifications
+  using the `chmod` command, which may indicate an attacker attempting to alter access
+  controls on critical files or directories. Such modifications can be used to grant
+  unauthorized users elevated privileges or to conceal malicious activities by restricting
+  legitimate access. By monitoring for unusual or unauthorized `chmod` usage, this
+  analytic helps identify potential security breaches, allowing security teams to
+  respond promptly to prevent privilege escalation, data tampering, or other unauthorized
+  actions on the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.002
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` proctitle=\"*chmod*\" AND proctitle IN (\"* 777 *\"\
+    , \"* 755 *\", \"*+*x*\", \"* 754 *\")\n  | rename host as dest\n  | stats count\
+    \ min(_time) as firstTime max(_time) as lastTime\n    BY proctitle dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_file_permission_modification_via_chmod_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5f1d2ea7-eec0-4790-8b24-6875312ad492
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_file_permission_modification_via_chmod.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

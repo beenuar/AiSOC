@@ -1,0 +1,39 @@
+id: sigmahq-sigma-8a670c6d-7189-4b1c-8017-a417ca84a086
+name: Suspicious SQL Error Messages
+description: Detects SQL error messages that indicate probing for an injection attack
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- http://www.sqlinjection.net/errors
+logsource:
+  category: application
+  product: sql
+  definition: 'Requirements: application error logs must be collected (with LOG_LEVEL
+    ERROR and above)'
+detection:
+  keywords:
+  - quoted string not properly terminated
+  - You have an error in your SQL syntax
+  - Unclosed quotation mark
+  - 'near "*": syntax error'
+  - SELECTs to the left and right of UNION do not have the same number of result columns
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8a670c6d-7189-4b1c-8017-a417ca84a086
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/sql/app_sqlinjection_errors.yml
+falsepositives:
+- A syntax error in MySQL also occurs in non-dynamic (safe) queries if there is an
+  empty in() clause, that may often be the case.
+notes:
+  quarantine_reason: 'upstream status: test'

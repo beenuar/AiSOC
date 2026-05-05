@@ -1,0 +1,43 @@
+id: splunk-security-content-6fe42e07-15b1-4caa-b547-7885666cb1bd
+name: Microsoft Intune Device Health Scripts
+description: Microsoft Intune device remediation scripts are a tool administrators
+  can use to remotely manage devices, this functionality can also be abused for SYSTEM
+  level code execution and lateral movement to intune managed devices. This detection
+  identifies when a new device health script has been added, updated or deleted.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1072
+  - T1021.007
+  - T1202
+  - T1105
+  categories:
+  - cloud
+references:
+- https://posts.specterops.io/death-from-above-lateral-movement-from-azure-to-on-prem-ad-d18cb3959d4d
+- https://securityintelligence.com/x-force/detecting-intune-lateral-movement/
+- https://posts.specterops.io/maestro-9ed71d38d546
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_activity` operationName="*DeviceHealthScript*" | rename
+    identity as user, properties.TargetObjectIds{} as TargetObjectId, properties.TargetDisplayNames{}
+    as TargetDisplayName, properties.Actor.IsDelegatedAdmin as user_isDelegatedAdmin
+    | rex field="operationName" "^(?P<action>\w+?)DeviceHealthScript" | replace "patch"
+    with "updated", "create" with "created", "delete", with "deleted", "assign", with
+    "assigned" IN action | table _time operationName action user user_type user_isDelegatedAdmin
+    TargetDisplayName TargetObjectId status tenantId correlationId | `microsoft_intune_device_health_scripts_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6fe42e07-15b1-4caa-b547-7885666cb1bd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/microsoft_intune_device_health_scripts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

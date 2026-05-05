@@ -1,0 +1,34 @@
+id: sigmahq-sigma-ea34fb97-e2c4-4afb-810f-785e4459b194
+name: Curl Usage on Linux
+description: Detects a curl process start on linux, which indicates a file download
+  from a remote location or a simple web request to a remote server
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/22/i/how-malicious-actors-abuse-native-linux-tools-in-their-attacks.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: /curl
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ea34fb97-e2c4-4afb-810f-785e4459b194
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_curl_usage.yml
+falsepositives:
+- Scripts created by developers and admins
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

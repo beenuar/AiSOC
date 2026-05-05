@@ -1,0 +1,43 @@
+id: splunk-security-content-ac3311f5-661d-4e99-bd1f-3ec665b05441
+name: Windows Mail Protocol In Non-Common Process Path
+description: The following analytic detects a Windows application establishing an
+  SMTP connection from a non-common installation path. It leverages Sysmon EventCode
+  3 to identify processes not typically associated with email clients (e.g., Thunderbird,
+  Outlook) making SMTP connections. This activity is significant as adversaries, including
+  malware like AgentTesla, use such connections for Command and Control (C2) communication
+  to exfiltrate stolen data. If confirmed malicious, this behavior could lead to unauthorized
+  data exfiltration, including sensitive information like desktop screenshots, browser
+  data, and system details, compromising the affected host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.003
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.agent_tesla
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=3\nNOT Image IN(\n  \"C:\\\\Program Files \\(x86\\\
+    )\\\\*\",\n  \"C:\\\\Program Files\\\\*\",\n  \"C:\\\\Windows\\\\System32\\\\\
+    *\",\n  \"C:\\\\Windows\\\\SysWOW64\\\\*\"\n)\n(\n  DestinationPortName=\"smtp\"\
+    \n  OR\n  DestinationPort IN (25, 587)\n)\n| stats count min(_time) as firstTime\n\
+    \              max(_time) as lastTime\nby action app dest dest_ip dest_port direction\
+    \ dvc protocol protocol_version\n   src src_ip src_port transport user vendor_product\
+    \ process_name\n   process_exec process_guid process_id\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_mail_protocol_in_non_common_process_path_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ac3311f5-661d-4e99-bd1f-3ec665b05441
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_mail_protocol_in_non_common_process_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

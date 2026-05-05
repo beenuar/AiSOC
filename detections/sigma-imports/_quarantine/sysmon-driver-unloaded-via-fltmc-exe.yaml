@@ -1,0 +1,39 @@
+id: sigmahq-sigma-4d7cda18-1b12-4e52-b45c-d28653210df8
+name: Sysmon Driver Unloaded Via Fltmc.EXE
+description: Detects possible Sysmon filter driver unloaded via fltmc.exe
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070
+  - T1685
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://www.darkoperator.com/blog/2018/10/5/operating-offensively-against-sysmon
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \fltMC.exe
+  - OriginalFileName: fltMC.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - unload
+    - sysmon
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4d7cda18-1b12-4e52-b45c-d28653210df8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_fltmc_unload_driver_sysmon.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: splunk-security-content-a9a1da02-8e27-4bf7-a348-f4389c9da487
+name: GetAdComputer with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-AdComputer`
+  PowerShell commandlet using PowerShell Script Block Logging (EventCode=4104). This
+  detection leverages script block text to identify when this commandlet is run. The
+  `Get-AdComputer` commandlet is significant as it can be used by adversaries to enumerate
+  all domain computers, aiding in situational awareness and Active Directory discovery.
+  If confirmed malicious, this activity could allow attackers to map the network,
+  identify targets, and plan further attacks, potentially leading to unauthorized
+  access and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+- https://docs.microsoft.com/en-us/powershell/module/activedirectory/get-adgroup?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-AdComputer*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `getadcomputer_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a9a1da02-8e27-4bf7-a348-f4389c9da487
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getadcomputer_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-a4694263-59a8-4608-a3a0-6f8d3a51664c
+name: Suspicious Key Manager Access
+description: Detects the invocation of the Stored User Names and Passwords dialogue
+  (Key Manager)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1555.004
+  categories:
+  - endpoint
+references:
+- https://twitter.com/NinjaParanoid/status/1516442028963659777
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  selection_cli:
+    CommandLine|contains|all:
+    - keymgr
+    - KRShowKeyMgr
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a4694263-59a8-4608-a3a0-6f8d3a51664c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_keymgr.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

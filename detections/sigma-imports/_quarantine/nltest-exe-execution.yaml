@@ -1,0 +1,35 @@
+id: sigmahq-sigma-903076ff-f442-475a-b667-4f246bcc203b
+name: Nltest.EXE Execution
+description: Detects nltest commands that can be used for information discovery
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1016
+  - T1018
+  - T1482
+  categories:
+  - endpoint
+references:
+- https://jpcertcc.github.io/ToolAnalysisResultSheet/details/nltest.htm
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \nltest.exe
+  - OriginalFileName: nltestrk.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 903076ff-f442-475a-b667-4f246bcc203b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_nltest_execution.yml
+falsepositives:
+- Legitimate administration activity
+notes:
+  quarantine_reason: 'upstream status: test'

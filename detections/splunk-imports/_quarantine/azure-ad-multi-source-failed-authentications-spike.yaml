@@ -1,0 +1,54 @@
+id: splunk-security-content-116e11a9-63ea-41eb-a66a-6a13bdc7d2c7
+name: Azure AD Multi-Source Failed Authentications Spike
+description: The following analytic detects potential distributed password spraying
+  attacks in an Azure AD environment. It identifies a spike in failed authentication
+  attempts across various user-and-IP combinations from multiple source IPs and countries,
+  using different user agents. This detection leverages Azure AD SignInLogs, focusing
+  on error code 50126 for failed authentications. This activity is significant as
+  it indicates an adversary's attempt to bypass security controls by distributing
+  login attempts. If confirmed malicious, this could lead to unauthorized access,
+  data breaches, privilege escalation, and lateral movement within the organization's
+  infrastructure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=*SignInLogs properties.status.errorCode=50126\
+    \ properties.authenticationDetails{}.succeeded=false\n  | rename properties.*\
+    \ as *\n  | bucket span=5m _time\n  | eval uniqueIPUserCombo = src_ip . \"-\"\
+    \ . user\n  | rename userAgent as user_agent\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime dc(uniqueIPUserCombo) as uniqueIpUserCombinations,\
+    \ dc(user) as uniqueUsers, dc(src_ip) as uniqueIPs, dc(user_agent) as uniqueUserAgents,\
+    \ dc(location.countryOrRegion) as uniqueCountries values(location.countryOrRegion)\
+    \ as countries  values(action) as action values(dest) as dest values(user) as\
+    \ user values(src) as src values(vendor_account) as vendor_account values(vendor_product)\
+    \ as vendor_product values(user_agent) as user_agent\n  | where uniqueIpUserCombinations\
+    \ > 20 AND uniqueUsers > 20 AND uniqueIPs > 20 AND uniqueUserAgents >= 1\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_multi_source_failed_authentications_spike_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 116e11a9-63ea-41eb-a66a-6a13bdc7d2c7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_multi_source_failed_authentications_spike.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

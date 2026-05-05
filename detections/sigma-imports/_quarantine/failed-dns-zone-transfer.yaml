@@ -1,0 +1,32 @@
+id: sigmahq-sigma-6d444368-6da1-43fe-b2fc-44202430480e
+name: Failed DNS Zone Transfer
+description: Detects when a DNS zone transfer failed.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1590.002
+  categories:
+  - endpoint
+references:
+- https://kb.eventtracker.com/evtpass/evtpages/EventId_6004_Microsoft-Windows-DNS-Server-Service_65410.asp
+logsource:
+  product: windows
+  service: dns-server
+detection:
+  selection:
+    EventID: 6004
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6d444368-6da1-43fe-b2fc-44202430480e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/dns_server/win_dns_server_failed_dns_zone_transfer.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: splunk-security-content-0b730470-5fe8-4b13-93a7-fe0ad014d0cc
+name: Windows Hidden Schedule Task Settings
+description: The following analytic detects the creation of hidden scheduled tasks
+  on Windows systems, which are not visible in the UI. It leverages Windows Security
+  EventCode 4698 to identify tasks where the 'Hidden' setting is enabled. This behavior
+  is significant as it may indicate malware activity, such as Industroyer2, or the
+  use of living-off-the-land binaries (LOLBINs) to download additional payloads. If
+  confirmed malicious, this activity could allow attackers to execute code stealthily,
+  maintain persistence, or further compromise the system by downloading additional
+  malicious payloads.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053
+  categories:
+  - endpoint
+references:
+- https://www.welivesecurity.com/2022/04/12/industroyer2-industroyer-reloaded/
+- https://cert.gov.ua/article/39518
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode=4698\nTaskContent = \"*&lt;Hidden&gt;true&lt;/Hidden&gt;*\"\
+    \n| stats count min(_time) as firstTime max(_time) as lastTime\n  by TaskName\
+    \ TaskContent action signature status dest\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_hidden_schedule_task_settings_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0b730470-5fe8-4b13-93a7-fe0ad014d0cc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_hidden_schedule_task_settings.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

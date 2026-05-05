@@ -1,0 +1,42 @@
+id: splunk-security-content-65711630-f9bf-11eb-8d72-acde48001122
+name: Powershell Execute COM Object
+description: The following analytic detects the execution of a COM CLSID through PowerShell.
+  It leverages EventCode 4104 and searches for specific script block text indicating
+  the creation of a COM object. This activity is significant as it is commonly used
+  by adversaries and malware, such as the Conti ransomware, to execute commands, potentially
+  for privilege escalation or bypassing User Account Control (UAC). If confirmed malicious,
+  this technique could allow attackers to gain elevated privileges or persist within
+  the environment, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1546.015
+  categories:
+  - endpoint
+references:
+- https://threadreaderapp.com/thread/1423361119926816776.html
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*CreateInstance([type]::GetTypeFromCLSID*\"\
+    \n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `powershell_execute_com_object_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 65711630-f9bf-11eb-8d72-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_execute_com_object.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

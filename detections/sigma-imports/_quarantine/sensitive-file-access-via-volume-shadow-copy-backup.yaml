@@ -1,0 +1,40 @@
+id: sigmahq-sigma-f57f8d16-1f39-4dcb-a604-6c73d9b54b3d
+name: Sensitive File Access Via Volume Shadow Copy Backup
+description: Detects a command that accesses the VolumeShadowCopy in order to extract
+  sensitive files such as the Security or SAM registry hives or the AD database (ntds.dit)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://twitter.com/vxunderground/status/1423336151860002816?s=20
+- https://www.virustotal.com/gui/file/03e9b8c2e86d6db450e5eceec057d7e369ee2389b9daecaf06331a95410aa5f8/detection
+- https://pentestlab.blog/2018/07/04/dumping-domain-password-hashes/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_1:
+    CommandLine|contains: \\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy
+  selection_2:
+    CommandLine|contains:
+    - \\NTDS.dit
+    - \\SYSTEM
+    - \\SECURITY
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f57f8d16-1f39-4dcb-a604-6c73d9b54b3d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_sensitive_file_access_shadowcopy.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

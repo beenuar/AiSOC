@@ -1,0 +1,31 @@
+id: sigmahq-sigma-00eee2a5-fdb0-4746-a21d-e43fbdea5681
+name: Linux Doas Conf File Creation
+description: Detects the creation of doas.conf file in linux host platform.
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://research.splunk.com/endpoint/linux_doas_conf_file_creation/
+- https://www.makeuseof.com/how-to-install-and-use-doas/
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: /etc/doas.conf
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 00eee2a5-fdb0-4746-a21d-e43fbdea5681
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/file_event/file_event_lnx_doas_conf_creation.yml
+falsepositives:
+- Unlikely

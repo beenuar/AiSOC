@@ -1,0 +1,36 @@
+id: sigmahq-sigma-d7329412-13bd-44ba-a072-3387f804a106
+name: Guest Account Enabled Via Sysadminctl
+description: Detects attempts to enable the guest account using the sysadminctl utility
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1078.001
+  categories:
+  - endpoint
+references:
+- https://ss64.com/osx/sysadminctl.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /sysadminctl
+    CommandLine|contains|all:
+    - ' -guestAccount'
+    - ' on'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7329412-13bd-44ba-a072-3387f804a106
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_sysadminctl_enable_guest_account.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

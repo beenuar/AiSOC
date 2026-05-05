@@ -1,0 +1,31 @@
+id: sigmahq-sigma-62fff148-278d-497e-8ecd-ad6083231a35
+name: OneLogin User Assumed Another User
+description: Detects when an user assumed another user account.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://developers.onelogin.com/api-docs/1/events/event-resource
+logsource:
+  product: onelogin
+  service: onelogin.events
+detection:
+  selection:
+    event_type_id: 3
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 62fff148-278d-497e-8ecd-ad6083231a35
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/onelogin/onelogin_assumed_another_user.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

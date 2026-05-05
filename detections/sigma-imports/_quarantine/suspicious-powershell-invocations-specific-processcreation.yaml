@@ -1,0 +1,77 @@
+id: sigmahq-sigma-536e2947-3729-478c-9903-745aaffe60d2
+name: Suspicious PowerShell Invocations - Specific - ProcessCreation
+description: Detects suspicious PowerShell invocation command parameters
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_convert_b64:
+    CommandLine|contains|all:
+    - -nop
+    - ' -w '
+    - hidden
+    - ' -c '
+    - '[Convert]::FromBase64String'
+  selection_iex:
+    CommandLine|contains|all:
+    - ' -w '
+    - hidden
+    - -noni
+    - -nop
+    - ' -c '
+    - iex
+    - New-Object
+  selection_enc:
+    CommandLine|contains|all:
+    - ' -w '
+    - hidden
+    - -ep
+    - bypass
+    - -Enc
+  selection_reg:
+    CommandLine|contains|all:
+    - powershell
+    - reg
+    - add
+    - \software\
+  selection_webclient:
+    CommandLine|contains|all:
+    - bypass
+    - -noprofile
+    - -windowstyle
+    - hidden
+    - new-object
+    - system.net.webclient
+    - .download
+  selection_iex_webclient:
+    CommandLine|contains|all:
+    - iex
+    - New-Object
+    - Net.WebClient
+    - .Download
+  filter_chocolatey:
+    CommandLine|contains:
+    - (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1
+    - Write-ChocolateyWarning
+  condition: 1 of selection_* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 536e2947-3729-478c-9903-745aaffe60d2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_invocation_specific.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

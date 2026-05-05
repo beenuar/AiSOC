@@ -1,0 +1,37 @@
+id: sigmahq-sigma-50e54b8d-ad73-43f8-96a1-5191685b17a4
+name: Silenttrinity Stager Msbuild Activity
+description: Detects a possible remote connections to Silenttrinity c2
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1127.001
+  categories:
+  - endpoint
+references:
+- https://www.blackhillsinfosec.com/my-first-joyride-with-silenttrinity/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \msbuild.exe
+  filter:
+    DestinationPort:
+    - 80
+    - 443
+    Initiated: 'true'
+  condition: selection and filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 50e54b8d-ad73-43f8-96a1-5191685b17a4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_silenttrinity_stager_msbuild_activity.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

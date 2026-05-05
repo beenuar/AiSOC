@@ -1,0 +1,34 @@
+id: sigmahq-sigma-9f308120-69ed-4506-abde-ac6da81f4310
+name: Okta Network Zone Deactivated or Deleted
+description: Detects when an Network Zone is Deactivated or Deleted.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType:
+    - zone.deactivate
+    - zone.delete
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9f308120-69ed-4506-abde-ac6da81f4310
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_network_zone_deactivated_or_deleted.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-e7bd1cfa-b446-4c88-8afb-403bcd79e3fa
+name: System Network Discovery - Linux
+description: Detects enumeration of local network configuration
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1016
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1016/T1016.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img:
+    Image|endswith:
+    - /firewall-cmd
+    - /ufw
+    - /iptables
+    - /netstat
+    - /ss
+    - /ip
+    - /ifconfig
+    - /systemd-resolve
+    - /route
+  selection_cli:
+    CommandLine|contains: /etc/resolv.conf
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e7bd1cfa-b446-4c88-8afb-403bcd79e3fa
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_system_network_discovery.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

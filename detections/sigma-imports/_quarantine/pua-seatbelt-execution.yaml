@@ -1,0 +1,62 @@
+id: sigmahq-sigma-38646daa-e78f-4ace-9de0-55547b2d30da
+name: PUA - Seatbelt Execution
+description: Detects the execution of the PUA/Recon tool Seatbelt via PE information
+  of command line parameters
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1526
+  - T1087
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/GhostPack/Seatbelt
+- https://www.bluetangle.dev/2022/08/fastening-seatbelt-on-threat-hunting.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \Seatbelt.exe
+  - OriginalFileName: Seatbelt.exe
+  - Description: Seatbelt
+  - CommandLine|contains:
+    - ' DpapiMasterKeys'
+    - ' InterestingProcesses'
+    - ' InterestingFiles'
+    - ' CertificateThumbprints'
+    - ' ChromiumBookmarks'
+    - ' ChromiumHistory'
+    - ' ChromiumPresence'
+    - ' CloudCredentials'
+    - ' CredEnum'
+    - ' CredGuard'
+    - ' FirefoxHistory'
+    - ' ProcessCreationEvents'
+  selection_group_list:
+    CommandLine|contains:
+    - ' -group=misc'
+    - ' -group=remote'
+    - ' -group=chromium'
+    - ' -group=slack'
+    - ' -group=system'
+    - ' -group=user'
+    - ' -group=all'
+  selection_group_output:
+    CommandLine|contains: ' -outputfile='
+  condition: selection_img or all of selection_group_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 38646daa-e78f-4ace-9de0-55547b2d30da
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_seatbelt.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: sigmahq-sigma-074e0ded-6ced-4ebd-8b4d-53f55908119d
+name: AWL Bypass with Winrm.vbs and Malicious WsmPty.xsl/WsmTxt.xsl
+description: Detects execution of attacker-controlled WsmPty.xsl or WsmTxt.xsl via
+  winrm.vbs and copied cscript.exe (can be renamed)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1216
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/application-whitelisting-bypass-and-arbitrary-unsigned-code-execution-technique-in-winrm-vbs-c8c24fb40404
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  contains_format_pretty_arg:
+    CommandLine|contains:
+    - format:pretty
+    - format:"pretty"
+    - format:"text"
+    - format:text
+  image_from_system_folder:
+    Image|startswith:
+    - C:\Windows\System32\
+    - C:\Windows\SysWOW64\
+  contains_winrm:
+    CommandLine|contains: winrm
+  condition: contains_winrm and (contains_format_pretty_arg and not image_from_system_folder)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 074e0ded-6ced-4ebd-8b4d-53f55908119d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrm_awl_bypass.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

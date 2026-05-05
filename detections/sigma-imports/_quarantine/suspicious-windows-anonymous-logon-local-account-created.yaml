@@ -1,0 +1,38 @@
+id: sigmahq-sigma-1bbf25b9-8038-4154-a50b-118f2a32be27
+name: Suspicious Windows ANONYMOUS LOGON Local Account Created
+description: Detects the creation of suspicious accounts similar to ANONYMOUS LOGON,
+  such as using additional spaces. Created as an covering detection for exclusion
+  of Logon Type 3 from ANONYMOUS LOGON accounts.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1136.001
+  - T1136.002
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1189469425482829824
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4720
+    SamAccountName|contains|all:
+    - ANONYMOUS
+    - LOGON
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1bbf25b9-8038-4154-a50b-118f2a32be27
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_local_anon_logon_created.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,33 @@
+id: sigmahq-sigma-e6fe26ee-d063-4f5b-b007-39e90aaf50e3
+name: Potential Persistence Via AutodialDLL
+description: Detects change the the "AutodialDLL" key which could be used as a persistence
+  method to load custom DLL via the "ws2_32" library
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2015/01/13/beyond-good-ol-run-key-part-24/
+- https://persistence-info.github.io/Data/autodialdll.html
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Services\WinSock2\Parameters\AutodialDLL
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e6fe26ee-d063-4f5b-b007-39e90aaf50e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_autodial_dll.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

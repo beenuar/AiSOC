@@ -1,0 +1,41 @@
+id: splunk-security-content-69934363-e1dd-4c49-8651-9d7663dd4d2f
+name: Windows Account Discovery for Sam Account Name
+description: The following analytic detects the execution of the PowerView PowerShell
+  cmdlet Get-NetUser, specifically querying for "samaccountname" and "pwdlastset"
+  attributes. It leverages Event ID 4104 from PowerShell Script Block Logging to identify
+  this activity. This behavior is significant as it may indicate an attempt to gather
+  user account information from Active Directory, which is a common reconnaissance
+  step in lateral movement or privilege escalation attacks. If confirmed malicious,
+  this activity could allow an attacker to map out user accounts, potentially leading
+  to further exploitation and unauthorized access within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  ScriptBlockText = \"*Get-NetUser*\" ScriptBlockText\
+    \ IN (\"*samaccountname*\", \"*pwdlastset*\")\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_account_discovery_for_sam_account_name_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 69934363-e1dd-4c49-8651-9d7663dd4d2f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_account_discovery_for_sam_account_name.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

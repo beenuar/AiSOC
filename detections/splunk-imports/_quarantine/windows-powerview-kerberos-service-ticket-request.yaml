@@ -1,0 +1,45 @@
+id: splunk-security-content-970455a1-4ac2-47e1-a9a5-9e75443ddcb9
+name: Windows PowerView Kerberos Service Ticket Request
+description: The following analytic detects the execution of the `Get-DomainSPNTicket`
+  commandlet, part of the PowerView tool, by leveraging PowerShell Script Block Logging
+  (EventCode=4104). This commandlet requests Kerberos service tickets for specified
+  service principal names (SPNs). Monitoring this activity is crucial as it can indicate
+  attempts to perform Kerberoasting, a technique used to extract SPN account passwords
+  via cracking tools like hashcat. If confirmed malicious, this activity could allow
+  attackers to gain unauthorized access to sensitive accounts, potentially leading
+  to privilege escalation and further network compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-DomainSPNTicket/
+- https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/kerberoast
+- https://github.com/PowerShellMafia/PowerSploit/blob/master/Recon/PowerView.ps1
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/t1208-kerberoasting
+- https://attack.mitre.org/techniques/T1558/003
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText=*Get-DomainSPNTicket*\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powerview_kerberos_service_ticket_request_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 970455a1-4ac2-47e1-a9a5-9e75443ddcb9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powerview_kerberos_service_ticket_request.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

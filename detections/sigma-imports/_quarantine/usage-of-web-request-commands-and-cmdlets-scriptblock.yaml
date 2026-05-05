@@ -1,0 +1,47 @@
+id: sigmahq-sigma-1139d2e2-84b1-4226-b445-354492eba8ba
+name: Usage Of Web Request Commands And Cmdlets - ScriptBlock
+description: Detects the use of various web request commands with commandline tools
+  and Windows PowerShell cmdlets (including aliases) via PowerShell scriptblock logs
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://4sysops.com/archives/use-powershell-to-download-a-file-with-http-https-and-ftp/
+- https://blog.jourdant.me/post/3-ways-to-download-files-with-powershell
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - '[System.Net.WebRequest]::create'
+    - 'curl '
+    - Invoke-RestMethod
+    - Invoke-WebRequest
+    - ' irm '
+    - 'iwr '
+    - Resume-BitsTransfer
+    - Start-BitsTransfer
+    - 'wget '
+    - WinHttp.WinHttpRequest
+  filter:
+    Path|startswith: C:\Packages\Plugins\Microsoft.GuestConfiguration.ConfigurationforWindows\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1139d2e2-84b1-4226-b445-354492eba8ba
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_web_request_cmd_and_cmdlets.yml
+falsepositives:
+- Use of Get-Command and Get-Help modules to reference Invoke-WebRequest and Start-BitsTransfer.
+notes:
+  quarantine_reason: 'upstream status: test'

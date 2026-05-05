@@ -1,0 +1,42 @@
+id: splunk-security-content-fabd364e-04f3-11ec-b34b-acde48001122
+name: GetWmiObject DS User with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-WmiObject` cmdlet
+  with the `DS_User` class parameter via PowerShell Script Block Logging (EventCode=4104).
+  It leverages logs to identify attempts to query all domain users using WMI. This
+  activity is significant as it may indicate an adversary or Red Team operation attempting
+  to enumerate domain users for situational awareness and Active Directory discovery.
+  If confirmed malicious, this behavior could lead to further reconnaissance, enabling
+  attackers to map out the network and identify potential targets for privilege escalation
+  or lateral movement.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://www.blackhillsinfosec.com/red-blue-purple/
+- https://docs.microsoft.com/en-us/windows/win32/wmisdk/describing-the-ldap-namespace
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`powershell` EventCode=4104 ScriptBlockText = "*get-wmiobject*" ScriptBlockText
+    = "*ds_user*" ScriptBlockText = "*-namespace*" ScriptBlockText = "*root\\directory\\ldap*"
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by dest
+    signature signature_id user_id vendor_product EventID Guid Opcode Name Path ProcessID
+    ScriptBlockId ScriptBlockText | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `getwmiobject_ds_user_with_powershell_script_block_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: fabd364e-04f3-11ec-b34b-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getwmiobject_ds_user_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

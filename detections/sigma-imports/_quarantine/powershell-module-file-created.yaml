@@ -1,0 +1,38 @@
+id: sigmahq-sigma-e36941d0-c0f0-443f-bc6f-cb2952eb69ea
+name: PowerShell Module File Created
+description: Detects the creation of a new PowerShell module ".psm1", ".psd1", ".dll",
+  ".ps1", etc.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://learn.microsoft.com/en-us/powershell/scripting/developer/module/understanding-a-windows-powershell-module?view=powershell-7.3
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    TargetFilename|contains:
+    - \WindowsPowerShell\Modules\
+    - \PowerShell\7\Modules\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e36941d0-c0f0-443f-bc6f-cb2952eb69ea
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_powershell_module_creation.yml
+falsepositives:
+- Likely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,56 @@
+id: splunk-security-content-0edd5112-56c9-11ec-b990-acde48001122
+name: Suspicious Linux Discovery Commands
+description: The following analytic detects the execution of suspicious bash commands
+  commonly used in scripts like AutoSUID, LinEnum, and LinPeas for system discovery
+  on a Linux host. It leverages Endpoint Detection and Response (EDR) data, specifically
+  looking for a high number of distinct commands executed within a short time frame.
+  This activity is significant as it often precedes privilege escalation or other
+  malicious actions. If confirmed malicious, an attacker could gain detailed system
+  information, identify vulnerabilities, and potentially escalate privileges, posing
+  a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/matrices/enterprise/linux/
+- https://attack.mitre.org/techniques/T1059/004/
+- https://github.com/IvanGlinkin/AutoSUID
+- https://github.com/carlospolop/PEASS-ng/tree/master/linPEAS
+- https://github.com/rebootuser/LinEnum
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(Processes.action) as action values(Processes.original_file_name)\
+    \ as original_file_name values(Processes.parent_process) as parent_process values(Processes.parent_process_exec)\
+    \ as parent_process_exec values(Processes.parent_process_guid) as parent_process_guid\
+    \ values(Processes.parent_process_id) as parent_process_id values(Processes.parent_process_name)\
+    \ as parent_process_name values(Processes.parent_process_path) as parent_process_path\
+    \ values(Processes.process) as process values(Processes.process_exec) as process_exec\
+    \ values(Processes.process_guid) as process_guid values(Processes.process_hash)\
+    \ as process_hash values(Processes.process_id) as process_id values(Processes.process_integrity_level)\
+    \ as process_integrity_level values(Processes.process_path) as process_path values(Processes.user_id)\
+    \ as user_id values(Processes.vendor_product) as vendor_product dc(Processes.process)\
+    \ as distinct_commands dc(Processes.process_name) as distinct_process_names FROM\
+    \ datamodel=Endpoint.Processes\n  WHERE [\n| inputlookup linux_tool_discovery_process\n\
+    | rename process as Processes.process\n| table Processes.process] by _time span=5m\
+    \ Processes.user Processes.dest\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| where distinct_commands > 40 AND distinct_process_names\
+    \ > 3\n| `suspicious_linux_discovery_commands_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0edd5112-56c9-11ec-b990-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_linux_discovery_commands.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

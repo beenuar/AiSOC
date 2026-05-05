@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b237c54b-0f15-4612-a819-44b735e0de27
+name: A Security-Enabled Global Group Was Deleted
+description: Detects activity when a security-enabled global group is deleted
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://www.cisecurity.org/controls/cis-controls-list/
+- https://www.pcisecuritystandards.org/documents/PCI_DSS_v3-2-1.pdf
+- https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.04162018.pdf
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=4730
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=634
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID:
+    - 4730
+    - 634
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b237c54b-0f15-4612-a819-44b735e0de27
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_security_enabled_global_group_deleted.yml
+falsepositives:
+- Unknown

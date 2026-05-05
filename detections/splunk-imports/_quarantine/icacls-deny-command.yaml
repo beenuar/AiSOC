@@ -1,0 +1,69 @@
+id: splunk-security-content-cf8d753e-a8fe-11eb-8f58-acde48001122
+name: Icacls Deny Command
+description: 'The following analytic detects instances where an adversary modifies
+
+  security permissions of a file or directory using commands like "icacls.exe", "cacls.exe",
+
+  or "xcacls.exe" with deny options. It leverages data from Endpoint Detection and
+
+  Response (EDR) agents, focusing on process names and command-line executions. This
+
+  activity is significant as it is commonly used by Advanced Persistent Threats (APTs)
+
+  and coinminer scripts to evade detection and impede access to critical files. If
+
+  confirmed malicious, this could allow attackers to maintain persistence and hinder
+
+  incident response efforts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)
+
+    as lastTime from datamodel=Endpoint.Processes where
+
+    Processes.process_name IN ( "icacls.exe", "cacls.exe", "xcacls.exe") AND
+
+    Processes.process IN ("*/deny*", "*/d:*", "*/d ")
+
+    by Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec
+
+    Processes.process_guid Processes.process_hash Processes.process_id Processes.process_integrity_level
+
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product
+
+    | `drop_dm_object_name(Processes)`
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `icacls_deny_command_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: cf8d753e-a8fe-11eb-8f58-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/icacls_deny_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

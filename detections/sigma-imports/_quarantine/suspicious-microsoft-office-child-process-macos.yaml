@@ -1,0 +1,52 @@
+id: sigmahq-sigma-69483748-1525-4a6c-95ca-90dc8d431b68
+name: Suspicious Microsoft Office Child Process - MacOS
+description: Detects suspicious child processes spawning from microsoft office suite
+  applications such as word or excel. This could indicates malicious macro execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.002
+  - T1137.002
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/applescript/
+- https://objective-see.org/blog/blog_0x4B.html
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    ParentImage|contains:
+    - Microsoft Word
+    - Microsoft Excel
+    - Microsoft PowerPoint
+    - Microsoft OneNote
+    Image|endswith:
+    - /bash
+    - /curl
+    - /dash
+    - /fish
+    - /osacompile
+    - /osascript
+    - /sh
+    - /zsh
+    - /python
+    - /python3
+    - /wget
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 69483748-1525-4a6c-95ca-90dc8d431b68
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_office_susp_child_processes.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

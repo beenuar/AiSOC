@@ -1,0 +1,57 @@
+id: sigmahq-sigma-ab4561b1-6c7e-48a7-ad08-087cfb9ce8f1
+name: Important Windows Event Auditing Disabled
+description: Detects scenarios where system auditing for important events such as
+  "Process Creation" or "Logon" events is disabled.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://docs.google.com/presentation/d/1dkrldTTlN3La-OjWtkWJBb4hVk6vfsSMBFBERs6R8zA/edit
+- https://github.com/SigmaHQ/sigma/blob/ad1bfd3d28aa0ccc9656240f845022518ef65a2e/documentation/logsource-guides/windows/service/security.md
+logsource:
+  product: windows
+  service: security
+  definition: dfd8c0f4-e6ad-4e07-b91b-f2fca0ddef64
+detection:
+  selection_state_success_and_failure:
+    EventID: 4719
+    SubcategoryGuid:
+    - '{0CCE9210-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9211-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9212-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9215-69AE-11D9-BED3-505054503030}'
+    - '{0CCE921B-69AE-11D9-BED3-505054503030}'
+    - '{0CCE922B-69AE-11D9-BED3-505054503030}'
+    - '{0CCE922F-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9230-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9235-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9236-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9237-69AE-11D9-BED3-505054503030}'
+    - '{0CCE923F-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9240-69AE-11D9-BED3-505054503030}'
+    - '{0CCE9242-69AE-11D9-BED3-505054503030}'
+    AuditPolicyChanges|contains:
+    - '%%8448'
+    - '%%8450'
+  selection_state_success_only:
+    EventID: 4719
+    SubcategoryGuid: '{0CCE9217-69AE-11D9-BED3-505054503030}'
+    AuditPolicyChanges|contains: '%%8448'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ab4561b1-6c7e-48a7-ad08-087cfb9ce8f1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_disable_event_auditing_critical.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

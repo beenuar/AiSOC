@@ -1,0 +1,42 @@
+id: sigmahq-sigma-36bed6b2-e9a0-4fff-beeb-413a92b86138
+name: Active Directory Computers Enumeration With Get-AdComputer
+description: Detects usage of the "Get-AdComputer" to enumerate Computers or properties
+  within Active Directory.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1018
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-adcomputer
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1018/T1018.md
+- https://github.com/redcanaryco/atomic-red-team/blob/02cb591f75064ffe1e0df9ac3ed5972a2e491c97/atomics/T1087.002/T1087.002.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_cmdlet:
+    ScriptBlockText|contains: 'Get-AdComputer '
+  selection_option:
+    ScriptBlockText|contains:
+    - '-Filter '
+    - '-LDAPFilter '
+    - '-Properties '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 36bed6b2-e9a0-4fff-beeb-413a92b86138
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_get_adcomputer.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

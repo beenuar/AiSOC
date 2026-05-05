@@ -1,0 +1,51 @@
+id: sigmahq-sigma-fa1a7e52-3d02-435b-81b8-00da14dd66c1
+name: Diskshadow Script Mode - Execution From Potential Suspicious Location
+description: Detects execution of "Diskshadow.exe" in script mode using the "/s" flag
+  where the script is located in a potentially suspicious location.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2018/03/26/diskshadow-the-return-of-vss-evasion-persistence-and-active-directory-database-extraction/
+- https://www.ired.team/offensive-security/credential-access-and-credential-dumping/ntds.dit-enumeration
+- https://medium.com/@cyberjyot/lolbin-execution-via-diskshadow-f6ff681a27a4
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/diskshadow
+- https://www.lifars.com/wp-content/uploads/2022/01/GriefRansomware_Whitepaper-2.pdf
+- https://www.zscaler.com/blogs/security-research/technical-analysis-crytox-ransomware
+- https://research.checkpoint.com/2022/evilplayout-attack-against-irans-state-broadcaster/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: diskshadow.exe
+  - Image|endswith: \diskshadow.exe
+  selection_cli:
+    CommandLine|contains|windash: '-s '
+  selection_paths:
+    CommandLine|contains:
+    - :\Temp\
+    - :\Windows\Temp\
+    - \AppData\Local\
+    - \AppData\Roaming\
+    - \ProgramData\
+    - \Users\Public\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fa1a7e52-3d02-435b-81b8-00da14dd66c1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_diskshadow_script_mode_susp_location.yml
+falsepositives:
+- False positives may occur if you execute the script from one of the paths mentioned
+  in the rule. Apply additional filters that fits your org needs.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,56 @@
+id: sigmahq-sigma-26481afe-db26-4228-b264-25a29fe6efc7
+name: Uncommon Service Installation Image Path
+description: Detects uncommon service installation commands by looking at suspicious
+  or uncommon image path values containing references to encoded powershell commands,
+  temporary paths, etc.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  suspicious_paths:
+    ImagePath|contains:
+    - \\\\.\\pipe
+    - \Users\Public\
+    - \Windows\Temp\
+  suspicious_encoded_flag:
+    ImagePath|contains: ' -e'
+  suspicious_encoded_keywords:
+    ImagePath|contains:
+    - ' aQBlAHgA'
+    - ' aWV4I'
+    - ' IAB'
+    - ' JAB'
+    - ' PAA'
+    - ' SQBFAFgA'
+    - ' SUVYI'
+  filter_optional_thor_remote:
+    ImagePath|startswith: C:\WINDOWS\TEMP\thor10-remote\thor64.exe
+  filter_main_defender_def_updates:
+    ImagePath|startswith: C:\ProgramData\Microsoft\Windows Defender\Definition Updates\
+  condition: selection and ( suspicious_paths or all of suspicious_encoded_* ) and
+    not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 26481afe-db26-4228-b264-25a29fe6efc7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_uncommon.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

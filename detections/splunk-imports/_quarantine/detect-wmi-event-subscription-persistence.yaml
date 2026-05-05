@@ -1,0 +1,42 @@
+id: splunk-security-content-01d9a0c2-cece-11eb-ab46-acde48001122
+name: Detect WMI Event Subscription Persistence
+description: The following analytic identifies the creation of WMI Event Subscriptions,
+  which can be used to establish persistence or perform privilege escalation. It detects
+  EventID 19 (EventFilter creation), EventID 20 (EventConsumer creation), and EventID
+  21 (FilterToConsumerBinding creation) from Sysmon logs. This activity is significant
+  because WMI Event Subscriptions can execute code with elevated SYSTEM privileges,
+  making it a powerful persistence mechanism. If confirmed malicious, an attacker
+  could maintain long-term access, escalate privileges, and execute arbitrary code,
+  posing a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1546.003/T1546.003.md
+- https://www.eideon.com/2018-03-02-THL03-WMIBackdoors/
+- https://github.com/trustedsec/SysmonCommunityGuide/blob/master/chapters/WMI-events.md
+- https://in.security/2019/04/03/an-intro-into-abusing-and-identifying-wmi-event-subscriptions-for-persistence/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventID=20\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest dvc object\n       object_category object_path signature\n\
+    \       signature_id src status\n       user user_id vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `detect_wmi_event_subscription_persistence_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 01d9a0c2-cece-11eb-ab46-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_wmi_event_subscription_persistence.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,40 @@
+id: sigmahq-sigma-bcfcc962-0e4a-4fd9-84bb-a833e672df3f
+name: Azure Virtual Network Modified or Deleted
+description: Identifies when a Virtual Network is modified or deleted in Azure.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName|startswith:
+    - MICROSOFT.NETWORK/VIRTUALNETWORKGATEWAYS/
+    - MICROSOFT.NETWORK/VIRTUALNETWORKS/
+    operationName|endswith:
+    - /WRITE
+    - /DELETE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bcfcc962-0e4a-4fd9-84bb-a833e672df3f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_virtual_network_modified_or_deleted.yml
+falsepositives:
+- Virtual Network being modified or deleted may be performed by a system administrator.
+  Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Virtual Network modified or deleted from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

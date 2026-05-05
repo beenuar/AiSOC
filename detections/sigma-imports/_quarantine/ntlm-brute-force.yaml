@@ -1,0 +1,43 @@
+id: sigmahq-sigma-9c8acf1a-cbf9-4db6-b63c-74baabe03e59
+name: NTLM Brute Force
+description: Detects common NTLM brute force device names
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - endpoint
+references:
+- https://www.varonis.com/blog/investigate-ntlm-brute-force
+logsource:
+  product: windows
+  service: ntlm
+  definition: Requires events from Microsoft-Windows-NTLM/Operational
+detection:
+  selection:
+    EventID: 8004
+  devicename:
+    WorkstationName:
+    - Rdesktop
+    - Remmina
+    - Freerdp
+    - Windows7
+    - Windows8
+    - Windows2012
+    - Windows2016
+    - Windows2019
+  condition: selection and devicename
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9c8acf1a-cbf9-4db6-b63c-74baabe03e59
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/ntlm/win_susp_ntlm_brute_force.yml
+falsepositives:
+- Systems with names equal to the spoofed ones used by the brute force tools
+notes:
+  quarantine_reason: 'upstream status: test'

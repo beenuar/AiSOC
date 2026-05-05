@@ -1,0 +1,42 @@
+id: sigmahq-sigma-2dbd9d3d-9e27-42a8-b8df-f13825c6c3d5
+name: WebDav Client Execution Via Rundll32.EXE
+description: 'Detects "svchost.exe" spawning "rundll32.exe" with command arguments
+  like "C:\windows\system32\davclnt.dll,DavSetCookie".
+
+  This could be an indicator of exfiltration or use of WebDav to launch code (hosted
+  on a WebDav server).'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - endpoint
+references:
+- https://github.com/OTRF/detection-hackathon-apt29/issues/17
+- https://github.com/OTRF/ThreatHunter-Playbook/blob/2d4257f630f4c9770f78d0c1df059f891ffc3fec/docs/evals/apt29/detections/7.B.4_C10730EA-6345-4934-AA0F-B0EFCA0C4BA6.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \svchost.exe
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  selection_cli:
+    CommandLine|contains: C:\windows\system32\davclnt.dll,DavSetCookie
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2dbd9d3d-9e27-42a8-b8df-f13825c6c3d5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_webdav_client_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

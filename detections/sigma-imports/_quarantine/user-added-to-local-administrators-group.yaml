@@ -1,0 +1,42 @@
+id: sigmahq-sigma-ad720b90-25ad-43ff-9b5e-5c841facc8e5
+name: User Added to Local Administrators Group
+description: Detects addition of users to the local administrator group via "Net"
+  or "Add-LocalGroupMember".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://blog.talosintelligence.com/2022/08/recent-cyber-attack.html?m=1
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_main:
+  - CommandLine|contains|all:
+    - 'localgroup '
+    - ' /add'
+  - CommandLine|contains|all:
+    - 'Add-LocalGroupMember '
+    - ' -Group '
+  selection_group:
+    CommandLine|contains:
+    - ' administrators '
+    - ' administrateur'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ad720b90-25ad-43ff-9b5e-5c841facc8e5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_add_user_local_admin_group.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

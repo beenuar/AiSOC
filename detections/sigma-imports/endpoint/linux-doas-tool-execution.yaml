@@ -1,0 +1,32 @@
+id: sigmahq-sigma-067d8238-7127-451c-a9ec-fa78045b618b
+name: Linux Doas Tool Execution
+description: Detects the doas tool execution in linux host platform. This utility
+  tool allow standard users to perform tasks as root, the same way sudo does.
+severity: low
+enabled: true
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://research.splunk.com/endpoint/linux_doas_tool_execution/
+- https://www.makeuseof.com/how-to-install-and-use-doas/
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /doas
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 067d8238-7127-451c-a9ec-fa78045b618b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_doas_execution.yml
+falsepositives:
+- Unlikely

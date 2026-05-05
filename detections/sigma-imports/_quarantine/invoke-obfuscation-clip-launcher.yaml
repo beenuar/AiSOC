@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b222df08-0e07-11eb-adc1-0242ac120002
+name: Invoke-Obfuscation CLIP+ Launcher
+description: Detects Obfuscated use of Clip.exe to execute PowerShell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - cmd
+    - '&&'
+    - 'clipboard]::'
+    - -f
+    CommandLine|contains:
+    - /c
+    - /r
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b222df08-0e07-11eb-adc1-0242ac120002
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_invoke_obfuscation_clip.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

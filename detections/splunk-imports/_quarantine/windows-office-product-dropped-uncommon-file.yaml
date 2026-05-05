@@ -1,0 +1,54 @@
+id: splunk-security-content-7ac0fced-9eae-4381-a748-90dcd1aa9393
+name: Windows Office Product Dropped Uncommon File
+description: The following analytic detects Microsoft Office applications dropping
+  or creating executables or scripts on a Windows OS. It leverages process creation
+  and file system events from the Endpoint data model to identify Office applications
+  like Word or Excel generating files with extensions such as ".exe", ".dll", or ".ps1".
+  This behavior is significant as it is often associated with spear-phishing attacks
+  where malicious files are dropped to compromise the host. If confirmed malicious,
+  this activity could lead to code execution, privilege escalation, or persistent
+  access, posing a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/fin7-pursuing-an-enigmatic-and-evasive-global-criminal-operation
+- https://attack.mitre.org/groups/G0046/
+- https://www.joesandbox.com/analysis/702680/0/html
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/trojanized-onenote-document-leads-to-formbook-malware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\n\
+    \  WHERE `process_office_products`\n  BY _time span=1h Processes.action\n    \
+    \ Processes.dest Processes.original_file_name Processes.parent_process\n     Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n     Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process\n     Processes.process_exec\
+    \ Processes.process_guid Processes.process_hash\n     Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_name\n     Processes.process_path Processes.user Processes.user_id\n\
+    \     Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| join process_guid,\
+    \ _time [\n| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.file_name\
+    \ IN (\"*.dll\", \"*.exe\", \"*.js\", \"*.pif\", \"*.ps1\", \"*.scr\", \"*.vbe\"\
+    , \"*.vbs\")\n  BY _time span=1h Filesystem.dest\n     Filesystem.file_create_time\
+    \ Filesystem.file_name Filesystem.process_guid\n     Filesystem.file_path\n| `drop_dm_object_name(Filesystem)`\n\
+    | fields _time dest file_create_time file_name file_path process_name process_path\
+    \ process process_guid]\n| dedup file_create_time\n| table dest, process_name,\
+    \ process, file_create_time, file_name, file_path, process_guid\n| `windows_office_product_dropped_uncommon_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7ac0fced-9eae-4381-a748-90dcd1aa9393
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_office_product_dropped_uncommon_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,45 @@
+id: splunk-security-content-dd83407e-439f-11ec-ab8e-acde48001122
+name: Network Discovery Using Route Windows App
+description: The following analytic detects the execution of the `route.exe` Windows
+  application, commonly used for network discovery. It leverages data from Endpoint
+  Detection and Response (EDR) agents, focusing on process creation events. This activity
+  is significant because adversaries often use `route.exe` to map network routes and
+  identify potential targets within a network. If confirmed malicious, this behavior
+  could allow attackers to gain insights into network topology, facilitating lateral
+  movement and further exploitation. Note that false positives may occur due to legitimate
+  administrative tasks or automated scripts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1016.001
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/ad4c3cda-41f2-4401-8dba-56cc2d245488/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime from datamodel=Endpoint.Processes where\n(Processes.process_name=route.exe\
+    \ OR Processes.original_file_name=route.exe)\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process\n   Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process Processes.process_exec\n   Processes.process_guid\
+    \ Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_name Processes.process_path Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `network_discovery_using_route_windows_app_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dd83407e-439f-11ec-ab8e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/network_discovery_using_route_windows_app.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

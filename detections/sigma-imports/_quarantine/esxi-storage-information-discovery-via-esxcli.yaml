@@ -1,0 +1,43 @@
+id: sigmahq-sigma-f41dada5-3f56-4232-8503-3fb7f9cf2d60
+name: ESXi Storage Information Discovery Via ESXCLI
+description: Detects execution of the "esxcli" command with the "storage" flag in
+  order to retrieve information about the storage status and other related information.
+  Seen used by malware such as DarkSide and LockBit.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  - T1007
+  - T1059.012
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/21/e/darkside-linux-vms-targeted.html
+- https://www.trendmicro.com/en_us/research/22/a/analysis-and-Impact-of-lockbit-ransomwares-first-linux-and-vmware-esxi-variant.html
+- https://developer.broadcom.com/xapis/esxcli-command-reference/7.0.0/namespace/esxcli_storage.html
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_img:
+    Image|endswith: /esxcli
+    CommandLine|contains: storage
+  selection_cli:
+    CommandLine|contains:
+    - ' get'
+    - ' list'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f41dada5-3f56-4232-8503-3fb7f9cf2d60
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_esxcli_storage_discovery.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

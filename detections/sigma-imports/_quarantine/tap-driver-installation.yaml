@@ -1,0 +1,35 @@
+id: sigmahq-sigma-8e4cf0e5-aa5d-4dc3-beff-dc26917744a9
+name: Tap Driver Installation
+description: Well-known TAP software installation. Possible preparation for data exfiltration
+  using tunnelling techniques
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048
+  categories:
+  - endpoint
+references:
+- https://community.openvpn.net/openvpn/wiki/ManagingWindowsTAPDrivers
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains: tap0901
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8e4cf0e5-aa5d-4dc3-beff-dc26917744a9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_tap_driver.yml
+falsepositives:
+- Legitimate OpenVPN TAP installation
+notes:
+  quarantine_reason: 'upstream status: test'

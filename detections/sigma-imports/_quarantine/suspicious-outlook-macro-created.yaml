@@ -1,0 +1,38 @@
+id: sigmahq-sigma-117d3d3a-755c-4a61-b23e-9171146d094c
+name: Suspicious Outlook Macro Created
+description: Detects the creation of a macro file for Outlook.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1137
+  - T1008
+  - T1546
+  categories:
+  - endpoint
+references:
+- https://www.mdsec.co.uk/2020/11/a-fresh-outlook-on-mail-based-persistence/
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=53
+- https://www.linkedin.com/pulse/outlook-backdoor-using-vba-samir-b-/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \Microsoft\Outlook\VbaProject.OTM
+  filter:
+    Image|endswith: \outlook.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 117d3d3a-755c-4a61-b23e-9171146d094c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_outlook_susp_macro_creation.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

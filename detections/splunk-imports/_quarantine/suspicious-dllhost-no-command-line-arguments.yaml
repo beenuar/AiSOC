@@ -1,0 +1,47 @@
+id: splunk-security-content-ff61e98c-0337-4593-a78f-72a676c56f26
+name: Suspicious DLLHost no Command Line Arguments
+description: The following analytic detects instances of DLLHost.exe executing without
+  command line arguments. This behavior is unusual and often associated with malicious
+  activities, such as those performed by Cobalt Strike. The detection leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process execution
+  logs. This activity is significant because DLLHost.exe typically requires arguments
+  to function correctly, and its absence may indicate an attempt to evade detection.
+  If confirmed malicious, this could lead to unauthorized actions like credential
+  dumping or file manipulation, posing a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://raw.githubusercontent.com/threatexpress/malleable-c2/c3385e481159a759f79b8acfe11acf240893b830/jquery-c2.4.2.profile
+- https://www.cobaltstrike.com/blog/learn-pipe-fitting-for-all-of-your-offense-projects/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\
+    \ where\n(Processes.process_name=dllhost.exe OR Processes.original_file_name=dllhost.exe)\n\
+    Processes.process IN (\"*dllhost\",\"*dllhost.exe\", \"*dllhost.exe\\\"\")\nby\
+    \ Processes.action Processes.dest Processes.original_file_name\n   Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n   Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid Processes.process_hash\n   Processes.process_id\
+    \ Processes.process_integrity_level Processes.process_name Processes.process_path\n\
+    \   Processes.user Processes.user_id Processes.vendor_product | `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `suspicious_dllhost_no_command_line_arguments_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ff61e98c-0337-4593-a78f-72a676c56f26
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_dllhost_no_command_line_arguments.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

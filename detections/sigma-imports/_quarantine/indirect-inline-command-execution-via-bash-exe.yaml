@@ -1,0 +1,40 @@
+id: sigmahq-sigma-5edc2273-c26f-406c-83f3-f4d948e740dd
+name: Indirect Inline Command Execution Via Bash.EXE
+description: 'Detects execution of Microsoft bash launcher with the "-c" flag.
+
+  This can be used to potentially bypass defenses and execute Linux or Windows-based
+  binaries directly via bash.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Bash/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - :\Windows\System32\bash.exe
+    - :\Windows\SysWOW64\bash.exe
+  - OriginalFileName: Bash.exe
+  selection_cli:
+    CommandLine|contains: ' -c '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5edc2273-c26f-406c-83f3-f4d948e740dd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bash_command_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

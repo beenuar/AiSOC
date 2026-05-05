@@ -1,0 +1,38 @@
+id: splunk-security-content-ad3f352a-0347-48ee-86b9-670b5025a548
+name: Ollama Possible API Endpoint Scan Reconnaissance
+description: Detects API reconnaissance and endpoint scanning activity against Ollama
+  servers by identifying sources probing multiple API endpoints within short timeframes,
+  particularly when using HEAD requests or accessing diverse endpoint paths, which
+  indicates systematic enumeration to map the API surface, discover hidden endpoints,
+  or identify vulnerabilities before launching targeted attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1595
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`ollama_server` \"[GIN]\"\n  | bin _time span=5m\n  | stats count as\
+    \ total_requests, values(dest) as dest, values(http_method) as methods, values(status)\
+    \ as status_codes\n    BY _time, src, host\n  | where total_requests > 120\n \
+    \ | eval severity=\"medium\"\n  | eval attack_type=\"API Activity Surge\"\n  |\
+    \ stats count\n    BY _time, host, src,\n       total_requests, dest, methods,\n\
+    \       status_codes, severity, attack_type\n  | `ollama_possible_api_endpoint_scan_reconnaissance_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ad3f352a-0347-48ee-86b9-670b5025a548
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_possible_api_endpoint_scan_reconnaissance.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

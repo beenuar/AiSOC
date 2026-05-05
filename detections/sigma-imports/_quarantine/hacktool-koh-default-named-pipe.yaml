@@ -1,0 +1,41 @@
+id: sigmahq-sigma-0adc67e0-a68f-4ffd-9c43-28905aad5d6a
+name: HackTool - Koh Default Named Pipe
+description: Detects creation of default named pipes used by the Koh tool
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1528
+  - T1134.001
+  categories:
+  - endpoint
+references:
+- https://github.com/GhostPack/Koh/blob/0283d9f3f91cf74732ad377821986cfcb088e20a/Clients/BOF/KohClient.c#L12
+logsource:
+  product: windows
+  category: pipe_created
+  definition: Note that you have to configure logging for Named Pipe Events in Sysmon
+    config (Event ID 17 and Event ID 18). The basic configuration is in popular sysmon
+    configuration (https://github.com/SwiftOnSecurity/sysmon-config), but it is worth
+    verifying. You can also use other repo, e.g. https://github.com/Neo23x0/sysmon-config,
+    https://github.com/olafhartong/sysmon-modular. How to test detection? You can
+    check powershell script from this site https://svch0st.medium.com/guide-to-named-pipes-and-hunting-for-cobalt-strike-pipes-dc46b2c5f575
+detection:
+  selection:
+    PipeName|contains:
+    - \imposecost
+    - \imposingcost
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0adc67e0-a68f-4ffd-9c43-28905aad5d6a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/pipe_created/pipe_created_hktl_koh_default_pipe.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

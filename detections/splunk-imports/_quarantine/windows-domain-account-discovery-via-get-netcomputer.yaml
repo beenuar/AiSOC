@@ -1,0 +1,42 @@
+id: splunk-security-content-a7fbbc4e-4571-424a-b627-6968e1c939e4
+name: Windows Domain Account Discovery Via Get-NetComputer
+description: The following analytic detects the execution of the PowerView PowerShell
+  cmdlet Get-NetComputer, which is used to query Active Directory for user account
+  details such as "samaccountname," "accountexpires," "lastlogon," and more. It leverages
+  Event ID 4104 from PowerShell Script Block Logging to identify this activity. This
+  behavior is significant as it may indicate an attempt to gather user account information,
+  which is often a precursor to further malicious actions. If confirmed malicious,
+  this activity could lead to unauthorized access, privilege escalation, or lateral
+  movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-347a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  ScriptBlockText = \"*Get-NetComputer*\"\
+    \ ScriptBlockText IN (\"*samaccountname*\", \"*accountexpires*\", \"*lastlogon*\"\
+    , \"*lastlogoff*\", \"*pwdlastset*\", \"*logoncount*\")\n  | fillnull\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_domain_account_discovery_via_get_netcomputer_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a7fbbc4e-4571-424a-b627-6968e1c939e4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_domain_account_discovery_via_get_netcomputer.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

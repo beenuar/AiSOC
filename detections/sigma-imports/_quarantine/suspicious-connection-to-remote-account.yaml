@@ -1,0 +1,40 @@
+id: sigmahq-sigma-1883444f-084b-419b-ac62-e0d0c5b3693f
+name: Suspicious Connection to Remote Account
+description: 'Adversaries with no prior knowledge of legitimate credentials within
+  the system or environment may guess passwords to attempt access to accounts.
+
+  Without knowledge of the password for an account, an adversary may opt to systematically
+  guess the password using a repetitive or iterative mechanism'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1110.001/T1110.001.md#atomic-test-2---brute-force-credentials-of-single-active-directory-domain-user-via-ldap-against-domain-controller-ntlm-or-kerberos
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - System.DirectoryServices.Protocols.LdapDirectoryIdentifier
+    - System.Net.NetworkCredential
+    - System.DirectoryServices.Protocols.LdapConnection
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1883444f-084b-419b-ac62-e0d0c5b3693f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_networkcredential.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

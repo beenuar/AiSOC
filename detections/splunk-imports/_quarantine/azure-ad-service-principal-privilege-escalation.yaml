@@ -1,0 +1,47 @@
+id: splunk-security-content-29eb39d3-2bc8-49cc-99b3-35593191a588
+name: Azure AD Service Principal Privilege Escalation
+description: This detection identifies when an Azure Service Principal elevates privileges
+  by adding themself to a new app role assignment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://splunkbase.splunk.com/app/3110
+- https://splunk.github.io/splunk-add-on-for-microsoft-cloud-services/Install/
+- https://github.com/mvelazc0/BadZure
+- https://www.splunk.com/en_us/blog/security/hunting-m365-invaders-navigating-the-shadows-of-midnight-blizzard.html
+- https://posts.specterops.io/microsoft-breach-what-happened-what-should-azure-admins-do-da2b7e674ebc
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad` category=AuditLogs operationName="Add app role
+    assignment to service principal" properties.initiatedBy.app.displayName=* properties.result=Success
+    | spath path=properties{}.targetResources{}.modifiedProperties{} output=targetResources
+    | rename properties.* as * | eval user="NA" | eval src="NA" | stats min(_time)
+    as firstTime max(_time) as lastTime values(eval(mvfilter(match(targetResources,
+    "AppRole.Value")))) as appRole, values(eval(mvfilter(match(targetResources, "ServicePrincipal.DisplayName"))))
+    as targetServicePrincipal values(eval(mvindex(''properties.targetResources{}.displayName'',0)))
+    as targetAppContext values(user_agent) as user_agent values(identity) as servicePrincipal
+    values(properties.initiatedBy.app.servicePrincipalId) as servicePrincipalId by
+    dest user src vendor_account vendor_product signature | spath input=appRole path=newValue
+    output=appRole | spath input=targetServicePrincipal path=newValue output=targetServicePrincipal
+    | eval appRole=trim(replace(appRole, "\"", "")), targetServicePrincipal=trim(replace(targetServicePrincipal,
+    "\"", "")) | where servicePrincipal=targetServicePrincipal | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `azure_ad_service_principal_privilege_escalation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 29eb39d3-2bc8-49cc-99b3-35593191a588
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_service_principal_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

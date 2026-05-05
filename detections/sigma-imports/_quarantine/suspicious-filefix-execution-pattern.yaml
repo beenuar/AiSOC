@@ -1,0 +1,84 @@
+id: sigmahq-sigma-b5b29e4e-31fa-4fdf-b058-296e7a1aa0c2
+name: Suspicious FileFix Execution Pattern
+description: 'Detects suspicious FileFix execution patterns where users are tricked
+  into running malicious commands through browser file upload dialog manipulation.
+
+  This attack typically begins when users visit malicious websites impersonating legitimate
+  services or news platforms,
+
+  which may display fake CAPTCHA challenges or direct instructions to open file explorer
+  and paste clipboard content.
+
+  The clipboard content usually contains commands that download and execute malware,
+  such as information stealing tools.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.004
+  categories:
+  - endpoint
+references:
+- https://mrd0x.com/filefix-clickfix-alternative/
+- https://expel.com/blog/cache-smuggling-when-a-picture-isnt-a-thousand-words/
+- https://blog.checkpoint.com/research/filefix-the-new-social-engineering-attack-building-on-clickfix-tested-in-the-wild/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_exec_parent:
+    ParentImage|endswith:
+    - \brave.exe
+    - \chrome.exe
+    - \firefox.exe
+    - \msedge.exe
+    CommandLine|contains: '#'
+  selection_cli_lolbin:
+    CommandLine|contains:
+    - '%comspec%'
+    - bitsadmin
+    - certutil
+    - cmd
+    - cscript
+    - curl
+    - finger
+    - mshta
+    - powershell
+    - pwsh
+    - regsvr32
+    - rundll32
+    - schtasks
+    - wget
+    - wscript
+  selection_cli_captcha:
+    CommandLine|contains:
+    - account
+    - anti-bot
+    - botcheck
+    - captcha
+    - challenge
+    - confirmation
+    - fraud
+    - human
+    - identification
+    - identificator
+    - identity
+    - robot
+    - validation
+    - verification
+    - verify
+  condition: selection_exec_parent and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b5b29e4e-31fa-4fdf-b058-296e7a1aa0c2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_filefix_execution_pattern.yml
+falsepositives:
+- Legitimate use of PowerShell or other utilities launched from browser extensions
+  or automation tools
+notes:
+  quarantine_reason: 'upstream status: experimental'

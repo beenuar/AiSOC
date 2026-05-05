@@ -1,0 +1,46 @@
+id: sigmahq-sigma-c6c56ada-612b-42d1-9a29-adad3c5c2c1e
+name: Audit Policy Tampering Via NT Resource Kit Auditpol
+description: 'Threat actors can use an older version of the auditpol binary available
+  inside the NT resource kit to change audit policy configuration to impair detection
+  capability.
+
+  This can be carried out by selectively disabling/removing certain audit policies
+  as well as restoring a custom policy owned by the threat actor.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://github.com/3CORESec/MAL-CL/tree/master/Descriptors/Windows%202000%20Resource%20Kit%20Tools/AuditPol
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - /logon:none
+    - /system:none
+    - /sam:none
+    - /privilege:none
+    - /object:none
+    - /process:none
+    - /policy:none
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c6c56ada-612b-42d1-9a29-adad3c5c2c1e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_auditpol_nt_resource_kit_usage.yml
+falsepositives:
+- The old auditpol utility isn't available by default on recent versions of Windows
+  as it was replaced by a newer version. The FP rate should be very low except for
+  tools that use a similar flag structure
+notes:
+  quarantine_reason: 'upstream status: test'

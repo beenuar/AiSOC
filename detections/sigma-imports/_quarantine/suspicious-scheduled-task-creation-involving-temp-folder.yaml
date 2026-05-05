@@ -1,0 +1,38 @@
+id: sigmahq-sigma-39019a4e-317f-4ce3-ae63-309a8c6b53c5
+name: Suspicious Scheduled Task Creation Involving Temp Folder
+description: Detects the creation of scheduled tasks that involves a temporary folder
+  and runs only once
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://discuss.elastic.co/t/detection-and-response-for-hafnium-activity/266289/3
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \schtasks.exe
+    CommandLine|contains|all:
+    - ' /create '
+    - ' /sc once '
+    - \Temp\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 39019a4e-317f-4ce3-ae63-309a8c6b53c5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_creation_temp_folder.yml
+falsepositives:
+- Administrative activity
+- Software installation
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-6942bd25-5970-40ab-af49-944247103358
+name: Suspicious Get Information for SMB Share - PowerShell Module
+description: 'Adversaries may look for folders and drives shared on remote systems
+  as a means of identifying sources of information to gather as a precursor for Collection
+  and
+
+  to identify potential systems of interest for Lateral Movement.
+
+  Networks often contain shared network drives and folders that enable users to access
+  file directories on various systems across a network.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1069.002/T1069.002.md
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection:
+  - Payload|contains: get-smbshare
+  - ContextInfo|contains: get-smbshare
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6942bd25-5970-40ab-af49-944247103358
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_susp_smb_share_reco.yml
+falsepositives:
+- Administrator script
+notes:
+  quarantine_reason: 'upstream status: test'

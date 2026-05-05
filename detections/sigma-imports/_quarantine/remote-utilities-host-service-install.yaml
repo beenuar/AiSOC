@@ -1,0 +1,37 @@
+id: sigmahq-sigma-85cce894-dd8b-4427-a958-5cc47a4dc9b9
+name: Remote Utilities Host Service Install
+description: Detects Remote Utilities Host service installation on the target system.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.remoteutilities.com/support/kb/host-service-won-t-start/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_root:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection_service:
+  - ImagePath|contains|all:
+    - \rutserv.exe
+    - -service
+  - ServiceName: Remote Utilities - Host
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 85cce894-dd8b-4427-a958-5cc47a4dc9b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_remote_utilities.yml
+falsepositives:
+- Legitimate use of the tool
+notes:
+  quarantine_reason: 'upstream status: test'

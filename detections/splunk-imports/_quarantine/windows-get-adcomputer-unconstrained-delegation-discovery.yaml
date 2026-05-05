@@ -1,0 +1,45 @@
+id: splunk-security-content-c8640777-469f-4638-ab44-c34a3233ffac
+name: Windows Get-AdComputer Unconstrained Delegation Discovery
+description: The following analytic detects the use of the Get-ADComputer cmdlet with
+  parameters indicating a search for Windows endpoints with Kerberos Unconstrained
+  Delegation. It leverages PowerShell Script Block Logging (EventCode=4104) to identify
+  this specific activity. This behavior is significant as it may indicate an attempt
+  by adversaries or Red Teams to gain situational awareness and perform Active Directory
+  discovery. If confirmed malicious, this activity could allow attackers to identify
+  high-value targets for further exploitation, potentially leading to privilege escalation
+  or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1018/
+- https://adsecurity.org/?p=1667
+- https://docs.microsoft.com/en-us/defender-for-identity/cas-isp-unconstrained-kerberos
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation
+- https://www.cyberark.com/resources/threat-research-blog/weakness-within-kerberos-delegation
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-ADComputer*\"\
+    \ AND ScriptBlockText = \"*TrustedForDelegation*\")\n  | fillnull\n  | stats count\
+    \ min(_time) as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n\
+    \       user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_get_adcomputer_unconstrained_delegation_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c8640777-469f-4638-ab44-c34a3233ffac
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_get_adcomputer_unconstrained_delegation_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

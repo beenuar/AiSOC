@@ -1,0 +1,38 @@
+id: sigmahq-sigma-277efb8f-60be-4f10-b4d3-037802f37167
+name: Registry Persistence Mechanisms in Recycle Bin
+description: Detects persistence registry keys for Recycle Bin
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547
+  categories:
+  - endpoint
+references:
+- https://github.com/vxunderground/VXUG-Papers/blob/751edb8d50f95bd7baa730adf2c6c3bb1b034276/The%20Persistence%20Series/Persistence%20via%20Recycle%20Bin/Persistence_via_Recycle_Bin.pdf
+- https://persistence-info.github.io/Data/recyclebin.html
+- https://www.hexacorn.com/blog/2018/05/28/beyond-good-ol-run-key-part-78-2/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection_create:
+    EventType: RenameKey
+    NewName|contains: \CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\shell\open
+  selection_set:
+    EventType: SetValue
+    TargetObject|contains: \CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\shell\open\command\(Default)
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 277efb8f-60be-4f10-b4d3-037802f37167
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_persistence_recycle_bin.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

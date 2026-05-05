@@ -1,0 +1,47 @@
+id: splunk-security-content-872e3063-0fc4-4e68-b2f3-f2b99184a708
+name: GetAdGroup with PowerShell
+description: The following analytic detects the execution of `powershell.exe` with
+  the `Get-AdGroup` commandlet, which is used to query domain groups in a Windows
+  Domain. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process names and command-line arguments. Monitoring this activity
+  is crucial as it may indicate an adversary or Red Team enumerating domain groups
+  for situational awareness and Active Directory discovery. If confirmed malicious,
+  this activity could lead to further reconnaissance, privilege escalation, or lateral
+  movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://docs.microsoft.com/en-us/powershell/module/activedirectory/get-adgroup?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.process_name=\"powershell.exe\"\n    )\n    (Processes.process=*Get-AdGroup*)\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `getadgroup_with_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 872e3063-0fc4-4e68-b2f3-f2b99184a708
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getadgroup_with_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

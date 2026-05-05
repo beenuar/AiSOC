@@ -1,0 +1,38 @@
+id: sigmahq-sigma-2c28c248-7f50-417a-9186-a85b223010ee
+name: Wscript Shell Run In CommandLine
+description: Detects the presence of the keywords "Wscript", "Shell" and "Run" in
+  the command, which could indicate a suspicious activity
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20220830122045/http://blog.talosintelligence.com/2022/08/modernloader-delivers-multiple-stealers.html
+- https://blog.talosintelligence.com/modernloader-delivers-multiple-stealers-cryptominers-and-rats/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - Wscript.
+    - .Shell
+    - .Run
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2c28c248-7f50-417a-9186-a85b223010ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mshta_inline_vbscript.yml
+falsepositives:
+- Inline scripting can be used by some rare third party applications or administrators.
+  Investigate and apply additional filters accordingly
+notes:
+  quarantine_reason: 'upstream status: test'

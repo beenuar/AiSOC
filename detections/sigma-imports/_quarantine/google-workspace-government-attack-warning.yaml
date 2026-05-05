@@ -1,0 +1,36 @@
+id: sigmahq-sigma-eafe6f2b-cfec-4612-aec2-49563c33a087
+name: Google Workspace Government Attack Warning
+description: Detects a login attempt in Google Workspace flagged as a potential attack
+  by a government-backed threat actor
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/logging/docs/audit/gsuite-audit-logging
+- https://cloud.google.com/logging/docs/audit/understanding-audit-logs
+- https://developers.google.com/workspace/admin/reports/v1/appendix/activity/login#gov_attack_warning
+logsource:
+  product: gcp
+  service: google_workspace.login
+detection:
+  selection:
+    protoPayload.serviceName: login.googleapis.com
+    protoPayload.metadata.event.eventName: gov_attack_warning
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: eafe6f2b-cfec-4612-aec2-49563c33a087
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/gworkspace/login/gcp_gworkspace_govattack.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

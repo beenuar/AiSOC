@@ -1,0 +1,47 @@
+id: sigmahq-sigma-24c8392b-aa3c-46b7-a545-43f71657fe98
+name: Suspicious Schtasks Schedule Types
+description: Detects scheduled task creations or modification on a suspicious schedule
+  type
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-change
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+- http://blog.talosintelligence.com/2022/09/lazarus-three-rats.html
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \schtasks.exe
+  - OriginalFileName: schtasks.exe
+  selection_time:
+    CommandLine|contains:
+    - ' ONLOGON '
+    - ' ONSTART '
+    - ' ONCE '
+    - ' ONIDLE '
+  filter_privs:
+    CommandLine|contains:
+    - NT AUT
+    - ' SYSTEM'
+    - HIGHEST
+  condition: all of selection_* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 24c8392b-aa3c-46b7-a545-43f71657fe98
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_schedule_type.yml
+falsepositives:
+- Legitimate processes that run at logon. Filter according to your environment
+notes:
+  quarantine_reason: 'upstream status: test'

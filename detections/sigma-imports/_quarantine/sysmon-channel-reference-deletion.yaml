@@ -1,0 +1,47 @@
+id: sigmahq-sigma-18beca67-ab3e-4ee3-ba7a-a46ca8d7d0cc
+name: Sysmon Channel Reference Deletion
+description: Potential threat actor tampering with Sysmon manifest and eventually
+  disabling it
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Flangvik/status/1283054508084473861
+- https://twitter.com/SecurityJosh/status/1283027365770276866
+- https://securityjosh.github.io/2020/04/23/Mute-Sysmon.html
+- https://gist.github.com/Cyb3rWard0g/cf08c38c61f7e46e8404b38201ca01c8
+logsource:
+  product: windows
+  service: security
+detection:
+  selection1:
+    EventID: 4657
+    ObjectName|contains:
+    - WINEVT\Publishers\{5770385f-c22a-43e0-bf4c-06f5698ffbd9}
+    - WINEVT\Channels\Microsoft-Windows-Sysmon/Operational
+    ObjectValueName: Enabled
+    NewValue: 0
+  selection2:
+    EventID: 4663
+    ObjectName|contains:
+    - WINEVT\Publishers\{5770385f-c22a-43e0-bf4c-06f5698ffbd9}
+    - WINEVT\Channels\Microsoft-Windows-Sysmon/Operational
+    AccessMask: '0x10000'
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 18beca67-ab3e-4ee3-ba7a-a46ca8d7d0cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_sysmon_channel_reference_deletion.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,44 @@
+id: splunk-security-content-daed6823-b51c-4843-a6ad-169708f1323e
+name: Windows Service Deletion In Registry
+description: The following analytic detects the deletion of a service from the Windows
+  Registry under CurrentControlSet\Services. It leverages data from the Endpoint.Registry
+  datamodel, specifically monitoring registry paths and actions related to service
+  deletion. This activity is significant as adversaries may delete services to evade
+  detection and hinder incident response efforts. If confirmed malicious, this action
+  could disrupt legitimate services, impair system functionality, and potentially
+  allow attackers to maintain a lower profile within the environment, complicating
+  detection and remediation efforts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references:
+- https://unit42.paloaltonetworks.com/brute-ratel-c4-tool/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path=
+    "*\\SYSTEM\\CurrentControlSet\\Services*" AND (Registry.action = deleted OR (Registry.registry_value_name
+    = DeleteFlag AND Registry.registry_value_data = 0x00000001 AND Registry.action=modified))
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_service_deletion_in_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: daed6823-b51c-4843-a6ad-169708f1323e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_service_deletion_in_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

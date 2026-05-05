@@ -1,0 +1,34 @@
+id: sigmahq-sigma-e8a677fd-248c-4eab-94df-de2f6f645884
+name: OpenCanary - NMAP OS Scan
+description: Detects instances where an OpenCanary node has been targeted by a NMAP
+  OS Scan
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 5002
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e8a677fd-248c-4eab-94df-de2f6f645884
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_portscan_nmap_os_scan.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

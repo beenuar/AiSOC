@@ -1,0 +1,43 @@
+id: sigmahq-sigma-88a22f69-62f9-4b8a-aa00-6b0212f2f05a
+name: Invoke-Obfuscation Via Use Rundll32 - PowerShell Module
+description: Detects Obfuscated Powershell via use Rundll32 in Scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_4103:
+    Payload|contains|all:
+    - '&&'
+    - rundll32
+    - shell32.dll
+    - shellexec_rundll
+    Payload|contains:
+    - value
+    - invoke
+    - comspec
+    - iex
+  condition: selection_4103
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 88a22f69-62f9-4b8a-aa00-6b0212f2f05a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_invoke_obfuscation_via_use_rundll32.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

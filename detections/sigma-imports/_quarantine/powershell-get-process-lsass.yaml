@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b2815d0d-7481-4bf0-9b6c-a4c48a94b349
+name: PowerShell Get-Process LSASS
+description: Detects a "Get-Process" cmdlet and it's aliases on lsass process, which
+  is in almost all cases a sign of malicious activity
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1552.004
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20220205033028/https://twitter.com/PythonResponder/status/1385064506049630211
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - Get-Process lsas
+    - ps lsas
+    - gps lsas
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b2815d0d-7481-4bf0-9b6c-a4c48a94b349
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_getprocess_lsass.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-4cbef972-f347-4170-b62a-8253f6168e6d
+name: UAC Bypass Using IDiagnostic Profile
+description: Detects the "IDiagnosticProfileUAC" UAC bypass technique
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/Wh04m1001/IDiagnosticProfileUAC
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \DllHost.exe
+    ParentCommandLine|contains: ' /Processid:{12C21EA7-2EB8-4B55-9249-AC243DA8C666}'
+    IntegrityLevel:
+    - High
+    - System
+    - S-1-16-16384
+    - S-1-16-12288
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4cbef972-f347-4170-b62a-8253f6168e6d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_idiagnostic_profile.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

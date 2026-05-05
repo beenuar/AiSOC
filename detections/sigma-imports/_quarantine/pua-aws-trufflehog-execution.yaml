@@ -1,0 +1,39 @@
+id: sigmahq-sigma-a840e606-7c8c-4684-9bc1-eb6b6155127f
+name: PUA - AWS TruffleHog Execution
+description: 'Detects the execution of TruffleHog, a popular open-source tool used
+  for scanning repositories for secrets and sensitive information, within an AWS environment.
+
+  It has been reported to be used by threat actors for credential harvesting. All
+  detections should be investigated to determine if the usage is authorized by security
+  teams or potentially malicious.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1555
+  - T1003
+  categories:
+  - cloud
+references:
+- https://github.com/trufflesecurity/trufflehog
+- https://www.rapid7.com/blog/post/tr-crimson-collective-a-new-threat-group-observed-operating-in-the-cloud/
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    userAgent: TruffleHog
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a840e606-7c8c-4684-9bc1-eb6b6155127f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_pua_trufflehog.yml
+falsepositives:
+- Legitimate use of TruffleHog by security teams for credential scanning.
+notes:
+  quarantine_reason: 'upstream status: experimental'

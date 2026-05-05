@@ -1,0 +1,36 @@
+id: sigmahq-sigma-caa02837-f659-466f-bca6-48bde2826ab4
+name: Potential DLL Sideloading Via ClassicExplorer32.dll
+description: Detects potential DLL sideloading using ClassicExplorer32.dll from the
+  Classic Shell software
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://blogs.blackberry.com/en/2022/12/mustang-panda-uses-the-russian-ukrainian-war-to-attack-europe-and-asia-pacific-targets
+- https://app.any.run/tasks/6d8cabb0-dcda-44b6-8050-28d6ce281687/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection_classicexplorer:
+    ImageLoaded|endswith: \ClassicExplorer32.dll
+  filter_classicexplorer:
+    ImageLoaded|startswith: C:\Program Files\Classic Shell\
+  condition: selection_classicexplorer and not filter_classicexplorer
+provenance:
+  source: SigmaHQ/sigma
+  source_id: caa02837-f659-466f-bca6-48bde2826ab4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_classicexplorer32.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

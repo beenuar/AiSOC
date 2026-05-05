@@ -1,0 +1,42 @@
+id: sigmahq-sigma-48739819-8230-4ee3-a8ea-e0289d1fb0ff
+name: Azure Active Directory Hybrid Health AD FS Service Delete
+description: 'This detection uses azureactivity logs (Administrative category) to
+  identify the deletion of an Azure AD Hybrid health AD FS service instance in a tenant.
+
+  A threat actor can create a new AD Health ADFS service and create a fake server
+  to spoof AD FS signing logs.
+
+  The health AD FS service can then be deleted after it is not longer needed via HTTP
+  requests to Azure.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1578.003
+  categories:
+  - cloud
+references:
+- https://o365blog.com/post/hybridhealthagent/
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    CategoryValue: Administrative
+    ResourceProviderValue: Microsoft.ADHybridHealthService
+    ResourceId|contains: AdFederationService
+    OperationNameValue: Microsoft.ADHybridHealthService/services/delete
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48739819-8230-4ee3-a8ea-e0289d1fb0ff
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_aadhybridhealth_adfs_service_delete.yml
+falsepositives:
+- Legitimate AAD Health AD FS service instances being deleted in a tenant
+notes:
+  quarantine_reason: 'upstream status: test'

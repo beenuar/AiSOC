@@ -1,0 +1,36 @@
+id: sigmahq-sigma-0c46d4f4-a2bf-4104-9597-8d653fc2bb55
+name: GitHub Repository Pages Site Changed to Public
+description: Detects when a GitHub Pages site of a repository is made public. This
+  usually is part of a publishing process but could indicate or lead to potential
+  unauthorized exposure of sensitive information or code.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1567.001
+  categories:
+  - endpoint
+references:
+- https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site
+- https://www.sentinelone.com/blog/exploiting-repos-6-ways-threat-actors-abuse-github-other-devops-platforms
+- https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/security-log-events
+logsource:
+  product: github
+  service: audit
+detection:
+  selection:
+    action: repo.pages_public
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0c46d4f4-a2bf-4104-9597-8d653fc2bb55
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/github/audit/github_pages_site_changed_to_public.yml
+falsepositives:
+- Legitimate publishing of repository pages by authorized users
+notes:
+  quarantine_reason: 'upstream status: experimental'

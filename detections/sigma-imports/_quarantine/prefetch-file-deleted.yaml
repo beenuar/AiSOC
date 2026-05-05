@@ -1,0 +1,40 @@
+id: sigmahq-sigma-0a1f9d29-6465-4776-b091-7f43b26e4c89
+name: Prefetch File Deleted
+description: Detects the deletion of a prefetch file which may indicate an attempt
+  to destroy forensic evidence
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://www.group-ib.com/blog/hunting-for-ttps-with-prefetch-files/
+logsource:
+  product: windows
+  category: file_delete
+detection:
+  selection:
+    TargetFilename|contains: :\Windows\Prefetch\
+    TargetFilename|endswith: .pf
+  filter_main_svchost:
+    Image|endswith: :\windows\system32\svchost.exe
+    User|contains:
+    - AUTHORI
+    - AUTORI
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0a1f9d29-6465-4776-b091-7f43b26e4c89
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_prefetch.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

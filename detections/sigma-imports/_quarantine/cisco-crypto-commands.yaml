@@ -1,0 +1,36 @@
+id: sigmahq-sigma-1f978c6a-4415-47fb-aca5-736a44d7ca3d
+name: Cisco Crypto Commands
+description: Show when private keys are being exported from the device, or when new
+  certificates are installed
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1553.004
+  - T1552.004
+  categories:
+  - endpoint
+references:
+- https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/a1/sec-a1-cr-book/sec-a1-cr-book_chapter_0111.html
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - crypto pki export
+  - crypto pki import
+  - crypto pki trustpoint
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1f978c6a-4415-47fb-aca5-736a44d7ca3d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_crypto_actions.yml
+falsepositives:
+- Not commonly run by administrators. Also whitelist your known good certificates
+notes:
+  quarantine_reason: 'upstream status: test'

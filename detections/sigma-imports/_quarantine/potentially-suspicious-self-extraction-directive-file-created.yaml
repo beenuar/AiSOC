@@ -1,0 +1,43 @@
+id: sigmahq-sigma-ab90dab8-c7da-4010-9193-563528cfa347
+name: Potentially Suspicious Self Extraction Directive File Created
+description: 'Detects the creation of a binary file with the ".sed" extension. The
+  ".sed" extension stand for Self Extraction Directive files.
+
+  These files are used by the "iexpress.exe" utility in order to create self extracting
+  packages.
+
+  Attackers were seen abusing this utility and creating PE files with embedded ".sed"
+  entries.
+
+  Usually ".sed" files are simple ini files and not PE binaries.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/iexpress.exe-D594B2A33EFAFD0EABF09E3FDC05FCEA.html
+- https://en.wikipedia.org/wiki/IExpress
+- https://www.virustotal.com/gui/file/602f4ae507fa8de57ada079adff25a6c2a899bd25cd092d0af7e62cdb619c93c/behavior
+logsource:
+  product: windows
+  category: file_executable_detected
+detection:
+  selection:
+    TargetFilename|endswith: .sed
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ab90dab8-c7da-4010-9193-563528cfa347
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_executable_detected/file_executable_detected_win_susp_embeded_sed_file.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

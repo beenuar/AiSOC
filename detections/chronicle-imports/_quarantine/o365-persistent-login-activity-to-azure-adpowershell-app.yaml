@@ -1,0 +1,54 @@
+id: chronicle-detection-rules-o365-persistent-login-activity-to-azure-adpowershell-app
+name: o365_persistent_login_activity_to_azure_ADPowerShell_app
+description: o365_persistent_login_activity_to_azure_ADPowerShell_app
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_persistent_login_activity_to_azure_ADPowerShell_app {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Continual logins\
+    \ to Azure AD PowerShell app are not a security best practice, if this is observed,\
+    \ additional investigation is needed\"\n    rule_id = \"mr_4e61ae7f-d9fc-4c2a-b086-69d9d50dc5cc\"\
+    \n    rule_name = \"O365 Persistent Login Activity To Azure AD PowerShell App\"\
+    \n    tactic = \"TA0008\"\n    technique = \"T1021.007\"\n    type = \"alert\"\
+    \n    platform = \"azure\"\n    data_source = \"o365\"\n    severity = \"Medium\"\
+    \n    priority = \"Medium\"\n\n  events:\n    $login.metadata.event_type = \"\
+    USER_LOGIN\"\n    $login.metadata.product_event_type = \"UserLoggedIn\"\n    $login.metadata.product_name\
+    \ = \"Office 365\"\n    $login.metadata.vendor_name = \"Microsoft\"\n    $login.target.resource.product_object_id\
+    \ = \"1b730954-1685-4b74-9bfd-dac224a7b894\"\n    $login.security_result.action\
+    \ = \"ALLOW\"\n    $login.target.user.userid = $userid\n    $login.metadata.event_timestamp.seconds\
+    \ = $time\n\n  match:\n    $userid over 24h\n\n  outcome:\n    $risk_score = 65\n\
+    \    $event_count = count_distinct($login.metadata.id)\n    $entra_id_login_threshold\
+    \ = 2\n    $security_summary = array_distinct($login.security_result.summary)\n\
+    \    $user_agent = array_distinct($login.network.http.user_agent)\n    $country_region_login_attempt\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    //added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($login.principal.ip)\n    $target_user_userid = array_distinct($login.target.user.userid)\n\
+    \n  condition:\n    // Can set based on your own threshold\n    #time > 1\n}"
+  chronicle_rule_name: o365_persistent_login_activity_to_azure_ADPowerShell_app
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_persistent_login_activity_to_azure_ADPowerShell_app
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_persistent_login_activity_to_azure_ADPowerShell_app.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

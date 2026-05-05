@@ -1,0 +1,37 @@
+id: sigmahq-sigma-48bbc537-b652-4b4e-bd1d-281172df448f
+name: Sysinternals PsSuspend Execution
+description: Detects usage of Sysinternals PsSuspend which can be abused to suspend
+  critical processes
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/pssuspend
+- https://twitter.com/0gtweet/status/1638069413717975046
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - OriginalFileName: pssuspend.exe
+  - Image|endswith:
+    - \pssuspend.exe
+    - \pssuspend64.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 48bbc537-b652-4b4e-bd1d-281172df448f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_pssuspend_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

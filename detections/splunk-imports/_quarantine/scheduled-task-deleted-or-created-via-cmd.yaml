@@ -1,0 +1,59 @@
+id: splunk-security-content-d5af132c-7c17-439c-9d31-13d55340f36c
+name: Scheduled Task Deleted Or Created via CMD
+description: The following analytic detects the creation or deletion of scheduled
+  tasks via schtasks.exe when invoked with create or delete flags, specifically focusing
+  on those executions where the process includes additional parameters such as /tr,
+  /sc, or /ru. The detection uses Endpoint Detection and Response (EDR) telemetry
+  mapped to the Endpoint data model, and filters out events originating from trusted
+  system paths like C:\Windows\System32 or C:\Program Files. It further narrows results
+  to cases where schtasks.exe is launched by potentially suspicious parent processes
+  such as cmd.exe, wscript.exe, or cscript.exe, and excludes service accounts. This
+  behavior may indicate adversary efforts to gain persistence or evade detection by
+  manipulating scheduled tasks using scripts or command shells. If confirmed malicious,
+  such activity could lead to unauthorized code execution or the removal of monitoring
+  mechanisms on endpoints.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/02/21/qbot-and-zerologon-lead-to-full-domain-compromise/
+- https://www.joesandbox.com/analysis/691823/0/html
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-delete
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n    count\n    min(_time)\
+    \ as firstTime\n    max(_time) as lastTime\nFROM datamodel=Endpoint.Processes\
+    \ WHERE\n\nProcesses.parent_process_name=\"cmd.exe\"\nProcesses.process_name=\"\
+    schtasks.exe\"\nProcesses.process IN (\n    \"*/create*\",\n    \"*-create*\"\
+    ,\n    \"*/delete*\",\n    \"*-delete*\"\n)\nNOT Processes.process IN (\n    \"\
+    * \\\"C:\\\\Program Files (x86)\\\\*\",\n    \"* \\\"C:\\\\Program Files\\\\*\"\
+    ,\n    \"* \\\"C:\\\\Windows\\\\System32\\\\*\",\n    \"* \\\"C:\\\\Windows\\\\\
+    SysWOW64\\\\*\",\n    \"* C:\\\\Program Files (x86)\\\\*\",\n    \"* C:\\\\Program\
+    \ Files\\\\*\",\n    \"* C:\\\\Windows\\\\System32\\\\*\",\n    \"* C:\\\\Windows\\\
+    \\SysWOW64\\\\*\"\n)\nNOT Processes.user=\"*$\"\n\nBY Processes.action Processes.dest\
+    \ Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\n\
+    \   Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\n\
+    \   Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_name Processes.process_path Processes.user\n   Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `scheduled_task_deleted_or_created_via_cmd_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d5af132c-7c17-439c-9d31-13d55340f36c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/scheduled_task_deleted_or_created_via_cmd.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

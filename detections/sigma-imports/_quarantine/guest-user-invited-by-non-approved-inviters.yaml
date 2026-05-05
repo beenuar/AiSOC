@@ -1,0 +1,34 @@
+id: sigmahq-sigma-0b4b72e3-4c53-4d5b-b198-2c58cfef39a9
+name: Guest User Invited By Non Approved Inviters
+description: Detects when a user that doesn't have permissions to invite a guest user
+  attempts to invite one.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts#things-to-monitor
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Invite external user
+    Status: failure
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0b4b72e3-4c53-4d5b-b198-2c58cfef39a9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_guest_invite_failure.yml
+falsepositives:
+- A non malicious user is unaware of the proper process
+notes:
+  quarantine_reason: 'upstream status: test'

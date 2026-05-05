@@ -1,0 +1,45 @@
+id: splunk-security-content-f6ee02d6-fea0-11eb-b2c2-acde48001122
+name: Gsuite Drive Share In External Email
+description: The following analytic detects Google Drive or Google Docs files shared
+  externally from an internal domain. It leverages GSuite Drive logs, extracting and
+  comparing the source and destination email domains to identify external sharing.
+  This activity is significant as it may indicate potential data exfiltration by an
+  attacker or insider. If confirmed malicious, this could lead to unauthorized access
+  to sensitive information, data leakage, and potential compliance violations. Monitoring
+  this behavior helps in early detection and mitigation of data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567.002
+  categories:
+  - cloud
+references:
+- https://www.redhat.com/en/topics/devops/what-is-devsecops
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gsuite_drive` NOT (email IN(\"\", \"null\"))\n| spath path=parameters.owner\
+    \ output=owner\n| rex field=owner \"[^@]+@(?<src_domain>[^@]+)\"\n| rex field=email\
+    \ \"[^@]+@(?<dest_domain>[^@]+)\"\n| where src_domain = \"internal_test_email.com\"\
+    \ and not dest_domain = \"internal_test_email.com\"\n| eval phase=\"plan\"\n|\
+    \ eval severity=\"low\"\n| stats values(parameters.doc_title) as doc_title,\n\
+    \  values(parameters.doc_type) as doc_types,\n  values(email) as dst_email_list,\n\
+    \  values(parameters.visibility) as visibility,\n  values(parameters.doc_id) as\
+    \ doc_id,\n  count min(_time) as firstTime max(_time) as lastTime\n  by parameters.owner\
+    \ ip_address phase severity\n| rename parameters.owner as user ip_address as src_ip\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `gsuite_drive_share_in_external_email_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f6ee02d6-fea0-11eb-b2c2-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gsuite_drive_share_in_external_email.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

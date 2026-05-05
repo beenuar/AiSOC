@@ -1,0 +1,69 @@
+id: sigmahq-sigma-b55ca2a3-7cff-4dda-8bdd-c7bfa63bf544
+name: DNS Query Tor .Onion Address - Sysmon
+description: Detects DNS queries to an ".onion" address related to Tor routing networks
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1090.003
+  categories:
+  - endpoint
+references:
+- https://www.logpoint.com/en/blog/detecting-tor-use-with-logpoint/
+- https://github.com/Azure/Azure-Sentinel/blob/f99542b94afe0ad2f19a82cc08262e7ac8e1428e/Detections/ASimDNS/imDNS_TorProxies.yaml
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    QueryName|endswith:
+    - .hiddenservice.net
+    - .onion.ca
+    - .onion.cab
+    - .onion.casa
+    - .onion.city
+    - .onion.direct
+    - .onion.dog
+    - .onion.glass
+    - .onion.gq
+    - .onion.ink
+    - .onion.it
+    - .onion.link
+    - .onion.lt
+    - .onion.lu
+    - .onion.nu
+    - .onion.pet
+    - .onion.plus
+    - .onion.rip
+    - .onion.sh
+    - .onion.to
+    - .onion.top
+    - .onion
+    - .s1.tor-gateways.de
+    - .s2.tor-gateways.de
+    - .s3.tor-gateways.de
+    - .s4.tor-gateways.de
+    - .s5.tor-gateways.de
+    - .t2w.pw
+    - .tor2web.ae.org
+    - .tor2web.blutmagie.de
+    - .tor2web.com
+    - .tor2web.fi
+    - .tor2web.io
+    - .tor2web.org
+    - .tor2web.xyz
+    - .torlink.co
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b55ca2a3-7cff-4dda-8bdd-c7bfa63bf544
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_tor_onion_domain_query.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

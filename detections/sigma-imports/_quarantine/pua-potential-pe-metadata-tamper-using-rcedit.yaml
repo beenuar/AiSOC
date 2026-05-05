@@ -1,0 +1,52 @@
+id: sigmahq-sigma-0c92f2e6-f08f-4b73-9216-ecb0ca634689
+name: PUA - Potential PE Metadata Tamper Using Rcedit
+description: Detects the use of rcedit to potentially alter executable PE metadata
+  properties, which could conceal efforts to rename system utilities for defense evasion.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  - T1036
+  - T1027.005
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://security.stackexchange.com/questions/210843/is-it-possible-to-change-original-filename-of-an-exe
+- https://www.virustotal.com/gui/file/02e8e8c5d430d8b768980f517b62d7792d690982b9ba0f7e04163cbc1a6e7915
+- https://github.com/electron/rcedit
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \rcedit-x64.exe
+    - \rcedit-x86.exe
+  - Description: Edit resources of exe
+  - Product: rcedit
+  selection_flags:
+    CommandLine|contains: --set-
+  selection_attributes:
+    CommandLine|contains:
+    - OriginalFileName
+    - CompanyName
+    - FileDescription
+    - ProductName
+    - ProductVersion
+    - LegalCopyright
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0c92f2e6-f08f-4b73-9216-ecb0ca634689
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_rcedit_execution.yml
+falsepositives:
+- Legitimate use of the tool by administrators or users to update metadata of a binary
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,33 @@
+id: sigmahq-sigma-7bbc309f-e2b1-4eb1-8369-131a367d67d3
+name: Too Many Global Admins
+description: Identifies an event where there are there are too many accounts assigned
+  the Global Administrator role.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-how-to-configure-security-alerts#there-are-too-many-global-administrators
+logsource:
+  product: azure
+  service: pim
+detection:
+  selection:
+    riskEventType: tooManyGlobalAdminsAssignedToTenantAlertIncident
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7bbc309f-e2b1-4eb1-8369-131a367d67d3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/privileged_identity_management/azure_pim_too_many_global_admins.yml
+falsepositives:
+- Investigate if threshold setting in PIM is too low.
+notes:
+  quarantine_reason: 'upstream status: test'

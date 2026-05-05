@@ -1,0 +1,41 @@
+id: sigmahq-sigma-f1edd233-30b5-4823-9e6a-c4171b24d316
+name: Rundll32 Registered COM Objects
+description: load malicious registered COM objects
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1546.015
+  categories:
+  - endpoint
+references:
+- https://nasbench.medium.com/a-deep-dive-into-rundll32-exe-642344b41e90
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1546.015/T1546.015.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  selection_cli:
+    CommandLine|contains:
+    - '-sta '
+    - '-localserver '
+    CommandLine|contains|all:
+    - '{'
+    - '}'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f1edd233-30b5-4823-9e6a-c4171b24d316
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_registered_com_objects.yml
+falsepositives:
+- Legitimate use
+notes:
+  quarantine_reason: 'upstream status: test'

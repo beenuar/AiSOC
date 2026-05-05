@@ -1,0 +1,34 @@
+id: sigmahq-sigma-2ff692c2-4594-41ec-8fcb-46587de769e0
+name: CrashControl CrashDump Disabled
+description: Detects disabling the CrashDump per registry (as used by HermeticWiper)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/labs/hermetic-wiper-ukraine-under-attack/
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|contains: SYSTEM\CurrentControlSet\Control\CrashControl
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2ff692c2-4594-41ec-8fcb-46587de769e0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_crashdump_disabled.yml
+falsepositives:
+- Legitimate disabling of crashdumps
+notes:
+  quarantine_reason: 'upstream status: test'

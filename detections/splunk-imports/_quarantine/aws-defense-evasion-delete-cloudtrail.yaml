@@ -1,0 +1,41 @@
+id: splunk-security-content-82092925-9ca1-4e06-98b8-85a2d3889552
+name: AWS Defense Evasion Delete Cloudtrail
+description: The following analytic detects the deletion of AWS CloudTrail logs by
+  identifying `DeleteTrail` events within CloudTrail logs. This detection leverages
+  CloudTrail data to monitor for successful `DeleteTrail` actions, excluding those
+  initiated from the AWS console. This activity is significant because adversaries
+  may delete CloudTrail logs to evade detection and operate stealthily within the
+  compromised environment. If confirmed malicious, this action could allow attackers
+  to cover their tracks, making it difficult to trace their activities and potentially
+  leading to prolonged unauthorized access and further exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1562/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName = DeleteTrail eventSource = cloudtrail.amazonaws.com\
+    \ userAgent !=console.amazonaws.com errorCode = success\n  | rename user_name\
+    \ as user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY signature dest user\n       user_agent src vendor_account\n       vendor_region\
+    \ vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_defense_evasion_delete_cloudtrail_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 82092925-9ca1-4e06-98b8-85a2d3889552
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_defense_evasion_delete_cloudtrail.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

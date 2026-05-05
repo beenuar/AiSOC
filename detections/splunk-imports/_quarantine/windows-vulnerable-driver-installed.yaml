@@ -1,0 +1,44 @@
+id: splunk-security-content-1dda7586-57be-4a1b-8de1-a9ad802b9a7f
+name: Windows Vulnerable Driver Installed
+description: The following analytic detects the loading of known vulnerable Windows
+  drivers, which may indicate potential persistence or privilege escalation attempts.
+  It leverages Windows System service install EventCode 7045 to identify driver loading
+  events and cross-references them with a list of vulnerable drivers. This activity
+  is significant as attackers often exploit vulnerable drivers to gain elevated privileges
+  or maintain persistence on a system. If confirmed malicious, this could allow attackers
+  to execute arbitrary code with high privileges, leading to further system compromise
+  and potential data exfiltration. This detection is a Windows Event Log adaptation
+  of the Sysmon driver loaded detection written by Michael Haag.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://loldrivers.io/
+- https://github.com/SpikySabra/Kernel-Cactus
+- https://github.com/wavestone-cdt/EDRSandblast
+- https://research.splunk.com/endpoint/a2b1f1ef-221f-4187-b2a4-d4b08ec745f4/
+- https://www.splunk.com/en_us/blog/security/these-are-the-drivers-you-are-looking-for-detect-and-prevent-malicious-drivers.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7045 ServiceType=\"kernel mode driver\"\
+    \n  | table _time dest EventCode ImagePath ServiceName ServiceType\n  | lookup\
+    \ loldrivers driver_name AS ImagePath OUTPUT is_driver driver_description\n  |\
+    \ search is_driver = TRUE\n  | `windows_vulnerable_driver_installed_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1dda7586-57be-4a1b-8de1-a9ad802b9a7f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_vulnerable_driver_installed.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

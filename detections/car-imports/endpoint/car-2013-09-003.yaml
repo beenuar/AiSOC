@@ -1,0 +1,42 @@
+id: mitre-car-car-2013-09-003
+name: SMB Session Setups
+description: 'Account usage within SMB can be used to identify compromised credentials,
+  and the hosts accessed with them.
+
+
+  This analytic monitors SMB activity that deals with user activity rather than file
+  activity.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1187
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: PCAP
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'flow = search Flow:Message
+
+      smb_setup = filter flow where (dest_port == 445 and protocol == smb.setup)
+
+      smb_setup.user = smb_write.proto_info.user_name
+
+      smb_setup.target_host = smb_write.proto_info.hostname
+
+      output smb_write'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-09-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-09-003.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b923f7d6-ac89-4a50-a71a-89fb846b4aa8
+name: HackTool - Empire UserAgent URI Combo
+description: Detects user agent and URI paths used by empire agents
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://github.com/BC-SECURITY/Empire
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-useragent: Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko
+    cs-uri:
+    - /admin/get.php
+    - /news.php
+    - /login/process.php
+    cs-method: POST
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b923f7d6-ac89-4a50-a71a-89fb846b4aa8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_hktl_empire_ua_uri_patterns.yml
+falsepositives:
+- Valid requests with this exact user agent to server scripts of the defined names
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: splunk-security-content-82d06410-134c-11eb-adc1-0242ac120002
+name: Detect SNICat SNI Exfiltration
+description: The following analytic identifies the use of SNICat tool commands within
+  the TLS SNI field, indicating potential data exfiltration attempts. It leverages
+  Zeek SSL data to detect specific SNICat commands such as LIST, LS, SIZE, LD, CB,
+  EX, ALIVE, EXIT, WHERE, and finito in the server_name field. This activity is significant
+  as SNICat is a known tool for covert data exfiltration using TLS. If confirmed malicious,
+  this could allow attackers to exfiltrate sensitive data undetected, posing a severe
+  threat to data confidentiality and integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  categories:
+  - network
+references:
+- https://www.mnemonic.io/resources/blog/introducing-snicat/
+- https://github.com/mnemonic-no/SNIcat
+- https://attack.mitre.org/techniques/T1041/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`zeek_ssl`
+
+    | rex field=server_name "(?<snicat>(LIST|LS|SIZE|LD|CB|CD|EX|ALIVE|EXIT|WHERE|finito)-[A-Za-z0-9]{16}\.)"
+
+    | stats count BY src_ip dest_ip server_name snicat
+
+    | where count>0
+
+    | table src_ip dest_ip server_name snicat
+
+    | `detect_snicat_sni_exfiltration_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 82d06410-134c-11eb-adc1-0242ac120002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_snicat_sni_exfiltration.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-aff815cc-e400-4bf0-a47a-5d8a2407d4e1
+name: Use Get-NetTCPConnection - PowerShell Module
+description: Adversaries may attempt to get a listing of network connections to or
+  from the compromised system they are currently accessing or from remote systems
+  by querying for information over the network.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1049
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1049/T1049.md#atomic-test-2---system-network-connections-discovery-with-powershell
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection:
+    ContextInfo|contains: Get-NetTCPConnection
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aff815cc-e400-4bf0-a47a-5d8a2407d4e1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_susp_get_nettcpconnection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

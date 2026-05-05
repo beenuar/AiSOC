@@ -1,0 +1,38 @@
+id: sigmahq-sigma-d047726b-c71c-4048-a99b-2e2f50dc107d
+name: Kavremover Dropped Binary LOLBIN Usage
+description: Detects the execution of a signed binary dropped by Kaspersky Lab Products
+  Remover (kavremover) which can be abused as a LOLBIN to execute arbitrary commands
+  and binaries.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references:
+- https://nasbench.medium.com/lolbined-using-kaspersky-endpoint-security-kes-installer-to-execute-arbitrary-commands-1c999f1b7fea
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains: ' run run-cmd '
+  filter_main_legit_parents:
+    ParentImage|endswith:
+    - \cleanapi.exe
+    - \kavremover.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d047726b-c71c-4048-a99b-2e2f50dc107d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_kavremover_uncommon_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

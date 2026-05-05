@@ -1,0 +1,41 @@
+id: splunk-security-content-e4c73d68-794b-468d-b4d0-dac1772bbae7
+name: GetAdGroup with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-AdGroup` PowerShell
+  cmdlet using PowerShell Script Block Logging (EventCode=4104). This cmdlet is used
+  to enumerate all domain groups, which adversaries may exploit for situational awareness
+  and Active Directory discovery. Monitoring this activity is crucial as it can indicate
+  reconnaissance efforts within the network. If confirmed malicious, this behavior
+  could lead to further exploitation, such as privilege escalation or lateral movement,
+  by providing attackers with detailed information about the domain's group structure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://docs.microsoft.com/en-us/powershell/module/activedirectory/get-adgroup?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Get-ADGroup*\"\n \
+    \ | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `getadgroup_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e4c73d68-794b-468d-b4d0-dac1772bbae7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getadgroup_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

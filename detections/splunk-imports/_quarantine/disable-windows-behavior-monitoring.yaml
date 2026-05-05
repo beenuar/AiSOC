@@ -1,0 +1,49 @@
+id: splunk-security-content-79439cae-9200-11eb-a4d3-acde48001122
+name: Disable Windows Behavior Monitoring
+description: The following analytic identifies modifications in the registry to disable
+  Windows Defender's real-time behavior monitoring. It leverages data from the Endpoint.Registry
+  data model, specifically monitoring changes to registry paths associated with Windows
+  Defender settings. This activity is significant because disabling real-time protection
+  is a common tactic used by malware such as RATs, bots, or Trojans to evade detection.
+  If confirmed malicious, this action could allow an attacker to execute code, escalate
+  privileges, or persist in the environment without being detected by antivirus software.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://tccontre.blogspot.com/2020/01/remcos-rat-evading-windows-defender-av.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection\\DisableBehaviorMonitoring"
+    OR Registry.registry_path= "*\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time
+    Protection\\DisableOnAccessProtection" OR Registry.registry_path= "*\\SOFTWARE\\Policies\\Microsoft\\Windows
+    Defender\\Real-Time Protection\\DisableScanOnRealtimeEnable" OR Registry.registry_path=
+    "*\\SOFTWARE\\Microsoft\\Windows Defender\\Real-Time Protection\\DisableRealtimeMonitoring"
+    OR Registry.registry_path= "*\\Real-Time Protection\\DisableIntrusionPreventionSystem"
+    OR Registry.registry_path= "*\\Real-Time Protection\\DisableIOAVProtection" OR
+    Registry.registry_path= "*\\Real-Time Protection\\DisableScriptScanning" AND Registry.registry_value_data
+    = "0x00000001") by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data)
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `disable_windows_behavior_monitoring_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 79439cae-9200-11eb-a4d3-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/disable_windows_behavior_monitoring.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

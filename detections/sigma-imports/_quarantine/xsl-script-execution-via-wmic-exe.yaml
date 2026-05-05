@@ -1,0 +1,67 @@
+id: sigmahq-sigma-05c36dd6-79d6-4a9a-97da-3db20298ab2d
+name: XSL Script Execution Via WMIC.EXE
+description: 'Detects the execution of WMIC with the "format" flag to potentially
+  load local XSL files.
+
+  Adversaries abuse this functionality to execute arbitrary files while potentially
+  bypassing application whitelisting defenses.
+
+  Extensible Stylesheet Language (XSL) files are commonly used to describe the processing
+  and rendering of data within XML files.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  - T1220
+  - T1059.005
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1220/T1220.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \wmic.exe
+  - OriginalFileName: wmic.exe
+  - Hashes|contains:
+    - IMPHASH=1B1A3F43BF37B5BFE60751F2EE2F326E
+    - IMPHASH=37777A96245A3C74EB217308F3546F4C
+    - IMPHASH=9D87C9D67CE724033C0B40CC4CA1B206
+    - IMPHASH=B12619881D79C3ACADF45E752A58554A
+    - IMPHASH=16A48C3CABF98A9DC1BF02C07FE1EA00
+  selection_cmd:
+    CommandLine|contains|windash: '-format:'
+  filter_main_known_format:
+    CommandLine|contains:
+    - Format:List
+    - Format:htable
+    - Format:hform
+    - Format:table
+    - Format:mof
+    - Format:value
+    - Format:rawxml
+    - Format:xml
+    - Format:csv
+  filter_main_remote_operation:
+    CommandLine|contains:
+    - ://
+    - \\\\
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 05c36dd6-79d6-4a9a-97da-3db20298ab2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_xsl_script_processing.yml
+falsepositives:
+- WMIC.exe FP depend on scripts and administrative methods used in the monitored environment.
+- Static format arguments - https://petri.com/command-line-wmi-part-3
+notes:
+  quarantine_reason: 'upstream status: test'

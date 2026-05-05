@@ -1,0 +1,42 @@
+id: sigmahq-sigma-e2e01011-5910-4267-9c3b-4149ed5479cf
+name: Potential WWlib.DLL Sideloading
+description: Detects potential DLL sideloading of "wwlib.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/WhichbufferArda/status/1658829954182774784
+- https://news.sophos.com/en-us/2022/11/03/family-tree-dll-sideloading-cases-may-be-related/
+- https://securelist.com/apt-luminousmoth/103332/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \wwlib.dll
+  filter_main_path:
+    Image|startswith:
+    - C:\Program Files (x86)\Microsoft Office\
+    - C:\Program Files\Microsoft Office\
+    Image|endswith: \winword.exe
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\Microsoft Office\
+    - C:\Program Files\Microsoft Office\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e2e01011-5910-4267-9c3b-4149ed5479cf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_wwlib.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

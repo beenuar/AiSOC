@@ -1,0 +1,51 @@
+id: sigmahq-sigma-8de1cbe8-d6f5-496d-8237-5f44a721c7a0
+name: Whoami.EXE Execution Anomaly
+description: Detects the execution of whoami.exe with suspicious parent processes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references:
+- https://brica.de/alerts/alert/public/1247926/agent-tesla-keylogger-delivered-inside-a-power-iso-daa-archive/
+- https://app.any.run/tasks/7eaba74e-c1ea-400f-9c17-5e30eee89906/
+- https://www.youtube.com/watch?v=DsJ9ByX84o4&t=6s
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \whoami.exe
+  - OriginalFileName: whoami.exe
+  filter_main_known_parents:
+    ParentImage|endswith:
+    - \cmd.exe
+    - \powershell_ise.exe
+    - \powershell.exe
+    - \pwsh.exe
+  filter_optional_ms_monitoring_agent:
+    ParentImage|endswith: :\Program Files\Microsoft Monitoring Agent\Agent\MonitoringHost.exe
+  filter_main_parent_null:
+    ParentImage: null
+  filter_main_parent_empty:
+    ParentImage:
+    - ''
+    - '-'
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8de1cbe8-d6f5-496d-8237-5f44a721c7a0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_whoami_parent_anomaly.yml
+falsepositives:
+- Admin activity
+- Scripts and administrative tools used in the monitored environment
+- Monitoring activity
+notes:
+  quarantine_reason: 'upstream status: test'

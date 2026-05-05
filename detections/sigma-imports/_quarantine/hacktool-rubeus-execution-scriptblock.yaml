@@ -1,0 +1,53 @@
+id: sigmahq-sigma-3245cd30-e015-40ff-a31d-5cadd5f377ec
+name: HackTool - Rubeus Execution - ScriptBlock
+description: Detects the execution of the hacktool Rubeus using specific command line
+  flags
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003
+  - T1558.003
+  - T1550.003
+  categories:
+  - endpoint
+references:
+- https://blog.harmj0y.net/redteaming/from-kekeo-to-rubeus
+- https://m0chan.github.io/2019/07/31/How-To-Attack-Kerberos-101.html
+- https://github.com/GhostPack/Rubeus
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - 'asreproast '
+    - 'dump /service:krbtgt '
+    - dump /luid:0x
+    - 'kerberoast '
+    - 'createnetonly /program:'
+    - 'ptt /ticket:'
+    - '/impersonateuser:'
+    - 'renew /ticket:'
+    - 'asktgt /user:'
+    - 'harvest /interval:'
+    - 's4u /user:'
+    - 's4u /ticket:'
+    - 'hash /password:'
+    - 'golden /aes256:'
+    - 'silver /user:'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3245cd30-e015-40ff-a31d-5cadd5f377ec
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_hktl_rubeus.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

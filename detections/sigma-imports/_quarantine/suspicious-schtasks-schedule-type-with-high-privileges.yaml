@@ -1,0 +1,47 @@
+id: sigmahq-sigma-7a02e22e-b885-4404-b38b-1ddc7e65258a
+name: Suspicious Schtasks Schedule Type With High Privileges
+description: Detects scheduled task creations or modification to be run with high
+  privileges on a suspicious schedule type
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-change
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \schtasks.exe
+  - OriginalFileName: schtasks.exe
+  selection_time:
+    CommandLine|contains:
+    - ' ONLOGON '
+    - ' ONSTART '
+    - ' ONCE '
+    - ' ONIDLE '
+  selection_privs:
+    CommandLine|contains:
+    - NT AUT
+    - ' SYSTEM'
+    - HIGHEST
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7a02e22e-b885-4404-b38b-1ddc7e65258a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_schedule_type_system.yml
+falsepositives:
+- Some installers were seen using this method of creation unfortunately. Filter them
+  in your environment
+notes:
+  quarantine_reason: 'upstream status: test'

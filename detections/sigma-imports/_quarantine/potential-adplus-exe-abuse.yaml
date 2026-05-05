@@ -1,0 +1,46 @@
+id: sigmahq-sigma-2f869d59-7f6a-4931-992c-cce556ff2d53
+name: Potential Adplus.EXE Abuse
+description: Detects execution of "AdPlus.exe", a binary that is part of the Windows
+  SDK that can be used as a LOLBIN in order to dump process memory and execute arbitrary
+  commands.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Adplus/
+- https://twitter.com/nas_bench/status/1534916659676422152
+- https://twitter.com/nas_bench/status/1534915321856917506
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \adplus.exe
+  - OriginalFileName: Adplus.exe
+  selection_cli:
+    CommandLine|contains:
+    - ' -hang '
+    - ' -pn '
+    - ' -pmn '
+    - ' -p '
+    - ' -po '
+    - ' -c '
+    - ' -sc '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2f869d59-7f6a-4931-992c-cce556ff2d53
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_adplus_memory_dump.yml
+falsepositives:
+- Legitimate usage of Adplus for debugging purposes
+notes:
+  quarantine_reason: 'upstream status: test'

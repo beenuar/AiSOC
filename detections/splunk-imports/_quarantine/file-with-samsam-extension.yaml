@@ -1,0 +1,52 @@
+id: splunk-security-content-02c6cfc2-ae66-4735-bfc7-6291da834cbf
+name: File with Samsam Extension
+description: 'The following analytic detects file writes with extensions indicative
+  of a SamSam ransomware attack.
+
+  It leverages file-system activity data to identify file names ending in .stubbin,
+  .berkshire, .satoshi, .sophos, or .keyxml.
+
+  This activity is significant because SamSam ransomware is highly destructive, leading
+  to file encryption and ransom demands.
+
+  If confirmed malicious, the impact includes significant financial losses, operational
+  disruptions, and reputational damage.
+
+  Immediate actions should include isolating affected systems, restoring files from
+  backups, and investigating the attack source to prevent further incidents.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n        values(Filesystem.user) as user\n   \
+    \     values(Filesystem.dest) as dest\n        values(Filesystem.file_path) as\
+    \ file_path\nfrom datamodel=Endpoint.Filesystem where\nFilesystem.file_name IN\
+    \ (\n  \"*.berkshire\",\n  \"*.keyxml\",\n  \"*.satoshi\",\n  \"*.sophos\",\n\
+    \  \"*.stubbin\"\n)\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\n\
+    \   Filesystem.file_create_time Filesystem.file_hash\n   Filesystem.file_modify_time\
+    \ Filesystem.file_name\n   Filesystem.file_path Filesystem.file_acl Filesystem.file_size\n\
+    \   Filesystem.process_guid Filesystem.process_id\n   Filesystem.user Filesystem.vendor_product\n\
+    | `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | rex field=file_name \"(?<file_extension>\\.[^\\.]+)$\"\n| search file_extension\
+    \ IN (\".berkshire\", \".keyxml\", \".satoshi\", \".sophos\", \".stubbin\")\n\
+    | `file_with_samsam_extension_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 02c6cfc2-ae66-4735-bfc7-6291da834cbf
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/file_with_samsam_extension.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

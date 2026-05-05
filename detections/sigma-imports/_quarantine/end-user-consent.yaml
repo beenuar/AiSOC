@@ -1,0 +1,32 @@
+id: sigmahq-sigma-9b2cc4c4-2ad4-416d-8e8e-ee6aa6f5035a
+name: End User Consent
+description: Detects when an end user consents to an application
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#end-user-consent
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    ConsentContext.IsAdminConsent: 'false'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9b2cc4c4-2ad4-416d-8e8e-ee6aa6f5035a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_end_user_consent.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,46 @@
+id: sigmahq-sigma-880973f3-9708-491c-a77b-2a35a1921158
+name: Linux Shell Pipe to Shell
+description: Detects suspicious process command line that starts with a shell that
+  executes something and finally gets piped into another shell
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1140
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    CommandLine|startswith:
+    - 'sh -c '
+    - 'bash -c '
+  selection_exec:
+  - CommandLine|contains:
+    - '| bash '
+    - '| sh '
+    - '|bash '
+    - '|sh '
+  - CommandLine|endswith:
+    - '| bash'
+    - '| sh'
+    - '|bash'
+    - ' |sh'
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 880973f3-9708-491c-a77b-2a35a1921158
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_susp_pipe_shell.yml
+falsepositives:
+- Legitimate software that uses these patterns
+notes:
+  quarantine_reason: 'upstream status: test'

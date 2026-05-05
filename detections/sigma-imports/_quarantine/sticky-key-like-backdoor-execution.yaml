@@ -1,0 +1,51 @@
+id: sigmahq-sigma-2fdefcb3-dbda-401e-ae23-f0db027628bc
+name: Sticky Key Like Backdoor Execution
+description: Detects the usage and installation of a backdoor that uses an option
+  to register a malicious debugger for built-in tools that are accessible in the login
+  screen
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1546.008
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/archive/blogs/jonathantrull/detecting-sticky-key-backdoors
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \winlogon.exe
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+    - \wt.exe
+    CommandLine|contains:
+    - sethc.exe
+    - utilman.exe
+    - osk.exe
+    - Magnify.exe
+    - Narrator.exe
+    - DisplaySwitch.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2fdefcb3-dbda-401e-ae23-f0db027628bc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_sticky_key_like_backdoor_execution.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

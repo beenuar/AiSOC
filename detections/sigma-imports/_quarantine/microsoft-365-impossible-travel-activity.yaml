@@ -1,0 +1,36 @@
+id: sigmahq-sigma-d7eab125-5f94-43df-8710-795b80fa1189
+name: Microsoft 365 - Impossible Travel Activity
+description: Detects when a Microsoft Cloud App Security reported a risky sign-in
+  attempt due to a login associated with an impossible travel.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Impossible travel activity
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7eab125-5f94-43df-8710-795b80fa1189
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_impossible_travel_activity.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

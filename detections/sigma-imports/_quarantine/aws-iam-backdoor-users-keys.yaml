@@ -1,0 +1,41 @@
+id: sigmahq-sigma-0a5177f4-6ca9-44c2-aacf-d3f3d8b6e4d2
+name: AWS IAM Backdoor Users Keys
+description: 'Detects AWS API key creation for a user by another user.
+
+  Backdoored users can be used to obtain persistence in the AWS environment.
+
+  Also with this alert, you can detect a flow of AWS keys in your org.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://github.com/RhinoSecurityLabs/pacu/blob/866376cd711666c775bbfcde0524c817f2c5b181/pacu/modules/iam__backdoor_users_keys/main.py
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_source:
+    eventSource: iam.amazonaws.com
+    eventName: CreateAccessKey
+  filter:
+    userIdentity.arn|contains: responseElements.accessKey.userName
+  condition: selection_source and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0a5177f4-6ca9-44c2-aacf-d3f3d8b6e4d2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_iam_backdoor_users_keys.yml
+falsepositives:
+- Adding user keys to their own accounts (the filter cannot cover all possible variants
+  of user naming)
+- AWS API keys legitimate exchange workflows
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-a197e378-d31b-41c0-9635-cfdf1c1bb423
+name: HackTool - WinRM Access Via Evil-WinRM
+description: Adversaries may use Valid Accounts to log into a computer using the Remote
+  Desktop Protocol (RDP). The adversary may then perform actions as the logged-on
+  user.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1021.006/T1021.006.md#atomic-test-3---winrm-access-with-evil-winrm
+- https://github.com/Hackplayers/evil-winrm
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \ruby.exe
+    CommandLine|contains|all:
+    - '-i '
+    - '-u '
+    - '-p '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a197e378-d31b-41c0-9635-cfdf1c1bb423
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_evil_winrm.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

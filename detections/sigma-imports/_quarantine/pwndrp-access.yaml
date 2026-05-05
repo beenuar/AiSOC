@@ -1,0 +1,34 @@
+id: sigmahq-sigma-2b1ee7e4-89b6-4739-b7bb-b811b6607e5e
+name: PwnDrp Access
+description: Detects downloads from PwnDrp web servers developed for red team testing
+  and most likely also used for criminal activity
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1102.001
+  - T1102.003
+  categories:
+  - network
+references:
+- https://breakdev.org/pwndrop/
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri|contains: /pwndrop/
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2b1ee7e4-89b6-4739-b7bb-b811b6607e5e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_pwndrop.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

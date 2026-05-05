@@ -1,0 +1,46 @@
+id: splunk-security-content-791b727c-deec-4fbe-a732-756131b3c5a1
+name: 3CX Supply Chain Attack Network Indicators
+description: The following analytic identifies DNS queries to domains associated with
+  the 3CX supply chain attack. It leverages the Network_Resolution datamodel to detect
+  these suspicious domain indicators. This activity is significant because it can
+  indicate a potential compromise stemming from the 3CX supply chain attack, which
+  is known for distributing malicious software through trusted updates. If confirmed
+  malicious, this activity could allow attackers to establish a foothold in the network,
+  exfiltrate sensitive data, or further propagate malware, leading to extensive damage
+  and data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1195.002
+  categories:
+  - network
+references:
+- https://www.sentinelone.com/blog/smoothoperator-ongoing-campaign-trojanizes-3cx-software-in-software-supply-chain-attack/
+- https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp
+- https://www.reddit.com/r/crowdstrike/comments/125r3uu/20230329_situational_awareness_crowdstrike/
+- https://www.3cx.com/community/threads/crowdstrike-endpoint-security-detection-re-3cx-desktop-app.119934/page-2#post-558898
+- https://www.3cx.com/community/threads/3cx-desktopapp-security-alert.119951/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Network_Resolution where\nDNS.query=*\n\
+    NOT DNS.query IN (\"-\", \"unknown\")\nby DNS.answer DNS.answer_count DNS.query\n\
+    \   DNS.query_count DNS.reply_code_id DNS.src\n   DNS.vendor_product\n| `drop_dm_object_name(DNS)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | lookup 3cx_ioc_domains domain as query OUTPUT Description isIOC\n| search isIOC=true\n\
+    | `3cx_supply_chain_attack_network_indicators_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 791b727c-deec-4fbe-a732-756131b3c5a1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/3cx_supply_chain_attack_network_indicators.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

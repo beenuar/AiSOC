@@ -1,0 +1,66 @@
+id: splunk-security-content-f2a9df84-9b01-4a21-9e3a-7aa1a217f69e
+name: Cisco NVM - MSHTML or MSHTA Network Execution Without URL in CLI
+description: 'This analytic detects suspicious use of ''mshta.exe'' or ''rundll32.exe''
+  invoking ''mshtml.dll''
+
+  or the ''RunHTMLApplication'' export without including a direct HTTP/HTTPS URL in
+  the command line.
+
+  This pattern could be associated with obfuscated script execution used by threat
+  actors during
+
+  initial access or payload staging. The absence of a visible URL may indicate attempts
+  to evade static
+
+  detections by embedding the URL via string concatenation, encoding (e.g., hex),
+  or indirect script loaders
+
+  like ''GetObject()''.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  - T1059.005
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/005/
+- https://redcanary.com/blog/mshta-attack-technique/
+- https://lolbas-project.github.io/lolbas/Binaries/Rundll32/
+- https://learn.microsoft.com/en-us/windows/win32/api/mshtml/nf-mshtml-mshtml_runhtmlapplication
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_network_visibility_module_flowdata`\n(\n  (\n    process_name\
+    \ = \"mshta.exe\"\n    process_arguments IN (\"*javascript*\", \"*vbscript*\"\
+    )\n  )\n  OR\n  ( process_name = \"rundll32.exe\" AND\n    process_arguments =\
+    \ \"*mshtml*\" AND\n    process_arguments = \"*RunHTMLApplication*\"\n  )\n)\n\
+    NOT process_arguments IN (\"*http://*\", \"*https://*\")\n| stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n        values(parent_process_arguments)\
+    \ as parent_process_arguments\n        values(process_arguments) as process_arguments\n\
+    \        values(parent_process_hash) as parent_process_hash\n        values(process_hash)\
+    \ as process_hash\n        values(module_name_list) as module_name_list\n    \
+    \    values(module_hash_list) as module_hash_list\n        values(dest_port) as\
+    \ dest_port\n        values(aliul) as additional_logged_in_users_list\n      \
+    \  values(dest_hostname) as dest_hostname\n        by src dest parent_process_path\
+    \ parent_process_integrity_level process_path process_name process_integrity_level\
+    \ process_id transport\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table\n  parent_process_integrity_level parent_process_path parent_process_arguments\
+    \ parent_process_hash\n  process_integrity_level process_path process_name process_arguments\
+    \ process_hash process_id\n  additional_logged_in_users_list module_name_list\
+    \ module_hash_list\n  src dest_hostname dest dest_port transport firstTime lastTime\n\
+    | `cisco_nvm___mshtml_or_mshta_network_execution_without_url_in_cli_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f2a9df84-9b01-4a21-9e3a-7aa1a217f69e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cisco_nvm___mshtml_or_mshta_network_execution_without_url_in_cli.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

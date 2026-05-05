@@ -1,0 +1,50 @@
+id: sigmahq-sigma-055fb54c-a8f4-4aee-bd44-f74cf30a0d9d
+name: HackTool - SharpMove Tool Execution
+description: Detects the execution of SharpMove, a .NET utility performing multiple
+  tasks such as "Task Creation", "SCM" query, VBScript execution using WMI via its
+  PE metadata and command line options.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://github.com/0xthirteen/SharpMove/
+- https://pentestlab.blog/tag/sharpmove/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \SharpMove.exe
+  - OriginalFileName: SharpMove.exe
+  selection_cli_computer:
+    CommandLine|contains: computername=
+  selection_cli_actions:
+    CommandLine|contains:
+    - action=create
+    - action=dcom
+    - action=executevbs
+    - action=hijackdcom
+    - action=modschtask
+    - action=modsvc
+    - action=query
+    - action=scm
+    - action=startservice
+    - action=taskscheduler
+  condition: selection_img or all of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 055fb54c-a8f4-4aee-bd44-f74cf30a0d9d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharpmove.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

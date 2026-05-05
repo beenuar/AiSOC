@@ -1,0 +1,40 @@
+id: sigmahq-sigma-cdb15e19-c2d0-432a-928e-e49c8c60dcf2
+name: Potential DLL Sideloading Of MsCorSvc.DLL
+description: Detects potential DLL sideloading of "mscorsvc.dll".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/entries/microsoft/built-in/mscorsvc.html
+logsource:
+  product: windows
+  category: image_load
+detection:
+  selection:
+    ImageLoaded|endswith: \mscorsvc.dll
+  filter_main_generic:
+    ImageLoaded|startswith:
+    - C:\Windows\Microsoft.NET\Framework\
+    - C:\Windows\Microsoft.NET\Framework64\
+    - C:\Windows\Microsoft.NET\FrameworkArm\
+    - C:\Windows\Microsoft.NET\FrameworkArm64\
+    - C:\Windows\WinSxS\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cdb15e19-c2d0-432a-928e-e49c8c60dcf2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_mscorsvc.yml
+falsepositives:
+- Legitimate applications loading their own versions of the DLL mentioned in this
+  rule.
+notes:
+  quarantine_reason: 'upstream status: test'

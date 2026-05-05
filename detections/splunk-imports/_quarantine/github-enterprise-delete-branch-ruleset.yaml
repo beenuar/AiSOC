@@ -1,0 +1,48 @@
+id: splunk-security-content-6169ea23-3719-439f-957a-0ea5174b70e2
+name: GitHub Enterprise Delete Branch Ruleset
+description: The following analytic detects when branch rules are deleted in GitHub
+  Enterprise. The detection monitors GitHub Enterprise audit logs for branch rule
+  deletion events by tracking actor details, repository information, and associated
+  metadata. For a SOC, identifying deleted branch rules is critical as it could indicate
+  attempts to bypass code review requirements and security controls. Branch deletion
+  rules are essential security controls that enforce code review, prevent force pushes,
+  and maintain code quality. Disabling these protections could allow malicious actors
+  to directly push unauthorized code changes or backdoors to protected branches. The
+  impact of disabled branch protection includes potential code tampering, bypass of
+  security reviews, introduction of vulnerabilities or malicious code, and compromise
+  of software supply chain integrity. This activity could be part of a larger attack
+  chain where an adversary first disables security controls before attempting to inject
+  malicious code.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1195
+  categories:
+  - cloud
+references:
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_enterprise` action=repository_ruleset.destroy\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor,\
+    \ actor_id, actor_ip,\n       actor_is_bot, actor_location.country_code, business,\n\
+    \       business_id, org, org_id,\n       repo, repo_id, user_agent,\n       action,\
+    \ ruleset_name\n  | eval user=actor\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_enterprise_delete_branch_ruleset_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6169ea23-3719-439f-957a-0ea5174b70e2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_enterprise_delete_branch_ruleset.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

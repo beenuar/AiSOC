@@ -1,0 +1,53 @@
+id: chronicle-detection-rules-sap-impossible-travel
+name: sap_impossible_travel
+description: sap_impossible_travel
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_impossible_travel {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Identifies two successful logons for the same User ID from\
+    \ two different geographic locations in a timeframe that is physically impossible\
+    \ to travel between, indicating credential sharing or theft.\"\n    severity =\
+    \ \"medium\"\n    tactic = \"TA0006\"\n    technique = \"T1078\"\n\n  events:\n\
+    \    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n    (\n        $e.metadata.event_type\
+    \ = \"USER_LOGIN\" or\n        $e.additional.fields[\"msg_1\"] = /^AU1$|^AU5$/\n\
+    \    )\n    $e.principal.ip_geo_artifact.location.country_or_region != \"\"\n\n\
+    \    $country = $e.principal.ip_geo_artifact.location.country_or_region\n    $state\
+    \ = $e.principal.ip_geo_artifact.location.state\n    $user = $e.principal.user.userid\n\
+    \n  match:\n    $user over 1h\n\n  outcome:\n    $countries = array_distinct($country)\n\
+    \    $states = array_distinct($state)\n    $count_of_countries = count_distinct($country)\n\
+    \    $count_of_states = count_distinct($state)\n    $risk_score = if(count_distinct($country)\
+    \ > 1, 30, 0) + if(count_distinct($state) > 2, 30, 0) + 30\n    $network_carrier_name\
+    \ = array_distinct($e.principal.ip_geo_artifact.network.carrier_name)\n    $networn_dns_domain\
+    \ = array_distinct($e.principal.ip_geo_artifact.network.dns_domain)\n    $network_org\
+    \ = array_distinct($e.principal.ip_geo_artifact.network.organization_name)\n \
+    \   $sap_instance = array_distinct($e.target.resource.name)\n\n  condition:\n\
+    \    #country >= 2 or #state >= 2\n}"
+  chronicle_rule_name: sap_impossible_travel
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_impossible_travel
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_impossible_travel.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

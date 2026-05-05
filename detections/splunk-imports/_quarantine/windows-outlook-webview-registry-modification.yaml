@@ -1,0 +1,47 @@
+id: splunk-security-content-6e1ad5d4-d9af-496a-96ec-f31c11cd09f2
+name: Windows Outlook WebView Registry Modification
+description: The following analytic identifies modifications to specific Outlook registry
+  values related to WebView and Today features. It detects when a URL is set in these
+  registry locations, which could indicate attempts to manipulate Outlook's web-based
+  components. The analytic focuses on changes to the "URL" value within Outlook's
+  WebView and Today registry paths. This activity is significant as it may represent
+  an attacker's effort to redirect Outlook's web content or inject malicious URLs.
+  If successful, this technique could lead to phishing attempts, data theft, or serve
+  as a stepping stone for further compromise of the user's email client and potentially
+  sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/c6318acde2e2f691b550e3a491f49ff1
+- https://github.com/trustedsec/specula/wiki
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count values(Registry.registry_value_name)
+    as registry_value_name values(Registry.registry_value_data) as registry_value_data
+    min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Registry
+    where (Registry.registry_path="*\\Software\\Microsoft\\Office\\*\\Outlook\\WebView\\*"
+    OR Registry.registry_path="*\\Software\\Microsoft\\Office\\*\\Outlook\\Today")
+    AND Registry.registry_value_name="URL" by Registry.action Registry.dest Registry.process_guid
+    Registry.process_id Registry.registry_hive Registry.registry_path Registry.registry_key_name
+    Registry.registry_value_data Registry.registry_value_name Registry.registry_value_type
+    Registry.status Registry.user Registry.vendor_product | `security_content_ctime(lastTime)`
+    | `security_content_ctime(firstTime)` | `drop_dm_object_name(Registry)` | `windows_outlook_webview_registry_modification_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6e1ad5d4-d9af-496a-96ec-f31c11cd09f2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_outlook_webview_registry_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-cec8e918-30f7-4e2d-9bfa-a59cc97ae60f
+name: OpenWith.exe Executes Specified Binary
+description: The OpenWith.exe executes other binary
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://github.com/LOLBAS-Project/LOLBAS/blob/4db780e0f0b2e2bb8cb1fa13e09196da9b9f1834/yml/LOLUtilz/OSBinaries/Openwith.yml
+- https://twitter.com/harr0ey/status/991670870384021504
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \OpenWith.exe
+    CommandLine|contains: /c
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cec8e918-30f7-4e2d-9bfa-a59cc97ae60f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_openwith.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

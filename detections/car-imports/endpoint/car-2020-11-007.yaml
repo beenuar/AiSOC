@@ -1,0 +1,46 @@
+id: mitre-car-car-2020-11-007
+name: Network Share Connection Removal
+description: Adversaries may use network shares to exfliltrate date; they will then
+  remove the shares to cover their tracks. This analytic looks for the removal of
+  network shares via commandline, which is otherwise a rare event.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - network shares being removed via the command line
+    type: Pseudocode
+    code: "processes = search Process:Create\ntarget_processes = filter processes\
+      \ where (\n  (exe=\"C:\\\\Windows\\\\System32\\\\net.exe\" AND command_line=\"\
+      *delete*\") OR\n  command_line=\"*Remove-SmbShare*\" OR\n  comman_line=\"*Remove-FileShare*\"\
+      \ )\noutput target_processes\n"
+  - name: Splunk Search - delete network shares
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) ((Image="C:\\Windows\\System32\\net.exe"
+      AND CommandLine="*delete*") OR CommandLine="*Remove-SmbShare*" OR CommandLine="*Remove-FileShare*")
+
+      '
+  - name: LogPoint Search - delete network shares
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 ((image="C:\Windows\System32\net.exe"
+      command="*delete*") OR command="*Remove-SmbShare*" OR command="*Remove-FileShare*")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-007
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-007.yaml
+notes:
+  car_status: needs_implementation

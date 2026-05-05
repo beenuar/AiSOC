@@ -1,0 +1,34 @@
+id: sigmahq-sigma-e9a2b582-3f6a-48ac-b4a1-6849cdc50b3c
+name: Apache Threading Error
+description: Detects an issue in apache logs that reports threading related errors
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1210
+  categories:
+  - endpoint
+references:
+- https://github.com/hannob/apache-uaf/blob/da40f2be3684c8095ec6066fa68eb5c07a086233/README.md
+logsource:
+  service: apache
+  definition: 'Requirements: Must be able to collect the error.log file'
+detection:
+  keywords:
+  - '__pthread_tpp_change_priority: Assertion `new_prio == -1 || (new_prio >= fifo_min_prio
+    && new_prio <= fifo_max_prio)'
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e9a2b582-3f6a-48ac-b4a1-6849cdc50b3c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/product/apache/web_apache_threading_error.yml
+falsepositives:
+- 3rd party apache modules - https://bz.apache.org/bugzilla/show_bug.cgi?id=46185
+notes:
+  quarantine_reason: 'upstream status: test'

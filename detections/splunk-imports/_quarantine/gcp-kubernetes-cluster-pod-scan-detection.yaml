@@ -1,0 +1,37 @@
+id: splunk-security-content-19b53215-4a16-405b-8087-9e6acf619842
+name: GCP Kubernetes cluster pod scan detection
+description: The following analytic identifies unauthenticated requests to Kubernetes
+  cluster pods. It detects this activity by analyzing GCP Pub/Sub messages for audit
+  logs where the response status code is 401, indicating unauthorized access attempts.
+  This activity is significant for a SOC because it may indicate reconnaissance or
+  scanning attempts by an attacker trying to identify vulnerable pods. If confirmed
+  malicious, this activity could lead to unauthorized access, allowing the attacker
+  to exploit vulnerabilities within the cluster, potentially compromising sensitive
+  data or gaining control over the Kubernetes environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1526
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`google_gcp_pubsub_message` category=kube-audit\n  | spath input=properties.log\n\
+    \  | search responseStatus.code=401\n  | table sourceIPs{} userAgent verb requestURI\
+    \ responseStatus.reason properties.pod\n  | `gcp_kubernetes_cluster_pod_scan_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 19b53215-4a16-405b-8087-9e6acf619842
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gcp_kubernetes_cluster_pod_scan_detection.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

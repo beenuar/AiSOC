@@ -1,0 +1,44 @@
+id: sigmahq-sigma-af491bca-e752-4b44-9c86-df5680533dbc
+name: Finger.EXE Execution
+description: 'Detects execution of the "finger.exe" utility.
+
+  Finger.EXE or "TCPIP Finger Command" is an old utility that is still present on
+  modern Windows installation. It Displays information about users on a specified
+  remote computer (typically a UNIX computer) that is running the finger service or
+  daemon.
+
+  Due to the old nature of this utility and the rareness of machines having the finger
+  service. Any execution of "finger.exe" can be considered "suspicious" and worth
+  investigating.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://twitter.com/bigmacjpg/status/1349727699863011328?s=12
+- https://app.any.run/tasks/40115012-a919-4208-bfed-41e82cb3dadf/
+- http://hyp3rlinx.altervista.org/advisories/Windows_TCPIP_Finger_Command_C2_Channel_and_Bypassing_Security_Software.txt
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - OriginalFileName: finger.exe
+  - Image|endswith: \finger.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: af491bca-e752-4b44-9c86-df5680533dbc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_finger_execution.yml
+falsepositives:
+- Admin activity (unclear what they do nowadays with finger.exe)
+notes:
+  quarantine_reason: 'upstream status: test'

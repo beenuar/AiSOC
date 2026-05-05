@@ -1,0 +1,35 @@
+id: sigmahq-sigma-0ddcff6d-d262-40b0-804b-80eb592de8e3
+name: Azure Service Principal Created
+description: Identifies when a service principal is created in Azure.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/identity/monitoring-health/reference-audit-activities#application-proxy
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    properties.message: Add service principal
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0ddcff6d-d262-40b0-804b-80eb592de8e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_service_principal_created.yml
+falsepositives:
+- Service principal being created may be performed by a system administrator.
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Service principal created from unfamiliar users should be investigated. If known
+  behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

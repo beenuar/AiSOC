@@ -1,0 +1,38 @@
+id: sigmahq-sigma-2316929c-01aa-438c-970f-099145ab1ee6
+name: JAMF MDM Potential Suspicious Child Process
+description: Detects potential suspicious child processes of "jamf". Could be a sign
+  of potential abuse of Jamf as a C2 server as seen by Typhon MythicAgent.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/MythicAgents/typhon/
+- https://www.zoocoup.org/casper/jamf_cheatsheet.pdf
+- https://docs.jamf.com/10.30.0/jamf-pro/administrator-guide/Components_Installed_on_Managed_Computers.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    ParentImage|endswith: /jamf
+    Image|endswith:
+    - /bash
+    - /sh
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2316929c-01aa-438c-970f-099145ab1ee6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_jamf_susp_child.yml
+falsepositives:
+- Legitimate execution of custom scripts or commands by Jamf administrators. Apply
+  additional filters accordingly
+notes:
+  quarantine_reason: 'upstream status: test'

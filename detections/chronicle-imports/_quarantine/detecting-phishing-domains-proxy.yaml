@@ -1,0 +1,70 @@
+id: chronicle-detection-rules-detecting-phishing-domains-proxy
+name: detecting_phishing_domains_proxy
+description: detecting_phishing_domains_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detecting_phishing_domains_proxy {\n meta:\n    author =\
+    \ \"Dmitriy Dyakon, SOC Prime\"\n    description = \"This rule detects network\
+    \ connections to Phishing domains.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/CeUkPKroNAZ7\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071\"\n\n  events:\n(($selection_URLs_1.target.url\
+    \ = \"com-managers-updateds-notifications-accounts.com\" or $selection_URLs_1.target.url\
+    \ = \"com-updated-manager-notifications-accounts.info\" or $selection_URLs_1.target.url\
+    \ = \"com-index-managers-updateds-notifications-accounts.com\" or $selection_URLs_1.target.url\
+    \ = \"com-notice-index-managers-review-accounts.com\" or $selection_URLs_1.target.url\
+    \ = \"appleid.com-notice-index-managers-review-accounts.com\" or $selection_URLs_1.target.url\
+    \ = \"appleid.com-index-managers-updateds-notifications-accounts.com\" or $selection_URLs_1.target.url\
+    \ = \"appleid.com-updated-manager-notifications-accounts.info\" or $selection_URLs_1.target.url\
+    \ = \"appleid.com-manager-updateds-account-notifeds.com\" or $selection_URLs_1.target.url\
+    \ = \"com-manager-updateds-account-notifeds.com\" or $selection_URLs_1.target.url\
+    \ = \"appleid.com-managers-updateds-notifications-accounts.com\" or $selection_URLs_1.target.url\
+    \ = \"appleid.com-index-managers-updateds-notifications-accounts.info\" or $selection_URLs_1.target.url\
+    \ = \"com-index-managers-updateds-notifications-accounts.info\") or ($selection_URLs_1.target.url\
+    \ = \"com-authenticationid-account-id-291175.com\" or $selection_URLs_1.target.url\
+    \ = \"com-authentication-account-id-67800.com\" or $selection_URLs_1.target.url\
+    \ = \"account-signinid.com-authentication-account-id-67800.com\" or $selection_URLs_1.target.url\
+    \ = \"com-reviewid-account-authenticationid-11250.com\" or $selection_URLs_1.target.url\
+    \ = \"com-authentication-account-id-67991.com\" or $selection_URLs_1.target.url\
+    \ = \"accountid-signin.com-authenticationid-account-id-291175.com\") or ($selection_URLs_1.target.url\
+    \ = \"reverify-id-apple.com\" or $selection_URLs_1.target.url = \"re-verify-id-apple.com\"\
+    \ or $selection_URLs_1.target.url = \"reverify-id-apple.com\" or $selection_URLs_1.target.url\
+    \ = \"un-verify-id-apple.com\" or $selection_URLs_1.target.url = \"unverify-id-apple.com\"\
+    \ or $selection_URLs_1.target.url = \"re-verify-id-apple.com\" or $selection_URLs_1.target.url\
+    \ = \"unverify-id-apple.com\" or $selection_URLs_1.target.url = \"www.unverify-id-apple.com\"\
+    \ or $selection_URLs_1.target.url = \"un-verify-id-apple.com\" or $selection_URLs_1.target.url\
+    \ = \"wazze-design.com\" or $selection_URLs_1.target.url = \"www.wazze-design.com\"\
+    \ or $selection_URLs_1.target.url = \"www.re-verify-id-apple.com\" or $selection_URLs_1.target.url\
+    \ = \"www.reverify-id-apple.com\" or $selection_URLs_1.target.url = \"www.un-verify-id-apple.com\"\
+    \ or $selection_URLs_1.target.url = \"ns1.stitis.com\" or $selection_URLs_1.target.url\
+    \ = \"ns2.stitis.com\" or $selection_URLs_1.target.url = \"disable-id-apple.com\"\
+    \ or $selection_URLs_1.target.url = \"www.support-id-icloud.com\" or $selection_URLs_1.target.url\
+    \ = \"apple.com-verif-id.app\") or ($selection_URLs_1.target.url = \"pages-secure.com-verifications-account-webservices-appleid.com\"\
+    \ or $selection_URLs_1.target.url = \"com-verifications-account-webservices-appleid.com\"\
+    \ or $selection_URLs_1.target.url = \"com-verifications-account-webservices-appleid.com\"\
+    \ or $selection_URLs_1.target.url = \"com-page-secure-webmail-supportcenter.com\"\
+    \ or $selection_URLs_1.target.url = \"identification-account.com-page-secure-webmail-supportcenter.com\"\
+    \ or $selection_URLs_1.target.url = \"www.com-page-secure-webmail-supportcenter.com\"\
+    \ or $selection_URLs_1.target.url = \"com-page-secure-webmail-supportcenter.com\"\
+    ))\n\n  condition:\n    $selection_URLs_1\n}"
+  chronicle_rule_name: detecting_phishing_domains_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: detecting_phishing_domains_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/proxy/detecting_phishing_domains__proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

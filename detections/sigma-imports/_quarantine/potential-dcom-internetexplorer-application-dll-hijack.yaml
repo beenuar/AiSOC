@@ -1,0 +1,35 @@
+id: sigmahq-sigma-2f7979ae-f82b-45af-ac1d-2b10e93b0baa
+name: Potential DCOM InternetExplorer.Application DLL Hijack
+description: Detects potential DLL hijack of "iertutil.dll" found in the DCOM InternetExplorer.Application
+  Class over the network
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/201009-RemoteDCOMIErtUtilDLLHijack/notebook.html
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image: System
+    TargetFilename|endswith: \Internet Explorer\iertutil.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2f7979ae-f82b-45af-ac1d-2b10e93b0baa
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_dcom_iertutil_dll_hijack.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

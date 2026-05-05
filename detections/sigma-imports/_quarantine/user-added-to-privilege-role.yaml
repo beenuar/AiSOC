@@ -1,0 +1,34 @@
+id: sigmahq-sigma-49a268a4-72f4-4e38-8a7b-885be690c5b5
+name: User Added To Privilege Role
+description: Detects when a user is added to a privileged role.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-identity-management#azure-ad-roles-assignment
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message:
+    - Add eligible member (permanent)
+    - Add eligible member (eligible)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 49a268a4-72f4-4e38-8a7b-885be690c5b5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_priviledged_role_assignment_add.yml
+falsepositives:
+- Legtimate administrator actions of adding members from a role
+notes:
+  quarantine_reason: 'upstream status: test'

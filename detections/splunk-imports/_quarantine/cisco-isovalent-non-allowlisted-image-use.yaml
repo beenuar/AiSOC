@@ -1,0 +1,58 @@
+id: splunk-security-content-9f2b7b1d-6c2f-4f2d-9a8b-8a1d7c5f2e11
+name: Cisco Isovalent - Non Allowlisted Image Use
+description: 'The following analytic detects use of container images that fall outside
+  an approved
+
+  allowlist, leveraging Cisco Isovalent/Tetragon runtime telemetry (image name and
+
+  workload identity). Adversaries commonly introduce untrusted or newly published
+
+  images to deploy tooling, establish persistence, or abuse supply‑chain trust. This
+
+  behavior may indicate image pulls from unauthorized registries, execution of
+
+  unvetted software, or a drift from established deployment baselines. Extra scrutiny
+
+  is warranted for namespaces and workloads that normally source images from restricted
+
+  registries, and for pods that suddenly begin running images outside expected
+
+  prefixes.
+
+  Maintain an environment‑specific allowlist via the macro `cisco_isovalent_allowed_images`
+
+  (for example, allow trusted registries/prefixes such as ImageName="gcr.io/org/*",
+
+  "registry.local/*", or "myco/*") and keep it updated as new baseline images are
+
+  introduced. This analytic alerts on images NOT matching the allowlist.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.003
+  categories:
+  - endpoint
+references:
+- https://dev.to/thenjdevopsguy/attacking-a-kubernetes-cluster-enter-red-team-mode-2onj
+- https://www.reddit.com/r/kubernetes/comments/l6e5yr/one_of_our_kubernetes_containers_was_compromised/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_isovalent_process_exec` pod_name!=\"\"\n| search NOT `cisco_isovalent_allowed_images`\n\
+    | stats count\n        min(_time) as firstTime\n        max(_time) as lastTime\n\
+    \    by pod_image_name pod_namespace pod_name process_name cluster_name\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_isovalent___non_allowlisted_image_use_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9f2b7b1d-6c2f-4f2d-9a8b-8a1d7c5f2e11
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cisco_isovalent___non_allowlisted_image_use.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-1fc0809e-06bf-4de3-ad52-25e5263b7623
+name: Publicly Accessible RDP Service
+description: Detects connections from routable IPs to an RDP listener. Which is indicative
+  of a publicly-accessible RDP service.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: zeek
+  service: rdp
+detection:
+  selection:
+    id.orig_h|cidr:
+    - ::1/128
+    - 10.0.0.0/8
+    - 127.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - 2620:83:8000::/48
+    - fc00::/7
+    - fe80::/10
+  condition: not selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1fc0809e-06bf-4de3-ad52-25e5263b7623
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_rdp_public_listener.yml
+falsepositives:
+- Although it is recommended to NOT have RDP exposed to the internet, verify that
+  this is a) allowed b) the server has not already been compromised via some brute
+  force or remote exploit since it has been exposed to the internet. Work to secure
+  the server if you are unable to remove it from being exposed to the internet.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,55 @@
+id: sigmahq-sigma-811f459f-9231-45d4-959a-0266c6311987
+name: Suspicious Child Process Of BgInfo.EXE
+description: Detects suspicious child processes of "BgInfo.exe" which could be a sign
+  of potential abuse of the binary to proxy execution via external VBScript
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1218
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Bginfo/
+- https://oddvar.moe/2017/05/18/bypassing-application-whitelisting-with-bginfo/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith:
+    - \bginfo.exe
+    - \bginfo64.exe
+  selection_child:
+  - Image|endswith:
+    - \calc.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \notepad.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+  - Image|contains:
+    - \AppData\Local\
+    - \AppData\Roaming\
+    - :\Users\Public\
+    - :\Temp\
+    - :\Windows\Temp\
+    - :\PerfLogs\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 811f459f-9231-45d4-959a-0266c6311987
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bginfo_suspicious_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

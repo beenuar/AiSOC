@@ -1,0 +1,59 @@
+id: sigmahq-sigma-7dbbcac2-57a0-45ac-b306-ff30a8bd2981
+name: Windows AMSI Related Registry Tampering Via CommandLine
+description: 'Detects tampering of AMSI (Anti-Malware Scan Interface) related registry
+  values via command line tools such as reg.exe or PowerShell.
+
+  AMSI provides a generic interface for applications and services to integrate with
+  antimalware products.
+
+  Adversaries may disable AMSI to evade detection of malicious scripts and code execution.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/arttoolkit/arttoolkit.github.io/blob/16d6230d009e58fd6f773f5317fd4d14c1f26004/_wadcoms/AMSI-Bypass-Jscript_amsienable.md
+- https://mostafayahiax.medium.com/hunting-for-amsi-bypassing-methods-9886dda0bf9d
+- https://www.mdsec.co.uk/2019/02/macros-and-more-with-sharpshooter-v2-0/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_key:
+    CommandLine|contains|all:
+    - \Software\Microsoft\Windows Script\Settings
+    - AmsiEnable
+  selection_reg_img:
+  - Image|endswith: \reg.exe
+  - OriginalFileName: reg.exe
+  selection_reg_cmd:
+    CommandLine|contains: add
+  selection_powershell_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_powershell_cmd:
+    CommandLine|contains:
+    - Set-ItemProperty
+    - New-ItemProperty
+    - 'sp '
+  condition: selection_key and (all of selection_powershell_* or all of selection_reg_*)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7dbbcac2-57a0-45ac-b306-ff30a8bd2981
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_amsi_registry_tampering.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

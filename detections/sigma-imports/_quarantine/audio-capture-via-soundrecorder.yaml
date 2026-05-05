@@ -1,0 +1,34 @@
+id: sigmahq-sigma-83865853-59aa-449e-9600-74b9d89a6d6e
+name: Audio Capture via SoundRecorder
+description: Detect attacker collecting audio via SoundRecorder application.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1123
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1123/T1123.md
+- https://eqllib.readthedocs.io/en/latest/analytics/f72a98cb-7b3d-4100-99c3-a138b6e9ff6e.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \SoundRecorder.exe
+    CommandLine|contains: /FILE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 83865853-59aa-449e-9600-74b9d89a6d6e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_soundrecorder_audio_capture.yml
+falsepositives:
+- Legitimate audio capture by legitimate user.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-cb39d16b-b3b6-4a7a-8222-1cf24b686ffc
+name: Data Exfiltration with Wget
+description: 'Detects attempts to post the file with the usage of wget utility.
+
+  The adversary can bypass the permission restriction with the misconfigured sudo
+  permission for wget utility which could allow them to read files like /etc/shadow.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - endpoint
+references:
+- https://linux.die.net/man/1/wget
+- https://gtfobins.github.io/gtfobins/wget/
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0: wget
+    a1|startswith: --post-file=
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cb39d16b-b3b6-4a7a-8222-1cf24b686ffc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_data_exfil_wget.yml
+falsepositives:
+- Legitimate usage of wget utility to post a file
+notes:
+  quarantine_reason: 'upstream status: test'

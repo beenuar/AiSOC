@@ -1,0 +1,40 @@
+id: splunk-security-content-0fa86e31-0f73-4ec7-9ca3-dc88e117f1db
+name: Windows New InProcServer32 Added
+description: The following analytic detects the addition of new InProcServer32 registry
+  keys on Windows endpoints. It leverages data from the Endpoint.Registry datamodel
+  to identify changes in registry paths associated with InProcServer32. This activity
+  is significant because malware often uses this mechanism to achieve persistence
+  or execute malicious code by registering a new InProcServer32 key pointing to a
+  harmful DLL. If confirmed malicious, this could allow an attacker to persist in
+  the environment or execute arbitrary code, posing a significant threat to system
+  integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.netspi.com/blog/technical/red-team-operations/microsoft-outlook-remote-code-execution-cve-2024-21378/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry
+    where Registry.registry_path="*\\InProcServer32\\*" by Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_name Registry.registry_value_data
+    Registry.dest Registry.process_guid Registry.user | `drop_dm_object_name(Registry)`
+    |`security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_new_inprocserver32_added_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0fa86e31-0f73-4ec7-9ca3-dc88e117f1db
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_new_inprocserver32_added.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

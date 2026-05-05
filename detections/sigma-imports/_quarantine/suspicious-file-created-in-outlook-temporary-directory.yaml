@@ -1,0 +1,54 @@
+id: sigmahq-sigma-fabb0e80-030c-4e3e-a104-d09676991ac3
+name: Suspicious File Created in Outlook Temporary Directory
+description: 'Detects the creation of files with suspicious file extensions in the
+  temporary directory that Outlook uses when opening attachments.
+
+  This can be used to detect spear-phishing campaigns that use suspicious files as
+  attachments, which may contain malicious code.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://vipre.com/blog/svg-phishing-attacks-the-new-trick-in-the-cybercriminals-playbook/
+- https://thecyberexpress.com/rogue-rdp-files-used-in-ukraine-cyberattacks/
+- https://www.microsoft.com/en-us/security/blog/2024/10/29/midnight-blizzard-conducts-large-scale-spear-phishing-campaign-using-rdp-files/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection_extension:
+    TargetFilename|endswith:
+    - .cpl
+    - .hta
+    - .iso
+    - .rdp
+    - .svg
+    - .vba
+    - .vbe
+    - .vbs
+  selection_location:
+  - TargetFilename|contains:
+    - \AppData\Local\Packages\Microsoft.Outlook_
+    - \AppData\Local\Microsoft\Olk\Attachments\
+  - TargetFilename|contains|all:
+    - \AppData\Local\Microsoft\Windows\
+    - \Content.Outlook\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fabb0e80-030c-4e3e-a104-d09676991ac3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_outlook_susp_file_creation_in_temp_dir.yml
+falsepositives:
+- Opening of headers or footers in email signatures that include SVG images or legitimate
+  SVG attachments
+notes:
+  quarantine_reason: 'upstream status: experimental'

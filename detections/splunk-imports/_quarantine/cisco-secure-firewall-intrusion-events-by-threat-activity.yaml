@@ -1,0 +1,119 @@
+id: splunk-security-content-b71e57e8-c571-4ff1-ae13-bc4384a9e891
+name: Cisco Secure Firewall - Intrusion Events by Threat Activity
+description: 'This analytic detects intrusion events from known threat activity using
+  Cisco Secure Firewall Intrusion Events.
+
+  It leverages Cisco Secure Firewall Threat Defense IntrusionEvent logs to identify
+  cases where one or multiple Snort signatures
+
+  associated with a known threat or threat actor activity have been triggered within
+  a one-hour time window. The detection uses a
+
+  lookup table (cisco_snort_ids_to_threat_mapping) to map Snort signature IDs to known
+  threat actors and their techniques.
+
+  When multiple signatures associated with the same threat actor are triggered within
+  the time window, and the count of
+
+  unique signatures matches or exceeds the expected number of signatures for that
+  threat technique, an alert is generated.
+
+  This helps identify potential coordinated threat activity in your network environment
+  by correlating related intrusion
+
+  events that occur in close temporal proximity.
+
+
+  Currently, this detection will alert on the following threat actors or malware families
+  as defined in the cisco_snort_ids_to_threat_mapping lookup:
+
+
+  * AgentTesla
+
+  * Amadey
+
+  * ArcaneDoor
+
+  * AsyncRAT
+
+  * CastleRAT
+
+  * Chafer
+
+  * DCRAT
+
+  * LokiBot
+
+  * Lumma Stealer
+
+  * Nobelium
+
+  * Quasar
+
+  * Remcos
+
+  * Snake
+
+  * Static Tundra
+
+  * Xworm
+
+
+  To add or update threat actors, update the cisco_snort_ids_to_threat_mapping.csv
+  lookup file with new or modified threat names and associated Snort signature IDs.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  - T1573.002
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/products/security/firewalls/index.html
+- https://blog.talosintelligence.com/static-tundra/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cisco_secure_firewall` EventType=IntrusionEvent
+
+    | stats count AS total_alerts, dc(signature_id) AS sig_count, values(SnortRuleGroups)
+    AS snort_rule_groups, values(connection_id) AS connection_id, values(rule) AS
+    rule, values(dest_port) AS dest_port, values(transport) AS transport, values(app)
+    AS app, values(signature) AS signature, values(src) AS src BY _time dest signature_id
+
+    | lookup cisco_snort_ids_to_threat_mapping signature_id OUTPUT threat, category,
+    message
+
+    | where isnotnull(threat)
+
+    | bin _time span=1d
+
+    | stats count AS Total_Alerts, dc(signature_id) AS sig_count, values(signature_id)
+    AS signature_id, values(category) AS category, values(message) AS message, values(snort_rule_groups)
+    AS snort_rule_groups, values(connection_id) AS connection_id, values(rule) AS
+    rule, values(dest_port) AS dest_port, values(transport) AS transport, values(app)
+    AS app, values(signature) AS signature, values(src) AS src BY _time dest threat
+
+    | lookup threat_snort_count threat OUTPUT description, distinct_count_snort_ids
+
+    | table _time, dest, src, threat, category, message, description, signature_id,
+    signature, snort_rule_groups, sig_count, distinct_count_snort_ids, connection_id,
+    rule, dest_port, transport, app
+
+    | where sig_count >= distinct_count_snort_ids
+
+    | `cisco_secure_firewall___intrusion_events_by_threat_activity_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b71e57e8-c571-4ff1-ae13-bc4384a9e891
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___intrusion_events_by_threat_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

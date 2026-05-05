@@ -1,0 +1,35 @@
+id: sigmahq-sigma-c1d147ae-a951-48e5-8b41-dcd0170c7213
+name: App Granted Microsoft Permissions
+description: Detects when an application is granted delegated or app role permissions
+  for Microsoft Graph, Exchange, Sharepoint, or Azure AD
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#application-granted-highly-privileged-permissions
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message:
+    - Add delegated permission grant
+    - Add app role assignment to service principal
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c1d147ae-a951-48e5-8b41-dcd0170c7213
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_permissions_msft.yml
+falsepositives:
+- When the permission is legitimately needed for the app
+notes:
+  quarantine_reason: 'upstream status: test'

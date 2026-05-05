@@ -1,0 +1,51 @@
+id: sigmahq-sigma-7595ba94-cf3b-4471-aa03-4f6baa9e5fad
+name: Important Scheduled Task Deleted/Disabled
+description: Detects when adversaries stop services or processes by deleting or disabling
+  their respective scheduled tasks in order to conduct data destructive activities
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4699
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4701
+logsource:
+  product: windows
+  service: security
+  definition: The Advanced Audit Policy setting Object Access > Audit Other Object
+    Access Events has to be configured to allow this detection. We also recommend
+    extracting the Command field from the embedded XML in the event data.
+detection:
+  selection:
+    EventID:
+    - 4699
+    - 4701
+    TaskName|contains:
+    - \Windows\SystemRestore\SR
+    - \Windows\Windows Defender\
+    - \Windows\BitLocker
+    - \Windows\WindowsBackup\
+    - \Windows\WindowsUpdate\
+    - \Windows\UpdateOrchestrator\Schedule
+    - \Windows\ExploitGuard
+  filter_main_defender_update:
+    EventID: 4699
+    SubjectUserName|endswith: $
+    TaskName|contains: \Windows\Windows Defender\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7595ba94-cf3b-4471-aa03-4f6baa9e5fad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_scheduled_task_delete_or_disable.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

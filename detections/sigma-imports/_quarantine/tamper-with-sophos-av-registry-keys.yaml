@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9f4662ac-17ca-43aa-8f12-5d7b989d0101
+name: Tamper With Sophos AV Registry Keys
+description: Detects tamper attempts to sophos av functionality via registry key modification
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://redacted.com/blog/bianlian-ransomware-gang-gives-it-a-go/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \Sophos Endpoint Defense\TamperProtection\Config\SAVEnabled
+    - \Sophos Endpoint Defense\TamperProtection\Config\SEDEnabled
+    - \Sophos\SAVService\TamperProtection\Enabled
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9f4662ac-17ca-43aa-8f12-5d7b989d0101
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_sophos_av_tamper.yml
+falsepositives:
+- Some FP may occur when the feature is disabled by the AV itself, you should always
+  investigate if the action was legitimate
+notes:
+  quarantine_reason: 'upstream status: test'

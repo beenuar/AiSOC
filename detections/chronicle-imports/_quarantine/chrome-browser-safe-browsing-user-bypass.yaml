@@ -1,0 +1,61 @@
+id: chronicle-detection-rules-chrome-browser-safe-browsing-user-bypass
+name: chrome_browser_safe_browsing_user_bypass
+description: chrome_browser_safe_browsing_user_bypass
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule chrome_browser_safe_browsing_user_bypass {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Detects and alerts on users bypassing\
+    \ Chrome Safe Browsing warnings and accessing potentially dangerous content or\
+    \ downloads\"\n    rule_id = \"mr_73e2a3d4-13ba-47ef-b250-a2bdcd98dc48\"\n   \
+    \ rule_name = \"Chrome Browser Safe Browsing User Bypass\"\n    mitre_attack_tactic\
+    \ = \"Initial Access\"\n    mitre_attack_technique = \"Phishing: Spearphishing\
+    \ Link\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1566/002/\"\
+    \n    mitre_attack_version = \"v14.1\"\n    type = \"alert\"\n    tags = \"chrome\
+    \ enterprise\"\n    data_source = \"Chrome Management\"\n    severity = \"Low\"\
+    \n    priority = \"Low\"\n\n  events:\n    $process.metadata.product_name = \"\
+    Chrome Management\"\n    (\n        $process.metadata.product_event_type = \"\
+    badNavigationEvent\" or\n        $process.metadata.product_event_type = \"dangerousDownloadEvent\"\
+    \ or\n        $process.metadata.product_event_type = \"contentTransferEvent\"\
+    \ or\n        $process.metadata.product_event_type = \"unscannedFileEvent\"\n\
+    \    )\n    $process.security_result.action_details = \"EVENT_RESULT_BYPASSED\"\
+    \n    $process.security_result.category_details = $category\n    strings.coalesce($process.principal.user.email_addresses,\
+    \ $process.principal.hostname ) = $user\n\n  match:\n    $user over 5m\n\n  outcome:\n\
+    \    $risk_score = max(\n      if ($category = \"\", 10) +\n      if ($category\
+    \ = \"THREAT_TYPE_UNSPECIFIED\", 20) +\n      if ($category = \"SSL_ERROR\", 30)\
+    \ +\n      if ($category = \"UNWANTED_SOFTWARE\", 50) +\n      if ($category =\
+    \ \"DANGEROUS\", 60) +\n      if ($category = \"SOCIAL_ENGINEERING\", 70) +\n\
+    \      if ($category = \"DANGEROUS_HOST\", 80) +\n      if ($category = \"MALWARE\"\
+    , 90)\n    )\n    $instances = count_distinct($user)\n    $suspicious_url = array_distinct($process.target.url)\n\
+    \    $suspicious_file_sha256 = array_distinct($process.target.file.sha256)\n \
+    \   $principal_user_userid = array_distinct($user)\n\ncondition:\n  // To reduce\
+    \ the number of alerts to just higher risk events, uncomment the value in the\
+    \ line below\n  $process // and $risk_score >= 50\n}"
+  chronicle_rule_name: chrome_browser_safe_browsing_user_bypass
+provenance:
+  source: chronicle/detection-rules
+  source_id: chrome_browser_safe_browsing_user_bypass
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/chrome_browser_safe_browsing_user_bypass.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

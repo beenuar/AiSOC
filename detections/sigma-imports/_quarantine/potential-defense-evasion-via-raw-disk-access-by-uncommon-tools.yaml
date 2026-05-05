@@ -1,0 +1,83 @@
+id: sigmahq-sigma-db809f10-56ce-4420-8c86-d6a7d793c79c
+name: Potential Defense Evasion Via Raw Disk Access By Uncommon Tools
+description: Detects raw disk access using uncommon tools or tools that are located
+  in suspicious locations (heavy filtering is required), which could indicate possible
+  defense evasion attempts
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1006
+  categories:
+  - endpoint
+references:
+- https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+logsource:
+  product: windows
+  category: raw_access_thread
+detection:
+  filter_main_floppy:
+    Device|contains: floppy
+  filter_main_generic:
+    Image|startswith:
+    - C:\$WINDOWS.~BT\
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+    - C:\Windows\CCM\
+    - C:\Windows\explorer.exe
+    - C:\Windows\servicing\
+    - C:\Windows\SoftwareDistribution\
+    - C:\Windows\System32\
+    - C:\Windows\SystemApps\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\uus\
+    - C:\Windows\WinSxS\
+  filter_main_system_images:
+    Image:
+    - Registry
+    - System
+  filter_main_windefender:
+    Image|startswith: C:\ProgramData\Microsoft\Windows Defender\Platform\
+    Image|endswith:
+    - \MsMpEng.exe
+    - \MpDefenderCoreService.exe
+  filter_main_microsoft_appdata:
+    Image|startswith: C:\Users\
+    Image|contains|all:
+    - \AppData\
+    - \Microsoft\
+  filter_main_ssd_nvme:
+    Image|startswith: C:\Windows\Temp\
+    Image|endswith:
+    - \Executables\SSDUpdate.exe
+    - \HostMetadata\NVMEHostmetadata.exe
+  filter_main_null:
+    Image: null
+  filter_main_systemsettings:
+    Image: C:\Windows\ImmersiveControlPanel\SystemSettings.exe
+  filter_main_update:
+    Image|startswith: C:\$WinREAgent\Scratch\
+  filter_optional_github_desktop:
+    Image|startswith: C:\Users\
+    Image|contains: \AppData\Local\GitHubDesktop\app-
+    Image|endswith: \resources\app\git\mingw64\bin\git.exe
+  filter_optional_nextron:
+    Image|startswith: C:\Windows\Temp\asgard2-agent\
+    Image|endswith: \thor.exe
+  filter_optional_Keybase:
+    Image|startswith: C:\Users\
+    Image|contains: \AppData\Local\Keybase\upd.exe
+  condition: not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db809f10-56ce-4420-8c86-d6a7d793c79c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/raw_access_thread/raw_access_thread_susp_disk_access_using_uncommon_tools.yml
+falsepositives:
+- Likely
+notes:
+  quarantine_reason: 'upstream status: test'

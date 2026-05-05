@@ -1,0 +1,35 @@
+id: sigmahq-sigma-aa6f6ea6-0676-40dd-b510-6e46f02d8867
+name: Local File Read Using Curl.EXE
+description: Detects execution of "curl.exe" with the "file://" protocol handler in
+  order to read local files.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://curl.se/docs/manpage.html
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \curl.exe
+  - OriginalFileName: curl.exe
+  selection_cli:
+    CommandLine|contains: file:///
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aa6f6ea6-0676-40dd-b510-6e46f02d8867
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_curl_local_file_read.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

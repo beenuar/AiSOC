@@ -1,0 +1,32 @@
+id: sigmahq-sigma-613c03ba-0779-4a53-8a1f-47f914a4ded3
+name: DNS Query To MEGA Hosting Website
+description: Detects DNS queries for subdomains related to MEGA sharing website
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567.002
+  categories:
+  - endpoint
+references:
+- https://research.nccgroup.com/2021/05/27/detecting-rclone-an-effective-tool-for-exfiltration/
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    QueryName|contains: userstorage.mega.co.nz
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 613c03ba-0779-4a53-8a1f-47f914a4ded3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_mega_nz.yml
+falsepositives:
+- Legitimate DNS queries and usage of Mega
+notes:
+  quarantine_reason: 'upstream status: test'

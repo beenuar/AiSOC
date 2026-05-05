@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d7662ff6-9e97-4596-a61d-9839e32dee8d
+name: Add SafeBoot Keys Via Reg Utility
+description: Detects execution of "reg.exe" commands with the "add" or "copy" flags
+  on safe boot registry keys. Often used by attacker to allow the ransomware to work
+  in safe mode as some security products do not
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://redacted.com/blog/bianlian-ransomware-gang-gives-it-a-go/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \reg.exe
+  - OriginalFileName: reg.exe
+  selection_safeboot:
+    CommandLine|contains: \SYSTEM\CurrentControlSet\Control\SafeBoot
+  selection_flag:
+    CommandLine|contains:
+    - ' copy '
+    - ' add '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d7662ff6-9e97-4596-a61d-9839e32dee8d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_add_safeboot.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

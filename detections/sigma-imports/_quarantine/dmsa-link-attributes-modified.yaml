@@ -1,0 +1,39 @@
+id: sigmahq-sigma-9b111d8e-92e0-4153-88bc-daefc1333aba
+name: DMSA Link Attributes Modified
+description: 'Detects modification of dMSA link attributes (msDS-ManagedAccountPrecededByLink)
+  via PowerShell scripts.
+
+  This command line pattern could be an indicator an attempt to exploit the BadSuccessor
+  privilege escalation vulnerability in Windows Server 2025.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078.002
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://www.akamai.com/blog/security-research/abusing-bad-successor-for-privilege-escalation-in-active-directory
+logsource:
+  category: ps_script
+  product: windows
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - .Put("msDS-ManagedAccountPrecededByLink
+    - CN=
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9b111d8e-92e0-4153-88bc-daefc1333aba
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_modification_of_dmsa_link_attribute.yml
+falsepositives:
+- Legitimate administrative tasks modifying these attributes.
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,43 @@
+id: splunk-security-content-f86a8ec9-b042-45eb-92f4-e9ed1d781078
+name: Cloud Provisioning Activity From Previously Unseen IP Address
+description: The following analytic detects cloud provisioning activities originating
+  from previously unseen IP addresses. It leverages cloud infrastructure logs to identify
+  events where resources are created or started, and cross-references these with a
+  baseline of known IP addresses. This activity is significant as it may indicate
+  unauthorized access or potential misuse of cloud resources. If confirmed malicious,
+  an attacker could gain unauthorized control over cloud resources, leading to data
+  breaches, service disruptions, or increased operational costs.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats earliest(_time) as firstTime, latest(_time) as lastTime, values(All_Changes.object_id)\
+    \ as object_id FROM datamodel=Change\n  WHERE (\n        All_Changes.action=started\n\
+    \        OR\n        All_Changes.action=created\n    )\n    All_Changes.status=success\n\
+    \  BY All_Changes.src, All_Changes.user, All_Changes.command\n| `drop_dm_object_name(\"\
+    All_Changes\")`\n| lookup previously_seen_cloud_provisioning_activity_sources\
+    \ src as src OUTPUT firstTimeSeen, enough_data\n| eventstats max(enough_data)\
+    \ as enough_data\n| where enough_data=1\n| eval firstTimeSeenSrc=min(firstTimeSeen)\n\
+    | where isnull(firstTimeSeenSrc) OR firstTimeSeenSrc > relative_time(now(), `previously_unseen_cloud_provisioning_activity_window`)\n\
+    | `security_content_ctime(firstTime)`\n| table firstTime, src, user, object_id,\
+    \ command\n| `cloud_provisioning_activity_from_previously_unseen_ip_address_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f86a8ec9-b042-45eb-92f4-e9ed1d781078
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/cloud_provisioning_activity_from_previously_unseen_ip_address.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

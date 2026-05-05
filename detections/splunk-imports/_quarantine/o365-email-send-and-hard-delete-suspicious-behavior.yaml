@@ -1,0 +1,68 @@
+id: splunk-security-content-c97b3d72-0a47-46f9-b742-b89f1cc2d551
+name: O365 Email Send and Hard Delete Suspicious Behavior
+description: The following analytic identifies when an O365 email account sends and
+  then hard deletes email with within a short period (within 1 hour). This behavior
+  may indicate a compromised account where the threat actor is attempting to remove
+  forensic artifacts or evidence of activity. Threat actors often use this technique
+  to prevent defenders and victims from knowing the account has been compromised.
+  --- Some account owner legitimate behaviors can trigger this alert, however these
+  actions may not be aligned with organizational expectations / best practice behaviors.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.001
+  - T1070.008
+  - T1485
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/
+- https://www.hhs.gov/sites/default/files/help-desk-social-engineering-sector-alert-tlpclear.pdf
+- https://intelligence.abnormalsecurity.com/attack-library/threat-actor-convincingly-impersonates-employee-requesting-direct-deposit-update-in-likely-ai-generated-attack
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange (Operation IN ("Send*"))
+    OR (Operation IN ("HardDelete") AND Folder.Path IN ("\\Sent Items","\\Recoverable
+    Items\\Deletions"))
+
+    | eval user = lower(UserId), sender = lower(CASE(isnotnull(SendAsUserSmtp),SendAsUserSmtp,isnotnull(SendOnBehalfOfUserSmtp),SendOnBehalfOfUserSmtp,true(),MailboxOwnerUPN)),
+    subject = trim(CASE(Operation IN ("Send","SendAs","SendOnBehalf"),''Item.Subject'',Operation
+    IN ("SoftDelete","HardDelete"),''AffectedItems{}.Subject'')), -time = _time,file_name
+    = CASE(Operation IN ("Send","SendAs","SendOnBehalf"),split(''Item.Attachments'',";
+    "),Operation IN ("SoftDelete","HardDelete"),split(''AffectedItems{}.Attachments'',";
+    ")), file_size = CASE(Operation IN ("Send","SendAs","SendOnBehalf"),round(tonumber(''Item.SizeInBytes'')/1024/1024,2),true(),round(tonumber(replace(file_name,
+    "(.+)\s\((\d+)(b\)$)", "\2"))/1024/1024,2))
+
+    | eval sendtime = CASE(Operation IN ("Send","SendAs","SendOnBehalf"),_time)
+
+    | eval deltime = CASE(Operation IN ("SoftDelete","HardDelete"),_time)
+
+    | stats values(sender) as sender, values(ClientIPAddress) as src, values(ClientInfoString)
+    as http_user_agent, values(Operation) as signature, values(file_name) as file_name,
+    sum(file_size) as file_size, values(Folder.Path) as file_path, min(sendtime) as
+    firstTime, max(deltime) as lastTime, dc(Operation) as opcount, count by subject,user
+
+    | eval timediff = tonumber(lastTime) - tonumber(firstTime)
+
+    | where opcount > 1 AND firstTime < lastTime  AND timediff < 3600
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_email_send_and_hard_delete_suspicious_behavior_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c97b3d72-0a47-46f9-b742-b89f1cc2d551
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_send_and_hard_delete_suspicious_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

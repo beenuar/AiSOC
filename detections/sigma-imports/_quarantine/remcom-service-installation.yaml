@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9e36ed87-4986-482e-8e3b-5c23ffff11bf
+name: RemCom Service Installation
+description: Detects RemCom service installation and execution events
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://github.com/kavika13/RemCom/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_eid:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection_service:
+  - ServiceName: RemComSvc
+  - ImagePath|endswith: \RemComSvc.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9e36ed87-4986-482e-8e3b-5c23ffff11bf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_remcom.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

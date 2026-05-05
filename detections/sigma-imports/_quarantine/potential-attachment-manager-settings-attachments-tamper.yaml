@@ -1,0 +1,42 @@
+id: sigmahq-sigma-ee77a5db-b0f3-4be2-bfd4-b58be1c6b15a
+name: Potential Attachment Manager Settings Attachments Tamper
+description: Detects tampering with attachment manager settings policies attachments
+  (See reference for more information)
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://support.microsoft.com/en-us/topic/information-about-the-attachment-manager-in-microsoft-windows-c48a4dcd-8de5-2af5-ee9b-cd795ae42738
+- https://www.virustotal.com/gui/file/2bcd5702a7565952c44075ac6fb946c7780526640d1264f692c7664c02c68465
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_main:
+    TargetObject|contains: \SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments\
+  selection_value_hide_zone_info:
+    TargetObject|endswith: \HideZoneInfoOnProperties
+    Details: DWORD (0x00000001)
+  selection_value_save_zone_info:
+    TargetObject|endswith: \SaveZoneInformation
+    Details: DWORD (0x00000002)
+  selection_value_scan_with_av:
+    TargetObject|endswith: \ScanWithAntiVirus
+    Details: DWORD (0x00000001)
+  condition: selection_main and 1 of selection_value_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ee77a5db-b0f3-4be2-bfd4-b58be1c6b15a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_policies_attachments_tamper.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

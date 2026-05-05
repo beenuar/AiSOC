@@ -1,0 +1,40 @@
+id: sigmahq-sigma-7773b877-5abb-4a3e-b9c9-fd0369b59b00
+name: WMIC Remote Command Execution
+description: Detects the execution of WMIC to query information on a remote system
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://securelist.com/moonbounce-the-dark-side-of-uefi-firmware/105468/
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wmic
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \WMIC.exe
+  - OriginalFileName: wmic.exe
+  selection_cli:
+    CommandLine|contains|windash: '/node:'
+  filter_main_localhost:
+    CommandLine|contains:
+    - localhost
+    - 127.0.0.1
+  condition: all of selection_* and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7773b877-5abb-4a3e-b9c9-fd0369b59b00
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmic_remote_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,54 @@
+id: sigmahq-sigma-dd857d3e-0c6e-457b-9b48-e82ae7f86bd7
+name: New Module Module Added To IIS Server
+description: Detects the addition of a new module to an IIS server.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/iis/manage/provisioning-and-managing-iis/configure-logging-in-iis
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://www.microsoft.com/en-us/security/blog/2022/07/26/malicious-iis-extensions-quietly-open-persistent-backdoors-into-servers/
+- https://learn.microsoft.com/en-us/iis/get-started/introduction-to-iis/iis-modules-overview
+logsource:
+  product: windows
+  service: iis-configuration
+detection:
+  selection:
+    EventID: 29
+    Configuration|contains: /system.webServer/modules/add
+  filter_main_builtin:
+    NewValue:
+    - AnonymousAuthenticationModule
+    - CustomErrorModule
+    - DefaultDocumentModule
+    - DirectoryListingModule
+    - FileCacheModule
+    - HttpCacheModule
+    - HttpLoggingModule
+    - ProtocolSupportModule
+    - RequestFilteringModule
+    - StaticCompressionModule
+    - StaticFileModule
+    - TokenCacheModule
+    - UriCacheModule
+  filter_main_remove:
+    NewValue: ''
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dd857d3e-0c6e-457b-9b48-e82ae7f86bd7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/iis-configuration/win_iis_module_added.yml
+falsepositives:
+- Legitimate administrator activity
+notes:
+  quarantine_reason: 'upstream status: test'

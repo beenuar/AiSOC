@@ -1,0 +1,41 @@
+id: sigmahq-sigma-634b00d5-ccc3-4a06-ae3b-0ec8444dd51b
+name: Malicious Windows Script Components File Execution by TAEF Detection
+description: 'Windows Test Authoring and Execution Framework (TAEF) framework allows
+  you to run automation by executing tests files written on different languages (C,
+  C#, Microsoft COM Scripting interfaces
+
+  Adversaries may execute malicious code (such as WSC file with VBScript, dll and
+  so on) directly by running te.exe'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Te/
+- https://twitter.com/pabraeken/status/993298228840992768
+- https://learn.microsoft.com/en-us/windows-hardware/drivers/taef/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \te.exe
+  - ParentImage|endswith: \te.exe
+  - OriginalFileName: \te.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 634b00d5-ccc3-4a06-ae3b-0ec8444dd51b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_use_of_te_bin.yml
+falsepositives:
+- It's not an uncommon to use te.exe directly to execute legal TAEF tests
+notes:
+  quarantine_reason: 'upstream status: test'

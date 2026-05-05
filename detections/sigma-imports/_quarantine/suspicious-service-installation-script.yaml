@@ -1,0 +1,47 @@
+id: sigmahq-sigma-70f00d10-60b2-4f34-b9a0-dc3df3fe762a
+name: Suspicious Service Installation Script
+description: Detects suspicious service installation scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_eid:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+  selection_cmd_flags:
+    ImagePath|contains|windash:
+    - ' -c '
+    - ' -r '
+    - ' -k '
+  selection_binaries:
+    ImagePath|contains:
+    - cscript
+    - mshta
+    - powershell
+    - pwsh
+    - regsvr32
+    - rundll32
+    - wscript
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 70f00d10-60b2-4f34-b9a0-dc3df3fe762a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_susp_service_installation_script.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

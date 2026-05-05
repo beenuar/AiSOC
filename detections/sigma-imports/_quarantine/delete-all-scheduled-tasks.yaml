@@ -1,0 +1,38 @@
+id: sigmahq-sigma-220457c1-1c9f-4c2e-afe6-9598926222c1
+name: Delete All Scheduled Tasks
+description: Detects the usage of schtasks with the delete flag and the asterisk symbol
+  to delete all tasks from the schedule of the local computer, including tasks scheduled
+  by other users.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-delete
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \schtasks.exe
+    CommandLine|contains|all:
+    - ' /delete '
+    - /tn \*
+    - ' /f'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 220457c1-1c9f-4c2e-afe6-9598926222c1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_delete_all.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

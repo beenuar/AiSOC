@@ -1,0 +1,50 @@
+id: splunk-security-content-e3308b0c-d1a1-40d5-9486-4500f0d34731
+name: M365 Copilot Application Usage Pattern Anomalies
+description: Detects M365 Copilot users exhibiting suspicious application usage patterns
+  including multi-location access, abnormally high activity volumes, or access to
+  multiple Copilot applications that may indicate account compromise or automated
+  abuse. The detection aggregates M365 Copilot Graph API events per user, calculating
+  metrics like distinct cities/countries accessed, unique IP addresses, number of
+  different Copilot apps used, and average events per day over the observation period.
+  Users are flagged when they access Copilot from multiple cities (cities_count >
+  1), generate excessive daily activity (events_per_day > 100), or use more than two
+  different Copilot applications (app_count > 2), which are anomalous patterns suggesting
+  credential compromise or bot-driven abuse.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`m365_copilot_graph_api` (appDisplayName=\"*Copilot*\" OR appDisplayName=\"\
+    M365ChatClient\" OR appDisplayName=\"OfficeAIAppChatCopilot\") | eval user = userPrincipalName\
+    \ | stats count as events,\n    dc(location.city) as cities_count,\n    values(location.city)\
+    \ as city_list,\n    dc(location.countryOrRegion) as countries_count,\n    values(location.countryOrRegion)\
+    \ as country_list,\n    dc(ipAddress) as ip_count,\n    values(ipAddress) as ip_addresses,\n\
+    \    dc(appDisplayName) as app_count,\n    values(appDisplayName) as apps_used,\n\
+    \    dc(resourceDisplayName) as resource_count,\n    values(resourceDisplayName)\
+    \ as resources_accessed,\n    min(_time) as first_seen,\n    max(_time) as last_seen\n\
+    \    by user\n| eval days_active = round((last_seen - first_seen)/86400, 1) |\
+    \ eval first_seen = strftime(first_seen, \"%Y-%m-%d %H:%M:%S\") | eval last_seen\
+    \ = strftime(last_seen, \"%Y-%m-%d %H:%M:%S\") | eval events_per_day = if(days_active\
+    \ > 0, round(events/days_active, 2), events) | where cities_count > 1 OR events_per_day\
+    \ > 100 OR app_count > 2 | sort -events_per_day, -countries_count | `m365_copilot_application_usage_pattern_anomalies_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e3308b0c-d1a1-40d5-9486-4500f0d34731
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_application_usage_pattern_anomalies.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

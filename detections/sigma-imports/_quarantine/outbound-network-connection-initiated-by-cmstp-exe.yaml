@@ -1,0 +1,46 @@
+id: sigmahq-sigma-efafe0bf-4238-479e-af8f-797bd3490d2d
+name: Outbound Network Connection Initiated By Cmstp.EXE
+description: 'Detects a network connection initiated by Cmstp.EXE
+
+  Its uncommon for "cmstp.exe" to initiate an outbound network connection. Investigate
+  the source of such requests to determine if they are malicious.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218.003
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20190720093911/http://www.endurant.io/cmstp/detecting-cmstp-enabled-code-execution-and-uac-bypass-with-sysmon/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \cmstp.exe
+    Initiated: 'true'
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: efafe0bf-4238-479e-af8f-797bd3490d2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_cmstp_initiated_connection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

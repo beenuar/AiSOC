@@ -1,0 +1,50 @@
+id: sigmahq-sigma-67bc0e75-c0a9-4cfc-8754-84a505b63c04
+name: Potentially Suspicious Child Process Of ClickOnce Application
+description: Detects potentially suspicious child processes of a ClickOnce deployment
+  application
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/less-smartscreen-more-caffeine-ab-using-clickonce-for-trusted-code-execution-1446ea8051c5
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|contains: \AppData\Local\Apps\2.0\
+    Image|endswith:
+    - \calc.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \explorer.exe
+    - \mshta.exe
+    - \net.exe
+    - \net1.exe
+    - \nltest.exe
+    - \notepad.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \reg.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \schtasks.exe
+    - \werfault.exe
+    - \wscript.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 67bc0e75-c0a9-4cfc-8754-84a505b63c04
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dfsvc_suspicious_child_processes.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

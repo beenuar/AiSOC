@@ -1,0 +1,43 @@
+id: sigmahq-sigma-e88a6ddc-74f7-463b-9b26-f69fc0d2ce85
+name: New TimeProviders Registered With Uncommon DLL Name
+description: 'Detects processes setting a new DLL in DllName in under HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\TimeProvider.
+
+  Adversaries may abuse time providers to execute DLLs when the system boots.
+
+  The Windows Time service (W32Time) enables time synchronization across and within
+  domains.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.003/T1547.003.md
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Services\W32Time\TimeProviders
+    TargetObject|endswith: \DllName
+  filter_main_w32time:
+    Details:
+    - '%SystemRoot%\System32\vmictimeprovider.dll'
+    - '%systemroot%\system32\w32time.dll'
+    - C:\Windows\SYSTEM32\w32time.DLL
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e88a6ddc-74f7-463b-9b26-f69fc0d2ce85
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_timeproviders_dllname.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

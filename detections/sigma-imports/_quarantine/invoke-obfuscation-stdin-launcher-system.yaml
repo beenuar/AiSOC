@@ -1,0 +1,45 @@
+id: sigmahq-sigma-72862bf2-0eb1-11eb-adc1-0242ac120002
+name: Invoke-Obfuscation STDIN+ Launcher - System
+description: Detects Obfuscated use of stdin to execute PowerShell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: system
+detection:
+  selection_main:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains|all:
+    - cmd
+    - powershell
+    ImagePath|contains:
+    - /c
+    - /r
+  selection_other:
+  - ImagePath|contains: noexit
+  - ImagePath|contains|all:
+    - input
+    - $
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 72862bf2-0eb1-11eb-adc1-0242ac120002
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_stdin_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

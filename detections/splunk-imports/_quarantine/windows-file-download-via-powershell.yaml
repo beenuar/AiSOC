@@ -1,0 +1,63 @@
+id: splunk-security-content-58c4e56c-b5b8-46a3-b5fb-6537dca3c6de
+name: Windows File Download Via PowerShell
+description: 'The following analytic detects the use of PowerShell''s download methods
+  such as
+
+  "DownloadString" and "DownloadData" from the WebClient class or Invoke-WebRequest
+
+  and it''s aliases "IWR" or "Curl".
+
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+
+  process execution logs that include command-line details.
+
+  This activity can be significant such methods and functions are commonly used in
+  malicious
+
+  PowerShell scripts to fetch and execute remote code.
+
+  If confirmed malicious, this behavior could allow an attacker to download and run
+
+  arbitrary code, potentially leading to unauthorized access, data exfiltration,
+
+  or further compromise of the affected system.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/dotnet/api/system.net.webclient?view=net-9.0#methods
+- https://blog.malwarebytes.com/malwarebytes-news/2021/02/lazyscripter-from-empire-to-double-rat/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1059.001/T1059.001.md
+- https://thedfirreport.com/2023/05/22/icedid-macro-ends-in-nokoyawa-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where `process_powershell`
+    Processes.process IN ( "*iwr *", "*Invoke-WebRequest*", "*wget *", "curl", "*.DownloadData*",
+    "*.DownloadFile*", "*.DownloadString*" ) by Processes.action Processes.dest Processes.original_file_name
+    Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid
+    Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path
+    Processes.process Processes.process_exec Processes.process_guid Processes.process_hash
+    Processes.process_id Processes.process_integrity_level Processes.process_name
+    Processes.process_path Processes.user Processes.user_id Processes.vendor_product
+    | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_file_download_via_powershell_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 58c4e56c-b5b8-46a3-b5fb-6537dca3c6de
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_file_download_via_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-413d4a81-6c98-4479-9863-014785fd579c
+name: Okta Admin Role Assigned to an User or Group
+description: Detects when an the Administrator role is assigned to an user or group.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType:
+    - group.privilege.grant
+    - user.account.privilege.grant
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 413d4a81-6c98-4479-9863-014785fd579c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_admin_role_assigned_to_user_or_group.yml
+falsepositives:
+- Administrator roles could be assigned to users or group by other admin users.
+notes:
+  quarantine_reason: 'upstream status: test'

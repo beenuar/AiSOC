@@ -1,0 +1,36 @@
+id: sigmahq-sigma-7bdde3bf-2a42-4c39-aa31-a92b3e17afac
+name: HackTool - LittleCorporal Generated Maldoc Injection
+description: Detects the process injection of a LittleCorporal generated Maldoc.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  - T1055.003
+  categories:
+  - endpoint
+references:
+- https://github.com/connormcgarr/LittleCorporal
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    SourceImage|endswith: \winword.exe
+    CallTrace|contains|all:
+    - :\Windows\Microsoft.NET\Framework64\v2.
+    - UNKNOWN
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7bdde3bf-2a42-4c39-aa31-a92b3e17afac
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_hktl_littlecorporal_generated_maldoc.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,46 @@
+id: splunk-security-content-7bc111cc-7f1b-4be7-99fa-50cf8d2e7564
+name: GitHub Enterprise Disable Audit Log Event Stream
+description: The following analytic detects when a user disables audit log event streaming
+  in GitHub Enterprise. The detection monitors GitHub Enterprise audit logs for configuration
+  changes that disable the audit log streaming functionality, which is used to send
+  audit events to security monitoring platforms. This behavior could indicate an attacker
+  attempting to prevent their malicious activities from being logged and detected
+  by disabling the audit trail. For a SOC, identifying the disabling of audit logging
+  is critical as it may be a precursor to other attacks where adversaries want to
+  operate undetected. The impact could be severe as organizations lose visibility
+  into user actions, configuration changes, and security events within their GitHub
+  Enterprise environment, potentially allowing attackers to perform malicious activities
+  without detection. This creates a significant blind spot in security monitoring
+  and incident response capabilities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  - T1195
+  categories:
+  - cloud
+references:
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_enterprise` action=audit_log_streaming.destroy\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor,\
+    \ actor_id, actor_ip,\n       actor_is_bot, actor_location.country_code, business,\n\
+    \       business_id, user_agent, action\n  | eval user=actor\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_enterprise_disable_audit_log_event_stream_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7bc111cc-7f1b-4be7-99fa-50cf8d2e7564
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_enterprise_disable_audit_log_event_stream.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

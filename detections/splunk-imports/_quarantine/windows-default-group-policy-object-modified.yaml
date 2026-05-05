@@ -1,0 +1,46 @@
+id: splunk-security-content-fe6a6cc4-9e0d-4d66-bcf4-2c7f44860876
+name: Windows Default Group Policy Object Modified
+description: The following analytic detects modifications to default Group Policy
+  Objects (GPOs) using Event ID 5136. It monitors changes to the `Default Domain Controllers
+  Policy` and `Default Domain Policy`, which are critical for enforcing security settings
+  across domain controllers and all users/computers, respectively. This activity is
+  significant because unauthorized changes to these GPOs can indicate an adversary
+  with privileged access attempting to deploy persistence mechanisms or execute malware
+  across the network. If confirmed malicious, such modifications could lead to widespread
+  compromise, allowing attackers to maintain control and execute arbitrary code on
+  numerous hosts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1484/
+- https://attack.mitre.org/techniques/T1484/001
+- https://www.trustedsec.com/blog/weaponizing-group-policy-objects-access/
+- https://adsecurity.org/?p=2716
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 ObjectClass=groupPolicyContainer\
+    \ AttributeLDAPDisplayName=versionNumber (ObjectDN=\"CN={31B2F340-016D-11D2-945F-00C04FB984F9},CN=POLICIES,CN=SYSTEM,DC=*\"\
+    \ OR ObjectDN=\"CN={6AC1786C-016F-11D2-945F-00C04fB984F9},CN=POLICIES,CN=SYSTEM,DC=*\"\
+    )\n  | stats min(_time) as firstTime max(_time) as lastTime\n    BY ObjectDN SubjectUserSid\
+    \ AttributeValue\n       Computer DSName dest\n  | rename AttributeValue as versionNumber\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_default_group_policy_object_modified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fe6a6cc4-9e0d-4d66-bcf4-2c7f44860876
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_default_group_policy_object_modified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

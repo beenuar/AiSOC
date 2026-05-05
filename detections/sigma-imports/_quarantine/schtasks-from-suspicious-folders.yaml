@@ -1,0 +1,50 @@
+id: sigmahq-sigma-8a8379b8-780b-4dbf-b1e9-31c8d112fefb
+name: Schtasks From Suspicious Folders
+description: Detects scheduled task creations that have suspicious action command
+  and folder combinations
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/lazarus-dream-job-chemical
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \schtasks.exe
+  - OriginalFileName: schtasks.exe
+  selection_create:
+    CommandLine|contains: ' /create '
+  selection_command:
+    CommandLine|contains:
+    - powershell
+    - pwsh
+    - 'cmd /c '
+    - 'cmd /k '
+    - 'cmd /r '
+    - 'cmd.exe /c '
+    - 'cmd.exe /k '
+    - 'cmd.exe /r '
+  selection_all_folders:
+    CommandLine|contains:
+    - C:\ProgramData\
+    - '%ProgramData%'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8a8379b8-780b-4dbf-b1e9-31c8d112fefb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_folder_combos.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,48 @@
+id: sigmahq-sigma-d29ada0f-af45-4f27-8f32-f7b77c3dbc4e
+name: HackTool - SysmonEnte Execution
+description: Detects the use of SysmonEnte, a tool to attack the integrity of Sysmon
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.001
+  categories:
+  - endpoint
+references:
+- https://codewhitesec.blogspot.com/2022/09/attacks-on-sysmon-revisited-sysmonente.html
+- https://github.com/codewhitesec/SysmonEnte/
+- https://github.com/codewhitesec/SysmonEnte/blob/fe267690fcc799fbda15398243615a30451d9099/screens/1.png
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection_sysmon:
+    TargetImage|contains:
+    - :\Windows\Sysmon.exe
+    - :\Windows\Sysmon64.exe
+    GrantedAccess: '0x1400'
+  selection_calltrace:
+    CallTrace: Ente
+  filter_main_generic:
+    SourceImage|contains:
+    - :\Program Files (x86)\
+    - :\Program Files\
+    - :\Windows\System32\
+    - :\Windows\SysWOW64\
+  filter_main_msdefender:
+    SourceImage|contains: :\ProgramData\Microsoft\Windows Defender\Platform\
+    SourceImage|endswith: \MsMpEng.exe
+  condition: ( selection_sysmon and not 1 of filter_main_* ) or selection_calltrace
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d29ada0f-af45-4f27-8f32-f7b77c3dbc4e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_hktl_sysmonente.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

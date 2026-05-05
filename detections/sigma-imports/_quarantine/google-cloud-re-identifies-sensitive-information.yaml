@@ -1,0 +1,32 @@
+id: sigmahq-sigma-234f9f48-904b-4736-a34c-55d23919e4b7
+name: Google Cloud Re-identifies Sensitive Information
+description: Identifies when sensitive information is re-identified in google Cloud.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1565
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/dlp/docs/reference/rest/v2/projects.content/reidentify
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name: projects.content.reidentify
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 234f9f48-904b-4736-a34c-55d23919e4b7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_dlp_re_identifies_sensitive_information.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

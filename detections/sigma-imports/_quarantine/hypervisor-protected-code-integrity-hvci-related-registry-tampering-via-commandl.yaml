@@ -1,0 +1,60 @@
+id: sigmahq-sigma-6225c53a-a96e-4235-b28f-8d7997cd96eb
+name: Hypervisor-protected Code Integrity (HVCI) Related Registry Tampering Via CommandLine
+description: 'Detects the tampering of Hypervisor-protected Code Integrity (HVCI)
+  related registry values via command line tool reg.exe.
+
+  HVCI uses virtualization-based security to protect code integrity by ensuring that
+  only trusted code can run in kernel mode.
+
+  Adversaries may tamper with HVCI to load malicious or unsigned drivers, which can
+  be used to escalate privileges, maintain persistence, or evade security mechanisms.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://www.sophos.com/en-us/blog/sharpening-the-knife-gold-blades-strategic-evolution
+- https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+    - \reg.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+    - reg.exe
+  selection_cli:
+    CommandLine|contains:
+    - 'add '
+    - 'New-ItemProperty '
+    - 'Set-ItemProperty '
+    - 'si '
+  selection_cli_base:
+    CommandLine|contains: \DeviceGuard
+  selection_cli_key:
+    CommandLine|contains:
+    - EnableVirtualizationBasedSecurity
+    - HypervisorEnforcedCodeIntegrity
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6225c53a-a96e-4235-b28f-8d7997cd96eb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hvci_registry_tampering.yml
+falsepositives:
+- Legitimate system administration tasks that require disabling HVCI for troubleshooting
+  purposes when certain drivers or applications are incompatible with it.
+notes:
+  quarantine_reason: 'upstream status: experimental'

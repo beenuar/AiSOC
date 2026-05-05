@@ -1,0 +1,39 @@
+id: sigmahq-sigma-1ce8c8a3-2723-48ed-8246-906ac91061a6
+name: Possible PetitPotam Coerce Authentication Attempt
+description: Detect PetitPotam coerced authentication activity.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1187
+  categories:
+  - endpoint
+references:
+- https://github.com/topotam/PetitPotam
+- https://github.com/splunk/security_content/blob/0dd6de32de2118b2818550df9e65255f4109a56d/detections/endpoint/petitpotam_network_share_access_request.yml
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Detailed File Share"
+    must be configured for Success/Failure
+detection:
+  selection:
+    EventID: 5145
+    ShareName|startswith: \\\\
+    ShareName|endswith: \IPC$
+    RelativeTargetName: lsarpc
+    SubjectUserName: ANONYMOUS LOGON
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1ce8c8a3-2723-48ed-8246-906ac91061a6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_petitpotam_network_share.yml
+falsepositives:
+- Unknown. Feedback welcomed.
+notes:
+  quarantine_reason: 'upstream status: test'

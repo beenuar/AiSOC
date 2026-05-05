@@ -1,0 +1,45 @@
+id: splunk-security-content-e5c7b380-19da-42e9-9e53-0af4cd27aee3
+name: M365 Copilot Agentic Jailbreak Attack
+description: Detects agentic AI jailbreak attempts that try to establish persistent
+  control over M365 Copilot through rule injection, universal triggers, response automation,
+  system overrides, and persona establishment techniques. The detection analyzes the
+  PromptText field for keywords like "from now on," "always respond," "ignore previous,"
+  "new rule," "override," and role-playing commands (e.g., "act as," "you are now")
+  that attempt to inject persistent instructions. The search computes risk by counting
+  distinct jailbreak indicators per user session, flagging coordinated manipulation
+  attempts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`m365_exported_ediscovery_prompt_logs` | eval user = Sender | eval
+    rule_injection=if(match(Subject_Title, "(?i)(rules|instructions)\s*="), "YES",
+    "NO") | eval universal_trigger=if(match(Subject_Title, "(?i)(every|all).*prompt"),
+    "YES", "NO") | eval response_automation=if(match(Subject_Title, "(?i)(always|automatic).*respond"),
+    "YES", "NO") | eval system_override=if(match(Subject_Title, "(?i)(override|bypass|ignore).*(system|default)"),
+    "YES", "NO") | eval persona_establishment=if(match(Subject_Title, "(?i)(with.*\[.*\]|persona)"),
+    "YES", "NO") | where rule_injection="YES" OR universal_trigger="YES" OR response_automation="YES"
+    OR system_override="YES" OR persona_establishment="YES" | table _time, "Source
+    ID", user, Subject_Title, rule_injection, universal_trigger, response_automation,
+    system_override, persona_establishment, Workload | sort -_time | `m365_copilot_agentic_jailbreak_attack_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e5c7b380-19da-42e9-9e53-0af4cd27aee3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_agentic_jailbreak_attack.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

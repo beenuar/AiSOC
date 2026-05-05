@@ -1,0 +1,36 @@
+id: sigmahq-sigma-5b40a734-99b6-4b98-a1d0-1cea51a08ab2
+name: Suspicious Interactive PowerShell as SYSTEM
+description: Detects the creation of files that indicator an interactive use of PowerShell
+  in the SYSTEM user context
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://jpcertcc.github.io/ToolAnalysisResultSheet/details/PowerSploit_Invoke-Mimikatz.htm
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename:
+    - C:\Windows\System32\config\systemprofile\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
+    - C:\Windows\System32\config\systemprofile\AppData\Local\Microsoft\Windows\PowerShell\StartupProfileData-Interactive
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5b40a734-99b6-4b98-a1d0-1cea51a08ab2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_system_interactive_powershell.yml
+falsepositives:
+- Administrative activity
+- PowerShell scripts running as SYSTEM user
+notes:
+  quarantine_reason: 'upstream status: test'

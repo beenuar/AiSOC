@@ -1,0 +1,36 @@
+id: sigmahq-sigma-ce7066a6-508a-42d3-995b-2952c65dc2ce
+name: Drop Binaries Into Spool Drivers Color Folder
+description: Detects the creation of suspcious binary files inside the "\windows\system32\spool\drivers\color\"
+  as seen in the blog referenced below
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/07/27/untangling-knotweed-european-private-sector-offensive-actor-using-0-day-exploits/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|startswith: C:\Windows\System32\spool\drivers\color\
+    TargetFilename|endswith:
+    - .dll
+    - .exe
+    - .sys
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ce7066a6-508a-42d3-995b-2952c65dc2ce
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_spool_drivers_color_drop.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

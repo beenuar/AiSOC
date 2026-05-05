@@ -1,0 +1,33 @@
+id: sigmahq-sigma-f956c7c1-0f60-4bc5-b7d7-b39ab3c08908
+name: PktMon.EXE Execution
+description: Detects execution of PktMon, a tool that captures network packets.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1040
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Pktmon/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \pktmon.exe
+  - OriginalFileName: PktMon.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f956c7c1-0f60-4bc5-b7d7-b39ab3c08908
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pktmon_execution.yml
+falsepositives:
+- Legitimate use
+notes:
+  quarantine_reason: 'upstream status: test'

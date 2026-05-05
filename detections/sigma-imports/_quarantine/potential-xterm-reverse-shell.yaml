@@ -1,0 +1,35 @@
+id: sigmahq-sigma-4e25af4b-246d-44ea-8563-e42aacab006b
+name: Potential Xterm Reverse Shell
+description: Detects usage of "xterm" as a potential reverse shell tunnel
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet
+- https://www.revshells.com/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|contains: xterm
+    CommandLine|contains: -display
+    CommandLine|endswith: :1
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4e25af4b-246d-44ea-8563-e42aacab006b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_xterm_reverse_shell.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

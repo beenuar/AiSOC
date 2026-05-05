@@ -1,0 +1,41 @@
+id: splunk-security-content-7c921d28-ef48-4f1b-85b3-0af8af7697db
+name: AWS Defense Evasion Update Cloudtrail
+description: The following analytic detects `UpdateTrail` events in AWS CloudTrail
+  logs. It identifies attempts to modify CloudTrail settings, potentially to evade
+  logging. The detection leverages CloudTrail logs, focusing on `UpdateTrail` events
+  where the user agent is not the AWS console and the operation is successful. This
+  activity is significant because altering CloudTrail settings can disable or limit
+  logging, hindering visibility into AWS account activities. If confirmed malicious,
+  this could allow attackers to operate undetected, compromising the integrity and
+  security of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1562/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName = UpdateTrail eventSource = cloudtrail.amazonaws.com\
+    \ userAgent !=console.amazonaws.com errorCode = success\n  | rename user_name\
+    \ as user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY signature dest user\n       user_agent src vendor_account\n       vendor_region\
+    \ vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_defense_evasion_update_cloudtrail_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7c921d28-ef48-4f1b-85b3-0af8af7697db
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_defense_evasion_update_cloudtrail.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

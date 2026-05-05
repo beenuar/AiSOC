@@ -1,0 +1,45 @@
+id: splunk-security-content-94cb89aa-aec1-4585-91b1-affcdacf357e
+name: GitHub Enterprise Remove Organization
+description: The following analytic detects when a user removes an organization from
+  GitHub Enterprise. The detection monitors GitHub Enterprise audit logs for organization
+  deletion events, which could indicate unauthorized removal of critical business
+  resources. For a SOC, identifying organization removals is crucial as it may signal
+  account compromise, insider threats, or malicious attempts to disrupt business operations
+  by deleting entire organizational structures. The impact could be severe, potentially
+  resulting in loss of source code, repositories, team structures, access controls,
+  and other critical organizational assets. This disruption could halt development
+  workflows, cause data loss, and require significant effort to restore from backups
+  if available. Additionally, unauthorized organization removal could be part of a
+  larger attack campaign aimed at destroying or compromising enterprise assets.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  - T1195
+  categories:
+  - cloud
+references:
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_enterprise` action=business.remove_organization\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor,\
+    \ actor_id, actor_is_bot,\n       actor_location.country_code, business, business_id,\n\
+    \       org, org_id, user_agent,\n       action\n  | eval user=actor\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_enterprise_remove_organization_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 94cb89aa-aec1-4585-91b1-affcdacf357e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_enterprise_remove_organization.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

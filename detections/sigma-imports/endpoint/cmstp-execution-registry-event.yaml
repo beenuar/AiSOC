@@ -1,0 +1,31 @@
+id: sigmahq-sigma-b6d235fc-1d38-4b12-adbe-325f06728f37
+name: CMSTP Execution Registry Event
+description: Detects various indicators of Microsoft Connection Manager Profile Installer
+  execution
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1218.003
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20190720093911/http://www.endurant.io/cmstp/detecting-cmstp-enabled-code-execution-and-uac-bypass-with-sysmon/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \cmmgr32.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b6d235fc-1d38-4b12-adbe-325f06728f37
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_cmstp_execution_by_registry.yml
+falsepositives:
+- Legitimate CMSTP use (unlikely in modern enterprise environments)

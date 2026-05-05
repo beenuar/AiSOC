@@ -1,0 +1,61 @@
+id: chronicle-detection-rules-suspicious-powershell-parameter-substring
+name: suspicious_powershell_parameter_substring
+description: suspicious_powershell_parameter_substring
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_powershell_parameter_substring {\n meta:\n   \
+    \ author = \"Florian Roth (rule), Daniel Bohannon (idea), Roberto Rodriguez (Fix)\"\
+    \n    description = \"Detects suspicious PowerShell invocation with a parameter\
+    \ substring  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/4brkB1aA8Gzp\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, t1086\"\n\n  events:\n(re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Powershell\\.exe`) and ($selection.target.process.command_line = \" -windowstyle\
+    \ h \" or $selection.target.process.command_line = \" -windowstyl h\" or $selection.target.process.command_line\
+    \ = \" -windowsty h\" or $selection.target.process.command_line = \" -windowst\
+    \ h\" or $selection.target.process.command_line = \" -windows h\" or $selection.target.process.command_line\
+    \ = \" -windo h\" or $selection.target.process.command_line = \" -wind h\" or\
+    \ $selection.target.process.command_line = \" -win h\" or $selection.target.process.command_line\
+    \ = \" -wi h\" or $selection.target.process.command_line = \" -win h \" or $selection.target.process.command_line\
+    \ = \" -win hi \" or $selection.target.process.command_line = \" -win hid \" or\
+    \ $selection.target.process.command_line = \" -win hidd \" or $selection.target.process.command_line\
+    \ = \" -win hidde \" or $selection.target.process.command_line = \" -NoPr \" or\
+    \ $selection.target.process.command_line = \" -NoPro \" or $selection.target.process.command_line\
+    \ = \" -NoProf \" or $selection.target.process.command_line = \" -NoProfi \" or\
+    \ $selection.target.process.command_line = \" -NoProfil \" or $selection.target.process.command_line\
+    \ = \" -nonin \" or $selection.target.process.command_line = \" -nonint \" or\
+    \ $selection.target.process.command_line = \" -noninte \" or $selection.target.process.command_line\
+    \ = \" -noninter \" or $selection.target.process.command_line = \" -nonintera\
+    \ \" or $selection.target.process.command_line = \" -noninterac \" or $selection.target.process.command_line\
+    \ = \" -noninteract \" or $selection.target.process.command_line = \" -noninteracti\
+    \ \" or $selection.target.process.command_line = \" -noninteractiv \" or $selection.target.process.command_line\
+    \ = \" -ec \" or $selection.target.process.command_line = \" -encodedComman \"\
+    \ or $selection.target.process.command_line = \" -encodedComma \" or $selection.target.process.command_line\
+    \ = \" -encodedComm \" or $selection.target.process.command_line = \" -encodedCom\
+    \ \" or $selection.target.process.command_line = \" -encodedCo \" or $selection.target.process.command_line\
+    \ = \" -encodedC \" or $selection.target.process.command_line = \" -encoded \"\
+    \ or $selection.target.process.command_line = \" -encode \" or $selection.target.process.command_line\
+    \ = \" -encod \" or $selection.target.process.command_line = \" -enco \" or $selection.target.process.command_line\
+    \ = \" -en \") and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: suspicious_powershell_parameter_substring
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_powershell_parameter_substring
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/suspicious_powershell_parameter_substring.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

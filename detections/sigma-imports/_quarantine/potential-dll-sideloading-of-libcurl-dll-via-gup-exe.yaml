@@ -1,0 +1,36 @@
+id: sigmahq-sigma-e49b5745-1064-4ac1-9a2e-f687bc2dd37e
+name: Potential DLL Sideloading Of Libcurl.DLL Via GUP.EXE
+description: Detects potential DLL sideloading of "libcurl.dll" by the "gup.exe" process
+  from an uncommon location
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://labs.withsecure.com/publications/fin7-target-veeam-servers
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \gup.exe
+    ImageLoaded|endswith: \libcurl.dll
+  filter_main_notepad_plusplus:
+    Image|endswith: \Notepad++\updater\GUP.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e49b5745-1064-4ac1-9a2e-f687bc2dd37e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_gup_libcurl.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

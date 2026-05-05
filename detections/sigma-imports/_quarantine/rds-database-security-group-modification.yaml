@@ -1,0 +1,42 @@
+id: sigmahq-sigma-14f3f1c8-02d5-43a2-a191-91ffb52d3015
+name: RDS Database Security Group Modification
+description: 'Detects changes to the security group entries for RDS databases.
+
+  This can indicate that a misconfiguration has occurred which potentially exposes
+  the database to the public internet, a wider audience within the VPC or that removal
+  of valid rules has occurred which could impact the availability of the database
+  to legitimate services and users.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - cloud
+references:
+- https://www.gorillastack.com/blog/real-time-events/important-aws-cloudtrail-security-events-tracking/
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: rds.amazonaws.com
+    eventName:
+    - AuthorizeDBSecurityGroupIngress
+    - CreateDBSecurityGroup
+    - DeleteDBSecurityGroup
+    - RevokeDBSecurityGroupIngress
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 14f3f1c8-02d5-43a2-a191-91ffb52d3015
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_cloudtrail_security_group_change_rds.yml
+falsepositives:
+- Creation of a new Database that needs new security group rules
+notes:
+  quarantine_reason: 'upstream status: test'

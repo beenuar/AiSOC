@@ -1,0 +1,34 @@
+id: sigmahq-sigma-07e97cc6-aed1-43ae-9081-b3470d2367f1
+name: Okta Suspicious Activity Reported by End-user
+description: Detects when an Okta end-user reports activity by their account as being
+  potentially suspicious.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1586.003
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://github.com/okta/workflows-templates/blob/1164f0eb71ce47c9ddc7d850e9ab87b5a2b42333/workflows/suspicious_activity_reported/readme.md
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.account.report_suspicious_activity_by_enduser
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07e97cc6-aed1-43ae-9081-b3470d2367f1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_suspicious_activity_enduser_report.yml
+falsepositives:
+- If an end-user incorrectly identifies normal activity as suspicious.
+notes:
+  quarantine_reason: 'upstream status: test'

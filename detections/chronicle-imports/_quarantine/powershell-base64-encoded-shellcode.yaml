@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-powershell-base64-encoded-shellcode
+name: powershell_base64_encoded_shellcode
+description: powershell_base64_encoded_shellcode
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule powershell_base64_encoded_shellcode {\n meta:\n    author\
+    \ = \"Florian Roth\"\n    description = \"Detects Base64 encoded Shellcode  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/RtwpJThpBzv8\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/17\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"defense_evasion, t1036\"\n\n  events:\n\
+    (re.regex($selection1.target.process.command_line, `.*AAAAYInlM.*`) and ($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\") and (re.regex($selection1.target.process.command_line,\
+    \ `.*OiCAAAAYInlM.*`) or re.regex($selection1.target.process.command_line, `.*OiJAAAAYInlM.*`)))\n\
+    \n  condition:\n    $selection1\n}"
+  chronicle_rule_name: powershell_base64_encoded_shellcode
+provenance:
+  source: chronicle/detection-rules
+  source_id: powershell_base64_encoded_shellcode
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/powershell_base64_encoded_shellcode.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

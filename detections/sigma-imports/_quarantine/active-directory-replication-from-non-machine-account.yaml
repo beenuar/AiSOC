@@ -1,0 +1,43 @@
+id: sigmahq-sigma-17d619c1-e020-4347-957e-1d1207455c93
+name: Active Directory Replication from Non Machine Account
+description: Detects potential abuse of Active Directory Replication Service (ADRS)
+  from a non machine account to request credentials.
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1003.006
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/180815-ADObjectAccessReplication/notebook.html
+- https://threathunterplaybook.com/library/windows/active_directory_replication.html
+- https://threathunterplaybook.com/hunts/windows/190101-ADModDirectoryReplication/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4662
+    AccessMask: '0x100'
+    Properties|contains:
+    - 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2
+    - 1131f6ad-9c07-11d1-f79f-00c04fc2dcd2
+    - 89e95b76-444d-4c62-991a-0facbeda640c
+  filter:
+  - SubjectUserName|endswith: $
+  - SubjectUserName|startswith: MSOL_
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 17d619c1-e020-4347-957e-1d1207455c93
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_ad_replication_non_machine_account.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

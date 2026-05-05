@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-sap-system-or-client-configuration-change
+name: sap_system_or_client_configuration_change
+description: sap_system_or_client_configuration_change
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_system_or_client_configuration_change {\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects changes to either Global System\
+    \ Changeability (EU1) or Client-Specific Configuration (EU2/SCC4).\"\n    severity\
+    \ = \"High\"\n    tactic = \"TA0005\"\n    technique = \"T1562.001\"\n\n  events:\n\
+    \    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n\n        (\n            $e.additional.fields[\"\
+    msg_1\"] = \"EU1\" or\n            $e.additional.fields[\"msg_1\"] = \"EU2\"\n\
+    \        )\n\n\n    $user = $e.principal.user.userid\n\n  match:\n    $user over\
+    \ 1h\n\n  outcome:\n    $risk_score = max(if($e.additional.fields[\"msg_1\"] =\
+    \ \"EU1\", 95, 60))\n\n    $client = array_distinct($e.target.resource.attribute.labels[\"\
+    slgmand\"])\n    $principal_user = array_distinct($user)\n    $msg_id = array_distinct($e.additional.fields[\"\
+    msg_1\"])\n    $terminal_ip = array_distinct($e.principal.ip)\n    $details =\
+    \ array_distinct($e.metadata.description)\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_system_or_client_configuration_change
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_system_or_client_configuration_change
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_system_or_client_configuration_change.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

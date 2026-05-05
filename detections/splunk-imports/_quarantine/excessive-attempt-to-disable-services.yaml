@@ -1,0 +1,51 @@
+id: splunk-security-content-8fa2a0f0-acd9-11eb-8994-acde48001122
+name: Excessive Attempt To Disable Services
+description: The following analytic identifies a suspicious series of command-line
+  executions attempting to disable multiple services. It leverages data from Endpoint
+  Detection and Response (EDR) agents, focusing on processes where "sc.exe" is used
+  with parameters like "config" or "Disabled" within a short time frame. This activity
+  is significant as it may indicate an adversary's attempt to disable security or
+  other critical services to further compromise the system. If confirmed malicious,
+  this could lead to the attacker achieving persistence, evading detection, or disabling
+  security mechanisms, thereby increasing the risk of further exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.action)\
+    \ as action values(Processes.original_file_name) as original_file_name values(Processes.parent_process)\
+    \ as parent_process values(Processes.parent_process_exec) as parent_process_exec\
+    \ values(Processes.parent_process_guid) as parent_process_guid values(Processes.parent_process_id)\
+    \ as parent_process_id values(Processes.parent_process_path) as parent_process_path\
+    \ values(Processes.process) as process values(Processes.process_exec) as process_exec\
+    \ values(Processes.process_guid) as process_guid values(Processes.process_hash)\
+    \ as process_hash values(Processes.process_id) as process_id values(Processes.process_integrity_level)\
+    \ as process_integrity_level values(Processes.process_path) as process_path values(Processes.user_id)\
+    \ as user_id values(Processes.vendor_product) as vendor_product  count min(_time)\
+    \ as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE\
+    \ Processes.process_name = \"sc.exe\"\n    AND\n    Processes.process=\"*config*\"\
+    \n    OR\n    Processes.process=\"*Disabled*\"\n  BY Processes.process_name Processes.parent_process_name\
+    \ Processes.dest\n     Processes.user _time span=1m\n| where count >=4\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `excessive_attempt_to_disable_services_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8fa2a0f0-acd9-11eb-8994-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/excessive_attempt_to_disable_services.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

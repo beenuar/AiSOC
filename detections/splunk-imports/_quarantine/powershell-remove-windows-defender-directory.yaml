@@ -1,0 +1,39 @@
+id: splunk-security-content-adf47620-79fa-11ec-b248-acde48001122
+name: Powershell Remove Windows Defender Directory
+description: The following analytic detects a suspicious PowerShell command attempting
+  to delete the Windows Defender directory. It leverages PowerShell Script Block Logging
+  to identify commands containing "rmdir" and targeting the Windows Defender path.
+  This activity is significant as it may indicate an attempt to disable or corrupt
+  Windows Defender, a key security component. If confirmed malicious, this action
+  could allow an attacker to bypass endpoint protection, facilitating further malicious
+  activities without detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`powershell` EventCode=4104 ScriptBlockText = "*rmdir *" AND ScriptBlockText
+    = "*\\Microsoft\\Windows Defender*" | fillnull | stats count min(_time) as firstTime
+    max(_time) as lastTime by dest signature signature_id user_id vendor_product EventID
+    Guid Opcode Name Path ProcessID ScriptBlockId ScriptBlockText | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `powershell_remove_windows_defender_directory_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: adf47620-79fa-11ec-b248-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_remove_windows_defender_directory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

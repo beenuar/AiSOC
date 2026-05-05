@@ -1,0 +1,60 @@
+id: splunk-security-content-b28c4957-96a6-47e0-a965-6c767aac1458
+name: AWS Defense Evasion Impair Security Services
+description: The following analytic detects attempts to impair or disable AWS security
+  services by monitoring specific deletion operations across GuardDuty, AWS WAF (classic
+  and v2), CloudWatch, Route 53, and CloudWatch Logs. These actions include deleting
+  detectors, rule groups, IP sets, web ACLs, logging configurations, alarms, and log
+  streams. Adversaries may perform such operations to evade detection or remove visibility
+  from defenders. By explicitly pairing eventName values with their corresponding
+  eventSource services, this detection reduces noise and ensures that only security-related
+  deletions are flagged. It leverages CloudTrail logs to identify specific API calls
+  like "DeleteLogStream" and "DeleteDetector." This activity is significant because
+  it indicates potential efforts to disable security monitoring and evade detection.
+  If confirmed malicious, this could allow attackers to operate undetected, escalate
+  privileges, or exfiltrate data without triggering security alerts, severely compromising
+  the security posture of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/cli/latest/reference/guardduty/index.html
+- https://docs.aws.amazon.com/cli/latest/reference/waf/index.html
+- https://www.elastic.co/guide/en/security/current/prebuilt-rules.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cloudtrail`
+
+    (eventName="DeleteDetector" AND eventSource="guardduty.amazonaws.com") OR (   eventName
+    IN ("DeleteIPSet", "DeleteWebACL", "DeleteRuleGroup", "DeleteRule") AND eventSource
+    IN ("guardduty.amazonaws.com", "wafv2.amazonaws.com", "waf.amazonaws.com") ) OR
+    ( eventName="DeleteLoggingConfiguration" AND eventSource IN ("wafv2.amazonaws.com",
+    "waf.amazonaws.com", "route53.amazonaws.com") )
+
+    | rename user_name as user
+
+    | stats count min(_time) as firstTime max(_time) as lastTime by signature dest
+    user user_agent src vendor_account vendor_region vendor_product
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `aws_defense_evasion_impair_security_services_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b28c4957-96a6-47e0-a965-6c767aac1458
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_defense_evasion_impair_security_services.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

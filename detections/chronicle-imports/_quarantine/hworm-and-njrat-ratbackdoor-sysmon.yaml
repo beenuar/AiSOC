@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-hworm-and-njrat-ratbackdoor-sysmon
+name: hworm_and_njrat_ratbackdoor_sysmon
+description: hworm_and_njrat_ratbackdoor_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule hworm_and_njrat_ratbackdoor_sysmon {\n meta:\n    author\
+    \ = \"Alexandr Yampolskyi, SOC Prime\"\n    description = \"HWorm and NjRAT Rat/Backdoor\
+    \ Detector.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Xm5GOenPgfoV\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/27\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and ($selection.target.file.md5 = \"00df326eee18617fae2fdd3684ac1546\"\
+    \ or $selection.target.file.md5 = \"1488cdc5c5c9c87b4e0dae27ba3511cb\" or $selection.target.file.md5\
+    \ = \"4543daa6936dde54dda8782b89d5daf1\" or $selection.target.file.md5 = \"80b1f909d1217313c14ea6d4d0b003dc\"\
+    \ or $selection.target.file.md5 = \"81c153256efd9161f4d89fe5fd7015bc\" or $selection.target.file.md5\
+    \ = \"c6b53fc46427527a0739e6b6443ef72d\" or $selection.target.file.md5 = \"9e273220eb71f849ea99b923cbc1fae3\"\
+    \ or $selection.target.file.md5 = \"43309710ab8f87dc5d9842a5bca85f80\" or $selection.target.file.md5\
+    \ = \"a40faab2f3f546aeb29aaefcb0f751d8\" or $selection.target.file.md5 = \"617a128b44671ac88df0b7180d9d0135\"\
+    \ or $selection.target.file.md5 = \"ae5c8ad09954a56f348a3b72ed824363\" or $selection.target.file.md5\
+    \ = \"da3e2eeffd78d8c5ef472b8a09e9d325\" or $selection.target.file.md5 = \"0de41aef336f40a07ed6984db61b52ab\"\
+    \ or $selection.target.file.md5 = \"e081a42d6e09a3fcf049a33b2ecf0412\" or $selection.target.file.md5\
+    \ = \"361c9d44809f788b92023b762e363449\" or $selection.target.file.md5 = \"c46a631f0bc82d8c2d46e9d8634cc50242987fa7749cac097439298d1d0c1d6e\"\
+    \ or $selection.target.file.md5 = \"25bc108a683d25a77efcac89b45f0478d9ddd281a9a2fb1f55fc6992a93aa830\"\
+    \ or $selection.target.file.md5 = \"b957911d7d5865e91851ab402189ae86\" or $selection.target.file.md5\
+    \ = \"0ab40f5c7d9151742ec29d53fb224ad8\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: hworm_and_njrat_ratbackdoor_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: hworm_and_njrat_ratbackdoor_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/hworm_and_njrat_rat_backdoor__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

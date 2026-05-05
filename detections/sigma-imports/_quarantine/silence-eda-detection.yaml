@@ -1,0 +1,50 @@
+id: sigmahq-sigma-3ceb2083-a27f-449a-be33-14ec1b7cc973
+name: Silence.EDA Detection
+description: Detects Silence EmpireDNSAgent as described in the Group-IP report
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1071.004
+  - T1572
+  - T1529
+  categories:
+  - endpoint
+references:
+- https://www.group-ib.com/resources/threat-research/silence_2.0.going_global.pdf
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  empire:
+    ScriptBlockText|contains|all:
+    - System.Diagnostics.Process
+    - Stop-Computer
+    - Restart-Computer
+    - Exception in execution
+    - $cmdargs
+    - Close-Dnscat2Tunnel
+  dnscat:
+    ScriptBlockText|contains|all:
+    - set type=$LookupType`nserver
+    - $Command | nslookup 2>&1 | Out-String
+    - New-RandomDNSField
+    - '[Convert]::ToString($SYNOptions, 16)'
+    - $Session.Dead = $True
+    - $Session["Driver"] -eq
+  condition: empire and dnscat
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3ceb2083-a27f-449a-be33-14ec1b7cc973
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_apt_silence_eda.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

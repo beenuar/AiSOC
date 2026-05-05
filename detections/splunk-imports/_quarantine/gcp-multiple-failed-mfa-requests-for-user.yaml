@@ -1,0 +1,45 @@
+id: splunk-security-content-cbb3cb84-c06f-4393-adcc-5cb6195621f1
+name: GCP Multiple Failed MFA Requests For User
+description: The following analytic detects multiple failed multi-factor authentication
+  (MFA) requests for a single user within a Google Cloud Platform (GCP) tenant. It
+  triggers when 10 or more MFA prompts fail within a 5-minute window, using Google
+  Workspace login failure events. This behavior is significant as it may indicate
+  an adversary attempting to bypass MFA by bombarding the user with repeated authentication
+  requests. If confirmed malicious, this activity could lead to unauthorized access,
+  allowing attackers to compromise accounts and potentially escalate privileges within
+  the GCP environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1586.003
+  - T1621
+  categories:
+  - cloud
+references:
+- https://www.mandiant.com/resources/blog/russian-targeting-gov-business
+- https://arstechnica.com/information-technology/2022/03/lapsus-and-solar-winds-hackers-both-use-the-same-old-trick-to-bypass-mfa/
+- https://therecord.media/russian-hackers-bypass-2fa-by-annoying-victims-with-repeated-push-notifications/
+- https://attack.mitre.org/techniques/T1621/
+- https://attack.mitre.org/techniques/T1078/004/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gws_reports_login` event.name=login_failure `gws_login_mfa_methods`\n\
+    \  | bucket span=5m _time\n  | stats dc(_raw) AS mfa_prompts values(user) AS user\n\
+    \    BY src_ip, login_challenge_method, _time\n  | where mfa_prompts >= 10\n \
+    \ | `gcp_multiple_failed_mfa_requests_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cbb3cb84-c06f-4393-adcc-5cb6195621f1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gcp_multiple_failed_mfa_requests_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-6a5f68d1-c4b5-46b9-94ee-5324892ea939
+name: Uninstall Sysinternals Sysmon
+description: Detects the removal of Sysmon, which could be a potential attempt at
+  defense evasion
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1562.001/T1562.001.md#atomic-test-11---uninstall-sysmon
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_pe:
+  - Image|endswith:
+    - \Sysmon64.exe
+    - \Sysmon.exe
+  - Description: System activity monitor
+  selection_cli:
+    CommandLine|contains|windash: -u
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6a5f68d1-c4b5-46b9-94ee-5324892ea939
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_sysmon_uninstall.yml
+falsepositives:
+- Legitimate administrators might use this command to remove Sysmon for debugging
+  purposes
+notes:
+  quarantine_reason: 'upstream status: test'

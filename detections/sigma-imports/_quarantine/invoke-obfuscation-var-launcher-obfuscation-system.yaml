@@ -1,0 +1,46 @@
+id: sigmahq-sigma-14bcba49-a428-42d9-b943-e2ce0f0f7ae6
+name: Invoke-Obfuscation VAR++ LAUNCHER OBFUSCATION - System
+description: Detects Obfuscated Powershell via VAR++ LAUNCHER
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains|all:
+    - '&&set'
+    - cmd
+    - /c
+    - -f
+    ImagePath|contains:
+    - '{0}'
+    - '{1}'
+    - '{2}'
+    - '{3}'
+    - '{4}'
+    - '{5}'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 14bcba49-a428-42d9-b943-e2ce0f0f7ae6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_var_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,46 @@
+id: sigmahq-sigma-1543ae20-cbdf-4ec1-8d12-7664d667a825
+name: Suspicious Commands Linux
+description: Detects relevant commands often related to malware or hacking activity
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- Internal Research - mostly derived from exploit code including code in MSF
+logsource:
+  product: linux
+  service: auditd
+detection:
+  cmd1:
+    type: EXECVE
+    a0: chmod
+    a1: 777
+  cmd2:
+    type: EXECVE
+    a0: chmod
+    a1: u+s
+  cmd3:
+    type: EXECVE
+    a0: cp
+    a1: /bin/ksh
+  cmd4:
+    type: EXECVE
+    a0: cp
+    a1: /bin/sh
+  condition: 1 of cmd*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1543ae20-cbdf-4ec1-8d12-7664d667a825
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_susp_cmds.yml
+falsepositives:
+- Admin activity
+notes:
+  quarantine_reason: 'upstream status: test'

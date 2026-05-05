@@ -1,0 +1,64 @@
+id: chronicle-detection-rules-win-short-term-account-use
+name: win_short_term_account_use
+description: win_short_term_account_use
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule win_short_term_account_use {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detects the creation, login, and deletion of a user account\
+    \ over a predefined timeframe\"\n    rule_id = \"mr_ac28ce76-8197-4354-af0d-d77c5771d9df\"\
+    \n    rule_name = \"Windows Short Term Account Use\"\n    type = \"alert\"\n \
+    \   platform = \"windows\"\n    data_source = \"microsoft windows events\"\n \
+    \   severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $create.metadata.event_type\
+    \ = \"USER_CREATION\"\n    $create.target.user.userid = $targetUser\n\n    $create.metadata.event_timestamp.seconds\
+    \ < $login.metadata.event_timestamp.seconds\n\n    $login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    //Focus is on Windows login events with this event code\
+    \ but could be modified for other platforms as well\n    $login.metadata.product_event_type\
+    \ = \"4624\"\n    $login.target.user.userid = $targetUser\n\n    $login.metadata.event_timestamp.seconds\
+    \ < $delete.metadata.event_timestamp.seconds\n\n    $delete.metadata.event_type\
+    \ = \"USER_DELETION\"\n    $delete.target.user.userid = $targetUser\n\n  match:\n\
+    \    $targetUser over 4h\n\n  outcome:\n    $risk_score = 65\n    $event_count\
+    \ = count_distinct($login.metadata.id)\n    // added to populate alert graph with\
+    \ additional context\n    $principal_hostname = array_distinct($login.principal.hostname)\n\
+    \    $src_hostname = array_distinct($login.src.hostname)\n    $src_ip = array_distinct($login.src.ip)\n\
+    \    $principal_user_userid = array_distinct($login.principal.user.userid)\n \
+    \   $principal_user_employee_id = array_distinct($login.principal.user.employee_id)\n\
+    \    // principal_process_id for each of the three types of events\n    $user_creation_process_id\
+    \ = array_distinct($create.principal.process.pid)\n    $user_login_process_id\
+    \ = array_distinct($login.principal.process.pid)\n    $user_deletion_process_id\
+    \ = array_distinct($delete.principal.process.pid)\n    $target_process_file_full_path\
+    \ = array_distinct($login.target.process.file.full_path)\n    // Commented out\
+    \ target.user.userid because it is already represented in graph as match variable.\
+    \ If match changes, can uncomment to add to results\n    //$target_user_userid\
+    \ = array_distinct($login.target.user.userid)\n    $principal_resource_name =\
+    \ array_distinct($login.principal.resource.name)\n    $target_resource_name =\
+    \ array_distinct($login.target.resource.name)\n    $target_url = array_distinct($login.target.url)\n\
+    \n  condition:\n    $create and $login and $delete\n\n}"
+  chronicle_rule_name: win_short_term_account_use
+provenance:
+  source: chronicle/detection-rules
+  source_id: win_short_term_account_use
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/win_short_term_account_use.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

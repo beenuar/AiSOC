@@ -1,0 +1,37 @@
+id: sigmahq-sigma-bd33d2aa-497e-4651-9893-5c5364646595
+name: Suspicious TCP Tunnel Via PowerShell Script
+description: Detects powershell scripts that creates sockets/listeners which could
+  be indicative of tunneling activity
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1090
+  categories:
+  - endpoint
+references:
+- https://github.com/Arno0x/PowerShellScripts/blob/a6b7d5490fbf0b20f91195838f3a11156724b4f7/proxyTunnel.ps1
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - '[System.Net.HttpWebRequest]'
+    - System.Net.Sockets.TcpListener
+    - AcceptTcpClient
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bd33d2aa-497e-4651-9893-5c5364646595
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_proxy_scripts.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

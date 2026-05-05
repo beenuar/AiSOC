@@ -1,0 +1,68 @@
+id: sigmahq-sigma-2ddef153-167b-4e89-86b6-757a9e65dcac
+name: File Download Via Bitsadmin To A Suspicious Target Folder
+description: Detects usage of bitsadmin downloading a file to a suspicious target
+  folder
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1197
+  - T1036.003
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://blog.netspi.com/15-ways-to-download-a-file/#bitsadmin
+- https://isc.sans.edu/diary/22264
+- https://lolbas-project.github.io/lolbas/Binaries/Bitsadmin/
+- https://blog.talosintelligence.com/breaking-the-silence-recent-truebot-activity/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \bitsadmin.exe
+  - OriginalFileName: bitsadmin.exe
+  selection_flags:
+    CommandLine|contains:
+    - ' /transfer '
+    - ' /create '
+    - ' /addfile '
+  selection_folder:
+    CommandLine|contains:
+    - :\Perflogs
+    - :\ProgramData\
+    - :\Temp\
+    - :\Users\Public\
+    - :\Windows\
+    - \$Recycle.Bin\
+    - \AppData\Local\
+    - \AppData\Roaming\
+    - \Contacts\
+    - \Desktop\
+    - \Favorites\
+    - \Favourites\
+    - \inetpub\wwwroot\
+    - \Music\
+    - \Pictures\
+    - \Start Menu\Programs\Startup\
+    - \Users\Default\
+    - \Videos\
+    - '%ProgramData%'
+    - '%public%'
+    - '%temp%'
+    - '%tmp%'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2ddef153-167b-4e89-86b6-757a9e65dcac
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bitsadmin_download_susp_targetfolder.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

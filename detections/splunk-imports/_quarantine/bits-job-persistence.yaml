@@ -1,0 +1,49 @@
+id: splunk-security-content-e97a5ffe-90bf-11eb-928a-acde48001122
+name: BITS Job Persistence
+description: The following analytic detects the use of `bitsadmin.exe` to schedule
+  a BITS job for persistence on an endpoint. It leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on specific command-line parameters such as
+  `create`, `addfile`, and `resume`. This activity is significant because BITS jobs
+  can be used by attackers to maintain persistence, download malicious payloads, or
+  exfiltrate data. If confirmed malicious, this could allow an attacker to persist
+  in the environment, execute arbitrary code, or transfer sensitive information, necessitating
+  further investigation and potential remediation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1197/
+- https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/bitsadmin
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1197/T1197.md#atomic-test-3---persist-download--execute
+- https://lolbas-project.github.io/lolbas/Binaries/Bitsadmin/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_bitsadmin`\
+    \ Processes.process IN (*create*, *addfile*, *setnotifyflags*, *setnotifycmdline*,\
+    \ *setminretrydelay*, *setcustomheaders*, *resume* )\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `bits_job_persistence_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e97a5ffe-90bf-11eb-928a-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/bits_job_persistence.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

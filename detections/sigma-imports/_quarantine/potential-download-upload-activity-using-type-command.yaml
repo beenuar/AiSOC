@@ -1,0 +1,39 @@
+id: sigmahq-sigma-aa0b3a82-eacc-4ec3-9150-b5a9a3e3f82f
+name: Potential Download/Upload Activity Using Type Command
+description: Detects usage of the "type" command to download/upload data from WebDAV
+  server
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://mr0range.com/a-new-lolbin-using-the-windows-type-command-to-upload-download-files-81d7b6179e22
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_upload:
+    CommandLine|contains|all:
+    - 'type '
+    - ' > \\\\'
+  selection_download:
+    CommandLine|contains|all:
+    - type \\\\
+    - ' > '
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aa0b3a82-eacc-4ec3-9150-b5a9a3e3f82f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cmd_type_arbitrary_file_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

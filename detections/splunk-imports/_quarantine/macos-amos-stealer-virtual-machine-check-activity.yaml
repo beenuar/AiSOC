@@ -1,0 +1,48 @@
+id: splunk-security-content-4e41ad21-9761-426d-8aa1-083712ff9f30
+name: MacOS AMOS Stealer - Virtual Machine Check Activity
+description: 'The following analytic detects AMOS Stealer VM check activity on macOS.
+  It leverages osquery to monitor process events and identifies the execution of the
+  "osascript" command along with specific commandline strings.
+
+  This activity is significant as AMOS stealer was seen using this pattern in order
+  to check if the host is a Virtual Machine or not.
+
+  If confirmed malicious, this behavior indicate that the host is already infected
+  by the AMOS stealer, which could allow attackers to execute arbitrary code, escalate
+  privileges, steal information, or persist within the environment, posing a significant
+  security risk.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.002
+  categories:
+  - endpoint
+references:
+- https://osquery.readthedocs.io/en/stable/deployment/process-auditing/
+- https://www.virustotal.com/gui/search/behaviour_processes%253A%2522osascript%2520-e%2520set%2522%2520AND%2520behaviour_processes%253A%2522system_profiler%2522%2520AND%2520(behaviour_processes%253A%2522VMware%2522%2520OR%2520behaviour_processes%253A%2522QEMU%2522)?type=files
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`osquery_macro`\nname=es_process_events\ncolumns.cmdline=\"*osascript*\"\
+    \ncolumns.cmdline=\"* -e *\"\ncolumns.cmdline=\"*set*\"\ncolumns.cmdline=\"*system_profiler*\"\
+    \ncolumns.cmdline IN (\"*VMware*\", \"*QEMU*\")\n\n| rename columns.* as *\n\n\
+    | stats  min(_time) as firstTime max(_time) as lastTime\n  values(cmdline) as\
+    \ cmdline,\n  values(pid) as pid,\n  values(parent) as parent,\n  values(path)\
+    \ as path,\n  values(signing_id) as signing_id,\n  by username host\n\n| rename\n\
+    \  username as user,\n  cmdline as process,\n  parent as parent_process,\n  path\
+    \ as process_path,\n  host as dest\n\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `macos_amos_stealer___virtual_machine_check_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4e41ad21-9761-426d-8aa1-083712ff9f30
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_amos_stealer___virtual_machine_check_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

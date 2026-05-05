@@ -1,0 +1,37 @@
+id: sigmahq-sigma-cafeeba3-01da-4ab4-b6c4-a31b1d9730c7
+name: PrintBrm ZIP Creation of Extraction
+description: Detects the execution of the LOLBIN PrintBrm.exe, which can be used to
+  create or extract ZIP files. PrintBrm.exe should not be run on a normal workstation.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/PrintBrm/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: \PrintBrm.exe
+    CommandLine|contains|all:
+    - ' -f'
+    - .zip
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cafeeba3-01da-4ab4-b6c4-a31b1d9730c7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_printbrm.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

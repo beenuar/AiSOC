@@ -1,0 +1,37 @@
+id: sigmahq-sigma-ae48ab93-45f7-4051-9dfe-5d30a3f78e33
+name: Spring Framework Exceptions
+description: Detects suspicious Spring framework exceptions that could indicate exploitation
+  attempts
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://docs.spring.io/spring-security/site/docs/current/api/overview-tree.html
+logsource:
+  category: application
+  product: spring
+detection:
+  keywords:
+  - AccessDeniedException
+  - CsrfException
+  - InvalidCsrfTokenException
+  - MissingCsrfTokenException
+  - CookieTheftException
+  - InvalidCookieException
+  - RequestRejectedException
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ae48ab93-45f7-4051-9dfe-5d30a3f78e33
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/spring/spring_application_exceptions.yml
+falsepositives:
+- Application bugs

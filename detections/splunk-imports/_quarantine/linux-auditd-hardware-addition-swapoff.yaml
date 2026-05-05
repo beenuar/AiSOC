@@ -1,0 +1,39 @@
+id: splunk-security-content-5728bb16-1a0b-4b66-bce2-0074ac839770
+name: Linux Auditd Hardware Addition Swapoff
+description: The following analytic detects the execution of the "swapoff" command,
+  which disables the swapping of paging devices on a Linux system. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process execution
+  logs. This activity is significant because disabling swap can be a tactic used by
+  malware, such as Awfulshred, to evade detection and hinder forensic analysis. If
+  confirmed malicious, this action could allow an attacker to manipulate system memory
+  management, potentially leading to data corruption, system instability, or evasion
+  of memory-based detection mechanisms.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1200
+  categories:
+  - endpoint
+references:
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/overview-of-the-cyber-weapons-used-in-the-ukraine-russia-war/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` proctitle = \"*swapoff*\" AND proctitle = \"*-a*\"\n\
+    \  | rename host as dest\n  | stats count min(_time) as firstTime max(_time) as\
+    \ lastTime\n    BY proctitle dest\n  | `security_content_ctime(firstTime)`\n \
+    \ | `security_content_ctime(lastTime)`\n  | `linux_auditd_hardware_addition_swapoff_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5728bb16-1a0b-4b66-bce2-0074ac839770
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_hardware_addition_swapoff.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

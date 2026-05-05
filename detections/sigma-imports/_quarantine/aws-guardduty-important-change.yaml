@@ -1,0 +1,34 @@
+id: sigmahq-sigma-6e61ee20-ce00-4f8d-8aee-bedd8216f7e3
+name: AWS GuardDuty Important Change
+description: Detects updates of the GuardDuty list of trusted IPs, perhaps to disable
+  security alerts against malicious IPs.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - cloud
+references:
+- https://github.com/RhinoSecurityLabs/pacu/blob/866376cd711666c775bbfcde0524c817f2c5b181/pacu/modules/guardduty__whitelist_ip/main.py#L9
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_source:
+    eventSource: guardduty.amazonaws.com
+    eventName: CreateIPSet
+  condition: selection_source
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6e61ee20-ce00-4f8d-8aee-bedd8216f7e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_guardduty_disruption.yml
+falsepositives:
+- Valid change in the GuardDuty (e.g. to ignore internal scanners)
+notes:
+  quarantine_reason: 'upstream status: test'

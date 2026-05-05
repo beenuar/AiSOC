@@ -1,0 +1,36 @@
+id: sigmahq-sigma-b97cd4b1-30b8-4a9d-bd72-6293928d52bc
+name: Indirect Command Execution By Program Compatibility Wizard
+description: Detect indirect command execution via Program Compatibility Assistant
+  pcwrun.exe
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/pabraeken/status/991335019833708544
+- https://lolbas-project.github.io/lolbas/Binaries/Pcwrun/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \pcwrun.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b97cd4b1-30b8-4a9d-bd72-6293928d52bc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_pcwrun.yml
+falsepositives:
+- Need to use extra processing with 'unique_count' / 'filter' to focus on outliers
+  as opposed to commonly seen artifacts
+- Legit usage of scripts
+notes:
+  quarantine_reason: 'upstream status: test'

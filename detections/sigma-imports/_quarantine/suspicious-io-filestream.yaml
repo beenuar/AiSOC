@@ -1,0 +1,37 @@
+id: sigmahq-sigma-70ad982f-67c8-40e0-a955-b920c2fa05cb
+name: Suspicious IO.FileStream
+description: Open a handle on the drive volume via the \\.\ DOS device path specifier
+  and perform direct access read of the first few bytes of the volume.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1006/T1006.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - New-Object
+    - IO.FileStream
+    - \\\\.\\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 70ad982f-67c8-40e0-a955-b920c2fa05cb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_iofilestream.yml
+falsepositives:
+- Legitimate PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

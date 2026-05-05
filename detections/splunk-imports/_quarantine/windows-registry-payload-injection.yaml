@@ -1,0 +1,45 @@
+id: splunk-security-content-c6b2d80f-179a-41a1-b95e-ce5601d7427a
+name: Windows Registry Payload Injection
+description: The following analytic detects suspiciously long data written to the
+  Windows registry, a behavior often linked to fileless malware or persistence techniques.
+  It leverages Endpoint Detection and Response (EDR) telemetry, focusing on registry
+  events with data lengths exceeding 512 characters. This activity is significant
+  as it can indicate an attempt to evade traditional file-based defenses, making it
+  crucial for SOC monitoring. If confirmed malicious, this technique could allow attackers
+  to maintain persistence, execute code, or manipulate system configurations without
+  leaving a conventional file footprint.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027.011
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/tracking-evolution-gootloader-operations
+- https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/kovter-an-evolving-malware-gone-fileless
+- https://attack.mitre.org/techniques/T1027/011/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry\n\
+    \  WHERE Registry.registry_value_data=*\n  BY _time span=1h Registry.dest\n  \
+    \   Registry.registry_path Registry.registry_value_name Registry.process_guid\n\
+    \     Registry.registry_value_data Registry.registry_key_name Registry.registry_hive\n\
+    \     Registry.status Registry.action Registry.process_id\n     Registry.user\
+    \ Registry.vendor_product\n| `drop_dm_object_name(Registry)`\n| eval reg_data_len\
+    \ = len(registry_value_data)\n| where reg_data_len > 512\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_registry_payload_injection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c6b2d80f-179a-41a1-b95e-ce5601d7427a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_registry_payload_injection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,48 @@
+id: sigmahq-sigma-e96253b8-6b3b-4f90-9e59-3b24b99cf9b4
+name: HackTool - KrbRelay Execution
+description: Detects the use of KrbRelay, a Kerberos relaying tool
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://github.com/cube0x0/KrbRelay
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \KrbRelay.exe
+  - OriginalFileName: KrbRelay.exe
+  selection_cli_1:
+    CommandLine|contains|all:
+    - ' -spn '
+    - ' -clsid '
+    - ' -rbcd '
+  selection_cli_2:
+    CommandLine|contains|all:
+    - shadowcred
+    - clsid
+    - spn
+  selection_cli_3:
+    CommandLine|contains|all:
+    - 'spn '
+    - 'session '
+    - 'clsid '
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e96253b8-6b3b-4f90-9e59-3b24b99cf9b4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_krbrelay.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

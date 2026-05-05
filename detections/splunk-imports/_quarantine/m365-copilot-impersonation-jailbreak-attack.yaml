@@ -1,0 +1,51 @@
+id: splunk-security-content-cc26aba8-7f4a-4078-b91a-052d6a53cb13
+name: M365 Copilot Impersonation Jailbreak Attack
+description: Detects M365 Copilot impersonation and roleplay jailbreak attempts where
+  users try to manipulate the AI into adopting alternate personas, behaving as unrestricted
+  entities, or impersonating malicious AI systems to bypass safety controls. The detection
+  searches exported eDiscovery prompt logs for roleplay keywords like "pretend you
+  are," "act as," "you are now," "amoral," and "roleplay as" in the Subject_Title
+  field. Prompts are categorized into specific impersonation types (AI_Impersonation,
+  Malicious_AI_Persona, Unrestricted_AI_Persona, etc.) to identify attempts to override
+  the AI's safety guardrails through persona injection attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`m365_exported_ediscovery_prompt_logs`\n  | search Subject_Title=\"\
+    *Pretend you are*\" OR Subject_Title=\"*act as*\" OR Subject_Title=\"*you are\
+    \ now*\" OR Subject_Title=\"*amoral*\" OR Subject_Title=\"*being*\" OR Subject_Title=\"\
+    *roleplay as*\" OR Subject_Title=\"*imagine you are*\" OR Subject_Title=\"*behave\
+    \ like*\"\n  | eval user = Sender\n  | eval impersonation_type=case(match(Subject_Title,\
+    \ \"(?i)pretend you are.*AI\"), \"AI_Impersonation\", match(Subject_Title, \"\
+    (?i)(act as\n  | roleplay as).*AI\"), \"AI_Roleplay\", match(Subject_Title, \"\
+    (?i)amoral.*AI\"), \"Amoral_AI\", match(Subject_Title, \"(?i)transcendent being\"\
+    ), \"Fictional_Entity\", match(Subject_Title, \"(?i)(act as\n  | pretend you are).*(entities\n\
+    \  | multiple)\"), \"Multi_Entity\", match(Subject_Title, \"(?i)(imagine you are\n\
+    \  | behave like).*AI\"), \"AI_Behavioral_Change\", match(Subject_Title, \"(?i)you\
+    \ are now.*AI\"), \"AI_Identity_Override\", match(Subject_Title, \"(?i)(evil\n\
+    \  | malicious\n  | harmful).*AI\"), \"Malicious_AI_Persona\", match(Subject_Title,\
+    \ \"(?i)(unrestricted\n  | unlimited\n  | uncensored).*AI\"), \"Unrestricted_AI_Persona\"\
+    , 1=1, \"Generic_Roleplay\")\n  | table _time, user, Subject_Title, impersonation_type,\
+    \ Workload\n  | sort -_time\n  | `m365_copilot_impersonation_jailbreak_attack_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cc26aba8-7f4a-4078-b91a-052d6a53cb13
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_impersonation_jailbreak_attack.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

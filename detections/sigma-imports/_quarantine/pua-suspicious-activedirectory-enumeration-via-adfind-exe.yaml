@@ -1,0 +1,47 @@
+id: sigmahq-sigma-455b9d50-15a1-4b99-853f-8d37655a4c1b
+name: PUA - Suspicious ActiveDirectory Enumeration Via AdFind.EXE
+description: Detects active directory enumeration activity using known AdFind CLI
+  flags
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://www.joeware.net/freetools/tools/adfind/
+- https://social.technet.microsoft.com/wiki/contents/articles/7535.adfind-command-examples.aspx
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1087.002/T1087.002.md
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_password:
+    CommandLine|contains:
+    - lockoutduration
+    - lockoutthreshold
+    - lockoutobservationwindow
+    - maxpwdage
+    - minpwdage
+    - minpwdlength
+    - pwdhistorylength
+    - pwdproperties
+  selection_enum_ad:
+    CommandLine|contains: -sc admincountdmp
+  selection_enum_exchange:
+    CommandLine|contains: -sc exchaddresses
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 455b9d50-15a1-4b99-853f-8d37655a4c1b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_adfind_enumeration.yml
+falsepositives:
+- Authorized administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

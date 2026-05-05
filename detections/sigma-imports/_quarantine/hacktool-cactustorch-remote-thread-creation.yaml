@@ -1,0 +1,43 @@
+id: sigmahq-sigma-2e4e488a-6164-4811-9ea1-f960c7359c40
+name: HackTool - CACTUSTORCH Remote Thread Creation
+description: Detects remote thread creation from CACTUSTORCH as described in references.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055.012
+  - T1059.005
+  - T1059.007
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://twitter.com/SBousseaden/status/1090588499517079552
+- https://github.com/mdsecactivebreach/CACTUSTORCH
+logsource:
+  product: windows
+  category: create_remote_thread
+detection:
+  selection:
+    SourceImage|endswith:
+    - \System32\cscript.exe
+    - \System32\wscript.exe
+    - \System32\mshta.exe
+    - \winword.exe
+    - \excel.exe
+    TargetImage|contains: \SysWOW64\
+    StartModule: null
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2e4e488a-6164-4811-9ea1-f960c7359c40
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/create_remote_thread/create_remote_thread_win_hktl_cactustorch.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

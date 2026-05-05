@@ -1,0 +1,42 @@
+id: sigmahq-sigma-be2e3a5c-9cc7-4d02-842a-68e9cb26ec49
+name: JAMF MDM Execution
+description: Detects execution of the "jamf" binary to create user accounts and run
+  commands. For example, the binary can be abused by attackers on the system in order
+  to bypass security controls or remove application control polices.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/MythicAgents/typhon/
+- https://www.zoocoup.org/casper/jamf_cheatsheet.pdf
+- https://docs.jamf.com/10.30.0/jamf-pro/administrator-guide/Components_Installed_on_Managed_Computers.html
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: /jamf
+    CommandLine|contains:
+    - createAccount
+    - manage
+    - removeFramework
+    - removeMdmProfile
+    - resetPassword
+    - setComputerName
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: be2e3a5c-9cc7-4d02-842a-68e9cb26ec49
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_jamf_usage.yml
+falsepositives:
+- Legitimate use of the JAMF CLI tool by IT support and administrators
+notes:
+  quarantine_reason: 'upstream status: test'

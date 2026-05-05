@@ -1,0 +1,90 @@
+id: sigmahq-sigma-c9a88268-0047-4824-ba6e-4d81ce0b907c
+name: Antivirus Relevant File Paths Alerts
+description: 'Detects an Antivirus alert in a highly relevant file path or with a
+  relevant file name.
+
+  This event must not be ignored just because the AV has blocked the malware but investigate,
+  how it came there in the first place.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1588
+  categories:
+  - endpoint
+references:
+- https://www.nextron-systems.com/?s=antivirus
+logsource:
+  category: antivirus
+detection:
+  selection_path:
+    Filename|contains:
+    - :\PerfLogs\
+    - :\Temp\
+    - :\Users\Default\
+    - :\Users\Public\
+    - :\Windows\
+    - /www/
+    - \inetpub\
+    - \tsclient\
+    - apache
+    - nginx
+    - tomcat
+    - weblogic
+  selection_ext:
+    Filename|endswith:
+    - .asax
+    - .ashx
+    - .asmx
+    - .asp
+    - .aspx
+    - .bat
+    - .cfm
+    - .cgi
+    - .chm
+    - .cmd
+    - .dat
+    - .ear
+    - .gif
+    - .hta
+    - .jpeg
+    - .jpg
+    - .jsp
+    - .jspx
+    - .lnk
+    - .msc
+    - .php
+    - .pl
+    - .png
+    - .ps1
+    - .psm1
+    - .py
+    - .pyc
+    - .rb
+    - .scf
+    - .sct
+    - .sh
+    - .svg
+    - .txt
+    - .vbe
+    - .vbs
+    - .war
+    - .wll
+    - .wsf
+    - .wsh
+    - .xll
+    - .xml
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c9a88268-0047-4824-ba6e-4d81ce0b907c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/category/antivirus/av_relevant_files.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

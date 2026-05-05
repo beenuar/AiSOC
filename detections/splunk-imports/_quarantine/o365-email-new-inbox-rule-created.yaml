@@ -1,0 +1,54 @@
+id: splunk-security-content-449f525a-7b42-47be-96a7-d9724e336c19
+name: O365 Email New Inbox Rule Created
+description: The following analytic identifies the creation of new email inbox rules
+  in an Office 365 environment. It detects events logged under New-InboxRule and Set-InboxRule
+  operations within the o365_management_activity data source, focusing on parameters
+  that may indicate mail forwarding, removal, or obfuscation. Inbox rule creation
+  is a typical end-user activity however attackers also leverage this technique for
+  multiple reasons.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  - T1564.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/
+- https://www.hhs.gov/sites/default/files/help-desk-social-engineering-sector-alert-tlpclear.pdf
+- https://intelligence.abnormalsecurity.com/attack-library/threat-actor-convincingly-impersonates-employee-requesting-direct-deposit-update-in-likely-ai-generated-attack
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange AND (Operation=New-InboxRule
+    OR Operation=Set-InboxRule) Parameters{}.Name IN (SoftDeleteMessage,DeleteMessage,ForwardTo,ForwardAsAttachmentTo,RedirectTo,MoveToFolder,CopyToFolder)
+
+    | eval file_path = mvappend(MoveToFolder,CopyToFolder), recipient=mvappend(ForwardTo,
+    ForwardAsAttachmentTo, RedirectTo), user = lower(UserId), signature = Operation,
+    src = if(match(ClientIP, "^\["), ltrim(mvindex(split(ClientIP, "]:"), 0), "["),
+    mvindex(split(ClientIP,":"),0)), desc = Name, action = ''Parameters{}.Name''
+
+
+    | stats values(action) as action, values(src) as src, values(recipient) as recipient,
+    values(file_path) as file_path, count, min(_time) as firstTime, max(_time) as
+    lastTime by user, signature, desc
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_email_new_inbox_rule_created_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 449f525a-7b42-47be-96a7-d9724e336c19
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_new_inbox_rule_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,46 @@
+id: splunk-security-content-cfe7cca7-2746-4bdf-b712-b01ed819b9de
+name: Cloud Security Groups Modifications by User
+description: The following analytic identifies unusual modifications to security groups
+  in your cloud environment by users, focusing on actions such as modifications, deletions,
+  or creations over 30-minute intervals. It leverages cloud infrastructure logs and
+  calculates the standard deviation for each user, using the 3-sigma rule to detect
+  anomalies. This activity is significant as it may indicate a compromised account
+  or insider threat. If confirmed malicious, attackers could alter security group
+  configurations, potentially exposing sensitive resources or disrupting services.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1578.005
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1578/005/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats dc(All_Changes.object) as unique_security_groups values(All_Changes.src)\
+    \ as src values(All_Changes.user_type) as user_type values(All_Changes.object_category)\
+    \ as object_category values(All_Changes.object) as objects values(All_Changes.action)\
+    \ as action  values(All_Changes.user_agent) as user_agent values(All_Changes.command)\
+    \ as command FROM datamodel=Change\n  WHERE All_Changes.object_category = \"security_group\"\
+    \ (All_Changes.action = modified\n    OR\n    All_Changes.action = deleted\n \
+    \   OR\n    All_Changes.action = created)\n  BY All_Changes.user _time span=30m\n\
+    | `drop_dm_object_name(\"All_Changes\")`\n| eventstats avg(unique_security_groups)\
+    \ as avg_changes , stdev(unique_security_groups) as std_changes\n  BY user\n|\
+    \ eval upperBound=(avg_changes+std_changes*3)\n| eval isOutlier=if(unique_security_groups\
+    \ > 2 and unique_security_groups >= upperBound, 1, 0)\n| where isOutlier=1\n|\
+    \ `cloud_security_groups_modifications_by_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cfe7cca7-2746-4bdf-b712-b01ed819b9de
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/cloud_security_groups_modifications_by_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,40 @@
+id: splunk-security-content-5f661629-9750-4cb9-897c-1f05d6db8727
+name: Okta Unauthorized Access to Application
+description: The following analytic identifies attempts by users to access Okta applications
+  that have not been assigned to them. It leverages Okta Identity Management logs,
+  specifically focusing on failed access attempts to unassigned applications. This
+  activity is significant for a SOC as it may indicate potential unauthorized access
+  attempts, which could lead to exposure of sensitive information or disruption of
+  services. If confirmed malicious, such activity could result in data breaches, non-compliance
+  with data protection laws, and overall compromise of the IT environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.004
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats values(Authentication.app) as app values(Authentication.action)\
+    \ as action values(Authentication.user) as user values(Authentication.reason)\
+    \ as reason FROM datamodel=Authentication\n  WHERE Authentication.signature=app.generic.unauth_app_access_attempt\
+    \ Authentication.action=\"failure\"\n  BY _time Authentication.src Authentication.user\n\
+    \     Authentication.dest\n| `drop_dm_object_name(\"Authentication\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| iplocation src\n| `okta_unauthorized_access_to_application_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5f661629-9750-4cb9-897c-1f05d6db8727
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_unauthorized_access_to_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

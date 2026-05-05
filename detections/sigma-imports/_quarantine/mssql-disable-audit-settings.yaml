@@ -1,0 +1,41 @@
+id: sigmahq-sigma-350dfb37-3706-4cdc-9e2e-5e24bc3a46df
+name: MSSQL Disable Audit Settings
+description: Detects when an attacker calls the "ALTER SERVER AUDIT" or "DROP SERVER
+  AUDIT" transaction in order to delete or disable audit logs on the server
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.netspi.com/blog/technical/network-penetration-testing/sql-server-persistence-part-1-startup-stored-procedures/
+- https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-server-audit-transact-sql?view=sql-server-ver16
+- https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-server-audit-transact-sql?view=sql-server-ver16
+logsource:
+  product: windows
+  service: application
+  definition: 'Requirements: MSSQL audit policy must be enabled in order to receive
+    this event in the application log'
+detection:
+  selection:
+    Provider_Name|contains: MSSQL
+    EventID: 33205
+    Data|contains:
+    - statement:ALTER SERVER AUDIT
+    - statement:DROP SERVER AUDIT
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 350dfb37-3706-4cdc-9e2e-5e24bc3a46df
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/mssqlserver/win_mssql_disable_audit_settings.yml
+falsepositives:
+- This event should only fire when an administrator is modifying the audit policy.
+  Which should be a rare occurrence once it's set up
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,63 @@
+id: sigmahq-sigma-73a883d0-0348-4be4-a8d8-51031c2564f8
+name: Potential Registry Persistence Attempt Via Windows Telemetry
+description: 'Detects potential persistence behavior using the windows telemetry registry
+  key.
+
+  Windows telemetry makes use of the binary CompatTelRunner.exe to run a variety of
+  commands and perform the actual telemetry collections.
+
+  This binary was created to be easily extensible, and to that end, it relies on the
+  registry to instruct on which commands to run.
+
+  The problem is, it will run any arbitrary command without restriction of location
+  or type.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://www.trustedsec.com/blog/abusing-windows-telemetry-for-persistence/
+logsource:
+  category: registry_set
+  product: windows
+  definition: 'Requirements: Sysmon config that monitors \SOFTWARE\Microsoft\Windows
+    NT\CurrentVersion\AppCompatFlags\TelemetryController subkey of the HKLM hives'
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TelemetryController\
+    TargetObject|endswith: \Command
+    Details|contains:
+    - .bat
+    - .bin
+    - .cmd
+    - .dat
+    - .dll
+    - .exe
+    - .hta
+    - .jar
+    - .js
+    - .msi
+    - .ps
+    - .sh
+    - .vb
+  filter_main_generic:
+    Details|contains:
+    - \system32\CompatTelRunner.exe
+    - \system32\DeviceCensus.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 73a883d0-0348-4be4-a8d8-51031c2564f8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_telemetry_persistence.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

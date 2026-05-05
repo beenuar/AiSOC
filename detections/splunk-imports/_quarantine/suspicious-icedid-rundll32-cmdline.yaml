@@ -1,0 +1,44 @@
+id: splunk-security-content-bed761f8-ee29-11eb-8bf3-acde48001122
+name: Suspicious IcedID Rundll32 Cmdline
+description: The following analytic detects a suspicious `rundll32.exe` command line
+  used to execute a DLL file, a technique associated with IcedID malware. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on command-line
+  executions containing the pattern `*/i:*`. This activity is significant as it indicates
+  potential malware attempting to load an encrypted DLL payload, often named `license.dat`.
+  If confirmed malicious, this could allow attackers to execute arbitrary code, leading
+  to further system compromise and potential data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://threatpost.com/icedid-banking-trojan-surges-emotet/165314/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_rundll32`\
+    \ Processes.process=*/i:*\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `suspicious_icedid_rundll32_cmdline_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bed761f8-ee29-11eb-8bf3-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_icedid_rundll32_cmdline.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

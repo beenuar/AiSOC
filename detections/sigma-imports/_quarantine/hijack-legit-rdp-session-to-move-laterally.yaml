@@ -1,0 +1,34 @@
+id: sigmahq-sigma-52753ea4-b3a0-4365-910d-36cff487b789
+name: Hijack Legit RDP Session to Move Laterally
+description: Detects the usage of tsclient share to place a backdoor on the RDP source
+  machine's startup folder
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith: \mstsc.exe
+    TargetFilename|contains: \Microsoft\Windows\Start Menu\Programs\Startup\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 52753ea4-b3a0-4365-910d-36cff487b789
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_tsclient_filewrite_startup.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

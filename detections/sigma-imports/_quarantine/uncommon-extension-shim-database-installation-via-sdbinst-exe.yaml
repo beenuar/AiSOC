@@ -1,0 +1,51 @@
+id: sigmahq-sigma-18ee686c-38a3-4f65-9f44-48a077141f42
+name: Uncommon Extension Shim Database Installation Via Sdbinst.EXE
+description: 'Detects installation of a potentially suspicious new shim with an uncommon
+  extension using sdbinst.exe.
+
+  Adversaries may establish persistence and/or elevate privileges by executing malicious
+  content triggered by application shims'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.011
+  categories:
+  - endpoint
+references:
+- https://www.fireeye.com/blog/threat-research/2017/05/fin7-shim-databases-persistence.html
+- https://github.com/nasbench/Misc-Research/blob/8ee690e43a379cbce8c9d61107442c36bd9be3d3/Other/Undocumented-Flags-Sdbinst.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith: \sdbinst.exe
+  - OriginalFileName: sdbinst.exe
+  filter_main_legit_ext:
+    CommandLine|contains: .sdb
+  filter_main_legit_extensions:
+  - CommandLine|endswith:
+    - ' -c'
+    - ' -f'
+    - ' -mm'
+    - ' -t'
+  - CommandLine|contains: ' -m -bg'
+  filter_main_null:
+    CommandLine: null
+  filter_main_empty:
+    CommandLine: ''
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 18ee686c-38a3-4f65-9f44-48a077141f42
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sdbinst_susp_extension.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

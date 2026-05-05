@@ -1,0 +1,83 @@
+id: splunk-security-content-64f91df1-49ec-46aa-81bd-2282d3cea765
+name: Geographic Improbable Location
+description: Geolocation data can be inaccurate or easily spoofed by Remote Employment
+  Fraud (REF) workers. REF actors sometimes slip up and reveal their true location,
+  creating what we call 'improbable travel' scenarios — logins from opposite sides
+  of the world within minutes. This identifies situations where these travel scenarios
+  occur.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats summariesonly=true values(Authentication.app) as app from
+    datamodel=Authentication.Authentication where (`okta` OR (index="firewall" AND
+    sourcetype="pan:globalprotect")) AND Authentication.action="success" AND Authentication.app
+    IN ("Workday", "Slack", "*GlobalProtect", "Jira*", "Atlassian Cloud", "Zoom")
+    AND NOT Authentication.user="unknown" by _time index sourcetype host Authentication.user
+    Authentication.src span=1s | `drop_dm_object_name("Authentication")` | fields
+    user,src,app,_time,count,host | eval user=lower(replace(user, "((^.*\\\)|(@.*$))",
+    "")) | join type=outer user [| inputlookup identity_lookup_expanded where user_status=active
+    | rex field=email "^(?<user>[a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9_\-\.]+)\.([a-zA-Z]{2,5})$"
+    | rename email as user_email bunit as user_bunit priority as user_priority work_country
+    as user_work_country work_city as user_work_city | fields user user_email user_bunit
+    user_priority user_work_country user_work_city] | eventstats dc(src) as src_count
+    by user | eventstats dc(user) as user_count by src | sort 0 + _time | iplocation
+    src | lookup local=true asn_lookup_by_cidr ip as src OUTPUT ip asn description
+    | eval session_lat=if(isnull(src_lat), lat, src_lat), session_lon=if(isnull(src_long),
+    lon, src_long), session_city=if(isnull(src_city), City, src_city), session_country=if(isnull(src_country),
+    Country, src_country), session_region=if(isnull(src_region), Region, src_region)
+    | eval session_city=if(isnull(session_city) OR match(session_city,"^\s+|^$"),
+    null(), session_city), session_country=if(isnull(session_country) OR match(session_country,"^\s+|^$"),
+    null(), session_country), session_region=if(isnull(session_region) OR match(session_region,"^\s+|^$"),
+    null(), session_region) | where isnotnull(session_lat) and isnotnull(session_lon)
+    | eval session_city=if(isnull(session_city),"-",session_city), session_country=if(isnull(session_country),"-",session_country),
+    session_region=if(isnull(session_region),"-",session_region) | streamstats current=t
+    window=2 earliest(session_region) as prev_region,earliest(session_lat) as prev_lat,
+    earliest(session_lon) as prev_lon, earliest(session_city) as prev_city, earliest(session_country)
+    as prev_country, earliest(_time) as prev_time, earliest(src) as prev_src, latest(user_bunit)
+    as user_bunit, earliest(app) as prev_app values(user_work_country) as user_work_country
+    by user | where (src!=prev_src) AND !(prev_city=session_city AND prev_country=session_country)
+    AND ((isnotnull(prev_city) AND isnotnull(session_city)) OR prev_country!=session_country)
+    | `globedistance(session_lat,session_lon,prev_lat,prev_lon,"m")` | eval time_diff=if((_time-prev_time)==0,
+    1, _time - prev_time) | eval speed = round(distance*3600/time_diff,2) | eval distance=
+    round(distance,2) | eval user_work_country=case(user_work_country="usa","United
+    States", user_work_country="cze","Czechia", user_work_country="pol","Poland",
+    user_work_country="ind","India", user_work_country="fra","France", user_work_country="can","Canada",
+    user_work_country="mys","Malaysia", user_work_country="kor","South Korea", user_work_country="aus","Australia",
+    user_work_country="bel","Belgium", user_work_country="dnk","Denmark", user_work_country="bra","Brazil",
+    user_work_country="deu","Germany", user_work_country="jpn","Japan", user_work_country="che","Switzerland",
+    user_work_country="swe","Sweden", user_work_country="zaf","South Africa", user_work_country="irl","Ireland",
+    user_work_country="ita","Italy", user_work_country="nor","Norway", user_work_country="gbr","United
+    Kingdom", user_work_country="hkg","Hong Kong", user_work_country="chn","China",
+    user_work_country="esp","Spain", user_work_country="nld", "Netherlands", user_work_country="twn","Taiwan",
+    user_work_country="est","Estonia", user_work_country="sgp","Singapore", user_work_country="are","United
+    Arab Emirates", 1=1,"N/A") | lookup local=true asn_lookup_by_cidr ip as prev_src
+    OUTPUT ip as prev_ip asn as prev_asn description as prev_description | eval suspect=if(!user_work_country==session_country,"Sketchy","Normal")
+    | search (speed>500 AND distance>750) | table _time,prev_time,user,host,src,prev_src,app,prev_app,distance,speed,suspect,session_city,session_region,
+    session_country,prev_city,prev_region,prev_country,user_priority,user_work_*,prev_ip,ip,asn,prev_asn,prev_description,description
+    | rename _time as event_time | convert ctime(event_time) timeformat="%Y-%m-%d
+    %H:%M:%S" | convert ctime(prev_time) timeformat="%Y-%m-%d %H:%M:%S" | eval problem=if(!session_country==prev_country
+    AND (!session_country==user_work_country),"Yes","Nope") | search NOT (prev_city="-"
+    OR session_city="-") AND NOT [inputlookup known_devices_public_ip_filter.csv |
+    fields ip | rename ip as src] | dedup user host prev_src src | fillnull value="N/A"
+    | search problem="Yes"| `geographic_improbable_location_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 64f91df1-49ec-46aa-81bd-2282d3cea765
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/geographic_improbable_location.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

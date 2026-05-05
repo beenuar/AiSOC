@@ -1,0 +1,45 @@
+id: splunk-security-content-9f31aa8e-e37c-46bc-bce1-8b3be646d026
+name: Detect AWS Console Login by User from New Region
+description: The following analytic identifies AWS console login attempts by users
+  from a new region. It leverages AWS CloudTrail events and compares current login
+  regions against a baseline of previously seen regions for each user. This activity
+  is significant as it may indicate unauthorized access attempts or compromised credentials.
+  If confirmed malicious, an attacker could gain unauthorized access to AWS resources,
+  potentially leading to data breaches, resource manipulation, or further lateral
+  movement within the cloud environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1535
+  - T1586.003
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats earliest(_time) as firstTime latest(_time) as lastTime FROM\
+    \ datamodel=Authentication\n  WHERE Authentication.signature=ConsoleLogin\n  BY\
+    \ Authentication.user Authentication.src\n| iplocation Authentication.src\n| `drop_dm_object_name(Authentication)`\n\
+    | rename Region as justSeenRegion\n| table firstTime lastTime user justSeenRegion\n\
+    | join user type=outer [\n| inputlookup previously_seen_users_console_logins\n\
+    | rename Region as previouslySeenRegion\n| stats min(firstTime) AS earliestseen\n\
+    \  BY user previouslySeenRegion\n| fields earliestseen user previouslySeenRegion]\n\
+    | eval userRegion=if(firstTime >= relative_time(now(), \"-24h@h\"), \"New Region\"\
+    ,\"Previously Seen Region\")\n| where userRegion= \"New Region\"\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| table firstTime lastTime user previouslySeenRegion\
+    \ justSeenRegion userRegion\n| `detect_aws_console_login_by_user_from_new_region_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9f31aa8e-e37c-46bc-bce1-8b3be646d026
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_aws_console_login_by_user_from_new_region.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

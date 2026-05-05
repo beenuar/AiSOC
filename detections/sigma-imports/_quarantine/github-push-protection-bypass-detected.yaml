@@ -1,0 +1,36 @@
+id: sigmahq-sigma-02cf536a-cf21-4876-8842-4159c8aee3cc
+name: Github Push Protection Bypass Detected
+description: Detects when a user bypasses the push protection on a secret detected
+  by secret scanning.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://docs.github.com/en/enterprise-cloud@latest/code-security/secret-scanning/push-protection-for-repositories-and-organizations
+- https://thehackernews.com/2024/03/github-rolls-out-default-secret.html
+logsource:
+  product: github
+  service: audit
+  definition: 'Requirements: The audit log streaming feature must be enabled to be
+    able to receive such logs. You can enable following the documentation here: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-audit-log-streaming'
+detection:
+  selection:
+    action|contains: secret_scanning_push_protection.bypass
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 02cf536a-cf21-4876-8842-4159c8aee3cc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/github/audit/github_push_protection_bypass_detected.yml
+falsepositives:
+- Allowed administrative activities.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-e15b518d-b4ce-4410-a9cd-501f23ce4a18
+name: Suspicious Creation with Colorcpl
+description: Once executed, colorcpl.exe will copy the arbitrary file to c:\windows\system32\spool\drivers\color\
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564
+  categories:
+  - endpoint
+references:
+- https://twitter.com/eral4m/status/1480468728324231172?s=20
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith: \colorcpl.exe
+  filter_ext:
+    TargetFilename|endswith:
+    - .icm
+    - .gmmp
+    - .cdmp
+    - .camp
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e15b518d-b4ce-4410-a9cd-501f23ce4a18
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_colorcpl.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

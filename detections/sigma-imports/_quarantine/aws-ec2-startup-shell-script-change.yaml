@@ -1,0 +1,37 @@
+id: sigmahq-sigma-1ab3c5ed-5baf-417b-bb6b-78ca33f6c3df
+name: AWS EC2 Startup Shell Script Change
+description: Detects changes to the EC2 instance startup script. The shell script
+  will be executed as root/SYSTEM every time the specific instances are booted up.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1059.003
+  - T1059.004
+  categories:
+  - cloud
+references:
+- https://github.com/RhinoSecurityLabs/pacu/blob/866376cd711666c775bbfcde0524c817f2c5b181/pacu/modules/ec2__startup_shell_script/main.py#L9
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection_source:
+    eventSource: ec2.amazonaws.com
+    requestParameters.attribute: userData
+    eventName: ModifyInstanceAttribute
+  condition: selection_source
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1ab3c5ed-5baf-417b-bb6b-78ca33f6c3df
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_ec2_startup_script_change.yml
+falsepositives:
+- Valid changes to the startup script
+notes:
+  quarantine_reason: 'upstream status: test'

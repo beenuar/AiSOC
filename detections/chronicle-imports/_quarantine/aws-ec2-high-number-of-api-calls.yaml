@@ -1,0 +1,59 @@
+id: chronicle-detection-rules-aws-ec2-high-number-of-api-calls
+name: aws_ec2_high_number_of_api_calls
+description: aws_ec2_high_number_of_api_calls
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule aws_ec2_high_number_of_api_calls {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detect when an EC2 instance makes high number\
+    \ of API calls.\"\n    rule_id = \"mr_d19289e1-4385-4757-bf54-0f61e7a789a4\"\n\
+    \    rule_name = \"AWS EC2 High Number Of API Calls\"\n    mitre_attack_tactic\
+    \ = \"Discovery\"\n    mitre_attack_technique = \"Cloud Infrastructure Discovery\"\
+    \n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1580/\"\n    mitre_attack_version\
+    \ = \"v13.1\"\n    type = \"Alert\"\n    data_source = \"AWS CloudTrail\"\n  \
+    \  platform = \"AWS\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \    $api.metadata.vendor_name = \"AMAZON\"\n    $api.metadata.product_name =\
+    \ \"AWS CloudTrail\"\n    $api.principal.resource.type = \"AssumedRole\"\n   \
+    \ $api.principal.user.userid = /\\/i-.*$/ //regex to be improved\n    re.capture($api.principal.user.userid,\
+    \ \":assumed-role/.*/(.*)$\") = $instanceId\n    $api.principal.ip = $ip\n\n \
+    \ match:\n    $ip, $instanceId over 5m\n\n  outcome:\n    $risk_score = max(35)\n\
+    \    $mitre_attack_tactic = \"Discovery\"\n    $mitre_attack_technique = \"Cloud\
+    \ Infrastructure Discovery\"\n    $mitre_attack_technique_id = \"T1580\"\n   \
+    \ $event_count = count_distinct($api.metadata.id)\n    $network_http_user_agent\
+    \ = array_distinct($api.network.http.user_agent)\n    $principal_ip = array_distinct($api.principal.ip)\n\
+    \    $principal_ip_country = array_distinct($api.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($api.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_display_name = array_distinct($api.principal.user.user_display_name)\n\
+    \    $dc_product_event_type = count_distinct($api.metadata.product_event_type)\n\
+    \    $aws_region = array_distinct($api.principal.location.name)\n    $target_resource_name\
+    \ = array_distinct($api.target.resource.name)\n    $target_resource_product_object_id\
+    \ = array_distinct($api.target.resource.product_object_id)\n\n  condition:\n \
+    \   $api and $dc_product_event_type > 7\n}"
+  chronicle_rule_name: aws_ec2_high_number_of_api_calls
+provenance:
+  source: chronicle/detection-rules
+  source_id: aws_ec2_high_number_of_api_calls
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/aws/cloudtrail/aws_ec2_high_number_of_api_calls.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

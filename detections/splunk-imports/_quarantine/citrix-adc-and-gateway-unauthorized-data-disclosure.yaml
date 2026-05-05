@@ -1,0 +1,43 @@
+id: splunk-security-content-b593cac5-dd20-4358-972a-d945fefdaf17
+name: Citrix ADC and Gateway Unauthorized Data Disclosure
+description: The following analytic detects attempts to exploit the Citrix Bleed vulnerability
+  (CVE-2023-4966), which can lead to the leaking of session tokens. It identifies
+  HTTP requests with a 200 status code targeting the /oauth/idp/.well-known/openid-configuration
+  URL endpoint. By parsing web traffic and filtering based on user agent details,
+  HTTP method, source and destination IPs, and sourcetype, it aims to identify potentially
+  malicious requests. This activity is significant for a SOC because successful exploitation
+  can allow attackers to impersonate legitimate users, bypass authentication, and
+  access sensitive data. If confirmed malicious, it could lead to unauthorized data
+  access, network propagation, and critical information exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://www.assetnote.io/resources/research/citrix-bleed-leaking-session-tokens-with-cve-2023-4966
+- https://github.com/assetnote/exploits/tree/main/citrix/CVE-2023-4966
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.url IN (\"*/oauth/idp/.well-known/openid-configuration*\"\
+    )  Web.status=200\n  BY Web.http_user_agent, Web.status Web.http_method,\n   \
+    \  Web.url, Web.url_length, Web.src,\n     Web.dest, sourcetype\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `citrix_adc_and_gateway_unauthorized_data_disclosure_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b593cac5-dd20-4358-972a-d945fefdaf17
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/citrix_adc_and_gateway_unauthorized_data_disclosure.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

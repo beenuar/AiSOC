@@ -1,0 +1,35 @@
+id: sigmahq-sigma-e4be5675-4a53-426a-8c81-a8bb2387e947
+name: CodeIntegrity - Blocked Image/Driver Load For Policy Violation
+description: Detects blocked load events that did not meet the authenticode signing
+  level requirements or violated the code integrity policy.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://twitter.com/wdormann/status/1590434950335320065
+- https://github.com/MicrosoftDocs/windows-itpro-docs/blob/40fe118976734578f83e5e839b9c63ae7a4af82d/windows/security/threat-protection/windows-defender-application-control/event-id-explanations.md#windows-codeintegrity-operational-log
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3077
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e4be5675-4a53-426a-8c81-a8bb2387e947
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/code_integrity/win_codeintegrity_enforced_policy_block.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

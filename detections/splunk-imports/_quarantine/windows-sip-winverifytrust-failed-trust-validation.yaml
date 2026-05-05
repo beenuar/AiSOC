@@ -1,0 +1,43 @@
+id: splunk-security-content-6ffc7f88-415b-4278-a80d-b957d6539e1a
+name: Windows SIP WinVerifyTrust Failed Trust Validation
+description: The following analytic detects failed trust validation attempts using
+  Windows Event Log - CAPI2 (CryptoAPI 2). It specifically triggers on EventID 81,
+  which indicates that "The digital signature of the object did not verify." This
+  detection leverages the CAPI2 Operational log to identify instances where digital
+  signatures fail to validate. Monitoring this activity is crucial as it can indicate
+  attempts to execute untrusted or potentially malicious binaries. If confirmed malicious,
+  this activity could allow attackers to bypass security controls and execute unauthorized
+  code, leading to potential system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1553/003/
+- https://specterops.io/wp-content/uploads/sites/3/2022/06/SpecterOps_Subverting_Trust_in_Windows.pdf
+- https://github.com/gtworek/PSBits/tree/master/SIP
+- https://github.com/mattifestation/PoCSubjectInterfacePackage
+- https://pentestlab.blog/2017/11/06/hijacking-digital-signatures/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`capi2_operational` EventID=81 \"The digital signature of the object\
+    \ did not verify.\"\n  | xmlkv UserData_Xml\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY Computer, UserData_Xml\n  | rename Computer as\
+    \ dest\n  | `windows_sip_winverifytrust_failed_trust_validation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6ffc7f88-415b-4278-a80d-b957d6539e1a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sip_winverifytrust_failed_trust_validation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

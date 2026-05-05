@@ -1,0 +1,34 @@
+id: sigmahq-sigma-93a19907-d4f9-4deb-9f91-aac4692776a6
+name: UAC Bypass Using .NET Code Profiler on MMC
+description: Detects the pattern of UAC Bypass using .NET Code Profiler and mmc.exe
+  DLL hijacking (UACMe 39)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://github.com/hfiref0x/UACME
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\Users\
+    TargetFilename|endswith: \AppData\Local\Temp\pe386.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 93a19907-d4f9-4deb-9f91-aac4692776a6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_uac_bypass_dotnet_profiler.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

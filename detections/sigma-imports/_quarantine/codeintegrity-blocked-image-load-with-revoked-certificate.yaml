@@ -1,0 +1,33 @@
+id: sigmahq-sigma-6f156c48-3894-4952-baf0-16193e9067d2
+name: CodeIntegrity - Blocked Image Load With Revoked Certificate
+description: Detects blocked image load events with revoked certificates by code integrity.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations
+- Internal Research
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3036
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6f156c48-3894-4952-baf0-16193e9067d2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/code_integrity/win_codeintegrity_revoked_image_blocked.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

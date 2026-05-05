@@ -1,0 +1,40 @@
+id: sigmahq-sigma-c9fbe8e9-119d-40a6-9b59-dd58a5d84429
+name: Potential Ransomware or Unauthorized MBR Tampering Via Bcdedit.EXE
+description: Detects potential malicious and unauthorized usage of bcdedit.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  - T1542.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/bcdedit--set
+- https://twitter.com/malwrhunterteam/status/1372536434125512712/photo/2
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \bcdedit.exe
+  - OriginalFileName: bcdedit.exe
+  selection_cli:
+    CommandLine|contains:
+    - delete
+    - deletevalue
+    - import
+    - safeboot
+    - network
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c9fbe8e9-119d-40a6-9b59-dd58a5d84429
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bcdedit_susp_execution.yml
+notes:
+  quarantine_reason: 'upstream status: test'

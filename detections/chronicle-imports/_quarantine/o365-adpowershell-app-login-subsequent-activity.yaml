@@ -1,0 +1,79 @@
+id: chronicle-detection-rules-o365-adpowershell-app-login-subsequent-activity
+name: o365_ADPowerShell_app_login_subsequent_activity
+description: o365_ADPowerShell_app_login_subsequent_activity
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_ADPowerShell_app_login_subsequent_activity {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Once a user authenticates to\
+    \ the Azure AD PowerShell application, if they take multiple admin actions indicative\
+    \ of establishing their own persistence with an Entra ID application within a\
+    \ portion of the access token time, alert for additional investigation\"\n   \
+    \ rule_id = \"mr_2d781f34-05f3-43aa-b5ec-257c03787a66\"\n    rule_name = \"O365\
+    \ AD PowerShell App Login Subsequent Activity\"\n    assumption = \"This does\
+    \ not take into account attempts that were blocked, just any logging of attempts\
+    \ for any of these actions\"\n    tactic = \"TA0003\"\n    technique = \"T1098.001\"\
+    \n    type = \"alert\"\n    platform = \"azure\"\n    data_source = \"o365\"\n\
+    \    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    (\n  \
+    \      $login.metadata.event_type = \"USER_LOGIN\" and\n        $login.metadata.product_event_type\
+    \ = \"UserLoggedIn\" and\n        $login.metadata.product_name = \"Office 365\"\
+    \ and\n        $login.metadata.vendor_name = \"Microsoft\" and\n        $login.target.resource.product_object_id\
+    \ = \"1b730954-1685-4b74-9bfd-dac224a7b894\" and\n        $login.security_result.action\
+    \ = \"ALLOW\"\n    )\n    $login.target.user.userid = $userid\n    $login.metadata.event_timestamp.seconds\
+    \ < $other.metadata.event_timestamp.seconds\n    (\n        (\n            $other.metadata.event_type\
+    \ = \"USER_RESOURCE_CREATION\" and\n            $other.metadata.product_event_type\
+    \ = \"Add application.\" and\n            $other.metadata.product_name = \"Office\
+    \ 365\" and\n            $other.metadata.vendor_name = \"Microsoft\"\n       \
+    \ )\n        or\n        (\n            $other.metadata.event_type = \"USER_RESOURCE_UPDATE_CONTENT\"\
+    \ and\n            $other.metadata.product_event_type = \"Update application.\"\
+    \ and\n            $other.metadata.product_name = \"Office 365\" and\n       \
+    \     $other.metadata.vendor_name = \"Microsoft\"\n        )\n        or\n   \
+    \     (\n            $other.metadata.event_type = \"USER_RESOURCE_UPDATE_PERMISSIONS\"\
+    \ and\n            $other.metadata.product_event_type = \"Add delegated permission\
+    \ grant.\" and\n            $other.metadata.product_name = \"Office 365\" and\n\
+    \            $other.metadata.vendor_name = \"Microsoft\"\n        )\n        or\n\
+    \        (\n            $other.metadata.event_type = \"USER_RESOURCE_UPDATE_CONTENT\"\
+    \ and\n            $other.metadata.product_event_type = /Update application.*Certificates\
+    \ and secrets management/ nocase and\n            $other.metadata.product_name\
+    \ = \"Office 365\" and\n            $other.metadata.vendor_name = \"Microsoft\"\
+    \n        )\n    )\n    $other.principal.user.userid = $userid\n    $other.metadata.product_event_type\
+    \ = $other_event\n\n  match:\n    $userid over 90m\n\n  outcome:\n    $risk_score\
+    \ = max(if($other.metadata.product_event_type = \"Add application.\", 10, 0) +\n\
+    \                        if($other.metadata.product_event_type = \"Update application.\"\
+    , 10, 0) +\n                        if($other.metadata.product_event_type = \"\
+    Add delegated permission grant.\", 10, 0) +\n                        if($other.metadata.product_event_type\
+    \ = /Update application.*Certificates and secrets management/ nocase, 55, 0))\n\
+    \    $subsequent_action_threshold = 1\n    $product_event_type = array_distinct($other.metadata.product_event_type)\n\
+    \    $country_region_login_attempt = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    //added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($login.principal.ip)\n    //$principal_user_userid = array_distinct($other.principal.user.userid)\n\
+    \    $target_resource_name = array_distinct($other.target.resource.name)\n\n \
+    \ condition:\n    $login and #other_event > 0\n}"
+  chronicle_rule_name: o365_ADPowerShell_app_login_subsequent_activity
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_ADPowerShell_app_login_subsequent_activity
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_ADPowerShell_app_login_subsequent_activity.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

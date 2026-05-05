@@ -1,0 +1,36 @@
+id: sigmahq-sigma-3371f518-5fe3-4cf6-a14b-2a0ae3fd8a4f
+name: Sysinternals PsService Execution
+description: Detects usage of Sysinternals PsService which can be abused for service
+  reconnaissance and tampering
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/psservice
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - OriginalFileName: psservice.exe
+  - Image|endswith:
+    - \PsService.exe
+    - \PsService64.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3371f518-5fe3-4cf6-a14b-2a0ae3fd8a4f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_psservice.yml
+falsepositives:
+- Legitimate use of PsService by an administrator
+notes:
+  quarantine_reason: 'upstream status: test'

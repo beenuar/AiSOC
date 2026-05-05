@@ -1,0 +1,86 @@
+id: chronicle-detection-rules-download-from-suspicious-dyndns-hosts
+name: download_from_suspicious_dyndns_hosts
+description: download_from_suspicious_dyndns_hosts
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule download_from_suspicious_dyndns_hosts {\n meta:\n    author\
+    \ = \"Florian Roth\"\n    description = \"Detects download of certain file types\
+    \ from hosts with dynamic DNS names (selected list)  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/GCmXVO2VjJ0x\"\n    version\
+    \ = \"0.01\"\n    created = \"2017/11/08\"\n    category = \"proxy\"\n\n  events:\n\
+    (($selection.target.url = \"exe\" or $selection.target.url = \"vbs\" or $selection.target.url\
+    \ = \"bat\" or $selection.target.url = \"rar\" or $selection.target.url = \"ps1\"\
+    \ or $selection.target.url = \"doc\" or $selection.target.url = \"docm\" or $selection.target.url\
+    \ = \"xls\" or $selection.target.url = \"xlsm\" or $selection.target.url = \"\
+    pptm\" or $selection.target.url = \"rtf\" or $selection.target.url = \"hta\" or\
+    \ $selection.target.url = \"dll\" or $selection.target.url = \"ws\" or $selection.target.url\
+    \ = \"wsf\" or $selection.target.url = \"sct\" or $selection.target.url = \"zip\"\
+    ) and (re.regex($selection.target.hostname, `.*\\.hopto\\.org`) or re.regex($selection.target.hostname,\
+    \ `.*\\.no-ip\\.org`) or re.regex($selection.target.hostname, `.*\\.no-ip\\.info`)\
+    \ or re.regex($selection.target.hostname, `.*\\.no-ip\\.biz`) or re.regex($selection.target.hostname,\
+    \ `.*\\.no-ip\\.com`) or re.regex($selection.target.hostname, `.*\\.noip\\.com`)\
+    \ or re.regex($selection.target.hostname, `.*\\.ddns\\.name`) or re.regex($selection.target.hostname,\
+    \ `.*\\.myftp\\.org`) or re.regex($selection.target.hostname, `.*\\.myftp\\.biz`)\
+    \ or re.regex($selection.target.hostname, `.*\\.serveblog\\.net`) or re.regex($selection.target.hostname,\
+    \ `.*\\.servebeer\\.com`) or re.regex($selection.target.hostname, `.*\\.servemp3\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.serveftp\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.servequake\\.com`) or re.regex($selection.target.hostname, `.*\\.servehalflife\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.servehttp\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.servegame\\.com`) or re.regex($selection.target.hostname, `.*\\.servepics\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.myvnc\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ignorelist\\.com`) or re.regex($selection.target.hostname, `.*\\.jkub\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.dlinkddns\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.jumpingcrab\\.com`) or re.regex($selection.target.hostname, `.*\\.ddns\\\
+    .info`) or re.regex($selection.target.hostname, `.*\\.mooo\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.dns-dns\\.com`) or re.regex($selection.target.hostname, `.*\\.strangled\\\
+    .net`) or re.regex($selection.target.hostname, `.*\\.ddns\\.info`) or re.regex($selection.target.hostname,\
+    \ `.*\\.adultdns\\.net`) or re.regex($selection.target.hostname, `.*\\.craftx\\\
+    .biz`) or re.regex($selection.target.hostname, `.*\\.ddns01\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.dns53\\.biz`) or re.regex($selection.target.hostname, `.*\\.dnsapi\\.info`)\
+    \ or re.regex($selection.target.hostname, `.*\\.dnsd\\.info`) or re.regex($selection.target.hostname,\
+    \ `.*\\.dnsdynamic\\.com`) or re.regex($selection.target.hostname, `.*\\.dnsdynamic\\\
+    .net`) or re.regex($selection.target.hostname, `.*\\.dnsget\\.org`) or re.regex($selection.target.hostname,\
+    \ `.*\\.fe100\\.net`) or re.regex($selection.target.hostname, `.*\\.flashserv\\\
+    .net`) or re.regex($selection.target.hostname, `.*\\.ftp21\\.net`) or re.regex($selection.target.hostname,\
+    \ `.*\\.http01\\.com`) or re.regex($selection.target.hostname, `.*\\.http80\\\
+    .info`) or re.regex($selection.target.hostname, `.*\\.https443\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.imap01\\.com`) or re.regex($selection.target.hostname, `.*\\.kadm5\\.com`)\
+    \ or re.regex($selection.target.hostname, `.*\\.mysq1\\.net`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ns360\\.info`) or re.regex($selection.target.hostname, `.*\\.ntdll\\.net`)\
+    \ or re.regex($selection.target.hostname, `.*\\.ole32\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.proxy8080\\.com`) or re.regex($selection.target.hostname, `.*\\.sql01\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.ssh01\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ssh22\\.net`) or re.regex($selection.target.hostname, `.*\\.tempors\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.tftpd\\.net`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ttl60\\.com`) or re.regex($selection.target.hostname, `.*\\.ttl60\\.org`)\
+    \ or re.regex($selection.target.hostname, `.*\\.user32\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.voip01\\.com`) or re.regex($selection.target.hostname, `.*\\.wow64\\.net`)\
+    \ or re.regex($selection.target.hostname, `.*\\.x64\\.me`) or re.regex($selection.target.hostname,\
+    \ `.*\\.xns01\\.com`) or re.regex($selection.target.hostname, `.*\\.dyndns\\.org`)\
+    \ or re.regex($selection.target.hostname, `.*\\.dyndns\\.info`) or re.regex($selection.target.hostname,\
+    \ `.*\\.dyndns\\.tv`) or re.regex($selection.target.hostname, `.*\\.dyndns-at-home\\\
+    .com`) or re.regex($selection.target.hostname, `.*\\.dnsomatic\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.zapto\\.org`) or re.regex($selection.target.hostname, `.*\\.webhop\\.net`)\
+    \ or re.regex($selection.target.hostname, `.*\\.25u\\.com`) or re.regex($selection.target.hostname,\
+    \ `.*\\.slyip\\.net`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: download_from_suspicious_dyndns_hosts
+provenance:
+  source: chronicle/detection-rules
+  source_id: download_from_suspicious_dyndns_hosts
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/proxy/download_from_suspicious_dyndns_hosts.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-20d96d95-5a20-4cf1-a483-f3bda8a7c037
+name: Add or Remove Computer from DC
+description: Detects the creation or removal of a computer. Can be used to detect
+  attacks such as DCShadow via the creation of a new SPN.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1207
+  categories:
+  - endpoint
+references:
+- https://github.com/Yamato-Security/EnableWindowsLogSettings/blob/7f6d755d45ac7cc9fc35b0cbf498e6aa4ef19def/ConfiguringSecurityLogAuditPolicies.md
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4741
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4743
+logsource:
+  service: security
+  product: windows
+detection:
+  selection:
+    EventID:
+    - 4741
+    - 4743
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 20d96d95-5a20-4cf1-a483-f3bda8a7c037
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_add_remove_computer.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

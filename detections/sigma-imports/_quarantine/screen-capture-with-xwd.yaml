@@ -1,0 +1,43 @@
+id: sigmahq-sigma-e2f17c5d-b02a-442b-9052-6eb89c9fec9c
+name: Screen Capture with Xwd
+description: Detects adversary creating screen capture of a full with xwd. Highly
+  recommended using rule on servers, due high usage of screenshot utilities on user
+  workstations
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1113
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1113/T1113.md#atomic-test-3---x-windows-capture
+- https://linux.die.net/man/1/xwd
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: EXECVE
+    a0: xwd
+  xwd_root_window:
+    a1: -root
+    a2: -out
+    a3|endswith: .xwd
+  xwd_no_root_window:
+    a1: -out
+    a2|endswith: .xwd
+  condition: selection and 1 of xwd_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e2f17c5d-b02a-442b-9052-6eb89c9fec9c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_screencaputre_xwd.yml
+falsepositives:
+- Legitimate use of screenshot utility
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,45 @@
+id: chronicle-detection-rules-sap-hanadb-assign-admin-authorizations
+name: sap_hanadb_assign_admin_authorizations
+description: sap_hanadb_assign_admin_authorizations
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_hanadb_assign_admin_authorizations {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects the assignment of administrative\
+    \ privileges or roles within SAP HANA DB.\"\n    severity = \"High\"\n    tactic\
+    \ = \"TA0003\"\n    technique = \"T1098\"\n\n  events:\n    $e.metadata.log_type\
+    \ = \"SAP_HANA_AUDIT\"\n\n    $statement = $e.additional.fields[\"executed_statement\"\
+    ]\n\n    $statement = /ADMIN/ nocase\n    (\n        $statement = /GRANT PRIVILEGE/\
+    \ nocase or\n        $statement = /GRANT ROLE/ nocase\n    )\n\n    $user = $e.principal.user.userid\n\
+    \n  match:\n    $user over 30m\n\n  outcome:\n    $risk_score = max(80)\n    $principal_user\
+    \ = array_distinct($user)\n    $target_user = array_distinct($e.target.user.userid)\n\
+    \    $statements = array_distinct($statement)\n    $system_id = array_distinct($e.target.resource.attribute.labels[\"\
+    system_id\"])\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_hanadb_assign_admin_authorizations
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_hanadb_assign_admin_authorizations
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_hanadb_assign_admin_authorizations.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-flawedammyy-rat-detection-proxy
+name: flawedammyy_rat_detection_proxy
+description: flawedammyy_rat_detection_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule flawedammyy_rat_detection_proxy {\n meta:\n    author = \"\
+    Alexandr Yampolskyi, SOC Prime\"\n    description = \"FlawedAmmyy RAT Detection\
+    \ Through Proxy.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/MwMcHa7iZkn1\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/07/11\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071\"\n\n  events:\n(($selectionSRC.target.url =\
+    \ \"chimachinenow.com\" or $selectionSRC.target.url = \"highlandfamily.org\" or\
+    \ $selectionSRC.target.url = \"intra.cfecgcaquitaine.com\" or $selectionSRC.target.url\
+    \ = \"motifahsap.com\" or $selectionSRC.target.url = \"sittalhaphedver.com\" or\
+    \ $selectionSRC.target.url = \"wassronledorhad.in\" or $selectionSRC.target.url\
+    \ = \"balzantruck.com\" or $selectionSRC.target.url = \"buyviagraoverthecounterusabb.net\"\
+    \ or $selectionSRC.target.url = \"fifa2018start.info\" or $selectionSRC.target.url\
+    \ = \"buyviagraoverthecounterusabb.net/documents/B123456789012.js\" or $selectionSRC.target.url\
+    \ = \"chimachinenow.com/kjdhc783\" or $selectionSRC.target.url = \"highlandfamily.org/kjdhc783\"\
+    \ or $selectionSRC.target.url = \"intra.cfecgcaquitaine.com/kjdhc783\" or $selectionSRC.target.url\
+    \ = \"motifahsap.com/kjdhc783\" or $selectionSRC.target.url = \"sittalhaphedver.com/p66/kjdhc783\"\
+    \ or $selectionSRC.target.url = \"wassronledorhad.in/q2/index.php\" or $selectionSRC.target.url\
+    \ = \"balzantruck.com/45rt.exe\") or ($selectionSRC.principal.ip = \"179.60.146.3\"\
+    \ or $selectionSRC.principal.ip = \"185.176.221.54\" or $selectionSRC.principal.ip\
+    \ = \"179.60.146.3\" or $selectionSRC.principal.ip = \"194.165.16.11\") or ($selectionSRC.target.ip\
+    \ = \"179.60.146.3\" or $selectionSRC.target.ip = \"185.176.221.54\" or $selectionSRC.target.ip\
+    \ = \"179.60.146.3\" or $selectionSRC.target.ip = \"194.165.16.11\"))\n\n  condition:\n\
+    \    $selectionSRC\n}"
+  chronicle_rule_name: flawedammyy_rat_detection_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: flawedammyy_rat_detection_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/proxy/flawedammyy_rat_detection__proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,41 @@
+id: splunk-security-content-80ffaede-1f12-49d5-a86e-b4b599b68b3c
+name: Windows Root Domain linked policies Discovery
+description: The following analytic detects the use of the `[Adsisearcher]` type accelerator
+  in PowerShell to query Active Directory for root domain linked policies. It leverages
+  PowerShell Script Block Logging (EventCode=4104) to identify this activity. This
+  behavior is significant as it may indicate an attempt by adversaries or Red Teams
+  to gain situational awareness and perform Active Directory Discovery. If confirmed
+  malicious, this activity could allow attackers to map out domain policies, potentially
+  aiding in further exploitation or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://www.welivesecurity.com/2022/04/12/industroyer2-industroyer-reloaded/
+- https://medium.com/@pentesttas/discover-hidden-gpo-s-on-active-directory-using-ps-adsi-a284b6814c81
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*[adsisearcher]*\"\
+    \ ScriptBlockText = \"*.SearchRooT*\" ScriptBlockText = \"*.gplink*\"\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_root_domain_linked_policies_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 80ffaede-1f12-49d5-a86e-b4b599b68b3c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_root_domain_linked_policies_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,43 @@
+id: splunk-security-content-5e38ded4-c964-41f4-8cb6-4a1a53c6929f
+name: Windows PowerShell Export Certificate
+description: The following analytic detects the use of the PowerShell Cmdlet `export-certificate`
+  by leveraging Script Block Logging. This activity is significant as it may indicate
+  an adversary attempting to exfiltrate certificates from the local Certificate Store
+  on a Windows endpoint. Monitoring this behavior is crucial because stolen certificates
+  can be used to impersonate users, decrypt sensitive data, or facilitate further
+  attacks. If confirmed malicious, this activity could lead to unauthorized access
+  to encrypted communications and sensitive information, posing a severe security
+  risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.004
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://dev.to/iamthecarisma/managing-windows-pfx-certificates-through-powershell-3pj
+- https://learn.microsoft.com/en-us/powershell/module/pki/export-certificate?view=windowsserver2022-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*export-certificate*\"\
+    )\n  | rename Computer as dest\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ EventID\n       Guid Opcode Name\n       Path ProcessID ScriptBlockId\n    \
+    \   ScriptBlockText\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powershell_export_certificate_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5e38ded4-c964-41f4-8cb6-4a1a53c6929f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_export_certificate.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

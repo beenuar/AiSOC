@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-secure-deletion-with-sdelete
+name: secure_deletion_with_sdelete
+description: secure_deletion_with_sdelete
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule secure_deletion_with_sdelete {\n meta:\n    author = \"Thomas\
+    \ Patzke\"\n    description = \"Detects renaming of file while deletion with SDelete\
+    \ tool  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/oQbb7ITCipFP\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"defense_evasion, t1107, t1066, s0195\"\n\n  events:\n\
+    (($selection.metadata.product_event_type = \"4656\" or $selection.metadata.product_event_type\
+    \ = \"4663\" or $selection.metadata.product_event_type = \"4658\") and ((re.regex($selection.target.registry.registry_value_data,\
+    \ `.*\\.AAA`) or re.regex($selection.target.registry.registry_value_data, `.*\\\
+    .ZZZ`)) or (re.regex($selection.target.file.full_path, `.*\\.AAA`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\.ZZZ`))))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: secure_deletion_with_sdelete
+provenance:
+  source: chronicle/detection-rules
+  source_id: secure_deletion_with_sdelete
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/secure_deletion_with_sdelete.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

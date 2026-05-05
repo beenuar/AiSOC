@@ -1,0 +1,56 @@
+id: splunk-security-content-40d2dc41-9bbf-421a-a34b-8611271a6770
+name: Internal Vertical Port Scan
+description: This analytic detects instances where an internal host attempts to communicate
+  with over 500 ports on a single destination IP address. It includes filtering criteria
+  to exclude applications performing scans over ephemeral port ranges, focusing on
+  potential reconnaissance or scanning activities. Monitoring network traffic logs
+  allows for timely detection and response to such behavior, enhancing network security
+  by identifying and mitigating potential threats promptly.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n        values(All_Traffic.action) as action\n\
+    \        values(All_Traffic.src_category) as src_category\n        values(All_Traffic.dest_zone)\
+    \ as dest_zone\n        values(All_Traffic.src_zone) as src_zone\n\nfrom datamodel=Network_Traffic\
+    \ where\n\nAll_Traffic.src_ip IN (\n  \"10.0.0.0/8\", \"172.16.0.0/12\", \"192.168.0.0/16\"\
+    , \"100.64.0.0/10\",\n  \"127.0.0.0/8\", \"169.254.0.0/16\", \"192.0.0.0/24\"\
+    , \"192.0.0.0/29\", \"192.0.0.8/32\",\n  \"192.0.0.9/32\", \"192.0.0.10/32\",\
+    \ \"192.0.0.170/32\", \"192.0.0.171/32\", \"192.0.2.0/24\",\n  \"192.31.196.0/24\"\
+    , \"192.52.193.0/24\", \"192.88.99.0/24\", \"224.0.0.0/4\", \"192.175.48.0/24\"\
+    ,\n  \"198.18.0.0/15\", \"198.51.100.0/24\", \"203.0.113.0/24\", \"240.0.0.0/4\"\
+    \n)\n\nby span=1s _time\n   All_Traffic.src_ip All_Traffic.dest_port\n   All_Traffic.dest_ip\
+    \ All_Traffic.transport\n   All_Traffic.rule\n\n| `drop_dm_object_name(\"All_Traffic\"\
+    )`\n| eval gtime=_time\n| bin span=1h gtime\n\n| stats min(_time) as _time\n \
+    \       values(action) as action\n        dc(eval(if(dest_port<1024 AND transport=\"\
+    tcp\",dest_port,null))) as privilegedDestTcpPortCount\n        dc(eval(if(transport=\"\
+    tcp\",dest_port,null))) as totalDestTcpPortCount\n        dc(eval(if(dest_port<1024\
+    \ AND transport=\"udp\",dest_port,null))) as privilegedDestUdpPortCount\n    \
+    \    dc(eval(if(transport=\"udp\",dest_port,null))) as totalDestUdpPortCount\n\
+    \        values(src_category) as src_category\n        values(dest_zone) as dest_zone\n\
+    \        values(src_zone) as src_zone\n  by src_ip dest_ip transport gtime\n|\
+    \ eval totalDestPortCount=totalDestUdpPortCount+totalDestTcpPortCount,\n     \
+    \  privilegedDestPortCount=privilegedDestTcpPortCount+privilegedDestUdpPortCount\n\
+    | where (totalDestPortCount>=500 AND privilegedDestPortCount>=20)\n| fields -\
+    \ gtime\n| `internal_vertical_port_scan_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 40d2dc41-9bbf-421a-a34b-8611271a6770
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/internal_vertical_port_scan.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,49 @@
+id: splunk-security-content-d8b967dd-657f-4d88-93b5-c588bcd7218c
+name: Okta Risk Threshold Exceeded
+description: The following correlation identifies when a user exceeds a risk threshold
+  based on multiple suspicious Okta activities. It leverages the Risk Framework from
+  Enterprise Security, aggregating risk events from "Suspicious Okta Activity," "Okta
+  Account Takeover," and "Okta MFA Exhaustion" analytic stories. This detection is
+  significant as it highlights potentially compromised user accounts exhibiting multiple
+  tactics, techniques, and procedures (TTPs) within a 24-hour period. If confirmed
+  malicious, this activity could indicate a serious security breach, allowing attackers
+  to gain unauthorized access, escalate privileges, or persist within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1110
+  categories:
+  - application
+references:
+- https://developer.okta.com/docs/reference/api/event-types
+- https://sec.okta.com/everythingisyes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(All_Risk.analyticstories)\
+    \ as analyticstories  sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count,values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.risk_object_type\
+    \ = user All_Risk.analyticstories IN (\"Okta Account Takeover\", \"Suspicious\
+    \ Okta Activity\",\"Okta MFA Exhaustion\")\n  BY All_Risk.risk_object,All_Risk.risk_object_type\n\
+    | `drop_dm_object_name(\"All_Risk\")`\n| search mitre_technique_id_count > 5\n\
+    | `okta_risk_threshold_exceeded_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d8b967dd-657f-4d88-93b5-c588bcd7218c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_risk_threshold_exceeded.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

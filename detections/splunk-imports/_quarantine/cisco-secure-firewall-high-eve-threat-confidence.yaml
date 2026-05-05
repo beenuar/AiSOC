@@ -1,0 +1,44 @@
+id: splunk-security-content-8c15183e-2e70-4db4-86c3-88f8d9129b66
+name: Cisco Secure Firewall - High EVE Threat Confidence
+description: The following analytic detects connections with a high Encrypted Visibility
+  Engine (EVE) threat confidence score, indicating potentially malicious behavior
+  within encrypted traffic. It leverages Cisco Secure Firewall Threat Defense logs
+  and evaluates the EVE_ThreatConfidencePct field, which reflects the system's confidence
+  in classifying encrypted sessions as threats based on machine learning models and
+  behavioral analysis. A score equal to or greater than 80 suggests the connection
+  is highly likely to be associated with malware command and control (C2), remote
+  access tools, or suspicious tunneling behavior. If confirmed malicious, this may
+  indicate covert communication over TLS from compromised hosts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  - T1071.001
+  - T1105
+  - T1573.002
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=ConnectionEvent EVE_ThreatConfidencePct\
+    \ >= 80\n| stats count min(_time) as firstTime max(_time) as lastTime\n    Values(rule)\
+    \ as rule\n    Values(url) as url\n    by EVE_Process, EVE_ThreatConfidencePct,\
+    \ src, dest, dest_port, transport, action\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_secure_firewall___high_eve_threat_confidence_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8c15183e-2e70-4db4-86c3-88f8d9129b66
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___high_eve_threat_confidence.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

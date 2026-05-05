@@ -1,0 +1,60 @@
+id: sigmahq-sigma-40aa399c-7b02-4715-8e5f-73572b493f33
+name: Suspicious File Download From IP Via Wget.EXE - Paths
+description: Detects potentially suspicious file downloads directly from IP addresses
+  and stored in suspicious locations using Wget.exe
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.gnu.org/software/wget/manual/wget.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \wget.exe
+  - OriginalFileName: wget.exe
+  selection_ip:
+    CommandLine|re: ://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+  selection_http:
+    CommandLine|contains: http
+  selection_flag:
+  - CommandLine|re: \s-O\s
+  - CommandLine|contains: --output-document
+  selection_paths:
+  - CommandLine|contains:
+    - :\PerfLogs\
+    - :\Temp\
+    - :\Users\Public\
+    - :\Windows\Help\
+    - :\Windows\Temp\
+    - \Temporary Internet
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Favorites\
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Favourites\
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Contacts\
+  - CommandLine|contains|all:
+    - :\Users\
+    - \Pictures\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 40aa399c-7b02-4715-8e5f-73572b493f33
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wget_download_susp_locations.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

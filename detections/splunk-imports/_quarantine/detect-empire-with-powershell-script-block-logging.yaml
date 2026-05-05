@@ -1,0 +1,46 @@
+id: splunk-security-content-bc1dc6b8-c954-11eb-bade-acde48001122
+name: Detect Empire with PowerShell Script Block Logging
+description: The following analytic detects suspicious PowerShell execution indicative
+  of PowerShell-Empire activity. It leverages PowerShell Script Block Logging (EventCode=4104)
+  to capture and analyze commands sent to PowerShell, specifically looking for patterns
+  involving `system.net.webclient` and base64 encoding. This behavior is significant
+  as it often represents initial stagers used by PowerShell-Empire, a known post-exploitation
+  framework. If confirmed malicious, this activity could allow attackers to download
+  and execute additional payloads, leading to potential code execution, data exfiltration,
+  or further compromise of the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://help.splunk.com/en/security-offerings/splunk-user-behavior-analytics/get-data-in/5.4.1/add-other-data-to-splunk-uba/configure-powershell-logging-to-see-powershell-anomalies-in-splunk-uba.
+- https://blog.palantir.com/tampering-with-windows-event-tracing-background-offense-and-defense-4be7ac62ac63
+- https://static1.squarespace.com/static/552092d5e4b0661088167e5c/t/59c1814829f18782e24f1fe2/1505853768977/Windows+PowerShell+Logging+Cheat+Sheet+ver+Sept+2017+v2.1.pdf
+- https://www.crowdstrike.com/blog/investigating-powershell-command-and-script-logging/
+- https://github.com/BC-SECURITY/Empire
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  (ScriptBlockText=*system.net.webclient*\
+    \ AND ScriptBlockText=*frombase64string*)\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `detect_empire_with_powershell_script_block_logging_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bc1dc6b8-c954-11eb-bade-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_empire_with_powershell_script_block_logging.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

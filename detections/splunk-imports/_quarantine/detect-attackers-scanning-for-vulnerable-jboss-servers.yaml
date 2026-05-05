@@ -1,0 +1,42 @@
+id: splunk-security-content-104658f4-afdc-499e-9719-17243f982681
+name: Detect attackers scanning for vulnerable JBoss servers
+description: The following analytic identifies specific GET or HEAD requests to web
+  servers that indicate reconnaissance attempts to find vulnerable JBoss servers.
+  It leverages data from the Web data model, focusing on HTTP methods and URLs associated
+  with JBoss management interfaces. This activity is significant because it often
+  precedes exploitation attempts using tools like JexBoss, which can compromise the
+  server. If confirmed malicious, attackers could gain unauthorized access, execute
+  arbitrary code, or escalate privileges, leading to potential data breaches and system
+  compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  - T1133
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Web\n  WHERE (\n        Web.http_method=\"\
+    GET\"\n        OR\n        Web.http_method=\"HEAD\"\n    )\n    AND (Web.url=\"\
+    */web-console/ServerInfo.jsp*\" OR Web.url=\"*web-console*\" OR Web.url=\"*jmx-console*\"\
+    \ OR Web.url = \"*invoker*\")\n  BY Web.http_method, Web.url, Web.src,\n     Web.dest\n\
+    | `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_attackers_scanning_for_vulnerable_jboss_servers_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 104658f4-afdc-499e-9719-17243f982681
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/detect_attackers_scanning_for_vulnerable_jboss_servers.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,47 @@
+id: splunk-security-content-ce27646e-d411-11eb-8a00-acde48001122
+name: Allow File And Printing Sharing In Firewall
+description: The following analytic detects the modification of firewall settings
+  to allow file and printer sharing. It leverages data from Endpoint Detection and
+  Response (EDR) agents, focusing on command-line executions involving 'netsh' commands
+  that enable file and printer sharing. This activity is significant because it can
+  indicate an attempt by ransomware to discover and encrypt files on additional machines
+  connected to the compromised host. If confirmed malicious, this could lead to widespread
+  file encryption across the network, significantly increasing the impact of a ransomware
+  attack.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.007
+  categories:
+  - endpoint
+references:
+- https://community.fortinet.com:443/t5/FortiEDR/How-FortiEDR-detects-and-blocks-Revil-Ransomware-aka-sodinokibi/ta-p/189638?externalID=FD52469
+- https://app.any.run/tasks/c0f98850-af65-4352-9746-fbebadee4f05/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n`process_netsh`\n\
+    Processes.process= \"*firewall*\"\nProcesses.process= \"*group=\\\"File and Printer\
+    \ Sharing\\\"*\"\nProcesses.process=\"*enable=Yes*\"\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process\n   Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process\n   Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n   Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_name\n   Processes.process_path Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `allow_file_and_printing_sharing_in_firewall_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ce27646e-d411-11eb-8a00-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/allow_file_and_printing_sharing_in_firewall.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

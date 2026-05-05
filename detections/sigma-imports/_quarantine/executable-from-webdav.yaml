@@ -1,0 +1,38 @@
+id: sigmahq-sigma-aac2fd97-bcba-491b-ad66-a6edf89c71bf
+name: Executable from Webdav
+description: Detects executable access via webdav6. Can be seen in APT 29 such as
+  from the emulated APT 29 hackathon https://github.com/OTRF/detection-hackathon-apt29/
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- http://carnal0wnage.attackresearch.com/2012/06/webdav-server-to-download-custom.html
+- https://github.com/OTRF/detection-hackathon-apt29
+logsource:
+  product: zeek
+  service: http
+detection:
+  selection_webdav:
+  - c-useragent|contains: WebDAV
+  - c-uri|contains: webdav
+  selection_executable:
+  - resp_mime_types|contains: dosexec
+  - c-uri|endswith: .exe
+  condition: selection_webdav and selection_executable
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aac2fd97-bcba-491b-ad66-a6edf89c71bf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_http_executable_download_from_webdav.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,52 @@
+id: sigmahq-sigma-a39d7fa7-3fbd-4dc2-97e1-d87f546b1bbc
+name: Program Executions in Suspicious Folders
+description: Detects program executions in suspicious non-program folders related
+  to malware or hacking activity
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1587
+  - T1584
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SYSCALL
+    exe|startswith:
+    - /tmp/
+    - /var/www/
+    - /home/*/public_html/
+    - /usr/local/apache2/
+    - /usr/local/httpd/
+    - /var/apache/
+    - /srv/www/
+    - /home/httpd/html/
+    - /srv/http/
+    - /usr/share/nginx/html/
+    - /var/lib/pgsql/data/
+    - /usr/local/mysql/data/
+    - /var/lib/mysql/
+    - /var/vsftpd/
+    - /etc/bind/
+    - /var/named/
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a39d7fa7-3fbd-4dc2-97e1-d87f546b1bbc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/syscall/lnx_auditd_susp_exe_folders.yml
+falsepositives:
+- Admin activity (especially in /tmp folders)
+- Crazy web applications
+notes:
+  quarantine_reason: 'upstream status: test'

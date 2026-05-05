@@ -1,0 +1,32 @@
+id: sigmahq-sigma-0b8baa3f-575c-46ee-8715-d6f28cc7d33c
+name: NTDS.DIT Created
+description: Detects creation of a file named "ntds.dit" (Active Directory Database)
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: ntds.dit
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0b8baa3f-575c-46ee-8715-d6f28cc7d33c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_ntds_dit_creation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

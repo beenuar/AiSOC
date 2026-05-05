@@ -1,0 +1,40 @@
+id: splunk-security-content-c3f85976-94a5-11ec-9a58-acde48001122
+name: Windows Excessive Disabled Services Event
+description: The following analytic identifies an excessive number of system events
+  where services are modified from start to disabled. It leverages Windows Event Logs
+  (EventCode 7040) to detect multiple service state changes on a single host. This
+  activity is significant as it may indicate an adversary attempting to disable security
+  applications or other critical services, potentially leading to defense evasion
+  or destructive actions. If confirmed malicious, this behavior could allow attackers
+  to disable security defenses, disrupt system operations, and achieve their objectives
+  on the compromised system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://blog.talosintelligence.com/2018/02/olympic-destroyer.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7040 \"disabled\"\n  | stats count values(EventData_Xml)\
+    \ as MessageList dc(EventData_Xml) as MessageCount min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY Computer EventCode UserID\n  | rename Computer as dest\n\
+    \  | where count >=10\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_excessive_disabled_services_event_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c3f85976-94a5-11ec-9a58-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_excessive_disabled_services_event.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

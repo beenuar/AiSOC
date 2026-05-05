@@ -1,0 +1,65 @@
+id: sigmahq-sigma-584bca0f-3608-4402-80fd-4075ff6072e3
+name: Potential CommandLine Obfuscation Using Unicode Characters From Suspicious
+  Image
+description: 'Detects potential commandline obfuscation using unicode characters.
+
+  Adversaries may attempt to make an executable or file difficult to discover or analyze
+  by encrypting, encoding, or otherwise obfuscating its contents on the system or
+  in transit.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://www.wietzebeukema.nl/blog/windows-command-line-obfuscation
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1027/T1027.md#atomic-test-6---dlp-evasion-via-sensitive-data-in-vba-macro-over-http
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \powershell.exe
+    - \powershell_ise.exe
+    - \pwsh.exe
+    - \wscript.exe
+    OriginalFileName:
+    - Cmd.EXE
+    - cscript.exe
+    - PowerShell.EXE
+    - PowerShell_ISE.EXE
+    - pwsh.dll
+    - wscript.exe
+  selection_special_chars:
+    CommandLine|contains:
+    - ˣ
+    - ˪
+    - ˢ
+    - ∕
+    - ⁄
+    - ―
+    - —
+    -  
+    - ¯
+    - ®
+    - ¶
+    - ⠀
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 584bca0f-3608-4402-80fd-4075ff6072e3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_cli_obfuscation_unicode_img.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

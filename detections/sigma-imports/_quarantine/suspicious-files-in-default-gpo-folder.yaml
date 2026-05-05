@@ -1,0 +1,36 @@
+id: sigmahq-sigma-5f87308a-0a5b-4623-ae15-d8fa1809bc60
+name: Suspicious Files in Default GPO Folder
+description: Detects the creation of copy of suspicious files (EXE/DLL) to the default
+  GPO storage folder
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.005
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/intelligence-insights-november-2021/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|contains: \Policies\{31B2F340-016D-11D2-945F-00C04FB984F9}\
+    TargetFilename|endswith:
+    - .dll
+    - .exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5f87308a-0a5b-4623-ae15-d8fa1809bc60
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_default_gpo_dir_write.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

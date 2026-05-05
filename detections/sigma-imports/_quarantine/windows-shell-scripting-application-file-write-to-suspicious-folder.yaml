@@ -1,0 +1,56 @@
+id: sigmahq-sigma-1277f594-a7d1-4f28-a2d3-73af5cbeab43
+name: Windows Shell/Scripting Application File Write to Suspicious Folder
+description: Detects Windows shells and scripting applications that write files to
+  suspicious folders
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection_1:
+    Image|endswith:
+    - \bash.exe
+    - \cmd.exe
+    - \cscript.exe
+    - \msbuild.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \sh.exe
+    - \wscript.exe
+    TargetFilename|startswith:
+    - C:\PerfLogs\
+    - C:\Users\Public\
+  selection_2:
+    Image|endswith:
+    - \certutil.exe
+    - \forfiles.exe
+    - \mshta.exe
+    - \schtasks.exe
+    - \scriptrunner.exe
+    - \wmic.exe
+    TargetFilename|contains:
+    - C:\PerfLogs\
+    - C:\Users\Public\
+    - C:\Windows\Temp\
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1277f594-a7d1-4f28-a2d3-73af5cbeab43
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_shell_write_susp_directory.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

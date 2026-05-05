@@ -1,0 +1,44 @@
+id: sigmahq-sigma-ada4b0c4-758b-46ac-9033-9004613a150d
+name: Modify Group Policy Settings
+description: Detect malicious GPO modifications can be used to implement many other
+  malicious behaviors.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/40b77d63808dd4f4eafb83949805636735a1fd15/atomics/T1484.001/T1484.001.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_reg:
+  - Image|endswith: \reg.exe
+  - OriginalFileName: reg.exe
+  selection_path:
+    CommandLine|contains: \SOFTWARE\Policies\Microsoft\Windows\System
+  selection_key:
+    CommandLine|contains:
+    - GroupPolicyRefreshTimeDC
+    - GroupPolicyRefreshTimeOffsetDC
+    - GroupPolicyRefreshTime
+    - GroupPolicyRefreshTimeOffset
+    - EnableSmartScreen
+    - ShellSmartScreenLevel
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ada4b0c4-758b-46ac-9033-9004613a150d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_modify_group_policy_settings.yml
+falsepositives:
+- Legitimate use
+notes:
+  quarantine_reason: 'upstream status: test'

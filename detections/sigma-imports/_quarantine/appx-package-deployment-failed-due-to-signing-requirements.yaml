@@ -1,0 +1,35 @@
+id: sigmahq-sigma-898d5fc9-fbc3-43de-93ad-38e97237c344
+name: AppX Package Deployment Failed Due to Signing Requirements
+description: Detects an appx package deployment / installation with the error code
+  "0x80073cff" which indicates that the package didn't meet the signing requirements.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/labs/inside-malicious-windows-apps-for-malware-deployment/
+- https://learn.microsoft.com/en-us/windows/win32/appxpkg/troubleshooting
+- https://news.sophos.com/en-us/2021/11/11/bazarloader-call-me-back-attack-abuses-windows-10-apps-mechanism/
+logsource:
+  product: windows
+  service: appxdeployment-server
+detection:
+  selection:
+    EventID: 401
+    ErrorCode: '0x80073cff'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 898d5fc9-fbc3-43de-93ad-38e97237c344
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/appxdeployment_server/win_appxdeployment_server_appx_package_deployment_failed_signing_requirements.yml
+falsepositives:
+- Legitimate AppX packages not signed by MS used part of an enterprise.
+notes:
+  quarantine_reason: 'upstream status: test'

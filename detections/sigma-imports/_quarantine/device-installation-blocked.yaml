@@ -1,0 +1,33 @@
+id: sigmahq-sigma-c9eb55c3-b468-40ab-9089-db2862e42137
+name: Device Installation Blocked
+description: Detects an installation of a device that is forbidden by the system policy
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1200
+  categories:
+  - endpoint
+references:
+- https://github.com/Yamato-Security/EnableWindowsLogSettings/blob/7f6d755d45ac7cc9fc35b0cbf498e6aa4ef19def/ConfiguringSecurityLogAuditPolicies.md
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-6423
+logsource:
+  service: security
+  product: windows
+detection:
+  selection:
+    EventID: 6423
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c9eb55c3-b468-40ab-9089-db2862e42137
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_device_installation_blocked.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,51 @@
+id: splunk-security-content-01f0aef4-8591-4daa-a53d-0ed49823b681
+name: Windows Abused Web Services
+description: The following analytic detects a suspicious process making DNS queries
+  to known, abused web services such as text-paste sites, VoIP, secure tunneling,
+  instant messaging, and digital distribution platforms. This detection leverages
+  Sysmon logs with Event ID 22, focusing on specific query names. This activity is
+  significant as it may indicate an adversary attempting to download malicious files,
+  a common initial access technique. If confirmed malicious, this could lead to unauthorized
+  code execution, data exfiltration, or further compromise of the target host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1102
+  categories:
+  - network
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.njrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=22\nQueryName IN (\n    \"*//objects.githubusercontent.com*\"\
+    ,\n    \"*anonfiles.com*\",\n    \"*cdn.discordapp.com*\",\n    \"*ddns.net*\"\
+    ,\n    \"*dl.dropboxusercontent.com*\",\n    \"*duckdns.org*\",\n    \"*ghostbin.co*\"\
+    ,\n    \"*glitch.me*\",\n    \"*gofile.io*\",\n    \"*hastebin.com*\",\n    \"\
+    *mediafire.com*\",\n    \"*mega.nz*\",\n    \"*ngrok.io*\",\n    \"*onrender.com*\"\
+    ,\n    \"*pages.dev*\",\n    \"*paste.ee*\",\n    \"*pastebin.com*\",\n    \"\
+    *pastebin.pl*\",\n    \"*pasteio.com*\",\n    \"*pastetext.net*\",\n    \"*privatlab.com*\"\
+    ,\n    \"*privatlab.net*\",\n    \"*send.exploit.in*\",\n    \"*sendspace.com*\"\
+    ,\n    \"*storage.googleapis.com*\",\n    \"*storjshare.io*\",\n    \"*supabase.co*\"\
+    ,\n    \"*temp.sh*\",\n    \"*textbin*\",\n    \"*transfer.sh*\",\n    \"*trycloudflare.com*\"\
+    ,\n    \"*ufile.io*\",\n    \"*w3spaces.com*\",\n    \"*workers.dev*\"\n)\n| eval\
+    \ answer=coalesce(answer,\"none\")\n| eval answer_count=coalesce(answer_count,0)\n\
+    | rename dvc as dest\n| stats  min(_time) as firstTime max(_time) as lastTime\
+    \ count\n    BY answer answer_count dest process_exec process_guid\n       process_name\
+    \ query query_count reply_code_id signature\n       signature_id src user_id vendor_product\n\
+    \       QueryName QueryResults QueryStatus\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_abused_web_services_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 01f0aef4-8591-4daa-a53d-0ed49823b681
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/windows_abused_web_services.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

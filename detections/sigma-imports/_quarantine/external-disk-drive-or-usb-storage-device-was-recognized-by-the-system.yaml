@@ -1,0 +1,36 @@
+id: sigmahq-sigma-f69a87ea-955e-4fb4-adb2-bb9fd6685632
+name: External Disk Drive Or USB Storage Device Was Recognized By The System
+description: Detects external disk drives or plugged-in USB devices.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1091
+  - T1200
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-6416
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_eid:
+    EventID: 6416
+  selection_field:
+  - ClassName: DiskDrive
+  - DeviceDescription: USB Mass Storage Device
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f69a87ea-955e-4fb4-adb2-bb9fd6685632
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_external_device.yml
+falsepositives:
+- Likely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,68 @@
+id: sigmahq-sigma-754ed792-634f-40ae-b3bc-e0448d33f695
+name: Suspicious PowerShell Parent Process
+description: Detects a suspicious or uncommon parent processes of PowerShell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse?slide=26
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+  - ParentImage|contains: tomcat
+  - ParentImage|endswith:
+    - \amigo.exe
+    - \browser.exe
+    - \chrome.exe
+    - \firefox.exe
+    - \httpd.exe
+    - \iexplore.exe
+    - \jbosssvc.exe
+    - \microsoftedge.exe
+    - \microsoftedgecp.exe
+    - \MicrosoftEdgeSH.exe
+    - \mshta.exe
+    - \nginx.exe
+    - \outlook.exe
+    - \php-cgi.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \safari.exe
+    - \services.exe
+    - \sqlagent.exe
+    - \sqlserver.exe
+    - \sqlservr.exe
+    - \vivaldi.exe
+    - \w3wp.exe
+  selection_powershell:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - CommandLine|contains:
+    - /c powershell
+    - /c pwsh
+  - Description: Windows PowerShell
+  - Product: PowerShell Core 6
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 754ed792-634f-40ae-b3bc-e0448d33f695
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_susp_parent_process.yml
+falsepositives:
+- Other scripts
+notes:
+  quarantine_reason: 'upstream status: test'

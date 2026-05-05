@@ -1,0 +1,33 @@
+id: sigmahq-sigma-7679d464-4f74-45e2-9e01-ac66c5eb041a
+name: HackTool - SecurityXploded Execution
+description: Detects the execution of SecurityXploded Tools
+severity: critical
+enabled: true
+tags:
+  mitre:
+  - T1555
+  categories:
+  - endpoint
+references:
+- https://securityxploded.com/
+- https://web.archive.org/web/20200601000524/https://cyberx-labs.com/blog/gangnam-industrial-style-apt-campaign-targets-korean-industrial-companies/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Company: SecurityXploded
+  - Image|endswith: PasswordDump.exe
+  - OriginalFileName|endswith: PasswordDump.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7679d464-4f74-45e2-9e01-ac66c5eb041a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_secutyxploded.yml
+falsepositives:
+- Unlikely

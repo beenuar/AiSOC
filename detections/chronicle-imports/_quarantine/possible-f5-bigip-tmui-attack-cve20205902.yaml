@@ -1,0 +1,43 @@
+id: chronicle-detection-rules-possible-f5-bigip-tmui-attack-cve20205902
+name: possible_f5_bigip_tmui_attack_cve20205902
+description: possible_f5_bigip_tmui_attack_cve20205902
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_f5_bigip_tmui_attack_cve20205902 {\n meta:\n   \
+    \ author = \"Roman Ranskyi\"\n    description = \"Detects possible CVE-2020-5902\
+    \ exploitation attempt against F5 BIG-IP, The Traffic Management User Interface\
+    \ (TMUI) Attack.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/a3bYpIF6od6C\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"webserver\"\n   \
+    \ mitre = \"initial_access, t1190\"\n\n  events:\n((re.regex($selection.target.url,\
+    \ `.*/tmui/login\\.jsp.*`) and (re.regex($selection.target.url, `.*\\.\\.;.*`)\
+    \ or re.regex($selection.target.url, `.*\\.\\./.*`))) or (re.regex($selection.target.url,\
+    \ `.*/tmui/login\\.jsp.*`) and (re.regex($selection.target.url, `.*\\?command=.*`)\
+    \ or re.regex($selection.target.url, `.*\\+admin.*`) or re.regex($selection.target.url,\
+    \ `.*;id.*`) or re.regex($selection.target.url, `.*/nc.*`) or re.regex($selection.target.url,\
+    \ `.*/sh.*`) or re.regex($selection.target.url, `.*/bash.*`) or re.regex($selection.target.url,\
+    \ `.*/curl.*`) or re.regex($selection.target.url, `.*authproperties\\.jsp.*`)\
+    \ or re.regex($selection.target.url, `.*getTabSet\\.jsp.*`) or re.regex($selection.target.url,\
+    \ `.*;/tmui/.*`) or re.regex($selection.target.url, `.*/passwd.*`) or re.regex($selection.target.url,\
+    \ `.*/shadow.*`))))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: possible_f5_bigip_tmui_attack_cve20205902
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_f5_bigip_tmui_attack_cve20205902
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/proactive_exploit_detection/big_ip/possible_f5_big_ip_tmui_attack_cve_2020_5902_part_1.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

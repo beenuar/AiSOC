@@ -1,0 +1,40 @@
+id: sigmahq-sigma-c15a46a0-07d4-4c87-b4b6-89207835a83b
+name: Add Potential Suspicious New Download Source To Winget
+description: Detects usage of winget to add new potentially suspicious download sources
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+- https://github.com/nasbench/Misc-Research/tree/b9596e8109dcdb16ec353f316678927e507a5b8d/LOLBINs/Winget
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \winget.exe
+  - OriginalFileName: winget.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - 'source '
+    - 'add '
+  selection_source_direct_ip:
+    CommandLine|re: ://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c15a46a0-07d4-4c87-b4b6-89207835a83b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winget_add_susp_custom_source.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

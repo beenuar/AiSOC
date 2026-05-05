@@ -1,0 +1,42 @@
+id: splunk-security-content-ad517544-aff9-4c96-bd99-d6eb43bfbb6a
+name: Windows Event Log Cleared
+description: The following analytic detects the clearing of Windows event logs by
+  identifying Windows Security Event ID 1102 or System log event 104. This detection
+  leverages Windows event logs to monitor for log clearing activities. Such behavior
+  is significant as it may indicate an attempt to cover tracks after malicious activities.
+  If confirmed malicious, this action could hinder forensic investigations and allow
+  attackers to persist undetected, making it crucial to investigate further and correlate
+  with other alerts and data sources.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.001
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-1102
+- https://www.ired.team/offensive-security/defense-evasion/disabling-windows-event-logs-by-suspending-eventlog-service-threads
+- https://attack.mitre.org/techniques/T1070/001/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1070.001/T1070.001.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "(`wineventlog_security` EventCode=1102)\nOR\n(`wineventlog_system`\
+    \ EventCode=104)\n| stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \  by action change_type dest dvc object_category signature_id status user vendor_product\
+    \ object EventCode\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_event_log_cleared_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ad517544-aff9-4c96-bd99-d6eb43bfbb6a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_event_log_cleared.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

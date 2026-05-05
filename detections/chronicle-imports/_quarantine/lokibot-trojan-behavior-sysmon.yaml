@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-lokibot-trojan-behavior-sysmon
+name: lokibot_trojan_behavior_sysmon
+description: lokibot_trojan_behavior_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule lokibot_trojan_behavior_sysmon {\n meta:\n    author = \"\
+    Alexandr Yampolskyi, SOC Prime\"\n    description = \"LokiBot Trojan behavior.\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/pG4o4ap1jIfh\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/04\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, t1059\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"1\" and (($selection1.target.process.command_line = \"GET /bobby\" or $selection1.target.process.command_line\
+    \ = \"POST /bobby/Panel\") or ($selection1.target.file.md5 = \"3C4BE617FDA78DA05B38F4EE52121E99\"\
+    \ or $selection1.target.file.md5 = \"7FB5A88768D7ECE242DBD4B30EDEFF0C\" or $selection1.target.file.md5\
+    \ = \"14A4DFFE0105A7DEF2A1EFF32899A9AC\" or $selection1.target.file.md5 = \"E69245E9685CB204105E69C424F304CC\"\
+    \ or $selection1.target.file.md5 = \"75CCD03BB4934490A9F599A15381F43D\" or $selection1.target.file.md5\
+    \ = \"68BEFE15006189CE8215371935F8E720\" or $selection1.target.file.md5 = \"05869152534B238D25051F7718FDB382\"\
+    \ or $selection1.target.file.md5 = \"3DFA31D85482009479FEAFD5AF7E818A\" or $selection1.target.file.md5\
+    \ = \"f9b5535bffd5c0525cb1e59bf79f06d925448b12f106fe1e972473fab4f082fa\" or $selection1.target.file.md5\
+    \ = \"4bf2658e0f69865c977cabd24b8dccca38ffc09a17b3367e5f702d2993cf00f7\" or $selection1.target.file.md5\
+    \ = \"ed5550d3047903d3e09363f90b6d49f519d1484af4e528fd95f1e5f3e5a008b2\" or $selection1.target.file.md5\
+    \ = \"5b1b12f580dcc0219e88887cbe5af7f2\" or $selection1.target.file.md5 = \"51c86d4fe87f490e4da5e8035645e548\"\
+    \ or $selection1.target.file.md5 = \"c94d4d0a893a786d51e4acbb66c3cd29\" or $selection1.target.file.md5\
+    \ = \"007b3818d95f328376d73f3714c49154\" or $selection1.target.file.md5 = \"D3E758016C147B5035E20D22E6888E6F\"\
+    \ or $selection1.target.file.md5 = \"09ef7c56d36365fd24d45660c3246a0a\" or $selection1.target.file.md5\
+    \ = \"42844D8957C46DD47EFFEC1C54273EFC\" or $selection1.target.file.md5 = \"D4BBE7685E53F6B788F65268BEA485C3\"\
+    \ or $selection1.target.file.md5 = \"B18F0AD651B48B3DEC184B4F95BFCAE3\"))) or\
+    \ ($selection1.metadata.product_event_type = \"11\" and re.regex($selection1.target.registry.registry_key,\
+    \ `.*F63AAA`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: lokibot_trojan_behavior_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: lokibot_trojan_behavior_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/lokibot_trojan_behavior__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

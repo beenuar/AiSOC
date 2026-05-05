@@ -1,0 +1,40 @@
+id: sigmahq-sigma-2632954e-db1c-49cb-9936-67d1ef1d17d2
+name: Addition of SID History to Active Directory Object
+description: An attacker can use the SID history attribute to gain additional privileges.
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1134.005
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=1772
+logsource:
+  product: windows
+  service: security
+detection:
+  selection1:
+    EventID:
+    - 4765
+    - 4766
+  selection2:
+    EventID: 4738
+  selection3:
+    SidHistory:
+    - '-'
+    - '%%1793'
+  filter_null:
+    SidHistory: null
+  condition: selection1 or (selection2 and not selection3 and not filter_null)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2632954e-db1c-49cb-9936-67d1ef1d17d2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_add_sid_history.yml
+falsepositives:
+- Migration of an account into a new domain

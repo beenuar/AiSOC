@@ -1,0 +1,42 @@
+id: sigmahq-sigma-99c8be4f-3087-4f9f-9c24-8c7e257b442e
+name: Setup16.EXE Execution With Custom .Lst File
+description: 'Detects the execution of "Setup16.EXE" and old installation utility
+  with a custom ".lst" file.
+
+  These ".lst" file can contain references to external program that "Setup16.EXE"
+  will execute.
+
+  Attackers and adversaries might leverage this as a living of the land utility.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.005
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2024/10/12/the-sweet16-the-oldbin-lolbin-called-setup16-exe/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage: C:\Windows\SysWOW64\setup16.exe
+    ParentCommandLine|contains: ' -m '
+  filter_optional_valid_path:
+    Image|startswith: C:\~MSSETUP.T\
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 99c8be4f-3087-4f9f-9c24-8c7e257b442e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_setup16_custom_lst_execution.yml
+falsepositives:
+- On modern Windows system, the "Setup16" utility is practically never used, hence
+  false positive should be very rare.
+notes:
+  quarantine_reason: 'upstream status: test'

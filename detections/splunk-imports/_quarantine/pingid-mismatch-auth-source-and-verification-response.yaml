@@ -1,0 +1,58 @@
+id: splunk-security-content-15b0694e-caa2-4009-8d83-a1f98b86d086
+name: PingID Mismatch Auth Source and Verification Response
+description: The following analytic identifies discrepancies between the IP address
+  of an authentication event and the IP address of the verification response event,
+  focusing on differences in the originating countries. It leverages JSON logs from
+  PingID, comparing the 'auth_Country' and 'verify_Country' fields. This activity
+  is significant as it may indicate suspicious sign-in behavior, such as account compromise
+  or unauthorized access attempts. If confirmed malicious, this could allow attackers
+  to bypass authentication mechanisms, potentially leading to unauthorized access
+  to sensitive systems and data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1621
+  - T1556.006
+  - T1098.005
+  categories:
+  - application
+references:
+- https://twitter.com/jhencinski/status/1618660062352007174
+- https://attack.mitre.org/techniques/T1098/005/
+- https://attack.mitre.org/techniques/T1556/006/
+- https://docs.pingidentity.com/r/en-us/pingoneforenterprise/p14e_subscriptions?tocId=3xhnxjX3VzKNs3SXigWnQA
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`pingid` ("result.status" IN ("SUCCESS*","FAIL*","UNSUCCESSFUL*" )
+    NOT "result.message" IN ("*pair*","*create*","*delete*")) | eval user = upper(''actors{}.name''),
+    session_id = ''resources{}.websession'', dest = ''resources{}.ipaddress'', reason
+    = ''result.message'', object = ''resources{}.devicemodel'', status = ''result.status''
+    | join user session_id [ search `pingid` ("result.status" IN ("POLICY") AND "resources{}.ipaddress"=*)
+    AND "result.message" IN("*Action: Authenticate*","*Action: Approve*","*Action:
+    Allowed*") | rex field=result.message "IP Address: (?:N\/A)?(?<policy_ipaddress>.+)?\n"
+    | rex field=result.message "Action: (?:N\/A)?(?<signature>.+)?\n" | rex field=result.message
+    "Requested Application Name: (?:N\/A)?(?<Requested_Application_Name>.+)?\n" |
+    rex field=result.message " Requested Application ID: (?:N\/A)?(?<Requested_Application_ID>.+)?\n"
+    | eval user = upper(''actors{}.name''), session_id = ''resources{}.websession'',
+    src = coalesce(''resources{}.ipaddress'',policy_ipaddress), app = coalesce(Requested_Application_ID,Requested_Application_Name)
+    | fields app, user, session_id, src, signature ] | iplocation prefix=auth_ dest
+    | iplocation prefix=verify_ src | stats count min(_time) as firstTime max(_time)
+    as lastTime values(app) as app values(session_id) as session_id by user, dest,
+    auth_Country, src, verify_Country, object, signature, status, reason | where auth_Country
+    != verify_Country | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `pingid_mismatch_auth_source_and_verification_response_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 15b0694e-caa2-4009-8d83-a1f98b86d086
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/pingid_mismatch_auth_source_and_verification_response.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

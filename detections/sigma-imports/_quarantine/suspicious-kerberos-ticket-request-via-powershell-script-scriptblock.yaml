@@ -1,0 +1,40 @@
+id: sigmahq-sigma-a861d835-af37-4930-bcd6-5b178bfb54df
+name: Suspicious Kerberos Ticket Request via PowerShell Script - ScriptBlock
+description: 'Detects PowerShell scripts that utilize native PowerShell Identity modules
+  to request Kerberos tickets.
+
+  This behavior is typically seen during a Kerberos or silver ticket attack. A successful
+  execution will output the SPNs for the endpoint in question.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1558.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1558.003/T1558.003.md#atomic-test-4---request-a-single-ticket-via-powershell
+- https://learn.microsoft.com/en-us/dotnet/api/system.identitymodel.tokens.kerberosrequestorsecuritytoken?view=netframework-4.8.1
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - System.IdentityModel.Tokens.KerberosRequestorSecurityToken
+    - .GetRequest()
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a861d835-af37-4930-bcd6-5b178bfb54df
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_request_kerberos_ticket.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

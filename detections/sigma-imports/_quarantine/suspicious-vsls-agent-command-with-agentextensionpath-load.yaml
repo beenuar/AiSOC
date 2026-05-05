@@ -1,0 +1,36 @@
+id: sigmahq-sigma-43103702-5886-11ed-9b6a-0242ac120002
+name: Suspicious Vsls-Agent Command With AgentExtensionPath Load
+description: Detects Microsoft Visual Studio vsls-agent.exe lolbin execution with
+  a suspicious library load using the --agentExtensionPath parameter
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/bohops/status/1583916360404729857
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \vsls-agent.exe
+    CommandLine|contains: --agentExtensionPath
+  filter:
+    CommandLine|contains: Microsoft.VisualStudio.LiveShare.Agent.
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 43103702-5886-11ed-9b6a-0242ac120002
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_vslsagent_agentextensionpath_load.yml
+falsepositives:
+- False positives depend on custom use of vsls-agent.exe
+notes:
+  quarantine_reason: 'upstream status: test'

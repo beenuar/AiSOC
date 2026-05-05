@@ -1,0 +1,42 @@
+id: sigmahq-sigma-81a0ecb5-0a41-4ba1-b2ba-c944eb92bfa2
+name: Add Insecure Download Source To Winget
+description: 'Detects usage of winget to add a new insecure (http) download source.
+
+  Winget will not allow the addition of insecure sources, hence this could indicate
+  potential suspicious activity (or typos)'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/package-manager/winget/source
+- https://github.com/nasbench/Misc-Research/tree/b9596e8109dcdb16ec353f316678927e507a5b8d/LOLBINs/Winget
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \winget.exe
+  - OriginalFileName: winget.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - 'source '
+    - 'add '
+    - http://
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 81a0ecb5-0a41-4ba1-b2ba-c944eb92bfa2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winget_add_insecure_custom_source.yml
+falsepositives:
+- False positives might occur if the users are unaware of such control checks
+notes:
+  quarantine_reason: 'upstream status: test'

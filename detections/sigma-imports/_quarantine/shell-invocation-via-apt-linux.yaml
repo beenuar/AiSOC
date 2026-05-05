@@ -1,0 +1,40 @@
+id: sigmahq-sigma-bb382fd5-b454-47ea-a264-1828e4c766d6
+name: Shell Invocation via Apt - Linux
+description: 'Detects the use of the "apt" and "apt-get" commands to execute a shell
+  or proxy commands.
+
+  Such behavior may be associated with privilege escalation, unauthorized command
+  execution, or to break out from restricted environments.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/apt/
+- https://gtfobins.github.io/gtfobins/apt-get/
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+    - /apt
+    - /apt-get
+    CommandLine|contains: APT::Update::Pre-Invoke::=
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bb382fd5-b454-47ea-a264-1828e4c766d6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_apt_shell_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-d3abac66-f11c-4ed0-8acb-50cc29c97eed
+name: NetNTLM Downgrade Attack
+description: Detects NetNTLM downgrade attack
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.optiv.com/blog/post-exploitation-using-netntlm-downgrade-attacks
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Audit Policy : Object Access > Audit Registry (Success)'
+detection:
+  selection:
+    EventID: 4657
+    ObjectName|contains|all:
+    - \REGISTRY\MACHINE\SYSTEM
+    - ControlSet
+    - \Control\Lsa
+    ObjectValueName:
+    - LmCompatibilityLevel
+    - NtlmMinClientSec
+    - RestrictSendingNTLMTraffic
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3abac66-f11c-4ed0-8acb-50cc29c97eed
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_net_ntlm_downgrade.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

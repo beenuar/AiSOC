@@ -1,0 +1,45 @@
+id: splunk-security-content-da20828e-d6fb-4ee5-afb7-d0ac200923d5
+name: GCP Multiple Users Failing To Authenticate From Ip
+description: The following analytic detects a single source IP address failing to
+  authenticate into more than 20 unique Google Workspace user accounts within a 5-minute
+  window. It leverages Google Workspace login failure events to identify potential
+  password spraying attacks. This activity is significant as it may indicate an adversary
+  attempting to gain unauthorized access or elevate privileges within the Google Cloud
+  Platform. If confirmed malicious, this behavior could lead to unauthorized access
+  to sensitive resources, data breaches, or further exploitation within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/blog/products/identity-security/how-google-cloud-can-help-stop-credential-stuffing-attacks
+- https://www.slideshare.net/dafthack/ok-google-how-do-i-red-team-gsuite
+- https://attack.mitre.org/techniques/T1110/003/
+- https://www.blackhillsinfosec.com/wp-content/uploads/2020/05/Breaching-the-Cloud-Perimeter-Slides.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gws_reports_login` event.type = login event.name = login_failure\n\
+    \  | bucket span=5m _time\n  | stats count dc(user) AS unique_accounts values(user)\
+    \ as tried_accounts values(authentication_method) AS authentication_method earliest(_time)\
+    \ as firstTime latest(_time) as lastTime\n    BY _time event.name src\n      \
+    \ app id.applicationName\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | where unique_accounts > 20\n  | `gcp_multiple_users_failing_to_authenticate_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: da20828e-d6fb-4ee5-afb7-d0ac200923d5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gcp_multiple_users_failing_to_authenticate_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

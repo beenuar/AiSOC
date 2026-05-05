@@ -1,0 +1,57 @@
+id: chronicle-detection-rules-google-workspace-new-trusted-domain-added
+name: google_workspace_new_trusted_domain_added
+description: google_workspace_new_trusted_domain_added
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule google_workspace_new_trusted_domain_added {\n\n    meta:\n      author\
+    \ = \"Google Cloud Security\"\n      description = \"Identifies when a domain\
+    \ is added to the list of trusted domains in Google Workspace. An adversary may\
+    \ attempt to manipulate sharing settings for trusted domains to gain unauthorized\
+    \ access to sensitive files and folders within an organization.\"\n      rule_id\
+    \ = \"mr_319d97c3-6f63-4a6c-9fab-e70cc3f03aaf\"\n      rule_name = \"Google Workspace\
+    \ New Trusted Domain Added\"\n      mitre_attack_tactic = \"Defense Evasion\"\n\
+    \      mitre_attack_technique = \"Impair Defenses: Disable or Modify Cloud Firewall\"\
+    \n      mitre_attack_url = \"https://attack.mitre.org/techniques/T1562/007/\"\n\
+    \      mitre_attack_version = \"v13.1\"\n      type = \"Alert\"\n      data_source\
+    \ = \"Workspace Activity\"\n      severity = \"High\"\n      priority = \"High\"\
+    \n\n    events:\n      $ws.metadata.vendor_name = \"Google Workspace\"\n     \
+    \ $ws.metadata.product_name = \"admin\"\n      $ws.metadata.product_event_type\
+    \ = \"ADD_TRUSTED_DOMAINS\"\n\n    outcome:\n      $risk_score = max(75)\n   \
+    \   $mitre_attack_tactic = \"Defense Evasion\"\n      $mitre_attack_technique\
+    \ = \"Impair Defenses: Disable or Modify Cloud Firewall\"\n      $mitre_attack_technique_id\
+    \ = \"T1562.007\"\n      $event_count = count_distinct($ws.metadata.id)\n    \
+    \  $principal_ip = array_distinct($ws.principal.ip)\n      $principal_country\
+    \ = array_distinct($ws.principal.ip_geo_artifact.location.country_or_region)\n\
+    \      $principal_state = array_distinct($ws.principal.ip_geo_artifact.location.state)\n\
+    \      $principal_user_emails = array_distinct($ws.principal.user.email_addresses)\n\
+    \      $principal_user_id = array_distinct($ws.principal.user.userid)\n      $target_domain\
+    \ = $ws.target.domain.name\n\n\n    condition:\n      $ws\n  }"
+  chronicle_rule_name: google_workspace_new_trusted_domain_added
+provenance:
+  source: chronicle/detection-rules
+  source_id: google_workspace_new_trusted_domain_added
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/google_workspace_new_trusted_domain_added.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

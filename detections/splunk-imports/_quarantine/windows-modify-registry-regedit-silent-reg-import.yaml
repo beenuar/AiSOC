@@ -1,0 +1,48 @@
+id: splunk-security-content-824dd598-71be-4203-bc3b-024f4cda340e
+name: Windows Modify Registry Regedit Silent Reg Import
+description: The following analytic detects the modification of the Windows registry
+  using the regedit.exe application with the silent mode parameter. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process names and
+  command-line executions. This activity is significant because the silent mode allows
+  registry changes without user confirmation, which can be exploited by adversaries
+  to import malicious registry settings. If confirmed malicious, this could enable
+  attackers to persist in the environment, escalate privileges, or manipulate system
+  configurations, leading to potential system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/a6f2ffe2-e6e2-4396-ae2e-04ea0143f2d8/
+- https://www.techtarget.com/searchwindowsserver/tip/Command-line-options-for-Regeditexe
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        Processes.process_name=\"regedit.exe\"\n        OR\n     \
+    \   Processes.original_file_name=\"regedit.exe\"\n    )\n    AND Processes.process=\"\
+    * /s *\" AND Processes.process=\"*.reg*\"\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_modify_registry_regedit_silent_reg_import_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 824dd598-71be-4203-bc3b-024f4cda340e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_regedit_silent_reg_import.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

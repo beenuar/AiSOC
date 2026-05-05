@@ -1,0 +1,41 @@
+id: sigmahq-sigma-3abd6094-7027-475f-9630-8ab9be7b9725
+name: Windows Admin Share Mount Via Net.EXE
+description: Detects when an admin share is mounted using net.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://drive.google.com/file/d/1lKya3_mLnR3UQuCoiYruO3qgu052_iS_/view
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \net.exe
+    - \net1.exe
+  - OriginalFileName:
+    - net.exe
+    - net1.exe
+  selection_cli:
+    CommandLine|contains|all:
+    - ' use '
+    - ' \\\\*\\*$'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3abd6094-7027-475f-9630-8ab9be7b9725
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_net_use_mount_admin_share.yml
+falsepositives:
+- Administrators
+notes:
+  quarantine_reason: 'upstream status: test'

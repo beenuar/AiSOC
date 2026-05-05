@@ -1,0 +1,56 @@
+id: splunk-security-content-8f2c4e9a-5d3b-4c7e-9a1f-6e8d5b2c3a9f
+name: Cisco ASA - AAA Policy Tampering
+description: 'This analytic detects modifications to authentication and authorization
+  (AAA) security policies on Cisco ASA devices via CLI or ASDM.
+
+  AAA policies control critical security mechanisms including authentication attempts,
+  lockout thresholds, password policies, and access control settings that protect
+  administrative access to network infrastructure.
+
+  Adversaries or malicious insiders may weaken authentication policies to facilitate
+  brute force attacks, disable account lockouts to enable unlimited password attempts,
+  reduce password complexity requirements, or modify authorization settings to elevate
+  privileges and maintain persistent access.
+
+  The detection monitors for command execution events containing AAA-related commands
+  such as `aaa authentication`, `aaa authorization`, or `aaa local authentication`,
+  focusing on changes to authentication attempts, lockout policies, and access control
+  configurations.
+
+  Investigate any unauthorized modifications to AAA policies, especially changes that
+  weaken security posture (increasing max-fail attempts, disabling lockouts, reducing
+  password requirements), and verify these changes against approved change management
+  processes and security policies.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.004
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/asa-cli-reference/A-H/asa-command-ref-A-H/aa-ac-commands.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (111008, 111010)\ncommand IN (\n    \"aaa\
+    \ authentication*\",\n    \"aaa authorization*\",\n    \"aaa local authentication*\"\
+    ,\n    \"aaa-server*\",\n    \"no aaa*\"\n)\n| fillnull\n| stats count\n     \
+    \   earliest(_time) as firstTime\n        latest(_time) as lastTime\n        values(user)\
+    \ as user\n        values(action) as action\n        values(message_id) as message_id\n\
+    \        values(command) as command\n        values(src_ip) as src_ip\n      \
+    \  values(process_name) as process_name\n  by host\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_asa___aaa_policy_tampering_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8f2c4e9a-5d3b-4c7e-9a1f-6e8d5b2c3a9f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___aaa_policy_tampering.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

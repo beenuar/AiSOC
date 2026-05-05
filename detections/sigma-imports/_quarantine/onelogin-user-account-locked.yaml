@@ -1,0 +1,35 @@
+id: sigmahq-sigma-a717c561-d117-437e-b2d9-0118a7035d01
+name: OneLogin User Account Locked
+description: Detects when an user account is locked or suspended.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://developers.onelogin.com/api-docs/1/events/event-resource/
+logsource:
+  product: onelogin
+  service: onelogin.events
+detection:
+  selection1:
+    event_type_id: 532
+  selection2:
+    event_type_id: 553
+  selection3:
+    event_type_id: 551
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a717c561-d117-437e-b2d9-0118a7035d01
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/onelogin/onelogin_user_account_locked.yml
+falsepositives:
+- System may lock or suspend user accounts.
+notes:
+  quarantine_reason: 'upstream status: test'

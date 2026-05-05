@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d3bf399f-b0cf-4250-8bb4-dfc192ab81dc
+name: Ie4uinit Lolbin Use From Invalid Path
+description: Detect use of ie4uinit.exe to execute commands from a specially prepared
+  ie4uinit.inf file from a directory other than the usual directories
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Ie4uinit/
+- https://bohops.com/2018/03/10/leveraging-inf-sct-fetch-execute-techniques-for-bypass-evasion-persistence-part-2/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  lolbin:
+  - Image|endswith: \ie4uinit.exe
+  - OriginalFileName: IE4UINIT.EXE
+  filter_correct:
+    CurrentDirectory:
+    - c:\windows\system32\
+    - c:\windows\sysWOW64\
+  filter_missing:
+    CurrentDirectory: null
+  condition: lolbin and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d3bf399f-b0cf-4250-8bb4-dfc192ab81dc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_ie4uinit.yml
+falsepositives:
+- ViberPC updater calls this binary with the following commandline "ie4uinit.exe -ClearIconCache"
+notes:
+  quarantine_reason: 'upstream status: test'

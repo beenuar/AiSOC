@@ -1,0 +1,38 @@
+id: sigmahq-sigma-a7c0ae48-8df8-42bf-91bd-2ea57e2f9d43
+name: Juniper BGP Missing MD5
+description: Detects juniper BGP missing MD5 digest. Which may be indicative of brute
+  force attacks to manipulate routing.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1110
+  - T1557
+  categories:
+  - endpoint
+references:
+- https://www.blackhat.com/presentations/bh-usa-03/bh-us-03-convery-franz-v3.pdf
+logsource:
+  product: juniper
+  service: bgp
+  definition: 'Requirements: juniper bgp logs need to be enabled and ingested'
+detection:
+  keywords_bgp_juniper:
+    '|all':
+    - :179
+    - missing MD5 digest
+  condition: keywords_bgp_juniper
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a7c0ae48-8df8-42bf-91bd-2ea57e2f9d43
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/juniper/bgp/juniper_bgp_missing_md5.yml
+falsepositives:
+- Unlikely. Except due to misconfigurations
+notes:
+  quarantine_reason: 'upstream status: test'

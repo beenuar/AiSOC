@@ -1,0 +1,37 @@
+id: sigmahq-sigma-5594e67a-7f92-4a04-b65d-1a42fd824a60
+name: MSI Installation From Web
+description: Detects installation of a remote msi file from web.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  - T1218.007
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_st0pp3r_/status/1583922009842802689
+logsource:
+  product: windows
+  service: application
+detection:
+  selection:
+    Provider_Name: MsiInstaller
+    EventID:
+    - 1040
+    - 1042
+    Data|contains: ://
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5594e67a-7f92-4a04-b65d-1a42fd824a60
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/msiinstaller/win_msi_install_from_web.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

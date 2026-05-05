@@ -1,0 +1,32 @@
+id: sigmahq-sigma-bc92ca75-cd42-4d61-9a37-9d5aa259c88b
+name: Win Defender Restored Quarantine File
+description: Detects the restoration of files from the defender quarantine
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID: 1009
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bc92ca75-cd42-4d61-9a37-9d5aa259c88b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/windefend/win_defender_restored_quarantine_file.yml
+falsepositives:
+- Legitimate administrator activity restoring a file
+notes:
+  quarantine_reason: 'upstream status: test'

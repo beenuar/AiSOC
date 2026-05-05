@@ -1,0 +1,50 @@
+id: mitre-car-car-2016-04-003
+name: User Activity from Stopping Windows Defensive Services
+description: 'Spyware and malware remain a serious problem and Microsoft developed
+  security services, Windows Defender and Windows Firewall, to combat this threat.
+  In the event Windows Defender or Windows Firewall is turned off, administrators
+  should correct the issue immediately to prevent the possibility of infection or
+  further infection and investigate to determine if caused by crash or user manipulation.
+
+
+  Stopping services events are Windows Event Code 7036.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'log_name == "System" AND
+
+      event_code == "7036"
+
+      param1 in ["Windows Defender", "Windows Firewall"] AND
+
+      param2 == "stopped"
+
+      '
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WinServer channel="System" event_id=7036 param1 in ["Windows Defender",
+      "Windows Firewall"] param2="stopped"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2016-04-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2016-04-003.yaml
+notes:
+  car_status: needs_implementation

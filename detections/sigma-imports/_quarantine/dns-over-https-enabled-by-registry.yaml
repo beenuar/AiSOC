@@ -1,0 +1,49 @@
+id: sigmahq-sigma-04b45a8a-d11d-49e4-9acc-4a1b524407a5
+name: DNS-over-HTTPS Enabled by Registry
+description: 'Detects when a user enables DNS-over-HTTPS.
+
+  This can be used to hide internet activity or be used to hide the process of exfiltrating
+  data.
+
+  With this enabled organization will lose visibility into data such as query type,
+  response and originating IP that are used to determine bad actors.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1140
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.tenforums.com/tutorials/151318-how-enable-disable-dns-over-https-doh-microsoft-edge.html
+- https://github.com/elastic/detection-rules/issues/1371
+- https://chromeenterprise.google/policies/?policy=DnsOverHttpsMode
+- https://admx.help/HKLM/Software/Policies/Mozilla/Firefox/DNSOverHTTPS
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection_edge:
+    TargetObject|endswith: \SOFTWARE\Policies\Microsoft\Edge\BuiltInDnsClientEnabled
+    Details: DWORD (0x00000001)
+  selection_chrome:
+    TargetObject|endswith: \SOFTWARE\Google\Chrome\DnsOverHttpsMode
+    Details: secure
+  selection_firefox:
+    TargetObject|endswith: \SOFTWARE\Policies\Mozilla\Firefox\DNSOverHTTPS\Enabled
+    Details: DWORD (0x00000001)
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 04b45a8a-d11d-49e4-9acc-4a1b524407a5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_dns_over_https_enabled.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

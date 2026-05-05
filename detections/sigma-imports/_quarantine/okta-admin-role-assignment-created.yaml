@@ -1,0 +1,33 @@
+id: sigmahq-sigma-139bdd4b-9cd7-49ba-a2f4-744d0a8f5d8c
+name: Okta Admin Role Assignment Created
+description: Detects when a new admin role assignment is created. Which could be a
+  sign of privilege escalation or persistence
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: iam.resourceset.bindings.add
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 139bdd4b-9cd7-49ba-a2f4-744d0a8f5d8c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_admin_role_assignment_created.yml
+falsepositives:
+- Legitimate creation of a new admin role assignment
+notes:
+  quarantine_reason: 'upstream status: test'

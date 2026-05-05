@@ -1,0 +1,33 @@
+id: sigmahq-sigma-7be5fb68-f9ef-476d-8b51-0256ebece19e
+name: Suspicious Execution of Hostname
+description: Use of hostname to get information
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1082/T1082.md#atomic-test-6---hostname-discovery-windows
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/hostname
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \HOSTNAME.EXE
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7be5fb68-f9ef-476d-8b51-0256ebece19e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hostname_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

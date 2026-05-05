@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-malicious-behaviour-on-user-login-microsoft-windows-c0d0s0-group-behavior
+name: malicious_behaviour_on_user_login_microsoft_windows__c0d0s0_group_behavior
+description: malicious_behaviour_on_user_login_microsoft_windows__c0d0s0_group_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule malicious_behaviour_on_user_login_microsoft_windows__c0d0s0_group_behavior\
+    \ {\n meta:\n    author = \"Ariel Millahuel\"\n    description = \"Detects malicious\
+    \ registry values and unusual AppData folder modification related also to c0d0s0\
+    \ group.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/L7ZaPMOEyDMa\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/11/21\"\n    product = \"windows\"\n    category\
+    \ = \"registry_event\"\n    mitre = \"persistence, privilege_escalation, t1112,\
+    \ t1547, t1547.001\"\n\n  events:\n($selection1.metadata.event_type = \"SetValue\"\
+    \ and (re.regex($selection1.target.registry.registry_key, `.*\\\\CurrentVersion\\\
+    \\Run\\\\Windows Debug Tools.*`) or (re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\CurrentVersion\\\\SvcHost\\\\netsvcs.*`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\Dncp\\\\Parameters\\\\ServiceDll.*`))))\n\n  condition:\n    $selection1\n\
+    }"
+  chronicle_rule_name: malicious_behaviour_on_user_login_microsoft_windows__c0d0s0_group_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: malicious_behaviour_on_user_login_microsoft_windows__c0d0s0_group_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/file_event/malicious_behaviour_on_user_login__microsoft_windows___c0d0s0_group_behavior_part_1.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,51 @@
+id: splunk-security-content-a3148fad-3734-4b7f-9a71-62f08d39fab1
+name: Windows Office Product Spawned MSDT
+description: The following analytic detects a Microsoft Office product spawning the
+  Windows msdt.exe process. This detection leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on process creation events where Office applications
+  are the parent process. This activity is significant as it may indicate an attempt
+  to exploit protocol handlers to bypass security controls, even if macros are disabled.
+  If confirmed malicious, this behavior could allow an attacker to execute arbitrary
+  code, potentially leading to system compromise, data exfiltration, or further lateral
+  movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://isc.sans.edu/diary/rss/28694
+- https://doublepulsar.com/follina-a-microsoft-office-code-execution-vulnerability-1a47fce5629e
+- https://twitter.com/nao_sec/status/1530196847679401984?s=20&t=ZiXYI4dQuA-0_dzQzSUb3A
+- https://app.any.run/tasks/713f05d2-fe78-4b9d-a744-f7c133e3fafb/
+- https://www.virustotal.com/gui/file/4a24048f81afbe9fb62e7a6a49adbd1faf41f266b5f9feecdceb567aec096784/detection
+- https://strontic.github.io/xcyclopedia/library/msdt.exe-152D4C9F63EFB332CCB134C6953C0104.html
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/trojanized-onenote-document-leads-to-formbook-malware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_office_products_parent`\
+    \ Processes.process_name=msdt.exe\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_office_product_spawned_msdt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a3148fad-3734-4b7f-9a71-62f08d39fab1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_office_product_spawned_msdt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

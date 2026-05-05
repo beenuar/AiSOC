@@ -1,0 +1,41 @@
+id: sigmahq-sigma-692f0bec-83ba-4d04-af7e-e884a96059b6
+name: Potential WMI Lateral Movement WmiPrvSE Spawned PowerShell
+description: Detects Powershell as a child of the WmiPrvSE process. Which could be
+  a sign of lateral movement via WMI.
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1047
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://any.run/report/68bc255f9b0db6a0d30a8f2dadfbee3256acfe12497bf93943bc1eab0735e45e/a2385d6f-34f7-403c-90d3-b1f9d2a90a5e
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \WmiPrvSE.exe
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 692f0bec-83ba-4d04-af7e-e884a96059b6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wmiprvse_spawns_powershell.yml
+falsepositives:
+- AppvClient
+- CCM
+- WinRM

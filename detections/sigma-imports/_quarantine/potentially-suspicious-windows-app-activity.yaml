@@ -1,0 +1,60 @@
+id: sigmahq-sigma-f91ed517-a6ba-471d-9910-b3b4a398c0f3
+name: Potentially Suspicious Windows App Activity
+description: Detects potentially suspicious child process of applications launched
+  from inside the WindowsApps directory. This could be a sign of a rogue ".appx" package
+  installation/execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2021/11/11/bazarloader-call-me-back-attack-abuses-windows-10-apps-mechanism/
+- https://www.sentinelone.com/labs/inside-malicious-windows-apps-for-malware-deployment/
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_parent:
+    ParentImage|contains: C:\Program Files\WindowsApps\
+  selection_susp_img:
+    Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \powershell_ise.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  selection_susp_cli:
+    CommandLine|contains:
+    - cmd /c
+    - Invoke-
+    - Base64
+  filter_optional_terminal:
+    ParentImage|contains: :\Program Files\WindowsApps\Microsoft.WindowsTerminal
+    ParentImage|endswith: \WindowsTerminal.exe
+    Image|endswith:
+    - \powershell.exe
+    - \cmd.exe
+    - \pwsh.exe
+  filter_optional_sysinternals:
+    ParentImage|startswith: C:\Program Files\WindowsApps\Microsoft.SysinternalsSuite
+    Image|endswith: \cmd.exe
+  condition: selection_parent and 1 of selection_susp_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f91ed517-a6ba-471d-9910-b3b4a398c0f3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_susp_appx_execution.yml
+falsepositives:
+- Legitimate packages that make use of external binaries such as Windows Terminal
+notes:
+  quarantine_reason: 'upstream status: test'

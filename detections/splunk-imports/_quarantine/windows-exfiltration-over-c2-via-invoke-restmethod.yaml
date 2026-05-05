@@ -1,0 +1,44 @@
+id: splunk-security-content-06ade821-f6fa-40d0-80af-15bc1d45b3ba
+name: Windows Exfiltration Over C2 Via Invoke RestMethod
+description: The following analytic detects potential data exfiltration using PowerShell's
+  Invoke-RestMethod. It leverages PowerShell Script Block Logging to identify scripts
+  that attempt to upload files via HTTP POST requests. This activity is significant
+  as it may indicate an attacker is exfiltrating sensitive data, such as desktop screenshots
+  or files, to an external command and control (C2) server. If confirmed malicious,
+  this could lead to data breaches, loss of sensitive information, and further compromise
+  of the affected systems. Immediate investigation is recommended to determine the
+  intent and scope of the activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_CERT_UA/status/1620781684257091584
+- https://cert.gov.ua/article/3761104
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Invoke-RestMethod\
+    \ *\" AND ScriptBlockText = \"* -Uri *\" AND ScriptBlockText = \"* -Method *\"\
+    \ AND ScriptBlockText = \"* Post *\" AND ScriptBlockText = \"* -InFile *\"\n \
+    \ | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_exfiltration_over_c2_via_invoke_restmethod_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 06ade821-f6fa-40d0-80af-15bc1d45b3ba
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_exfiltration_over_c2_via_invoke_restmethod.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

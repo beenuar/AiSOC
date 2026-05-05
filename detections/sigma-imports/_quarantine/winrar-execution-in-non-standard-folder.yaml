@@ -1,0 +1,46 @@
+id: sigmahq-sigma-4ede543c-e098-43d9-a28f-dd784a13132f
+name: WinRAR Execution in Non-Standard Folder
+description: Detects a suspicious WinRAR execution in a folder which is not the default
+  installation folder
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1560.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/cyb3rops/status/1460978167628406785
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image|endswith:
+    - \rar.exe
+    - \winrar.exe
+  - Description:
+    - Command line RAR
+    - WinRAR
+  filter_main_unrar:
+    Image|endswith: \UnRAR.exe
+  filter_main_path:
+    Image|contains:
+    - :\Program Files (x86)\WinRAR\
+    - :\Program Files\WinRAR\
+  filter_optional_temp:
+    Image|contains: :\Windows\Temp\
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4ede543c-e098-43d9-a28f-dd784a13132f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrar_uncommon_folder_execution.yml
+falsepositives:
+- Legitimate use of WinRAR in a folder of a software that bundles WinRAR
+notes:
+  quarantine_reason: 'upstream status: test'

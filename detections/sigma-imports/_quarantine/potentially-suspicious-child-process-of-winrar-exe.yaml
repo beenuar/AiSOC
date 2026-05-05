@@ -1,0 +1,52 @@
+id: sigmahq-sigma-146aace8-9bd6-42ba-be7a-0070d8027b76
+name: Potentially Suspicious Child Process Of WinRAR.EXE
+description: Detects potentially suspicious child processes of WinRAR.exe.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  categories:
+  - endpoint
+references:
+- https://www.group-ib.com/blog/cve-2023-38831-winrar-zero-day/
+- https://github.com/knight0x07/WinRAR-Code-Execution-Vulnerability-CVE-2023-38831/blob/26ab6c40b6d2c09bb4fc60feaa4a3a90cfd20c23/Part-1-Overview.md
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \WinRAR.exe
+  selection_binaries:
+  - Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \wscript.exe
+  - OriginalFileName:
+    - Cmd.Exe
+    - cscript.exe
+    - mshta.exe
+    - PowerShell.EXE
+    - pwsh.dll
+    - regsvr32.exe
+    - RUNDLL32.EXE
+    - wscript.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 146aace8-9bd6-42ba-be7a-0070d8027b76
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_winrar_susp_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

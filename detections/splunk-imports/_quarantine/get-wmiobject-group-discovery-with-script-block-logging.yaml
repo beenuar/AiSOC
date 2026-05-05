@@ -1,0 +1,45 @@
+id: splunk-security-content-69df7f7c-155d-11ec-a055-acde48001122
+name: Get WMIObject Group Discovery with Script Block Logging
+description: The following analytic detects the execution of the `Get-WMIObject Win32_Group`
+  command using PowerShell Script Block Logging (EventCode=4104). This method captures
+  the full command sent to PowerShell, allowing for detailed analysis. Identifying
+  group information on an endpoint is not inherently malicious but can be suspicious
+  based on context such as time, endpoint, and user. This activity is significant
+  as it may indicate reconnaissance efforts by an attacker. If confirmed malicious,
+  it could lead to further enumeration and potential lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/powershell-detections-threat-research-release-august-2021.html
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1069.001/T1069.001.md
+- https://help.splunk.com/en/security-offerings/splunk-user-behavior-analytics/get-data-in/5.4.1/add-other-data-to-splunk-uba/configure-powershell-logging-to-see-powershell-anomalies-in-splunk-uba.
+- https://blog.palantir.com/tampering-with-windows-event-tracing-background-offense-and-defense-4be7ac62ac63
+- https://static1.squarespace.com/static/552092d5e4b0661088167e5c/t/59c1814829f18782e24f1fe2/1505853768977/Windows+PowerShell+Logging+Cheat+Sheet+ver+Sept+2017+v2.1.pdf
+- https://www.crowdstrike.com/blog/investigating-powershell-command-and-script-logging/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Get-WMIObject*\" AND\
+    \ ScriptBlockText = \"*Win32_Group*\"\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `get_wmiobject_group_discovery_with_script_block_logging_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 69df7f7c-155d-11ec-a055-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/get_wmiobject_group_discovery_with_script_block_logging.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

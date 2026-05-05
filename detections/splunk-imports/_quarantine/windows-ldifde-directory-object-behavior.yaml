@@ -1,0 +1,49 @@
+id: splunk-security-content-35cd29ca-f08c-4489-8815-f715c45460d3
+name: Windows Ldifde Directory Object Behavior
+description: The following analytic identifies the use of Ldifde.exe, a command-line
+  utility for creating, modifying, or deleting LDAP directory objects. This detection
+  leverages data from Endpoint Detection and Response (EDR) agents, focusing on process
+  execution and command-line arguments. Monitoring Ldifde.exe is significant because
+  it can be used by attackers to manipulate directory objects, potentially leading
+  to unauthorized changes or data exfiltration. If confirmed malicious, this activity
+  could allow an attacker to gain control over directory services, escalate privileges,
+  or access sensitive information within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Ldifde/
+- https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF
+- https://twitter.com/0gtweet/status/1564968845726580736?s=20
+- https://strontic.github.io/xcyclopedia/library/ldifde.exe-45D28FB47E9B6ACC5DCA9FDA3E790210.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=ldifde.exe\
+    \ Processes.process IN (\"*-i *\", \"*-f *\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_ldifde_directory_object_behavior_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 35cd29ca-f08c-4489-8815-f715c45460d3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ldifde_directory_object_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

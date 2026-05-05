@@ -1,0 +1,40 @@
+id: sigmahq-sigma-e8d34729-86a4-4140-adfd-0a29c2106307
+name: HackTool - CoercedPotato Execution
+description: Detects the use of CoercedPotato, a tool for privilege escalation
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://github.com/hackvens/CoercedPotato
+- https://blog.hackvens.fr/articles/CoercedPotato.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_loader_img:
+    Image|endswith: \CoercedPotato.exe
+  selection_params:
+    CommandLine|contains: ' --exploitId '
+  selection_loader_imphash:
+    Hashes|contains:
+    - IMPHASH=A75D7669DB6B2E107A44C4057FF7F7D6
+    - IMPHASH=F91624350E2C678C5DCBE5E1F24E22C9
+    - IMPHASH=14C81850A079A87E83D50CA41C709A15
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e8d34729-86a4-4140-adfd-0a29c2106307
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_coercedpotato.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

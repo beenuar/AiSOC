@@ -1,0 +1,43 @@
+id: sigmahq-sigma-7d416556-6502-45b2-9bad-9d2f05f38997
+name: Powershell Sensitive File Discovery
+description: Detect adversaries enumerate sensitive files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://twitter.com/malmoeb/status/1570814999370801158
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_action:
+    ScriptBlockText|contains:
+    - ls
+    - get-childitem
+    - gci
+  selection_recurse:
+    ScriptBlockText|contains: -recurse
+  selection_file:
+    ScriptBlockText|contains:
+    - .pass
+    - .kdbx
+    - .kdb
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7d416556-6502-45b2-9bad-9d2f05f38997
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_sensitive_file_discovery.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

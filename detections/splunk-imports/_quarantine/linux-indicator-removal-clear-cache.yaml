@@ -1,0 +1,46 @@
+id: splunk-security-content-e0940505-0b73-4719-84e6-cb94c44a5245
+name: Linux Indicator Removal Clear Cache
+description: The following analytic detects processes that clear or free page cache
+  on a Linux system. It leverages Endpoint Detection and Response (EDR) data, focusing
+  on specific command-line executions involving the kernel system request `drop_caches`.
+  This activity is significant as it may indicate an attempt to delete forensic evidence
+  or the presence of wiper malware like Awfulshred. If confirmed malicious, this behavior
+  could allow an attacker to cover their tracks, making it difficult to investigate
+  other malicious activities or system compromises.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/overview-of-the-cyber-weapons-used-in-the-ukraine-russia-war/
+- https://cert.gov.ua/article/3718487
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ IN (\"dash\", \"sudo\", \"bash\")\n    AND\n    Processes.process  IN(\"* echo\
+    \ 3 &gt; *\", \"* echo 2 &gt; *\",\"* echo 1 &gt; *\")\n    AND\n    Processes.process\
+    \ = \"*/proc/sys/vm/drop_caches\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `linux_indicator_removal_clear_cache_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e0940505-0b73-4719-84e6-cb94c44a5245
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_indicator_removal_clear_cache.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,58 @@
+id: splunk-security-content-08d67349-0808-4f55-b431-1037269fa517
+name: Windows PowerShell Process Implementing Manual Base64 Decoder
+description: 'The following analytic identifies Windows PowerShell processes that
+  implement a manual Base64 decoder.
+
+  Threat actors often use Base64 encoding to obfuscate malicious payloads or commands
+  within PowerShell scripts.
+
+  By manually decoding Base64 strings, attackers can evade detection mechanisms that
+  look for standard decoding functions like using the "-enc" flag or the "FromBase64String"
+  function.
+
+  This detection focuses on PowerShell processes that exhibit characteristics of manual
+  Base64 decoding, such as the presence of specific string manipulation methods and
+  bitwise operations.
+
+  Security teams should investigate any instances of such activity, especially if
+  found in conjunction with other suspicious behaviors or on systems that should not
+  be using PowerShell for such tasks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027.010
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://www.virustotal.com/gui/file/4b3ab4d9f2332da6b6cd8d9d0f4910a5eb85ac8c969108acb3ad49631812f998/behavior
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\n  from datamodel=Endpoint.Processes where\n\
+    \n  `process_powershell`\n  Processes.process = \"*ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/*\"\
+    \n  Processes.process = \"*.Substring(*\"\n  Processes.process = \"*.GetString(*\"\
+    \n  Processes.process = \"*.IndexOf(*\"\n  Processes.process IN (\"*-shl*\", *-shr*,\
+    \ \"*-bxor*\", \"*-bor*\", \"*-band*\")\n\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process Processes.parent_process_exec\n\
+    \   Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash Processes.process_id\n   Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path Processes.user Processes.user_id\n\
+    \   Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_powershell_process_implementing_manual_base64_decoder_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 08d67349-0808-4f55-b431-1037269fa517
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_process_implementing_manual_base64_decoder.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

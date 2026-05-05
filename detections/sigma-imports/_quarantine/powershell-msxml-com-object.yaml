@@ -1,0 +1,45 @@
+id: sigmahq-sigma-78aa1347-1517-4454-9982-b338d6df8343
+name: Powershell MsXml COM Object
+description: 'Adversaries may abuse PowerShell commands and scripts for execution.
+
+  PowerShell is a powerful interactive command-line interface and scripting environment
+  included in the Windows operating system. (Citation: TechNet PowerShell)
+
+  Adversaries can use PowerShell to perform a number of actions, including discovery
+  of information and execution of code'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1059.001/T1059.001.md#atomic-test-7---powershell-msxml-com-object---with-prompt
+- https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms766431(v=vs.85)
+- https://www.trendmicro.com/en_id/research/22/e/uncovering-a-kingminer-botnet-attack-using-trend-micro-managed-x.html
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - New-Object
+    - -ComObject
+    - MsXml2.
+    - XmlHttp
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 78aa1347-1517-4454-9982-b338d6df8343
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_msxml_com.yml
+falsepositives:
+- Legitimate administrative script
+notes:
+  quarantine_reason: 'upstream status: test'

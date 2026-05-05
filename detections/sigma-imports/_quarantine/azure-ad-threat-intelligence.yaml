@@ -1,0 +1,36 @@
+id: sigmahq-sigma-a2cb56ff-4f46-437a-a0fa-ffa4d1303cba
+name: Azure AD Threat Intelligence
+description: Indicates user activity that is unusual for the user or consistent with
+  known attack patterns.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#azure-ad-threat-intelligence-sign-in
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#azure-ad-threat-intelligence-user
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: investigationsThreatIntelligence
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a2cb56ff-4f46-437a-a0fa-ffa4d1303cba
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_threat_intel.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins from the user.
+notes:
+  quarantine_reason: 'upstream status: test'

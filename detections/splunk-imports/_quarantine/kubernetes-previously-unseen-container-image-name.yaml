@@ -1,0 +1,44 @@
+id: splunk-security-content-fea515a4-b1d8-4cd6-80d6-e0d71397b891
+name: Kubernetes Previously Unseen Container Image Name
+description: The following analytic identifies the creation of containerized workloads
+  using previously unseen images in a Kubernetes cluster. It leverages process metrics
+  from an OTEL collector and Kubernetes cluster receiver, pulled from Splunk Observability
+  Cloud. The detection compares container image names seen in the last hour with those
+  from the previous 30 days. This activity is significant as unfamiliar container
+  images may introduce vulnerabilities, malware, or misconfigurations, posing threats
+  to the cluster's integrity. If confirmed malicious, compromised images can lead
+  to data breaches, service disruptions, unauthorized access, and potential lateral
+  movement within the cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| mstats  count(k8s.container.ready) as k8s.container.ready_count where\
+    \ `kubernetes_metrics` AND earliest=-24h by host.name k8s.cluster.name k8s.node.name\
+    \ container.image.name\n| eval current=\"True\"\n| append [mstats  count(k8s.container.ready)\
+    \ as k8s.container.ready_count where `kubernetes_metrics` AND earliest=-30d latest=-1h\
+    \  by host.name k8s.cluster.name k8s.node.name container.image.name\n| eval current=\"\
+    false\" ]\n| stats values(current) as current\n  BY host.name k8s.cluster.name\
+    \ k8s.node.name\n     container.image.name\n| search current=\"true\" AND current!=\"\
+    false\"\n| rename host.name as host\n| `kubernetes_previously_unseen_container_image_name_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fea515a4-b1d8-4cd6-80d6-e0d71397b891
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_previously_unseen_container_image_name.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-46dd5308-4572-4d12-aa43-8938f0184d4f
+name: Bypass UAC Using DelegateExecute
+description: Bypasses User Account Control using a fileless method
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-iexecutecommand
+- https://devblogs.microsoft.com/oldnewthing/20100312-01/?p=14623
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1548.002/T1548.002.md#atomic-test-7---bypass-uac-using-sdclt-delegateexecute
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \open\command\DelegateExecute
+    Details: (Empty)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 46dd5308-4572-4d12-aa43-8938f0184d4f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_bypass_uac_using_delegateexecute.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

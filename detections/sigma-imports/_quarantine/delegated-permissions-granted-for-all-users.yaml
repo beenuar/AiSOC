@@ -1,0 +1,33 @@
+id: sigmahq-sigma-a6355fbe-f36f-45d8-8efc-ab42465cbc52
+name: Delegated Permissions Granted For All Users
+description: Detects when highly privileged delegated permissions are granted on behalf
+  of all users
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-applications#application-granted-highly-privileged-permissions
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Add delegated permission grant
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a6355fbe-f36f-45d8-8efc-ab42465cbc52
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_app_delegated_permissions_all_users.yml
+falsepositives:
+- When the permission is legitimately needed for the app
+notes:
+  quarantine_reason: 'upstream status: test'

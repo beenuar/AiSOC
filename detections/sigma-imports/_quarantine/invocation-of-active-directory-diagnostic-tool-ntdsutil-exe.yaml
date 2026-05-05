@@ -1,0 +1,33 @@
+id: sigmahq-sigma-2afafd61-6aae-4df4-baed-139fa1f4c345
+name: Invocation of Active Directory Diagnostic Tool (ntdsutil.exe)
+description: Detects execution of ntdsutil.exe, which can be used for various attacks
+  against the NTDS database (NTDS.DIT)
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.003
+  categories:
+  - endpoint
+references:
+- https://jpcertcc.github.io/ToolAnalysisResultSheet/details/ntdsutil.htm
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \ntdsutil.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2afafd61-6aae-4df4-baed-139fa1f4c345
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_ntdsutil_usage.yml
+falsepositives:
+- NTDS maintenance
+notes:
+  quarantine_reason: 'upstream status: test'

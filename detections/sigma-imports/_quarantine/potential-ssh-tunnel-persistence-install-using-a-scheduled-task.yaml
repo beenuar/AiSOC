@@ -1,0 +1,46 @@
+id: sigmahq-sigma-2daa93a0-a5fb-41c5-8cd8-3c11294bfd1f
+name: Potential SSH Tunnel Persistence Install Using A Scheduled Task
+description: Detects the creation of new scheduled tasks via commandline, using Schtasks.exe.
+  This rule detects tasks creating that call OpenSSH, which may indicate the creation
+  of reverse SSH tunnel to the attacker's server.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2023/10/30/netsupport-intrusion-results-in-domain-compromise/
+- https://www.kroll.com/en/insights/publications/cyber/cactus-ransomware-prickly-new-variant-evades-detection
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \schtasks.exe
+  - OriginalFileName: schtasks.exe
+  selection_cli_sshd:
+    CommandLine|contains|all:
+    - ' /create '
+    - sshd.exe
+    - -f
+  selection_cli_ssh:
+    CommandLine|contains|all:
+    - ' /create '
+    - ssh.exe
+    - -i
+  condition: selection_img and 1 of selection_cli_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2daa93a0-a5fb-41c5-8cd8-3c11294bfd1f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_openssh_tunnelling.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-18b88d08-d73e-4f21-bc25-4b9892a4fdd0
+name: PST Export Alert Using eDiscovery Alert
+description: Alert on when a user has performed an eDiscovery search or exported a
+  PST file from the search. This PST file usually has sensitive information including
+  email body content
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/microsoft-365/compliance/alert-policies?view=o365-worldwide
+logsource:
+  service: threat_management
+  product: m365
+  definition: Requires the 'eDiscovery search or exported' alert to be enabled
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: eDiscovery search started or exported
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 18b88d08-d73e-4f21-bc25-4b9892a4fdd0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_pst_export_alert.yml
+falsepositives:
+- PST export can be done for legitimate purposes but due to the sensitive nature of
+  its content it must be monitored.
+notes:
+  quarantine_reason: 'upstream status: test'

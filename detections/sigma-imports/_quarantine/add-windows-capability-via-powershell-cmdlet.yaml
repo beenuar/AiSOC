@@ -1,0 +1,43 @@
+id: sigmahq-sigma-b36d01a3-ddaf-4804-be18-18a6247adfcd
+name: Add Windows Capability Via PowerShell Cmdlet
+description: Detects usage of the "Add-WindowsCapability" cmdlet to add Windows capabilities.
+  Notable capabilities could be "OpenSSH" and others.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse?tabs=powershell
+- https://www.virustotal.com/gui/file/af1c82237b6e5a3a7cdbad82cc498d298c67845d92971bada450023d1335e267/content
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_cmdlet:
+    CommandLine|contains: Add-WindowsCapability
+  selection_capa:
+    CommandLine|contains: OpenSSH.
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b36d01a3-ddaf-4804-be18-18a6247adfcd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_add_windows_capability.yml
+falsepositives:
+- Legitimate usage of the capabilities by administrators or users. Add additional
+  filters accordingly.
+notes:
+  quarantine_reason: 'upstream status: test'

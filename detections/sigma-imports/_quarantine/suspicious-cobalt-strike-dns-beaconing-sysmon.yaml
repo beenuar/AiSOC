@@ -1,0 +1,38 @@
+id: sigmahq-sigma-f356a9c4-effd-4608-bbf8-408afd5cd006
+name: Suspicious Cobalt Strike DNS Beaconing - Sysmon
+description: Detects a program that invoked suspicious DNS queries known from Cobalt
+  Strike beacons
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  categories:
+  - endpoint
+references:
+- https://www.icebrg.io/blog/footprints-of-fin7-tracking-actor-patterns
+- https://www.sekoia.io/en/hunting-and-detecting-cobalt-strike/
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection1:
+    QueryName|startswith:
+    - aaa.stage.
+    - post.1
+  selection2:
+    QueryName|contains: .stage.123456.
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f356a9c4-effd-4608-bbf8-408afd5cd006
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_mal_cobaltstrike.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

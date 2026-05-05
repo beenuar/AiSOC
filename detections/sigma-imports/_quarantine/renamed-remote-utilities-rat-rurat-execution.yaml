@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9ef27c24-4903-4192-881a-3adde7ff92a5
+name: Renamed Remote Utilities RAT (RURAT) Execution
+description: Detects execution of renamed Remote Utilities (RURAT) via Product PE
+  header field
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/misbehaving-rats/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Product: Remote Utilities
+  filter:
+    Image|endswith:
+    - \rutserv.exe
+    - \rfusclient.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9ef27c24-4903-4192-881a-3adde7ff92a5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_rurat.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

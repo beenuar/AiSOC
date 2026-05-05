@@ -1,0 +1,36 @@
+id: sigmahq-sigma-6e78b74f-c762-4800-82ad-f66787f10c8a
+name: Potential Rcdll.DLL Sideloading
+description: Detects potential DLL sideloading of rcdll.dll
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/23/c/iron-tiger-sysupdate-adds-linux-targeting.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \rcdll.dll
+  filter:
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\Microsoft Visual Studio\
+    - C:\Program Files (x86)\Windows Kits\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6e78b74f-c762-4800-82ad-f66787f10c8a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_rcdll.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,80 @@
+id: sigmahq-sigma-f2c64357-b1d2-41b7-849f-34d2682c0fad
+name: Suspicious Command Patterns In Scheduled Task Creation
+description: Detects scheduled task creation using "schtasks" that contain potentially
+  suspicious or uncommon commands
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/512c1352-6380-4436-b27d-bb62f0c020d6/
+- https://twitter.com/RedDrip7/status/1506480588827467785
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/devil-bait/NCSC-MAR-Devil-Bait.pdf
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_schtasks:
+    Image|endswith: \schtasks.exe
+    CommandLine|contains: '/Create '
+  selection_pattern_1:
+    CommandLine|contains:
+    - '/sc minute '
+    - '/ru system '
+  selection_pattern_2:
+    CommandLine|contains:
+    - cmd /c
+    - cmd /k
+    - cmd /r
+    - 'cmd.exe /c '
+    - 'cmd.exe /k '
+    - 'cmd.exe /r '
+  selection_uncommon:
+    CommandLine|contains:
+    - ' -decode '
+    - ' -enc '
+    - ' -w hidden '
+    - ' bypass '
+    - ' IEX'
+    - .DownloadData
+    - .DownloadFile
+    - .DownloadString
+    - '/c start /min '
+    - FromBase64String
+    - mshta http
+    - mshta.exe http
+  selection_anomaly_1:
+    CommandLine|contains:
+    - :\ProgramData\
+    - :\Temp\
+    - :\Tmp\
+    - :\Users\Public\
+    - :\Windows\Temp\
+    - \AppData\
+    - '%AppData%'
+    - '%Temp%'
+    - '%tmp%'
+  selection_anomaly_2:
+    CommandLine|contains:
+    - cscript
+    - curl
+    - wscript
+  condition: selection_schtasks and ( all of selection_pattern_* or selection_uncommon
+    or all of selection_anomaly_* )
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f2c64357-b1d2-41b7-849f-34d2682c0fad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_schtasks_susp_pattern.yml
+falsepositives:
+- Software installers that run from temporary folders and also install scheduled tasks
+  are expected to generate some false positives
+notes:
+  quarantine_reason: 'upstream status: test'

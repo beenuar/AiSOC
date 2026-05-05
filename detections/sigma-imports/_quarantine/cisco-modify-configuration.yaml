@@ -1,0 +1,42 @@
+id: sigmahq-sigma-671ffc77-50a7-464f-9e3d-9ea2b493b26b
+name: Cisco Modify Configuration
+description: Modifications to a config that will serve an adversary's impacts or persistence
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  - T1505
+  - T1565.002
+  - T1053
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - ip http server
+  - ip https server
+  - kron policy-list
+  - kron occurrence
+  - policy-list
+  - access-list
+  - ip access-group
+  - archive maximum
+  - ntp server
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 671ffc77-50a7-464f-9e3d-9ea2b493b26b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_modify_config.yml
+falsepositives:
+- Legitimate administrators may run these commands
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-4ac1f50b-3bd0-4968-902d-868b4647937e
+name: DPAPI Domain Backup Key Extraction
+description: Detects tools extracting LSA secret DPAPI domain backup key from Domain
+  Controllers
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.004
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/190620-DomainDPAPIBackupKeyExtraction/notebook.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4662
+    ObjectType: SecretObject
+    AccessMask: '0x2'
+    ObjectName|contains: BCKUPKEY
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4ac1f50b-3bd0-4968-902d-868b4647937e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_dpapi_domain_backupkey_extraction.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

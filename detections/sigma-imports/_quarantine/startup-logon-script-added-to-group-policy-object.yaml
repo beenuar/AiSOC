@@ -1,0 +1,53 @@
+id: sigmahq-sigma-123e4e6d-b123-48f8-b261-7214938acaf0
+name: Startup/Logon Script Added to Group Policy Object
+description: Detects the modification of Group Policy Objects (GPO) to add a startup/logon
+  script to users or computer objects.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  - T1547
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/startup-logon-script-added-to-group-policy-object.html
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Audit Detailed File
+    Share" must be configured for Success/Failure
+detection:
+  selection_eventid:
+    EventID:
+    - 5136
+    - 5145
+  selection_attributes_main:
+    AttributeLDAPDisplayName:
+    - gPCMachineExtensionNames
+    - gPCUserExtensionNames
+    AttributeValue|contains: 42B5FAAE-6536-11D2-AE5A-0000F87571E3
+  selection_attributes_optional:
+    AttributeValue|contains:
+    - 40B6664F-4972-11D1-A7CA-0000F87571E3
+    - 40B66650-4972-11D1-A7CA-0000F87571E3
+  selection_share:
+    ShareName|endswith: \SYSVOL
+    RelativeTargetName|endswith:
+    - \scripts.ini
+    - \psscripts.ini
+    AccessList|contains: '%%4417'
+  condition: selection_eventid and (all of selection_attributes_* or selection_share)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 123e4e6d-b123-48f8-b261-7214938acaf0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_group_policy_startup_script_added_to_gpo.yml
+falsepositives:
+- Legitimate execution by system administrators.
+notes:
+  quarantine_reason: 'upstream status: test'

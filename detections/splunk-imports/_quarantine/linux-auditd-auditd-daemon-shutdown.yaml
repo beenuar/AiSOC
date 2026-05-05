@@ -1,0 +1,43 @@
+id: splunk-security-content-6e2574b3-e24b-4321-ae3c-ba83a75bb714
+name: Linux Auditd Auditd Daemon Shutdown
+description: The following analytic detects the unexpected termination of the Linux
+  Audit daemon (auditd) by monitoring for log entries of type DAEMON_END. This event
+  signifies that the audit logging service has stopped, either due to a legitimate
+  system shutdown, manual administrative action, or potentially malicious tampering.
+  Since auditd is responsible for recording critical security events, its sudden stoppage
+  may indicate an attempt to disable security monitoring or evade detection during
+  an attack. This detection should be correlated with system logs to determine whether
+  the shutdown was part of routine maintenance or an anomaly. If confirmed as malicious,
+  this could lead to a compromised system where security events are no longer being
+  logged, allowing attackers to operate undetected. Therefore, monitoring and alerting
+  on auditd shutdown events is crucial for maintaining the integrity of system security
+  monitoring.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.012
+  categories:
+  - endpoint
+references:
+- https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/security_guide/sec-audit_record_types
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=DAEMON_END\n  | rename host as dest\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY type op res\n \
+    \      auid dest pid\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_auditd_daemon_shutdown_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6e2574b3-e24b-4321-ae3c-ba83a75bb714
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_auditd_daemon_shutdown.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-84c9e83c-599a-458a-a0cb-0ecce44e807a
+name: Ufw Force Stop Using Ufw-Init
+description: Detects attempts to force stop the ufw using ufw-init
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1686
+  categories:
+  - endpoint
+references:
+- https://blogs.blackberry.com/
+- https://twitter.com/Joseliyo_Jstnk/status/1620131033474822144
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection_init:
+    CommandLine|contains|all:
+    - -ufw-init
+    - force-stop
+  selection_ufw:
+    CommandLine|contains|all:
+    - ufw
+    - disable
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84c9e83c-599a-458a-a0cb-0ecce44e807a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_disable_ufw.yml
+falsepositives:
+- Network administrators
+notes:
+  quarantine_reason: 'upstream status: test'

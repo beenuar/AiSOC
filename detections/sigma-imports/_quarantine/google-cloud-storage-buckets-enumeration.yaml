@@ -1,0 +1,37 @@
+id: sigmahq-sigma-e2feb918-4e77-4608-9697-990a1aaf74c3
+name: Google Cloud Storage Buckets Enumeration
+description: Detects when storage bucket is enumerated in Google Cloud.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://cloud.google.com/storage/docs/json_api/v1/buckets
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name:
+    - storage.buckets.list
+    - storage.buckets.listChannels
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e2feb918-4e77-4608-9697-990a1aaf74c3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/audit/gcp_bucket_enumeration.yml
+falsepositives:
+- Storage Buckets being enumerated may be performed by a system administrator. Verify
+  whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Storage Buckets enumerated from unfamiliar users should be investigated. If known
+  behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

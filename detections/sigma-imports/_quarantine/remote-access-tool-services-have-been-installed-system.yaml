@@ -1,0 +1,59 @@
+id: sigmahq-sigma-1a31b18a-f00c-4061-9900-f735b96c99fc
+name: Remote Access Tool Services Have Been Installed - System
+description: Detects service installation of different remote access tools software.
+  These software are often abused by threat actors to perform
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/misbehaving-rats/
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID:
+    - 7045
+    - 7036
+    ServiceName|contains:
+    - AmmyyAdmin
+    - Atera
+    - BASupportExpressSrvcUpdater
+    - BASupportExpressStandaloneService
+    - chromoting
+    - GoToAssist
+    - GoToMyPC
+    - jumpcloud
+    - LMIGuardianSvc
+    - LogMeIn
+    - monblanking
+    - Parsec
+    - RManService
+    - RPCPerformanceService
+    - RPCService
+    - SplashtopRemoteService
+    - SSUService
+    - TeamViewer
+    - TightVNC
+    - vncserver
+    - Zoho
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a31b18a-f00c-4061-9900-f735b96c99fc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_service_install_remote_access_software.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

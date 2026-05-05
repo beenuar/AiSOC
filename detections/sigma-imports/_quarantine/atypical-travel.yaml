@@ -1,0 +1,36 @@
+id: sigmahq-sigma-1a41023f-1e70-4026-921a-4d9341a9038e
+name: Atypical Travel
+description: Identifies two sign-ins originating from geographically distant locations,
+  where at least one of the locations may also be atypical for the user, given past
+  behavior.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#atypical-travel
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-user-accounts#unusual-sign-ins
+logsource:
+  product: azure
+  service: riskdetection
+detection:
+  selection:
+    riskEventType: unlikelyTravel
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a41023f-1e70-4026-921a-4d9341a9038e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/identity_protection/azure_identity_protection_atypical_travel.yml
+falsepositives:
+- We recommend investigating the sessions flagged by this detection in the context
+  of other sign-ins from the user.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,34 @@
+id: sigmahq-sigma-243de76f-4725-4f2e-8225-a8a69b15ad61
+name: PowerShell Create Local User
+description: Detects creation of a local user via PowerShell
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1136.001/T1136.001.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains: New-LocalUser
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 243de76f-4725-4f2e-8225-a8a69b15ad61
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_create_local_user.yml
+falsepositives:
+- Legitimate user creation
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-d59d7842-9a21-4bc6-ba98-64bfe0091355
+name: Powershell DNSExfiltration
+description: DNSExfiltrator allows for transferring (exfiltrate) a file over a DNS
+  request covert channel
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1048
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1048/T1048.md#atomic-test-3---dnsexfiltration-doh
+- https://github.com/Arno0x/DNSExfiltrator
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_cmdlet:
+  - ScriptBlockText|contains: Invoke-DNSExfiltrator
+  - ScriptBlockText|contains|all:
+    - ' -i '
+    - ' -d '
+    - ' -p '
+    - ' -doh '
+    - ' -t '
+  condition: selection_cmdlet
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d59d7842-9a21-4bc6-ba98-64bfe0091355
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_invoke_dnsexfiltration.yml
+falsepositives:
+- Legitimate script
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,38 @@
+id: sigmahq-sigma-1a4bd6e3-4c6e-405d-a9a3-53a116e341d4
+name: USB Device Plugged
+description: Detects plugged/unplugged USB devices
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1200
+  categories:
+  - endpoint
+references:
+- https://df-stream.com/2014/01/the-windows-7-event-log-and-usb-device/
+- https://www.techrepublic.com/article/how-to-track-down-usb-flash-drive-usage-in-windows-10s-event-viewer/
+logsource:
+  product: windows
+  service: driver-framework
+  definition: Requires enabling and collection of the Microsoft-Windows-DriverFrameworks-UserMode/Operational
+    eventlog
+detection:
+  selection:
+    EventID:
+    - 2003
+    - 2100
+    - 2102
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a4bd6e3-4c6e-405d-a9a3-53a116e341d4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/driverframeworks/win_usb_device_plugged.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

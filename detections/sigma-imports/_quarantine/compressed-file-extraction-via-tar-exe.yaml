@@ -1,0 +1,40 @@
+id: sigmahq-sigma-bf361876-6620-407a-812f-bfe11e51e924
+name: Compressed File Extraction Via Tar.EXE
+description: 'Detects execution of "tar.exe" in order to extract compressed file.
+
+  Adversaries may abuse various utilities in order to decompress data to avoid detection.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1560
+  - T1560.001
+  categories:
+  - endpoint
+references:
+- https://unit42.paloaltonetworks.com/chromeloader-malware/
+- https://lolbas-project.github.io/lolbas/Binaries/Tar/
+- https://symantec-enterprise-blogs.security.com/blogs/threat-intelligence/cicada-apt10-japan-espionage
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_img:
+  - Image|endswith: \tar.exe
+  - OriginalFileName: bsdtar
+  selection_extract:
+    CommandLine|contains: -x
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bf361876-6620-407a-812f-bfe11e51e924
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_tar_extraction.yml
+falsepositives:
+- Likely
+notes:
+  quarantine_reason: 'upstream status: test'

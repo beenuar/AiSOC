@@ -1,0 +1,36 @@
+id: sigmahq-sigma-2975af79-28c4-4d2f-a951-9095f229df29
+name: Cobalt Strike DNS Beaconing
+description: Detects suspicious DNS queries known from Cobalt Strike beacons
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  categories:
+  - network
+references:
+- https://www.icebrg.io/blog/footprints-of-fin7-tracking-actor-patterns
+- https://www.sekoia.io/en/hunting-and-detecting-cobalt-strike/
+logsource:
+  category: dns
+detection:
+  selection1:
+    query|startswith:
+    - aaa.stage.
+    - post.1
+  selection2:
+    query|contains: .stage.123456.
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2975af79-28c4-4d2f-a951-9095f229df29
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/dns/net_dns_mal_cobaltstrike.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

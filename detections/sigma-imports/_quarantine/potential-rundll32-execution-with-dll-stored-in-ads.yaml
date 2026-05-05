@@ -1,0 +1,36 @@
+id: sigmahq-sigma-9248c7e1-2bf3-4661-a22c-600a8040b446
+name: Potential Rundll32 Execution With DLL Stored In ADS
+description: Detects execution of rundll32 where the DLL being called is stored in
+  an Alternate Data Stream (ADS).
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Rundll32
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  selection_cli:
+    CommandLine|re: '[Rr][Uu][Nn][Dd][Ll][Ll]32(?:\.[Ee][Xx][Ee])? \S+?\w:\S+?:'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9248c7e1-2bf3-4661-a22c-600a8040b446
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_ads_stored_dll_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

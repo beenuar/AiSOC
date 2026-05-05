@@ -1,0 +1,36 @@
+id: sigmahq-sigma-83844185-1c5b-45bc-bcf3-b5bf3084ca5b
+name: Suspicious Encoded Scripts in a WMI Consumer
+description: Detects suspicious encoded payloads in WMI Event Consumers
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1047
+  - T1546.003
+  categories:
+  - endpoint
+references:
+- https://github.com/RiccardoAncarani/LiquidSnake
+logsource:
+  product: windows
+  category: wmi_event
+detection:
+  selection_destination:
+    Destination|base64offset|contains:
+    - WriteProcessMemory
+    - This program cannot be run in DOS mode
+    - This program must be run under Win32
+  condition: selection_destination
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 83844185-1c5b-45bc-bcf3-b5bf3084ca5b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/wmi_event/sysmon_wmi_susp_encoded_scripts.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

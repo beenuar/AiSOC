@@ -1,0 +1,38 @@
+id: sigmahq-sigma-459f2f98-397b-4a4a-9f47-6a5ec2f1c69d
+name: Arbitrary File Download Via MSOHTMED.EXE
+description: Detects usage of "MSOHTMED" to download arbitrary files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://github.com/LOLBAS-Project/LOLBAS/pull/238/files
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \MSOHTMED.exe
+  - OriginalFileName: MsoHtmEd.exe
+  selection_cli:
+    CommandLine|contains:
+    - ftp://
+    - http://
+    - https://
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 459f2f98-397b-4a4a-9f47-6a5ec2f1c69d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_msohtmed_download.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

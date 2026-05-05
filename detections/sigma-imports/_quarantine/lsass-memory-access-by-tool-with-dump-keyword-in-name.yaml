@@ -1,0 +1,62 @@
+id: sigmahq-sigma-9bd012ee-0dff-44d7-84a0-aa698cfd87a3
+name: LSASS Memory Access by Tool With Dump Keyword In Name
+description: Detects LSASS process access requests from a source process with the
+  "dump" keyword in its image name.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_xpn_/status/1491557187168178176
+- https://www.ired.team/offensive-security/credential-access-and-credential-dumping/dump-credentials-from-lsass-process-without-mimikatz
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: \lsass.exe
+    SourceImage|contains: dump
+    GrantedAccess|endswith:
+    - '10'
+    - '30'
+    - '50'
+    - '70'
+    - '90'
+    - B0
+    - D0
+    - F0
+    - '18'
+    - '38'
+    - '58'
+    - '78'
+    - '98'
+    - B8
+    - D8
+    - F8
+    - 1A
+    - 3A
+    - 5A
+    - 7A
+    - 9A
+    - BA
+    - DA
+    - FA
+    - '0x14C2'
+    - FF
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9bd012ee-0dff-44d7-84a0-aa698cfd87a3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_lsass_dump_keyword_image.yml
+falsepositives:
+- Rare programs that contain the word dump in their name and access lsass
+notes:
+  quarantine_reason: 'upstream status: test'

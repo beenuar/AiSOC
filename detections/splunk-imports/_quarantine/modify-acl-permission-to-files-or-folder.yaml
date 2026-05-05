@@ -1,0 +1,48 @@
+id: splunk-security-content-7e8458cc-acca-11eb-9e3f-acde48001122
+name: Modify ACL permission To Files Or Folder
+description: The following analytic detects the modification of ACL permissions to
+  files or folders, making them accessible to everyone or to system account. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on processes like
+  "cacls.exe," "icacls.exe," and "xcacls.exe" with specific command-line arguments.
+  This activity is significant as it may indicate an adversary attempting to evade
+  ACLs or access protected files. If confirmed malicious, this could allow unauthorized
+  access to sensitive data, potentially leading to data breaches or further system
+  compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count\n  min(_time) as firstTime\n\
+    \  max(_time) as lastTime\n  values(Processes.process) as process\n  values(Processes.process_id)\
+    \ as process_id\nfrom datamodel=Endpoint.Processes where\n  Processes.process_name\
+    \ IN (\"icacls.exe\", \"cacls.exe\", \"xcacls.exe\")\n  Processes.process IN (\"\
+    */grant*\", \"*/g:*\", \"*/g *\")\n  Processes.process IN (\"* SYSTEM:*\", \"\
+    * S-1-1-0:*\")\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\nProcesses.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\nProcesses.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec\nProcesses.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\nProcesses.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `modify_acl_permission_to_files_or_folder_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7e8458cc-acca-11eb-9e3f-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/modify_acl_permission_to_files_or_folder.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

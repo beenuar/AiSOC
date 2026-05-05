@@ -1,0 +1,55 @@
+id: splunk-security-content-4a57877d-9c56-4a50-9ad2-620e2f0ad821
+name: MCP Sensitive System File Search
+description: This detection identifies MCP filesystem tool usage attempting to search
+  for files containing sensitive patterns such as passwords, credentials, API keys,
+  secrets, and configuration files. Adversaries and malicious insiders may abuse legitimate
+  MCP filesystem capabilities to conduct reconnaissance and discover sensitive data
+  stores for exfiltration or credential harvesting.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.001
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/8377
+- https://www.splunk.com/en_us/blog/security/securing-ai-agents-model-context-protocol.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`mcp_server`\n(method IN (\"read_file\", \"get_file_contents\", \"\
+    read\", \"search_files\", \"find_files\", \"grep\", \"search\", \"list_directory\"\
+    , \"read_directory\"))\n(params.path=\"*.ssh*\" OR params.path=\"*Administrator*\"\
+    \ OR params.path=\"*credentials*\" OR params.path=\"*password*\" OR params.path=\"\
+    *.env*\" OR params.path=\"*id_rsa*\" OR params.path=\"*.pem*\" OR params.path=\"\
+    *.ppk*\" OR params.path=\"*.key*\" OR params.path=\"*secrets*\" OR params.path=\"\
+    *.aws*\" OR params.path=\"*.config*\"\nOR params.pattern=\"*password*\" OR params.pattern=\"\
+    *key*\" OR params.pattern=\"*secret*\" OR params.pattern=\"*credential*\" OR params.pattern=\"\
+    *token*\" OR params.pattern=\"*auth*\" OR params.pattern=\"*api_key*\" OR params.pattern=\"\
+    *private_key*\")\n| eval dest=host\n| eval detection_type=case(\n    method IN\
+    \ (\"read_file\", \"get_file_contents\", \"read\"), \"PATH_ACCESS\",\n    method\
+    \ IN (\"search_files\", \"find_files\", \"grep\", \"search\"), \"PATTERN_SEARCH\"\
+    ,\n    method IN (\"list_directory\", \"read_directory\"), \"DIRECTORY_ENUM\"\
+    ,\n    1=1, \"UNKNOWN\")\n| eval target_path=coalesce('params.path', 'params.directory',\
+    \ 'params.file')\n| eval search_pattern=coalesce('params.pattern', 'params.query',\
+    \ 'params.search')\n| stats count min(_time) as firstTime max(_time) as lastTime\
+    \ values(detection_type) as detection_types values(target_path) as targeted_paths\
+    \ values(search_pattern) as search_patterns values(method) as methods_used by\
+    \ dest, source\n| eval time_span_seconds=lastTime-firstTime\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| table dest firstTime lastTime count source\
+    \ detection_types methods_used targeted_paths search_patterns time_span_seconds\n\
+    | `mcp_sensitive_system_file_search_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4a57877d-9c56-4a50-9ad2-620e2f0ad821
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/mcp_sensitive_system_file_search.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

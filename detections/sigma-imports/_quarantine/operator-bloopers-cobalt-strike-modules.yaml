@@ -1,0 +1,44 @@
+id: sigmahq-sigma-4f154fb6-27d1-4813-a759-78b93e0b9c48
+name: Operator Bloopers Cobalt Strike Modules
+description: Detects Cobalt Strike module/commands accidentally entered in CMD shell
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://hstechdocs.helpsystems.com/manuals/cobaltstrike/current/userguide/content/cobalt-4-5-user-guide.pdf
+- https://thedfirreport.com/2021/10/04/bazarloader-and-the-conti-leaks/
+- https://thedfirreport.com/2022/06/16/sans-ransomware-summit-2022-can-you-detect-this/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName: Cmd.Exe
+  - Image|endswith: \cmd.exe
+  selection_cli:
+    CommandLine|contains:
+    - Invoke-UserHunter
+    - Invoke-ShareFinder
+    - Invoke-Kerberoast
+    - Invoke-SMBAutoBrute
+    - Invoke-Nightmare
+    - zerologon
+    - av_query
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4f154fb6-27d1-4813-a759-78b93e0b9c48
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_cobaltstrike_bloopers_modules.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

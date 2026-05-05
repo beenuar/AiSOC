@@ -1,0 +1,37 @@
+id: sigmahq-sigma-25cb1ba1-8a19-4a23-a198-d252664c8cef
+name: AWS EFS Fileshare Modified or Deleted
+description: 'Detects when a EFS Fileshare is modified or deleted.
+
+  You can''t delete a file system that is in use.
+
+  If the file system has any mount targets, the adversary must first delete them,
+  so deletion of a mount will occur before deletion of a fileshare.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/efs/latest/ug/API_DeleteFileSystem.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: elasticfilesystem.amazonaws.com
+    eventName: DeleteFileSystem
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 25cb1ba1-8a19-4a23-a198-d252664c8cef
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_efs_fileshare_modified_or_deleted.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-4922a5dd-6743-4fc2-8e81-144374280997
+name: Flash Player Update from Suspicious Location
+description: Detects a flashplayer update from an unofficial location
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1189
+  - T1204.002
+  - T1036.005
+  categories:
+  - network
+references:
+- https://gist.github.com/roycewilliams/a723aaf8a6ac3ba4f817847610935cfb
+logsource:
+  category: proxy
+detection:
+  selection:
+  - c-uri|contains: /flash_install.php
+  - c-uri|endswith: /install_flash_player.exe
+  filter:
+    cs-host|endswith: .adobe.com
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4922a5dd-6743-4fc2-8e81-144374280997
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_susp_flash_download_loc.yml
+falsepositives:
+- Unknown flash download locations
+notes:
+  quarantine_reason: 'upstream status: test'

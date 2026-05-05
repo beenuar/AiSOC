@@ -1,0 +1,87 @@
+id: sigmahq-sigma-0250638a-2b28-4541-86fc-ea4c558fa0c6
+name: Suspicious Browser Child Process - MacOS
+description: Detects suspicious child processes spawned from browsers. This could
+  be a result of a potential web browser exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1189
+  - T1203
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://fr.slideshare.net/codeblue_jp/cb19-recent-apt-attack-on-crypto-exchange-employees-by-heungsoo-kang
+- https://github.com/elastic/detection-rules/blob/4312d8c9583be524578a14fe6295c3370b9a9307/rules/macos/execution_initial_access_suspicious_browser_childproc.toml
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    ParentImage|contains:
+    - com.apple.WebKit.WebContent
+    - firefox
+    - Google Chrome Helper
+    - Google Chrome
+    - Microsoft Edge
+    - Opera
+    - Safari
+    - Tor Browser
+    Image|endswith:
+    - /bash
+    - /curl
+    - /dash
+    - /ksh
+    - /osascript
+    - /perl
+    - /php
+    - /pwsh
+    - /python
+    - /sh
+    - /tcsh
+    - /wget
+    - /zsh
+  filter_main_generic:
+    CommandLine|contains: --defaults-torrc
+  filter_main_ms_autoupdate:
+    CommandLine|contains: /Library/Application Support/Microsoft/MAU*/Microsoft AutoUpdate.app/Contents/MacOS/msupdate
+  filter_main_chrome:
+    ParentImage|contains:
+    - Google Chrome Helper
+    - Google Chrome
+    CommandLine|contains:
+    - /Volumes/Google Chrome/Google Chrome.app/Contents/Frameworks/*/Resources/install.sh
+    - /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/*/Resources/keystone_promote_preflight.sh
+    - /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/*/Resources/keystone_promote_postflight.sh
+  filter_main_ms_edge:
+    ParentImage|contains: Microsoft Edge
+    CommandLine|contains:
+    - IOPlatformExpertDevice
+    - hw.model
+  filter_main_chromerecovery:
+    ParentImage|contains:
+    - Google Chrome Helper
+    - Google Chrome
+    CommandLine|contains|all:
+    - /Users/
+    - /Library/Application Support/Google/Chrome/recovery/
+    - /ChromeRecovery
+  filter_optional_null:
+    CommandLine: null
+  filter_optional_empty:
+    CommandLine: ''
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0250638a-2b28-4541-86fc-ea4c558fa0c6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_susp_browser_child_process.yml
+falsepositives:
+- Legitimate browser install, update and recovery scripts
+notes:
+  quarantine_reason: 'upstream status: test'

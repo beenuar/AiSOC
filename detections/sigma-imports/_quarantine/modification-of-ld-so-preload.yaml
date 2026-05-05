@@ -1,0 +1,35 @@
+id: sigmahq-sigma-4b3cb710-5e83-4715-8c45-8b2b5b3e5751
+name: Modification of ld.so.preload
+description: Identifies modification of ld.so.preload for shared object injection.
+  This technique is used by attackers to load arbitrary code into processes.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1574.006/T1574.006.md
+- https://eqllib.readthedocs.io/en/latest/analytics/fd9b987a-1101-4ed3-bda6-a70300eaf57e.html
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name: /etc/ld.so.preload
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4b3cb710-5e83-4715-8c45-8b2b5b3e5751
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_ld_so_preload_mod.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

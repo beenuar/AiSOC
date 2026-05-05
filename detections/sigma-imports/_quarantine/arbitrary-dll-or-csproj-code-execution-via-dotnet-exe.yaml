@@ -1,0 +1,52 @@
+id: sigmahq-sigma-d80d5c81-04ba-45b4-84e4-92eba40e0ad3
+name: Arbitrary DLL or Csproj Code Execution Via Dotnet.EXE
+description: Detects execution of arbitrary DLLs or unsigned code via a ".csproj"
+  files via Dotnet.EXE.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Dotnet/
+- https://twitter.com/_felamos/status/1204705548668555264
+- https://bohops.com/2019/08/19/dotnet-core-a-vector-for-awl-bypass-defense-evasion/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \dotnet.exe
+  - OriginalFileName: .NET Host
+  selection_cli:
+    CommandLine|endswith:
+    - .csproj
+    - .csproj"
+    - .dll
+    - .dll"
+    - .csproj'
+    - .dll'
+  filter_optional_notepadplus_plus:
+    ParentImage:
+    - C:\Program Files (x86)\Notepad++\notepad++.exe
+    - C:\Program Files\Notepad++\notepad++.exe
+    CommandLine|contains|all:
+    - C:\ProgramData\CSScriptNpp\
+    - '-cscs_path:'
+    - \cs-script\cscs.dll
+  condition: all of selection_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d80d5c81-04ba-45b4-84e4-92eba40e0ad3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dotnet_arbitrary_dll_csproj_execution.yml
+falsepositives:
+- Legitimate administrator usage
+notes:
+  quarantine_reason: 'upstream status: test'

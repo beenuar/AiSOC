@@ -1,0 +1,34 @@
+id: sigmahq-sigma-ec290c06-9b6b-4338-8b6b-095c0f284f10
+name: Suspicious Execution of Shutdown to Log Out
+description: Detects the rare use of the command line tool shutdown to logoff a user
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1529
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/9e5b12c4912c07562aec7500447b11fa3e17e254/atomics/T1529/T1529.md
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \shutdown.exe
+    CommandLine|contains: /l
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ec290c06-9b6b-4338-8b6b-095c0f284f10
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_shutdown_logoff.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

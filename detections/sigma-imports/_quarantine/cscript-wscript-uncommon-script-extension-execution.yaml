@@ -1,0 +1,52 @@
+id: sigmahq-sigma-99b7460d-c9f1-40d7-a316-1f36f61d52ee
+name: Cscript/Wscript Uncommon Script Extension Execution
+description: Detects Wscript/Cscript executing a file with an uncommon (i.e. non-script)
+  extension
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.005
+  - T1059.007
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - OriginalFileName:
+    - wscript.exe
+    - cscript.exe
+  - Image|endswith:
+    - \wscript.exe
+    - \cscript.exe
+  selection_extension:
+    CommandLine|contains:
+    - .csv
+    - .dat
+    - .doc
+    - .gif
+    - .jpeg
+    - .jpg
+    - .png
+    - .ppt
+    - .txt
+    - .xls
+    - .xml
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 99b7460d-c9f1-40d7-a316-1f36f61d52ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_wscript_cscript_uncommon_extension_exec.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

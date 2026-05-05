@@ -1,0 +1,69 @@
+id: mitre-car-car-2014-04-003
+name: Powershell Execution
+description: '[PowerShell](https://attack.mitre.org/techniques/T1059/001/) is a scripting
+  environment included with Windows that is used by both attackers and administrators.
+  Execution of PowerShell scripts in most Windows versions is opaque and not typically
+  secured by antivirus which makes using PowerShell an easy way to circumvent security
+  measures. This analytic detects execution of PowerShell scripts.
+
+
+  Powershell can be used to hide monitored command line execution such as:
+
+  -   `net use`
+
+  -   `sc start`'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      powershell = filter process where (exe == "powershell.exe" AND parent_exe !=
+      "explorer.exe" )
+
+      output powershell
+
+      '
+  - name: ''
+    type: Splunk
+    code: 'index=__your_sysmon_index__ EventCode=1 Image="C:\\Windows\\*\\powershell.exe"
+      ParentImage!="C:\\Windows\\explorer.exe"|stats values(CommandLine) as "Command
+      Lines" values(ParentImage) as "Parent Images" by ComputerName
+
+      '
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (process_name == \"powershell.exe\"\
+      \ and parent_process_name != \"explorer.exe\")\n"
+  - name: ''
+    type: DNIF
+    code: '_fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $App=powershell.exe
+      NOT $ParentProcess=regex(.*explorer.exe.*)i limit 30
+
+      '
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 image="*\powershell.exe" -parent_image="C:\Windows\explorer.exe"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-04-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-04-003.yaml
+notes:
+  car_status: needs_implementation

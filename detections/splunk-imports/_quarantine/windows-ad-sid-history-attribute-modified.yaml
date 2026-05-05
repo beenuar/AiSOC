@@ -1,0 +1,42 @@
+id: splunk-security-content-1155e47d-307f-4247-beab-71071e3a458c
+name: Windows AD SID History Attribute Modified
+description: The following analytic detects modifications to the SID History attribute
+  in Active Directory by leveraging event code 5136. This detection uses logs from
+  the `wineventlog_security` data source to identify changes to the sIDHistory attribute.
+  Monitoring this activity is crucial as the SID History attribute can be exploited
+  by adversaries to inherit permissions from other accounts, potentially granting
+  unauthorized access. If confirmed malicious, this activity could allow attackers
+  to maintain persistent access and escalate privileges within the domain, posing
+  a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.005
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=1772
+- https://learn.microsoft.com/en-us/windows/win32/adschema/a-sidhistory?redirectedfrom=MSDN
+- https://learn.microsoft.com/en-us/defender-for-identity/security-assessment-unsecure-sid-history-attribute
+- https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/sid-history-injection
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 AttributeLDAPDisplayName=sIDHistory\
+    \ OperationType=\"%%14674\"\n  | stats values(ObjectDN) as ObjectDN\n    BY _time,\
+    \ Computer, SubjectUserName,\n       AttributeValue\n  | rename Computer as dest\n\
+    \  | `windows_ad_sid_history_attribute_modified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1155e47d-307f-4247-beab-71071e3a458c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_sid_history_attribute_modified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

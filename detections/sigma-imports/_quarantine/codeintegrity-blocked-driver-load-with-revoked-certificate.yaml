@@ -1,0 +1,34 @@
+id: sigmahq-sigma-9b72b82d-f1c5-4632-b589-187159bc6ec1
+name: CodeIntegrity - Blocked Driver Load With Revoked Certificate
+description: Detects blocked load attempts of revoked drivers
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations
+- Internal Research
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3023
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9b72b82d-f1c5-4632-b589-187159bc6ec1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/code_integrity/win_codeintegrity_revoked_driver_blocked.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

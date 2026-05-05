@@ -1,0 +1,41 @@
+id: sigmahq-sigma-65f77b1e-8e79-45bf-bb67-5988a8ce45a5
+name: SharpHound Recon Account Discovery
+description: Detects remote RPC calls useb by SharpHound to map remote connections
+  and local group membership.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1087
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wkst/55118c55-2122-4ef9-8664-0c1ff9e168f3
+- https://github.com/jsecurity101/MSRPC-to-ATTACK/blob/ddd4608fe8684fcf2fcf9b48c5f0b3c28097f8a3/documents/MS-WKST.md
+- https://github.com/zeronetworks/rpcfirewall
+- https://zeronetworks.com/blog/stopping-lateral-movement-via-the-rpc-firewall/
+logsource:
+  product: rpc_firewall
+  category: application
+  definition: 'Requirements: install and apply the RPC Firewall to all processes with
+    "audit:true action:block uuid:6bffd098-a112-3610-9833-46c3f87e345a opnum:2'
+detection:
+  selection:
+    EventLog: RPCFW
+    EventID: 3
+    InterfaceUuid: 6bffd098-a112-3610-9833-46c3f87e345a
+    OpNum: 2
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 65f77b1e-8e79-45bf-bb67-5988a8ce45a5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/rpc_firewall/rpc_firewall_sharphound_recon_account.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

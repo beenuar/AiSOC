@@ -1,0 +1,35 @@
+id: sigmahq-sigma-82343930-652f-43f5-ab70-2ee9fdd6d5e9
+name: Potential ShellDispatch.DLL Functionality Abuse
+description: Detects potential "ShellDispatch.dll" functionality abuse to execute
+  arbitrary binaries via "ShellExecute"
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2023/06/07/this-lolbin-doesnt-exist/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  selection_cli:
+    CommandLine|contains: RunDll_ShellExecuteW
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 82343930-652f-43f5-ab70-2ee9fdd6d5e9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_shelldispatch_potential_abuse.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

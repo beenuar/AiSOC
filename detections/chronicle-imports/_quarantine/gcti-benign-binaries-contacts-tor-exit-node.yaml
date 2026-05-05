@@ -1,0 +1,79 @@
+id: chronicle-detection-rules-gcti-benign-binaries-contacts-tor-exit-node
+name: gcti_benign_binaries_contacts_tor_exit_node
+description: gcti_benign_binaries_contacts_tor_exit_node
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule gcti_benign_binaries_contacts_tor_exit_node {\n\n  meta:\n    author =\
+    \ \"Google Cloud Security\"\n    description = \"Alert on Benign Binary contacting\
+    \ a TOR IP\"\n    rule_id = \"mr_8bb13cf7-d66b-41f2-9bbc-0a1884a77f70\"\n    rule_name\
+    \ = \"GCTI Benign Binaries Contacts Tor Exit Node\"\n    tactic = \"TA0011\"\n\
+    \    technique = \"T1090.003\"\n    type = \"alert\"\n    tags = \"tor, benign\
+    \ binaries\"\n    data_source = \"crowdstrike\"\n    severity = \"High\"\n   \
+    \ priority = \"High\"\n\n  events:\n    $network.metadata.event_type = \"NETWORK_CONNECTION\"\
+    \n    $network.principal.process.file.sha256 = $benign_hash\n    $network.target.ip\
+    \ = $ip\n\n    // Benign Files provided by GCTI Feed\n    $gcti_feed.graph.entity.file.sha256\
+    \ = $benign_hash\n    $gcti_feed.graph.metadata.vendor_name = \"Google Cloud Threat\
+    \ Intelligence\"\n    $gcti_feed.graph.metadata.product_name = \"GCTI Feed\"\n\
+    \    $gcti_feed.graph.metadata.entity_type = \"FILE\"\n    $gcti_feed.graph.metadata.threat.threat_feed_name\
+    \ = \"Benign Binaries\"\n    $gcti_feed.graph.metadata.source_type = \"GLOBAL_CONTEXT\"\
+    \n\n    // Tor IP listing provided by GCTI Feed\n    $tor.graph.entity.artifact.ip\
+    \ = $ip\n    $tor.graph.metadata.entity_type = \"IP_ADDRESS\"\n    $tor.graph.metadata.threat.threat_feed_name\
+    \ = \"Tor Exit Nodes\"\n    $tor.graph.metadata.vendor_name = \"Google Cloud Threat\
+    \ Intelligence\"\n    $tor.graph.metadata.product_name = \"GCTI Feed\"\n    $tor.graph.metadata.source_type\
+    \ = \"GLOBAL_CONTEXT\"\n\n  match:\n    $ip over 5m\n\n  outcome:\n    $risk_score\
+    \ = max(\n        if($tor.graph.metadata.threat.confidence = \"HIGH_CONFIDENCE\"\
+    , 70) +\n        // Unauthorized target geographies\n        if($network.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Cuba\", 20) +\n        if($network.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Iran\", 20) +\n        if($network.target.ip_geo_artifact.location.country_or_region\
+    \ = \"North Korea\", 20) +\n        if($network.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Russia\", 20) +\n        if($network.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Syria\", 20)\n    )\n    $event_count = count_distinct($network.metadata.id)\n\
+    \    $tor_ip_country = array_distinct($network.target.ip_geo_artifact.location.country_or_region)\n\
+    \    // added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($network.principal.ip)\n    // Commented out target.ip because\
+    \ it is already represented in graph as match variable. If match changes, can\
+    \ uncomment to add to results\n    //$target_ip = array_distinct($network.target.ip)\n\
+    \    $principal_process_pid = array_distinct($network.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($network.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($network.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($network.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($network.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($network.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($network.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($network.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($network.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($network.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($network.target.process.product_specific_process_id)\n    //$target_process_parent_process_product_specific_process_id\
+    \ = array_distinct($network.target.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($network.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($network.target.user.userid)\n\n  condition:\n\
+    \    $network and $gcti_feed and $tor\n}"
+  chronicle_rule_name: gcti_benign_binaries_contacts_tor_exit_node
+provenance:
+  source: chronicle/detection-rules
+  source_id: gcti_benign_binaries_contacts_tor_exit_node
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/gcti_benign_binaries_contacts_tor_exit_node.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

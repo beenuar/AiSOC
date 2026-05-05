@@ -1,0 +1,42 @@
+id: sigmahq-sigma-05a2ab7e-ce11-4b63-86db-ab32e763e11d
+name: MMC Spawning Windows Shell
+description: Detects a Windows command line executable started from MMC
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://enigma0x3.net/2017/01/05/lateral-movement-using-the-mmc20-application-com-object/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection1:
+    ParentImage|endswith: \mmc.exe
+  selection2:
+  - Image|endswith:
+    - \cmd.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \wscript.exe
+    - \cscript.exe
+    - \sh.exe
+    - \bash.exe
+    - \reg.exe
+    - \regsvr32.exe
+  - Image|contains: \BITSADMIN
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 05a2ab7e-ce11-4b63-86db-ab32e763e11d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mmc_susp_child_process.yml
+notes:
+  quarantine_reason: 'upstream status: test'

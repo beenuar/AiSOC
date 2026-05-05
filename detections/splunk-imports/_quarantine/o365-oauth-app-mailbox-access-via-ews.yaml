@@ -1,0 +1,44 @@
+id: splunk-security-content-e600cf1a-0bef-4426-b42e-00176d610a4d
+name: O365 OAuth App Mailbox Access via EWS
+description: The following analytic detects when emails are accessed in Office 365
+  Exchange via Exchange Web Services (EWS) using OAuth-authenticated applications.
+  It leverages the ClientInfoString field to identify EWS interactions and aggregates
+  metrics such as access counts, timing, and client IP addresses, categorized by user,
+  ClientAppId, OperationCount, and AppId. Monitoring OAuth applications accessing
+  emails through EWS is crucial for identifying potential abuse or unauthorized data
+  access. If confirmed malicious, this activity could lead to unauthorized email access,
+  data exfiltration, or further compromise of sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/002/
+- https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+- https://learn.microsoft.com/en-us/exchange/client-developer/exchange-web-services/ews-applications-and-the-exchange-architecture
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=Exchange Operation=MailItemsAccessed\
+    \ AppId=* ClientAppId=*\n  | regex ClientInfoString=\"^Client=WebServices;ExchangeWebServices\"\
+    \n  | fillnull\n  | stats count earliest(_time) as firstTime latest(_time) as\
+    \ lastTime values(ClientIPAddress) as src\n    BY user ClientAppId OperationCount\n\
+    \       AppId vendor_account vendor_product\n       dest signature ClientInfoString\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_oauth_app_mailbox_access_via_ews_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e600cf1a-0bef-4426-b42e-00176d610a4d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_oauth_app_mailbox_access_via_ews.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,43 @@
+id: splunk-security-content-2f0604c6-6030-11eb-ae93-0242ac130002
+name: AWS SAML Update identity provider
+description: The following analytic detects updates to the SAML provider in AWS. It
+  leverages AWS CloudTrail logs to identify the `UpdateSAMLProvider` event, analyzing
+  fields such as `sAMLProviderArn`, `sourceIPAddress`, and `userIdentity` details.
+  Monitoring updates to the SAML provider is crucial as it may indicate a perimeter
+  compromise of federated credentials or unauthorized backdoor access set by an attacker.
+  If confirmed malicious, this activity could allow attackers to manipulate identity
+  federation, potentially leading to unauthorized access to cloud resources and sensitive
+  data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://www.splunk.com/en_us/blog/security/a-golden-saml-journey-solarwinds-continued.html
+- https://www.fireeye.com/content/dam/fireeye-www/blog/pdfs/wp-m-unc2452-2021-000343-01.pdf
+- https://www.cyberark.com/resources/threat-research-blog/golden-saml-newly-discovered-attack-technique-forges-authentication-to-cloud-apps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=UpdateSAMLProvider\n  | rename user_name as\
+    \ user\n  | stats count min(_time) as firstTime max(_time) as lastTime values(requestParameters.sAMLProviderArn)\
+    \ as request_parameters\n    BY signature dest user\n       user_agent src vendor_account\n\
+    \       vendor_region vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `aws_saml_update_identity_provider_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2f0604c6-6030-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_saml_update_identity_provider.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,50 @@
+id: splunk-security-content-e6d2dc61-a8b9-4b03-906c-da0ca75d71b8
+name: Detect Certify Command Line Arguments
+description: The following analytic detects the use of Certify or Certipy tools to
+  enumerate Active Directory Certificate Services (AD CS) environments. It leverages
+  Endpoint Detection and Response (EDR) data, focusing on specific command-line arguments
+  associated with these tools. This activity is significant because it indicates potential
+  reconnaissance or exploitation attempts targeting AD CS, which could lead to unauthorized
+  access or privilege escalation. If confirmed malicious, attackers could gain insights
+  into the AD CS infrastructure, potentially compromising sensitive certificates and
+  escalating their privileges within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://github.com/GhostPack/Certify
+- https://github.com/ly4k/Certipy
+- https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process\
+    \ IN (\"* find *\",\"* auth *\",\"* request *\",\"* req *\",\"* download *\",)\n\
+    \    AND\n    Processes.process IN (\"* /vulnerable*\",\"* /enrolleeSuppliesSubject\
+    \ *\",\"* /json /outfile*\",\"* /ca*\", \"* -username *\",\"* -u *\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `detect_certify_command_line_arguments_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e6d2dc61-a8b9-4b03-906c-da0ca75d71b8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_certify_command_line_arguments.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

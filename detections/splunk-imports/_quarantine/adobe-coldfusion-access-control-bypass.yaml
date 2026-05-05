@@ -1,0 +1,47 @@
+id: splunk-security-content-d6821c0b-fcdc-4c95-a77f-e10752fae41a
+name: Adobe ColdFusion Access Control Bypass
+description: 'The following analytic detects potential exploitation attempts against
+  Adobe ColdFusion vulnerabilities CVE-2023-29298 and CVE-2023-26360.
+
+  It monitors requests to specific ColdFusion Administrator endpoints, especially
+  those with an unexpected additional forward slash, using the Web datamodel.
+
+  This activity is significant for a SOC as it indicates attempts to bypass access
+  controls, which can lead to unauthorized access to ColdFusion administration endpoints.
+
+  If confirmed malicious, this could result in data theft, brute force attacks, or
+  further exploitation of other vulnerabilities, posing a serious security risk to
+  the environment.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://www.rapid7.com/blog/post/2023/07/11/cve-2023-29298-adobe-coldfusion-access-control-bypass/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\nWeb.url IN (\n\
+    \    \"*//CFIDE/adminapi*\",\n    \"*//CFIDE/administrator*\",\n    \"*//CFIDE/componentutils*\"\
+    ,\n    \"*//CFIDE/main*\",\n    \"*//CFIDE/restplay*\",\n    \"*//CFIDE/servermanager*\"\
+    ,\n    \"*//CFIDE/wizards*\",\n    \"*//restplay*\",\n)\nWeb.status=200\n\nBY\
+    \ Web.http_user_agent Web.status Web.http_method\n   Web.url Web.url_length Web.src\
+    \ Web.dest\n\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `adobe_coldfusion_access_control_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d6821c0b-fcdc-4c95-a77f-e10752fae41a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/adobe_coldfusion_access_control_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

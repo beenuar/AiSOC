@@ -1,0 +1,39 @@
+id: sigmahq-sigma-02f7c9c1-1ae8-4c6a-8add-04693807f92f
+name: Potential Access Token Abuse
+description: Detects potential token impersonation and theft. Example, when using
+  "DuplicateToken(Ex)" and "ImpersonateLoggedOnUser" with the "LOGON32_LOGON_NEW_CREDENTIALS
+  flag".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.001
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/fr/blog/how-attackers-abuse-access-token-manipulation
+- https://www.manageengine.com/log-management/cyber-security/access-token-manipulation.html
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 9
+    LogonProcessName: Advapi
+    AuthenticationPackageName: Negotiate
+    ImpersonationLevel: '%%1833'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 02f7c9c1-1ae8-4c6a-8add-04693807f92f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_access_token_abuse.yml
+falsepositives:
+- Anti-Virus
+notes:
+  quarantine_reason: 'upstream status: test'

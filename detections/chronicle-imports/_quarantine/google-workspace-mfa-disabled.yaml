@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-google-workspace-mfa-disabled
+name: google_workspace_mfa_disabled
+description: google_workspace_mfa_disabled
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule google_workspace_mfa_disabled {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Identifies when multi-factor authentication\
+    \ (MFA) is disabled for a Google Workspace organization. Security teams can monitor\
+    \ for changes to MFA configuration that may weaken the organization's security\
+    \ posture.\"\n    rule_id = \"mr_63139204-0d18-4410-b4c4-839bc9ccd456\"\n    rule_name\
+    \ = \"Google Workspace MFA Disabled\"\n    mitre_attack_tactic = \"Persistence\"\
+    \n    mitre_attack_technique = \"Modify Authentication Process\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1556/\"\n    mitre_attack_version =\
+    \ \"v13.1\"\n    type = \"Alert\"\n    data_source = \"Workspace Activity\"\n\
+    \    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    $ws.metadata.vendor_name\
+    \ = \"Google Workspace\"\n    $ws.metadata.product_name = \"admin\"\n    ($ws.metadata.product_event_type\
+    \ = \"ENFORCE_STRONG_AUTHENTICATION\" or\n    $ws.metadata.product_event_type\
+    \ =  \"ALLOW_STRONG_AUTHENTICATION\")\n    $ws.target.labels[\"new_value\"] =\
+    \ \"false\"\n\n  outcome:\n    $risk_score = max(70)\n    $mitre_attack_tactic\
+    \ = \"Persistence\"\n    $mitre_attack_technique = \"Modify Authentication Process\"\
+    \n    $mitre_attack_technique_id = \"T1556\"\n    $event_count = count_distinct($ws.metadata.id)\n\
+    \    $principal_ip = array_distinct($ws.principal.ip)\n    $principal_country\
+    \ = array_distinct($ws.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_state = array_distinct($ws.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_emails = array_distinct($ws.principal.user.email_addresses)\n\
+    \    $target_user_emails = array_distinct($ws.target.user.email_addresses)\n \
+    \   $principal_user_id = $ws.principal.user.userid\n\n  condition:\n    $ws\n}"
+  chronicle_rule_name: google_workspace_mfa_disabled
+provenance:
+  source: chronicle/detection-rules
+  source_id: google_workspace_mfa_disabled
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/google_workspace_mfa_disabled.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

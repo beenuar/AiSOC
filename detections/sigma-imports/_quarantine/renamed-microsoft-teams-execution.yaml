@@ -1,0 +1,37 @@
+id: sigmahq-sigma-88f46b67-14d4-4f45-ac2c-d66984f22191
+name: Renamed Microsoft Teams Execution
+description: Detects the execution of a renamed Microsoft Teams binary.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    OriginalFileName:
+    - msteams.exe
+    - teams.exe
+  filter_main_legit_names:
+    Image|endswith:
+    - \msteams.exe
+    - \teams.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 88f46b67-14d4-4f45-ac2c-d66984f22191
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_msteams.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

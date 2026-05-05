@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-onelogin-multiple-users-assumed
+name: onelogin_multiple_users_assumed
+description: onelogin_multiple_users_assumed
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule onelogin_multiple_users_assumed {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects when a user assumes multiple user accounts.\"\
+    \n    rule_id = \"mr_20b98df8-72a3-4163-8654-b66e4192d744\"\n    rule_name = \"\
+    OneLogin Multiple Users Assumed\"\n    reference = \"https://onelogin.service-now.com/kb_view_customer.do?sysparm_article=KB0010594\"\
+    \n    mitre_attack_tactic = \"Lateral Movement\"\n    mitre_attack_technique =\
+    \ \"Use Alternate Authentication Material\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1550/\"\
+    \n    mitre_attack_version = \"v15.1\"\n    type = \"Alert\"\n    data_source\
+    \ = \"OneLogin\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \     $assume.metadata.event_type = \"USER_RESOURCE_ACCESS\"\n     $assume.metadata.product_name\
+    \ = \"ONELOGIN_SSO\"\n     $assume.metadata.vendor_name = \"ONELOGIN\"\n     $assume.metadata.product_event_type\
+    \ = \"3\" //a user assumed another user\n     $assume.principal.user.userid =\
+    \ $actor_user\n\n  match:\n    $actor_user over 1h\n\n  outcome:\n    $risk_score\
+    \ = max(35)\n    $mitre_attack_tactic = \"Lateral Movement\"\n    $mitre_attack_technique\
+    \ = \"Use Alternate Authentication Material\"\n    $assume_reason = array_distinct($assume.metadata.description)\n\
+    \    $principal_user_userid = array_distinct($assume.principal.user.userid)\n\
+    \    $principal_user_user_display_name = array_distinct($assume.principal.user.user_display_name)\n\
+    \    $principal_ip = array_distinct($assume.principal.ip)\n    $principal_ip_country\
+    \ = array_distinct($assume.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($assume.principal.ip_geo_artifact.location.state)\n\
+    \    $target_user_userid = array_distinct($assume.target.user.userid)\n    $dc_target_user_userid\
+    \ = count_distinct($assume.target.user.userid)\n\n  condition:\n    $assume and\
+    \ $dc_target_user_userid > 3\n}"
+  chronicle_rule_name: onelogin_multiple_users_assumed
+provenance:
+  source: chronicle/detection-rules
+  source_id: onelogin_multiple_users_assumed
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/onelogin/onelogin_multiple_users_assumed.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

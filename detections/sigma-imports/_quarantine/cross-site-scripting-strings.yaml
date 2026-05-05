@@ -1,0 +1,55 @@
+id: sigmahq-sigma-65354b83-a2ea-4ea6-8414-3ab38be0d409
+name: Cross Site Scripting Strings
+description: Detects XSS attempts injected via GET requests in access logs
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1189
+  categories:
+  - application
+references:
+- https://github.com/payloadbox/xss-payload-list
+- https://portswigger.net/web-security/cross-site-scripting/contexts
+logsource:
+  category: webserver
+detection:
+  select_method:
+    cs-method: GET
+  keywords:
+  - =<script>
+  - =%3Cscript%3E
+  - =%253Cscript%253E
+  - '<iframe '
+  - '%3Ciframe '
+  - '<svg '
+  - '%3Csvg '
+  - document.cookie
+  - document.domain
+  - ' onerror='
+  - ' onresize='
+  - ' onload="'
+  - onmouseover=
+  - ${alert
+  - javascript:alert
+  - javascript%3Aalert
+  filter:
+    sc-status: 404
+  condition: select_method and keywords and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 65354b83-a2ea-4ea6-8414-3ab38be0d409
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_xss_in_access_logs.yml
+falsepositives:
+- JavaScripts,CSS Files and PNG files
+- User searches in search boxes of the respective website
+- Internal vulnerability scanners can cause some serious FPs when used, if you experience
+  a lot of FPs due to this think of adding more filters such as "User Agent" strings
+  and more response codes
+notes:
+  quarantine_reason: 'upstream status: test'

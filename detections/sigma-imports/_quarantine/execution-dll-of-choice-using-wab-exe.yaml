@@ -1,0 +1,37 @@
+id: sigmahq-sigma-fc014922-5def-4da9-a0fc-28c973f41bfb
+name: Execution DLL of Choice Using WAB.EXE
+description: This rule detects that the path to the DLL written in the registry is
+  different from the default one. Launched WAB.exe tries to load the DLL from Registry.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://github.com/LOLBAS-Project/LOLBAS/blob/8283d8d91552213ded165fd36deb6cb9534cb443/yml/OSBinaries/Wab.yml
+- https://twitter.com/Hexacorn/status/991447379864932352
+- http://www.hexacorn.com/blog/2018/05/01/wab-exe-as-a-lolbin/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Software\Microsoft\WAB\DLLPath
+  filter:
+    Details: '%CommonProgramFiles%\System\wab32.dll'
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fc014922-5def-4da9-a0fc-28c973f41bfb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_wab_dllpath_reg_change.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

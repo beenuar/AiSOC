@@ -1,0 +1,37 @@
+id: sigmahq-sigma-059c5af9-5131-4d8d-92b2-de4ad6146712
+name: LiveKD Driver Creation By Uncommon Process
+description: Detects the creation of the LiveKD driver by a process image other than
+  "livekd.exe".
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename: C:\Windows\System32\drivers\LiveKdD.SYS
+  filter_main_legit_name:
+    Image|endswith:
+    - \livekd.exe
+    - \livek64.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 059c5af9-5131-4d8d-92b2-de4ad6146712
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sysinternals_livekd_driver_susp_creation.yml
+falsepositives:
+- Administrators might rename LiveKD before its usage which could trigger this. Add
+  additional names you use to the filter
+notes:
+  quarantine_reason: 'upstream status: test'

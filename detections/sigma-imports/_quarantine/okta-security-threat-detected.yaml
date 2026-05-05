@@ -1,0 +1,33 @@
+id: sigmahq-sigma-5c82f0b9-3c6d-477f-a318-0e14a1df73e0
+name: Okta Security Threat Detected
+description: Detects when an security threat is detected in Okta.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://okta.github.io/okta-help/en/prod/Content/Topics/Security/threat-insight/configure-threatinsight-system-log.htm
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: security.threat.detected
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5c82f0b9-3c6d-477f-a318-0e14a1df73e0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_security_threat_detected.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,80 @@
+id: mitre-car-car-2016-04-002
+name: User Activity from Clearing Event Logs
+description: It is unlikely that event log data would be cleared during normal operations,
+  and it is likely that malicious attackers may try to cover their tracks by clearing
+  an event log. When an event log gets cleared, it is suspicious. 1. This is often
+  done using `wevtutil`, a legitimate tool provided by Microsoft. This action interferes
+  with event collection and notification, and may lead to a security event going undetected,
+  thereby potentially leading to further compromise of the network. 2. Alerting when
+  a `Clear Event Log` is generated could point to this intruder technique. Centrally
+  collecting events has the added benefit of making it much harder for attackers to
+  cover their tracks. Event Forwarding permits sources to forward multiple copies
+  of a collected event to multiple collectors, thus enabling redundant event collection.
+  Using a redundant event collection model can minimize the single point of failure
+  risk. 3. Attackers may set the option of the sources of events with `Limit-EventLog
+  -LogName Security -OverflowAction DoNotOverwrite` to not delete old Evenlog when
+  the .evtx is full. By default the Security Log size is configured with the minimum
+  value of 20 480KB (~23 000 EventLog). So if this option is enabled, all the new
+  EventLogs will be automatically deleted. We can detect this behavior with the Security
+  EventLog 1104. 4. Attackers may delete .evtx with `del C:\Windows\System32\winevt\logs\Security.evtx`
+  or `Remove-Item C:\Windows\System32\winevt\logs\Security.evtx` after having disabled
+  and stopped the Eventlog service. As the EventLog service is disabled and stopped,
+  the .evtx files are no longer used by this service and can be deleted. The new EventLog
+  will be Unavailable until the configuration is reset. 5. Attackers may use the powershell
+  command `Remove-EventLog -LogName Security` to unregister source of events that
+  are part of Windows (Application, Security…). This command deletes the security
+  EventLog (which also generates EventId 1102) but the new Eventlogs are still recorded
+  until the system is rebooted . After the System is rebooted, the Security log is
+  unregistered and doesn’t log any new Eventlog. However logs generated between the
+  command and the reboot are still available in the .evtx file.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://ptylu.github.io/content/report/report.html?report=26
+logsource:
+  category: Event Records,Process
+detection:
+  implementations:
+  - name: PseudoCode for dedicated EventID EventLog deletion
+    type: pseudocode
+    code: '([log_name] == "Security" and [event_code] in [1100, 1102, 1104]) or
+
+      ([log_name] == "System" and [event_code] == 104)
+
+      '
+  - name: Sigma rule (System log)
+    type: Sigma
+    code: ''
+  - name: Sigma rule (Security log)
+    type: Sigma
+    code: ''
+  - name: LogPoint version of the above pseudocode.
+    type: LogPoint
+    code: 'norm_id=WinServer ((channel="Security" event_id IN [1100,1102]) OR (channel="System"
+      event_id=104))
+
+      '
+  - name: Splunk search - Detecting log clearing with wevtutil
+    type: Splunk
+    code: 'index=__your_sysmon_index__ sourcetype= __your__windows__sysmon__sourcetype
+      EventCode=1 (Image=*wevtutil* CommandLine=*cl* (CommandLine=*System* OR CommandLine=*Security*
+      OR CommandLine=*Setup* OR CommandLine=*Application*) OR Clear-EventLog OR Limit-EventLog
+      OR (Remove-Item AND .evtx) OR Remove-EventLog)
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2016-04-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2016-04-002.yaml
+notes:
+  car_status: needs_implementation

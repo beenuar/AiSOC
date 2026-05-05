@@ -1,0 +1,45 @@
+id: sigmahq-sigma-9a019ffc-3580-4c9d-8d87-079f7e8d3fd4
+name: Cloudflared Tunnel Execution
+description: Detects execution of the "cloudflared" tool to connect back to a tunnel.
+  This was seen used by threat actors to maintain persistence and remote access to
+  compromised networks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1102
+  - T1090
+  - T1572
+  categories:
+  - endpoint
+references:
+- https://blog.reconinfosec.com/emergence-of-akira-ransomware-group
+- https://github.com/cloudflare/cloudflared
+- https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|all:
+    - ' tunnel '
+    - ' run '
+    CommandLine|contains:
+    - '-config '
+    - '-credentials-contents '
+    - '-credentials-file '
+    - '-token '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9a019ffc-3580-4c9d-8d87-079f7e8d3fd4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_cloudflared_tunnel_run.yml
+falsepositives:
+- Legitimate usage of Cloudflared tunnel.
+notes:
+  quarantine_reason: 'upstream status: test'

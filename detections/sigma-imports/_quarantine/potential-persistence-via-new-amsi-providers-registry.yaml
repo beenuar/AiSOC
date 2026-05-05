@@ -1,0 +1,55 @@
+id: sigmahq-sigma-33efc23c-6ea2-4503-8cfe-bdf82ce8f705
+name: Potential Persistence Via New AMSI Providers - Registry
+description: 'Detects when an attacker adds a new AMSI provider via the Windows Registry
+  to bypass AMSI (Antimalware Scan Interface) protections.
+
+  Attackers may add custom AMSI providers to persist on the system and evade detection
+  by security software that relies on AMSI for scanning scripts and other content.
+
+  This technique is often used in conjunction with fileless malware and script-based
+  attacks to maintain persistence while avoiding detection.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://persistence-info.github.io/Data/amsi.html
+- https://github.com/gtworek/PSBits/blob/8d767892f3b17eefa4d0668f5d2df78e844f01d8/FakeAMSI/FakeAMSI.c
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+    - \SOFTWARE\Microsoft\AMSI\Providers\
+    - \SOFTWARE\WOW6432Node\Microsoft\AMSI\Providers\
+  filter_optional_avast:
+    Image:
+    - C:\Program Files\Avast Software\Avast\RegSvr.exe
+    - C:\Program Files\Avast Software\Avast\x86\RegSvr.exe
+    TargetObject|contains: \{FB904E4E-D2C7-4C8D-8492-B620BB9896B1}
+  filter_optional_avg:
+    Image:
+    - C:\Program Files\AVG\Antivirus\RegSvr.exe
+    - C:\Program Files\AVG\Antivirus\x86\RegSvr.exe
+    TargetObject|contains: \{FB904E4E-D2C7-4C8D-8492-B620BB9896B1}
+  filter_optional_avira:
+    Image: C:\Program Files\Avira\Endpoint Protection SDK\endpointprotection.exe
+    TargetObject|contains: \{00000001-3DCC-4B48-A82E-E2071FE58E05}
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 33efc23c-6ea2-4503-8cfe-bdf82ce8f705
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_persistence_amsi_providers.yml
+falsepositives:
+- Legitimate security products adding their own AMSI providers. Filter these according
+  to your environment.
+notes:
+  quarantine_reason: 'upstream status: test'

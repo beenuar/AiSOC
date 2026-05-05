@@ -1,0 +1,33 @@
+id: sigmahq-sigma-719c22d7-c11a-4f2c-93a6-2cfdd5412f68
+name: Decode Base64 Encoded Text -MacOs
+description: Detects usage of base64 utility to decode arbitrary base64-encoded text
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1027/T1027.md
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image: /usr/bin/base64
+    CommandLine|contains: -d
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 719c22d7-c11a-4f2c-93a6-2cfdd5412f68
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_base64_decode.yml
+falsepositives:
+- Legitimate activities
+notes:
+  quarantine_reason: 'upstream status: test'

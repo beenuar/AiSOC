@@ -1,0 +1,35 @@
+id: sigmahq-sigma-f5d1def8-1de0-4a0e-9794-1f6f27dd605c
+name: PowerShell Hotfix Enumeration
+description: Detects call to "Win32_QuickFixEngineering" in order to enumerate installed
+  hotfixes often used in "enum" scripts by attackers
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/411Hall/JAWS/blob/233f142fcb1488172aa74228a666f6b3c5c48f1d/jaws-enum.ps1
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - Win32_QuickFixEngineering
+    - HotFixID
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f5d1def8-1de0-4a0e-9794-1f6f27dd605c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_hotfix_enum.yml
+falsepositives:
+- Legitimate administration scripts
+notes:
+  quarantine_reason: 'upstream status: test'

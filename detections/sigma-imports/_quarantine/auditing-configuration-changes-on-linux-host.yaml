@@ -1,0 +1,37 @@
+id: sigmahq-sigma-977ef627-4539-4875-adf4-ed8f780c4922
+name: Auditing Configuration Changes on Linux Host
+description: Detect changes in auditd configuration files
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://github.com/Neo23x0/auditd/blob/master/audit.rules
+- Self Experience
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: PATH
+    name:
+    - /etc/audit/*
+    - /etc/libaudit.conf
+    - /etc/audisp/*
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 977ef627-4539-4875-adf4-ed8f780c4922
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/path/lnx_auditd_auditing_config_change.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

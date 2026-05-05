@@ -1,0 +1,48 @@
+id: splunk-security-content-45b125c4-866f-11eb-a95a-acde48001122
+name: Windows High File Deletion Frequency
+description: The following analytic identifies a high frequency of file deletions
+  by monitoring Sysmon EventCodes 23 and 26 for specific file extensions. This detection
+  leverages Sysmon logs to track deleted target filenames, process names, and process
+  IDs. Such activity is significant as it often indicates ransomware behavior, where
+  files are encrypted and the originals are deleted. If confirmed malicious, this
+  activity could lead to extensive data loss and operational disruption, as ransomware
+  can render critical files inaccessible, demanding a ransom for their recovery.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/fin11-email-campaigns-precursor-for-ransomware-data-theft
+- https://blog.virustotal.com/2020/11/keep-your-friends-close-keep-ransomware.html
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN ("23","26") TargetFilename IN ("*.cmd", "*.ini","*.gif",
+    "*.jpg", "*.jpeg", "*.db", "*.ps1", "*.doc", "*.docx", "*.xls", "*.xlsx", "*.ppt",
+    "*.pptx", "*.bmp","*.zip", "*.rar", "*.7z", "*.chm", "*.png", "*.log", "*.vbs",
+    "*.js", "*.vhd", "*.bak", "*.wbcat", "*.bkf" , "*.backup*", "*.dsk", "*.win")
+    NOT TargetFilename IN ("*\\INetCache\\Content.Outlook\\*") | stats count min(_time)
+    as firstTime, max(_time) as lastTime values(file_path) as file_path values(file_hash)
+    as file_hash values(file_name) as file_name values(file_modify_time) as file_modify_time
+    values(process_name) as process_name values(process_path) as process_path values(process_guid)
+    as process_guid values(process_id) as process_id values(process_exec) as process_exec
+    by action dest dvc signature signature_id user user_id vendor_product | where
+    count >=100 | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_high_file_deletion_frequency_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 45b125c4-866f-11eb-a95a-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_high_file_deletion_frequency.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,41 @@
+id: sigmahq-sigma-c048f047-7e2a-4888-b302-55f509d4a91d
+name: SCR File Write Event
+description: Detects the creation of screensaver files (.scr) outside of system folders.
+  Attackers may execute an application as an ".SCR" file using "rundll32.exe desk.cpl,InstallScreenSaver"
+  for example.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Libraries/Desk/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: .scr
+  filter:
+    TargetFilename|contains:
+    - :\$WINDOWS.~BT\NewOS\
+    - :\Windows\System32\
+    - :\Windows\SysWOW64\
+    - :\Windows\WinSxS\
+    - :\WUDownloadCache\
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c048f047-7e2a-4888-b302-55f509d4a91d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_new_scr_file.yml
+falsepositives:
+- The installation of new screen savers by third party software
+notes:
+  quarantine_reason: 'upstream status: test'

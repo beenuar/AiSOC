@@ -1,0 +1,39 @@
+id: sigmahq-sigma-5b16df71-8615-4f7f-ac9b-6c43c0509e61
+name: Hide Schedule Task Via Index Value Tamper
+description: 'Detects when the "index" value of a scheduled task is modified from
+  the registry
+
+  Which effectively hides it from any tooling such as "schtasks /query" (Read the
+  referenced link for more information about the effects of this technique)'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://blog.qualys.com/vulnerabilities-threat-research/2022/06/20/defending-against-scheduled-task-attacks-in-windows-environments
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains|all:
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\
+    - Index
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5b16df71-8615-4f7f-ac9b-6c43c0509e61
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_hide_scheduled_task_via_index_tamper.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

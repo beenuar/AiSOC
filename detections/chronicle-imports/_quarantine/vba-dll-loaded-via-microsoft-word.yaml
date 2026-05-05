@@ -1,0 +1,40 @@
+id: chronicle-detection-rules-vba-dll-loaded-via-microsoft-word
+name: vba_dll_loaded_via_microsoft_word
+description: vba_dll_loaded_via_microsoft_word
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule vba_dll_loaded_via_microsoft_word {\n meta:\n    author =\
+    \ \"Antonlovesdnb\"\n    description = \"Detects DLL's Loaded Via Word Containing\
+    \ VBA Macros  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/zpEb6DTunUyO\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/02/19\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"initial_access, t1193\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"7\" and (re.regex($selection.target.process.file.full_path, `.*\\\\winword\\\
+    .exe.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\powerpnt\\\
+    .exe.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\excel\\\
+    .exe.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\outlook\\\
+    .exe.*`)) and (re.regex($selection.target.process.file.full_path, `.*\\\\VBE7\\\
+    .DLL.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\VBEUI\\\
+    .DLL.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\VBE7INTL\\\
+    .DLL.*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: vba_dll_loaded_via_microsoft_word
+provenance:
+  source: chronicle/detection-rules
+  source_id: vba_dll_loaded_via_microsoft_word
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/vba_dll_loaded_via_microsoft_word.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

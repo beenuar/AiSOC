@@ -1,0 +1,35 @@
+id: sigmahq-sigma-50e068d7-1e6b-4054-87e5-0a592c40c7e0
+name: Okta MFA Reset or Deactivated
+description: Detects when an attempt at deactivating  or resetting MFA.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.006
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType:
+    - user.mfa.factor.deactivate
+    - user.mfa.factor.reset_all
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 50e068d7-1e6b-4054-87e5-0a592c40c7e0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_mfa_reset_or_deactivated.yml
+falsepositives:
+- If a MFA reset or deactivated was performed by a system administrator.
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,33 @@
+id: sigmahq-sigma-3d48c9d3-1aa6-418d-98d3-8fd3c01a564e
+name: Potential Mftrace.EXE Abuse
+description: Detects child processes of the "Trace log generation tool for Media Foundation
+  Tools" (Mftrace.exe) which can abused to execute arbitrary binaries.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1127
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Mftrace/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \mftrace.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3d48c9d3-1aa6-418d-98d3-8fd3c01a564e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mftrace_child_process.yml
+falsepositives:
+- Legitimate use for tracing purposes
+notes:
+  quarantine_reason: 'upstream status: test'

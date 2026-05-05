@@ -1,0 +1,37 @@
+id: sigmahq-sigma-4ac47ed3-44c2-4b1f-9d51-bf46e8914126
+name: TrustedPath UAC Bypass Pattern
+description: Detects indicators of a UAC bypass method by mocking directories
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://medium.com/tenable-techblog/uac-bypass-by-mocking-trusted-directories-24a96675f6e
+- https://www.wietzebeukema.nl/blog/hijacking-dlls-in-windows
+- https://github.com/netero1010/TrustedPath-UACBypass-BOF
+- https://x.com/Wietze/status/1933495426952421843
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|contains:
+    - C:\Windows \System32\
+    - C:\Windows \SysWOW64\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4ac47ed3-44c2-4b1f-9d51-bf46e8914126
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_uac_bypass_trustedpath.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

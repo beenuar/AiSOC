@@ -1,0 +1,42 @@
+id: splunk-security-content-d51c13dd-a232-4c83-a2bb-72ab36233c5d
+name: Ivanti Connect Secure System Information Access via Auth Bypass
+description: The following analytic identifies attempts to exploit the CVE-2023-46805
+  and CVE-2024-21887 vulnerabilities in Ivanti Connect Secure. It detects GET requests
+  to the /api/v1/totp/user-backup-code/../../system/system-information URI, which
+  leverage an authentication bypass to access system information. The detection uses
+  the Web datamodel to identify requests with a 200 OK response, indicating a successful
+  exploit attempt. This activity is significant as it reveals potential unauthorized
+  access to sensitive system information. If confirmed malicious, attackers could
+  gain critical insights into the system, facilitating further exploitation and compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://github.com/RootUp/PersonalStuff/blob/master/http-vuln-cve2023-46805_2024_21887.nse
+- https://github.com/projectdiscovery/nuclei-templates/blob/c6b351e71b0fb0e40e222e97038f1fe09ac58194/http/misconfiguration/ivanti/CVE-2023-46085-CVE-2024-21887-mitigation-not-applied.yaml
+- https://github.com/rapid7/metasploit-framework/pull/18708/files
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.url=\"*/api/v1/totp/user-backup-code/../../system/system-information*\"\
+    \ Web.http_method=GET Web.status=200\n  BY Web.src, Web.dest, Web.http_user_agent,\n\
+    \     Web.url\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `ivanti_connect_secure_system_information_access_via_auth_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d51c13dd-a232-4c83-a2bb-72ab36233c5d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/ivanti_connect_secure_system_information_access_via_auth_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

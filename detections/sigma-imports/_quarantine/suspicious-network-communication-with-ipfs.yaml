@@ -1,0 +1,36 @@
+id: sigmahq-sigma-eb6c2004-1cef-427f-8885-9042974e5eb6
+name: Suspicious Network Communication With IPFS
+description: Detects connections to interplanetary file system (IPFS) containing a
+  user's email address which mirrors behaviours observed in recent phishing campaigns
+  leveraging IPFS to host credential harvesting webpages.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1056
+  categories:
+  - network
+references:
+- https://blog.talosintelligence.com/ipfs-abuse/
+- https://github.com/Cisco-Talos/IOCs/tree/80caca039988252fbb3f27a2e89c2f2917f582e0/2022/11
+- https://isc.sans.edu/diary/IPFS%20phishing%20and%20the%20need%20for%20correctly%20set%20HTTP%20security%20headers/29638
+logsource:
+  category: proxy
+detection:
+  selection:
+    cs-uri|re: (?i)(ipfs\.io/|ipfs\.io\s).+\..+@.+\.[a-z]+
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: eb6c2004-1cef-427f-8885-9042974e5eb6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/proxy_generic/proxy_susp_ipfs_cred_harvest.yml
+falsepositives:
+- Legitimate use of IPFS being used in the organisation. However the cs-uri regex
+  looking for a user email will likely negate this.
+notes:
+  quarantine_reason: 'upstream status: test'

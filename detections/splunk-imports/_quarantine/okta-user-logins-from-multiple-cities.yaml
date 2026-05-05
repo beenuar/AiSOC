@@ -1,0 +1,46 @@
+id: splunk-security-content-a3d1df37-c2a9-41d0-aa8f-59f82d6192a8
+name: Okta User Logins from Multiple Cities
+description: The following analytic identifies instances where the same Okta user
+  logs in from different cities within a 24-hour period. This detection leverages
+  Okta Identity Management logs, analyzing login events and their geographic locations.
+  Such behavior is significant as it may indicate a compromised account, with an attacker
+  attempting unauthorized access from multiple locations. If confirmed malicious,
+  this activity could lead to account takeovers and data breaches, allowing attackers
+  to access sensitive information and potentially escalate their privileges within
+  the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1586.003
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats  `security_content_summariesonly` values(Authentication.app)\
+    \ as app values(Authentication.action) as action values(Authentication.user) as\
+    \ user values(Authentication.reason) as reason values(Authentication.dest) as\
+    \ dest values(Authentication.signature) as signature  values(Authentication.method)\
+    \ as method FROM datamodel=Authentication\n  WHERE Authentication.signature=user.session.start\n\
+    \  BY _time Authentication.src\n| `drop_dm_object_name(\"Authentication\")`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | iplocation src\n| stats count min(_time) as firstTime max(_time) as lastTime\
+    \ dc(src) as distinct_src dc(City) as distinct_city values(src) as src values(City)\
+    \ as City values(Country) as Country values(action) as action\n  BY user\n| where\
+    \ distinct_city > 1\n| `okta_user_logins_from_multiple_cities_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a3d1df37-c2a9-41d0-aa8f-59f82d6192a8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_user_logins_from_multiple_cities.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

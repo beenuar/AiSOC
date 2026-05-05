@@ -1,0 +1,37 @@
+id: sigmahq-sigma-d4c7758e-9417-4f2e-9109-6125d66dabef
+name: User Risk and MFA Registration Policy Updated
+description: 'Detects changes and updates to the user risk and MFA registration policy.
+
+  Attackers can modified the policies to Bypass MFA, weaken security thresholds, facilitate
+  further attacks, maintain persistence.'
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/id-protection/howto-identity-protection-configure-mfa-policy
+- https://learn.microsoft.com/en-us/entra/identity/monitoring-health/reference-audit-activities
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    LoggedByService: AAD Management UX
+    Category: Policy
+    OperationName: Update User Risk and MFA Registration Policy
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: d4c7758e-9417-4f2e-9109-6125d66dabef
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_update_risk_and_mfa_registration_policy.yml
+falsepositives:
+- Known updates by administrators.
+notes:
+  quarantine_reason: 'upstream status: test'

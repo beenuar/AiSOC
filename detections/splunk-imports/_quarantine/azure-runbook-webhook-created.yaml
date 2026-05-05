@@ -1,0 +1,47 @@
+id: splunk-security-content-e98944a9-92e4-443c-81b8-a322e33ce75a
+name: Azure Runbook Webhook Created
+description: The following analytic detects the creation of a new Automation Runbook
+  Webhook within an Azure tenant. It leverages Azure Audit events, specifically the
+  "Create or Update an Azure Automation webhook" operation, to identify this activity.
+  This behavior is significant because Webhooks can trigger Automation Runbooks via
+  unauthenticated URLs exposed to the Internet, posing a security risk. If confirmed
+  malicious, an attacker could use this to execute code, create users, or maintain
+  persistence within the environment, potentially leading to unauthorized access and
+  control over Azure resources.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/automation/overview
+- https://docs.microsoft.com/en-us/azure/automation/automation-runbook-types
+- https://docs.microsoft.com/en-us/azure/automation/automation-webhooks?tabs=portal
+- https://www.inversecos.com/2021/12/how-to-detect-malicious-azure.html
+- https://www.netspi.com/blog/technical/cloud-penetration-testing/maintaining-azure-persistence-via-automation-accounts/
+- https://microsoft.github.io/Azure-Threat-Research-Matrix/Persistence/AZT503/AZT503-3/
+- https://attack.mitre.org/techniques/T1078/004/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_audit` operationName.value=\"Microsoft.Automation/automationAccounts/webhooks/write\"\
+    \ status.value=Succeeded\n  | dedup object\n  | rename claims.ipaddr as src_ip\n\
+    \  | rename caller as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime values(dest) as dest\n    BY object user, src_ip,\n       resourceGroupName,\
+    \ object_path\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_runbook_webhook_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e98944a9-92e4-443c-81b8-a322e33ce75a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_runbook_webhook_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

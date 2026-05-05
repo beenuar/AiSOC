@@ -1,0 +1,40 @@
+id: sigmahq-sigma-10018e73-06ec-46ec-8107-9172f1e04ff2
+name: Remote Server Service Abuse for Lateral Movement
+description: Detects remote RPC calls to possibly abuse remote encryption service
+  via MS-EFSR
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-srvs/accf23b0-0f57-441c-9185-43041f1b0ee9
+- https://github.com/jsecurity101/MSRPC-to-ATTACK/blob/ddd4608fe8684fcf2fcf9b48c5f0b3c28097f8a3/documents/MS-SCMR.md
+- https://github.com/zeronetworks/rpcfirewall
+- https://zeronetworks.com/blog/stopping-lateral-movement-via-the-rpc-firewall/
+logsource:
+  product: rpc_firewall
+  category: application
+  definition: 'Requirements: install and apply the RPC Firewall to all processes with
+    "audit:true action:block uuid:367abb81-9844-35f1-ad32-98f038001003'
+detection:
+  selection:
+    EventLog: RPCFW
+    EventID: 3
+    InterfaceUuid: 367abb81-9844-35f1-ad32-98f038001003
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 10018e73-06ec-46ec-8107-9172f1e04ff2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/rpc_firewall/rpc_firewall_remote_service_lateral_movement.yml
+falsepositives:
+- Administrative tasks on remote services
+notes:
+  quarantine_reason: 'upstream status: test'

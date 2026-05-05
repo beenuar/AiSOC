@@ -1,0 +1,35 @@
+id: sigmahq-sigma-07330162-dba1-4746-8121-a9647d49d297
+name: AWS Config Disabling Channel/Recorder
+description: Detects AWS Config Service disabling
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685.002
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/config/latest/developerguide/cloudtrail-log-files-for-aws-config.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: config.amazonaws.com
+    eventName:
+    - DeleteDeliveryChannel
+    - StopConfigurationRecorder
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07330162-dba1-4746-8121-a9647d49d297
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_config_disable_recording.yml
+falsepositives:
+- Valid change in AWS Config Service
+notes:
+  quarantine_reason: 'upstream status: test'

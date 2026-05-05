@@ -1,0 +1,33 @@
+id: sigmahq-sigma-7eff1a7f-dd45-4c20-877a-f21e342a7611
+name: RemCom Service File Creation
+description: Detects default RemCom service filename which indicates RemCom service
+  installation and execution
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://github.com/kavika13/RemCom/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \RemComSvc.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7eff1a7f-dd45-4c20-877a-f21e342a7611
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_remcom_service.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

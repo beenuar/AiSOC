@@ -1,0 +1,40 @@
+id: sigmahq-sigma-eae8ce9f-bde9-47a6-8e79-f20d18419910
+name: Suspicious History File Operations - Linux
+description: Detects commandline operations on shell history files
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.003
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1552.003/T1552.003.md
+logsource:
+  product: linux
+  service: auditd
+detection:
+  execve:
+    type: EXECVE
+  history:
+  - .bash_history
+  - .zsh_history
+  - .zhistory
+  - .history
+  - .sh_history
+  - fish_history
+  condition: execve and history
+provenance:
+  source: SigmaHQ/sigma
+  source_id: eae8ce9f-bde9-47a6-8e79-f20d18419910
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_susp_histfile_operations.yml
+falsepositives:
+- Legitimate administrative activity
+- Legitimate software, cleaning hist file
+notes:
+  quarantine_reason: 'upstream status: test'

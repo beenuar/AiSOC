@@ -1,0 +1,38 @@
+id: sigmahq-sigma-1667a172-ed4c-463c-9969-efd92195319a
+name: Okta Policy Modified or Deleted
+description: Detects when an Okta policy is modified or deleted.
+severity: low
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType:
+    - policy.lifecycle.update
+    - policy.lifecycle.delete
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1667a172-ed4c-463c-9969-efd92195319a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_policy_modified_or_deleted.yml
+falsepositives:
+- Okta Policies being modified or deleted may be performed by a system administrator.
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Okta Policies modified or deleted from unfamiliar users should be investigated.
+  If known behavior is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

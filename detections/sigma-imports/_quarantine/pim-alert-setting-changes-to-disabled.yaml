@@ -1,0 +1,32 @@
+id: sigmahq-sigma-aeaef14c-e5bf-4690-a9c8-835caad458bd
+name: PIM Alert Setting Changes To Disabled
+description: Detects when PIM alerts are set to disabled.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-identity-management#azure-ad-roles-assignment
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Disable PIM Alert
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: aeaef14c-e5bf-4690-a9c8-835caad458bd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_pim_alerts_disabled.yml
+falsepositives:
+- Administrator disabling PIM alerts as an active choice.
+notes:
+  quarantine_reason: 'upstream status: test'

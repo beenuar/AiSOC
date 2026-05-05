@@ -1,0 +1,41 @@
+id: splunk-security-content-66f22f52-fbae-4be7-a263-561dacb63612
+name: Cisco Secure Firewall - Lumma Stealer Outbound Connection Attempt
+description: 'This analytic detects Lumma Stealer outbound connection attempts using
+  Cisco Secure Firewall Intrusion Events.
+
+  It leverages Cisco Secure Firewall Threat Defense IntrusionEvent logs to identify
+  cases where Snort signatures with IDs 64797, 64798, 64799, 64800, 64801, 64167,
+  64168, 64169, 62709 have been triggered. If confirmed malicious, this behavior could
+  indicate an active infection of Lumma Stealer.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1041
+  - T1573.002
+  categories:
+  - network
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.lumma
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent signature_id IN (64797,\
+    \ 64798, 64799, 64800, 64801, 64167, 64168, 64169, 62709)\n| fillnull\n| stats\
+    \ min(_time) as firstTime max(_time) as lastTime\n        by src dest dest_port\
+    \ transport signature_id signature class_desc MitreAttackGroups rule InlineResult\
+    \ InlineResultReason app\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___lumma_stealer_outbound_connection_attempt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 66f22f52-fbae-4be7-a263-561dacb63612
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___lumma_stealer_outbound_connection_attempt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

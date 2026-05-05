@@ -1,0 +1,62 @@
+id: sigmahq-sigma-8023f872-3f1d-4301-a384-801889917ab4
+name: Usage of Renamed Sysinternals Tools - RegistrySet
+description: Detects non-sysinternals tools setting the "accepteula" key which normally
+  is set on sysinternals tool execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|contains:
+    - \PsExec
+    - \ProcDump
+    - \Handle
+    - \LiveKd
+    - \Process Explorer
+    - \PsLoglist
+    - \PsPasswd
+    - \Active Directory Explorer
+    TargetObject|endswith: \EulaAccepted
+  filter_main_image_names:
+    Image|endswith:
+    - \PsExec.exe
+    - \PsExec64.exe
+    - \procdump.exe
+    - \procdump64.exe
+    - \handle.exe
+    - \handle64.exe
+    - \livekd.exe
+    - \livekd64.exe
+    - \procexp.exe
+    - \procexp64.exe
+    - \psloglist.exe
+    - \psloglist64.exe
+    - \pspasswd.exe
+    - \pspasswd64.exe
+    - \ADExplorer.exe
+    - \ADExplorer64.exe
+  filter_optional_null:
+    Image: null
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8023f872-3f1d-4301-a384-801889917ab4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_renamed_sysinternals_eula_accepted.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

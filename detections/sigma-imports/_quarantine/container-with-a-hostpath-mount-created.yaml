@@ -1,0 +1,42 @@
+id: sigmahq-sigma-402b955c-8fe0-4a8c-b635-622b4ac5f902
+name: Container With A hostPath Mount Created
+description: 'Detects creation of a container with a hostPath mount.
+
+  A hostPath volume mounts a directory or a file from the node to the container.
+
+  Attackers who have permissions to create a new pod in the cluster may create one
+  with a writable hostPath volume and chroot to escape to the underlying node.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1611
+  categories:
+  - endpoint
+references:
+- https://microsoft.github.io/Threat-Matrix-for-Kubernetes/techniques/Writable%20hostPath%20mount/
+- https://blog.appsecco.com/kubernetes-namespace-breakout-using-insecure-host-path-volume-part-1-b382f2a6e216
+logsource:
+  category: application
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    verb: create
+    objectRef.resource: pods
+    hostPath: '*'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 402b955c-8fe0-4a8c-b635-622b4ac5f902
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_hostpath_mount.yml
+falsepositives:
+- The DaemonSet controller creates pods with hostPath volumes within the kube-system
+  namespace.
+notes:
+  quarantine_reason: 'upstream status: test'

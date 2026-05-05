@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-possible-libvlcdll-hijack-via-imageload
+name: possible_libvlcdll_hijack_via_imageload
+description: possible_libvlcdll_hijack_via_imageload
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_libvlcdll_hijack_via_imageload {\n meta:\n    author\
+    \ = \"SOC Prime Team, Fireeye\"\n    description = \"Identifies possible DLL search\
+    \ order hijacking of LIBVLC.dll based on image loads from unexpected locations.\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/2kasRzsrPd6f\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"image_load\"\n  \
+    \  product = \"windows\"\n    mitre = \"persistence, privilege_escalation, defense_evasion,\
+    \ t1574, t1574.001\"\n\n  events:\n(re.regex($selection.target.process.file.full_path,\
+    \ `.*LIBVLC\\.dll.*`) and re.regex($selection.target.process.file.full_path, `.*videolan.*`))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: possible_libvlcdll_hijack_via_imageload
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_libvlcdll_hijack_via_imageload
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/image_load/possible_libvlc_dll_hijack__via_imageload.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

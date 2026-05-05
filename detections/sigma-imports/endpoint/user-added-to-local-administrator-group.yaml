@@ -1,0 +1,38 @@
+id: sigmahq-sigma-c265cf08-3f99-46c1-8d59-328247057d57
+name: User Added to Local Administrator Group
+description: Detects the addition of a new member to the local administrator group,
+  which could be legitimate activity or a sign of privilege escalation activity
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1078
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4732
+- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_eid:
+    EventID: 4732
+  selection_group:
+  - TargetUserName|startswith: Administr
+  - TargetSid: S-1-5-32-544
+  filter_main_computer_accounts:
+    SubjectUserName|endswith: $
+  condition: all of selection_* and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c265cf08-3f99-46c1-8d59-328247057d57
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_user_added_to_local_administrators.yml
+falsepositives:
+- Legitimate administrative activity

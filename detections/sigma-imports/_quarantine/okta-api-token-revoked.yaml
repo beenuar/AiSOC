@@ -1,0 +1,32 @@
+id: sigmahq-sigma-cf1dbc6b-6205-41b4-9b88-a83980d2255b
+name: Okta API Token Revoked
+description: Detects when a API Token is revoked.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - identity
+references:
+- https://developer.okta.com/docs/reference/api/system-log/
+- https://developer.okta.com/docs/reference/api/event-types/
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: system.api_token.revoke
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cf1dbc6b-6205-41b4-9b88-a83980d2255b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/identity/okta/okta_api_token_revoked.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

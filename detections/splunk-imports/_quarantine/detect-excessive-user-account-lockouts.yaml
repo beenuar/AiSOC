@@ -1,0 +1,38 @@
+id: splunk-security-content-95a7f9a5-6096-437e-a19e-86f42ac609bd
+name: Detect Excessive User Account Lockouts
+description: The following analytic identifies user accounts experiencing an excessive
+  number of lockouts within a short timeframe. It leverages the 'Change' data model,
+  specifically focusing on events where the result indicates a lockout. This activity
+  is significant as it may indicate a brute-force attack or misconfiguration, both
+  of which require immediate attention. If confirmed malicious, this behavior could
+  lead to account compromise, unauthorized access, and potential lateral movement
+  within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.003
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Change.All_Changes\n  WHERE All_Changes.result=\"\
+    *lock*\"\n  BY All_Changes.user All_Changes.result\n| `drop_dm_object_name(\"\
+    All_Changes\")`\n| `drop_dm_object_name(\"Account_Management\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| search count > 5\n| `detect_excessive_user_account_lockouts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 95a7f9a5-6096-437e-a19e-86f42ac609bd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_excessive_user_account_lockouts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

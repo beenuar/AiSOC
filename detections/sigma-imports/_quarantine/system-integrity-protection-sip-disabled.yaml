@@ -1,0 +1,37 @@
+id: sigmahq-sigma-3603f18a-ec15-43a1-9af2-d196c8a7fec6
+name: System Integrity Protection (SIP) Disabled
+description: Detects the use of csrutil to disable the Configure System Integrity
+  Protection (SIP). This technique is used in post-exploit scenarios.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1518.001
+  categories:
+  - endpoint
+references:
+- https://ss64.com/osx/csrutil.html
+- https://objective-see.org/blog/blog_0x6D.html
+- https://www.welivesecurity.com/2017/10/20/osx-proton-supply-chain-attack-elmedia/
+- https://www.virustotal.com/gui/file/05a2adb266ec6c0ba9ed176d87d8530e71e845348c13caf9f60049760c312cd3/behavior
+logsource:
+  product: macos
+  category: process_creation
+detection:
+  selection:
+    Image|endswith: /csrutil
+    CommandLine|contains: disable
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3603f18a-ec15-43a1-9af2-d196c8a7fec6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_csrutil_disable.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

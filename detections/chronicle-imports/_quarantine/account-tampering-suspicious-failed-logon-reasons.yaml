@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-account-tampering-suspicious-failed-logon-reasons
+name: account_tampering__suspicious_failed_logon_reasons
+description: account_tampering__suspicious_failed_logon_reasons
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule account_tampering__suspicious_failed_logon_reasons {\n meta:\n\
+    \    author = \"Florian Roth\"\n    description = \"This method uses uncommon\
+    \ error codes on failed logons to determine suspicious activity and tampering\
+    \ with accounts that have been disabled or somehow restricted.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/O5OvzzX3zD8E\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"persistence, privilege_escalation, t1078\"\n\n\
+    \  events:\n(($selection.metadata.product_event_type = \"4625\" or $selection.metadata.product_event_type\
+    \ = \"4776\") and ($selection.security_result.description = \"0xC0000072\" or\
+    \ $selection.security_result.description = \"0xC000006F\" or $selection.security_result.description\
+    \ = \"0xC0000070\" or $selection.security_result.description = \"0xC0000413\"\
+    \ or $selection.security_result.description = \"0xC000018C\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: account_tampering__suspicious_failed_logon_reasons
+provenance:
+  source: chronicle/detection-rules
+  source_id: account_tampering__suspicious_failed_logon_reasons
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/account_tampering___suspicious_failed_logon_reasons.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

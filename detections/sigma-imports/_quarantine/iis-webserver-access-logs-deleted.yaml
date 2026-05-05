@@ -1,0 +1,35 @@
+id: sigmahq-sigma-3eb8c339-a765-48cc-a150-4364c04652bf
+name: IIS WebServer Access Logs Deleted
+description: Detects the deletion of IIS WebServer access logs which may indicate
+  an attempt to destroy forensic evidence
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://www.elastic.co/guide/en/security/current/webserver-access-logs-deleted.html
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains: \inetpub\logs\LogFiles\
+    TargetFilename|endswith: .log
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3eb8c339-a765-48cc-a150-4364c04652bf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_iis_access_logs.yml
+falsepositives:
+- During uninstallation of the IIS service
+- During log rotation
+notes:
+  quarantine_reason: 'upstream status: test'

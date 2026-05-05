@@ -1,0 +1,37 @@
+id: sigmahq-sigma-84b14121-9d14-416e-800b-f3b829c5a14d
+name: Suspicious CustomShellHost Execution
+description: Detects the execution of CustomShellHost.exe where the child isn't located
+  in 'C:\Windows\explorer.exe'. CustomShellHost is a known LOLBin that can be abused
+  by attackers for defense evasion techniques.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1216
+  categories:
+  - endpoint
+references:
+- https://github.com/LOLBAS-Project/LOLBAS/pull/180
+- https://lolbas-project.github.io/lolbas/Binaries/CustomShellHost/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \CustomShellHost.exe
+  filter_main_explorer:
+    Image: C:\Windows\explorer.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84b14121-9d14-416e-800b-f3b829c5a14d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_customshellhost_susp_exec.yml
+falsepositives:
+- False positives are unlikely, investigate matches carefully.
+notes:
+  quarantine_reason: 'upstream status: test'

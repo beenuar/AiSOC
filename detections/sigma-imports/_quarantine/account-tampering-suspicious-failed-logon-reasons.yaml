@@ -1,0 +1,53 @@
+id: sigmahq-sigma-9eb99343-d336-4020-a3cd-67f3819e68ee
+name: Account Tampering - Suspicious Failed Logon Reasons
+description: This method uses uncommon error codes on failed logons to determine suspicious
+  activity and tampering with accounts that have been disabled or somehow restricted.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4625
+- https://twitter.com/SBousseaden/status/1101431884540710913
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_eid:
+    EventID:
+    - 4625
+    - 4776
+  selection_status:
+  - Status:
+    - '0xC0000072'
+    - '0xC000006F'
+    - '0xC0000070'
+    - '0xC0000413'
+    - '0xC000018C'
+    - '0xC000015B'
+  - SubStatus:
+    - '0xC0000072'
+    - '0xC000006F'
+    - '0xC0000070'
+    - '0xC0000413'
+    - '0xC000018C'
+    - '0xC000015B'
+  filter:
+    SubjectUserSid: S-1-0-0
+  condition: all of selection_* and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9eb99343-d336-4020-a3cd-67f3819e68ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_failed_logon_reasons.yml
+falsepositives:
+- User using a disabled account
+notes:
+  quarantine_reason: 'upstream status: test'

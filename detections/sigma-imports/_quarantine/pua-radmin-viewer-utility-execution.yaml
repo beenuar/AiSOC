@@ -1,0 +1,36 @@
+id: sigmahq-sigma-5817e76f-4804-41e6-8f1d-5fa0b3ecae2d
+name: PUA - Radmin Viewer Utility Execution
+description: Detects the execution of Radmin which can be abused by an adversary to
+  remotely control Windows machines
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1072
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1072/T1072.md
+- https://www.radmin.fr/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Description: Radmin Viewer
+  - Product: Radmin Viewer
+  - OriginalFileName: Radmin.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5817e76f-4804-41e6-8f1d-5fa0b3ecae2d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_pua_radmin.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

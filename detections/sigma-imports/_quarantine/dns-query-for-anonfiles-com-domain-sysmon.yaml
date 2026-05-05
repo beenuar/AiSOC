@@ -1,0 +1,33 @@
+id: sigmahq-sigma-065cceea-77ec-4030-9052-fc0affea7110
+name: DNS Query for Anonfiles.com Domain - Sysmon
+description: Detects DNS queries for "anonfiles.com", which is an anonymous file upload
+  platform often used for malicious purposes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1567.002
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/vinfo/us/security/news/ransomware-spotlight/ransomware-spotlight-blackbyte
+logsource:
+  product: windows
+  category: dns_query
+detection:
+  selection:
+    QueryName|contains: .anonfiles.com
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 065cceea-77ec-4030-9052-fc0affea7110
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_anonymfiles_com.yml
+falsepositives:
+- Rare legitimate access to anonfiles.com
+notes:
+  quarantine_reason: 'upstream status: test'

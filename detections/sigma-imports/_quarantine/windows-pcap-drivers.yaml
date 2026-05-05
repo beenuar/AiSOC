@@ -1,0 +1,45 @@
+id: sigmahq-sigma-7b687634-ab20-11ea-bb37-0242ac130002
+name: Windows Pcap Drivers
+description: Detects Windows Pcap driver installation based on a list of associated
+  .sys files.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1040
+  categories:
+  - endpoint
+references:
+- https://ragged-lab.blogspot.com/2020/06/capturing-pcap-driver-installations.html#more
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection:
+    EventID: 4697
+    ServiceFileName|contains:
+    - pcap
+    - npcap
+    - npf
+    - nm3
+    - ndiscap
+    - nmnt
+    - windivert
+    - USBPcap
+    - pktmon
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7b687634-ab20-11ea-bb37-0242ac130002
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_pcap_drivers.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,45 @@
+id: sigmahq-sigma-33339be3-148b-4e16-af56-ad16ec6c7e7b
+name: Findstr Launching .lnk File
+description: Detects usage of findstr to identify and execute a lnk file as seen within
+  the HHS redirect attack
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  - T1202
+  - T1027.003
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/hhsgov-open-redirect-used-by-coronavirus-phishing-to-spread-malware/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \find.exe
+    - \findstr.exe
+  - OriginalFileName:
+    - FIND.EXE
+    - FINDSTR.EXE
+  selection_cli:
+    CommandLine|endswith:
+    - .lnk
+    - .lnk"
+    - .lnk'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 33339be3-148b-4e16-af56-ad16ec6c7e7b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_findstr_lnk.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

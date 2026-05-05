@@ -1,0 +1,54 @@
+id: splunk-security-content-b9fb8d97-dbc9-4a09-804c-ff0e3862bb2d
+name: Windows Rundll32 Apply User Settings Changes
+description: 'The following analytic detects the execution of rundll32 with a call
+  to the user32 DLL, specifically the UpdatePerUserSystemParameters function.
+
+  This function is responsible for updating system parameters, such as desktop backgrounds,
+  display settings, and visual themes.
+
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  command-line executions.
+
+  This activity can be significant as it is an uncommon way to apply settings. It
+  was also observed as part of Rhysida Ransomware activity.
+
+  If confirmed malicious, this could allow an attacker to disguise activities or make
+  unauthorized system changes, potentially leading to persistent unauthorized access.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-319a
+- https://www.cisa.gov/sites/default/files/publications/aa22-264a-iranian-cyber-actors-conduct-cyber-operations-against-the-government-of-albania.pdf
+- https://cdn.pathfactory.com/assets/10555/contents/400686/13f4424c-05b4-46db-bb9c-6bf9b5436ec4.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    `process_rundll32`\nProcesses.process = \"*user32.dll*\"\nProcesses.process =\
+    \ \"*UpdatePerUserSystemParameters*\"\n\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n   Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec\n   Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n   Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_rundll32_apply_user_settings_changes_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b9fb8d97-dbc9-4a09-804c-ff0e3862bb2d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rundll32_apply_user_settings_changes.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

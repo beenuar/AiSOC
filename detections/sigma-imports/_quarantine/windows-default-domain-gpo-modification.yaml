@@ -1,0 +1,54 @@
+id: sigmahq-sigma-e5ac86dd-2da1-454b-be74-05d26c769d7d
+name: Windows Default Domain GPO Modification
+description: 'Detects modifications to Default Domain or Default Domain Controllers
+  Group Policy Objects (GPOs).
+
+  Adversaries may modify these default GPOs to deploy malicious configurations across
+  the domain.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/25/i/unmasking-the-gentlemen-ransomware.html
+- https://adsecurity.org/?p=3377
+- https://www.pentestpartners.com/security-blog/living-off-the-land-gpo-style/
+- https://jgspiers.com/audit-group-policy-changes/
+logsource:
+  product: windows
+  service: security
+  definition: 'Enable ''Audit Directory Service Changes'' in the Default Domain Controllers
+    Policy under:
+
+    Computer Configuration -> Policies -> Windows Settings -> Security Settings ->
+    Advanced Audit Policy Configuration -> Audit Policies -> DS Access -> Audit Directory
+    Service Changes (Success).
+
+    Additionally, proper SACL needs to be configured on the ''CN=Policies,CN=System,DC=<domain>,DC=<tld>''
+    container in Active Directory to capture changes to Group Policy Objects.
+
+    '
+detection:
+  selection:
+    EventID: 5136
+    ObjectClass: groupPolicyContainer
+    ObjectDN|startswith:
+    - CN={31B2F340-016D-11D2-945F-00C04FB984F9},CN=POLICIES,CN=SYSTEM
+    - CN={6AC1786C-016F-11D2-945F-00C04FB984F9},CN=POLICIES,CN=SYSTEM
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e5ac86dd-2da1-454b-be74-05d26c769d7d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_default_domain_gpo_modification.yml
+falsepositives:
+- Legitimate modifications to Default Domain or Default Domain Controllers GPOs
+notes:
+  quarantine_reason: 'upstream status: experimental'

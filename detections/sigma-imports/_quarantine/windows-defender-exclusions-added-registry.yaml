@@ -1,0 +1,32 @@
+id: sigmahq-sigma-a982fc9c-6333-4ffb-a51d-addb04e8b529
+name: Windows Defender Exclusions Added - Registry
+description: Detects the Setting of Windows Defender Exclusions
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_nullbind/status/1204923340810543109
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection2:
+    TargetObject|contains: \Microsoft\Windows Defender\Exclusions
+  condition: selection2
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a982fc9c-6333-4ffb-a51d-addb04e8b529
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_defender_exclusions.yml
+falsepositives:
+- Administrator actions
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-a1473adb-5338-4a20-b4c3-126763e2d3d3
+name: Suspicious Advpack Call Via Rundll32.EXE
+description: Detects execution of "rundll32" calling "advpack.dll" with potential
+  obfuscated ordinal calls in order to leverage the "RegisterOCX" function
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Hexacorn/status/1224848930795552769
+- http://www.hexacorn.com/blog/2020/02/05/stay-positive-lolbins-not/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \rundll32.exe
+  - OriginalFileName: RUNDLL32.EXE
+  - CommandLine|contains: rundll32
+  selection_cli_dll:
+    CommandLine|contains: advpack
+  selection_cli_ordinal:
+  - CommandLine|contains|all:
+    - '#+'
+    - '12'
+  - CommandLine|contains: '#-'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a1473adb-5338-4a20-b4c3-126763e2d3d3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_advpack_obfuscated_ordinal_call.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

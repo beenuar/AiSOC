@@ -1,0 +1,46 @@
+id: sigmahq-sigma-710bdbce-495d-491d-9a8f-7d0d88d2b41e
+name: Special File Creation via Mknod Syscall
+description: 'Detects usage of the `mknod` syscall to create special files (e.g.,
+  character or block devices).
+
+  Attackers or malware might use `mknod` to create fake devices, interact with kernel
+  interfaces,
+
+  or establish covert channels in Linux systems.
+
+  Monitoring the use of `mknod` is important because this syscall is rarely used by
+  legitimate applications,
+
+  and it can be abused to bypass file system restrictions or create backdoors.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://man7.org/linux/man-pages/man2/mknod.2.html
+- https://hopeness.medium.com/master-the-linux-mknod-command-a-comprehensive-guide-1c150a546aa8
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection:
+    type: SYSCALL
+    SYSCALL: mknod
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 710bdbce-495d-491d-9a8f-7d0d88d2b41e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/syscall/lnx_auditd_susp_special_file_creation_via_mknod_syscall.yml
+falsepositives:
+- Device creation by legitimate scripts or init systems (udevadm, MAKEDEV)
+- Container runtimes or security tools during initialization
+notes:
+  quarantine_reason: 'upstream status: experimental'

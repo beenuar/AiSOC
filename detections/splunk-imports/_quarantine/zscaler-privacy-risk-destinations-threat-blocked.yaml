@@ -1,0 +1,39 @@
+id: splunk-security-content-5456bdef-d765-4565-8e1f-61ca027bc50d
+name: Zscaler Privacy Risk Destinations Threat Blocked
+description: The following analytic identifies blocked destinations within a network
+  that are deemed privacy risks by Zscaler. It leverages web proxy logs, focusing
+  on entries marked as "Privacy Risk." Key data points such as device owner, user,
+  URL category, destination URL, and IP are analyzed. This activity is significant
+  for a SOC as it helps monitor and manage privacy risks, ensuring a secure network
+  environment. If confirmed malicious, this activity could indicate attempts to access
+  or exfiltrate sensitive information, posing a significant threat to data privacy
+  and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - application
+references:
+- https://help.zscaler.com/zia/nss-feed-output-format-web-logs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zscaler_proxy` action=blocked urlclass=\"Privacy Risk\"\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY action deviceowner\
+    \ user\n       urlcategory url src\n       dest\n  | dedup urlcategory\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `zscaler_privacy_risk_destinations_threat_blocked_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5456bdef-d765-4565-8e1f-61ca027bc50d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/zscaler_privacy_risk_destinations_threat_blocked.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

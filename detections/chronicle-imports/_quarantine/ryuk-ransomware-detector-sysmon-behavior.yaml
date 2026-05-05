@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-ryuk-ransomware-detector-sysmon-behavior
+name: ryuk_ransomware_detector_sysmon_behavior
+description: ryuk_ransomware_detector_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ryuk_ransomware_detector_sysmon_behavior {\n meta:\n    author\
+    \ = \"Lee Archinal\"\n    description = \"This detects characteristics of the\
+    \ Ryuk Ransomware strain of malware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/vZQdVgPbH0b7\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/07/15\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"impact, t1486, execution, t1204\"\n\n  events:\n\
+    ($selection1.metadata.product_event_type = \"11\" and (re.regex($selection1.target.file.full_path,\
+    \ `.*\\.ryk`) or $selection1.target.file.full_path = \"RyukReadMe.html\"))\n\n\
+    \  condition:\n    $selection1\n}"
+  chronicle_rule_name: ryuk_ransomware_detector_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: ryuk_ransomware_detector_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/ryuk_ransomware_detector__sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

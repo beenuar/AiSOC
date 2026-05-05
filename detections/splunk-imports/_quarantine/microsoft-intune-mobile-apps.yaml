@@ -1,0 +1,51 @@
+id: splunk-security-content-98e6b389-2806-4426-a580-8a92cb0d9710
+name: Microsoft Intune Mobile Apps
+description: 'Microsoft Intune supports deploying packaged applications to support
+  software deployment, this functionality can also be abused for deploying malicious
+  payloads to intune managed devices.
+
+  This detection identifies when a new packaged application has been added, updated
+  or deleted.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1072
+  - T1021.007
+  - T1202
+  - T1105
+  categories:
+  - cloud
+references:
+- https://posts.specterops.io/death-from-above-lateral-movement-from-azure-to-on-prem-ad-d18cb3959d4d
+- https://securityintelligence.com/x-force/detecting-intune-lateral-movement/
+- https://posts.specterops.io/maestro-9ed71d38d546
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_activity` operationName="*MobileApp*"
+
+    | rename identity as user, properties.TargetObjectIds{} as TargetObjectId, properties.TargetDisplayNames{}
+    as TargetDisplayName, properties.Actor.IsDelegatedAdmin as user_isDelegatedAdmin
+
+    | rex field="operationName" "^(?P<action>\w+)\s" | replace "Patch" with "updated",
+    "Create" with "created", "Delete", with "deleted", "assign", with "assigned" IN
+    action
+
+    | table _time operationName action user user_type user_isDelegatedAdmin TargetDisplayName
+    TargetObjectId status tenantId correlationId
+
+    | `microsoft_intune_mobile_apps_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 98e6b389-2806-4426-a580-8a92cb0d9710
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/microsoft_intune_mobile_apps.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

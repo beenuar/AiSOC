@@ -1,0 +1,36 @@
+id: sigmahq-sigma-34ebb878-1b15-4895-b352-ca2eeb99b274
+name: Suspicious Execution of Shutdown
+description: Use of the commandline to shutdown or reboot windows
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1529
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1529/T1529.md
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/shutdown
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \shutdown.exe
+    CommandLine|contains:
+    - '/r '
+    - '/s '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 34ebb878-1b15-4895-b352-ca2eeb99b274
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_shutdown_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

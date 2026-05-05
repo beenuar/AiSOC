@@ -1,0 +1,37 @@
+id: sigmahq-sigma-70e8e9b4-6a93-4cb7-8cde-da69502e7aff
+name: VMGuestLib DLL Sideload
+description: Detects DLL sideloading of VMGuestLib.dll by the WmiApSrv service.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://decoded.avast.io/martinchlumecky/png-steganography/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|contains|all:
+    - \VMware\VMware Tools\vmStatsProvider\win32
+    - \vmGuestLib.dll
+    Image|endswith: \Windows\System32\wbem\WmiApSrv.exe
+  filter:
+    Signed: 'true'
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 70e8e9b4-6a93-4cb7-8cde-da69502e7aff
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_vmguestlib.yml
+falsepositives:
+- FP could occur if the legitimate version of vmGuestLib already exists on the system
+notes:
+  quarantine_reason: 'upstream status: test'

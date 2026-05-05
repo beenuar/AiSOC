@@ -1,0 +1,37 @@
+id: sigmahq-sigma-801bd44f-ceed-4eb6-887c-11544633c0aa
+name: Windows Defender Configuration Changes
+description: Detects suspicious changes to the Windows Defender configuration
+severity: high
+enabled: true
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus?view=o365-worldwide
+- https://bidouillesecurity.com/disable-windows-defender-in-powershell/#DisableAntiSpyware
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID: 5007
+    NewValue|contains:
+    - '\Windows Defender\DisableAntiSpyware '
+    - '\Windows Defender\Scan\DisableRemovableDriveScanning '
+    - '\Windows Defender\Scan\DisableScanningMappedNetworkDrivesForFullScan '
+    - '\Windows Defender\SpyNet\DisableBlockAtFirstSeen '
+    - '\Real-Time Protection\SpyNetReporting '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 801bd44f-ceed-4eb6-887c-11544633c0aa
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/windefend/win_defender_suspicious_features_tampering.yml
+falsepositives:
+- Administrator activity (must be investigated)

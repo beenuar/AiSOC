@@ -1,0 +1,38 @@
+id: sigmahq-sigma-f4ff7323-b5fc-4323-8b52-6b9408e15788
+name: Potential PowerShell Console History Access Attempt via History File
+description: 'Detects potential access attempts to the PowerShell console history
+  directly via history file (ConsoleHost_history.txt).
+
+  This can give access to plaintext passwords used in PowerShell commands or used
+  for general reconnaissance.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://0xdf.gitlab.io/2018/11/08/powershell-history-file.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+    - ConsoleHost_history.txt
+    - (Get-PSReadLineOption).HistorySavePath
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f4ff7323-b5fc-4323-8b52-6b9408e15788
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_console_history_file_access.yml
+falsepositives:
+- Legitimate access of the console history file is possible
+notes:
+  quarantine_reason: 'upstream status: experimental'

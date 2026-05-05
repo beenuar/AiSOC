@@ -1,0 +1,34 @@
+id: sigmahq-sigma-af6c3078-84cd-4c68-8842-08b76bd81b13
+name: OpenCanary - HTTP GET Request
+description: Detects instances where an HTTP service on an OpenCanary node has received
+  a GET request.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 3000
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: af6c3078-84cd-4c68-8842-08b76bd81b13
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_http_get.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

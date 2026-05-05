@@ -1,0 +1,48 @@
+id: splunk-security-content-1f35e1da-267b-11ec-90a9-acde48001122
+name: Wscript Or Cscript Suspicious Child Process
+description: This analytic identifies a suspicious spawned process by WScript or CScript
+  process. This technique was a common technique used by adversaries and malware to
+  execute different LOLBIN, other scripts like PowerShell or spawn a suspended process
+  to inject its code as a defense evasion. This TTP may detect some normal script
+  that uses several application tools that are in the list of the child process it
+  detects but a good pivot and indicator that a script may execute suspicious code.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  - T1134.004
+  - T1543
+  categories:
+  - endpoint
+references:
+- https://www.hybrid-analysis.com/sample/8da5b75b6380a41eee3a399c43dfe0d99eeefaa1fd21027a07b1ecaa4cd96fdd?environmentId=120
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name\
+    \ IN (\"cscript.exe\", \"wscript.exe\") Processes.process_name IN (\"regsvr32.exe\"\
+    , \"rundll32.exe\",\"winhlp32.exe\",\"certutil.exe\",\"msbuild.exe\",\"cmd.exe\"\
+    ,\"powershell*\",\"pwsh.exe\",\"wmic.exe\",\"mshta.exe\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `wscript_or_cscript_suspicious_child_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1f35e1da-267b-11ec-90a9-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/wscript_or_cscript_suspicious_child_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

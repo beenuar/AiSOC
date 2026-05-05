@@ -1,0 +1,46 @@
+id: splunk-security-content-cb56a1ea-e0b1-46d5-913f-e024cba40cbe
+name: Windows Archived Collected Data In TEMP Folder
+description: The following analytic detects the creation of archived files in a temporary
+  folder, which may contain collected data. This behavior is often associated with
+  malicious activity, where attackers compress sensitive information before exfiltration.
+  The detection focuses on monitoring specific directories, such as temp folders,
+  for the presence of newly created archive files (e.g., .zip, .rar, .tar). By identifying
+  this pattern, security teams can quickly respond to potential data collection and
+  exfiltration attempts, minimizing the risk of data breaches and improving overall
+  threat detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1560
+  categories:
+  - endpoint
+references:
+- https://x.com/suyog41/status/1825869470323056748
+- https://g0njxa.medium.com/from-vietnam-to-united-states-malware-fraud-and-dropshipping-98b7a7b2c36d
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \  max(_time) as lastTime\nFROM datamodel=Endpoint.Filesystem where\n  Filesystem.file_name\
+    \ IN (\"*.zip\", \"*.rar\", \"*.tar\", \"*.7z\")\n  Filesystem.file_path IN (\"\
+    *\\\\AppData\\\\Local\\\\Temp\\\\*\", \"*\\\\Windows\\\\Temp\\\\*\")\nby Filesystem.action\
+    \ Filesystem.dest Filesystem.file_access_time\n   Filesystem.file_create_time\
+    \ Filesystem.file_hash Filesystem.file_modify_time\n   Filesystem.file_name Filesystem.file_path\
+    \ Filesystem.file_acl Filesystem.file_size\n   Filesystem.process_guid Filesystem.process_id\
+    \ Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_archived_collected_data_in_temp_folder_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cb56a1ea-e0b1-46d5-913f-e024cba40cbe
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_archived_collected_data_in_temp_folder.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

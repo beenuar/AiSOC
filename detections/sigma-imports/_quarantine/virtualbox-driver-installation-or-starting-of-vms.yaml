@@ -1,0 +1,44 @@
+id: sigmahq-sigma-bab049ca-7471-4828-9024-38279a4c04da
+name: Virtualbox Driver Installation or Starting of VMs
+description: Adversaries can carry out malicious operations using a virtual instance
+  to avoid detection. This rule is built to detect the registration of the Virtualbox
+  driver or start of a Virtualbox VM.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1564.006
+  - T1564
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2020/05/21/ragnar-locker-ransomware-deploys-virtual-machine-to-dodge-security/
+- https://threatpost.com/maze-ransomware-ragnar-locker-virtual-machine/159350/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_1:
+    CommandLine|contains:
+    - VBoxRT.dll,RTR3Init
+    - VBoxC.dll
+    - VBoxDrv.sys
+  selection_2:
+    CommandLine|contains:
+    - startvm
+    - controlvm
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bab049ca-7471-4828-9024-38279a4c04da
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_virtualbox_execution.yml
+falsepositives:
+- This may have false positives on hosts where Virtualbox is legitimately being used
+  for operations
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,43 @@
+id: chronicle-detection-rules-new-run-key-pointing-to-suspicious-folder
+name: new_run_key_pointing_to_suspicious_folder
+description: new_run_key_pointing_to_suspicious_folder
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule new_run_key_pointing_to_suspicious_folder {\n meta:\n   \
+    \ author = \"Florian Roth, Markus Neis\"\n    description = \"Detects suspicious\
+    \ new RUN key element pointing to an executable in a suspicious folder  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/Yvh1ZbwRtP5h\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/08/25\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"persistence, t1060\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"13\" and (re.regex($selection.target.registry.registry_key, `.*\\\\SOFTWARE\\\
+    \\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\.*`) or re.regex($selection.target.registry.registry_key,\
+    \ `.*\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\.*`))\
+    \ and (re.regex($selection.metadata.description, `C:\\\\Windows\\\\Temp\\\\.*`)\
+    \ or re.regex($selection.metadata.description, `.*\\\\AppData\\\\.*`) or re.regex($selection.metadata.description,\
+    \ `C:\\\\$Recycle\\.bin\\\\.*`) or re.regex($selection.metadata.description, `C:\\\
+    \\Temp\\\\.*`) or re.regex($selection.metadata.description, `C:\\\\Users\\\\Public\\\
+    \\.*`) or re.regex($selection.metadata.description, `C:\\\\Users\\\\Default\\\\\
+    .*`) or re.regex($selection.metadata.description, `C:\\\\Users\\\\Desktop\\\\\
+    .*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: new_run_key_pointing_to_suspicious_folder
+provenance:
+  source: chronicle/detection-rules
+  source_id: new_run_key_pointing_to_suspicious_folder
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/new_run_key_pointing_to_suspicious_folder.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

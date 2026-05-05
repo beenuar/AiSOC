@@ -1,0 +1,42 @@
+id: sigmahq-sigma-949f1ffb-6e85-4f00-ae1e-c3c5b190d605
+name: Explorer Process Tree Break
+description: 'Detects a command line process that uses explorer.exe to launch arbitrary
+  commands or binaries,
+
+  which is similar to cmd.exe /c, only it breaks the process tree and makes its parent
+  a new instance of explorer spawning from "svchost"'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://twitter.com/CyberRaiju/status/1273597319322058752
+- https://twitter.com/bohops/status/1276357235954909188?s=12
+- https://twitter.com/nas_bench/status/1535322450858233858
+- https://securityboulevard.com/2019/09/deobfuscating-ostap-trickbots-34000-line-javascript-downloader/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_factory:
+    CommandLine|contains: /factory,{75dff2b7-6936-4c06-a8bb-676a7b00b24b}
+  selection_root:
+    CommandLine|contains: explorer.exe
+    CommandLine|contains|windash: ' /root,'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 949f1ffb-6e85-4f00-ae1e-c3c5b190d605
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_explorer_break_process_tree.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

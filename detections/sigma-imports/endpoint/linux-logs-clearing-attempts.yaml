@@ -1,0 +1,47 @@
+id: sigmahq-sigma-80915f59-9b56-4616-9de0-fd0dea6c12fe
+name: Linux Logs Clearing Attempts
+description: 'Detects logs clearing attempts on Linux systems via utilities such as
+  ''rm'', ''rmdir'', ''shred'', and ''unlink'' targeting log files and directories.
+
+  Adversaries often try to clear logs to cover their tracks after performing malicious
+  activities.'
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1685.006
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.002/T1070.002.md
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - /rm
+    - /rmdir
+    - /shred
+    - /unlink
+    CommandLine|contains:
+    - /var/log
+    - /var/spool/mail
+  filter_main_legit_systat:
+    Image|endswith: /rm
+    CommandLine|startswith: rm -f /var/log/sysstat/
+  filter_main_dmseg:
+    Image|endswith: /rm
+    CommandLine|startswith: rm -f -- /var/log//dmesg
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 80915f59-9b56-4616-9de0-fd0dea6c12fe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_clear_logs.yml
+falsepositives:
+- Legitimate administration activities

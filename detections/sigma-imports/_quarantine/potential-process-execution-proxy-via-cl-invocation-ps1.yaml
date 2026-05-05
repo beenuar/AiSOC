@@ -1,0 +1,34 @@
+id: sigmahq-sigma-a0459f02-ac51-4c09-b511-b8c9203fc429
+name: Potential Process Execution Proxy Via CL_Invocation.ps1
+description: Detects calls to "SyncInvoke" that is part of the "CL_Invocation.ps1"
+  script to proxy execution using "System.Diagnostics.Process"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1216
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Scripts/Cl_invocation/
+- https://twitter.com/bohops/status/948061991012327424
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains: 'SyncInvoke '
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a0459f02-ac51-4c09-b511-b8c9203fc429
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_cl_invocation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

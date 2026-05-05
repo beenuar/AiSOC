@@ -1,0 +1,46 @@
+id: splunk-security-content-4be54858-432f-11ec-8209-3e22fbd008af
+name: Scheduled Task Creation on Remote Endpoint using At
+description: The following analytic detects the creation of scheduled tasks on remote
+  Windows endpoints using the at.exe command. This detection leverages Endpoint Detection
+  and Response (EDR) telemetry, focusing on process creation events involving at.exe
+  with remote command-line arguments. Identifying this activity is significant for
+  a SOC as it may indicate lateral movement or remote code execution attempts by an
+  attacker. If confirmed malicious, this activity could lead to unauthorized access,
+  persistence, or execution of malicious code, potentially resulting in data theft
+  or further compromise of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.002
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/at
+- https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-scheduledjob?redirectedfrom=MSDN
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where (Processes.process_name=at.exe
+    OR Processes.original_file_name=at.exe) (Processes.process=*\\\\*) by Processes.action
+    Processes.dest Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`|
+    `security_content_ctime(lastTime)` | `scheduled_task_creation_on_remote_endpoint_using_at_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 4be54858-432f-11ec-8209-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/scheduled_task_creation_on_remote_endpoint_using_at.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

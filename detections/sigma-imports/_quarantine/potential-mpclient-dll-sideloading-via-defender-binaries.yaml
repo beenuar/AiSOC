@@ -1,0 +1,42 @@
+id: sigmahq-sigma-7002aa10-b8d4-47ae-b5ba-51ab07e228b9
+name: Potential Mpclient.DLL Sideloading Via Defender Binaries
+description: Detects potential sideloading of "mpclient.dll" by Windows Defender processes
+  ("MpCmdRun" and "NisSrv") from their non-default directory.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/blog/living-off-windows-defender-lockbit-ransomware-sideloads-cobalt-strike-through-microsoft-security-tool
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    Image|endswith:
+    - \MpCmdRun.exe
+    - \NisSrv.exe
+  filter_main_known_locations:
+    Image|startswith:
+    - C:\Program Files (x86)\Windows Defender\
+    - C:\Program Files\Microsoft Security Client\
+    - C:\Program Files\Windows Defender\
+    - C:\ProgramData\Microsoft\Windows Defender\Platform\
+    - C:\Windows\WinSxS\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7002aa10-b8d4-47ae-b5ba-51ab07e228b9
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mpcmdrun_dll_sideload_defender.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

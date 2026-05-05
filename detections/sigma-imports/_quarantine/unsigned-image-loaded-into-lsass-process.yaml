@@ -1,0 +1,33 @@
+id: sigmahq-sigma-857c8db3-c89b-42fb-882b-f681c7cf4da2
+name: Unsigned Image Loaded Into LSASS Process
+description: Loading unsigned image (DLL, EXE) into LSASS process
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://www.slideshare.net/heirhabarov/hunting-for-credentials-dumping-in-windows-environment
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \lsass.exe
+    Signed: 'false'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 857c8db3-c89b-42fb-882b-f681c7cf4da2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_lsass_unsigned_image_load.yml
+falsepositives:
+- Valid user connecting using RDP
+notes:
+  quarantine_reason: 'upstream status: test'

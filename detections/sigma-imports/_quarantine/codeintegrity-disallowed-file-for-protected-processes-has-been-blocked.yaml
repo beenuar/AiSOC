@@ -1,0 +1,34 @@
+id: sigmahq-sigma-5daf11c3-022b-4969-adb9-365e6c078c7c
+name: CodeIntegrity - Disallowed File For Protected Processes Has Been Blocked
+description: Detects block events for files that are disallowed by code integrity
+  for protected processes
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-id-explanations
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/event-tag-explanations
+- Internal Research
+logsource:
+  product: windows
+  service: codeintegrity-operational
+detection:
+  selection:
+    EventID: 3104
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5daf11c3-022b-4969-adb9-365e6c078c7c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/code_integrity/win_codeintegrity_blocked_protected_process_file.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

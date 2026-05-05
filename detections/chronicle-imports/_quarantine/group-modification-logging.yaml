@@ -1,0 +1,48 @@
+id: chronicle-detection-rules-group-modification-logging
+name: group_modification_logging
+description: group_modification_logging
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule group_modification_logging {\n meta:\n    author = \"Alexandr\
+    \ Yampolskyi\"\n    description = \"Configure systems to issue a log entry and\
+    \ alert when an account is added to or removed from any group assigned administrative\
+    \ privileges. Sigma detects Event ID 4728 indicates a ‘Member is added to a Security\
+    \ Group’. Event ID 4729 indicates a ‘Member is removed from a Security enabled-group’.\
+    \ Event ID 4730 indicates a‘Security Group is deleted’. The case is not applicable\
+    \ for Unix OS. Supported OS - Windows 2008 R2 and 7, Windows 2012 R2 and 8.1,\
+    \ Windows 2016 and 10 Windows Server 2019, Windows Server 2000, Windows 2003 and\
+    \ XP.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/OdYpGwZmuXva\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"CSC4, CSC4.8, GDPR Art 32.1, GDPR Art 32.2, NIST\
+    \ CSF 1.1 PR.AC-4, NIST CSF 1.1 PR.AT-2, NIST CSF 1.1 PR.MA-2, NIST CSF 1.1 PR.PT-3,\
+    \ ISO 27002-2013 A.9.1.1, ISO 27002-2013 A.9.2.2, ISO 27002-2013 A.9.2.3, ISO\
+    \ 27002-2013 A.9.2.4, ISO 27002-2013 A.9.2.5, ISO 27002-2013 A.9.2.6, ISO 27002-2013\
+    \ A.9.3.1, ISO 27002-2013 A.9.4.1, ISO 27002-2013 A.9.4.2, ISO 27002-2013 A.9.4.3,\
+    \ ISO 27002-2013 A.9.4.4, PCI DSS 3.2 2.1, PCI DSS 3.2 7.1, PCI DSS 3.2 7.2, PCI\
+    \ DSS 3.2 7.3, PCI DSS 3.2 8.1, PCI DSS 3.2 8.2, PCI DSS 3.2 8.3, PCI DSS 3.2\
+    \ 8.7\"\n\n  events:\n($selection.metadata.product_event_type = \"4728\" or $selection.metadata.product_event_type\
+    \ = \"4729\" or $selection.metadata.product_event_type = \"4730\" or $selection.metadata.product_event_type\
+    \ = \"633\" or $selection.metadata.product_event_type = \"632\" or $selection.metadata.product_event_type\
+    \ = \"634\")\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: group_modification_logging
+provenance:
+  source: chronicle/detection-rules
+  source_id: group_modification_logging
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/compliance/windows/group_modification_logging.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

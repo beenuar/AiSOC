@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-diskshadow-and-vshadow-launch-detection
+name: diskshadow_and_vshadow_launch_detection
+description: diskshadow_and_vshadow_launch_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule diskshadow_and_vshadow_launch_detection {\n meta:\n    author\
+    \ = \"Eugene Nechiporenko, SOC Prime\"\n    description = \"This rule detects\
+    \ execution vshadow.exe and diskshadow.exe  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/yRULJ5D4Sl1b\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/04/25\"\n    product = \"windows\"\n    service\
+    \ = \"process_creation\"\n    mitre = \"Credential Access, t1003, Persistence,\
+    \ t1060, t1053\"\n\n  events:\n(re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\vshadow\\.exe`) or re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\diskshadow\\.exe`) or (re.regex($selection1.target.process.command_line,\
+    \ `.*vshadow\\.exe -nw -exec=.*`) or re.regex($selection1.target.process.command_line,\
+    \ `.*diskshadow\\.exe /s \\?:\\\\\\\\.*`)))\n\n  condition:\n    $selection1\n\
+    }"
+  chronicle_rule_name: diskshadow_and_vshadow_launch_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: diskshadow_and_vshadow_launch_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/sysmon/diskshadow_and_vshadow_launch_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

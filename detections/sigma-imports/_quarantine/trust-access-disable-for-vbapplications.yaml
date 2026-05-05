@@ -1,0 +1,37 @@
+id: sigmahq-sigma-1a5c46e9-f32f-42f7-b2bc-6e9084db7fbf
+name: Trust Access Disable For VBApplications
+description: Detects registry changes to Microsoft Office "AccessVBOM" to a value
+  of "1" which disables trust access for VBA on the victim machine and lets attackers
+  execute malicious macros without any Microsoft Office warnings.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://twitter.com/inversecos/status/1494174785621819397
+- https://www.mcafee.com/blogs/other-blogs/mcafee-labs/zloader-with-a-new-infection-technique/
+- https://securelist.com/scarcruft-surveilling-north-korean-defectors-and-human-rights-activists/105074/
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Security\AccessVBOM
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1a5c46e9-f32f-42f7-b2bc-6e9084db7fbf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_access_vbom_tamper.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

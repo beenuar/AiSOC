@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-fallout-rig-ek-delivers-raccoon-stealer
+name: fallout_rig_ek_delivers_raccoon_stealer
+description: fallout_rig_ek_delivers_raccoon_stealer
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule fallout_rig_ek_delivers_raccoon_stealer {\n meta:\n    author\
+    \ = \"Emir Erdogan\"\n    description = \"Raccoon Stealer  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/9lYIAZKxCWzK\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/11/24\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1140, T1059, T1005, T1022, T1105, T1057\"\n\n \
+    \ events:\n(((re.regex($selection1.target.process.file.full_path, `.*\\\\cvtres\\\
+    .exe`) and re.regex($selection1.principal.process.file.full_path, `.*\\\\csc\\\
+    .exe`)) or ($selection1.metadata.product_event_type = \"1\" and (re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\csc\\.exe`) or re.regex($selection1.target.process.file.full_path, `.*\\\
+    \\AyJWa1N0\\.tmp`)) and re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\powershell\\.exe`))) or (re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\cmd\\.exe`) and re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\AyJWa1N0\\.tmp`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: fallout_rig_ek_delivers_raccoon_stealer
+provenance:
+  source: chronicle/detection-rules
+  source_id: fallout_rig_ek_delivers_raccoon_stealer
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/sysmon/fallout_rig_ek_delivers_raccoon_stealer.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

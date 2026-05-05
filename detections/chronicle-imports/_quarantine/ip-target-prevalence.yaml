@@ -1,0 +1,67 @@
+id: chronicle-detection-rules-ip-target-prevalence
+name: ip_target_prevalence
+description: ip_target_prevalence
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ip_target_prevalence {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detect events that are communicating to IP addresses that\
+    \ have a low rolling max prevalence.\"\n    rule_id = \"mr_0de02f28-2a7d-4128-aa31-02308491e744\"\
+    \n    rule_name = \"IP Target Prevalence\"\n    type = \"alert\"\n    tags = \"\
+    prevalence\"\n    data_source = \"crowdstrike, gcp firewall, microsoft sysmon,\
+    \ gcp scc, microsoft defender atp, corelight zeek, microsoft windows events\"\n\
+    \    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $network.metadata.event_type\
+    \ = \"NETWORK_CONNECTION\"\n    $network.target.ip = $ip\n\n    // derived from\
+    \ events ingested by Google SecOps\n    $prevalence.graph.metadata.entity_type\
+    \ = \"IP_ADDRESS\"\n    $prevalence.graph.metadata.source_type = \"DERIVED_CONTEXT\"\
+    \n    $prevalence.graph.entity.artifact.prevalence.day_count = 10\n    $prevalence.graph.entity.artifact.prevalence.rolling_max\
+    \ <= 3\n    $prevalence.graph.entity.artifact.prevalence.rolling_max > 0\n   \
+    \ $prevalence.graph.entity.artifact.ip = $ip\n\n  match:\n    $ip over 5m\n\n\
+    \  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($network.metadata.id)\n\
+    \    // added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($network.principal.ip)\n    // Commented out target.ip because\
+    \ it is already represented in graph as match variable. If match changes, can\
+    \ uncomment to add to results\n    //$target_ip = array_distinct($network.target.ip)\n\
+    \    $principal_process_pid = array_distinct($network.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($network.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($network.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($network.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($network.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($network.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($network.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($network.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($network.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($network.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($network.target.process.product_specific_process_id)\n    $target_process_parent_process_product_specific_process_id\
+    \ = array_distinct($network.target.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($network.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($network.target.user.userid)\n\n  condition:\n\
+    \    $network and $prevalence\n}"
+  chronicle_rule_name: ip_target_prevalence
+provenance:
+  source: chronicle/detection-rules
+  source_id: ip_target_prevalence
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/ip_target_prevalence.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

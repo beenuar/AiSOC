@@ -1,0 +1,51 @@
+id: sigmahq-sigma-a8f29a7b-b137-4446-80a0-b804272f3da2
+name: Persistence and Execution at Scale via GPO Scheduled Task
+description: Detect lateral movement using GPO scheduled task, usually used to deploy
+  ransomware at scale
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://twitter.com/menasec1/status/1106899890377052160
+- https://www.secureworks.com/blog/ransomware-as-a-distraction
+- https://www.elastic.co/guide/en/security/7.17/prebuilt-rule-0-16-1-scheduled-task-execution-at-scale-via-gpo.html
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Audit Detailed File
+    Share" must be configured for Success/Failure
+detection:
+  selection_5136:
+    EventID: 5136
+    AttributeLDAPDisplayName:
+    - gPCMachineExtensionNames
+    - gPCUserExtensionNames
+    AttributeValue|contains:
+    - CAB54552-DEEA-4691-817E-ED4A4D1AFC72
+    - AADCED64-746C-4633-A97C-D61349046527
+  selection_5145:
+    EventID: 5145
+    ShareName|endswith: \SYSVOL
+    RelativeTargetName|endswith: ScheduledTasks.xml
+    AccessList|contains:
+    - WriteData
+    - '%%4417'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a8f29a7b-b137-4446-80a0-b804272f3da2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_gpo_scheduledtasks.yml
+falsepositives:
+- If the source IP is not localhost then it's super suspicious, better to monitor
+  both local and remote changes to GPO scheduled tasks.
+notes:
+  quarantine_reason: 'upstream status: test'

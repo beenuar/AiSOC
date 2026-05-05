@@ -1,0 +1,40 @@
+id: sigmahq-sigma-2650dd1a-eb2a-412d-ac36-83f06c4f2282
+name: Detected Windows Software Discovery - PowerShell
+description: Adversaries may attempt to enumerate software for a variety of reasons,
+  such as figuring out what security measures are present or if the compromised system
+  has a version of software that is vulnerable.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1518
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1518/T1518.md
+- https://github.com/harleyQu1nn/AggressorScripts
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - get-itemProperty
+    - \software\
+    - select-object
+    - format-table
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2650dd1a-eb2a-412d-ac36-83f06c4f2282
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_software_discovery.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

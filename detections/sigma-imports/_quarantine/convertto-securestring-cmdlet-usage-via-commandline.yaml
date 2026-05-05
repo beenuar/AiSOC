@@ -1,0 +1,42 @@
+id: sigmahq-sigma-74403157-20f5-415d-89a7-c505779585cf
+name: ConvertTo-SecureString Cmdlet Usage Via CommandLine
+description: Detects usage of the "ConvertTo-SecureString" cmdlet via the commandline.
+  Which is fairly uncommon and could indicate potential suspicious activity
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse?slide=65
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/convertto-securestring?view=powershell-7.3#examples
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_cli:
+    CommandLine|contains: ConvertTo-SecureString
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 74403157-20f5-415d-89a7-c505779585cf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_cmdline_convertto_securestring.yml
+falsepositives:
+- Legitimate use to pass password to different powershell commands
+notes:
+  quarantine_reason: 'upstream status: test'

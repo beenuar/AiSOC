@@ -1,0 +1,46 @@
+id: sigmahq-sigma-bbb80e91-5746-4fbe-8898-122e2cafdbf4
+name: Suspicious PowerShell Invocations - Generic - PowerShell Module
+description: Detects suspicious PowerShell invocation command parameters
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection_encoded:
+    ContextInfo|contains:
+    - ' -enc '
+    - ' -EncodedCommand '
+    - ' -ec '
+  selection_hidden:
+    ContextInfo|contains:
+    - ' -w hidden '
+    - ' -window hidden '
+    - ' -windowstyle hidden '
+    - ' -w 1 '
+  selection_noninteractive:
+    ContextInfo|contains:
+    - ' -noni '
+    - ' -noninteractive '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bbb80e91-5746-4fbe-8898-122e2cafdbf4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_susp_invocation_generic.yml
+falsepositives:
+- Very special / sneaky PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

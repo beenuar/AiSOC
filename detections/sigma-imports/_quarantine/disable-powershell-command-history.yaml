@@ -1,0 +1,36 @@
+id: sigmahq-sigma-602f5669-6927-4688-84db-0d4b7afb2150
+name: Disable Powershell Command History
+description: Detects scripts or commands that disabled the Powershell command history
+  by removing psreadline module
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://twitter.com/DissectMalware/status/1062879286749773824
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - Remove-Module
+    - psreadline
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 602f5669-6927-4688-84db-0d4b7afb2150
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_disable_psreadline_command_history.yml
+falsepositives:
+- Legitimate script that disables the command history
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,71 @@
+id: sigmahq-sigma-7ff9db12-1b94-4a79-ba68-a2402c5d6729
+name: Windows Webshell Strings
+description: Detects common commands used in Windows webshells
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - application
+references:
+- https://bad-jubies.github.io/RCE-NOW-WHAT/
+- https://m365internals.com/2022/10/07/hunting-in-on-premises-exchange-server-logs/
+logsource:
+  category: webserver
+detection:
+  selection_method:
+    cs-method: GET
+  selection_keywords:
+  - =whoami
+  - =net%20user
+  - =net+user
+  - =net%2Buser
+  - =cmd%20/c%
+  - =cmd+/c+
+  - =cmd%2B/c%
+  - =cmd%20/r%
+  - =cmd+/r+
+  - =cmd%2B/r%
+  - =cmd%20/k%
+  - =cmd+/k+
+  - =cmd%2B/k%
+  - =powershell%
+  - =powershell+
+  - =tasklist%
+  - =tasklist+
+  - =wmic%
+  - =wmic+
+  - =ssh%
+  - =ssh+
+  - =python%
+  - =python+
+  - =python3%
+  - =python3+
+  - =ipconfig
+  - =wget%
+  - =wget+
+  - =curl%
+  - =curl+
+  - =certutil
+  - =copy%20%5C%5C
+  - =dsquery%
+  - =dsquery+
+  - =nltest%
+  - =nltest+
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7ff9db12-1b94-4a79-ba68-a2402c5d6729
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/web/webserver_generic/web_win_webshells_in_access_logs.yml
+falsepositives:
+- Web sites like wikis with articles on os commands and pages that include the os
+  commands in the URLs
+- User searches in search boxes of the respective website
+notes:
+  quarantine_reason: 'upstream status: test'

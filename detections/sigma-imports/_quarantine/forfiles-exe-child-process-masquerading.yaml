@@ -1,0 +1,46 @@
+id: sigmahq-sigma-f53714ec-5077-420e-ad20-907ff9bb2958
+name: Forfiles.EXE Child Process Masquerading
+description: Detects the execution of "forfiles" from a non-default location, in order
+  to potentially spawn a custom "cmd.exe" from the current working directory.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://www.hexacorn.com/blog/2023/12/31/1-little-known-secret-of-forfiles-exe/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentCommandLine|endswith:
+    - .exe
+    - .exe"
+    Image|endswith: \cmd.exe
+    CommandLine|startswith: /c echo "
+  filter_main_parent_not_sys:
+    ParentImage|contains:
+    - :\Windows\System32\
+    - :\Windows\SysWOW64\
+    ParentImage|endswith: \forfiles.exe
+    Image|contains:
+    - :\Windows\System32\
+    - :\Windows\SysWOW64\
+    Image|endswith: \cmd.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f53714ec-5077-420e-ad20-907ff9bb2958
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_forfiles_child_process_masquerading.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

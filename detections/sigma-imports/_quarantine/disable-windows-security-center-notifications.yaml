@@ -1,0 +1,34 @@
+id: sigmahq-sigma-3ae1a046-f7db-439d-b7ce-b8b366b81fa6
+name: Disable Windows Security Center Notifications
+description: Detect set UseActionCenterExperience to 0 to disable the Windows security
+  center notification
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/40b77d63808dd4f4eafb83949805636735a1fd15/atomics/T1112/T1112.md
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: Windows\CurrentVersion\ImmersiveShell\UseActionCenterExperience
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 3ae1a046-f7db-439d-b7ce-b8b366b81fa6
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disable_security_center_notifications.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

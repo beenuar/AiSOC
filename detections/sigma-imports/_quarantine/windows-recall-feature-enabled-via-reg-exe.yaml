@@ -1,0 +1,53 @@
+id: sigmahq-sigma-817f252c-5143-4dae-b418-48c3e9f63728
+name: Windows Recall Feature Enabled Via Reg.EXE
+description: 'Detects the enabling of the Windows Recall feature via registry manipulation.
+
+  Windows Recall can be enabled by deleting the existing "DisableAIDataAnalysis" value,
+  or setting it to 0.
+
+  Adversaries may enable Windows Recall as part of post-exploitation discovery and
+  collection activities.
+
+  This rule assumes that Recall is already explicitly disabled on the host, and subsequently
+  enabled by the adversary.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1113
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/client-management/manage-recall
+- https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-windowsai#disableaidataanalysis
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \reg.exe
+  - OriginalFileName: reg.exe
+  selection_value:
+    CommandLine|contains|all:
+    - Microsoft\Windows\WindowsAI
+    - DisableAIDataAnalysis
+  selection_action_add:
+    CommandLine|contains:
+    - add
+    - '0'
+  selection_action_delete:
+    CommandLine|contains: delete
+  condition: selection_img and selection_value and 1 of selection_action_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 817f252c-5143-4dae-b418-48c3e9f63728
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_reg_enable_windows_recall.yml
+falsepositives:
+- Legitimate use/activation of Windows Recall
+notes:
+  quarantine_reason: 'upstream status: test'

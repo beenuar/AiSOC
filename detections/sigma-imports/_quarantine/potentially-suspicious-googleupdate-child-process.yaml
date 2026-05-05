@@ -1,0 +1,39 @@
+id: sigmahq-sigma-84b1ecf9-6eff-4004-bafb-bae5c0e251b2
+name: Potentially Suspicious GoogleUpdate Child Process
+description: Detects potentially suspicious child processes of "GoogleUpdate.exe"
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/goofy-guineapig/NCSC-MAR-Goofy-Guineapig.pdf
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \GoogleUpdate.exe
+  filter_main_known_legit:
+  - Image|contains: \Google
+  - Image|endswith:
+    - \setup.exe
+    - chrome_updater.exe
+    - chrome_installer.exe
+  filter_main_image_null:
+    Image: null
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84b1ecf9-6eff-4004-bafb-bae5c0e251b2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_googleupdate_susp_child_process.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

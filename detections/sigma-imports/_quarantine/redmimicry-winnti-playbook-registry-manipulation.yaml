@@ -1,0 +1,32 @@
+id: sigmahq-sigma-5b175490-b652-4b02-b1de-5b5b4083c5f8
+name: RedMimicry Winnti Playbook Registry Manipulation
+description: Detects actions caused by the RedMimicry Winnti playbook
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://redmimicry.com
+logsource:
+  product: windows
+  category: registry_event
+detection:
+  selection:
+    TargetObject|contains: HKLM\SOFTWARE\Microsoft\HTMLHelp\data
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5b175490-b652-4b02-b1de-5b5b4083c5f8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_redmimicry_winnti_reg.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

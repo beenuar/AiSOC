@@ -1,0 +1,38 @@
+id: sigmahq-sigma-975b2262-9a49-439d-92a6-0709cccdf0b2
+name: Unsigned AppX Installation Attempt Using Add-AppxPackage - PsScript
+description: Detects usage of the "Add-AppxPackage" or it's alias "Add-AppPackage"
+  to install unsigned AppX packages
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/msix/package/unsigned-package
+- https://twitter.com/WindowsDocs/status/1620078135080325122
+logsource:
+  product: windows
+  category: ps_script
+  definition: Script Block Logging must be enable
+detection:
+  selection_cmdlet:
+    ScriptBlockText|contains:
+    - 'Add-AppPackage '
+    - 'Add-AppxPackage '
+  selection_flag:
+    ScriptBlockText|contains: ' -AllowUnsigned'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 975b2262-9a49-439d-92a6-0709cccdf0b2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_install_unsigned_appx_packages.yml
+falsepositives:
+- Installation of unsigned packages for testing purposes
+notes:
+  quarantine_reason: 'upstream status: test'

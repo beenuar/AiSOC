@@ -1,0 +1,35 @@
+id: sigmahq-sigma-2092cacb-d77b-4f98-ab0d-32b32f99a054
+name: Potential Vivaldi_elf.DLL Sideloading
+description: Detects potential DLL sideloading of "vivaldi_elf.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://research.checkpoint.com/2023/beyond-the-horizon-traveling-the-world-on-camaro-dragons-usb-flash-drives/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \vivaldi_elf.dll
+  filter_main_legit_path:
+    Image|endswith: \Vivaldi\Application\vivaldi.exe
+    ImageLoaded|contains: \Vivaldi\Application\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2092cacb-d77b-4f98-ab0d-32b32f99a054
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_vivaldi_elf.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

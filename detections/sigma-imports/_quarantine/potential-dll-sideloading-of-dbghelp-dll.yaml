@@ -1,0 +1,53 @@
+id: sigmahq-sigma-6414b5cd-b19d-447e-bb5e-9f03940b5784
+name: Potential DLL Sideloading Of DBGHELP.DLL
+description: Detects potential DLL sideloading of "dbghelp.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \dbghelp.dll
+  filter_main_generic:
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+    - C:\Windows\SoftwareDistribution\
+    - C:\Windows\System32\
+    - C:\Windows\SystemTemp\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\WinSxS\
+  filter_optional_anaconda:
+    ImageLoaded|endswith:
+    - \Anaconda3\Lib\site-packages\vtrace\platforms\windll\amd64\dbghelp.dll
+    - \Anaconda3\Lib\site-packages\vtrace\platforms\windll\i386\dbghelp.dll
+  filter_optional_epicgames:
+    ImageLoaded|endswith:
+    - \Epic Games\Launcher\Engine\Binaries\ThirdParty\DbgHelp\dbghelp.dll
+    - \Epic Games\MagicLegends\x86\dbghelp.dll
+  filter_optional_opera:
+    ImageLoaded|contains: opera\Opera Installer Temp\opera_package
+    ImageLoaded|endswith: \assistant\dbghelp.dll
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6414b5cd-b19d-447e-bb5e-9f03940b5784
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_dbghelp.yml
+falsepositives:
+- Legitimate applications loading their own versions of the DLL mentioned in this
+  rule
+notes:
+  quarantine_reason: 'upstream status: test'

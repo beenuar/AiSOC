@@ -1,0 +1,35 @@
+id: sigmahq-sigma-ec0722a3-eb5c-4a56-8ab2-bf6f20708592
+name: Renamed Gpg.EXE Execution
+description: Detects the execution of a renamed "gpg.exe". Often used by ransomware
+  and loaders to decrypt/encrypt data.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - endpoint
+references:
+- https://securelist.com/locked-out/68960/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    OriginalFileName: gpg.exe
+  filter_main_img:
+    Image|endswith:
+    - \gpg.exe
+    - \gpg2.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ec0722a3-eb5c-4a56-8ab2-bf6f20708592
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_gpg4win.yml
+notes:
+  quarantine_reason: 'upstream status: test'

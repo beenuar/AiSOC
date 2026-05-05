@@ -1,0 +1,40 @@
+id: sigmahq-sigma-b210394c-ba12-4f89-9117-44a2464b9511
+name: SMB Create Remote File Admin Share
+description: Look for non-system accounts SMB accessing a file with write (0x2) access
+  mask via administrative share (i.e C$).
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://github.com/OTRF/ThreatHunter-Playbook/blob/f7a58156dbfc9b019f17f638b8c62d22e557d350/playbooks/WIN-201012004336.yaml
+- https://securitydatasets.com/notebooks/atomic/windows/lateral_movement/SDWIN-200806015757.html?highlight=create%20file
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5145
+    ShareName|endswith: C$
+    AccessMask: '0x2'
+  filter_main_subjectusername:
+    SubjectUserName|endswith: $
+  filter_optional_local_ip:
+    IpAddress: ::1
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: b210394c-ba12-4f89-9117-44a2464b9511
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_smb_file_creation_admin_shares.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

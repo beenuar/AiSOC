@@ -1,0 +1,34 @@
+id: sigmahq-sigma-a66bc059-c370-472c-a0d7-f8fd1bf9d583
+name: Network Connection Initiated By Eqnedt32.EXE
+description: Detects network connections from the Equation Editor process "eqnedt32.exe".
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1203
+  categories:
+  - endpoint
+references:
+- https://twitter.com/forensicitguy/status/1513538712986079238
+- https://forensicitguy.github.io/xloader-formbook-velvetsweatshop-spreadsheet/
+- https://news.sophos.com/en-us/2019/07/18/a-new-equation-editor-exploit-goes-commercial-as-maldoc-attacks-using-it-spike/
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \eqnedt32.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a66bc059-c370-472c-a0d7-f8fd1bf9d583
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_eqnedt.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

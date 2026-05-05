@@ -1,0 +1,40 @@
+id: sigmahq-sigma-dd80db93-6ec2-4f4c-a017-ad40da6ffe81
+name: Windows Defender Real-Time Protection Failure/Restart
+description: Detects issues with Windows Defender Real-Time Protection features
+severity: medium
+enabled: true
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/
+- https://gist.github.com/nasbench/33732d6705cbdc712fae356f07666346
+logsource:
+  product: windows
+  service: windefend
+detection:
+  selection:
+    EventID:
+    - 3002
+    - 3007
+  filter_optional_network_inspection:
+    Feature_Name: '%%886'
+    Reason:
+    - '%%892'
+    - '%%858'
+  condition: selection and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dd80db93-6ec2-4f4c-a017-ad40da6ffe81
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/windefend/win_defender_real_time_protection_errors.yml
+falsepositives:
+- Some crashes can occur sometimes and the event doesn't provide enough information
+  to tune out these cases. Manual exception is required

@@ -1,0 +1,51 @@
+id: splunk-security-content-f5c1f64b-db59-4913-991e-3dac8adff288
+name: Windows Default Rdp File Unhidden
+description: This detection identifies the use of attrib.exe to remove hidden (-h)
+  or system (-s) attributes from the Default.rdp file, which is automatically created
+  in a user's Documents folder when a Remote Desktop Protocol (RDP) session is initiated
+  using mstsc.exe. The Default.rdp file stores session configuration details such
+  as the remote host address and screen settings. Unhiding this file is uncommon in
+  normal user behavior and may indicate that an attacker or red team operator is attempting
+  to access or manipulate RDP connection history that was previously hidden—either
+  by default or as part of an earlier anti-forensics effort. This activity may represent
+  part of a broader pattern of reconnaissance or staging for credential reuse, lateral
+  movement, or forensic analysis evasion. Monitoring for this behavior can help uncover
+  suspicious manipulation of user artifacts and highlight interactive attacker activity
+  on a compromised host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://medium.com/@bonguides25/how-to-clear-rdp-connections-history-in-windows-cf0ffb67f344
+- https://thelocalh0st.github.io/posts/rdp/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ = \"attrib.exe\" Processes.process IN(\"*-s*\", \"*-h*\") Processes.process\
+    \ = \"*default.rdp*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_default_rdp_file_unhidden_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f5c1f64b-db59-4913-991e-3dac8adff288
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_default_rdp_file_unhidden.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

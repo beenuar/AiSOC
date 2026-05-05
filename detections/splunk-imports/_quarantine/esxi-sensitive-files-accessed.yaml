@@ -1,0 +1,37 @@
+id: splunk-security-content-6fa0073d-6ca0-4f93-913d-fb420c9de15b
+name: ESXi Sensitive Files Accessed
+description: This detection identifies access to sensitive system and configuration
+  files on an ESXi host, including authentication data, service configurations, and
+  VMware-specific management settings. Interaction with these files may indicate adversary
+  reconnaissance, credential harvesting, or preparation for privilege escalation,
+  lateral movement, or persistence.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.008
+  - T1005
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*shell[*" Message IN ("*/etc/shadow*","*/etc/vmware/hostd/hostd.xml*",
+    "*/etc/vmware/vpxa/vpxa.cfg*","*/etc/sfcb/sfcb.cfg*","*/etc/security/*", "*/etc/likewise/krb5-affinity.conf*","*/etc/vmware-vpx/vcdb.properties*")
+    | rex field=_raw "\]: \[(?<user>\w+)\]:(?<command>.+)" | rex field=_raw "Z (?<dest>[\w\.]+)\s"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest user command
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_sensitive_files_accessed_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6fa0073d-6ca0-4f93-913d-fb420c9de15b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_sensitive_files_accessed.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,48 @@
+id: sigmahq-sigma-89c42960-f244-4dad-9151-ae9b1a3287a2
+name: Suspicious File Write to Webapps Root Directory
+description: 'Detects suspicious file writes to the root directory of web applications,
+  particularly Apache web servers or Tomcat servers.
+
+  This may indicate an attempt to deploy malicious files such as web shells or other
+  unauthorized scripts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://labs.watchtowr.com/guess-who-would-be-stupid-enough-to-rob-the-same-vault-twice-pre-auth-rce-chains-in-commvault/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection_susp_img:
+    Image|endswith:
+    - \dotnet.exe
+    - \w3wp.exe
+    - \java.exe
+  selection_servers:
+    TargetFilename|contains:
+    - \apache
+    - \tomcat
+  selection_path:
+    TargetFilename|contains: \webapps\ROOT\
+  selection_susp_extensions:
+    TargetFilename|endswith: .jsp
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 89c42960-f244-4dad-9151-ae9b1a3287a2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_file_write_in_webapps_root.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: experimental'

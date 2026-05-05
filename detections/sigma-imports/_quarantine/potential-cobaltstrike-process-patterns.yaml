@@ -1,0 +1,49 @@
+id: sigmahq-sigma-f35c5d71-b489-4e22-a115-f003df287317
+name: Potential CobaltStrike Process Patterns
+description: Detects potential process patterns related to Cobalt Strike beacon activity
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://hausec.com/2021/07/26/cobalt-strike-and-tradecraft/
+- https://thedfirreport.com/2021/08/29/cobalt-strike-a-defenders-guide/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_generic_1:
+    CommandLine|endswith: cmd.exe /C whoami
+    ParentImage|startswith: C:\Temp\
+  selection_generic_2:
+    ParentImage|endswith:
+    - \runonce.exe
+    - \dllhost.exe
+    CommandLine|contains|all:
+    - cmd.exe /c echo
+    - '> \\\\.\\pipe'
+  selection_conhost_1:
+    ParentCommandLine|contains|all:
+    - cmd.exe /C echo
+    - ' > \\\\.\\pipe'
+    CommandLine|endswith: conhost.exe 0xffffffff -ForceV1
+  selection_conhost_2:
+    ParentCommandLine|endswith: /C whoami
+    CommandLine|endswith: conhost.exe 0xffffffff -ForceV1
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f35c5d71-b489-4e22-a115-f003df287317
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_cobaltstrike_process_patterns.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,32 @@
+id: sigmahq-sigma-db6c06c4-bf3b-421c-aa88-15672b88c743
+name: Changes To PIM Settings
+description: Detects when changes are made to PIM roles
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-identity-management#azure-ad-roles-assignment
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    properties.message: Update role setting in PIM
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: db6c06c4-bf3b-421c-aa88-15672b88c743
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/audit_logs/azure_pim_change_settings.yml
+falsepositives:
+- Legit administrative PIM setting configuration changes
+notes:
+  quarantine_reason: 'upstream status: test'

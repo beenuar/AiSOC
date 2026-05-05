@@ -1,0 +1,41 @@
+id: sigmahq-sigma-ac9159cc-c364-4304-8f0a-d63fc1a0aabb
+name: ClickOnce Trust Prompt Tampering
+description: Detects changes to the ClickOnce trust prompt registry key in order to
+  enable an installation from different locations such as the Internet.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://posts.specterops.io/less-smartscreen-more-caffeine-ab-using-clickonce-for-trusted-code-execution-1446ea8051c5
+- https://learn.microsoft.com/en-us/visualstudio/deployment/how-to-configure-the-clickonce-trust-prompt-behavior
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \SOFTWARE\MICROSOFT\.NETFramework\Security\TrustManager\PromptingLevel\
+    TargetObject|endswith:
+    - \Internet
+    - \LocalIntranet
+    - \MyComputer
+    - \TrustedSites
+    - \UntrustedSites
+    Details: Enabled
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ac9159cc-c364-4304-8f0a-d63fc1a0aabb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_clickonce_trust_prompt.yml
+falsepositives:
+- Legitimate internal requirements.
+notes:
+  quarantine_reason: 'upstream status: test'

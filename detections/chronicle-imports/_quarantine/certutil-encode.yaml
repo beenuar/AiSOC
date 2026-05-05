@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-certutil-encode
+name: certutil_encode
+description: certutil_encode
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule certutil_encode {\n meta:\n    author = \"Florian Roth\"\n\
+    \    description = \"Detects suspicious a certutil command that used to encode\
+    \ files, which is sometimes used for data exfiltration  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/3xvaWdoC0q2R\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/24\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n\n  events:\n((re.regex($selection.target.process.command_line,\
+    \ `certutil -f -encode .*`) or re.regex($selection.target.process.command_line,\
+    \ `certutil\\.exe -f -encode .*`) or re.regex($selection.target.process.command_line,\
+    \ `certutil -encode -f .*`) or re.regex($selection.target.process.command_line,\
+    \ `certutil\\.exe -encode -f .*`)) and ($selection.metadata.product_event_type\
+    \ = \"4688\" or $selection.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: certutil_encode
+provenance:
+  source: chronicle/detection-rules
+  source_id: certutil_encode
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/certutil_encode.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

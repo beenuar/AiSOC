@@ -1,0 +1,76 @@
+id: sigmahq-sigma-5b80a791-ad9b-4b75-bcc1-ad4e1e89c200
+name: File With Suspicious Extension Downloaded Via Bitsadmin
+description: Detects usage of bitsadmin downloading a file with a suspicious extension
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1197
+  - T1036.003
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://blog.netspi.com/15-ways-to-download-a-file/#bitsadmin
+- https://isc.sans.edu/diary/22264
+- https://lolbas-project.github.io/lolbas/Binaries/Bitsadmin/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \bitsadmin.exe
+  - OriginalFileName: bitsadmin.exe
+  selection_flags:
+    CommandLine|contains:
+    - ' /transfer '
+    - ' /create '
+    - ' /addfile '
+  selection_extension:
+    CommandLine|contains:
+    - .7z
+    - .asax
+    - .ashx
+    - .asmx
+    - .asp
+    - .aspx
+    - .bat
+    - .cfm
+    - .cgi
+    - .chm
+    - .cmd
+    - .dll
+    - .gif
+    - .jpeg
+    - .jpg
+    - .jsp
+    - .jspx
+    - .log
+    - .png
+    - .ps1
+    - .psm1
+    - .rar
+    - .scf
+    - .sct
+    - .txt
+    - .vbe
+    - .vbs
+    - .war
+    - .wsf
+    - .wsh
+    - .xll
+    - .zip
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 5b80a791-ad9b-4b75-bcc1-ad4e1e89c200
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_bitsadmin_download_susp_extensions.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

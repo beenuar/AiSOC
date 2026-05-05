@@ -1,0 +1,34 @@
+id: sigmahq-sigma-25ffa65d-76d8-4da5-a832-3f2b0136e133
+name: PUA - Sysinternal Tool Execution - Registry
+description: Detects the execution of a Sysinternals Tool via the creation of the
+  "accepteula" registry key
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Moti_B/status/1008587936735035392
+logsource:
+  product: windows
+  category: registry_set
+detection:
+  selection:
+    TargetObject|endswith: \EulaAccepted
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 25ffa65d-76d8-4da5-a832-3f2b0136e133
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_pua_sysinternals_execution_via_eula.yml
+falsepositives:
+- Legitimate use of SysInternals tools
+- Programs that use the same Registry Key
+notes:
+  quarantine_reason: 'upstream status: test'

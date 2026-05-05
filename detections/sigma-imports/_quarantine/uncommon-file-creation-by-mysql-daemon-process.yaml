@@ -1,0 +1,46 @@
+id: sigmahq-sigma-c61daa90-3c1e-4f18-af62-8f288b5c9aaf
+name: Uncommon File Creation By Mysql Daemon Process
+description: 'Detects the creation of files with scripting or executable extensions
+  by Mysql daemon.
+
+  Which could be an indicator of "User Defined Functions" abuse to download malware.'
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://asec.ahnlab.com/en/58878/
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/honeypot-recon-mysql-malware-infection-via-user-defined-functions-udf/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image|endswith:
+    - \mysqld.exe
+    - \mysqld-nt.exe
+    TargetFilename|endswith:
+    - .bat
+    - .dat
+    - .dll
+    - .exe
+    - .ps1
+    - .psm1
+    - .vbe
+    - .vbs
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c61daa90-3c1e-4f18-af62-8f288b5c9aaf
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_mysqld_uncommon_file_creation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

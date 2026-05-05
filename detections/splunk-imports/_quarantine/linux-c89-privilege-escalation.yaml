@@ -1,0 +1,47 @@
+id: splunk-security-content-54c95f4d-3e5d-44be-9521-ea19ba62f7a8
+name: Linux c89 Privilege Escalation
+description: The following analytic detects the execution of the 'c89' command with
+  elevated privileges, which can be used to compile and execute C programs as root.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process creation events that include command-line arguments. This activity
+  is significant because it indicates a potential privilege escalation attempt, allowing
+  a user to execute arbitrary commands as root. If confirmed malicious, this could
+  lead to full system compromise, enabling the attacker to gain root access and execute
+  any command with elevated privileges.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/c89/
+- https://www.ibm.com/docs/en/zos/2.1.0?topic=guide-c89-compiler-invocation-using-host-environment-variables
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process=\"\
+    *c89*\"\n    AND\n    Processes.process=\"*-wrapper*\"\n    AND\n    Processes.process=\"\
+    *sudo*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_c89_privilege_escalation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 54c95f4d-3e5d-44be-9521-ea19ba62f7a8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_c89_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

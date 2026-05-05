@@ -1,0 +1,71 @@
+id: splunk-security-content-c0ee37bb-ed43-4632-8e38-060fba80b0b2
+name: M365 Copilot Information Extraction Jailbreak Attack
+description: Detects M365 Copilot information extraction jailbreak attacks that attempt
+  to obtain sensitive, classified, or comprehensive data through various social engineering
+  techniques including fictional entity impersonation, bulk data requests, and privacy
+  bypass attempts. The detection searches exported eDiscovery prompt logs for extraction
+  keywords like "transcendent," "tell me everything," "confidential," "dump," "extract,"
+  "reveal," and "bypass" in the Subject_Title field, categorizing each attempt by
+  extraction type and assigning severity levels (CRITICAL for classified/proprietary
+  data, HIGH for bulk extraction or privacy bypass). Prompts are further analyzed
+  for compound risk patterns such as "Confidential+Extraction" or "Bulk_Request+Bypass,"
+  filtering out low-severity cases to surface the most dangerous attempts to exfiltrate
+  sensitive organizational information through AI manipulation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`m365_exported_ediscovery_prompt_logs` | search Subject_Title="*transcendent*"
+    OR Subject_Title="*incorporeal*" OR Subject_Title="*being who*" OR Subject_Title="*tell
+    me everything*" OR Subject_Title="*give me all*" OR Subject_Title="*comprehensive*"
+    OR Subject_Title="*step by step*" OR Subject_Title="*hidden*" OR Subject_Title="*secret*"
+    OR Subject_Title="*confidential*" OR Subject_Title="*classified*" OR Subject_Title="*internal*"
+    OR Subject_Title="*sensitive*" OR Subject_Title="*proprietary*" OR Subject_Title="*dump*"
+    OR Subject_Title="*extract*" OR Subject_Title="*reveal*" OR Subject_Title="*disclose*"
+    OR Subject_Title="*leak*" | eval user = Sender | eval extraction_type=case(match(Subject_Title,
+    "(?i)(transcendent|incorporeal).*being"), "Knowledge_Entity", match(Subject_Title,
+    "(?i)tell.*me.*(everything|all)"), "Everything_Request", match(Subject_Title,
+    "(?i)(give|show|provide).*me.*(all|every)"), "Complete_Data_Request", match(Subject_Title,
+    "(?i)(hidden|secret|confidential|classified)"), "Restricted_Info", match(Subject_Title,
+    "(?i)(comprehensive|complete|full|entire)"), "Complete_Info", match(Subject_Title,
+    "(?i)(dump|extract|scrape).*(data|info|content)"), "Data_Extraction", match(Subject_Title,
+    "(?i)(reveal|disclose|expose|leak)"), "Information_Disclosure", match(Subject_Title,
+    "(?i)(internal|proprietary|sensitive).*information"), "Sensitive_Data_Request",
+    match(Subject_Title, "(?i)step.*by.*step.*(process|procedure|method)"), "Process_Extraction",
+    match(Subject_Title, "(?i)(bypass|ignore).*privacy"), "Privacy_Bypass", match(Subject_Title,
+    "(?i)(access|view|see).*(private|restricted)"), "Unauthorized_Access", 1=1, "Generic_Request")
+    | eval severity=case(match(Subject_Title, "(?i)(transcendent|incorporeal)"), "HIGH",
+    match(Subject_Title, "(?i)tell.*everything"), "HIGH", match(Subject_Title, "(?i)(dump|extract|scrape)"),
+    "HIGH", match(Subject_Title, "(?i)(classified|proprietary|confidential)"), "CRITICAL",
+    match(Subject_Title, "(?i)(hidden|secret|internal|sensitive)"), "MEDIUM", match(Subject_Title,
+    "(?i)(reveal|disclose|leak)"), "MEDIUM", match(Subject_Title, "(?i)(bypass|ignore).*privacy"),
+    "HIGH", 1=1, "LOW") | where severity!="LOW" | eval data_risk_flags=case(match(Subject_Title,
+    "(?i)(classified|confidential|proprietary)") AND match(Subject_Title, "(?i)(dump|extract|scrape)"),
+    "Confidential+Extraction", match(Subject_Title, "(?i)(everything|all|complete)")
+    AND match(Subject_Title, "(?i)(bypass|ignore)"), "Bulk_Request+Bypass", match(Subject_Title,
+    "(?i)(classified|confidential|proprietary)"), "Confidential", match(Subject_Title,
+    "(?i)(dump|extract|scrape)"), "Extraction", match(Subject_Title, "(?i)(everything|all|complete|comprehensive)"),
+    "Bulk_Request", match(Subject_Title, "(?i)(bypass|ignore)"), "Bypass_Attempt",
+    1=1, "Standard_Request") | table _time, user, Subject_Title, extraction_type,
+    severity, data_risk_flags, Size | sort -severity, -_time | `m365_copilot_information_extraction_jailbreak_attack_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c0ee37bb-ed43-4632-8e38-060fba80b0b2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_information_extraction_jailbreak_attack.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

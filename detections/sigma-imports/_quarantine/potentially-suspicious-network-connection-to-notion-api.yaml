@@ -1,0 +1,77 @@
+id: sigmahq-sigma-7e9cf7b6-e827-11ed-a05b-15959c120003
+name: Potentially Suspicious Network Connection To Notion API
+description: Detects a non-browser process communicating with the Notion API. This
+  could indicate potential use of a covert C2 channel such as "OffensiveNotion C2"
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1102
+  categories:
+  - endpoint
+references:
+- https://github.com/mttaggart/OffensiveNotion
+- https://medium.com/@huskyhacks.mk/we-put-a-c2-in-your-notetaking-app-offensivenotion-3e933bace332
+logsource:
+  product: windows
+  category: network_connection
+detection:
+  selection:
+    DestinationHostname|contains: api.notion.com
+  filter_main_notion:
+    Image|endswith: \AppData\Local\Programs\Notion\Notion.exe
+  filter_main_brave:
+    Image|endswith: \brave.exe
+  filter_main_chrome:
+    Image:
+    - C:\Program Files\Google\Chrome\Application\chrome.exe
+    - C:\Program Files (x86)\Google\Chrome\Application\chrome.exe
+  filter_main_firefox:
+    Image:
+    - C:\Program Files\Mozilla Firefox\firefox.exe
+    - C:\Program Files (x86)\Mozilla Firefox\firefox.exe
+  filter_main_ie:
+    Image:
+    - C:\Program Files (x86)\Internet Explorer\iexplore.exe
+    - C:\Program Files\Internet Explorer\iexplore.exe
+  filter_main_maxthon:
+    Image|endswith: \maxthon.exe
+  filter_main_edge_1:
+  - Image|startswith: C:\Program Files (x86)\Microsoft\EdgeWebView\Application\
+  - Image|endswith: \WindowsApps\MicrosoftEdge.exe
+  - Image:
+    - C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+    - C:\Program Files\Microsoft\Edge\Application\msedge.exe
+  filter_main_edge_2:
+    Image|startswith:
+    - C:\Program Files (x86)\Microsoft\EdgeCore\
+    - C:\Program Files\Microsoft\EdgeCore\
+    Image|endswith:
+    - \msedge.exe
+    - \msedgewebview2.exe
+  filter_main_opera:
+    Image|endswith: \opera.exe
+  filter_main_safari:
+    Image|endswith: \safari.exe
+  filter_main_seamonkey:
+    Image|endswith: \seamonkey.exe
+  filter_main_vivaldi:
+    Image|endswith: \vivaldi.exe
+  filter_main_whale:
+    Image|endswith: \whale.exe
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7e9cf7b6-e827-11ed-a05b-15959c120003
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_domain_notion_api_susp_communication.yml
+falsepositives:
+- Legitimate applications communicating with the "api.notion.com" endpoint that are
+  not already in the exclusion list. The desktop and browser applications do not appear
+  to be using the API by default unless integrations are configured.
+notes:
+  quarantine_reason: 'upstream status: test'

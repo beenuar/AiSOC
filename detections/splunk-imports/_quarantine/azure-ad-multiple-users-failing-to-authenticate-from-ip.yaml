@@ -1,0 +1,47 @@
+id: splunk-security-content-94481a6a-8f59-4c86-957f-55a71e3612a6
+name: Azure AD Multiple Users Failing To Authenticate From Ip
+description: The following analytic detects a single source IP failing to authenticate
+  with 30 unique valid users within 5 minutes in Azure Active Directory. It leverages
+  Azure AD SignInLogs with error code 50126, indicating invalid passwords. This behavior
+  is significant as it may indicate a Password Spraying attack, where an adversary
+  attempts to gain initial access or elevate privileges by trying common passwords
+  across many accounts. If confirmed malicious, this activity could lead to unauthorized
+  access, data breaches, or privilege escalation within the Azure AD environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs properties.status.errorCode=50126\
+    \ properties.authenticationDetails{}.succeeded=false\n  | rename properties.*\
+    \ as *\n  | bucket span=5m _time\n  | rename userAgent as user_agent\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime dc(user) as unique_user\
+    \ values(dest) as dest values(user) as user values(user_agent) as user_agent values(vendor_account)\
+    \ as vendor_account values(vendor_product) as vendor_product\n    BY src signature\n\
+    \  | where unique_user > 30\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_multiple_users_failing_to_authenticate_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 94481a6a-8f59-4c86-957f-55a71e3612a6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_multiple_users_failing_to_authenticate_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

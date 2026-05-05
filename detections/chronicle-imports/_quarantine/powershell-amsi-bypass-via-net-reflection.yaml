@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-powershell-amsi-bypass-via-net-reflection
+name: powershell_amsi_bypass_via_net_reflection
+description: powershell_amsi_bypass_via_net_reflection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule powershell_amsi_bypass_via_net_reflection {\n meta:\n   \
+    \ author = \"Markus Neis\"\n    description = \"Detects Request to amsiInitFailed\
+    \ that can be used to disable AMSI Scanning  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/5mi5iziSFLmj\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/08/17\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, defense_evasion, t1086\"\
+    \n\n  events:\n(re.regex($selection1.target.process.command_line, `.*System\\\
+    .Management\\.Automation\\.AmsiUtils.*`) and ($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\") and re.regex($selection1.target.process.command_line,\
+    \ `.*amsiInitFailed.*`))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: powershell_amsi_bypass_via_net_reflection
+provenance:
+  source: chronicle/detection-rules
+  source_id: powershell_amsi_bypass_via_net_reflection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/powershell_amsi_bypass_via__net_reflection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

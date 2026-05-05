@@ -1,0 +1,40 @@
+id: sigmahq-sigma-71b31e99-9ad0-47d4-aeb5-c0ca3928eeeb
+name: Potential Waveedit.DLL Sideloading
+description: Detects potential DLL sideloading of "waveedit.dll", which is part of
+  the Nero WaveEditor audio editing software.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/23/f/behind-the-scenes-unveiling-the-hidden-workings-of-earth-preta.html
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \waveedit.dll
+  filter_main_legit_path:
+    Image:
+    - C:\Program Files (x86)\Nero\Nero Apps\Nero WaveEditor\waveedit.exe
+    - C:\Program Files\Nero\Nero Apps\Nero WaveEditor\waveedit.exe
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\Nero\Nero Apps\Nero WaveEditor\
+    - C:\Program Files\Nero\Nero Apps\Nero WaveEditor\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 71b31e99-9ad0-47d4-aeb5-c0ca3928eeeb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_waveedit.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

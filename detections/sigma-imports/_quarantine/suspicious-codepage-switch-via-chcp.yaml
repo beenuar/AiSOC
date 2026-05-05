@@ -1,0 +1,37 @@
+id: sigmahq-sigma-c7942406-33dd-4377-a564-0f62db0593a3
+name: Suspicious CodePage Switch Via CHCP
+description: Detects a code page switch in command line or batch scripts to a rare
+  language
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/intl/code-page-identifiers
+- https://twitter.com/cglyer/status/1183756892952248325
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \chcp.com
+    CommandLine|endswith:
+    - ' 936'
+    - ' 1258'
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c7942406-33dd-4377-a564-0f62db0593a3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_chcp_codepage_switch.yml
+falsepositives:
+- Administrative activity (adjust code pages according to your organization's region)
+notes:
+  quarantine_reason: 'upstream status: test'

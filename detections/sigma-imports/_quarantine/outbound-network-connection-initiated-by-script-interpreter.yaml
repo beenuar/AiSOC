@@ -1,0 +1,48 @@
+id: sigmahq-sigma-992a6cae-db6a-43c8-9cec-76d7195c96fc
+name: Outbound Network Connection Initiated By Script Interpreter
+description: Detects a script interpreter wscript/cscript opening a network connection
+  to a non-local network. Adversaries may use script to download malicious payloads.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/28d190330fe44de6ff4767fc400cc10fa7cd6540/atomics/T1105/T1105.md
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    Image|endswith:
+    - \wscript.exe
+    - \cscript.exe
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  filter_main_ms_ranges:
+    DestinationIp|cidr: 20.0.0.0/11
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 992a6cae-db6a-43c8-9cec-76d7195c96fc
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_wscript_cscript_outbound_connection.yml
+falsepositives:
+- Legitimate scripts
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,60 @@
+id: splunk-security-content-73cf5dcb-cf36-4167-8bbe-384fe5384d05
+name: Windows Remote Access Software BRC4 Loaded Dll
+description: The following analytic identifies the loading of four specific Windows
+  DLLs (credui.dll, dbghelp.dll, samcli.dll, winhttp.dll) by a non-standard process.
+  This detection leverages Sysmon EventCode 7 to monitor DLL load events and flags
+  when all four DLLs are loaded within a short time frame. This activity is significant
+  as it may indicate the presence of Brute Ratel C4, a sophisticated remote access
+  tool used for credential dumping and other malicious activities. If confirmed malicious,
+  this behavior could lead to unauthorized access, credential theft, and further compromise
+  of the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219
+  - T1003
+  categories:
+  - endpoint
+references:
+- https://unit42.paloaltonetworks.com/brute-ratel-c4-tool/
+- https://www.mdsec.co.uk/2022/08/part-3-how-i-met-your-beacon-brute-ratel/
+- https://strontic.github.io/xcyclopedia/library/logoncli.dll-138871DBE68D0696D3D7FA91BC2873B1.html
+- https://strontic.github.io/xcyclopedia/library/credui.dll-A5BD797BBC2DD55231B9DE99837E5461.html
+- https://docs.microsoft.com/en-us/windows/win32/secauthn/credential-manager
+- https://strontic.github.io/xcyclopedia/library/samcli.dll-522D6D616EF142CDE965BD3A450A9E4C.html
+- https://strontic.github.io/xcyclopedia/library/dbghelp.dll-15A55EAB307EF8C190FE6135C0A86F7C.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=7\n  | bin _time span=30s\n  | eval BRC4_AnomalyLoadedDll=case(OriginalFileName==\"\
+    credui.dll\", 1, OriginalFileName==\"DBGHELP.DLL\", 1, OriginalFileName==\"SAMCLI.DLL\"\
+    , 1, OriginalFileName==\"winhttp.dll\", 1, 1=1, 0)\n  | eval BRC4_LoadedDllPath=case(match(ImageLoaded,\
+    \ \"credui.dll\"), 1, match(ImageLoaded, \"dbghelp.dll\"), 1, match(ImageLoaded,\
+    \ \"samcli.dll\"), 1, match(ImageLoaded, \"winhttp.dll\"), 1, 1=1, 0)\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime values(ImageLoaded) as\
+    \ ImageLoaded values(OriginalFileName) as OriginalFileName dc(ImageLoaded) as\
+    \ ImageLoadedCount values(loaded_file) as loaded_file values(loaded_file_path)\
+    \ as loaded_file_path values(original_file_name) as original_file_name values(process_exec)\
+    \ as process_exec values(process_guid) as process_guid values(process_hash) as\
+    \ process_hash values(process_id) as process_id values(process_name) as process_name\
+    \ values(process_path) as process_path values(service_dll_signature_exists) as\
+    \ service_dll_signature_exists values(service_dll_signature_verified) as service_dll_signature_verified\
+    \ values(signature) as signature values(signature_id) as signature_id values(user_id)\
+    \ as user_id values(vendor_product) as vendor_product\n    BY Image BRC4_LoadedDllPath\
+    \ BRC4_AnomalyLoadedDll\n       dest Signed\n  | where ImageLoadedCount == 4 AND\
+    \ (BRC4_LoadedDllPath == 1 OR BRC4_AnomalyLoadedDll == 1)\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_remote_access_software_brc4_loaded_dll_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 73cf5dcb-cf36-4167-8bbe-384fe5384d05
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_remote_access_software_brc4_loaded_dll.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

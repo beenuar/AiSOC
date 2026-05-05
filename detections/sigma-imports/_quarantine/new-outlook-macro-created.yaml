@@ -1,0 +1,35 @@
+id: sigmahq-sigma-8c31f563-f9a7-450c-bfa8-35f8f32f1f61
+name: New Outlook Macro Created
+description: Detects the creation of a macro file for Outlook.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1137
+  - T1008
+  - T1546
+  categories:
+  - endpoint
+references:
+- https://www.mdsec.co.uk/2020/11/a-fresh-outlook-on-mail-based-persistence/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith: \outlook.exe
+    TargetFilename|endswith: \Microsoft\Outlook\VbaProject.OTM
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8c31f563-f9a7-450c-bfa8-35f8f32f1f61
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_outlook_macro_creation.yml
+falsepositives:
+- User genuinely creates a VB Macro for their email
+notes:
+  quarantine_reason: 'upstream status: test'

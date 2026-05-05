@@ -1,0 +1,36 @@
+id: sigmahq-sigma-cd55f721-5623-4663-bd9b-5229cab5237d
+name: OpenCanary - SSH New Connection Attempt
+description: Detects instances where an SSH service on an OpenCanary node has had
+  a connection attempt.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1133
+  - T1021
+  - T1078
+  categories:
+  - endpoint
+references:
+- https://opencanary.readthedocs.io/en/latest/starting/configuration.html#services-configuration
+- https://github.com/thinkst/opencanary/blob/a0896adfcaf0328cfd5829fe10d2878c7445138e/opencanary/logger.py#L52
+logsource:
+  category: application
+  product: opencanary
+detection:
+  selection:
+    logtype: 4000
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cd55f721-5623-4663-bd9b-5229cab5237d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/opencanary/opencanary_ssh_new_connection.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: sigmahq-sigma-6345b048-8441-43a7-9bed-541133633d7a
+name: ManageEngine Endpoint Central Dctask64.EXE Potential Abuse
+description: 'Detects the execution of "dctask64.exe", a signed binary by ZOHO Corporation
+  part of ManageEngine Endpoint Central.
+
+  This binary can be abused for DLL injection, arbitrary command and process execution.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1055.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/gN3mes1s/status/1222088214581825540
+- https://twitter.com/gN3mes1s/status/1222095963789111296
+- https://twitter.com/gN3mes1s/status/1222095371175911424
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \dctask64.exe
+  - Hashes|contains:
+    - IMPHASH=6834B1B94E49701D77CCB3C0895E1AFD
+    - IMPHASH=1BB6F93B129F398C7C4A76BB97450BBA
+    - IMPHASH=FAA2AC19875FADE461C8D89DCF2710A3
+    - IMPHASH=F1039CED4B91572AB7847D26032E6BBF
+  selection_cli:
+    CommandLine|contains:
+    - ' executecmd64 '
+    - ' invokeexe '
+    - ' injectDll '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6345b048-8441-43a7-9bed-541133633d7a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dctask64_arbitrary_command_and_dll_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

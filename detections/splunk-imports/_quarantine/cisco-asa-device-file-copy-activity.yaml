@@ -1,0 +1,50 @@
+id: splunk-security-content-4d7e8f3a-9c2b-4e6f-8a1d-5b9c7e2f4a8c
+name: Cisco ASA - Device File Copy Activity
+description: 'This analytic detects file copy activity on Cisco ASA devices via CLI
+  or ASDM.
+
+  Adversaries may copy device files including configurations, logs, packet captures,
+  or system files for reconnaissance, credential extraction, or data exfiltration.
+  While legitimate file operations occur during backups and maintenance, unauthorized
+  copies may indicate malicious activity.
+
+  The detection monitors for command execution events (message ID 111008 or 111010)
+  containing copy commands targeting running-config, startup-config, packet capture
+  files, or other system files from disk0:, flash:, system:, or capture: locations.
+
+  Investigate unexpected file copies, especially from non-administrative accounts,
+  during unusual hours, or when combined with other suspicious activities.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1005
+  - T1530
+  categories:
+  - application
+references:
+- https://blog.talosintelligence.com/arcanedoor-new-espionage-focused-campaign-found-targeting-perimeter-network-devices/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (111008, 111010)\ncommand = \"copy *\"\n\
+    command IN (\n    \"*running-config*\",\n    \"*startup-config*\",\n    \"*/pcap\
+    \ capture:*\",\n    \"* disk0:*\",\n    \"* flash:*\",\n    \"* system:*\"\n)\n\
+    | fillnull\n| stats earliest(_time) as firstTime\n        latest(_time) as lastTime\n\
+    \        values(user) as user\n        values(action) as action\n        values(message_id)\
+    \ as message_id\n        values(command) as command\n        values(src_ip) as\
+    \ src_ip\n        values(process_name) as process_name\n  by host\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_asa___device_file_copy_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4d7e8f3a-9c2b-4e6f-8a1d-5b9c7e2f4a8c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___device_file_copy_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

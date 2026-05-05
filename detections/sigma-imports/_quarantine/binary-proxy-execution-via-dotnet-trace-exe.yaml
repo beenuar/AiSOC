@@ -1,0 +1,37 @@
+id: sigmahq-sigma-9257c05b-4a4a-48e5-a670-b7b073cf401b
+name: Binary Proxy Execution Via Dotnet-Trace.EXE
+description: Detects commandline arguments for executing a child process via dotnet-trace.exe
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/bohops/status/1740022869198037480
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \dotnet-trace.exe
+  - OriginalFileName: dotnet-trace.dll
+  selection_cli:
+    CommandLine|contains|all:
+    - '-- '
+    - collect
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9257c05b-4a4a-48e5-a670-b7b073cf401b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_dotnet_trace_lolbin_execution.yml
+falsepositives:
+- Legitimate usage of the utility in order to debug and trace a program.
+notes:
+  quarantine_reason: 'upstream status: test'

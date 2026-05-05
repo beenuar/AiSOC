@@ -1,0 +1,42 @@
+id: sigmahq-sigma-162e69a7-7981-4344-84a9-0f1c9a217a52
+name: Powershell Directory Enumeration
+description: Detects technique used by MAZE ransomware to enumerate directories using
+  Powershell
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1083/T1083.md
+- https://www.mandiant.com/resources/tactics-techniques-procedures-associated-with-maze-ransomware-incidents
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains|all:
+    - foreach
+    - Get-ChildItem
+    - '-Path '
+    - '-ErrorAction '
+    - SilentlyContinue
+    - 'Out-File '
+    - -append
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 162e69a7-7981-4344-84a9-0f1c9a217a52
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_directory_enum.yml
+falsepositives:
+- Legitimate PowerShell scripts
+notes:
+  quarantine_reason: 'upstream status: test'

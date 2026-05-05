@@ -1,0 +1,60 @@
+id: sigmahq-sigma-cdf05894-89e7-4ead-b2b0-0a5f97a90f2f
+name: Potential Encoded PowerShell Patterns In CommandLine
+description: Detects specific combinations of encoding methods in PowerShell via the
+  commandline
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://speakerdeck.com/heirhabarov/hunting-for-powershell-abuse?slide=65
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \powershell.exe
+    - \pwsh.exe
+  - OriginalFileName:
+    - PowerShell.EXE
+    - pwsh.dll
+  selection_to_1:
+    CommandLine|contains:
+    - ToInt
+    - ToDecimal
+    - ToByte
+    - ToUint
+    - ToSingle
+    - ToSByte
+  selection_to_2:
+    CommandLine|contains:
+    - ToChar
+    - ToString
+    - String
+  selection_gen_1:
+    CommandLine|contains|all:
+    - char
+    - join
+  selection_gen_2:
+    CommandLine|contains|all:
+    - split
+    - join
+  condition: selection_img and (all of selection_to_* or 1 of selection_gen_*)
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cdf05894-89e7-4ead-b2b0-0a5f97a90f2f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_powershell_encoding_patterns.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

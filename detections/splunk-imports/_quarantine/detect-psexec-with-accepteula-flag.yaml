@@ -1,0 +1,47 @@
+id: splunk-security-content-27c3a83d-cada-47c6-9042-67baf19d2574
+name: Detect PsExec With accepteula Flag
+description: The following analytic identifies the execution of `PsExec.exe` with
+  the `accepteula` flag in the command line. It leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on process execution logs and command-line arguments.
+  This activity is significant because PsExec is commonly used by threat actors to
+  execute code on remote systems, and the `accepteula` flag indicates first-time usage,
+  which could signify initial compromise. If confirmed malicious, this activity could
+  allow attackers to gain remote code execution capabilities, potentially leading
+  to further system compromise and lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        Processes.process_name IN (\"psexec.exe\", \"psexec64.exe\"\
+    )\n        OR\n        Processes.original_file_name=\"psexec.c\"\n    )\n    Processes.process=*accepteula*\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_psexec_with_accepteula_flag_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 27c3a83d-cada-47c6-9042-67baf19d2574
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_psexec_with_accepteula_flag.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

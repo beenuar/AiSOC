@@ -1,0 +1,54 @@
+id: sigmahq-sigma-1d2ab8ac-1a01-423b-9c39-001510eae8e8
+name: Azure AD Health Service Agents Registry Keys Access
+description: 'This detection uses Windows security events to detect suspicious access
+  attempts to the registry key values and sub-keys of Azure AD Health service agents
+  (e.g AD FS).
+
+  Information from AD Health service agents can be used to potentially abuse some
+  of the features provided by those services in the cloud (e.g. Federation).
+
+  This detection requires an access control entry (ACE) on the system access control
+  list (SACL) of the following securable object: HKLM:\SOFTWARE\Microsoft\ADHealthAgent.
+
+  Make sure you set the SACL to propagate to its sub-keys.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1012
+  categories:
+  - endpoint
+references:
+- https://o365blog.com/post/hybridhealthagent/
+- https://github.com/OTRF/Set-AuditRule/blob/c3dec5443414231714d850565d364ca73475ade5/rules/registry/aad_connect_health_service_agent.yml
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID:
+    - 4656
+    - 4663
+    ObjectType: Key
+    ObjectName: \REGISTRY\MACHINE\SOFTWARE\Microsoft\ADHealthAgent
+  filter:
+    ProcessName|contains:
+    - Microsoft.Identity.Health.Adfs.DiagnosticsAgent.exe
+    - Microsoft.Identity.Health.Adfs.InsightsService.exe
+    - Microsoft.Identity.Health.Adfs.MonitoringAgent.Startup.exe
+    - Microsoft.Identity.Health.Adfs.PshSurrogate.exe
+    - Microsoft.Identity.Health.Common.Clients.ResourceMonitor.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 1d2ab8ac-1a01-423b-9c39-001510eae8e8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_aadhealth_svc_agent_regkey_access.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

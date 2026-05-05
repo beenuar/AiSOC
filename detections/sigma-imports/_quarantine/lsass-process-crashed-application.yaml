@@ -1,0 +1,41 @@
+id: sigmahq-sigma-a18e0862-127b-43ca-be12-1a542c75c7c5
+name: LSASS Process Crashed - Application
+description: 'Detects Windows error reporting events where the process that crashed
+  is LSASS (Local Security Authority Subsystem Service).
+
+  This could be the cause of a provoked crash by techniques such as Lsass-Shtinkering
+  to dump credentials.'
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://github.com/deepinstinct/Lsass-Shtinkering
+- https://media.defcon.org/DEF%20CON%2030/DEF%20CON%2030%20presentations/Asaf%20Gilboa%20-%20LSASS%20Shtinkering%20Abusing%20Windows%20Error%20Reporting%20to%20Dump%20LSASS.pdf
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55
+logsource:
+  product: windows
+  service: application
+detection:
+  selection:
+    Provider_Name: Application Error
+    EventID: 1000
+    AppName: lsass.exe
+    ExceptionCode: c0000001
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a18e0862-127b-43ca-be12-1a542c75c7c5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/application/application_error/win_application_error_lsass_crash.yml
+falsepositives:
+- Rare legitimate crashing of the lsass process
+notes:
+  quarantine_reason: 'upstream status: experimental'

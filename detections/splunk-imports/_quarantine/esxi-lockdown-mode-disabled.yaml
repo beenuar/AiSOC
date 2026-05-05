@@ -1,0 +1,35 @@
+id: splunk-security-content-07c0d28a-9a9b-409f-8d4b-65355bd19ead
+name: ESXi Lockdown Mode Disabled
+description: This detection identifies when Lockdown Mode is disabled on an ESXi host,
+  which can indicate that a threat actor is attempting to weaken host security controls.
+  Disabling Lockdown Mode allows broader remote access via SSH or the host client
+  and may precede further malicious actions such as data exfiltration, lateral movement,
+  or VM tampering.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message IN ("*lockdownmode.disabled*", "*Administrator
+    access to the host has been enabled*") | rex field=_raw "Z (?<dest>[\w\.]+)\s"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest Message |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_lockdown_mode_disabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 07c0d28a-9a9b-409f-8d4b-65355bd19ead
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_lockdown_mode_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

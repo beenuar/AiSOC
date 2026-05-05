@@ -1,0 +1,46 @@
+id: splunk-security-content-d7c2c09b-9569-4a9e-a8b6-6a39a99c1d32
+name: Windows ISO LNK File Creation
+description: The following analytic detects the creation of .iso.lnk files in the
+  %USER%\AppData\Local\Temp\<random folder name>\ path, indicating that an ISO file
+  has been mounted and accessed. This detection leverages the Endpoint.Filesystem
+  data model, specifically monitoring file creation events in the Windows Recent folder.
+  This activity is significant as it may indicate the delivery and execution of potentially
+  malicious payloads via ISO files. If confirmed malicious, this could lead to unauthorized
+  code execution, data exfiltration, or further system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.001
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2021/05/27/new-sophisticated-email-based-attack-from-nobelium/
+- https://github.com/MHaggis/notes/blob/master/utilities/ISOBuilder.ps1
+- https://isc.sans.edu/diary/Recent+AZORult+activity/25120
+- https://tccontre.blogspot.com/2020/01/remcos-rat-evading-windows-defender-av.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Filesystem where Filesystem.file_path
+    IN ("*\\Microsoft\\Windows\\Recent\\*") Filesystem.file_name IN ("*.iso.lnk",
+    "*.img.lnk", "*.vhd.lnk", "*vhdx.lnk") by Filesystem.action Filesystem.dest Filesystem.file_access_time
+    Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name
+    Filesystem.file_path Filesystem.file_acl Filesystem.file_size Filesystem.process_guid
+    Filesystem.process_id Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_iso_lnk_file_creation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d7c2c09b-9569-4a9e-a8b6-6a39a99c1d32
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_iso_lnk_file_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

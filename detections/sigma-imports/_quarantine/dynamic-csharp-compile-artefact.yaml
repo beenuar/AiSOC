@@ -1,0 +1,38 @@
+id: sigmahq-sigma-e4a74e34-ecde-4aab-b2fb-9112dd01aed0
+name: Dynamic CSharp Compile Artefact
+description: 'When C# is compiled dynamically, a .cmdline file will be created as
+  a part of the process.
+
+  Certain processes are not typically observed compiling C# code, but can do so without
+  touching disk.
+
+  This can be used to unpack a payload for execution'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027.004
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1027.004/T1027.004.md#atomic-test-2---dynamic-c-compile
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: .cmdline
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: e4a74e34-ecde-4aab-b2fb-9112dd01aed0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_csharp_compile_artefact.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

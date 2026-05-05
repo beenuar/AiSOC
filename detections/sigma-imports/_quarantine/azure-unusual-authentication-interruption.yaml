@@ -1,0 +1,40 @@
+id: sigmahq-sigma-8366030e-7216-476b-9927-271d79f13cf3
+name: Azure Unusual Authentication Interruption
+description: Detects when there is a interruption in the authentication process.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/entra/architecture/security-operations-privileged-accounts
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection_50097:
+    ResultType: 50097
+    ResultDescription: Device authentication is required
+  selection_50155:
+    ResultType: 50155
+    ResultDescription: DeviceAuthenticationFailed
+  selection_50158:
+    ResultType: 50158
+    ResultDescription: ExternalSecurityChallenge - External security challenge was
+      not satisfied
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 8366030e-7216-476b-9927-271d79f13cf3
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/signin_logs/azure_unusual_authentication_interruption.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

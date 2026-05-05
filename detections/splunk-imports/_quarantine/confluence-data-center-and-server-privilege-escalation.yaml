@@ -1,0 +1,45 @@
+id: splunk-security-content-115bebac-0976-4f7d-a3ec-d1fb45a39a11
+name: Confluence Data Center and Server Privilege Escalation
+description: The following analytic identifies potential exploitation attempts on
+  a known vulnerability in Atlassian Confluence, specifically targeting the /setup/*.action*
+  URL pattern. It leverages web logs within the Splunk 'Web' Data Model, filtering
+  for successful accesses (HTTP status 200) to these endpoints. This activity is significant
+  as it suggests attackers might be exploiting a privilege escalation flaw in Confluence.
+  If confirmed malicious, it could result in unauthorized access or account creation
+  with escalated privileges, leading to potential data breaches or further exploitation
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://confluence.atlassian.com/security/cve-2023-22515-privilege-escalation-vulnerability-in-confluence-data-center-and-server-1295682276.html
+- https://confluence.atlassian.com/security/cve-2023-22518-improper-authorization-vulnerability-in-confluence-data-center-and-server-1311473907.html
+- https://www.rapid7.com/blog/post/2023/10/04/etr-cve-2023-22515-zero-day-privilege-escalation-in-confluence-server-and-data-center/
+- https://attackerkb.com/topics/Q5f0ItSzw5/cve-2023-22515/rapid7-analysis
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.url IN (\"*/setup/setupadministrator.action*\", \"\
+    */setup/finishsetup.action*\", \"*/json/setup-restore-local.action*\", \"*/json/setup-restore-progress.action*\"\
+    , \"*/json/setup-restore.action*\", \"*/bootstrap/selectsetupstep.action*\") Web.status=200\n\
+    \  BY Web.http_user_agent, Web.status Web.http_method,\n     Web.url, Web.url_length,\
+    \ Web.src,\n     Web.dest, sourcetype\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `confluence_data_center_and_server_privilege_escalation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 115bebac-0976-4f7d-a3ec-d1fb45a39a11
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/confluence_data_center_and_server_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

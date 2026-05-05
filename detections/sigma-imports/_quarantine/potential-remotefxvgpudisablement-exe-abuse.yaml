@@ -1,0 +1,37 @@
+id: sigmahq-sigma-f65e22f9-819e-4f96-9c7b-498364ae7a25
+name: Potential RemoteFXvGPUDisablement.EXE Abuse
+description: Detects PowerShell module creation where the module Contents are set
+  to "function Get-VMRemoteFXPhysicalVideoAdapter". This could be a sign of potential
+  abuse of  the "RemoteFXvGPUDisablement.exe" binary which is known to be vulnerable
+  to module load-order hijacking.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1218/T1218.md
+- https://github.com/redcanaryco/AtomicTestHarnesses/blob/7e1e4da116801e3d6fcc6bedb207064577e40572/TestHarnesses/T1218_SignedBinaryProxyExecution/InvokeRemoteFXvGPUDisablementCommand.ps1
+logsource:
+  product: windows
+  service: powershell-classic
+  definition: fields have to be extract from event
+detection:
+  selection:
+    Data|contains: ModuleContents=function Get-VMRemoteFXPhysicalVideoAdapter {
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f65e22f9-819e-4f96-9c7b-498364ae7a25
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_classic/posh_pc_remotefxvgpudisablement_abuse.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

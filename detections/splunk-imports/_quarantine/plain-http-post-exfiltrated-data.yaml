@@ -1,0 +1,41 @@
+id: splunk-security-content-e2b36208-a364-11eb-8909-acde48001122
+name: Plain HTTP POST Exfiltrated Data
+description: The following analytic detects potential data exfiltration using plain
+  HTTP POST requests. It leverages network traffic logs, specifically monitoring the
+  `stream_http` data source for POST methods containing suspicious form data such
+  as "wermgr.exe" or "svchost.exe". This activity is significant because it is commonly
+  associated with malware like Trickbot, trojans, keyloggers, or APT adversaries,
+  which use plain text HTTP POST requests to communicate with remote C2 servers. If
+  confirmed malicious, this activity could lead to unauthorized data exfiltration,
+  compromising sensitive information and potentially leading to further network infiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - application
+references:
+- https://blog.talosintelligence.com/2020/03/trickbot-primer.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`stream_http` http_method=POST form_data IN (\"*wermgr.exe*\",\"*svchost.exe*\"\
+    , \"*name=\\\"proclist\\\"*\",\"*ipconfig*\", \"*name=\\\"sysinfo\\\"*\", \"*net\
+    \ view*\")\n  | stats values(form_data) as http_request_body min(_time) as firstTime\
+    \ max(_time) as lastTime count\n    BY src_ip dest_ip http_method\n       http_user_agent\
+    \ uri_path url\n       bytes_in bytes_out\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `plain_http_post_exfiltrated_data_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e2b36208-a364-11eb-8909-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/plain_http_post_exfiltrated_data.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

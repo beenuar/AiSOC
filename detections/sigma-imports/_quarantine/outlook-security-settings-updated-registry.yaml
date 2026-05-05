@@ -1,0 +1,40 @@
+id: sigmahq-sigma-c3cefdf4-6703-4e1c-bad8-bf422fc5015a
+name: Outlook Security Settings Updated - Registry
+description: Detects changes to the registry values related to outlook security settings
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1137
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1137/T1137.md
+- https://learn.microsoft.com/en-us/outlook/troubleshoot/security/information-about-email-security-settings
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains|all:
+    - \SOFTWARE\Microsoft\Office\
+    - \Outlook\Security\
+  filter_main_outlook:
+    Image|startswith:
+    - C:\Program Files\Microsoft Office\
+    - C:\Program Files (x86)\Microsoft Office\
+    Image|endswith: \OUTLOOK.EXE
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c3cefdf4-6703-4e1c-bad8-bf422fc5015a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_outlook_security_settings.yml
+falsepositives:
+- Administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

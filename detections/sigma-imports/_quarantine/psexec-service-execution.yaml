@@ -1,0 +1,34 @@
+id: sigmahq-sigma-fdfcbd78-48f1-4a4b-90ac-d82241e368c5
+name: PsExec Service Execution
+description: Detects launch of the PSEXESVC service, which means that this system
+  was the target of a psexec remote execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/psexec
+- https://www.youtube.com/watch?v=ro2QuZTIMBM
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+  - Image: C:\Windows\PSEXESVC.exe
+  - OriginalFileName: psexesvc.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fdfcbd78-48f1-4a4b-90ac-d82241e368c5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_psexesvc.yml
+falsepositives:
+- Legitimate administrative tasks
+notes:
+  quarantine_reason: 'upstream status: test'

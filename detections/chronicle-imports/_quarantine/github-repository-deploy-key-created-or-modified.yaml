@@ -1,0 +1,64 @@
+id: chronicle-detection-rules-github-repository-deploy-key-created-or-modified
+name: github_repository_deploy_key_created_or_modified
+description: github_repository_deploy_key_created_or_modified
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule github_repository_deploy_key_created_or_modified {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects when an SSH deploy\
+    \ key is added or modified in a GitHub repository. A compromised or unauthorized\
+    \ deploy key could allow malicious actors to push unauthorized changes into production\
+    \ environments, potentially bypassing code reviews and testing procedures. This\
+    \ could lead to the introduction of backdoors, malware, or the exfiltration of\
+    \ sensitive data.\"\n    rule_id = \"mr_e10b0f8b-6a90-48af-aecb-95ef2ca10de8\"\
+    \n    rule_name = \"GitHub Repository Deploy Key Created Or Modified\"\n    assumption\
+    \ = \"Your GitHub enterprise audit log settings are configured to log the source\
+    \ IP address for events. Reference: https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/displaying-ip-addresses-in-the-audit-log-for-your-organization\"\
+    \n    type = \"alert\"\n    severity = \"High\"\n    priority = \"High\"\n   \
+    \ platform = \"GitHub\"\n    data_source = \"github\"\n    mitre_attack_tactic\
+    \ = \"Persistence\"\n    mitre_attack_technique = \"Account Manipulation: Additional\
+    \ Cloud Credentials\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1098/001/\"\
+    \n    mitre_attack_version = \"v14\"\n    reference = \"https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/audit-log-events-for-your-enterprise\"\
+    \n\n  events:\n    $github.metadata.vendor_name = \"GITHUB\" nocase\n    $github.metadata.product_name\
+    \ = \"GITHUB\"\n    (\n        $github.metadata.product_event_type = \"public_key.create\"\
+    \ or\n        $github.metadata.product_event_type = \"public_key.update\"\n  \
+    \  )\n    $github.principal.user.userid = $user_id\n    $github.target.resource.name\
+    \ = $github_repo_name\n\n  match:\n    $user_id, $github_repo_name over 30m\n\n\
+    \  outcome:\n    $risk_score = max(65)\n    $mitre_attack_tactic = \"Persistence\"\
+    \n    $mitre_attack_technique = \"Account Manipulation: Additional Cloud Credentials\"\
+    \n    $mitre_attack_technique_id = \"T1098.001\"\n    $event_count = count_distinct($github.metadata.id)\n\
+    \    $principal_ip = array_distinct($github.principal.ip)\n    $principal_user_userid\
+    \ = array_distinct($github.principal.user.userid)\n    $principal_ip_country =\
+    \ array_distinct($github.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($github.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_ip_city = array_distinct($github.principal.location.city)\n  \
+    \  $security_result_summary = array_distinct($github.security_result.summary)\n\
+    \n  condition:\n    $github\n}"
+  chronicle_rule_name: github_repository_deploy_key_created_or_modified
+provenance:
+  source: chronicle/detection-rules
+  source_id: github_repository_deploy_key_created_or_modified
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/github/github_repository_deploy_key_created_or_modified.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

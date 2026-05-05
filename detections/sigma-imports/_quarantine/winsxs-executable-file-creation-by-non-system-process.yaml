@@ -1,0 +1,37 @@
+id: sigmahq-sigma-34746e8c-5fb8-415a-b135-0abc167e912a
+name: WinSxS Executable File Creation By Non-System Process
+description: Detects the creation of binaries in the WinSxS folder by non-system processes
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://media.defense.gov/2023/May/09/2003218554/-1/-1/0/JOINT_CSA_HUNTING_RU_INTEL_SNAKE_MALWARE_20230509.PDF
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: C:\Windows\WinSxS\
+    TargetFilename|endswith: .exe
+  filter_main_system_location:
+    Image|startswith:
+    - C:\Windows\Systems32\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\WinSxS\
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 34746e8c-5fb8-415a-b135-0abc167e912a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_susp_winsxs_binary_creation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

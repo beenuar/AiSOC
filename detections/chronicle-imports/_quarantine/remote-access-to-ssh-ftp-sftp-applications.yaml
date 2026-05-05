@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-remote-access-to-ssh-ftp-sftp-applications
+name: remote_access_to_ssh_ftp_sftp_applications
+description: remote_access_to_ssh_ftp_sftp_applications
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule remote_access_to_ssh_ftp_sftp_applications {\n meta:\n  \
+    \  author = \"Osman Demir\"\n    description = \"Detects unauthorized access \
+    \ License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/0es5ppHJjdqw\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"linux\"\n    service\
+    \ = \"sshd\"\n    mitre = \"t1078, persistence, privilege_escalation, initial_access\"\
+    \n\n  events:\n((($selection.principal.application = \"ssh\" or $selection.principal.application\
+    \ = \"sftp\" or $selection.principal.application = \"ftp\") and ($selection.target.ip\
+    \ = \"172.16.0.0/16\" or $selection.target.ip = \"192.168.0.0/16\" or $selection.target.ip\
+    \ = \"10.0.0.0/8\")) or ((($selection.target.port = \"22\" or $selection.target.port\
+    \ = \"21\") and ($selection.target.ip = \"172.16.0.0/16\" or $selection.target.ip\
+    \ = \"192.168.0.0/16\" or $selection.target.ip = \"10.0.0.0/8\")) and not (($selection.principal.ip\
+    \ = \"allowed ip address list\" or $selection.principal.ip = \"172.16.0.0/16\"\
+    \ or $selection.principal.ip = \"192.168.0.0/16\" or $selection.principal.ip =\
+    \ \"10.0.0.0/8\"))))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: remote_access_to_ssh_ftp_sftp_applications
+provenance:
+  source: chronicle/detection-rules
+  source_id: remote_access_to_ssh_ftp_sftp_applications
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/linux/remote_access_to_ssh__ftp__sftp_applications.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

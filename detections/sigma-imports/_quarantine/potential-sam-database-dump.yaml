@@ -1,0 +1,57 @@
+id: sigmahq-sigma-4e87b8e2-2ee9-4b2a-a715-4727d297ece0
+name: Potential SAM Database Dump
+description: Detects the creation of files that look like exports of the local SAM
+  (Security Account Manager)
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - endpoint
+references:
+- https://github.com/search?q=CVE-2021-36934
+- https://web.archive.org/web/20210725081645/https://github.com/cube0x0/CVE-2021-36934
+- https://www.google.com/search?q=%22reg.exe+save%22+sam
+- https://github.com/HuskyHacks/ShadowSteal
+- https://github.com/FireFart/hivenightmare
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+  - TargetFilename|endswith:
+    - \Temp\sam
+    - \sam.sav
+    - \Intel\sam
+    - \sam.hive
+    - \Perflogs\sam
+    - \ProgramData\sam
+    - \Users\Public\sam
+    - \AppData\Local\sam
+    - \AppData\Roaming\sam
+    - _ShadowSteal.zip
+    - \Documents\SAM.export
+    - :\sam
+  - TargetFilename|contains:
+    - \hive_sam_
+    - \sam.save
+    - \sam.export
+    - \~reg_sam.save
+    - \sam_backup
+    - \sam.bck
+    - \sam.backup
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4e87b8e2-2ee9-4b2a-a715-4727d297ece0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_sam_dump.yml
+falsepositives:
+- Rare cases of administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

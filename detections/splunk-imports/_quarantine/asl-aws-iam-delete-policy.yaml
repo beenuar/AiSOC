@@ -1,0 +1,42 @@
+id: splunk-security-content-609ced68-d420-4ff7-8164-ae98b4b4018c
+name: ASL AWS IAM Delete Policy
+description: The following analytic identifies when a policy is deleted in AWS. It
+  leverages Amazon Security Lake logs to detect the DeletePolicy API operation. Monitoring
+  policy deletions is crucial as it can indicate unauthorized attempts to weaken security
+  controls. If confirmed malicious, this activity could allow an attacker to remove
+  critical security policies, potentially leading to privilege escalation or unauthorized
+  access to sensitive resources.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeletePolicy.html
+- https://docs.aws.amazon.com/cli/latest/reference/iam/delete-policy.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=DeletePolicy\n  | fillnull\n \
+    \ | stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor.user.uid\
+    \ api.operation api.service.name\n       http_request.user_agent src_endpoint.ip\
+    \ actor.user.account.uid\n       cloud.provider cloud.region\n  | rename actor.user.uid\
+    \ as user api.operation as action api.service.name as dest http_request.user_agent\
+    \ as user_agent src_endpoint.ip as src actor.user.account.uid as vendor_account\
+    \ cloud.provider as vendor_product cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `asl_aws_iam_delete_policy_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 609ced68-d420-4ff7-8164-ae98b4b4018c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_iam_delete_policy.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

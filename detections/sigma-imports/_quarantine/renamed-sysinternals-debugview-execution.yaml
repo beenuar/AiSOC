@@ -1,0 +1,35 @@
+id: sigmahq-sigma-cd764533-2e07-40d6-a718-cfeec7f2da7f
+name: Renamed SysInternals DebugView Execution
+description: Detects suspicious renamed SysInternals DebugView execution
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- https://www.epicturla.com/blog/sysinturla
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Product: Sysinternals DebugView
+  filter:
+    OriginalFileName: Dbgview.exe
+    Image|endswith: \Dbgview.exe
+  condition: selection and not filter
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cd764533-2e07-40d6-a718-cfeec7f2da7f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_renamed_sysinternals_debugview.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

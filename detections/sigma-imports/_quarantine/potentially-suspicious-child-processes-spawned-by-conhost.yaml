@@ -1,0 +1,55 @@
+id: sigmahq-sigma-dfa03a09-8b92-4d83-8e74-f72839b1c407
+name: Potentially Suspicious Child Processes Spawned by ConHost
+description: Detects suspicious child processes related to Windows Shell utilities
+  spawned by `conhost.exe`, which could indicate malicious activity using trusted
+  system components.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1202
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://tria.ge/241015-l98snsyeje/behavioral2
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith: \conhost.exe
+  selection_child:
+  - Image|endswith:
+    - \cmd.exe
+    - \cscript.exe
+    - \mshta.exe
+    - \powershell_ise.exe
+    - \powershell.exe
+    - \pwsh.exe
+    - \regsvr32.exe
+    - \wscript.exe
+  - OriginalFileName:
+    - cmd.exe
+    - cscript.exe
+    - mshta.exe
+    - powershell_ise.exe
+    - powershell.exe
+    - pwsh.dll
+    - regsvr32.exe
+    - wscript.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: dfa03a09-8b92-4d83-8e74-f72839b1c407
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_conhost_susp_winshell_child_process.yml
+falsepositives:
+- Legitimate administrative tasks using `conhost.exe` to spawn child processes such
+  as `cmd.exe`, `powershell.exe`, or `regsvr32.exe`.
+notes:
+  quarantine_reason: 'upstream status: experimental'

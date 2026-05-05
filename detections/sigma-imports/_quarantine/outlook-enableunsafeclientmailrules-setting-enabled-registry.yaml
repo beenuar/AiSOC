@@ -1,0 +1,35 @@
+id: sigmahq-sigma-6763c6c8-bd01-4687-bc8d-4fa52cf8ba08
+name: Outlook EnableUnsafeClientMailRules Setting Enabled - Registry
+description: Detects an attacker trying to enable the outlook security setting "EnableUnsafeClientMailRules"
+  which allows outlook to run applications or execute macros
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://support.microsoft.com/en-us/topic/how-to-control-the-rule-actions-to-start-an-application-or-run-a-macro-in-outlook-2016-and-outlook-2013-e4964b72-173c-959d-5d7b-ead562979048
+- https://speakerdeck.com/heirhabarov/hunting-for-persistence-via-microsoft-exchange-server-or-outlook?slide=44
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \Outlook\Security\EnableUnsafeClientMailRules
+    Details: DWORD (0x00000001)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6763c6c8-bd01-4687-bc8d-4fa52cf8ba08
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_office_outlook_enable_unsafe_client_mail_rules.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

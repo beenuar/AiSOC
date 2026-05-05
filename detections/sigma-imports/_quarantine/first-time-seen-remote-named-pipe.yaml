@@ -1,0 +1,59 @@
+id: sigmahq-sigma-52d8b0c6-53d6-439a-9e41-52ad442ad9ad
+name: First Time Seen Remote Named Pipe
+description: This detection excludes known namped pipes accessible remotely and notify
+  on newly observed ones, may help to detect lateral movement and remote exec using
+  named pipes
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://twitter.com/menasec1/status/1104489274387451904
+logsource:
+  product: windows
+  service: security
+  definition: The advanced audit policy setting "Object Access > Audit Detailed File
+    Share" must be configured for Success/Failure
+detection:
+  selection1:
+    EventID: 5145
+    ShareName: \\\\\*\\IPC$
+  false_positives:
+    RelativeTargetName:
+    - atsvc
+    - samr
+    - lsarpc
+    - lsass
+    - winreg
+    - netlogon
+    - srvsvc
+    - protected_storage
+    - wkssvc
+    - browser
+    - netdfs
+    - svcctl
+    - spoolss
+    - ntsvcs
+    - LSM_API_service
+    - HydraLsPipe
+    - TermSrv_API_service
+    - MsFteWds
+    - sql\query
+    - eventlog
+  condition: selection1 and not false_positives
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 52d8b0c6-53d6-439a-9e41-52ad442ad9ad
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_lm_namedpipe.yml
+falsepositives:
+- Update the excluded named pipe to filter out any newly observed legit named pipe
+notes:
+  quarantine_reason: 'upstream status: test'

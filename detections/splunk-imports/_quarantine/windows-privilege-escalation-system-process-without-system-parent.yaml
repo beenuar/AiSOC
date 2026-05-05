@@ -1,0 +1,46 @@
+id: splunk-security-content-5a5351cd-ba7e-499e-ad82-2ce160ffa637
+name: Windows Privilege Escalation System Process Without System Parent
+description: The following analytic detects any system integrity level process spawned
+  by a non-system account. It leverages Sysmon EventID 1, focusing on process integrity
+  and parent user data. This behavior is significant as it often indicates successful
+  privilege escalation to SYSTEM from a user-controlled process or service. If confirmed
+  malicious, this activity could allow an attacker to gain full control over the system,
+  execute arbitrary code, and potentially compromise the entire environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  - T1548
+  - T1134
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1068/
+- https://vuls.cert.org/confluence/display/Wiki/2021/06/21/Finding+Privilege+Escalation+Vulnerabilities+in+Windows+using+Process+Monitor
+- https://redcanary.com/blog/getsystem-offsec/
+- https://atomicredteam.io/privilege-escalation/T1134.001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=1 IntegrityLevel="system" ParentUser=* NOT ParentUser
+    IN ("*SYSTEM","*LOCAL SERVICE","*NETWORK SERVICE","*DWM-*","*$","-") | eval src_user
+    = replace(ParentUser,"^[^\\\]+\\\\","") | stats count min(_time) as firstTime
+    max(_time) as lastTime by action dest original_file_name parent_process parent_process_exec
+    parent_process_guid parent_process_id parent_process_name parent_process_path
+    process process_exec process_guid process_hash process_id process_integrity_level
+    process_name process_path user user_id vendor_product src_user | `security_content_ctime(firstTime)`  |
+    `security_content_ctime(lastTime)` | `windows_privilege_escalation_system_process_without_system_parent_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 5a5351cd-ba7e-499e-ad82-2ce160ffa637
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_privilege_escalation_system_process_without_system_parent.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

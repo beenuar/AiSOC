@@ -1,0 +1,47 @@
+id: sigmahq-sigma-cc368ed0-2411-45dc-a222-510ace303cb2
+name: Potentially Suspicious Execution Of Regasm/Regsvcs From Uncommon Location
+description: Detects potentially suspicious execution of the Regasm/Regsvcs utilities
+  from a potentially suspicious location
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.009
+  categories:
+  - endpoint
+references:
+- https://www.fortiguard.com/threat-signal-report/4718?s=09
+- https://lolbas-project.github.io/lolbas/Binaries/Regasm/
+- https://lolbas-project.github.io/lolbas/Binaries/Regsvcs/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \Regsvcs.exe
+    - \Regasm.exe
+  - OriginalFileName:
+    - RegSvcs.exe
+    - RegAsm.exe
+  selection_dir:
+    CommandLine|contains:
+    - \AppData\Local\Temp\
+    - \Microsoft\Windows\Start Menu\Programs\Startup\
+    - \PerfLogs\
+    - \Users\Public\
+    - \Windows\Temp\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cc368ed0-2411-45dc-a222-510ace303cb2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_regasm_regsvcs_uncommon_location_execution.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

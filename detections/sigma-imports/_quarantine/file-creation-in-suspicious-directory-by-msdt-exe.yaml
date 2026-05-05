@@ -1,0 +1,40 @@
+id: sigmahq-sigma-318557a5-150c-4c8d-b70e-a9910e199857
+name: File Creation In Suspicious Directory By Msdt.EXE
+description: Detects msdt.exe creating files in suspicious directories which could
+  be a sign of exploitation of either Follina or Dogwalk vulnerabilities
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://irsl.medium.com/the-trouble-with-microsofts-troubleshooters-6e32fc80b8bd
+- https://msrc-blog.microsoft.com/2022/05/30/guidance-for-cve-2022-30190-microsoft-support-diagnostic-tool-vulnerability/
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    Image|endswith: \msdt.exe
+    TargetFilename|contains:
+    - \Desktop\
+    - \Start Menu\Programs\Startup\
+    - C:\PerfLogs\
+    - C:\ProgramData\
+    - C:\Users\Public\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 318557a5-150c-4c8d-b70e-a9910e199857
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_msdt_susp_directories.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

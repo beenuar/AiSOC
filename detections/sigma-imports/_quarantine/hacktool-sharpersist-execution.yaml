@@ -1,0 +1,51 @@
+id: sigmahq-sigma-26488ad0-f9fd-4536-876f-52fea846a2e4
+name: HackTool - SharPersist Execution
+description: Detects the execution of the hacktool SharPersist - used to deploy various
+  different kinds of persistence mechanisms
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/sharpersist-windows-persistence-toolkit
+- https://github.com/mandiant/SharPersist
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \SharPersist.exe
+  - Product: SharPersist
+  selection_cli_1:
+    CommandLine|contains:
+    - ' -t schtask -c '
+    - ' -t startupfolder -c '
+  selection_cli_2:
+    CommandLine|contains|all:
+    - ' -t reg -c '
+    - ' -m add'
+  selection_cli_3:
+    CommandLine|contains|all:
+    - ' -t service -c '
+    - ' -m add'
+  selection_cli_4:
+    CommandLine|contains|all:
+    - ' -t schtask -c '
+    - ' -m add'
+  condition: 1 of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 26488ad0-f9fd-4536-876f-52fea846a2e4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_hktl_sharpersist.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

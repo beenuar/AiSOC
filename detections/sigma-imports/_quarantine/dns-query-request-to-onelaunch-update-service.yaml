@@ -1,0 +1,39 @@
+id: sigmahq-sigma-df68f791-ad95-447f-a271-640a0dab9cf8
+name: DNS Query Request To OneLaunch Update Service
+description: 'Detects DNS query requests to "update.onelaunch.com". This domain is
+  associated with the OneLaunch adware application.
+
+  When the OneLaunch application is installed it will attempt to get updates from
+  this domain.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1056
+  categories:
+  - endpoint
+references:
+- https://www.malwarebytes.com/blog/detections/pup-optional-onelaunch-silentcf
+- https://www.myantispyware.com/2020/12/14/how-to-uninstall-onelaunch-browser-removal-guide/
+- https://malware.guide/browser-hijacker/remove-onelaunch-virus/
+logsource:
+  category: dns_query
+  product: windows
+detection:
+  selection:
+    QueryName: update.onelaunch.com
+    Image|endswith: \OneLaunch.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: df68f791-ad95-447f-a271-640a0dab9cf8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/dns_query/dns_query_win_onelaunch_update_service.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

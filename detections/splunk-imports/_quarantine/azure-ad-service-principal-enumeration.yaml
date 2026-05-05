@@ -1,0 +1,43 @@
+id: splunk-security-content-3f0647ce-add5-4436-8039-cbd1abe74563
+name: Azure AD Service Principal Enumeration
+description: This detection leverages azure graph activity logs to identify when graph
+  APIs have been used to identify 10 or more service principals. This type of behaviour
+  is associated with tools such as Azure enumberation tools such as AzureHound or
+  ROADtools.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.004
+  - T1526
+  categories:
+  - cloud
+references:
+- https://github.com/SpecterOps/AzureHound
+- https://github.com/dirkjanm/ROADtools
+- https://splunkbase.splunk.com/app/3110
+- https://splunk.github.io/splunk-add-on-for-microsoft-cloud-services/Install/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category IN (MicrosoftGraphActivityLogs) TERM(servicePrincipals)\n\
+    \  | fillnull\n  | rex field=\"properties.requestUri\" \"https\\:\\/\\/graph.microsoft.com\\\
+    /beta\\/servicePrincipals\\/(?P<servicePrincipalb>.*?)\\/\"\n  | rex field=\"\
+    properties.requestUri\" \"https\\:\\/\\/graph.microsoft.com\\/v1.0\\/servicePrincipals\\\
+    /(?P<servicePrincipalv1>.*?)\\/\"\n  | eval spn=coalesce(servicePrincipalb,servicePrincipalv1)\n\
+    \  | fillnull\n  | stats count min(_time) as _time dc(spn) as spn_count values(user_id)\
+    \ as user_id\n    BY dest user src\n       vendor_account vendor_product signature\n\
+    \  | where spn_count>9\n  | `azure_ad_service_principal_enumeration_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3f0647ce-add5-4436-8039-cbd1abe74563
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_service_principal_enumeration.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

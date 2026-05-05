@@ -1,0 +1,56 @@
+id: sigmahq-sigma-11063ec2-de63-4153-935e-b1a8b9e616f1
+name: Linux Remote System Discovery
+description: Detects the enumeration of other remote systems.
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1018/T1018.md
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_1:
+    Image|endswith: /arp
+    CommandLine|contains: -a
+  selection_2:
+    Image|endswith: /ping
+    CommandLine|contains:
+    - ' 10.'
+    - ' 192.168.'
+    - ' 172.16.'
+    - ' 172.17.'
+    - ' 172.18.'
+    - ' 172.19.'
+    - ' 172.20.'
+    - ' 172.21.'
+    - ' 172.22.'
+    - ' 172.23.'
+    - ' 172.24.'
+    - ' 172.25.'
+    - ' 172.26.'
+    - ' 172.27.'
+    - ' 172.28.'
+    - ' 172.29.'
+    - ' 172.30.'
+    - ' 172.31.'
+    - ' 127.'
+    - ' 169.254.'
+  condition: 1 of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 11063ec2-de63-4153-935e-b1a8b9e616f1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_remote_system_discovery.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

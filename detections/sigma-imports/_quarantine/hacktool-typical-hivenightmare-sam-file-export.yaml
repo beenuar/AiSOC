@@ -1,0 +1,42 @@
+id: sigmahq-sigma-6ea858a8-ba71-4a12-b2cc-5d83312404c7
+name: HackTool - Typical HiveNightmare SAM File Export
+description: Detects files written by the different tools that exploit HiveNightmare
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://github.com/GossiTheDog/HiveNightmare
+- https://github.com/FireFart/hivenightmare/
+- https://github.com/WiredPulse/Invoke-HiveNightmare
+- https://twitter.com/cube0x0/status/1418920190759378944
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+  - TargetFilename|contains:
+    - \hive_sam_
+    - \SAM-2021-
+    - \SAM-2022-
+    - \SAM-2023-
+    - \SAM-haxx
+    - \Sam.save
+  - TargetFilename: C:\windows\temp\sam
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6ea858a8-ba71-4a12-b2cc-5d83312404c7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_hktl_hivenightmare_file_exports.yml
+falsepositives:
+- Files that accidentally contain these strings
+notes:
+  quarantine_reason: 'upstream status: test'

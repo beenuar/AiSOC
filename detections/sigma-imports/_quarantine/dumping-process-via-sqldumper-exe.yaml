@@ -1,0 +1,37 @@
+id: sigmahq-sigma-23ceaf5c-b6f1-4a32-8559-f2ff734be516
+name: Dumping Process via Sqldumper.exe
+description: Detects process dump via legitimate sqldumper.exe binary
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://twitter.com/countuponsec/status/910977826853068800
+- https://twitter.com/countuponsec/status/910969424215232518
+- https://lolbas-project.github.io/lolbas/OtherMSBinaries/Sqldumper/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \sqldumper.exe
+    CommandLine|contains:
+    - '0x0110'
+    - 0x01100:40
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 23ceaf5c-b6f1-4a32-8559-f2ff734be516
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_lolbin_susp_sqldumper_activity.yml
+falsepositives:
+- Legitimate MSSQL Server actions
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,39 @@
+id: sigmahq-sigma-45810b50-7edc-42ca-813b-bdac02fb946b
+name: Steganography Hide Zip Information in Picture File
+description: Detects appending of zip file to image
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1027.003
+  categories:
+  - endpoint
+references:
+- https://zerotoroot.me/steganography-hiding-a-zip-in-a-jpeg-file/
+logsource:
+  product: linux
+  service: auditd
+detection:
+  commands:
+    type: EXECVE
+    a0: cat
+  a1:
+    a1|endswith:
+    - .jpg
+    - .png
+  a2:
+    a2|endswith: .zip
+  condition: commands and a1 and a2
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 45810b50-7edc-42ca-813b-bdac02fb946b
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/auditd/execve/lnx_auditd_hidden_zip_files_steganography.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

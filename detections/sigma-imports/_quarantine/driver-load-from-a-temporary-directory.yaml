@@ -1,0 +1,32 @@
+id: sigmahq-sigma-2c4523d5-d481-4ed0-8ec3-7fbf0cb41a75
+name: Driver Load From A Temporary Directory
+description: Detects a driver load from a temporary directory
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: driver_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|contains: \Temp\
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2c4523d5-d481-4ed0-8ec3-7fbf0cb41a75
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/driver_load/driver_load_win_susp_temp_use.yml
+falsepositives:
+- There is a relevant set of false positives depending on applications in the environment
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,35 @@
+id: sigmahq-sigma-614a7e17-5643-4d89-b6fe-f9df1a79641c
+name: Wmiprvse Wbemcomn DLL Hijack - File
+description: Detects a threat actor creating a file named `wbemcomn.dll` in the `C:\Windows\System32\wbem\`
+  directory over the network and loading it for a WMI DLL Hijack scenario.
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1047
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://threathunterplaybook.com/hunts/windows/201009-RemoteWMIWbemcomnDLLHijack/notebook.html
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    Image: System
+    TargetFilename|endswith: \wbem\wbemcomn.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 614a7e17-5643-4d89-b6fe-f9df1a79641c
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_wmiprvse_wbemcomn_dll_hijack.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

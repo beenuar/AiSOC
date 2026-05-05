@@ -1,0 +1,99 @@
+id: sigmahq-sigma-f6de9536-0441-4b3f-a646-f4e00f300ffd
+name: Weak Encryption Enabled and Kerberoast
+description: Detects scenario where weak encryption is enabled for a user profile
+  which could be used for hash/password cracking.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=2053
+- https://blog.harmj0y.net/redteaming/another-word-on-delegation/
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: Audit Policy : Account Management > Audit User Account
+    Management, Group Policy : Computer Configuration\Windows Settings\Security Settings\Advanced
+    Audit Policy Configuration\Audit Policies\Account Management\Audit User Account
+    Management'
+detection:
+  selection:
+    EventID: 4738
+  olduac_des:
+    OldUacValue|endswith:
+    - 8???
+    - 9???
+    - A???
+    - B???
+    - C???
+    - D???
+    - E???
+    - F???
+  newuac_des:
+    NewUacValue|endswith:
+    - 8???
+    - 9???
+    - A???
+    - B???
+    - C???
+    - D???
+    - E???
+    - F???
+  olduac_preauth:
+    OldUacValue|endswith:
+    - 1????
+    - 3????
+    - 5????
+    - 7????
+    - 9????
+    - B????
+    - D????
+    - F????
+  newuac_preauth:
+    NewUacValue|endswith:
+    - 1????
+    - 3????
+    - 5????
+    - 7????
+    - 9????
+    - B????
+    - D????
+    - F????
+  olduac_encrypted:
+    OldUacValue|endswith:
+    - 8??
+    - 9??
+    - A??
+    - B??
+    - C??
+    - D??
+    - E??
+    - F??
+  newuac_encrypted:
+    NewUacValue|endswith:
+    - 8??
+    - 9??
+    - A??
+    - B??
+    - C??
+    - D??
+    - E??
+    - F??
+  condition: selection and ((newuac_des and not olduac_des) or (newuac_preauth and
+    not olduac_preauth) or (newuac_encrypted and not olduac_encrypted))
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f6de9536-0441-4b3f-a646-f4e00f300ffd
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_alert_enable_weak_encryption.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

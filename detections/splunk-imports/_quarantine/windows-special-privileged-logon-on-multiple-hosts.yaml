@@ -1,0 +1,45 @@
+id: splunk-security-content-4c461f5a-c2cc-4e86-b132-c262fc9edca7
+name: Windows Special Privileged Logon On Multiple Hosts
+description: The following analytic detects a user authenticating with special privileges
+  on 30 or more remote endpoints within a 5-minute window. It leverages Event ID 4672
+  from Windows Security logs to identify this behavior. This activity is significant
+  as it may indicate lateral movement or remote code execution by an adversary. If
+  confirmed malicious, the attacker could gain extensive control over the network,
+  potentially leading to privilege escalation, data exfiltration, or further compromise
+  of the environment. Security teams should adjust detection thresholds based on their
+  specific environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087
+  - T1021.002
+  - T1135
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4672
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn319113(v=ws.11)
+- https://thedfirreport.com/2023/01/23/sharefinder-how-threat-actors-discover-file-shares/
+- https://attack.mitre.org/tactics/TA0008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4672 AND NOT(Caller_User_Name IN (\"\
+    DWM-1\",\"DWM-2\",\"DWM-3\",\"LOCAL SERVICE\",\"NETWORK SERVICE\",\"SYSTEM\",\"\
+    *$\"))\n  | bucket span=5m _time\n  | stats dc(Computer) AS unique_targets values(Computer)\
+    \ as dest values(PrivilegeList) as privileges\n    BY _time, Caller_User_Name\n\
+    \  | rename Caller_User_Name as user\n  | where unique_targets > 30\n  | `windows_special_privileged_logon_on_multiple_hosts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4c461f5a-c2cc-4e86-b132-c262fc9edca7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_special_privileged_logon_on_multiple_hosts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

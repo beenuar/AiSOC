@@ -1,0 +1,43 @@
+id: sigmahq-sigma-af4c4609-5755-42fe-8075-4effb49f5d44
+name: Microsoft Excel Add-In Loaded From Uncommon Location
+description: Detects Microsoft Excel loading an Add-In (.xll) file from an uncommon
+  location
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/lnk-between-browsers
+- https://wazuh.com/blog/detecting-xll-files-used-for-dropping-fin7-jssloader-with-wazuh/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    Image|endswith: \excel.exe
+    ImageLoaded|contains:
+    - \Desktop\
+    - \Downloads\
+    - \Perflogs\
+    - \Temp\
+    - \Users\Public\
+    - \Windows\Tasks\
+    ImageLoaded|endswith: .xll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: af4c4609-5755-42fe-8075-4effb49f5d44
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_office_excel_xll_susp_load.yml
+falsepositives:
+- Some tuning might be required to allow or remove certain locations used by the rule
+  if you consider them as safe locations
+notes:
+  quarantine_reason: 'upstream status: test'

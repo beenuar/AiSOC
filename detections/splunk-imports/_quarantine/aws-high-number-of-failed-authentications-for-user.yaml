@@ -1,0 +1,40 @@
+id: splunk-security-content-e3236f49-daf3-4b70-b808-9290912ac64d
+name: AWS High Number Of Failed Authentications For User
+description: The following analytic detects an AWS account experiencing more than
+  20 failed authentication attempts within a 5-minute window. It leverages AWS CloudTrail
+  logs to identify multiple failed ConsoleLogin events. This behavior is significant
+  as it may indicate a brute force attack targeting the account. If confirmed malicious,
+  the attacker could potentially gain unauthorized access, leading to data breaches
+  or further exploitation of the AWS environment. Security teams should consider adjusting
+  the threshold based on their specific environment to reduce false positives.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1201
+  categories:
+  - cloud
+references:
+- https://www.trendmicro.com/cloudoneconformity/knowledge-base/aws/IAM/password-policy.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=ConsoleLogin action=failure\n  | bucket span=10m\
+    \ _time\n  | rename user_name as user\n  | stats dc(_raw) AS failed_attempts values(src)\
+    \ as src values(user_agent) as user_agent\n    BY _time, user, signature,\n  \
+    \     dest, vendor_account vendor_region,\n       vendor_product\n  | where failed_attempts\
+    \ > 20\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_high_number_of_failed_authentications_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e3236f49-daf3-4b70-b808-9290912ac64d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_high_number_of_failed_authentications_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

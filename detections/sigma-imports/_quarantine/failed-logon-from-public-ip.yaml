@@ -1,0 +1,48 @@
+id: sigmahq-sigma-f88e112a-21aa-44bd-9b01-6ee2a2bbbed1
+name: Failed Logon From Public IP
+description: Detects a failed logon attempt from a public IP. A login from a public
+  IP can indicate a misconfigured firewall or network boundary.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1190
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4625
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4625
+  filter_main_ip_unknown:
+    IpAddress|contains: '-'
+  filter_main_local_ranges:
+    IpAddress|cidr:
+    - ::1/128
+    - 10.0.0.0/8
+    - 127.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - fc00::/7
+    - fe80::/10
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: f88e112a-21aa-44bd-9b01-6ee2a2bbbed1
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_susp_failed_logon_source.yml
+falsepositives:
+- Legitimate logon attempts over the internet
+- IPv4-to-IPv6 mapped IPs
+notes:
+  quarantine_reason: 'upstream status: test'

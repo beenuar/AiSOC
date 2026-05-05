@@ -1,0 +1,39 @@
+id: sigmahq-sigma-2e669ed8-742e-4fe5-b3c4-5a59b486c2ee
+name: Activity Performed by Terminated User
+description: 'Detects when a Microsoft Cloud App Security reported for users whose
+  account were terminated in Azure AD, but still perform activities in other platforms
+  such as AWS or Salesforce.
+
+  This is especially relevant for users who use another account to manage resources,
+  since these accounts are often not terminated when a user leaves the company.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy
+- https://learn.microsoft.com/en-us/defender-cloud-apps/policy-template-reference
+logsource:
+  service: threat_management
+  product: m365
+detection:
+  selection:
+    eventSource: SecurityComplianceCenter
+    eventName: Activity performed by terminated user
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2e669ed8-742e-4fe5-b3c4-5a59b486c2ee
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/m365/threat_management/microsoft365_activity_by_terminated_user.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

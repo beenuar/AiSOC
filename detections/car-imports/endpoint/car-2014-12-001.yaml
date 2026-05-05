@@ -1,0 +1,94 @@
+id: mitre-car-car-2014-12-001
+name: Remotely Launched Executables via WMI
+description: 'Adversaries can use [Windows Management Instrumentation (WMI)](https://attack.mitre.org/techniques/T1047)
+  to move laterally by launching executables remotely. For adversaries to achieve
+  this, they must open a WMI connection to a remote host. This RPC activity is currently
+  detected by [CAR-2014-11-007](../CAR-2014-11-007). After the WMI connection has
+  been initialized, a process can be remotely launched using the command: `wmic /node:"<hostname>"
+  process call create "<command line>"`, which is detected via [CAR-2016-03-002](../CAR-2016-03-002).
+
+
+  This leaves artifacts at both a network (RPC) and process (command line) level.
+  When wmic.exe (or the schtasks API) is used to remotely create processes, Windows
+  uses RPC (135/tcp) to communicate with the the remote machine.
+
+
+  After RPC authenticates, the RPC endpoint mapper opens a high port connection, through
+  which the schtasks Remote Procedure Call is actually implemented. With the right
+  packet decoders, or by looking for certain byte streams in raw data, these functions
+  can be identified.
+
+
+  When the command line is executed, it has the parent process of `C:\windows\system32\wbem\WmiPrvSE.exe`.
+  This analytic looks for these two events happening in sequence, so that the network
+  connection and target process are output.
+
+
+  Certain strings can be identifiers of the WMI by looking up the interface UUID for
+  IRemUnknown2 in different formats
+
+
+  -   UUID `00000143-0000-0000-c000-000000000046` (decoded)
+
+  -   Hex `43 01 00 00 00 00 00 00 c0 00 00 00 00 00 00 46` (raw)
+
+  -   ASCII `CF` (printable text only)
+
+
+  This identifier is present three times during the RPC request phase. Any sensor
+  that has access to the byte code as raw, decoded, or ASCII could implement this
+  analytic.
+
+  The transfer syntax is
+
+
+  -   UUID `8a885d04-1ceb-11c9-9fe8-08002b104860` (decoded)
+
+  -   Hex `04 5d 88 8a eb 1c c9 11 9f e8 08 00 2b 10 48 60` (raw)
+
+  -   ASCII \`]+H\`\` (printable text only)
+
+
+  Thus, a great ASCII based signature is
+
+
+  -   `*CF*]+H*CF*CF*host*"`
+
+
+  ### Output Description
+
+
+  Identifies the process that initiated the RPC request (such as wmic.exe or powershell.exe),
+  as well as the source and destination information of the network connection that
+  triggered the alert.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: PCAP
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: "processes = search Process:Create\nwmi_children = filter processes where\
+      \ (parent_exe == \"wmiprvse.exe\")\n\nflows = search Flow:Message\nwmi_flow\
+      \ = filter flows where (src_port >= 49152 and dest_port >= 49152 and proto_info.rpc_interface\
+      \ == \"IRemUnknown2\")\n\nremote_wmi_process = join wmi_children, wmi_flow where\
+      \ (\n wmi_flow.time < wmi_children.time < wmi_flow.time + 1sec and\n wmi_flow.hostname\
+      \ == wmi_children.hostname\n)\n\noutput remote_wmi_process\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-12-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-12-001.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,34 @@
+id: chronicle-detection-rules-detection-of-safetykatz
+name: detection_of_safetykatz
+description: detection_of_safetykatz
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detection_of_safetykatz {\n meta:\n    author = \"Markus\
+    \ Neis\"\n    description = \"Detects possible SafetyKatz Behaviour  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/bx1gtxYzjwHz\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/07/24\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"credential_access, T1003\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"11\" and re.regex($selection.target.file.full_path, `.*\\\\Temp\\\\debug\\\
+    .bin`))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: detection_of_safetykatz
+provenance:
+  source: chronicle/detection-rules
+  source_id: detection_of_safetykatz
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/detection_of_safetykatz.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

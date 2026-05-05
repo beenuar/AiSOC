@@ -1,0 +1,41 @@
+id: sigmahq-sigma-270185ff-5f50-4d6d-a27f-24c3b8c9fef8
+name: Tomcat WebServer Logs Deleted
+description: Detects the deletion of tomcat WebServer logs which may indicate an attempt
+  to destroy forensic evidence
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- Internal Research
+- https://linuxhint.com/view-tomcat-logs-windows/
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains|all:
+    - \Tomcat
+    - \logs\
+    TargetFilename|contains:
+    - catalina.
+    - _access_log.
+    - localhost.
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 270185ff-5f50-4d6d-a27f-24c3b8c9fef8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_tomcat_logs.yml
+falsepositives:
+- During uninstallation of the tomcat server
+- During log rotation
+notes:
+  quarantine_reason: 'upstream status: test'

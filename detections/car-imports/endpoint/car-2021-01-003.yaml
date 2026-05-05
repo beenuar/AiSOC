@@ -1,0 +1,37 @@
+id: mitre-car-car-2021-01-003
+name: Clearing Windows Logs with Wevtutil
+description: In an attempt to clear traces after compromising a machine, threat actors
+  often try to clear Windows Event logs. This is often done using “wevtutil”, a legitimate
+  tool provided by Microsoft. This action interferes with event collection and notification,
+  and may lead to a security event going undetected, thereby potentially leading to
+  further compromise of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Splunk search - Detecting log clearing with wevtutil
+    type: Splunk
+    code: 'index=__your_sysmon_index__ sourcetype= __your__windows__sysmon__sourcetype
+      EventCode=1 Image=*wevtutil* CommandLine=*cl* (CommandLine=*System* OR CommandLine=*Security*
+      OR CommandLine=*Setup* OR CommandLine=*Application*)
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-003.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,57 @@
+id: sigmahq-sigma-0d34ed8b-1c12-4ff2-828c-16fc860b766d
+name: Suspicious Processes Spawned by Java.EXE
+description: Detects suspicious processes spawned from a Java host process which could
+  indicate a sign of exploitation (e.g. log4j)
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20231230220738/https://www.lunasec.io/docs/blog/log4j-zero-day/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    ParentImage|endswith: \java.exe
+    Image|endswith:
+    - \AppVLP.exe
+    - \bitsadmin.exe
+    - \certutil.exe
+    - \cscript.exe
+    - \curl.exe
+    - \forfiles.exe
+    - \hh.exe
+    - \mftrace.exe
+    - \mshta.exe
+    - \net.exe
+    - \net1.exe
+    - \query.exe
+    - \reg.exe
+    - \regsvr32.exe
+    - \rundll32.exe
+    - \schtasks.exe
+    - \scrcons.exe
+    - \scriptrunner.exe
+    - \sh.exe
+    - \systeminfo.exe
+    - \whoami.exe
+    - \wmic.exe
+    - \wscript.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0d34ed8b-1c12-4ff2-828c-16fc860b766d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_java_susp_child_process.yml
+falsepositives:
+- Legitimate calls to system binaries
+- Company specific internal usage
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,44 @@
+id: sigmahq-sigma-4096842a-8f9f-4d36-92b4-d0b2a62f9b2a
+name: Potential PetitPotam Attack Via EFS RPC Calls
+description: "Detects usage of the windows RPC library Encrypting File System Remote\
+  \ Protocol (MS-EFSRPC). Variations of this RPC are used within the attack refereed\
+  \ to as PetitPotam.\nThe usage of this RPC function should be rare if ever used\
+  \ at all.\nThus usage of this function is uncommon enough that any usage of this\
+  \ RPC function should warrant further investigation to determine if it is legitimate.\n\
+  \ View surrounding logs (within a few minutes before and after) from the Source\
+  \ IP to. Logs from from the Source IP would include dce_rpc, smb_mapping, smb_files,\
+  \ rdp, ntlm, kerberos, etc..'"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1557.001
+  - T1187
+  categories:
+  - endpoint
+references:
+- https://github.com/topotam/PetitPotam/blob/d83ac8f2dd34654628c17490f99106eb128e7d1e/PetitPotam/PetitPotam.cpp
+- https://msrc.microsoft.com/update-guide/vulnerability/ADV210003
+- https://vx-underground.org/archive/Symantec/windows-vista-network-attack-07-en.pdf
+- https://threatpost.com/microsoft-petitpotam-poc/168163/
+logsource:
+  product: zeek
+  service: dce_rpc
+detection:
+  selection:
+    operation|startswith: efs
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 4096842a-8f9f-4d36-92b4-d0b2a62f9b2a
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/zeek/zeek_dce_rpc_potential_petit_potam_efs_rpc_call.yml
+falsepositives:
+- Uncommon but legitimate windows administrator or software tasks that make use of
+  the Encrypting File System RPC Calls. Verify if this is common activity (see description).
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: splunk-security-content-43254751-e2ce-409a-b6b4-4f851e8dcc26
+name: Windows Modify Registry to Add or Modify Firewall Rule
+description: The following analytic detects a potential addition or modification of
+  firewall rules, signaling possible configuration changes or security policy adjustments.
+  It tracks commands such as netsh advfirewall firewall add rule and netsh advfirewall
+  firewall set rule, which may indicate attempts to alter network access controls.
+  Monitoring these actions ensures the integrity of firewall settings and helps prevent
+  unauthorized network access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/new-shrinklocker-ransomware-uses-bitlocker-to-encrypt-your-files/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE Registry.registry_path=
+    "*\\System\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\FirewallRules\\*"  Registry.action
+    = modified by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_modify_registry_to_add_or_modify_firewall_rule_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 43254751-e2ce-409a-b6b4-4f851e8dcc26
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_to_add_or_modify_firewall_rule.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

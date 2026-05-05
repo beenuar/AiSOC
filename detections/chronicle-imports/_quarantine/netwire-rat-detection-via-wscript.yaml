@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-netwire-rat-detection-via-wscript
+name: netwire_rat_detection_via_wscript
+description: netwire_rat_detection_via_wscript
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule netwire_rat_detection_via_wscript {\n meta:\n    author =\
+    \ \"Florian Roth - Margaritis Dimitrios (Idea) Ariel Millahuel (Rule)\"\n    description\
+    \ = \"Detects Netwire activity via WScript  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/uI7Og7wR6TUZ\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, t1056, t1082\"\n\n  events:\n\
+    ((re.regex($selection.target.process.file.full_path, `.*\\\\wscript\\.exe`) and\
+    \ (re.regex($selection.target.process.command_line, `.* C:\\\\Users\\\\.*\\.vbs\
+    \ .*`) or re.regex($selection.target.process.command_line, `.* C:\\\\Users\\\\\
+    admin\\\\AppData\\\\.*\\.vbs .*`) or re.regex($selection.target.process.command_line,\
+    \ `.* C:\\\\Users\\\\admin\\\\AppData\\\\OneDrive\\.vbs .*`)) and ($selection.metadata.product_event_type\
+    \ = \"4688\" or $selection.metadata.product_event_type = \"1\")) and not (re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\winrar.*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: netwire_rat_detection_via_wscript
+provenance:
+  source: chronicle/detection-rules
+  source_id: netwire_rat_detection_via_wscript
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/process_creation/netwire_rat_detection_via_wscript.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

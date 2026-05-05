@@ -1,0 +1,38 @@
+id: sigmahq-sigma-56fa3cd6-f8d6-4520-a8c7-607292971886
+name: Cisco BGP Authentication Failures
+description: Detects BGP failures which may be indicative of brute force attacks to
+  manipulate routing
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1110
+  - T1557
+  categories:
+  - endpoint
+references:
+- https://www.blackhat.com/presentations/bh-usa-03/bh-us-03-convery-franz-v3.pdf
+logsource:
+  product: cisco
+  service: bgp
+  definition: 'Requirements: cisco bgp logs need to be enabled and ingested'
+detection:
+  keywords_bgp_cisco:
+    '|all':
+    - :179
+    - IP-TCP-3-BADAUTH
+  condition: keywords_bgp_cisco
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 56fa3cd6-f8d6-4520-a8c7-607292971886
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/bgp/cisco_bgp_md5_auth_failed.yml
+falsepositives:
+- Unlikely. Except due to misconfigurations
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,51 @@
+id: sigmahq-sigma-207b0396-3689-42d9-8399-4222658efc99
+name: Potential Privilege Escalation To LOCAL SYSTEM
+description: Detects unknown program using commandline flags usually used by tools
+  such as PsExec and PAExec to start programs with SYSTEM Privileges
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1587.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/psexec
+- https://www.poweradmin.com/paexec/
+- https://www.fireeye.com/blog/threat-research/2020/10/kegtap-and-singlemalt-with-a-ransomware-chaser.html
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains|windash:
+    - ' -s cmd'
+    - ' -s -i cmd'
+    - ' -i -s cmd'
+    - ' -s pwsh'
+    - ' -s -i pwsh'
+    - ' -i -s pwsh'
+    - ' -s powershell'
+    - ' -s -i powershell'
+    - ' -i -s powershell'
+  filter_main_exclude_coverage:
+    CommandLine|contains:
+    - paexec
+    - PsExec
+    - accepteula
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 207b0396-3689-42d9-8399-4222658efc99
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_susp_psexec_paexec_flags.yml
+falsepositives:
+- Weird admins that rename their tools
+- Software companies that bundle PsExec/PAExec with their software and rename it,
+  so that it is less embarrassing
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,36 @@
+id: sigmahq-sigma-fcddca7c-b9c0-4ddf-98da-e1e2d18b0157
+name: Disabled Windows Defender Eventlog
+description: Detects the disabling of the Windows Defender eventlog as seen in relation
+  to Lockbit 3.0 infections
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1685
+  categories:
+  - endpoint
+references:
+- https://twitter.com/WhichbufferArda/status/1543900539280293889/photo/2
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains: \Microsoft\Windows\CurrentVersion\WINEVT\Channels\Microsoft-Windows-Windows
+      Defender/Operational\Enabled
+    Details: DWORD (0x00000000)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fcddca7c-b9c0-4ddf-98da-e1e2d18b0157
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_disabled_microsoft_defender_eventlog.yml
+falsepositives:
+- Other Antivirus software installations could cause Windows to disable that eventlog
+  (unknown)
+notes:
+  quarantine_reason: 'upstream status: test'

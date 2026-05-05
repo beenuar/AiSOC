@@ -1,0 +1,44 @@
+id: sigmahq-sigma-66a4d409-451b-4151-94f4-a55d559c49b0
+name: PowerShell Deleted Mounted Share
+description: Detects when when a mounted share is removed. Adversaries may remove
+  share connections that are no longer useful in order to clean up traces of their
+  operation
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.005
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1070.005/T1070.005.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection:
+    ScriptBlockText|contains:
+    - Remove-SmbShare
+    - Remove-FileShare
+  filter_main_module_load:
+    ScriptBlockText|contains|all:
+    - FileShare.cdxml
+    - Microsoft.PowerShell.Core\Export-ModuleMember
+    - ROOT/Microsoft/Windows/Storage/MSFT_FileShare
+    - ObjectModelWrapper
+    - Cmdletization.MethodParameter
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 66a4d409-451b-4151-94f4-a55d559c49b0
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_susp_mounted_share_deletion.yml
+falsepositives:
+- Administrators or Power users may remove their shares via cmd line
+notes:
+  quarantine_reason: 'upstream status: test'

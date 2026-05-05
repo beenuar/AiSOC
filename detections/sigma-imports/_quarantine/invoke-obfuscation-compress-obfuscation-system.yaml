@@ -1,0 +1,41 @@
+id: sigmahq-sigma-175997c5-803c-4b08-8bb0-70b099f47595
+name: Invoke-Obfuscation COMPRESS OBFUSCATION - System
+description: Detects Obfuscated Powershell via COMPRESS OBFUSCATION
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Provider_Name: Service Control Manager
+    EventID: 7045
+    ImagePath|contains|all:
+    - new-object
+    - text.encoding]::ascii
+    - readtoend
+    ImagePath|contains:
+    - :system.io.compression.deflatestream
+    - system.io.streamreader
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 175997c5-803c-4b08-8bb0-70b099f47595
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/system/service_control_manager/win_system_invoke_obfuscation_via_compress_services.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,37 @@
+id: sigmahq-sigma-098d7118-55bc-4912-a836-dc6483a8d150
+name: Access To ADMIN$ Network Share
+description: Detects access to ADMIN$ network share
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-5140
+logsource:
+  product: windows
+  service: security
+  definition: 'Requirements: The advanced audit policy setting "Object Access > Audit
+    File Share" must be configured for Success/Failure'
+detection:
+  selection:
+    EventID: 5140
+    ShareName: Admin$
+  filter_main_computer_account:
+    SubjectUserName|endswith: $
+  condition: selection and not 1 of filter_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 098d7118-55bc-4912-a836-dc6483a8d150
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_admin_share_access.yml
+falsepositives:
+- Legitimate administrative activity
+notes:
+  quarantine_reason: 'upstream status: test'

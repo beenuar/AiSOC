@@ -1,0 +1,38 @@
+id: sigmahq-sigma-c3d76afc-93df-461e-8e67-9b2bad3f2ac4
+name: File Explorer Folder Opened Using Explorer Folder Shortcut Via Shell
+description: Detects the initial execution of "cmd.exe" which spawns "explorer.exe"
+  with the appropriate command line arguments for opening the "My Computer" folder.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1135
+  categories:
+  - endpoint
+references:
+- https://ss64.com/nt/shell.html
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection:
+    ParentImage|endswith:
+    - \cmd.exe
+    - \powershell.exe
+    - \pwsh.exe
+    Image|endswith: \explorer.exe
+    CommandLine|contains: shell:mycomputerfolder
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c3d76afc-93df-461e-8e67-9b2bad3f2ac4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_explorer_folder_shortcut_via_shell_binary.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

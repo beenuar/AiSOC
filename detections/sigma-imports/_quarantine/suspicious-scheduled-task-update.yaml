@@ -1,0 +1,71 @@
+id: sigmahq-sigma-614cf376-6651-47c4-9dcc-6b9527f749f4
+name: Suspicious Scheduled Task Update
+description: Detects update to a scheduled task event that contain suspicious keywords.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4698
+logsource:
+  product: windows
+  service: security
+  definition: The Advanced Audit Policy setting Object Access > Audit Other Object
+    Access Events has to be configured to allow this detection. We also recommend
+    extracting the Command field from the embedded XML in the event data.
+detection:
+  selection_eid:
+    EventID: 4702
+  selection_paths:
+    TaskContentNew|contains:
+    - \AppData\Local\Temp\
+    - \AppData\Roaming\
+    - \Users\Public\
+    - \WINDOWS\Temp\
+    - C:\Temp\
+    - \Desktop\
+    - \Downloads\
+    - \Temporary Internet
+    - C:\ProgramData\
+    - C:\Perflogs\
+  selection_commands:
+    TaskContentNew|contains:
+    - regsvr32
+    - rundll32
+    - cmd.exe</Command>
+    - cmd</Command>
+    - '<Arguments>/c '
+    - '<Arguments>/k '
+    - '<Arguments>/r '
+    - powershell
+    - pwsh
+    - mshta
+    - wscript
+    - cscript
+    - certutil
+    - bitsadmin
+    - bash.exe
+    - 'bash '
+    - scrcons
+    - 'wmic '
+    - wmic.exe
+    - forfiles
+    - scriptrunner
+    - hh.exe
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 614cf376-6651-47c4-9dcc-6b9527f749f4
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_susp_scheduled_task_update.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

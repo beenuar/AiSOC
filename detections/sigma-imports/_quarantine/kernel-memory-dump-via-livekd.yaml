@@ -1,0 +1,39 @@
+id: sigmahq-sigma-c7746f1c-47d3-43d6-8c45-cd1e54b6b0a2
+name: Kernel Memory Dump Via LiveKD
+description: Detects execution of LiveKD with the "-m" flag to potentially dump the
+  kernel memory
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sysinternals/downloads/livekd
+- https://4sysops.com/archives/creating-a-complete-memory-dump-without-a-blue-screen/
+- https://kb.acronis.com/content/60892
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith:
+    - \livekd.exe
+    - \livekd64.exe
+  - OriginalFileName: livekd.exe
+  selection_cli:
+    CommandLine|contains|windash: ' -m'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c7746f1c-47d3-43d6-8c45-cd1e54b6b0a2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_sysinternals_livekd_kernel_memory_dump.yml
+falsepositives:
+- Unlikely in production environment
+notes:
+  quarantine_reason: 'upstream status: test'

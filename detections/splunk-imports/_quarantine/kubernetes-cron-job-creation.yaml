@@ -1,0 +1,40 @@
+id: splunk-security-content-5984dbe8-572f-47d7-9251-3dff6c3f0c0d
+name: Kubernetes Cron Job Creation
+description: The following analytic detects the creation of a Kubernetes cron job,
+  which is a task scheduled to run automatically at specified intervals. It identifies
+  this activity by monitoring Kubernetes Audit logs for the creation events of cron
+  jobs. This behavior is significant for a SOC as it could allow an attacker to execute
+  malicious tasks repeatedly and automatically, posing a threat to the Kubernetes
+  infrastructure. If confirmed malicious, this activity could lead to persistent attacks,
+  service disruptions, or unauthorized access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.007
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` verb=create \"objectRef.resource\"=cronjobs\n  | fillnull\n\
+    \  | stats count values(user.groups{}) as user_groups\n    BY kind objectRef.name\
+    \ objectRef.namespace\n       objectRef.resource requestObject.kind requestObject.spec.schedule\n\
+    \       requestObject.spec.jobTemplate.spec.template.spec.containers{}.image responseStatus.code\
+    \ sourceIPs{}\n       stage user.username userAgent\n       verb\n  | rename sourceIPs{}\
+    \ as src_ip, user.username as user\n  | `kubernetes_cron_job_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5984dbe8-572f-47d7-9251-3dff6c3f0c0d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_cron_job_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

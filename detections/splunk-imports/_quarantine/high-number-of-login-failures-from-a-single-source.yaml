@@ -1,0 +1,44 @@
+id: splunk-security-content-7f398cfb-918d-41f4-8db8-2e2474e02222
+name: High Number of Login Failures from a single source
+description: The following analytic detects multiple failed login attempts in Office365
+  Azure Active Directory from a single source IP address. It leverages Office365 management
+  activity logs, specifically AzureActiveDirectoryStsLogon records, aggregating these
+  logs in 5-minute intervals to count failed login attempts. This activity is significant
+  as it may indicate brute-force attacks or password spraying, which are critical
+  to monitor. If confirmed malicious, an attacker could gain unauthorized access to
+  Office365 accounts, leading to potential data breaches, lateral movement within
+  the organization, or further malicious activities using the compromised account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.001
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/001/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory Operation=UserLoginFailed\
+    \ record_type=AzureActiveDirectoryStsLogon\n  | bucket span=5m _time\n  | stats\
+    \ dc(_raw) AS failed_attempts values(user) as user values(LogonError) as LogonError\
+    \ values(signature) as signature values(UserAgent) as UserAgent values(dest) as\
+    \ dest values(vendor_account) as vendor_account values(vendor_product) as vendor_product\n\
+    \    BY _time, src_ip\n  | where failed_attempts > 10\n  | `high_number_of_login_failures_from_a_single_source_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7f398cfb-918d-41f4-8db8-2e2474e02222
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/high_number_of_login_failures_from_a_single_source.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,47 @@
+id: sigmahq-sigma-9ca2bf31-0570-44d8-a543-534c47c33ed7
+name: Potential DLL Sideloading Of DBGCORE.DLL
+description: Detects DLL sideloading of "dbgcore.dll"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://hijacklibs.net/
+logsource:
+  category: image_load
+  product: windows
+detection:
+  selection:
+    ImageLoaded|endswith: \dbgcore.dll
+  filter_main_generic:
+    ImageLoaded|startswith:
+    - C:\Program Files (x86)\
+    - C:\Program Files\
+    - C:\Windows\SoftwareDistribution\
+    - C:\Windows\System32\
+    - C:\Windows\SystemTemp\
+    - C:\Windows\SysWOW64\
+    - C:\Windows\WinSxS\
+  filter_optional_steam:
+    ImageLoaded|endswith: \Steam\bin\cef\cef.win7x64\dbgcore.dll
+  filter_optional_opera:
+    ImageLoaded|contains: opera\Opera Installer Temp\opera_package
+    ImageLoaded|endswith: \assistant\dbgcore.dll
+  condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 9ca2bf31-0570-44d8-a543-534c47c33ed7
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/image_load/image_load_side_load_dbgcore.yml
+falsepositives:
+- Legitimate applications loading their own versions of the DLL mentioned in this
+  rule
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,56 @@
+id: splunk-security-content-acb3ea33-70f7-47aa-b335-643b3aebcb2f
+name: Linux Auditd Possible Access Or Modification Of Sshd Config File
+description: 'The following analytic detects access, deletion or modification of the
+  ssh_config file on Linux systems.
+
+  It leverages data from Linux Auditd, focusing on events of type PATH with a nametype
+  of ("NORMAL", "CREATE", "DELETE").
+
+  This activity could be significant because unauthorized changes to ssh_config can
+  allow threat actors to redirect port connections or use unauthorized keys, potentially
+  compromising the system.
+
+  Correlate this with related EXECVE or PROCTITLE events to identify the process or
+  user responsible for the access or modification.
+
+  If confirmed malicious, this could lead to unauthorized access, privilege escalation,
+  or persistent backdoor access, posing a severe security risk.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.004
+  categories:
+  - endpoint
+references:
+- https://www.hackingarticles.in/ssh-penetration-testing-port-22/
+- https://attack.mitre.org/techniques/T1098/004/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`\n(\n  (type=PATH nametype IN (\"NORMAL\", \"CREATE\"\
+    , \"DELETE\"))\n  OR\n  type=CWD\n)\n| rex \"msg=audit\\([^)]*:(?<audit_id>\\\
+    d+)\\)\"\n\n| stats\n  values(type) as types\n  values(name) as names\n  values(nametype)\
+    \ as nametype\n  values(cwd) as cwd_list\n  values(_time) as event_times\n  by\
+    \ audit_id, host\n\n| eval current_working_directory = coalesce(mvindex(cwd_list,\
+    \ 0), \"N/A\")\n| eval candidate_paths = mvmap(names, if(match(names, \"^/\"),\
+    \ names, current_working_directory + \"/\" + names))\n| eval matched_paths = mvfilter(match(candidate_paths,\
+    \ \"/etc/ssh/ssh_config.*\"))\n| eval match_count = mvcount(matched_paths)\n|\
+    \ eval reconstructed_path = mvindex(matched_paths, 0)\n| eval e_time = mvindex(event_times,\
+    \ 0)\n| where match_count > 0\n| rename host as dest\n\n| stats count min(e_time)\
+    \ as firstTime max(e_time) as lastTime\n  values(nametype) as nametype\n  by current_working_directory\n\
+    \     reconstructed_path\n     match_count\n     dest\n     audit_id\n\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n|  `linux_auditd_possible_access_or_modification_of_sshd_config_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: acb3ea33-70f7-47aa-b335-643b3aebcb2f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_possible_access_or_modification_of_sshd_config_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

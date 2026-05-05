@@ -1,0 +1,39 @@
+id: sigmahq-sigma-bd8b828d-0dca-48e1-8a63-8a58ecf2644f
+name: Group Membership Reconnaissance Via Whoami.EXE
+description: Detects the execution of whoami.exe with the /group command line flag
+  to show group membership for the current user, account type, security identifiers
+  (SID), and attributes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1033
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \whoami.exe
+  - OriginalFileName: whoami.exe
+  selection_cli:
+    CommandLine|contains:
+    - ' /groups'
+    - ' -groups'
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: bd8b828d-0dca-48e1-8a63-8a58ecf2644f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_whoami_groups_discovery.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

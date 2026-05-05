@@ -1,0 +1,52 @@
+id: sigmahq-sigma-7a1b4c5e-8f3d-4b9a-7c2e-1f4a5b8c6d9e
+name: Suspicious Space Characters in RunMRU Registry Path - ClickFix
+description: Detects the occurrence of numerous space characters in RunMRU registry
+  paths, which may indicate execution via phishing lures using clickfix techniques
+  to hide malicious commands in the Windows Run dialog box from naked eyes.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1204.004
+  - T1027.010
+  categories:
+  - endpoint
+references:
+- https://expel.com/blog/cache-smuggling-when-a-picture-isnt-a-thousand-words/
+- https://github.com/JohnHammond/recaptcha-phish
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection_key:
+    TargetObject|contains: \Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU\
+    Details|contains: '#'
+  selection_space_variation:
+    Details|contains:
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    -             
+    - '            '
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 7a1b4c5e-8f3d-4b9a-7c2e-1f4a5b8c6d9e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_set/registry_set_susp_runmru_space_character.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: experimental'

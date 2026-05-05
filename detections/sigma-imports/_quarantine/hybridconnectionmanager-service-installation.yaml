@@ -1,0 +1,36 @@
+id: sigmahq-sigma-0ee4d8a5-4e67-4faf-acfa-62a78457d1f2
+name: HybridConnectionManager Service Installation
+description: Rule to detect the Hybrid Connection Manager service installation.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1554
+  categories:
+  - endpoint
+references:
+- https://twitter.com/Cyb3rWard0g/status/1381642789369286662
+logsource:
+  product: windows
+  service: security
+  definition: The 'System Security Extension' audit subcategory need to be enabled
+    to log the EID 4697
+detection:
+  selection:
+    EventID: 4697
+    ServiceName: HybridConnectionManager
+    ServiceFileName|contains: HybridConnectionManager
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0ee4d8a5-4e67-4faf-acfa-62a78457d1f2
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_hybridconnectionmgr_svc_installation.yml
+falsepositives:
+- Legitimate use of Hybrid Connection Manager via Azure function apps.
+notes:
+  quarantine_reason: 'upstream status: test'

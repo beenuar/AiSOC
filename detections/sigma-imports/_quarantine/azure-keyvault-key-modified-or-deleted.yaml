@@ -1,0 +1,46 @@
+id: sigmahq-sigma-80eeab92-0979-4152-942d-96749e11df40
+name: Azure Keyvault Key Modified or Deleted
+description: Identifies when a Keyvault Key is modified or deleted in Azure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552
+  - T1552.001
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName:
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/UPDATE/ACTION
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/CREATE
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/CREATE/ACTION
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/IMPORT/ACTION
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/RECOVER/ACTION
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/RESTORE/ACTION
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/DELETE
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/BACKUP/ACTION
+    - MICROSOFT.KEYVAULT/VAULTS/KEYS/PURGE/ACTION
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 80eeab92-0979-4152-942d-96749e11df40
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/azure/activity_logs/azure_keyvault_key_modified_or_deleted.yml
+falsepositives:
+- Key being modified or deleted may be performed by a system administrator.
+- Verify whether the user identity, user agent, and/or hostname should be making changes
+  in your environment.
+- Key modified or deleted from unfamiliar users should be investigated. If known behavior
+  is causing false positives, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: test'

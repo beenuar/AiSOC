@@ -1,0 +1,33 @@
+id: sigmahq-sigma-2111118f-7e46-4fc8-974a-59fd8ec95196
+name: DiagTrackEoP Default Login Username
+description: Detects the default "UserName" used by the DiagTrackEoP POC
+severity: critical
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://github.com/Wh04m1001/DiagTrackEoP/blob/3a2fc99c9700623eb7dc7d4b5f314fd9ce5ef51f/main.cpp#L46
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType: 9
+    TargetOutboundUserName: thisisnotvaliduser
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2111118f-7e46-4fc8-974a-59fd8ec95196
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/account_management/win_security_diagtrack_eop_default_login_username.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

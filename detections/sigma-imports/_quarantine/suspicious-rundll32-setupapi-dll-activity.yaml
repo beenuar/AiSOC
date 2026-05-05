@@ -1,0 +1,45 @@
+id: sigmahq-sigma-285b85b1-a555-4095-8652-a8a4106af63f
+name: Suspicious Rundll32 Setupapi.dll Activity
+description: setupapi.dll library provide InstallHinfSection function for processing
+  INF files. INF file may contain instructions allowing to create values in the registry,
+  modify files and install drivers. This technique could be used to obtain persistence
+  via modifying one of Run or RunOnce registry keys, run process or use other DLLs
+  chain calls (see references) InstallHinfSection function in setupapi.dll calls runonce.exe
+  executable regardless of actual content of INF file.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Libraries/Setupapi/
+- https://gist.githubusercontent.com/bohops/0cc6586f205f3691e04a1ebf1806aabd/raw/baf7b29891bb91e76198e30889fbf7d6642e8974/calc_exe.inf
+- https://raw.githubusercontent.com/huntresslabs/evading-autoruns/master/shady.inf
+- https://twitter.com/Z3Jpa29z/status/1313742350292746241?s=20
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: \runonce.exe
+    ParentImage|endswith: \rundll32.exe
+    ParentCommandLine|contains|all:
+    - setupapi.dll
+    - InstallHinfSection
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 285b85b1-a555-4095-8652-a8a4106af63f
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_rundll32_setupapi_installhinfsection.yml
+falsepositives:
+- Scripts and administrative tools that use INF files for driver installation with
+  setupapi.dll
+notes:
+  quarantine_reason: 'upstream status: test'

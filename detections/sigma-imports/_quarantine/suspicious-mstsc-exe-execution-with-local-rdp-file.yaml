@@ -1,0 +1,49 @@
+id: sigmahq-sigma-6e22722b-dfb1-4508-a911-49ac840b40f8
+name: Suspicious Mstsc.EXE Execution With Local RDP File
+description: Detects potential RDP connection via Mstsc using a local ".rdp" file
+  located in suspicious locations.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1219.002
+  categories:
+  - endpoint
+references:
+- https://www.blackhillsinfosec.com/rogue-rdp-revisiting-initial-access-methods/
+- https://web.archive.org/web/20230726144748/https://blog.thickmints.dev/mintsights/detecting-rogue-rdp/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \mstsc.exe
+  - OriginalFileName: mstsc.exe
+  selection_extension:
+    CommandLine|endswith:
+    - .rdp
+    - .rdp"
+  selection_paths:
+    CommandLine|contains:
+    - :\Users\Public\
+    - :\Windows\System32\spool\drivers\color
+    - ':\Windows\System32\Tasks_Migrated '
+    - :\Windows\Tasks\
+    - :\Windows\Temp\
+    - :\Windows\Tracing\
+    - \AppData\Local\Temp\
+    - \Downloads\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6e22722b-dfb1-4508-a911-49ac840b40f8
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_mstsc_run_local_rdp_file_susp_location.yml
+falsepositives:
+- Likelihood is related to how often the paths are used in the environment
+notes:
+  quarantine_reason: 'upstream status: test'

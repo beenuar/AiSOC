@@ -1,0 +1,48 @@
+id: sigmahq-sigma-c1dda054-d638-4c16-afc8-53e007f3fbc5
+name: Automated Collection Command PowerShell
+description: Once established within a system or network, an adversary may use automated
+  techniques for collecting internal data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1119
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1119/T1119.md
+logsource:
+  product: windows
+  category: ps_script
+  definition: 'Requirements: Script Block Logging must be enabled'
+detection:
+  selection_ext:
+    ScriptBlockText|contains:
+    - .doc
+    - .docx
+    - .xls
+    - .xlsx
+    - .ppt
+    - .pptx
+    - .rtf
+    - .pdf
+    - .txt
+  selection_cmd:
+    ScriptBlockText|contains|all:
+    - Get-ChildItem
+    - ' -Recurse '
+    - ' -Include '
+  condition: all of selection*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: c1dda054-d638-4c16-afc8-53e007f3fbc5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_script/posh_ps_automated_collection.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

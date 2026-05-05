@@ -1,0 +1,43 @@
+id: sigmahq-sigma-baca5663-583c-45f9-b5dc-ea96a22ce542
+name: Sticky Key Like Backdoor Usage - Registry
+description: Detects the usage and installation of a backdoor that uses an option
+  to register a malicious debugger for built-in tools that are accessible in the login
+  screen
+severity: critical
+enabled: false
+tags:
+  mitre:
+  - T1546.008
+  categories:
+  - endpoint
+references:
+- https://blogs.technet.microsoft.com/jonathantrull/2016/10/03/detecting-sticky-key-backdoors/
+- https://bazaar.abuse.ch/sample/6f3aa9362d72e806490a8abce245331030d1ab5ac77e400dd475748236a6cc81/
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection_registry:
+    TargetObject|endswith:
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\utilman.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\osk.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Magnify.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Narrator.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\DisplaySwitch.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\atbroker.exe\Debugger
+    - \SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\HelpPane.exe\Debugger
+  condition: selection_registry
+provenance:
+  source: SigmaHQ/sigma
+  source_id: baca5663-583c-45f9-b5dc-ea96a22ce542
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_stickykey_like_backdoor.yml
+falsepositives:
+- Unlikely
+notes:
+  quarantine_reason: 'upstream status: test'

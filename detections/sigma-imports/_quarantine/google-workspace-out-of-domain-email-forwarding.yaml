@@ -1,0 +1,34 @@
+id: sigmahq-sigma-2a0bb2dd-eb5f-4517-8cb9-404f8ba764a5
+name: Google Workspace Out Of Domain Email Forwarding
+description: Detects automatic email forwarding to external domains in Google Workspace,
+  which may indicate data leakage or misuse.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  categories:
+  - cloud
+references:
+- https://developers.google.com/workspace/admin/reports/v1/appendix/activity/login#email_forwarding_out_of_domain
+logsource:
+  product: gcp
+  service: google_workspace.login
+detection:
+  selection:
+    protoPayload.serviceName: login.googleapis.com
+    protoPayload.metadata.event.eventName: email_forwarding_out_of_domain
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 2a0bb2dd-eb5f-4517-8cb9-404f8ba764a5
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/gcp/gworkspace/login/gcp_gworkspace_out_of_domain_email_forwarding.yml
+falsepositives:
+- Legitimate forwarding
+notes:
+  quarantine_reason: 'upstream status: experimental'

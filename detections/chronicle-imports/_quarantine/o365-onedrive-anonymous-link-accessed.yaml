@@ -1,0 +1,55 @@
+id: chronicle-detection-rules-o365-onedrive-anonymous-link-accessed
+name: o365_onedrive_anonymous_link_accessed
+description: o365_onedrive_anonymous_link_accessed
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_onedrive_anonymous_link_accessed {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Anonymous links can be used to access\
+    \ files from OneDrive. While this isn't always a sign of malicious activity, some\
+    \ organizations do not support the use of anonymous links because of the risk\
+    \ of data leakage. This rule detects when anonymous links are used to access files\
+    \ from OneDrive.\"\n    rule_id = \"mr_7e67005a-d5fc-4497-8e81-e6797b2f54e9\"\n\
+    \    rule_name = \"O365 OneDrive Anonymous Link Accessed\"\n    tactic = \"TA0010\"\
+    \n    technique = \"T1048.002\"\n    type = \"hunt\"\n    platform = \"azure\"\
+    \n    data_source = \"o365\"\n    severity = \"Medium\"\n    priority = \"Medium\"\
+    \n\n  events:\n    $file.metadata.event_type = \"USER_RESOURCE_ACCESS\"\n    $file.metadata.product_event_type\
+    \ = \"AnonymousLinkUsed\"\n    $file.metadata.product_name = \"Office 365\"\n\
+    \    $file.metadata.vendor_name = \"Microsoft\"\n    $file.principal.user.userid\
+    \ = \"anonymous\"\n    $file.principal.ip = $ip\n\n  match:\n    $ip over 5m\n\
+    \n  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($file.metadata.id)\n\
+    \    $referral_url = array_distinct($file.network.http.referral_url)\n    $user_agent\
+    \ = array_distinct($file.network.http.user_agent)\n    $principal_application\
+    \ = array_distinct($file.principal.application)\n    $principal_ip = array_distinct($file.principal.ip)\n\
+    \    $target_application = array_distinct($file.target.application)\n    $principal_user_userid\
+    \ = array_distinct($file.principal.user.userid)\n    $target_file_full_path =\
+    \ array_distinct($file.target.file.full_path)\n    $target_url = array_distinct($file.target.url)\n\
+    \n  condition:\n    $file\n}"
+  chronicle_rule_name: o365_onedrive_anonymous_link_accessed
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_onedrive_anonymous_link_accessed
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_onedrive_anonymous_link_accessed.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

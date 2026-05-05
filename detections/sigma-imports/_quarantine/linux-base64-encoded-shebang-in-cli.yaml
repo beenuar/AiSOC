@@ -1,0 +1,39 @@
+id: sigmahq-sigma-fe2f9663-41cb-47e2-b954-8a228f3b9dff
+name: Linux Base64 Encoded Shebang In CLI
+description: Detects the presence of a base64 version of the shebang in the commandline,
+  which could indicate a malicious payload about to be decoded
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1140
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/pl_pl/research/20/i/the-evolution-of-malicious-shell-scripts.html
+- https://github.com/carlospolop/PEASS-ng/tree/master/linPEAS
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection:
+    CommandLine|contains:
+    - IyEvYmluL2Jhc2
+    - IyEvYmluL2Rhc2
+    - IyEvYmluL3pza
+    - IyEvYmluL2Zpc2
+    - IyEvYmluL3No
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fe2f9663-41cb-47e2-b954-8a228f3b9dff
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/linux/process_creation/proc_creation_lnx_base64_shebang_cli.yml
+falsepositives:
+- Legitimate administration activities
+notes:
+  quarantine_reason: 'upstream status: test'

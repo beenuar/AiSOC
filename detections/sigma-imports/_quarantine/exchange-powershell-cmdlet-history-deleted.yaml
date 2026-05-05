@@ -1,0 +1,34 @@
+id: sigmahq-sigma-a55349d8-9588-4c5a-8e3b-1925fe2a4ffe
+name: Exchange PowerShell Cmdlet History Deleted
+description: Detects the deletion of the Exchange PowerShell cmdlet History logs which
+  may indicate an attempt to destroy forensic evidence
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- https://m365internals.com/2022/10/07/hunting-in-on-premises-exchange-server-logs/
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    TargetFilename|startswith: \Logging\CmdletInfra\LocalPowerShell\Cmdlet\
+    TargetFilename|contains: _Cmdlet_
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a55349d8-9588-4c5a-8e3b-1925fe2a4ffe
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_exchange_powershell_logs.yml
+falsepositives:
+- Possible FP during log rotation
+notes:
+  quarantine_reason: 'upstream status: test'

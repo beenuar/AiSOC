@@ -1,0 +1,74 @@
+id: sigmahq-sigma-597a7e84-187d-458b-9e4f-2f5a0e676711
+name: Kubernetes Potential Enumeration Activity
+description: 'Detects potential Kubernetes enumeration or attack activity via the
+  audit log.
+
+  This includes the execution of common shells, utilities, or specialized tools like
+  ''Rakkess'' (access_matrix) and ''TruffleHog'' via Kubernetes API requests.
+
+  Attackers use these methods to perform reconnaissance (enumeration), secret harvesting,
+  or execute code (exec) within a cluster.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1609
+  - T1613
+  categories:
+  - endpoint
+references:
+- https://www.nccgroup.com/research/detection-engineering-for-kubernetes-clusters/
+- https://github.com/trufflesecurity/trufflehog
+- https://github.com/corneliusweig/rakkess
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection_status:
+    responseStatus.code: ALLOW
+  selection_request_uri:
+    requestURI|contains:
+    - '%2fbin%2fash'
+    - '%2fbin%2fbash'
+    - '%2fbin%2fbusybox'
+    - '%2fbin%2fdash'
+    - '%2fbin%2fsh'
+    - '%2fbin%2fzsh'
+    - /bin/ash
+    - /bin/bash
+    - /bin/busybox
+    - /bin/dash
+    - /bin/sh
+    - /bin/zsh
+    - '%2fusr%2fbin%2fcurl'
+    - '%2fusr%2fbin%2fkubectl'
+    - '%2fusr%2fbin%2fperl'
+    - '%2fusr%2fbin%2fpython'
+    - '%2fusr%2fbin%2fwget'
+    - /usr/bin/curl
+    - /usr/bin/kubectl
+    - /usr/bin/perl
+    - /usr/bin/python
+    - /usr/bin/wget
+  selection_request_user_agent:
+    userAgent|contains:
+    - access_matrix
+    - trufflehog
+    - azurehound
+    - micro-scanner
+  condition: selection_status and 1 of selection_request_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 597a7e84-187d-458b-9e4f-2f5a0e676711
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/application/kubernetes/audit/kubernetes_audit_potential_enumeration_activity.yml
+falsepositives:
+- Authorized administrative maintenance via kubectl
+- Automated internal infrastructure monitoring and certificate rotation
+- Security-approved vulnerability or secret scanning in DevSecOps pipelines
+notes:
+  quarantine_reason: 'upstream status: experimental'

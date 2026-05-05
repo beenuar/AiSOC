@@ -1,0 +1,53 @@
+id: splunk-security-content-468b7e11-d362-43b8-b6ec-7a2d3b246678
+name: Detect RTLO In File Name
+description: 'The following analytic identifies the use of the right-to-left override
+
+  (RTLO) character in file names. It leverages data from the Endpoint.Filesystem datamodel,
+
+  specifically focusing on file creation events and file names containing the RTLO
+
+  character (U+202E). This activity is significant because adversaries use RTLO to
+
+  disguise malicious files as benign by reversing the text that follows the character.
+
+  If confirmed malicious, this technique can deceive users and security tools, leading
+
+  to the execution of harmful files and potential system compromise.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1036/002/
+- https://resources.infosecinstitute.com/topic/spoof-using-right-to-left-override-rtlo-technique-2/
+- https://www.trendmicro.com/en_us/research/17/f/following-trail-blacktech-cyber-espionage-campaigns.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n        values(Filesystem.file_create_time) as\
+    \ file_create_time\n\nfrom datamodel=Endpoint.Filesystem where Filesystem.file_name!=unknown\n\
+    \nby Filesystem.action Filesystem.dest Filesystem.file_access_time\n   Filesystem.file_create_time\
+    \ Filesystem.file_hash Filesystem.file_modify_time\n   Filesystem.file_name Filesystem.file_path\
+    \ Filesystem.file_acl\n   Filesystem.file_size Filesystem.process_guid Filesystem.process_id\n\
+    \   Filesystem.user Filesystem.vendor_product\n\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | regex file_name = \"\\\\x{202E}\"\n| rex field=file_name \"(?<RTLO_file_1>.+)(?<RTLO_exist_file>\\\
+    \\x{202E})(?<RTLO_file_2>.+)\"\n| eval file_name_with_RTLO=file_name\n| eval file_name=RTLO_file_1.RTLO_file_2\n\
+    | fields - RTLO*\n| `detect_rtlo_in_file_name_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 468b7e11-d362-43b8-b6ec-7a2d3b246678
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_rtlo_in_file_name.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

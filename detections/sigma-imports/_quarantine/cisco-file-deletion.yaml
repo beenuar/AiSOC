@@ -1,0 +1,35 @@
+id: sigmahq-sigma-71d65515-c436-43c0-841b-236b1f32c21e
+name: Cisco File Deletion
+description: See what files are being deleted from flash file systems
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.004
+  - T1561.001
+  - T1561.002
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: cisco
+  service: aaa
+detection:
+  keywords:
+  - erase
+  - delete
+  - format
+  condition: keywords
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 71d65515-c436-43c0-841b-236b1f32c21e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/network/cisco/aaa/cisco_cli_file_deletion.yml
+falsepositives:
+- Will be used sometimes by admins to clean up local flash space
+notes:
+  quarantine_reason: 'upstream status: test'

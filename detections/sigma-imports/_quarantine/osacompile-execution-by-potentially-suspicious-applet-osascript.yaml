@@ -1,0 +1,35 @@
+id: sigmahq-sigma-a753a6af-3126-426d-8bd0-26ebbcb92254
+name: Osacompile Execution By Potentially Suspicious Applet/Osascript
+description: Detects potential suspicious applet or osascript executing "osacompile".
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/mac-application-bundles/
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    ParentImage|endswith:
+    - /applet
+    - /osascript
+    CommandLine|contains: osacompile
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: a753a6af-3126-426d-8bd0-26ebbcb92254
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/macos/process_creation/proc_creation_macos_suspicious_applet_behaviour.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

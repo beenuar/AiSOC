@@ -1,0 +1,34 @@
+id: sigmahq-sigma-6ea3bf32-9680-422d-9f50-e90716b12a66
+name: UAC Bypass Via Wsreset
+description: Unfixed method for UAC bypass from Windows 10. WSReset.exe file associated
+  with the Windows Store. It will run a binary file contained in a low-privilege registry.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://www.bleepingcomputer.com/news/security/trickbot-uses-a-new-windows-10-uac-bypass-to-launch-quietly
+- https://lolbas-project.github.io/lolbas/Binaries/Wsreset
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection:
+    TargetObject|endswith: \AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\Shell\open\command
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 6ea3bf32-9680-422d-9f50-e90716b12a66
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/registry/registry_event/registry_event_bypass_via_wsreset.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

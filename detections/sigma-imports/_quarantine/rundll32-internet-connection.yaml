@@ -1,0 +1,57 @@
+id: sigmahq-sigma-cdc8da7d-c303-42f8-b08c-b4ab47230263
+name: Rundll32 Internet Connection
+description: Detects a rundll32 that communicates with public IP addresses
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://www.hybrid-analysis.com/sample/759fb4c0091a78c5ee035715afe3084686a8493f39014aea72dae36869de9ff6?environmentId=100
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Image|endswith: \rundll32.exe
+    Initiated: 'true'
+  filter_main_local_ranges:
+    DestinationIp|cidr:
+    - 127.0.0.0/8
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - ::1/128
+    - fe80::/10
+    - fc00::/7
+  filter_main_ms_ranges:
+    DestinationIp|cidr:
+    - 20.0.0.0/8
+    - 51.103.0.0/16
+    - 51.104.0.0/16
+    - 51.105.0.0/16
+  filter_main_app_sdb:
+    CommandLine|endswith: \system32\PcaSvc.dll,PcaPatchSdbTask
+  filter_main_azure_managed:
+    SourceHostname|endswith: .internal.cloudapp.net
+  filter_main_svchost_update_processes:
+    ParentImage: C:\Windows\System32\svchost.exe
+    DestinationPort: 443
+  condition: selection and not 1 of filter_main_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: cdc8da7d-c303-42f8-b08c-b4ab47230263
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/network_connection/net_connection_win_rundll32_net_connections.yml
+falsepositives:
+- Communication to other corporate systems that use IP addresses from public address
+  spaces
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,42 @@
+id: sigmahq-sigma-35bc7e28-ee6b-492f-ab04-da58fcf6402e
+name: Windows Network Access Suspicious desktop.ini Action
+description: Detects unusual processes accessing desktop.ini remotely over network
+  share, which can be leveraged to alter how Explorer displays a folder's content
+  (i.e. renaming files) without changing them on disk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.009
+  categories:
+  - endpoint
+references:
+- https://isc.sans.edu/forums/diary/Desktopini+as+a+postexploitation+tool/25912/
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5145
+    ObjectType: File
+    RelativeTargetName|endswith: \desktop.ini
+    AccessList|contains:
+    - WriteData
+    - DELETE
+    - WriteDAC
+    - AppendData
+    - AddSubdirectory
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 35bc7e28-ee6b-492f-ab04-da58fcf6402e
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/builtin/security/win_security_net_share_obj_susp_desktop_ini.yml
+falsepositives:
+- Read only access list authority
+notes:
+  quarantine_reason: 'upstream status: test'

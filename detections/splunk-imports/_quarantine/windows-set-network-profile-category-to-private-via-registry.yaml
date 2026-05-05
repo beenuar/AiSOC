@@ -1,0 +1,48 @@
+id: splunk-security-content-b11bb510-97e1-4b7a-b673-887ab228c280
+name: Windows Set Network Profile Category to Private via Registry
+description: The following analytic detects attempts to modify the Windows Registry
+  to change a network profile's category to "Private", which may indicate an adversary
+  is preparing the environment for lateral movement or reducing firewall restrictions.
+  Specifically, this activity involves changes to the Category value within the HKLM\SOFTWARE\Microsoft\Windows
+  NT\CurrentVersion\NetworkList\Profiles\{GUID} registry path. A value of 1 corresponds
+  to a private network profile, which typically enables less restrictive firewall
+  policies. While this action can occur during legitimate network configuration, it
+  may also be a sign of malicious behavior when combined with other indicators such
+  as suspicious account activity, unexpected administrative privilege usage, or execution
+  of unsigned binaries. Monitoring for this registry modification—especially outside
+  standard IT processes or correlated with persistence mechanisms—can help identify
+  stealthy post-exploitation activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2025/07/31/frozen-in-transit-secret-blizzards-aitm-campaign-against-diplomats/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE Registry.registry_path
+    = "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Profiles\\*"
+    Registry.registry_value_name = "Category" Registry.registry_value_data = 0x00000001
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_set_network_profile_category_to_private_via_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b11bb510-97e1-4b7a-b673-887ab228c280
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_set_network_profile_category_to_private_via_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

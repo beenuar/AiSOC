@@ -1,0 +1,46 @@
+id: sigmahq-sigma-84232095-ecca-4015-b0d7-7726507ee793
+name: Suspicious DLL Loaded via CertOC.EXE
+description: Detects when a user installs certificates by using CertOC.exe to load
+  the target DLL file.
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://twitter.com/sblmsrsn/status/1445758411803480072?s=20
+- https://github.com/elastic/protections-artifacts/commit/746086721fd385d9f5c6647cada1788db4aea95f#diff-fe98e74189873d6df72a15df2eaa0315c59ba9cdaca93ecd68afc4ea09194ef2
+- https://lolbas-project.github.io/lolbas/Binaries/Certoc/
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+  - Image|endswith: \certoc.exe
+  - OriginalFileName: CertOC.exe
+  selection_cli:
+    CommandLine|contains|windash: ' -LoadDLL '
+  selection_paths:
+    CommandLine|contains:
+    - \Appdata\Local\Temp\
+    - \Desktop\
+    - \Downloads\
+    - \Users\Public\
+    - C:\Windows\Tasks\
+    - C:\Windows\Temp\
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 84232095-ecca-4015-b0d7-7726507ee793
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_creation/proc_creation_win_certoc_load_dll_susp_locations.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,41 @@
+id: splunk-security-content-5ee2bcd0-b2ff-11eb-bb34-acde48001122
+name: Delete ShadowCopy With PowerShell
+description: The following analytic detects the use of PowerShell to delete shadow
+  copies via the WMIC PowerShell module. It leverages EventCode 4104 and searches
+  for specific keywords like "ShadowCopy," "Delete," or "Remove" within the ScriptBlockText.
+  This activity is significant because deleting shadow copies is a common tactic used
+  by ransomware, such as DarkSide, to prevent data recovery. If confirmed malicious,
+  this action could lead to irreversible data loss and hinder recovery efforts, significantly
+  impacting business continuity and data integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/shining-a-light-on-darkside-ransomware-operations
+- https://www.techtarget.com/searchwindowsserver/tutorial/Set-up-PowerShell-script-block-logging-for-added-security
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText= \"*ShadowCopy*\" (ScriptBlockText\
+    \ = \"*Delete*\" OR ScriptBlockText = \"*Remove*\")\n  | fillnull\n  | stats count\
+    \ min(_time) as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n\
+    \       user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `delete_shadowcopy_with_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5ee2bcd0-b2ff-11eb-bb34-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/delete_shadowcopy_with_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

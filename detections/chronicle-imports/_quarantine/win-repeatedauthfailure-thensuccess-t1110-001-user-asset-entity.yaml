@@ -1,0 +1,78 @@
+id: chronicle-detection-rules-win-repeatedauthfailure-thensuccess-t1110-001-user-asset-entity
+name: win_repeatedAuthFailure_thenSuccess_T1110_001_user_asset_entity
+description: win_repeatedAuthFailure_thenSuccess_T1110_001_user_asset_entity
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule win_repeatedAuthFailure_thenSuccess_T1110_001_user_asset_entity {\n\n \
+    \ meta:\n    author = \"Google Cloud Security\"\n    description = \"Detect Multiple\
+    \ Failed Login Attempts followed by Successful Login\"\n    rule_id = \"mr_2a9dc1d2-d4b8-4b80-a494-3369c681da60\"\
+    \n    rule_name = \"MITRE ATT&CK T1110.001 Windows Repeated Authentication Failures\
+    \ Before Successful One With User Entity\"\n    type = \"alert\"\n    tags = \"\
+    user entity, asset entity\"\n    assumption = \"Assumes ingestion of Windows users\
+    \ and assets to entity graph to entity graph\"\n    data_source = \"microsoft\
+    \ windows events\"\n    platform = \"Windows\"\n    severity = \"Medium\"\n  \
+    \  priority = \"Medium\"\n    tactic = \"TA0006\"\n    technique = \"T1110.001\"\
+    \n\n  events:\n    $fail.metadata.event_type = \"USER_LOGIN\"\n    $fail.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $fail.principal.hostname = $hostname\n    $fail.target.user.userid\
+    \ = $target_user\n    $fail.security_result.action = \"BLOCK\"\n    $fail.metadata.product_event_type\
+    \ = \"4625\"\n\n    $fail.metadata.event_timestamp.seconds < $success.metadata.event_timestamp.seconds\n\
+    \n    $success.metadata.event_type = \"USER_LOGIN\"\n    $success.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $success.target.user.userid = $target_user\n    $success.principal.hostname\
+    \ = $hostname\n    $success.security_result.action = \"ALLOW\"\n    $success.metadata.product_event_type\
+    \ = \"4624\"\n\n    // Correlate with user entity data\n    $user.graph.entity.user.userid\
+    \ = $target_user\n    $user.graph.metadata.entity_type = \"USER\"\n    $user.graph.metadata.source_type\
+    \ = \"ENTITY_CONTEXT\"\n    // Can modify the following line to focus the rule\
+    \ on different user groups\n    any $user.graph.relations.entity.group.group_display_name\
+    \ = \"Domain Admins\"\n\n    // Correlate with asset entity data\n    $asset.graph.entity.asset.hostname\
+    \ = $hostname\n    $asset.graph.metadata.entity_type = \"ASSET\"\n    $asset.graph.metadata.source_type\
+    \ = \"ENTITY_CONTEXT\"\n    // Can modify the following line to focus the rule\
+    \ on different computer groups\n    any $asset.graph.relations.entity.group.group_display_name\
+    \ = \"Domain Controllers\"\n\n  match:\n    $target_user, $hostname over 15m\n\
+    \n    outcome:\n    //increment risk score if the system targeted is active directory\
+    \ server, can modify as you see fit, using this as an example\n    $risk_score\
+    \ = max(if($hostname = /activedir/, 75, 50))\n    $failed_login_threshold = 5\n\
+    \    $impacted_systems = array_distinct($hostname)\n    $impacted_users = array_distinct($target_user)\n\
+    \    $alert_type = \"Successful Brute Force Attack\"\n    $tlp = \"red\"\n   \
+    \ // added to populate alert graph with additional context\n    // Commented out\
+    \ principal.hostname because it is already represented in graph as match variable.\
+    \ If match changes, can uncomment to add to results\n    //$principal_hostname\
+    \ = array_distinct($success.principal.hostname)\n    $principal_ip = array_distinct($success.principal.ip)\n\
+    \    $target_hostname = array_distinct($success.target.hostname)\n    $src_hostname\
+    \ = array_distinct($success.src.hostname)\n    $target_ip = array_distinct($success.target.ip)\n\
+    \    $principal_user_userid = array_distinct($success.principal.user.userid)\n\
+    \    // Commented out target.user.userid because it is already represented in\
+    \ graph as match variable. If match changes, can uncomment to add to results\n\
+    \    //$target_user_userid = array_distinct($success.target.user.userid)\n   \
+    \ $principal_resource_name = array_distinct($success.principal.resource.name)\n\
+    \    $target_resource_name = array_distinct($success.target.resource.name)\n \
+    \   $target_url = array_distinct($success.target.url)\n\n  condition:\n    #fail\
+    \ > 4 and $success and $user and $asset\n}"
+  chronicle_rule_name: win_repeatedAuthFailure_thenSuccess_T1110_001_user_asset_entity
+provenance:
+  source: chronicle/detection-rules
+  source_id: win_repeatedAuthFailure_thenSuccess_T1110_001_user_asset_entity
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/win_repeatedAuthFailure_thenSuccess_T1110_001_user_asset_entity.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

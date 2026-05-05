@@ -1,0 +1,54 @@
+id: sigmahq-sigma-fccfb43e-09a7-4bd2-8b37-a5a7df33386d
+name: .RDP File Created By Uncommon Application
+description: Detects creation of a file with an ".rdp" extension by an application
+  that doesn't commonly create such files.
+severity: high
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://www.blackhillsinfosec.com/rogue-rdp-revisiting-initial-access-methods/
+- https://web.archive.org/web/20230726144748/https://blog.thickmints.dev/mintsights/detecting-rogue-rdp/
+logsource:
+  product: windows
+  category: file_event
+detection:
+  selection:
+    TargetFilename|endswith: .rdp
+    Image|endswith:
+    - \brave.exe
+    - \CCleaner Browser\Application\CCleanerBrowser.exe
+    - \chromium.exe
+    - \firefox.exe
+    - \Google\Chrome\Application\chrome.exe
+    - \iexplore.exe
+    - \microsoftedge.exe
+    - \msedge.exe
+    - \Opera.exe
+    - \Vivaldi.exe
+    - \Whale.exe
+    - \olk.exe
+    - \Outlook.exe
+    - \RuntimeBroker.exe
+    - \Thunderbird.exe
+    - \Discord.exe
+    - \Keybase.exe
+    - \msteams.exe
+    - \Slack.exe
+    - \teams.exe
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fccfb43e-09a7-4bd2-8b37-a5a7df33386d
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_rdp_file_susp_creation.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,45 @@
+id: sigmahq-sigma-ccd6a6c8-bb4e-4a91-9d2a-07e632819374
+name: AWS SAML Provider Deletion Activity
+description: 'Detects the deletion of an AWS SAML provider, potentially indicating
+  malicious intent to disrupt administrative or security team access.
+
+  An attacker can remove the SAML provider for the information security team or a
+  team of system administrators, to make it difficult for them to work and investigate
+  at the time of the attack and after it.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1531
+  categories:
+  - cloud
+references:
+- https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteSAMLProvider.html
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName: DeleteSAMLProvider
+    status: success
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ccd6a6c8-bb4e-4a91-9d2a-07e632819374
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/cloud/aws/cloudtrail/aws_delete_saml_provider.yml
+falsepositives:
+- Automated processes using tools like Terraform may trigger this alert.
+- Legitimate administrative actions by authorized system administrators could cause
+  this alert. Verify the user identity, user agent, and hostname to ensure they are
+  expected.
+- Deletions by unfamiliar users should be investigated. If the behavior is known and
+  expected, it can be exempted from the rule.
+notes:
+  quarantine_reason: 'upstream status: experimental'

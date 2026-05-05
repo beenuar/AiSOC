@@ -1,0 +1,40 @@
+id: sigmahq-sigma-07ad2ea8-6a55-4ac6-bf3e-91b8e59676eb
+name: Invoke-Obfuscation Via Use MSHTA - PowerShell Module
+description: Detects Obfuscated Powershell via use MSHTA in Scripts
+severity: high
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/SigmaHQ/sigma/issues/1009
+logsource:
+  product: windows
+  category: ps_module
+  definition: 0ad03ef1-f21b-4a79-8ce8-e6900c54b65b
+detection:
+  selection:
+    Payload|contains|all:
+    - set
+    - '&&'
+    - mshta
+    - vbscript:createobject
+    - .run
+    - (window.close)
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 07ad2ea8-6a55-4ac6-bf3e-91b8e59676eb
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/powershell/powershell_module/posh_pm_invoke_obfuscation_via_use_mhsta.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

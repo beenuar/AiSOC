@@ -1,0 +1,33 @@
+id: sigmahq-sigma-ff301988-c231-4bd0-834c-ac9d73b86586
+name: PowerShell Console History Logs Deleted
+description: Detects the deletion of the PowerShell console History logs which may
+  indicate an attempt to destroy forensic evidence
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references:
+- Internal Research
+logsource:
+  category: file_delete
+  product: windows
+detection:
+  selection:
+    TargetFilename|endswith: \PSReadLine\ConsoleHost_history.txt
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: ff301988-c231-4bd0-834c-ac9d73b86586
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_delete/file_delete_win_delete_powershell_command_history.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,47 @@
+id: mitre-car-car-2014-07-001
+name: Service Search Path Interception
+description: According to [ATT&CK](https://attack.mitre.org/), an adversary may [escalate
+  privileges](https://attack.mitre.org/tactics/TA0004) by [intercepting the search
+  path](https://attack.mitre.org/techniques/T1579/009) for legitimately installed
+  services. As a result, Windows will launch the target executable instead of the
+  desired binary and command line. This can be done when there are spaces in the binary
+  path and the path is unquoted. Search path interception should never happen legitimately
+  and will likely be the result of an adversary abusing a system misconfiguration.
+  With a few regular expressions, it is possible to identify the execution of services
+  with intercepted search paths.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      services = filter processes where (parent_exe == "services.exe")
+
+      unquoted_services = filter services where (command_line != "\"*" and command_line
+      == "* *")
+
+      intercepted_service = filter unquoted_service where (image_path != "* *" and
+      exe not in command_line)
+
+      output intercepted_service'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-07-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-07-001.yaml
+notes:
+  car_status: needs_implementation

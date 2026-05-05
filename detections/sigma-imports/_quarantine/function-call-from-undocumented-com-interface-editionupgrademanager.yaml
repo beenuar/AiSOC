@@ -1,0 +1,34 @@
+id: sigmahq-sigma-fb3722e4-1a06-46b6-b772-253e2e7db933
+name: Function Call From Undocumented COM Interface EditionUpgradeManager
+description: Detects function calls from the EditionUpgradeManager COM interface.
+  Which is an interface that is not used by standard executables.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://www.snip2code.com/Snippet/4397378/UAC-bypass-using-EditionUpgradeManager-C/
+- https://gist.github.com/hfiref0x/de9c83966623236f5ebf8d9ae2407611
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    CallTrace|contains: editionupgrademanagerobj.dll
+  condition: selection
+provenance:
+  source: SigmaHQ/sigma
+  source_id: fb3722e4-1a06-46b6-b772-253e2e7db933
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/process_access/proc_access_win_uac_bypass_editionupgrademanagerobj.yml
+falsepositives:
+- Unknown
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,69 @@
+id: sigmahq-sigma-0e29e3a7-1ad8-40aa-b691-9f82ecd33d66
+name: Office Macro File Download
+description: 'Detects the creation of a new office macro files on the system via an
+  application (browser, mail client).
+
+  This can help identify potential malicious activity, such as the download of macro-enabled
+  documents that could be used for exploitation.'
+severity: low
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1566.001/T1566.001.md
+- https://learn.microsoft.com/en-us/deployoffice/compat/office-file-format-reference
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection_processes:
+    Image|endswith:
+    - \RuntimeBroker.exe
+    - \outlook.exe
+    - \thunderbird.exe
+    - \brave.exe
+    - \chrome.exe
+    - \firefox.exe
+    - \iexplore.exe
+    - \maxthon.exe
+    - \MicrosoftEdge.exe
+    - \msedge.exe
+    - \msedgewebview2.exe
+    - \opera.exe
+    - \safari.exe
+    - \seamonkey.exe
+    - \vivaldi.exe
+    - \whale.exe
+  selection_ext:
+  - TargetFilename|endswith:
+    - .docm
+    - .dotm
+    - .xlsm
+    - .xltm
+    - .potm
+    - .pptm
+  - TargetFilename|contains:
+    - .docm:Zone
+    - .dotm:Zone
+    - .xlsm:Zone
+    - .xltm:Zone
+    - .potm:Zone
+    - .pptm:Zone
+  condition: all of selection_*
+provenance:
+  source: SigmaHQ/sigma
+  source_id: 0e29e3a7-1ad8-40aa-b691-9f82ecd33d66
+  source_commit: df5c6a6
+  license: DRL-1.1
+  license_url: https://github.com/SigmaHQ/Detection-Rule-License
+  imported_at: '2026-05-04'
+  imported_by: sigma_importer
+  upstream_path: rules/windows/file/file_event/file_event_win_office_macro_files_downloaded.yml
+falsepositives:
+- Legitimate macro files downloaded from the internet
+- Legitimate macro files sent as attachments via emails
+notes:
+  quarantine_reason: 'upstream status: test'

@@ -1,0 +1,40 @@
+id: splunk-security-content-0be4b5d6-c449-4084-b945-2392b519c33b
+name: Windows Service Create RemComSvc
+description: The following analytic detects the creation of the RemComSvc service
+  on a Windows endpoint, typically indicating lateral movement using RemCom.exe. It
+  leverages Windows EventCode 7045 from the System event log, specifically looking
+  for the "RemCom Service" name. This activity is significant as it often signifies
+  unauthorized lateral movement within the network, which is a common tactic used
+  by attackers to spread malware or gain further access. If confirmed malicious, this
+  could lead to unauthorized access to sensitive systems, data exfiltration, or further
+  compromise of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/blog/bears-midst-intrusion-democratic-national-committee/
+- https://github.com/kavika13/RemCom
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7045 ServiceName=\"RemCom Service\"\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest ImagePath\
+    \ ServiceName\n       ServiceType\n  | `security_content_ctime(firstTime)`\n \
+    \ | `security_content_ctime(lastTime)`\n  | `windows_service_create_remcomsvc_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0be4b5d6-c449-4084-b945-2392b519c33b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_service_create_remcomsvc.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema
