@@ -30,9 +30,11 @@ export function Hero() {
 
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
             Agent prompts, tool calls, and decisions are recorded in an investigation
-            ledger and replayable per case. Alert fusion, entity risk rollups, and purple-team
-            drills ship in-repo alongside connectors and detection-as-code. The stack is gated
-            by a 200-incident eval harness on every PR to{' '}
+            ledger and replayable per case. Three-tier memory, autonomy guardrails,
+            NL detection authoring, closed-loop FP correction, cross-platform rule
+            translation, hypothesis-driven hunting, phishing triage, and a knowledge-base
+            RAG over your runbooks ship in-repo — gated by a 200-incident eval harness on
+            every PR to{' '}
             <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">main</code>{' '}
             /{' '}
             <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">develop</code>.

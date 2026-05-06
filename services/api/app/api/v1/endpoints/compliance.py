@@ -1,444 +1,341 @@
-"""Compliance API endpoints.
+"""Compliance evidence trails (tier2-compliance).
 
-GET  /api/v1/compliance/soc2                      — SOC 2 summary + control list with evidence
-POST /api/v1/compliance/soc2/collect              — Trigger auto-evidence collection
-GET  /api/v1/compliance/soc2/export               — PDF-ready JSON export
-GET  /api/v1/compliance/{framework}               — Generic framework dashboard
-GET  /api/v1/compliance/{framework}/heatmap       — Heatmap data (category × status)
-POST /api/v1/compliance/{framework}/collect       — Auto-collect evidence for any framework
-GET  /api/v1/compliance/{framework}/export        — PDF-ready export for any framework
-GET  /api/v1/compliance/frameworks                — List all available frameworks
+Collects, hashes, and reviews audit-grade evidence records for regulatory
+frameworks (SOC 2, PCI-DSS, HIPAA, ISO 27001, NIST CSF, …).  Evidence items
+form a tamper-evident hash chain — each record's ``payload_hash`` is a
+SHA-256 digest of ``prev_hash || summary || raw_payload``.
+
+Endpoints
+---------
+* ``GET  /compliance/frameworks``          List known frameworks & controls.
+* ``POST /compliance/evidence``            Collect a new evidence item.
+* ``GET  /compliance/evidence``            List evidence (filter by framework/control/case).
+* ``GET  /compliance/evidence/{id}``       Get single evidence item.
+* ``POST /compliance/evidence/{id}/review`` Accept or reject an evidence item.
+* ``GET  /compliance/report``              Generate a compliance posture report.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
-from datetime import datetime
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy import func, select
+from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, require_permission
-from app.db.rls import TenantDBSession
-from app.models.compliance import ComplianceControl, ComplianceEvidence
-from app.services.compliance import auto_collect_evidence, get_soc2_summary
+from app.api.v1.deps import AuthUser, DBSession
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
 
-# ---------------------------------------------------------------------------
-# Supported frameworks
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
+# Known frameworks + sampled controls (extendable via DB or config)
+# ────────────────────────────────────────────────────────────────────────────
 
-SUPPORTED_FRAMEWORKS: dict[str, str] = {
-    "soc2": "SOC 2 Type II",
-    "iso27001": "ISO/IEC 27001:2022",
-    "nist_csf": "NIST Cybersecurity Framework 2.0",
-    "pci_dss": "PCI DSS v4.0",
-    "hipaa": "HIPAA Security Rule",
-    "dora": "DORA (Digital Operational Resilience Act)",
+FRAMEWORKS: dict[str, dict[str, str]] = {
+    "SOC2": {
+        "CC1.1": "Common Criteria — Commitment to Competence",
+        "CC6.1": "Logical and Physical Access Controls",
+        "CC6.2": "Access Provisioning",
+        "CC6.3": "Access Removal",
+        "CC7.2": "System Monitoring",
+        "CC8.1": "Change Management",
+        "A1.1": "Availability — Capacity Management",
+    },
+    "PCI-DSS": {
+        "Req-1": "Install and maintain network security controls",
+        "Req-6": "Develop and maintain secure systems",
+        "Req-8": "Identify users and authenticate access",
+        "Req-10": "Log and monitor all access to system components",
+        "Req-11": "Test security of systems and networks regularly",
+    },
+    "HIPAA": {
+        "164.308(a)(1)": "Security Management Process",
+        "164.308(a)(5)": "Security Awareness and Training",
+        "164.312(b)": "Audit Controls",
+        "164.312(d)": "Person or Entity Authentication",
+    },
+    "ISO27001": {
+        "A.12.4.1": "Event Logging",
+        "A.12.4.2": "Protection of Log Information",
+        "A.16.1.2": "Reporting Information Security Events",
+        "A.9.2.1": "User Registration and De-Registration",
+    },
+    "NIST-CSF": {
+        "DE.AE-1": "Baseline of network operations established",
+        "DE.CM-1": "Network monitored for potential events",
+        "RS.AN-1": "Investigations are performed",
+        "RS.MI-2": "Incidents are mitigated",
+    },
 }
 
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 # Pydantic schemas
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
+
+EvidenceKind = Literal["alert", "log", "screenshot", "attestation", "policy", "runbook", "other"]
+EvidenceStatus = Literal["pending", "accepted", "rejected"]
 
 
-class ControlOut(BaseModel):
-    id: str
+class CollectEvidenceRequest(BaseModel):
+    framework: str = Field(..., description="Compliance framework key e.g. 'SOC2'.")
+    control_id: str = Field(..., description="Control identifier e.g. 'CC7.2'.")
+    control_title: str | None = None
+    evidence_kind: EvidenceKind = "alert"
+    summary: str = Field(..., min_length=5)
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+    case_id: uuid.UUID | None = None
+
+
+class ReviewEvidenceRequest(BaseModel):
+    decision: Literal["accepted", "rejected"]
+    reviewer: str | None = None
+
+
+class EvidenceResponse(BaseModel):
+    id: uuid.UUID
+    case_id: uuid.UUID | None
     framework: str
     control_id: str
-    category: str
-    title: str
-    description: str | None
-
-
-class EvidenceOut(BaseModel):
-    id: str
-    control_id: str
-    evidence_type: str
-    title: str
-    description: str | None
+    control_title: str | None
+    evidence_kind: str
+    summary: str
+    raw_payload: dict[str, Any]
+    payload_hash: str | None
+    prev_hash: str | None
+    collected_at: datetime
+    reviewed_by: str | None
+    reviewed_at: datetime | None
     status: str
-    collected_at: str
+    created_at: datetime
 
 
-class ControlWithEvidence(BaseModel):
-    control: ControlOut
-    evidence: list[EvidenceOut]
-    latest_status: str
+class FrameworksResponse(BaseModel):
+    frameworks: dict[str, dict[str, str]]
 
 
-class FrameworkSummary(BaseModel):
-    total: int
-    collected: int
-    review: int
-    approved: int
-    rejected: int
-    missing: int
-    pct: int
-
-
-class FrameworkResponse(BaseModel):
+class CompliancePosture(BaseModel):
     framework: str
-    framework_name: str
-    summary: FrameworkSummary
-    controls: list[ControlWithEvidence]
-
-
-class SOC2Summary(BaseModel):
-    total: int
-    collected: int
-    review: int
-    approved: int
+    total_evidence: int
+    accepted: int
+    pending: int
     rejected: int
-    pct: int
+    coverage_pct: float  # accepted / known controls * 100
+    controls_covered: list[str]
+    controls_missing: list[str]
+    generated_at: datetime
 
 
-class SOC2Response(BaseModel):
-    summary: SOC2Summary
-    controls: list[ControlWithEvidence]
+# ────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ────────────────────────────────────────────────────────────────────────────
 
 
-class HeatmapCell(BaseModel):
-    category: str
-    status: str
-    count: int
+def _compute_hash(prev_hash: str | None, summary: str, payload: dict[str, Any]) -> str:
+    raw = (prev_hash or "") + summary + json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
-class HeatmapResponse(BaseModel):
-    framework: str
-    framework_name: str
-    categories: list[str]
-    statuses: list[str]
-    cells: list[HeatmapCell]
-
-
-class FrameworkInfo(BaseModel):
-    id: str
-    name: str
-    control_count: int
-
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
-
-
-async def _get_framework_data(
-    db: TenantDBSession,
-    tenant_id: uuid.UUID,
-    framework: str,
-) -> tuple[list[ComplianceControl], dict[uuid.UUID, list[ComplianceEvidence]]]:
-    """Fetch controls and grouped evidence for a framework."""
-    ctrl_result = await db.execute(
-        select(ComplianceControl).where(ComplianceControl.framework == framework).order_by(ComplianceControl.control_id)
-    )
-    controls = ctrl_result.scalars().all()
-
-    ev_result = await db.execute(
-        select(ComplianceEvidence)
-        .where(
-            ComplianceEvidence.tenant_id == tenant_id,
+async def _latest_hash(db: DBSession, framework: str) -> str | None:
+    row = (
+        await db.execute(
+            text("SELECT payload_hash FROM aisoc_compliance_evidence WHERE framework = :f ORDER BY created_at DESC LIMIT 1").bindparams(f=framework)
         )
-        .join(ComplianceControl, ComplianceEvidence.control_id == ComplianceControl.id)
-        .where(ComplianceControl.framework == framework)
-        .order_by(ComplianceEvidence.collected_at.desc())
+    ).fetchone()
+    return row.payload_hash if row else None
+
+
+def _row_to_evidence(row: Any) -> EvidenceResponse:
+    return EvidenceResponse(
+        id=row.id,
+        case_id=row.case_id,
+        framework=row.framework,
+        control_id=row.control_id,
+        control_title=row.control_title,
+        evidence_kind=row.evidence_kind,
+        summary=row.summary,
+        raw_payload=dict(row.raw_payload or {}),
+        payload_hash=row.payload_hash,
+        prev_hash=row.prev_hash,
+        collected_at=row.collected_at,
+        reviewed_by=row.reviewed_by,
+        reviewed_at=row.reviewed_at,
+        status=row.status,
+        created_at=row.created_at,
     )
-    all_evidence = ev_result.scalars().all()
-
-    ev_by_control: dict[uuid.UUID, list[ComplianceEvidence]] = {}
-    for ev in all_evidence:
-        ev_by_control.setdefault(ev.control_id, []).append(ev)
-
-    return controls, ev_by_control
 
 
-def _build_controls_with_evidence(
-    controls: list[ComplianceControl],
-    ev_by_control: dict[uuid.UUID, list[ComplianceEvidence]],
-    max_evidence: int = 5,
-) -> list[ControlWithEvidence]:
-    result = []
-    for ctrl in controls:
-        evs = ev_by_control.get(ctrl.id, [])
-        latest_status = evs[0].status if evs else "missing"
-        result.append(
-            ControlWithEvidence(
-                control=ControlOut(
-                    id=str(ctrl.id),
-                    framework=ctrl.framework,
-                    control_id=ctrl.control_id,
-                    category=ctrl.category,
-                    title=ctrl.title,
-                    description=ctrl.description,
-                ),
-                evidence=[
-                    EvidenceOut(
-                        id=str(e.id),
-                        control_id=str(e.control_id),
-                        evidence_type=e.evidence_type,
-                        title=e.title,
-                        description=e.description,
-                        status=e.status,
-                        collected_at=e.collected_at.isoformat(),
-                    )
-                    for e in evs[:max_evidence]
-                ],
-                latest_status=latest_status,
+# ────────────────────────────────────────────────────────────────────────────
+# Endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/frameworks", response_model=FrameworksResponse, summary="List frameworks and controls")
+async def list_frameworks() -> FrameworksResponse:
+    return FrameworksResponse(frameworks=FRAMEWORKS)
+
+
+@router.post("/evidence", response_model=EvidenceResponse, status_code=status.HTTP_201_CREATED, summary="Collect evidence item")
+async def collect_evidence(body: CollectEvidenceRequest, db: DBSession, user: AuthUser) -> EvidenceResponse:
+    prev_hash = await _latest_hash(db, body.framework)
+    new_hash = _compute_hash(prev_hash, body.summary, body.raw_payload)
+    now = datetime.now(UTC)
+    evidence_id = uuid.uuid4()
+
+    q = text("""
+        INSERT INTO aisoc_compliance_evidence (
+            id, case_id, framework, control_id, control_title,
+            evidence_kind, summary, raw_payload, payload_hash, prev_hash,
+            collected_at, status, created_at
+        ) VALUES (
+            :id, :case_id, :fw, :ctrl, :title,
+            :kind, :summary, :payload::jsonb, :hash, :prev,
+            :now, 'pending', :now
+        ) RETURNING *
+    """).bindparams(
+        id=evidence_id,
+        case_id=body.case_id,
+        fw=body.framework,
+        ctrl=body.control_id,
+        title=body.control_title or FRAMEWORKS.get(body.framework, {}).get(body.control_id),
+        kind=body.evidence_kind,
+        summary=body.summary,
+        payload=json.dumps(body.raw_payload),
+        hash=new_hash,
+        prev=prev_hash,
+        now=now,
+    )
+    try:
+        row = (await db.execute(q)).fetchone()
+        await db.commit()
+        return _row_to_evidence(row)
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.get("/evidence", response_model=list[EvidenceResponse], summary="List evidence items")
+async def list_evidence(
+    db: DBSession,
+    user: AuthUser,
+    framework: str | None = Query(None),
+    control_id: str | None = Query(None),
+    case_id: uuid.UUID | None = Query(None),
+    ev_status: str | None = Query(None, alias="status"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> list[EvidenceResponse]:
+    wheres = ["1=1"]
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    if framework:
+        wheres.append("framework = :fw"); params["fw"] = framework
+    if control_id:
+        wheres.append("control_id = :ctrl"); params["ctrl"] = control_id
+    if case_id:
+        wheres.append("case_id = :case_id"); params["case_id"] = case_id
+    if ev_status:
+        wheres.append("status = :ev_status"); params["ev_status"] = ev_status
+
+    q = text(f"SELECT * FROM aisoc_compliance_evidence WHERE {' AND '.join(wheres)} ORDER BY collected_at DESC LIMIT :limit OFFSET :offset").bindparams(**params)
+    try:
+        rows = (await db.execute(q)).fetchall()
+        return [_row_to_evidence(r) for r in rows]
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.get("/evidence/{evidence_id}", response_model=EvidenceResponse, summary="Get evidence item")
+async def get_evidence(evidence_id: uuid.UUID, db: DBSession, user: AuthUser) -> EvidenceResponse:
+    row = (await db.execute(text("SELECT * FROM aisoc_compliance_evidence WHERE id = :id").bindparams(id=evidence_id))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Evidence item not found.")
+    return _row_to_evidence(row)
+
+
+@router.post("/evidence/{evidence_id}/review", response_model=EvidenceResponse, summary="Accept or reject evidence")
+async def review_evidence(evidence_id: uuid.UUID, body: ReviewEvidenceRequest, db: DBSession, user: AuthUser) -> EvidenceResponse:
+    now = datetime.now(UTC)
+    q = text("""
+        UPDATE aisoc_compliance_evidence
+        SET status = :decision, reviewed_by = :reviewer, reviewed_at = :now
+        WHERE id = :id RETURNING *
+    """).bindparams(id=evidence_id, decision=body.decision, reviewer=body.reviewer or str(user), now=now)
+    try:
+        row = (await db.execute(q)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Evidence item not found.")
+        await db.commit()
+        return _row_to_evidence(row)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.get("/report", response_model=list[CompliancePosture], summary="Generate compliance posture report")
+async def compliance_report(
+    db: DBSession,
+    user: AuthUser,
+    framework: str | None = Query(None, description="Filter to a single framework."),
+) -> list[CompliancePosture]:
+    wheres = ["1=1"]
+    params: dict[str, Any] = {}
+    if framework:
+        wheres.append("framework = :fw"); params["fw"] = framework
+
+    q = text(f"""
+        SELECT framework, control_id,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE status = 'accepted') AS accepted,
+               COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
+               COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+        FROM aisoc_compliance_evidence
+        WHERE {' AND '.join(wheres)}
+        GROUP BY framework, control_id
+        ORDER BY framework, control_id
+    """).bindparams(**params)
+
+    try:
+        rows = (await db.execute(q)).fetchall()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+    # Aggregate by framework
+    by_fw: dict[str, Any] = {}
+    for r in rows:
+        fw = r.framework
+        if fw not in by_fw:
+            by_fw[fw] = {"total": 0, "accepted": 0, "pending": 0, "rejected": 0, "covered": set()}
+        by_fw[fw]["total"] += r.total
+        by_fw[fw]["accepted"] += r.accepted
+        by_fw[fw]["pending"] += r.pending
+        by_fw[fw]["rejected"] += r.rejected
+        if r.accepted > 0:
+            by_fw[fw]["covered"].add(r.control_id)
+
+    report = []
+    target_fws = [framework] if framework else list(by_fw.keys()) + [f for f in FRAMEWORKS if f not in by_fw]
+    for fw in dict.fromkeys(target_fws):
+        known = FRAMEWORKS.get(fw, {})
+        data = by_fw.get(fw, {"total": 0, "accepted": 0, "pending": 0, "rejected": 0, "covered": set()})
+        covered = data["covered"]
+        missing = [c for c in known if c not in covered]
+        pct = (len(covered) / len(known) * 100) if known else 0.0
+        report.append(
+            CompliancePosture(
+                framework=fw,
+                total_evidence=data["total"],
+                accepted=data["accepted"],
+                pending=data["pending"],
+                rejected=data["rejected"],
+                coverage_pct=round(pct, 1),
+                controls_covered=sorted(covered),
+                controls_missing=sorted(missing),
+                generated_at=datetime.now(UTC),
             )
         )
-    return result
-
-
-def _compute_summary(controls_with_ev: list[ControlWithEvidence]) -> dict:
-    total = len(controls_with_ev)
-    status_counts: dict[str, int] = {}
-    for cwev in controls_with_ev:
-        s = cwev.latest_status
-        status_counts[s] = status_counts.get(s, 0) + 1
-    collected = sum(status_counts.get(s, 0) for s in ("collected", "approved"))
-    return {
-        "total": total,
-        "collected": collected,
-        "review": status_counts.get("review", 0),
-        "approved": status_counts.get("approved", 0),
-        "rejected": status_counts.get("rejected", 0),
-        "missing": status_counts.get("missing", 0),
-        "pct": int(collected / total * 100) if total else 0,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Utility: list all frameworks
-# ---------------------------------------------------------------------------
-
-
-@router.get("/frameworks", response_model=list[FrameworkInfo])
-async def list_frameworks(
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:read"))],
-    db: TenantDBSession,
-) -> list[FrameworkInfo]:
-    """Return all supported compliance frameworks with control counts."""
-    result = await db.execute(
-        select(ComplianceControl.framework, func.count(ComplianceControl.id).label("cnt")).group_by(ComplianceControl.framework)
-    )
-    counts = {row.framework: row.cnt for row in result}
-
-    return [
-        FrameworkInfo(
-            id=fw_id,
-            name=fw_name,
-            control_count=counts.get(fw_id, 0),
-        )
-        for fw_id, fw_name in SUPPORTED_FRAMEWORKS.items()
-        if counts.get(fw_id, 0) > 0 or fw_id in counts
-    ]
-
-
-# ---------------------------------------------------------------------------
-# SOC 2 dedicated routes (kept for backward-compat)
-# ---------------------------------------------------------------------------
-
-
-@router.get("/soc2", response_model=SOC2Response)
-async def get_soc2_dashboard(
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:read"))],
-    db: TenantDBSession,
-) -> SOC2Response:
-    """Return SOC 2 evidence dashboard for the current tenant."""
-    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, "soc2")
-    controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control)
-    summary = await get_soc2_summary(db, current_user.tenant_id)
-
-    return SOC2Response(
-        summary=SOC2Summary(**summary),
-        controls=controls_with_evidence,
-    )
-
-
-@router.post("/soc2/collect", status_code=202)
-async def collect_soc2_evidence(
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:write"))],
-    db: TenantDBSession,
-) -> dict:
-    """Trigger automatic evidence collection for all SOC 2 controls."""
-    collected = await auto_collect_evidence(db, current_user.tenant_id, framework="soc2")
-    await db.commit()
-
-    return {
-        "message": f"Collected {len(collected)} evidence items",
-        "count": len(collected),
-        "collected_at": datetime.utcnow().isoformat(),
-    }
-
-
-@router.get("/soc2/export")
-async def export_soc2_evidence(
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:read"))],
-    db: TenantDBSession,
-) -> dict:
-    """Export SOC 2 evidence as structured JSON for PDF generation."""
-    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, "soc2")
-    controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control, max_evidence=3)
-    summary = await get_soc2_summary(db, current_user.tenant_id)
-
-    return {
-        "report_type": "SOC 2 Type I Evidence Report",
-        "generated_at": datetime.utcnow().isoformat(),
-        "tenant_id": str(current_user.tenant_id),
-        "summary": summary,
-        "controls": [
-            {
-                "control_id": cwev.control.control_id,
-                "category": cwev.control.category,
-                "title": cwev.control.title,
-                "description": cwev.control.description,
-                "evidence": [
-                    {
-                        "type": e.evidence_type,
-                        "title": e.title,
-                        "description": e.description,
-                        "status": e.status,
-                        "collected_at": e.collected_at,
-                    }
-                    for e in cwev.evidence
-                ],
-                "latest_status": cwev.latest_status,
-            }
-            for cwev in controls_with_evidence
-        ],
-    }
-
-
-# ---------------------------------------------------------------------------
-# Generic framework routes
-# ---------------------------------------------------------------------------
-
-
-def _validate_framework(framework: str) -> None:
-    if framework not in SUPPORTED_FRAMEWORKS:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Framework '{framework}' not found. Supported: {list(SUPPORTED_FRAMEWORKS.keys())}",
-        )
-
-
-@router.get("/{framework}", response_model=FrameworkResponse)
-async def get_framework_dashboard(
-    framework: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:read"))],
-    db: TenantDBSession,
-) -> FrameworkResponse:
-    """Return compliance dashboard for the given framework."""
-    _validate_framework(framework)
-
-    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, framework)
-    controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control)
-    summary_dict = _compute_summary(controls_with_evidence)
-
-    return FrameworkResponse(
-        framework=framework,
-        framework_name=SUPPORTED_FRAMEWORKS[framework],
-        summary=FrameworkSummary(**summary_dict),
-        controls=controls_with_evidence,
-    )
-
-
-@router.get("/{framework}/heatmap", response_model=HeatmapResponse)
-async def get_framework_heatmap(
-    framework: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:read"))],
-    db: TenantDBSession,
-) -> HeatmapResponse:
-    """Return heatmap data (category × status counts) for the given framework."""
-    _validate_framework(framework)
-
-    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, framework)
-    controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control)
-
-    # Build category × status matrix
-    cell_map: dict[tuple[str, str], int] = {}
-    categories_ordered: list[str] = []
-    for cwev in controls_with_evidence:
-        cat = cwev.control.category
-        st = cwev.latest_status
-        cell_map[(cat, st)] = cell_map.get((cat, st), 0) + 1
-        if cat not in categories_ordered:
-            categories_ordered.append(cat)
-
-    statuses = ["approved", "collected", "review", "rejected", "missing"]
-
-    cells = [HeatmapCell(category=cat, status=st, count=cell_map.get((cat, st), 0)) for cat in categories_ordered for st in statuses]
-
-    return HeatmapResponse(
-        framework=framework,
-        framework_name=SUPPORTED_FRAMEWORKS[framework],
-        categories=categories_ordered,
-        statuses=statuses,
-        cells=cells,
-    )
-
-
-@router.post("/{framework}/collect", status_code=202)
-async def collect_framework_evidence(
-    framework: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:write"))],
-    db: TenantDBSession,
-) -> dict:
-    """Trigger automatic evidence collection for the given framework."""
-    _validate_framework(framework)
-
-    collected = await auto_collect_evidence(db, current_user.tenant_id, framework=framework)
-    await db.commit()
-
-    return {
-        "framework": framework,
-        "message": f"Collected {len(collected)} evidence items",
-        "count": len(collected),
-        "collected_at": datetime.utcnow().isoformat(),
-    }
-
-
-@router.get("/{framework}/export")
-async def export_framework_evidence(
-    framework: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("compliance:read"))],
-    db: TenantDBSession,
-) -> dict:
-    """Export compliance evidence for the given framework as structured JSON."""
-    _validate_framework(framework)
-
-    controls, ev_by_control = await _get_framework_data(db, current_user.tenant_id, framework)
-    controls_with_evidence = _build_controls_with_evidence(controls, ev_by_control, max_evidence=3)
-    summary_dict = _compute_summary(controls_with_evidence)
-
-    return {
-        "report_type": f"{SUPPORTED_FRAMEWORKS[framework]} Evidence Report",
-        "framework": framework,
-        "framework_name": SUPPORTED_FRAMEWORKS[framework],
-        "generated_at": datetime.utcnow().isoformat(),
-        "tenant_id": str(current_user.tenant_id),
-        "summary": summary_dict,
-        "controls": [
-            {
-                "control_id": cwev.control.control_id,
-                "category": cwev.control.category,
-                "title": cwev.control.title,
-                "description": cwev.control.description,
-                "evidence": [
-                    {
-                        "type": e.evidence_type,
-                        "title": e.title,
-                        "description": e.description,
-                        "status": e.status,
-                        "collected_at": e.collected_at,
-                    }
-                    for e in cwev.evidence
-                ],
-                "latest_status": cwev.latest_status,
-            }
-            for cwev in controls_with_evidence
-        ],
-    }
+    return report

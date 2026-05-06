@@ -206,6 +206,143 @@ async def get_dashboard_metrics(
     )
 
 
+class SOCKpis(BaseModel):
+    mttd_hours: float
+    mttr_hours: float
+    false_positive_rate: float
+    alert_volume_7d: int
+    cases_opened_7d: int
+    cases_closed_7d: int
+    analyst_overrides_7d: int
+
+
+class AttackHeatmapCell(BaseModel):
+    tactic: str
+    technique: str
+    count: int
+
+
+class SOCMetrics(BaseModel):
+    kpis: SOCKpis
+    attack_heatmap: list[AttackHeatmapCell]
+
+
+@router.get("/soc", response_model=SOCMetrics)
+async def get_soc_metrics(
+    user: AuthUser,
+    db: DBSession,
+) -> SOCMetrics:
+    """Return SOC-level KPIs: MTTD, MTTR, FPR, and ATT&CK heatmap data."""
+    tenant_id = user.tenant_id
+    now = datetime.now(UTC)
+    week_start = now - timedelta(days=7)
+
+    # MTTD: mean time from alert creation to first investigation start
+    mttd_q = await db.scalar(
+        select(func.avg(
+            func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600
+        )).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.first_seen_at.isnot(None),
+                Alert.created_at >= week_start,
+            )
+        )
+    )
+    mttd_hours = float(mttd_q or 0.0)
+
+    # MTTR: mean time from alert creation to resolution
+    mttr_q = await db.scalar(
+        select(func.avg(
+            func.extract("epoch", Alert.updated_at - Alert.created_at) / 3600
+        )).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.status == "resolved",
+                Alert.created_at >= week_start,
+            )
+        )
+    )
+    mttr_hours = float(mttr_q or 0.0)
+
+    # FPR: false positives / total resolved alerts (last 7d)
+    total_resolved = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.status == "resolved",
+                Alert.created_at >= week_start,
+            )
+        )
+    ) or 0
+    fp_count = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.status == "resolved",
+                Alert.disposition == "false_positive",
+                Alert.created_at >= week_start,
+            )
+        )
+    ) or 0
+    fpr = (fp_count / total_resolved) if total_resolved > 0 else 0.0
+
+    # Alert volume 7d
+    alert_vol = await db.scalar(
+        select(func.count()).where(
+            and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start)
+        )
+    ) or 0
+
+    # Cases opened/closed 7d
+    cases_opened = await db.scalar(
+        select(func.count()).where(
+            and_(Case.tenant_id == tenant_id, Case.created_at >= week_start)
+        )
+    ) or 0
+    cases_closed = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Case.tenant_id == tenant_id,
+                Case.status == "resolved",
+                Case.updated_at >= week_start,
+            )
+        )
+    ) or 0
+
+    kpis = SOCKpis(
+        mttd_hours=round(mttd_hours, 2),
+        mttr_hours=round(mttr_hours, 2),
+        false_positive_rate=round(fpr, 4),
+        alert_volume_7d=alert_vol,
+        cases_opened_7d=cases_opened,
+        cases_closed_7d=cases_closed,
+        analyst_overrides_7d=0,
+    )
+
+    # ATT&CK heatmap: technique + tactic breakdown
+    heatmap_rows = (
+        await db.execute(
+            select(
+                func.jsonb_array_elements_text(Alert.mitre_tactics).label("tactic"),
+                func.jsonb_array_elements_text(Alert.mitre_techniques).label("technique"),
+                func.count().label("cnt"),
+            )
+            .where(Alert.tenant_id == tenant_id)
+            .group_by("tactic", "technique")
+            .order_by(func.count().desc())
+            .limit(50)
+        )
+    ).all()
+
+    heatmap = [
+        AttackHeatmapCell(tactic=r.tactic, technique=r.technique, count=r.cnt)
+        for r in heatmap_rows
+    ]
+
+    return SOCMetrics(kpis=kpis, attack_heatmap=heatmap)
+
+
 @router.get("/alerts/trend")
 async def get_alert_trend(
     user: AuthUser,

@@ -34,6 +34,11 @@ class Alert(Base):
     source_event_ids: Mapped[list] = mapped_column(JSONB, default=list)
     ocsf_class_uid: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Analyst verdict / disposition (set via feedback endpoint)
+    disposition: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    # Timestamp when an analyst first viewed / started triaging the alert (for MTTD)
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # AI/ML
     ai_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

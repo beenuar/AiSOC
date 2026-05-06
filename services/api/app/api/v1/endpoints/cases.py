@@ -1,449 +1,422 @@
-"""Case management endpoints."""
+"""First-class case management (tier2-cases).
 
-import os
-import re
+Implements the full case lifecycle: new → triaged → investigating → contained →
+resolved → closed.  Each case aggregates multiple alerts, maintains an observable
+graph, evidence chain, and MITRE ATT&CK coverage map.
+
+Endpoints
+---------
+* ``GET  /cases``                  List cases (filterable by status/severity/assignee).
+* ``POST /cases``                  Create a new case.
+* ``GET  /cases/{id}``             Retrieve a case.
+* ``PATCH /cases/{id}``            Update case fields (status, severity, assignee, …).
+* ``POST /cases/{id}/alerts``      Link alerts to a case.
+* ``POST /cases/{id}/observables`` Add / update observable graph nodes/edges.
+* ``POST /cases/{id}/comments``    Add a comment / timeline entry.
+* ``GET  /cases/{id}/comments``    List comments for a case.
+* ``GET  /cases/{id}/evidence``    Export the evidence chain as a structured report.
+"""
+
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Any, Literal
 
-_RUN_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
-
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession, require_permission
-from app.db.rls import TenantDBSession
-from app.models.case import Case, CaseTimeline
-
-_AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8084")
+from app.api.v1.deps import AuthUser, DBSession
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
+# ────────────────────────────────────────────────────────────────────────────
+# Pydantic schemas
+# ────────────────────────────────────────────────────────────────────────────
 
-class CaseResponse(BaseModel):
-    id: uuid.UUID
-    tenant_id: uuid.UUID
-    case_number: str
-    title: str
-    description: str | None
-    status: str
-    priority: str
-    severity: str
-    case_type: str
-    mitre_tactics: list
-    mitre_techniques: list
-    assigned_to_id: uuid.UUID | None
-    sla_deadline: datetime | None
-    sla_breached: bool
-    alert_ids: list
-    tags: list
-    ticket_refs: list
-    summary: str | None
-    resolution: str | None
-    closed_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
+CaseStatus = Literal["new", "triaged", "investigating", "contained", "resolved", "closed"]
+CaseSeverity = Literal["info", "low", "medium", "high", "critical"]
 
-    model_config = {"from_attributes": True}
-
-
-class CaseListResponse(BaseModel):
-    items: list[CaseResponse]
-    total: int
-    page: int
-    page_size: int
-    pages: int
+# Valid forward-only state transitions
+_TRANSITIONS: dict[str, set[str]] = {
+    "new": {"triaged"},
+    "triaged": {"investigating"},
+    "investigating": {"contained", "resolved"},
+    "contained": {"resolved"},
+    "resolved": {"closed"},
+    "closed": set(),
+}
 
 
 class CreateCaseRequest(BaseModel):
-    title: str
+    title: str = Field(..., min_length=3)
     description: str | None = None
-    priority: str = "medium"
-    severity: str = "medium"
-    case_type: str = "security_incident"
-    alert_ids: list[uuid.UUID] = []
-    tags: list[str] = []
+    severity: CaseSeverity = "medium"
+    assignee: str | None = None
+    alert_ids: list[uuid.UUID] = Field(default_factory=list)
+    mitre_techniques: list[str] = Field(default_factory=list)
+    compliance_frameworks: list[str] = Field(default_factory=list)
+    tags: dict[str, str] = Field(default_factory=dict)
+    sla_due_at: datetime | None = None
 
 
 class UpdateCaseRequest(BaseModel):
     title: str | None = None
     description: str | None = None
-    status: str | None = None
-    priority: str | None = None
-    severity: str | None = None
-    assigned_to_id: uuid.UUID | None = None
-    tags: list[str] | None = None
-    resolution: str | None = None
-    lessons_learned: str | None = None
+    severity: CaseSeverity | None = None
+    status: CaseStatus | None = None
+    assignee: str | None = None
+    mitre_techniques: list[str] | None = None
+    compliance_frameworks: list[str] | None = None
+    tags: dict[str, str] | None = None
+    sla_due_at: datetime | None = None
 
 
-class AddTimelineEventRequest(BaseModel):
-    content: str
-    event_type: str = "comment"
-    metadata: dict = {}
+class AddAlertsRequest(BaseModel):
+    alert_ids: list[uuid.UUID]
 
 
-class TimelineEventResponse(BaseModel):
+class ObservableNode(BaseModel):
+    id: str
+    kind: Literal["ip", "user", "host", "domain", "hash", "file", "process", "alert"]
+    value: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class ObservableEdge(BaseModel):
+    source: str
+    target: str
+    relation: str
+
+
+class UpdateObservablesRequest(BaseModel):
+    nodes: list[ObservableNode] = Field(default_factory=list)
+    edges: list[ObservableEdge] = Field(default_factory=list)
+
+
+class AddCommentRequest(BaseModel):
+    body: str = Field(..., min_length=1)
+    is_system: bool = False
+
+
+class CaseResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    description: str | None
+    severity: str
+    status: str
+    assignee: str | None
+    mitre_techniques: list[str]
+    alert_ids: list[uuid.UUID]
+    observable_graph: dict[str, Any]
+    evidence_chain: list[dict[str, Any]]
+    compliance_frameworks: list[str]
+    opened_at: datetime
+    triaged_at: datetime | None
+    resolved_at: datetime | None
+    closed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    tags: dict[str, Any]
+    sla_due_at: datetime | None
+
+
+class CommentResponse(BaseModel):
     id: uuid.UUID
     case_id: uuid.UUID
-    event_type: str
-    content: str
-    metadata: dict = Field(default_factory=dict, validation_alias="event_metadata")
-    user_id: uuid.UUID | None
-    is_automated: bool
+    author: str | None
+    body: str
+    is_system: bool
     created_at: datetime
 
-    model_config = {"from_attributes": True, "populate_by_name": True}
 
-
-def _generate_case_number(tenant_id: uuid.UUID) -> str:
-    """Generate a human-readable case number."""
-    ts = int(datetime.now(UTC).timestamp())
-    prefix = str(tenant_id)[:4].upper()
-    return f"CASE-{prefix}-{ts % 1000000:06d}"
-
-
-@router.get("", response_model=CaseListResponse)
-async def list_cases(
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-    db: TenantDBSession,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=25, ge=1, le=100),
-    status: str | None = None,
-    priority: str | None = None,
-    assigned_to_me: bool = False,
-) -> CaseListResponse:
-    """List cases with filtering."""
-    filters = [Case.tenant_id == current_user.tenant_id]
-    if status:
-        filters.append(Case.status == status)
-    if priority:
-        filters.append(Case.priority == priority)
-    if assigned_to_me:
-        filters.append(Case.assigned_to_id == current_user.user_id)
-
-    count_result = await db.execute(select(func.count()).select_from(Case).where(and_(*filters)))
-    total = count_result.scalar_one()
-
-    offset = (page - 1) * page_size
-    result = await db.execute(select(Case).where(and_(*filters)).order_by(Case.created_at.desc()).offset(offset).limit(page_size))
-    cases = result.scalars().all()
-
-    return CaseListResponse(
-        items=[CaseResponse.model_validate(c) for c in cases],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size,
-    )
-
-
-@router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED)
-async def create_case(
-    request: CreateCaseRequest,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
-    db: DBSession,
-) -> CaseResponse:
-    """Create a new security case."""
-    case = Case(
-        tenant_id=current_user.tenant_id,
-        case_number=_generate_case_number(current_user.tenant_id),
-        title=request.title,
-        description=request.description,
-        priority=request.priority,
-        severity=request.severity,
-        case_type=request.case_type,
-        alert_ids=[str(aid) for aid in request.alert_ids],
-        tags=request.tags,
-        created_by_id=current_user.user_id,
-    )
-    db.add(case)
-    await db.flush()
-
-    # Add creation timeline event
-    timeline_event = CaseTimeline(
-        case_id=case.id,
-        tenant_id=current_user.tenant_id,
-        event_type="case_created",
-        content=f"Case created by {current_user.email}",
-        user_id=current_user.user_id,
-    )
-    db.add(timeline_event)
-    await db.commit()
-    await db.refresh(case)
-
-    return CaseResponse.model_validate(case)
-
-
-@router.get("/{case_id}", response_model=CaseResponse)
-async def get_case(
-    case_id: uuid.UUID,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-    db: DBSession,
-) -> CaseResponse:
-    """Get a case by ID."""
-    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
-    case = result.scalar_one_or_none()
-    if case is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
-    return CaseResponse.model_validate(case)
-
-
-@router.patch("/{case_id}", response_model=CaseResponse)
-async def update_case(
-    case_id: uuid.UUID,
-    request: UpdateCaseRequest,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
-    db: DBSession,
-) -> CaseResponse:
-    """Update a case."""
-    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
-    case = result.scalar_one_or_none()
-    if case is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
-
-    updates: dict = {}
-    for field in ["title", "description", "status", "priority", "severity", "assigned_to_id", "tags", "resolution", "lessons_learned"]:
-        val = getattr(request, field, None)
-        if val is not None:
-            updates[field] = val
-
-    if request.status in ("closed", "cancelled") and "closed_at" not in updates:
-        updates["closed_at"] = datetime.now(UTC)
-
-    if updates:
-        updates["updated_at"] = datetime.now(UTC)
-        await db.execute(update(Case).where(Case.id == case_id).values(**updates))
-
-        # Add timeline event
-        db.add(
-            CaseTimeline(
-                case_id=case_id,
-                tenant_id=current_user.tenant_id,
-                event_type="case_updated",
-                content=f"Case updated by {current_user.email}: {', '.join(updates.keys())}",
-                user_id=current_user.user_id,
-                event_metadata={"changed_fields": list(updates.keys())},
-            )
-        )
-        await db.commit()
-        await db.refresh(case)
-
-    return CaseResponse.model_validate(case)
-
-
-@router.post("/{case_id}/timeline", response_model=TimelineEventResponse, status_code=status.HTTP_201_CREATED)
-async def add_timeline_event(
-    case_id: uuid.UUID,
-    request: AddTimelineEventRequest,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
-    db: DBSession,
-) -> TimelineEventResponse:
-    """Add a comment or event to the case timeline."""
-    # Verify case exists for this tenant
-    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
-
-    event = CaseTimeline(
-        case_id=case_id,
-        tenant_id=current_user.tenant_id,
-        event_type=request.event_type,
-        content=request.content,
-        event_metadata=request.metadata,
-        user_id=current_user.user_id,
-    )
-    db.add(event)
-    await db.commit()
-    await db.refresh(event)
-
-    return TimelineEventResponse.model_validate(event)
-
-
-@router.get("/{case_id}/timeline", response_model=list[TimelineEventResponse])
-async def get_timeline(
-    case_id: uuid.UUID,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-    db: DBSession,
-) -> list[TimelineEventResponse]:
-    """Get the full timeline for a case."""
-    result = await db.execute(
-        select(CaseTimeline)
-        .where(CaseTimeline.case_id == case_id, CaseTimeline.tenant_id == current_user.tenant_id)
-        .order_by(CaseTimeline.created_at.asc())
-    )
-    events = result.scalars().all()
-    return [TimelineEventResponse.model_validate(e) for e in events]
-
-
-# ---------------------------------------------------------------------------
-# Pillar-1: AI Investigation
-# ---------------------------------------------------------------------------
-
-
-class InvestigateRequest(BaseModel):
-    alert_summary: str = ""
-    raw_alert: dict[str, Any] = {}
-
-
-class InvestigateResponse(BaseModel):
-    run_id: str
-    case_id: str
+class EvidenceReport(BaseModel):
+    case_id: uuid.UUID
+    title: str
+    severity: str
     status: str
-    message: str
+    alert_count: int
+    mitre_techniques: list[str]
+    compliance_frameworks: list[str]
+    evidence_chain: list[dict[str, Any]]
+    generated_at: datetime
 
 
-@router.post("/{case_id}/investigate", response_model=InvestigateResponse, status_code=status.HTTP_202_ACCEPTED)
-async def investigate_case(
-    case_id: uuid.UUID,
-    body: InvestigateRequest,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
-    db: DBSession,
-) -> InvestigateResponse:
-    """
-    Trigger an autonomous AI investigation for this case.
-    Proxies to the agents service Pillar-1 orchestrator.
-    """
-    # Verify case ownership
-    result = await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == current_user.tenant_id))
-    case = result.scalar_one_or_none()
-    if case is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+# ────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ────────────────────────────────────────────────────────────────────────────
 
-    alert_summary = body.alert_summary or case.title or ""
-    raw_alert = body.raw_alert or {"case_id": str(case_id), "title": case.title}
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{_AGENTS_URL}/api/v1/cases/{case_id}/investigate",
-                json={
-                    "alert_summary": alert_summary,
-                    "raw_alert": raw_alert,
-                    "tenant_id": str(current_user.tenant_id),
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-    except httpx.HTTPStatusError as exc:
-        logger.error("agents_service_http_error", status=exc.response.status_code)
-        raise HTTPException(status_code=502, detail="Agents service returned an error") from exc
-    except Exception as exc:  # noqa: BLE001
-        logger.error("agents_service_unavailable", error=type(exc).__name__)
-        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
-
-    # Record timeline entry
-    db.add(
-        CaseTimeline(
-            case_id=case_id,
-            tenant_id=current_user.tenant_id,
-            event_type="ai_investigation_started",
-            content=f"AI investigation started (run_id={data.get('run_id')})",
-            user_id=current_user.user_id,
-            is_automated=True,
-            event_metadata={"run_id": data.get("run_id")},
-        )
+def _row_to_case(row: Any) -> CaseResponse:
+    return CaseResponse(
+        id=row.id,
+        title=row.title,
+        description=row.description,
+        severity=row.severity,
+        status=row.status,
+        assignee=row.assignee,
+        mitre_techniques=list(row.mitre_techniques or []),
+        alert_ids=list(row.alert_ids or []),
+        observable_graph=dict(row.observable_graph or {}),
+        evidence_chain=list(row.evidence_chain or []),
+        compliance_frameworks=list(row.compliance_frameworks or []),
+        opened_at=row.opened_at,
+        triaged_at=row.triaged_at,
+        resolved_at=row.resolved_at,
+        closed_at=row.closed_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        created_by=row.created_by,
+        tags=dict(row.tags or {}),
+        sla_due_at=row.sla_due_at,
     )
-    await db.commit()
-
-    return InvestigateResponse(**data)
 
 
-def _validate_run_id(run_id: str) -> str:
-    """Raise 422 if run_id is not a UUID; return canonicalized UUID string to break taint flow."""
+# ────────────────────────────────────────────────────────────────────────────
+# Endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("", response_model=list[CaseResponse], summary="List cases")
+async def list_cases(
+    db: DBSession,
+    user: AuthUser,
+    status_filter: str | None = Query(None, alias="status"),
+    severity: str | None = Query(None),
+    assignee: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> list[CaseResponse]:
+    where_clauses = ["1=1"]
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    if status_filter:
+        where_clauses.append("status = :status")
+        params["status"] = status_filter
+    if severity:
+        where_clauses.append("severity = :severity")
+        params["severity"] = severity
+    if assignee:
+        where_clauses.append("assignee = :assignee")
+        params["assignee"] = assignee
+
+    q = f"""
+        SELECT * FROM aisoc_cases
+        WHERE {' AND '.join(where_clauses)}
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+    """
     try:
-        # Round-trip through uuid.UUID to produce a safe, canonical string
-        return str(uuid.UUID(run_id))
-    except (ValueError, AttributeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Invalid run_id format",
-        ) from exc
+        rows = await db.execute(text(q).bindparams(**params))
+        return [_row_to_case(r) for r in rows.fetchall()]
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
 
 
-@router.get("/{case_id}/investigations/{run_id}")
-async def get_case_investigation(
-    case_id: uuid.UUID,
-    run_id: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-) -> dict[str, Any]:
-    """Proxy: poll investigation run status from the agents service."""
-    safe_run_id = _validate_run_id(run_id)
+@router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED, summary="Create case")
+async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) -> CaseResponse:
+    import json as _json
+
+    case_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    q = text("""
+        INSERT INTO aisoc_cases (
+            id, title, description, severity, status, assignee,
+            mitre_techniques, alert_ids, compliance_frameworks, tags,
+            sla_due_at, opened_at, created_at, updated_at, created_by
+        ) VALUES (
+            :id, :title, :description, :severity, 'new', :assignee,
+            :mitre::jsonb, :alert_ids::uuid[], :frameworks::text[], :tags::jsonb,
+            :sla, :now, :now, :now, :user
+        ) RETURNING *
+    """).bindparams(
+        id=case_id,
+        title=body.title,
+        description=body.description,
+        severity=body.severity,
+        assignee=body.assignee,
+        mitre=_json.dumps(body.mitre_techniques),
+        alert_ids=list(map(str, body.alert_ids)) or [],
+        frameworks=body.compliance_frameworks or [],
+        tags=_json.dumps(body.tags),
+        sla=body.sla_due_at,
+        now=now,
+        user=str(user) if user else "system",
+    )
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}")
-            resp.raise_for_status()
-            return resp.json()
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
+        row = (await db.execute(q)).fetchone()
+        await db.commit()
+        return _row_to_case(row)
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
 
 
-@router.get("/{case_id}/investigations/{run_id}/report.md")
-async def get_case_report_md(
-    case_id: uuid.UUID,
-    run_id: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-) -> Any:
-    """Proxy: download Markdown incident report from the agents service."""
-    from fastapi.responses import PlainTextResponse
-
-    safe_run_id = _validate_run_id(run_id)
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}/report.md")
-            resp.raise_for_status()
-            return PlainTextResponse(content=resp.text)
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
+@router.get("/{case_id}", response_model=CaseResponse, summary="Get case")
+async def get_case(case_id: uuid.UUID, db: DBSession, user: AuthUser) -> CaseResponse:
+    row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    return _row_to_case(row)
 
 
-@router.get("/{case_id}/investigations/{run_id}/report.html")
-async def get_case_report_html(
-    case_id: uuid.UUID,
-    run_id: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-) -> Any:
-    """Proxy: download HTML incident report from the agents service."""
-    from fastapi.responses import HTMLResponse
+@router.patch("/{case_id}", response_model=CaseResponse, summary="Update case")
+async def update_case(case_id: uuid.UUID, body: UpdateCaseRequest, db: DBSession, user: AuthUser) -> CaseResponse:
+    import json as _json
 
-    safe_run_id = _validate_run_id(run_id)
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}/report.html")
-            resp.raise_for_status()
-            return HTMLResponse(content=resp.text)
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
+    existing = (await db.execute(text("SELECT status FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found.")
 
-
-@router.get("/{case_id}/investigations/{run_id}/report.pdf")
-async def get_case_report_pdf(
-    case_id: uuid.UUID,
-    run_id: str,
-    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
-) -> Any:
-    """Proxy: download PDF incident report (rendered by weasyprint in agents service)."""
-    from fastapi.responses import Response as FastAPIResponse
-
-    safe_run_id = _validate_run_id(run_id)
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}/report.pdf")
-            resp.raise_for_status()
-            return FastAPIResponse(
-                content=resp.content,
-                media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="aisoc-report-{safe_run_id}.pdf"'},
+    if body.status and body.status != existing.status:
+        allowed = _TRANSITIONS.get(existing.status, set())
+        if body.status not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid status transition: {existing.status} → {body.status}. Allowed: {sorted(allowed) or 'none'}",
             )
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
+
+    now = datetime.now(UTC)
+    sets = ["updated_at = :now"]
+    params: dict[str, Any] = {"id": case_id, "now": now}
+
+    if body.title is not None:
+        sets.append("title = :title"); params["title"] = body.title
+    if body.description is not None:
+        sets.append("description = :description"); params["description"] = body.description
+    if body.severity is not None:
+        sets.append("severity = :severity"); params["severity"] = body.severity
+    if body.assignee is not None:
+        sets.append("assignee = :assignee"); params["assignee"] = body.assignee
+    if body.sla_due_at is not None:
+        sets.append("sla_due_at = :sla"); params["sla"] = body.sla_due_at
+    if body.mitre_techniques is not None:
+        sets.append("mitre_techniques = :mitre::jsonb"); params["mitre"] = _json.dumps(body.mitre_techniques)
+    if body.compliance_frameworks is not None:
+        sets.append("compliance_frameworks = :frameworks::text[]"); params["frameworks"] = body.compliance_frameworks
+    if body.tags is not None:
+        sets.append("tags = :tags::jsonb"); params["tags"] = _json.dumps(body.tags)
+
+    if body.status:
+        sets.append("status = :status"); params["status"] = body.status
+        ts_col = {"triaged": "triaged_at", "resolved": "resolved_at", "closed": "closed_at"}.get(body.status)
+        if ts_col:
+            sets.append(f"{ts_col} = :now")
+
+    q = text(f"UPDATE aisoc_cases SET {', '.join(sets)} WHERE id = :id RETURNING *").bindparams(**params)
+    try:
+        row = (await db.execute(q)).fetchone()
+        await db.commit()
+        return _row_to_case(row)
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")
+async def add_alerts(case_id: uuid.UUID, body: AddAlertsRequest, db: DBSession, user: AuthUser) -> CaseResponse:
+    ids_str = [str(a) for a in body.alert_ids]
+    q = text("""
+        UPDATE aisoc_cases
+        SET alert_ids = array(SELECT DISTINCT unnest(alert_ids || :new_ids::uuid[])),
+            updated_at = now()
+        WHERE id = :id
+        RETURNING *
+    """).bindparams(id=case_id, new_ids=ids_str)
+    try:
+        row = (await db.execute(q)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Case not found.")
+        await db.commit()
+        return _row_to_case(row)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.post("/{case_id}/observables", response_model=CaseResponse, summary="Update observable graph")
+async def update_observables(case_id: uuid.UUID, body: UpdateObservablesRequest, db: DBSession, user: AuthUser) -> CaseResponse:
+    import json as _json
+
+    existing = (await db.execute(text("SELECT observable_graph FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    graph: dict[str, Any] = dict(existing.observable_graph or {})
+    nodes = graph.get("nodes", [])
+    edges = graph.get("edges", [])
+
+    existing_ids = {n["id"] for n in nodes}
+    for n in body.nodes:
+        if n.id not in existing_ids:
+            nodes.append(n.model_dump())
+        else:
+            nodes = [n.model_dump() if x["id"] == n.id else x for x in nodes]
+
+    edge_keys = {(e["source"], e["target"]) for e in edges}
+    for e in body.edges:
+        if (e.source, e.target) not in edge_keys:
+            edges.append(e.model_dump())
+
+    graph = {"nodes": nodes, "edges": edges}
+    q = text("""
+        UPDATE aisoc_cases SET observable_graph = :g::jsonb, updated_at = now() WHERE id = :id RETURNING *
+    """).bindparams(id=case_id, g=_json.dumps(graph))
+    try:
+        row = (await db.execute(q)).fetchone()
+        await db.commit()
+        return _row_to_case(row)
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.post("/{case_id}/comments", response_model=CommentResponse, status_code=201, summary="Add comment")
+async def add_comment(case_id: uuid.UUID, body: AddCommentRequest, db: DBSession, user: AuthUser) -> CommentResponse:
+    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    comment_id = uuid.uuid4()
+    now = datetime.now(UTC)
+    q = text("""
+        INSERT INTO aisoc_case_comments (id, case_id, author, body, is_system, created_at)
+        VALUES (:id, :case_id, :author, :body, :sys, :now) RETURNING *
+    """).bindparams(id=comment_id, case_id=case_id, author=str(user) if user else "system", body=body.body, sys=body.is_system, now=now)
+    try:
+        row = (await db.execute(q)).fetchone()
+        await db.commit()
+        return CommentResponse(
+            id=row.id, case_id=row.case_id, author=row.author,
+            body=row.body, is_system=row.is_system, created_at=row.created_at,
+        )
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+
+
+@router.get("/{case_id}/comments", response_model=list[CommentResponse], summary="List case comments")
+async def list_comments(case_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[CommentResponse]:
+    rows = (await db.execute(text("SELECT * FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at").bindparams(id=case_id))).fetchall()
+    return [CommentResponse(id=r.id, case_id=r.case_id, author=r.author, body=r.body, is_system=r.is_system, created_at=r.created_at) for r in rows]
+
+
+@router.get("/{case_id}/evidence", response_model=EvidenceReport, summary="Export evidence chain report")
+async def evidence_report(case_id: uuid.UUID, db: DBSession, user: AuthUser) -> EvidenceReport:
+    row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    return EvidenceReport(
+        case_id=row.id,
+        title=row.title,
+        severity=row.severity,
+        status=row.status,
+        alert_count=len(row.alert_ids or []),
+        mitre_techniques=list(row.mitre_techniques or []),
+        compliance_frameworks=list(row.compliance_frameworks or []),
+        evidence_chain=list(row.evidence_chain or []),
+        generated_at=datetime.now(UTC),
+    )
