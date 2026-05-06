@@ -49,7 +49,7 @@ describe('Hero', () => {
     // rather than the older "every commit" wording.
     render(<Hero />);
 
-    expect(screen.getByText(/every PR to/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/every PR to/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/every commit/i)).toBeNull();
   });
 });
