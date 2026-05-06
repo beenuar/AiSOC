@@ -86,7 +86,7 @@ export function CommunitySubmissions() {
           No accepted community submissions yet.
         </p>
         <p className="mt-1 text-xs text-gray-500">
-          The leaderboard fills up as runs are merged. AiSOC's own numbers
+          The leaderboard fills up as runs are merged. AiSOC&apos;s own numbers
           appear in the cards above.
         </p>
       </div>
