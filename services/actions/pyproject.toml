@@ -16,7 +16,7 @@ asyncpg = "^0.29.0"
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
 structlog = "^24.1.0"
 httpx = "^0.26.0"
-aiokafka = "^0.10.0"
+aiokafka = ">=0.10,<0.15"
 python-dateutil = "^2.8.2"
 cryptography = "^42.0.0"
 
