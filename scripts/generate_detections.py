@@ -45,8 +45,10 @@ from typing import Any
 try:
     import yaml
 except ImportError:
-    print("ERROR: PyYAML not installed. Run: pip install pyyaml", file=sys.stderr)
-    sys.exit(1)
+    if __name__ == "__main__":
+        print("ERROR: PyYAML not installed. Run: pip install pyyaml", file=sys.stderr)
+        sys.exit(1)
+    raise
 
 ROOT = Path(__file__).parent.parent
 DETECTIONS_DIR = ROOT / "detections"

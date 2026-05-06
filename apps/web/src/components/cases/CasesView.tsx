@@ -105,13 +105,11 @@ function CaseCard({ c }: { c: Case }) {
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
-type SortKey = 'createdAt' | 'severity' | 'status' | 'alertCount';
 type FilterStatus = Case['status'] | 'all';
 
 export function CasesView() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [severityFilter, setSeverityFilter] = useState<Case['severity'] | 'all'>('all');
-  const [sortBy] = useState<SortKey>('createdAt');
   const [search, setSearch] = useState('');
 
   const { data: casesData, isLoading } = useSWR(
@@ -160,7 +158,6 @@ export function CasesView() {
       {/* Stats */}
       <div className="grid grid-cols-5 gap-3">
         {(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).map((s) => {
-          const stsCfg = s === 'all' ? null : STATUS_CONFIG[s];
           return (
             <button
               key={s}

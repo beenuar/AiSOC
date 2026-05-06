@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 from typing import Any, Callable
 
 from .plugin import PluginManifest

@@ -262,7 +262,7 @@ def build_detection_item(
                 if len(rel) >= 4 and rel[1] == "_quarantine":
                     category = rel[2]
             except ValueError:
-                pass
+                pass  # path is not relative to DETECTIONS_DIR; category stays None
 
     item: dict[str, Any] = {
         "id": data.get("id") or path.stem,

@@ -20,7 +20,6 @@ from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
     FP_BREAK_GLASS,
     FP_FORENSIC,
     FP_ONBOARD,
-    FP_PATCH,
     FP_PENTEST,
     FP_TUNING,
     S,

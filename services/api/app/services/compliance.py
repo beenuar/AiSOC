@@ -15,19 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit import AuditLog
 from app.models.compliance import ComplianceControl, ComplianceEvidence
 
-# Map SOC 2 control_ids → evidence collection functions
-_CONTROL_COLLECTORS: dict[str, str] = {
-    "CC6.1": "access_controls",
-    "CC6.2": "user_provisioning",
-    "CC6.3": "access_deprovisioning",
-    "CC7.1": "monitoring_detection",
-    "CC7.2": "system_monitoring",
-    "CC7.3": "security_event_evaluation",
-    "CC7.4": "incident_response",
-    "CC7.5": "incident_recovery",
-}
-
-
 async def auto_collect_evidence(
     db: AsyncSession,
     tenant_id: uuid.UUID,

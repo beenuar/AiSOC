@@ -10,7 +10,6 @@
  *   client.apiKeys.*      – API key management
  */
 
-import createClient, { type ClientOptions } from "openapi-fetch";
 import type {
   Alert,
   AlertFilters,
@@ -40,48 +39,6 @@ export interface AiSOCClientOptions {
   headers?: Record<string, string>;
   /** Fetch implementation — defaults to global fetch. */
   fetch?: typeof globalThis.fetch;
-}
-
-// ─── Internal fetch wrapper ───────────────────────────────────────────────────
-
-function buildFetchClient(opts: AiSOCClientOptions) {
-  const clientOpts: ClientOptions = {
-    baseUrl: opts.baseUrl,
-    headers: {
-      Authorization: `Bearer ${opts.token}`,
-      "Content-Type": "application/json",
-      ...opts.headers,
-    },
-  };
-  if (opts.fetch) {
-    clientOpts.fetch = opts.fetch;
-  }
-  return createClient<Record<string, unknown>>(clientOpts);
-}
-
-type FetchClient = ReturnType<typeof buildFetchClient>;
-
-async function get<T>(
-  fetchClient: FetchClient,
-  path: string,
-  params?: Record<string, unknown>,
-): Promise<T> {
-  const url = new URL(path, "http://localhost");
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null) {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const fullPath = url.pathname + url.search;
-  const res = await fetch(
-    String(new URL(fullPath, fetchClient as unknown as string)),
-  );
-  if (!res.ok) {
-    throw new AiSOCError(res.status, await res.text());
-  }
-  return res.json() as Promise<T>;
 }
 
 // ─── Error class ─────────────────────────────────────────────────────────────

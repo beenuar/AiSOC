@@ -67,7 +67,30 @@ server.on('upgrade', (req, socket, head) => {
 // channel it subscribed to so broadcasts can filter cheaply.
 const clients = new Map<string, Set<any>>();
 
+// Simple IP-based connection rate limiter: max 20 WS connections per IP per minute.
+const wsConnectCounts = new Map<string, { count: number; resetAt: number }>();
+const WS_RATE_LIMIT = 20;
+const WS_RATE_WINDOW_MS = 60_000;
+
+function wsRateLimitExceeded(ip: string): boolean {
+  const now = Date.now();
+  let entry = wsConnectCounts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + WS_RATE_WINDOW_MS };
+    wsConnectCounts.set(ip, entry);
+  }
+  entry.count += 1;
+  return entry.count > WS_RATE_LIMIT;
+}
+
 wss.on('connection', (ws, req) => {
+  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+    || req.socket.remoteAddress
+    || 'unknown';
+  if (wsRateLimitExceeded(ip)) {
+    ws.close(1008, 'Rate limit exceeded');
+    return;
+  }
   const url = new URL(req.url || '/', `http://localhost`);
   const tenantId = url.searchParams.get('tenant_id') || 'default';
   const channel: Channel = (ws as any)._aisocChannel ?? 'all';
@@ -114,8 +137,31 @@ function broadcastToTenant(tenantId: string, message: { type: string } & Record<
   }
 }
 
+// Simple IP-based rate limiter for SSE: max 20 connections per IP per minute.
+const sseConnectCounts = new Map<string, { count: number; resetAt: number }>();
+const SSE_RATE_LIMIT = 20;
+const SSE_RATE_WINDOW_MS = 60_000;
+
+function sseRateLimitExceeded(ip: string): boolean {
+  const now = Date.now();
+  let entry = sseConnectCounts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + SSE_RATE_WINDOW_MS };
+    sseConnectCounts.set(ip, entry);
+  }
+  entry.count += 1;
+  return entry.count > SSE_RATE_LIMIT;
+}
+
 // --- SSE endpoint ---
 app.get('/sse', (req, res) => {
+  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+    || req.socket.remoteAddress
+    || 'unknown';
+  if (sseRateLimitExceeded(ip)) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
   const tenantId = (req.query.tenant_id as string) || 'default';
 
   res.setHeader('Content-Type', 'text/event-stream');

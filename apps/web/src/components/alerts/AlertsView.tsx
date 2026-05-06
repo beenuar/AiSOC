@@ -3,9 +3,9 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { alertsApi, type Alert, type AlertFilters, type ConfidenceLabel } from '@/lib/api';
+import { alertsApi, type Alert, type AlertFilters } from '@/lib/api';
 import { clsx } from 'clsx';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { EntityRiskQueue } from './EntityRiskQueue';
 
 // Wave 1 of the AiSOC v6 capability roadmap. The "entities" tab renders the
@@ -171,7 +171,6 @@ function FiltersBar({
 }
 
 function AlertRow({ alert }: { alert: Alert }) {
-  const sevCfg = SEVERITY_CONFIG[alert.severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;
   return (
     <Link
       href={`/alerts/${alert.id}`}
@@ -215,7 +214,6 @@ function AlertRow({ alert }: { alert: Alert }) {
 
 export function AlertsView() {
   const [filters, setFilters] = useState<AlertFilters>({ page: 1, pageSize: 25 });
-  const [selectedIds] = useState(new Set<string>());
   // Default to the entity-centric queue — that's the whole point of Wave 1's
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.

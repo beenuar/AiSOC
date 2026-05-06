@@ -325,6 +325,13 @@ function seedData(): boolean {
   return true;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function sanitizeCaseId(id: unknown): string | null {
+  if (typeof id === "string" && UUID_RE.test(id)) return id;
+  return null;
+}
+
 async function findSeededCase(): Promise<{ id: string; case_number: string; title: string } | null> {
   step(6, 7, "Locating a seeded case");
   // The dev-mode auth bypass returns the demo user/tenant for unauthenticated
@@ -333,8 +340,13 @@ async function findSeededCase(): Promise<{ id: string; case_number: string; titl
     const res = await fetchJson("http://localhost:8000/v1/cases?page_size=5", 4000);
     if (res && Array.isArray(res.items) && res.items.length > 0) {
       const c0 = res.items[0];
-      log(c.green("ok") + ` found case ${c0.case_number} (${c0.id})`);
-      return { id: c0.id, case_number: c0.case_number, title: c0.title };
+      const safeId = sanitizeCaseId(c0.id);
+      if (!safeId) {
+        log(c.yellow("warn") + " API returned a non-UUID case ID — skipping");
+        return null;
+      }
+      log(c.green("ok") + ` found case ${c0.case_number} (${safeId})`);
+      return { id: safeId, case_number: c0.case_number, title: c0.title };
     }
     await new Promise((r) => setTimeout(r, 2000));
   }

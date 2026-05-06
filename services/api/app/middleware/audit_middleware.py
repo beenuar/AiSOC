@@ -94,7 +94,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     resource_id = seg
                     break
                 except ValueError:
-                    pass
+                    pass  # segment is not a UUID; try next
 
             async with AsyncSessionLocal() as db:
                 from app.models.audit import AuditLog  # noqa: PLC0415

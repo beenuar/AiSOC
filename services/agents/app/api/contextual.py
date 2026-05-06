@@ -522,8 +522,9 @@ async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
         try:
             async for chunk in _stream_llm(system, user, model):
                 yield (json.dumps({"delta": chunk}) + "\n").encode()
-        except Exception as exc:  # noqa: BLE001
-            yield (json.dumps({"error": str(exc)}) + "\n").encode()
+        except Exception:  # noqa: BLE001
+            logger.exception("contextual.stream.error")
+            yield (json.dumps({"error": "Streaming failed. Please try again."}) + "\n").encode()
 
         # Footer frame with metadata + suggested follow-ups.
         yield (

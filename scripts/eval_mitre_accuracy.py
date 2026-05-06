@@ -14,7 +14,6 @@ This script is also the entrypoint for the p1-eval CI step.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -22,7 +21,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "services" / "agents"))
 
-from tests.test_mitre_accuracy import evaluate_mitre_accuracy, SYNTHETIC_INCIDENTS
+from tests.test_mitre_accuracy import evaluate_mitre_accuracy
 
 
 def main() -> None:

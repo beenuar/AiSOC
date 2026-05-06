@@ -83,7 +83,7 @@ class UEBAKafkaConsumer:
             try:
                 features[k] = float(v)
             except (TypeError, ValueError):
-                pass
+                pass  # non-numeric feature value; skip
 
         if not features:
             return

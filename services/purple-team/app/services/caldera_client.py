@@ -9,8 +9,6 @@ import httpx
 
 LOG = logging.getLogger(__name__)
 
-_HEADERS = {"KEY": "", "Content-Type": "application/json"}
-
 
 class CalderaClient:
     def __init__(self, base_url: str, api_key: str) -> None:

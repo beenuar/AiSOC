@@ -60,6 +60,14 @@ class ElasticConnector(BaseConnector):
                     required=False,
                     default="logs-*",
                 ),
+                Field(
+                    "ssl_verify",
+                    "boolean",
+                    "Verify SSL certificate",
+                    required=False,
+                    default=True,
+                    help_text="Disable only for self-signed certificates in private deployments.",
+                ),
             ],
         )
 
@@ -70,6 +78,7 @@ class ElasticConnector(BaseConnector):
         username: str | None = None,
         password: str | None = None,
         index: str = "logs-*",
+        ssl_verify: bool = True,
     ):
         if not api_key and not (username and password):
             raise ValueError("Elastic connector requires either api_key or username+password")
@@ -78,6 +87,7 @@ class ElasticConnector(BaseConnector):
         self._username = username
         self._password = password
         self._index = index
+        self._ssl_verify = ssl_verify
 
     def _headers(self) -> dict[str, str]:
         if self._api_key:
@@ -93,7 +103,7 @@ class ElasticConnector(BaseConnector):
         }
 
     async def test_connection(self) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=self._ssl_verify) as client:
             try:
                 resp = await client.get(f"{self._base_url}/", headers=self._headers())
                 resp.raise_for_status()
@@ -105,12 +115,13 @@ class ElasticConnector(BaseConnector):
                     "cluster_name": info.get("cluster_name"),
                 }
             except Exception as exc:
-                return {"success": False, "connector": self.connector_id, "error": str(exc)}
+                logger.warning("elastic.test_connection.failed", error_type=type(exc).__name__)
+                return {"success": False, "connector": self.connector_id, "error": "Connection failed"}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         # Elastic Security stores detection rule alerts in this hidden index pattern.
         esql = f"FROM .alerts-security.alerts-* | WHERE @timestamp > NOW() - {since_seconds} seconds | LIMIT 100"
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
             resp = await client.post(
                 f"{self._base_url}/_query",
                 headers=self._headers(),
@@ -130,7 +141,7 @@ class ElasticConnector(BaseConnector):
         originating connector id.
         """
         esql = to_esql(unified, index=self._index)
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
             resp = await client.post(
                 f"{self._base_url}/_query",
                 headers=self._headers(),

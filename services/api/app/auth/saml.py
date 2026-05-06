@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -37,6 +38,15 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 logger = logging.getLogger(__name__)
+
+_SAFE_REDIRECT_RE = re.compile(r"^/[\w\-./]*$")
+
+
+def _safe_redirect(url: str) -> str:
+    """Return *url* only if it is a safe relative path; otherwise return '/'."""
+    if url and _SAFE_REDIRECT_RE.match(url):
+        return url
+    return "/"
 
 router = APIRouter(prefix="/auth/saml", tags=["auth-saml"])
 
@@ -156,8 +166,8 @@ async def saml_acs(request: Request) -> Response:
             }
         )
 
-        relay_state = (await request.form()).get("RelayState", "/")
-        response = RedirectResponse(url=str(relay_state), status_code=302)
+        relay_state = _safe_redirect(str((await request.form()).get("RelayState", "/")))
+        response = RedirectResponse(url=relay_state, status_code=302)
         response.set_cookie("aisoc_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
         return response
 

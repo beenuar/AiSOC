@@ -9,14 +9,27 @@ one place while the engine lives in services/agents.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, status
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL", "http://agents:8084")
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
+
+# Allowlist for playbook/run IDs: UUIDs or short slug-style alphanumeric IDs.
+# Prevents partial-SSRF via path traversal in proxied requests.
+_SAFE_ID_RE = re.compile(r"^[0-9a-zA-Z_\-]{1,128}$")
+
+
+def _validate_path_id(value: str, name: str = "id") -> None:
+    if not _SAFE_ID_RE.match(value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid {name} format",
+        )
 
 
 async def _proxy(method: str, path: str, **kwargs) -> Any:
@@ -26,12 +39,12 @@ async def _proxy(method: str, path: str, **kwargs) -> Any:
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.request(method, url, **kwargs)
         if r.status_code >= 400:
-            raise HTTPException(status_code=r.status_code, detail=r.text)
+            raise HTTPException(status_code=r.status_code, detail="Upstream service error")
         if r.status_code == 204:
             return None
         return r.json()
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -57,26 +70,31 @@ async def list_runs(limit: int = 50):
 
 @router.get("/runs/{run_id}", summary="Get a playbook run")
 async def get_run(run_id: str):
+    _validate_path_id(run_id, "run_id")
     return await _proxy("GET", f"/runs/{run_id}")
 
 
 @router.get("/{playbook_id}", summary="Get a playbook")
 async def get_playbook(playbook_id: str):
+    _validate_path_id(playbook_id, "playbook_id")
     return await _proxy("GET", f"/{playbook_id}")
 
 
 @router.put("/{playbook_id}", summary="Update a playbook")
 async def update_playbook(playbook_id: str, request: Request):
+    _validate_path_id(playbook_id, "playbook_id")
     body = await request.json()
     return await _proxy("PUT", f"/{playbook_id}", json=body)
 
 
 @router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
 async def delete_playbook(playbook_id: str):
+    _validate_path_id(playbook_id, "playbook_id")
     await _proxy("DELETE", f"/{playbook_id}")
 
 
 @router.post("/{playbook_id}/run", summary="Execute a playbook", status_code=202)
 async def run_playbook(playbook_id: str, request: Request):
+    _validate_path_id(playbook_id, "playbook_id")
     body = await request.json()
     return await _proxy("POST", f"/{playbook_id}/run", json=body)

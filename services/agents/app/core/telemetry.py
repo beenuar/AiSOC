@@ -105,14 +105,14 @@ def instrument_app(app) -> None:  # noqa: ANN001
 
         FastAPIInstrumentor.instrument_app(app)
     except ImportError:
-        pass
+        pass  # optional dependency not installed; skip FastAPI auto-instrumentation
 
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # type: ignore
 
         HTTPXClientInstrumentor().instrument()
     except ImportError:
-        pass
+        pass  # optional dependency not installed; skip HTTPX auto-instrumentation
 
 
 def get_tracer(name: str = "aisoc-agents") -> trace.Tracer:

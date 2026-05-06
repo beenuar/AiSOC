@@ -1,7 +1,6 @@
 'use client';
 
 import useSWR from 'swr';
-import { useState } from 'react';
 
 interface HeatmapCell {
   category: string;

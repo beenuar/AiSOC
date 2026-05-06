@@ -36,12 +36,6 @@ from app.hunt.loader import HuntCorpus, HuntDefinition
 _TESTS_DIR = Path(__file__).parent
 _HUNT_TELEMETRY_PATH = _TESTS_DIR / "eval_data" / "synthetic_hunt_telemetry.jsonl"
 
-# Per-hunt eval gates surfaced to ``scripts/run_evals.py``. The hunt corpus
-# is small (every hunt is hand-authored), so we hold ourselves to perfect
-# scenario coverage rather than a percentage floor.
-_POSITIVE_FLOOR = 1.0  # every hunt MUST fire on its declared positive scenario
-_NEGATIVE_CEILING = 0.0  # zero false positives on declared negative scenarios
-
 
 def _load_hunt_corpus() -> list[HuntDefinition]:
     """Load the YAML hunt corpus from ``hunts/`` (repo root)."""

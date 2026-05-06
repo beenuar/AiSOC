@@ -1,9 +1,12 @@
 """Case management endpoints."""
 
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
+
+_RUN_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -325,9 +328,11 @@ async def investigate_case(
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"Agents service error: {exc.response.text}") from exc
+        logger.error("agents_service_http_error", status=exc.response.status_code)
+        raise HTTPException(status_code=502, detail="Agents service returned an error") from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=f"Agents service unavailable: {exc}") from exc
+        logger.error("agents_service_unavailable", error=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
 
     # Record timeline entry
     db.add(
@@ -346,6 +351,12 @@ async def investigate_case(
     return InvestigateResponse(**data)
 
 
+def _validate_run_id(run_id: str) -> None:
+    """Raise 422 if run_id is not a UUID to prevent partial-SSRF via path injection."""
+    if not _RUN_ID_RE.match(run_id):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid run_id format")
+
+
 @router.get("/{case_id}/investigations/{run_id}")
 async def get_case_investigation(
     case_id: uuid.UUID,
@@ -353,15 +364,16 @@ async def get_case_investigation(
     current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
 ) -> dict[str, Any]:
     """Proxy: poll investigation run status from the agents service."""
+    _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}")
             resp.raise_for_status()
             return resp.json()
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
 
 
 @router.get("/{case_id}/investigations/{run_id}/report.md")
@@ -373,15 +385,16 @@ async def get_case_report_md(
     """Proxy: download Markdown incident report from the agents service."""
     from fastapi.responses import PlainTextResponse
 
+    _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.md")
             resp.raise_for_status()
             return PlainTextResponse(content=resp.text)
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
 
 
 @router.get("/{case_id}/investigations/{run_id}/report.html")
@@ -393,15 +406,16 @@ async def get_case_report_html(
     """Proxy: download HTML incident report from the agents service."""
     from fastapi.responses import HTMLResponse
 
+    _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.html")
             resp.raise_for_status()
             return HTMLResponse(content=resp.text)
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc
 
 
 @router.get("/{case_id}/investigations/{run_id}/report.pdf")
@@ -413,6 +427,7 @@ async def get_case_report_pdf(
     """Proxy: download PDF incident report (rendered by weasyprint in agents service)."""
     from fastapi.responses import Response as FastAPIResponse
 
+    _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.pdf")
@@ -423,6 +438,6 @@ async def get_case_report_pdf(
                 headers={"Content-Disposition": f'attachment; filename="aisoc-report-{run_id}.pdf"'},
             )
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+        raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail="Agents service unavailable") from exc

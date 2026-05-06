@@ -12,18 +12,15 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import sys
-from pathlib import Path
 from typing import Any
 
 import click
 import httpx
 import yaml
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
-    Ed25519PublicKey,
 )
 from jsonschema import ValidationError, validate
 from rich.console import Console

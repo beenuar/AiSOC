@@ -95,7 +95,7 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "new geography": ("unseen origin region", "anomalous origin", "first-time origin"),
     "compromised npm": ("trojanized js-libs release", "doctored js-libs build", "polluted js-libs feed"),
     "container image": ("workload bundle", "runtime workload artifact", "compute workload bundle"),
-    "wire transfer": ("ach instruction", "outgoing remittance", "treasury debit instruction"),
+    "wire transfer initial": ("ach instruction", "outgoing remittance", "treasury debit instruction"),
 
     # TA0002 — Execution
     "execution": ("payload delivery step", "binary launch", "code activation"),

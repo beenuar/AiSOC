@@ -137,4 +137,11 @@ async def latest_two_snapshots(
 # NOTE: ``compute_drift`` (and its helper ``_index_techniques``) are
 # imported from ``app.services.drift_diff`` so the pure-Python delta
 # logic stays unit-testable without SQLAlchemy installed.
-from app.services.drift_diff import compute_drift  # noqa: E402,F401
+from app.services.drift_diff import compute_drift  # noqa: E402
+
+__all__ = [
+    "compute_drift",
+    "get_latest_snapshots",
+    "list_snapshots",
+    "take_snapshot",
+]

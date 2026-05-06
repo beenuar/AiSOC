@@ -903,8 +903,10 @@ function ApiKeysPanel() {
       toast.error('Give the key a name');
       return;
     }
-    const id = `key-${Math.random().toString(36).slice(2, 8)}`;
-    const secretBody = Math.random().toString(36).slice(2, 14);
+    const idBytes = crypto.getRandomValues(new Uint8Array(6));
+    const id = `key-${Array.from(idBytes).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+    const secretBytes = crypto.getRandomValues(new Uint8Array(16));
+    const secretBody = Array.from(secretBytes).map(b => b.toString(16).padStart(2, '0')).join('');
     const secret = `aisoc_live_${secretBody}`;
     const key: ApiKey = {
       id,

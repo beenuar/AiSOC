@@ -71,19 +71,20 @@ class Plugin:
         async with self._client(context) as client:
             match action:
                 case "get_user":
-                    return await self._get_user(client, user_id)
+                    result = await self._get_user(client, user_id)
                 case "list_sessions":
-                    return await self._list_sessions(client, user_id)
+                    result = await self._list_sessions(client, user_id)
                 case "suspend_user":
-                    return await self._suspend_user(client, user_id)
+                    result = await self._suspend_user(client, user_id)
                 case "unsuspend_user":
-                    return await self._unsuspend_user(client, user_id)
+                    result = await self._unsuspend_user(client, user_id)
                 case "clear_user_sessions":
-                    return await self._clear_sessions(client, user_id)
+                    result = await self._clear_sessions(client, user_id)
                 case "clear_mfa_factors":
-                    return await self._clear_mfa(client, user_id)
+                    result = await self._clear_mfa(client, user_id)
                 case _:
-                    return {"error": f"Unknown action: {action}"}
+                    result = {"error": f"Unknown action: {action}"}
+        return result
 
     # ── Actions ───────────────────────────────────────────────────────────────
 

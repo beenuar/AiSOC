@@ -12,7 +12,7 @@
  * dev / no-LLM environments. Streaming is preferred when available.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,8 +22,6 @@ import {
   type CopilotMessage,
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { ErrorState } from '@/components/ui/ErrorState';
-import { EmptyState } from '@/components/ui/EmptyState';
 
 // ─── Suggested prompts ───────────────────────────────────────────────────────
 

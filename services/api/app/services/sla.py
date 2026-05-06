@@ -38,7 +38,7 @@ def merge_kpi_bar_dict(existing: dict | None, patch: dict[str, float]) -> dict[s
             try:
                 out[k] = float(kb[k])
             except (TypeError, ValueError):
-                pass
+                pass  # non-numeric value; skip key
     return out
 
 

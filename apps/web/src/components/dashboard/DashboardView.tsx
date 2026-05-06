@@ -117,7 +117,7 @@ function CustomTooltip({ active, payload, label }: any) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { data: metrics = MOCK_METRICS, isLoading } = useSWR(
+  const { data: metrics = MOCK_METRICS } = useSWR(
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
     { fallbackData: MOCK_METRICS, refreshInterval: 60000 }

@@ -15,10 +15,6 @@ from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
-_AUTH_URL = "https://api.crowdstrike.com/oauth2/token"
-_DETECTIONS_URL = "https://api.crowdstrike.com/detects/queries/detects/v1"
-_DETECTION_DETAILS_URL = "https://api.crowdstrike.com/detects/entities/summaries/GET/v1"
-
 
 class CrowdStrikeConnector(BaseConnector):
     connector_id = "crowdstrike"

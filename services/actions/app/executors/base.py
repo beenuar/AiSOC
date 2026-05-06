@@ -15,7 +15,6 @@ class BaseExecutor(ABC):
     @abstractmethod
     async def execute(self, request: ActionRequest) -> ActionResult:
         """Execute the action and return a result."""
-        ...
 
     async def rollback(self, result: ActionResult) -> bool:
         """

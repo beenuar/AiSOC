@@ -92,7 +92,6 @@ class MitreMitigation:
 
 _techniques: dict[str, MitreTechnique] = {}
 _actors: dict[str, MitreActor] = {}
-_mitigations: dict[str, MitreMitigation] = {}
 _tactic_map: dict[str, str] = {}  # tactic shortname → display name
 _loaded = False
 _load_time: float = 0.0

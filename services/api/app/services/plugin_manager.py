@@ -242,8 +242,8 @@ def _read_signature(plugin_dir: Path) -> bytes | None:
         decoded = bytes.fromhex(text.decode("ascii"))
         if len(decoded) == 64:  # Ed25519 signatures are exactly 64 bytes
             return decoded
-    except (UnicodeDecodeError, ValueError):
-        pass
+        except (UnicodeDecodeError, ValueError):
+            pass  # not a hex-encoded Ed25519 signature; fall through to raw bytes
 
     # Otherwise treat the file as raw signature bytes.
     if len(raw) == 64:

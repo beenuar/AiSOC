@@ -67,8 +67,6 @@ def split_op(key: str) -> tuple[str, str]:
 # Sample value pool for negation. Uses values unlikely to collide with
 # realistic field domains.
 _SENTINEL_STR = "__benign__"
-_SENTINEL_NUM = 0
-_SENTINEL_BOOL = False
 
 
 def _pos_for(op: str, expected: Any) -> Any:
@@ -355,10 +353,8 @@ def build_negative(
             )
     else:
         first_key = next(iter(when.keys()))
-        target_key = first_key
-        target_field_name, target_op = split_op(first_key)
+        neg_field, target_op = split_op(first_key)
         target_expected = when[first_key]
-        neg_field = target_field_name
 
     neg[neg_field] = _neg_for(target_op, target_expected)
     return neg

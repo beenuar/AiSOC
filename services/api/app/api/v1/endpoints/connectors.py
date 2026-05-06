@@ -34,9 +34,14 @@ Tenant scoping invariants enforced here:
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
+
+# Connector type IDs are restricted to alphanumeric, hyphens, and underscores.
+# This prevents path-traversal / partial-SSRF via user-supplied connector_type.
+_CONNECTOR_TYPE_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,100}$")
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -155,7 +160,7 @@ async def _fetch_catalog() -> list[dict[str, Any]]:
             resp = await client.get(url)
             resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning("connectors_service.catalog.unreachable url=%s err=%s", url, exc)
+        logger.warning("connectors_service.catalog.unreachable url=%s error_type=%s", url, type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="connectors service is unavailable; cannot list connector catalog",
@@ -204,6 +209,11 @@ async def _proxy_test_connection(
     add a shared-secret header (mirroring how the realtime push proxy in
     this codebase does it).
     """
+    if not _CONNECTOR_TYPE_RE.match(connector_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="connector_type contains invalid characters",
+        )
     url = _connectors_service_url(f"/connectors/{connector_type}/test")
     payload = {
         "auth_config": auth_config,

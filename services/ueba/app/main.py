@@ -85,7 +85,7 @@ async def _stop_kafka() -> None:
         try:
             await _consumer_task
         except asyncio.CancelledError:
-            pass
+            pass  # expected after cancel(); task is done
     LOG.info("UEBA service stopped.")
 
 

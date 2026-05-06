@@ -294,7 +294,15 @@ async function replayQueuedApprovals() {
 }
 
 // Allow the page to skipWaiting and activate a new SW immediately.
+// Guard against messages from unexpected origins (missing-origin-check mitigation).
 self.addEventListener('message', (event) => {
+  // Only accept messages from the same origin as the service worker registration.
+  if (
+    event.origin &&
+    event.origin !== self.location.origin
+  ) {
+    return;
+  }
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }

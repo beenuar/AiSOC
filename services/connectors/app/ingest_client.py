@@ -25,14 +25,11 @@ down, polls fail loudly and the scheduler records that in
 
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from typing import Any
 
 import httpx
-
-logger = logging.getLogger("aisoc.connectors.ingest_client")
 
 # 30s mirrors the ingest service's own ReadTimeout. We don't want the client
 # to give up before the server has a chance to publish; we also don't want

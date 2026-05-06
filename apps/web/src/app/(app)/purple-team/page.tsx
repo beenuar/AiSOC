@@ -401,7 +401,7 @@ function CoverageHeatmap() {
 }
 
 function ExecutionsTable({ onReportDetection }: { onReportDetection: (ex: Execution) => void }) {
-  const { data, error, isLoading, mutate } = useSWR<Execution[]>(
+  const { data, error, isLoading } = useSWR<Execution[]>(
     `${API}/api/v1/purple-team/executions?tenant_id=${TENANT_ID}&limit=50`,
     fetcher,
     { refreshInterval: 10000 }

@@ -291,7 +291,7 @@ def execute_rule(
         "kql": _run_kql,
         "eql": _run_eql,
         "lucene": lambda body, evts: (_run_kql(body, evts)[0], None),
-        "regex": lambda body, evts: _run_regex(body, evts),
+        "regex": _run_regex,
     }
 
     runner = runners.get(lang)

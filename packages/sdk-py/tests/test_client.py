@@ -5,7 +5,6 @@ Uses pytest-httpx to intercept outgoing requests — no real server needed.
 
 from __future__ import annotations
 
-import json
 import pytest
 from pytest_httpx import HTTPXMock
 

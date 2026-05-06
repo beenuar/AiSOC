@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -87,6 +88,16 @@ def _pop_state(state: str) -> dict[str, str] | None:
     return _state_store.pop(state, None)
 
 
+_SAFE_REDIRECT_RE = re.compile(r"^/[\w\-./]*$")
+
+
+def _safe_redirect(url: str) -> str:
+    """Return *url* only if it is a safe relative path; otherwise return '/'."""
+    if url and _SAFE_REDIRECT_RE.match(url):
+        return url
+    return "/"
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 
@@ -99,11 +110,12 @@ async def oidc_login(request: Request, redirect: str = "/") -> Response:
     scopes = os.getenv("OIDC_SCOPES", "openid email profile")
     use_pkce = os.getenv("OIDC_PKCE", "true").lower() == "true"
 
+    safe_redirect = _safe_redirect(redirect)
     if not issuer or not client_id:
         # Stub mode
         logger.warning("OIDC not configured (OIDC_ISSUER / OIDC_CLIENT_ID missing) — issuing stub token")
         token = _issue_jwt({"sub": "oidc-stub-user", "email": "oidc@stub.local", "provider": "oidc-stub"})
-        resp = RedirectResponse(url=redirect, status_code=302)
+        resp = RedirectResponse(url=safe_redirect, status_code=302)
         resp.set_cookie("aisoc_token", token, httponly=True, samesite="lax")
         return resp
 
@@ -114,7 +126,7 @@ async def oidc_login(request: Request, redirect: str = "/") -> Response:
 
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
-    state_data: dict[str, str] = {"redirect": redirect, "nonce": nonce}
+    state_data: dict[str, str] = {"redirect": safe_redirect, "nonce": nonce}
 
     params: dict[str, str] = {
         "response_type": "code",
@@ -195,8 +207,8 @@ async def oidc_callback(
     if id_token:
         try:
             claims = _jwt.decode(id_token, options={"verify_signature": False})
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to decode id_token claims: %s", exc)
 
     access_token = tokens.get("access_token", "")
 
@@ -262,7 +274,8 @@ async def oidc_userinfo(request: Request) -> JSONResponse:
 async def oidc_logout(request: Request, post_logout_redirect_uri: str = "/") -> Response:
     """RP-initiated logout — clear cookie and redirect to provider end_session."""
     issuer = os.getenv("OIDC_ISSUER")
-    response = RedirectResponse(url=post_logout_redirect_uri, status_code=302)
+    safe_uri = _safe_redirect(post_logout_redirect_uri)
+    response = RedirectResponse(url=safe_uri, status_code=302)
     response.delete_cookie("aisoc_token")
 
     if issuer:
@@ -270,10 +283,10 @@ async def oidc_logout(request: Request, post_logout_redirect_uri: str = "/") -> 
             provider = await _discover(issuer)
             end_session = provider.get("end_session_endpoint")
             if end_session:
-                params = urlencode({"post_logout_redirect_uri": post_logout_redirect_uri})
+                params = urlencode({"post_logout_redirect_uri": safe_uri})
                 response = RedirectResponse(url=f"{end_session}?{params}", status_code=302)
                 response.delete_cookie("aisoc_token")
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("OIDC end_session discovery failed, falling back to local logout: %s", exc)
 
     return response

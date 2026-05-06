@@ -11,12 +11,7 @@ from __future__ import annotations
 
 from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
     FP_AUTOMATION,
-    FP_BACKUP,
-    FP_BREAK_GLASS,
-    FP_FORENSIC,
-    FP_PATCH,
     FP_PENTEST,
-    FP_TUNING,
     S,
 )
 

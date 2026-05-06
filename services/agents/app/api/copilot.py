@@ -14,6 +14,7 @@ unset so the demo path never breaks.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import uuid
@@ -95,14 +96,11 @@ _SYNTHETIC_REPLIES = [
     ),
 ]
 
-_reply_idx = 0
+_reply_cycle = itertools.cycle(_SYNTHETIC_REPLIES)
 
 
 def _synthetic_reply(user_msg: str) -> str:
-    global _reply_idx
-    reply = _SYNTHETIC_REPLIES[_reply_idx % len(_SYNTHETIC_REPLIES)]
-    _reply_idx += 1
-    return reply
+    return next(_reply_cycle)
 
 
 # ---------------------------------------------------------------------------

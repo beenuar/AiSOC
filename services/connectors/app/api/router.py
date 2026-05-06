@@ -150,22 +150,22 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"connector config does not match schema: {exc}",
         ) from exc
-    except Exception as exc:  # pragma: no cover - last-ditch
+    except Exception:  # pragma: no cover - last-ditch
         logger.exception("connector.test.constructor_error", connector_id=connector_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"failed to construct connector: {exc}",
-        ) from exc
+            detail="Failed to construct connector. Check your configuration.",
+        )
 
     try:
         result = await connector.test_connection()
-    except Exception as exc:  # pragma: no cover - connector misbehaving
+    except Exception:  # pragma: no cover - connector misbehaving
         # A well-behaved connector swallows its own errors and returns
         # {"success": False, "error": ...}. If one raises anyway, we
         # convert to the same shape so the wizard UI doesn't have two
         # error formats to deal with.
         logger.exception("connector.test.runtime_error", connector_id=connector_id)
-        result = {"success": False, "connector": connector_id, "error": str(exc)}
+        result = {"success": False, "connector": connector_id, "error": "Connection test failed"}
 
     if not isinstance(result, dict):
         # Defensive: some connectors might return None on success. Coerce.
@@ -221,12 +221,12 @@ async def run_federated_query(connector_id: str, payload: FederatedQueryRequest)
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
     except QueryError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except Exception as exc:
+    except Exception:
         logger.exception("connector.query.runtime_error", connector_id=connector_id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"backend query failed: {exc}",
-        ) from exc
+            detail="Backend query failed. Check connector configuration and connectivity.",
+        )
 
     return {
         "connector_id": connector_id,

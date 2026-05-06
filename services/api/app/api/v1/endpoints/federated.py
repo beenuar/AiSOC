@@ -157,12 +157,6 @@ class FederatedBackendsResponse(BaseModel):
 # ----------------------------------------------------------------------- helpers
 
 
-_QUERY_TIMEOUT = httpx.Timeout(
-    settings.CONNECTORS_SERVICE_TIMEOUT_SECONDS,
-    connect=min(5.0, settings.CONNECTORS_SERVICE_TIMEOUT_SECONDS),
-)
-
-
 def _connectors_query_url(connector_type: str) -> str:
     base = settings.CONNECTORS_SERVICE_URL.rstrip("/")
     return f"{base}/api/v1/connectors/{connector_type}/query"

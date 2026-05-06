@@ -6,6 +6,7 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 import structlog
@@ -56,18 +57,7 @@ class QdrantStore:
         texts = [self._ioc_to_text(ioc) for ioc in iocs]
         vectors = await self._embed(texts)
 
-        points = [
-            PointStruct(
-                id=i,
-                vector=vectors[i],
-                payload=iocs[i],
-            )
-            for i in range(len(iocs))
-        ]
-
-        # Qdrant expects integer IDs — use hash of value+type for stable IDs
-        import hashlib
-
+        # Use hash of value+type for stable integer IDs
         points = [
             PointStruct(
                 id=abs(int(hashlib.md5(f"{ioc['type']}:{ioc['value']}".encode()).hexdigest(), 16)) % (2**63),

@@ -339,11 +339,8 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
 function AIInvestigation({ alertId }: { alertId: string }) {
   const [investigation, setInvestigation] = useState<AgentInvestigation | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const startInvestigation = async () => {
     setIsRunning(true);
-    setError(null);
     try {
       const result = await agentsApi.investigate(alertId);
       setInvestigation(result);

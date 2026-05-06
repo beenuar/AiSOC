@@ -67,22 +67,22 @@ SOURCES: list[Source] = [
     Source(
         name="sigmahq",
         commit=SIGMA_COMMIT,
-        runner=lambda commit: sigma_importer.import_rules(commit),
+        runner=sigma_importer.import_rules,
     ),
     Source(
         name="car",
         commit=CAR_COMMIT,
-        runner=lambda commit: car_importer.import_rules(commit),
+        runner=car_importer.import_rules,
     ),
     Source(
         name="splunk",
         commit=SPLUNK_COMMIT,
-        runner=lambda commit: splunk_importer.import_rules(commit),
+        runner=splunk_importer.import_rules,
     ),
     Source(
         name="chronicle",
         commit=CHRONICLE_COMMIT,
-        runner=lambda commit: chronicle_importer.import_rules(commit),
+        runner=chronicle_importer.import_rules,
     ),
 ]
 

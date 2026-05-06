@@ -207,7 +207,7 @@ class GitHubConnector(BaseConnector):
                                 # all subsequent ones are also too old.
                                 break
                         except ValueError:
-                            pass
+                            pass  # unparseable timestamp; keep event without age filter
                     alert["_aisoc_stream"] = "code_scanning"
                     events.append(alert)
             elif cs_resp.status_code in (403, 404):

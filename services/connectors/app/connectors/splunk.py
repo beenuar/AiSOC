@@ -47,13 +47,28 @@ class SplunkConnector(BaseConnector):
                     required=False,
                     default="AiSOC_Alerts",
                 ),
+                Field(
+                    "ssl_verify",
+                    "boolean",
+                    "Verify SSL certificate",
+                    required=False,
+                    default=True,
+                    help_text="Disable only for self-signed certificates in private deployments.",
+                ),
             ],
         )
 
-    def __init__(self, base_url: str, token: str, saved_search: str = "AiSOC_Alerts"):
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        saved_search: str = "AiSOC_Alerts",
+        ssl_verify: bool = True,
+    ):
         self._base_url = base_url.rstrip("/")
         self._token = token
         self._saved_search = saved_search
+        self._ssl_verify = ssl_verify
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -62,7 +77,7 @@ class SplunkConnector(BaseConnector):
         }
 
     async def test_connection(self) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=self._ssl_verify) as client:
             try:
                 resp = await client.get(
                     f"{self._base_url}/services/server/info",
@@ -73,12 +88,13 @@ class SplunkConnector(BaseConnector):
                 version = resp.json().get("entry", [{}])[0].get("content", {}).get("version")
                 return {"success": True, "connector": self.connector_id, "version": version}
             except Exception as exc:
-                return {"success": False, "connector": self.connector_id, "error": str(exc)}
+                logger.warning("splunk.test_connection.failed", error_type=type(exc).__name__)
+                return {"success": False, "connector": self.connector_id, "error": "Connection failed"}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         search_query = f"search index=notable earliest=-{since_seconds}s | head 100"
 
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
             # Create search job
             resp = await client.post(
                 f"{self._base_url}/services/search/jobs",
@@ -126,7 +142,7 @@ class SplunkConnector(BaseConnector):
         """
         index = self._saved_search if self._saved_search.startswith("index=") else "notable"
         spl = to_spl(unified, index=index)
-        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
             resp = await client.post(
                 f"{self._base_url}/services/search/jobs",
                 headers=self._headers(),

@@ -10,9 +10,6 @@ application rules in ``detection_specs.APPLICATION`` (~25 stable rules).
 from __future__ import annotations
 
 from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
-    FP_AUTOMATION,
-    FP_FORENSIC,
-    FP_PATCH,
     FP_PENTEST,
     FP_TUNING,
     S,
