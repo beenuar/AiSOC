@@ -138,21 +138,6 @@ function broadcastToTenant(tenantId: string, message: { type: string } & Record<
   }
 }
 
-// Generic IP-based rate limiter factory.
-function makeRateLimiter(limit: number, windowMs: number) {
-  const counts = new Map<string, { count: number; resetAt: number }>();
-  return function rateLimitExceeded(ip: string): boolean {
-    const now = Date.now();
-    let entry = counts.get(ip);
-    if (!entry || now > entry.resetAt) {
-      entry = { count: 0, resetAt: now + windowMs };
-      counts.set(ip, entry);
-    }
-    entry.count += 1;
-    return entry.count > limit;
-  };
-}
-
 // Rate limiters using express-rate-limit (recognised by CodeQL js/missing-rate-limiting).
 const sseRateLimit = rateLimit({
   windowMs: 60_000,

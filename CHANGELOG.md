@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.1] — 2026-05-06
+
+### Security
+
+- **Log-injection mitigation** (`services/api/app/api/v1/endpoints/connectors.py`) —
+  `connector_type` originates from user-supplied query parameters and was previously
+  logged verbatim, leaving an injection path for newlines/control characters into
+  structured log records. A character-allowlist reconstructor (`_safe_connector_type`)
+  now strips every character outside `[a-zA-Z0-9_\-]` before the value reaches any
+  log call, breaking CodeQL's taint trace (alert `py/log-injection`).
+
+- **Remove dead rate-limiter code** (`services/realtime/src/index.ts`) —
+  The hand-rolled `makeRateLimiter` function was superseded by `express-rate-limit`
+  in the previous release but not removed, leaving dead code that masked the
+  effective rate-limiting path. The function is now deleted; `express-rate-limit`
+  is the sole limiter in production (resolves CodeQL alert `js/unused-local-variable`).
+
 ## [6.0.0] — 2026-05-06
 
 ### Added

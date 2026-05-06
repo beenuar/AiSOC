@@ -47,10 +47,20 @@ _CONNECTOR_TYPE_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,100}$")
 # records — prevents log-injection when values originate from user input.
 _LOG_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
+# Inverse of _CONNECTOR_TYPE_RE — remove any character NOT in the safe set.
+# Reconstructing the value this way breaks CodeQL's taint trace so the sanitised
+# string is provably free of control characters and path-separator sequences.
+_CONNECTOR_TYPE_UNSAFE_CHARS_RE = re.compile(r"[^a-zA-Z0-9_\-]")
+
 
 def _safe_log_val(value: str) -> str:
     """Return *value* with ASCII control characters removed, safe for logging."""
     return _LOG_CTRL_RE.sub("", value)
+
+
+def _safe_connector_type(value: str) -> str:
+    """Reconstruct connector_type keeping only allowed chars; breaks taint trace."""
+    return _CONNECTOR_TYPE_UNSAFE_CHARS_RE.sub("", value)[:100]
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -234,7 +244,7 @@ async def _proxy_test_connection(
     except httpx.HTTPError as exc:
         logger.warning(
             "connectors_service.test.unreachable connector_type=%s err=%s",
-            connector_type,
+            _safe_connector_type(connector_type),
             type(exc).__name__,
         )
         raise HTTPException(
