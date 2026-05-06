@@ -20,14 +20,38 @@
  *     local debugging).
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-const AGENTS_BASE = process.env.NEXT_PUBLIC_AGENTS_URL || '';
-const ACTIONS_BASE = process.env.NEXT_PUBLIC_ACTIONS_URL || '';
-const FUSION_BASE = process.env.NEXT_PUBLIC_FUSION_URL || '';
-const THREATINTEL_BASE = process.env.NEXT_PUBLIC_THREATINTEL_URL || '';
-const ENRICHMENT_BASE = process.env.NEXT_PUBLIC_ENRICHMENT_URL || '';
-const REALTIME_BASE = process.env.NEXT_PUBLIC_REALTIME_URL || '';
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || '';
+/**
+ * Returns `url` unchanged when running server-side or when `url` is already
+ * same-origin. In the browser, if `url` is cross-origin relative to the page,
+ * we fall back to `''` (same-origin) so Next.js rewrites can proxy the request.
+ *
+ * This prevents a misconfigured NEXT_PUBLIC_*_URL (e.g. pointing directly at
+ * api.tryaisoc.com) from bypassing the proxy and triggering CORS blocks.
+ */
+function safeBase(url: string): string {
+  if (!url) return '';
+  if (typeof window === 'undefined') return url; // SSR — let Next.js rewrites decide
+  try {
+    const envOrigin = new URL(url).origin;
+    if (envOrigin !== window.location.origin) {
+      // Cross-origin base detected. Fall back to same-origin so the Next.js
+      // rewrite proxy can handle the request without CORS issues.
+      return '';
+    }
+  } catch {
+    // Relative URL or invalid — use as-is (same-origin path is fine)
+  }
+  return url;
+}
+
+const API_BASE = safeBase(process.env.NEXT_PUBLIC_API_URL || '');
+const AGENTS_BASE = safeBase(process.env.NEXT_PUBLIC_AGENTS_URL || '');
+const ACTIONS_BASE = safeBase(process.env.NEXT_PUBLIC_ACTIONS_URL || '');
+const FUSION_BASE = safeBase(process.env.NEXT_PUBLIC_FUSION_URL || '');
+const THREATINTEL_BASE = safeBase(process.env.NEXT_PUBLIC_THREATINTEL_URL || '');
+const ENRICHMENT_BASE = safeBase(process.env.NEXT_PUBLIC_ENRICHMENT_URL || '');
+const REALTIME_BASE = safeBase(process.env.NEXT_PUBLIC_REALTIME_URL || '');
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || ''; // WS handled separately by wsOrigin()
 
 /**
  * Compute the WebSocket origin at call time.
