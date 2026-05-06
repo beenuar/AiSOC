@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
 
-from app.models.action import ACTION_BLAST_RADIUS, ActionRequest, ActionType, BlastRadius
+from app.models.action import ACTION_BLAST_RADIUS, ActionRequest, BlastRadius
 
 
 class MaturityTier(IntEnum):

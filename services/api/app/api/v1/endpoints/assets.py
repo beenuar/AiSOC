@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
-from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
+from app.models.asset import Asset, AssetVulnerability
 from app.models.tenant import User
 
 router = APIRouter(prefix="/assets", tags=["assets"])

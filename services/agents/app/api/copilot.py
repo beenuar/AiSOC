@@ -70,11 +70,31 @@ class CopilotConversation(BaseModel):
 _CONVERSATIONS: dict[str, dict[str, Any]] = {}
 
 _SYNTHETIC_REPLIES = [
-    "I've analysed the alert context. The activity matches T1078 (Valid Accounts) combined with T1021.002 (SMB/Windows Admin Shares) lateral movement. Recommend isolating the host and reviewing recent authentication logs.",
-    "Based on the indicators, this looks like credential-access activity. The parent process chain suggests a LOLBin pattern. Consider adding a detection rule for this specific chain.",
-    "The entity risk score is elevated due to multiple failed authentications followed by a successful login from an unusual geolocation. I recommend triggering a step-up MFA challenge.",
-    "Correlation across the last 24 hours shows this IP was seen in 3 other alerts. The MITRE mapping points to T1110 (Brute Force). Blocking the IP at the perimeter is the fastest remediation.",
-    "I've reviewed the case timeline. The attacker dwell time appears short (< 2 hours), suggesting this may be an automated credential-stuffing campaign rather than a targeted intrusion.",
+    (
+        "I've analysed the alert context. The activity matches T1078 (Valid Accounts) combined"
+        " with T1021.002 (SMB/Windows Admin Shares) lateral movement. Recommend isolating the"
+        " host and reviewing recent authentication logs."
+    ),
+    (
+        "Based on the indicators, this looks like credential-access activity. The parent process"
+        " chain suggests a LOLBin pattern. Consider adding a detection rule for this specific"
+        " chain."
+    ),
+    (
+        "The entity risk score is elevated due to multiple failed authentications followed by a"
+        " successful login from an unusual geolocation. I recommend triggering a step-up MFA"
+        " challenge."
+    ),
+    (
+        "Correlation across the last 24 hours shows this IP was seen in 3 other alerts. The MITRE"
+        " mapping points to T1110 (Brute Force). Blocking the IP at the perimeter is the fastest"
+        " remediation."
+    ),
+    (
+        "I've reviewed the case timeline. The attacker dwell time appears short (< 2 hours),"
+        " suggesting this may be an automated credential-stuffing campaign rather than a targeted"
+        " intrusion."
+    ),
 ]
 
 _reply_idx = 0

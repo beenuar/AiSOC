@@ -45,7 +45,7 @@ class UserRiskProfile(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    indicators: Mapped[list["InsiderIndicator"]] = relationship(
+    indicators: Mapped[list[InsiderIndicator]] = relationship(
         "InsiderIndicator", back_populates="profile", lazy="noload"
     )
 
@@ -70,7 +70,7 @@ class InsiderIndicator(Base):
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    profile: Mapped["UserRiskProfile"] = relationship("UserRiskProfile", back_populates="indicators")
+    profile: Mapped[UserRiskProfile] = relationship("UserRiskProfile", back_populates="indicators")
 
 
 class InsiderPeerGroup(Base):

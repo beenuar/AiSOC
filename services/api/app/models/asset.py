@@ -39,7 +39,7 @@ class Asset(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    vulnerabilities: Mapped[list["AssetVulnerability"]] = relationship(
+    vulnerabilities: Mapped[list[AssetVulnerability]] = relationship(
         "AssetVulnerability", back_populates="asset", lazy="noload"
     )
 
@@ -66,7 +66,7 @@ class AssetVulnerability(Base):
     metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    asset: Mapped["Asset"] = relationship("Asset", back_populates="vulnerabilities")
+    asset: Mapped[Asset] = relationship("Asset", back_populates="vulnerabilities")
 
 
 class AlertAssetCorrelation(Base):

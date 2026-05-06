@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
@@ -224,7 +223,7 @@ async def list_metrics(
     children_result = await db.execute(
         select(Tenant.id).where(Tenant.parent_tenant_id == current_user.tenant_id)
     )
-    child_ids = [r for r in children_result.scalars().all()]
+    child_ids = list(children_result.scalars().all())
     if not child_ids:
         return []
 
