@@ -1,11 +1,9 @@
 module github.com/beenuar/aisoc/enrichment
 
-go 1.21
-
-toolchain go1.21.1
+go 1.22
 
 require (
-	github.com/go-chi/chi/v5 v5.0.11
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/cors v1.2.2
 	github.com/redis/go-redis/v9 v9.4.0
 	github.com/rs/zerolog v1.32.0
