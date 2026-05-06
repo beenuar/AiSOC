@@ -9,7 +9,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
-[![Version](https://img.shields.io/badge/version-5.2.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.0.0-f59e0b?style=flat-square)](CHANGELOG.md)
 
 [Live demo](https://tryaisoc.com) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
@@ -102,6 +102,14 @@ AiSOC bundles the components a SOC normally pieces together from separate vendor
 - **Validate coverage** with automated Atomic Red Team and Caldera adversary emulation.
 - **Respond** with blast-radius-aware SOAR actions, every step explainable.
 - **Govern** with multi-tenant RLS, granular RBAC, immutable audit logs, and SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA evidence dashboards.
+- **Manage at scale** with an MSSP parent-tenant console — onboard child tenants, delegate actions cross-tenant, and view rollup metrics in one pane.
+- **Track assets** with an asset inventory that auto-correlates vulnerabilities to alerts and surfaces asset blast radius.
+- **Detect insider threats** with user risk profiles, behavioural indicators, and peer-group deviation scoring.
+- **Gate automation** through L0–L4 maturity tiers — each tier unlocks progressively more autonomous remediation, with per-action whitelist and full audit gate log.
+- **Generate internal threat intelligence** — harvest IOCs from alert history, track threat actors and campaigns, subscribe to external STIX/TAXII feeds, all queryable via the REST API.
+- **Assess cloud posture** with a built-in CSPM/KSPM engine that ingests findings, tracks drift between scan runs, and surfaces a per-provider summary with suppress/resolve workflows.
+- **Correlate through identities** with a graph of users, devices, and service accounts; link alerts to identity nodes for blast-radius queries and attack-path reconstruction.
+- **Automate board reporting** — schedule PDF/HTML executive summaries, store artefacts, and deliver via email or webhook.
 
 Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 
