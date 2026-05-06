@@ -3,6 +3,7 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "ignoreDeprecations": "5.0",
     "lib": ["ES2020", "DOM"],
     "strict": true,
     "declaration": true,

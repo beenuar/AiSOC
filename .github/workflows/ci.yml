@@ -29,8 +29,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm tsc --noEmit
+      - run: pnpm run lint
+      - run: pnpm run type-check
 
   # ──────────────────────────────────────────────
   # Vitest smoke tests for the Next.js web app
@@ -158,7 +158,7 @@ jobs:
           ENVIRONMENT: development
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
-        run: pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short
       - name: Run agents unit tests (Pillar-1 eval suites + audit helpers)
         # `test_audit_helpers.py` imports `app.investigator.state` directly
         # (it stubs out the package __init__ to avoid pulling in LangGraph),
@@ -194,7 +194,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Install minimal deps
-        run: pip install --quiet pydantic pydantic-settings pytest
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis
       - name: Run fusion unit tests
         working-directory: services/fusion
         run: python -m pytest tests/ -v --tb=short
@@ -375,6 +375,8 @@ jobs:
           else
             echo "No baseline yet — first run will publish one."
           fi
+      - name: Install eval dependencies
+        run: pip install --quiet pyyaml pytest pytest-asyncio structlog
       - name: Run all eval suites
         # On PRs we additionally gate against the published baseline so a
         # detection-as-code merge that drops MITRE accuracy by ≥ 1pp blocks
