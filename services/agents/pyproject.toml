@@ -15,7 +15,7 @@ langchain = "^0.1.0"
 langchain-core = "^0.1.0"
 langchain-openai = "^0.0.5"
 langgraph = "^0.0.30"
-langchain-community = "^0.0.20"
+langchain-community = ">=0.0.20,<0.0.39"
 openai = "^1.12.0"
 redis = {extras = ["hiredis"], version = "^5.0.1"}
 httpx = "^0.26.0"
