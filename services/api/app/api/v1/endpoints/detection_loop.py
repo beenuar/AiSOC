@@ -25,11 +25,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.api.v1.deps import AuthUser, DBSession
 from app.core.config import settings
 
 router = APIRouter(prefix="/detection-loop", tags=["detection_rules", "detection_loop"])

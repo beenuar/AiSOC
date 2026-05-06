@@ -271,10 +271,31 @@ async function startKafkaConsumer() {
 // --- Web Push routes (Phase 4B mobile responder PWA) ---
 // Public key is needed by the browser to subscribe; the rest are
 // authenticated routes the API gateway forwards on behalf of a user.
+// Rate-limit push mutation routes: 20 req / min per IP to prevent abuse.
+const pushSubscribeRateLimitExceeded = makeRateLimiter(20, 60_000);
+
+function pushRateLimit(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  const ip =
+    (req.headers['x-forwarded-for'] as string | undefined)
+      ?.split(',')[0]
+      ?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
+  if (pushSubscribeRateLimitExceeded(ip)) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
+  next();
+}
+
 app.get('/v1/push/public-key', pushManager.publicKeyHandler);
-app.post('/v1/push/subscribe', pushManager.subscribeHandler);
-app.post('/v1/push/unsubscribe', pushManager.unsubscribeHandler);
-app.post('/v1/push/test', pushManager.testNotifyHandler);
+app.post('/v1/push/subscribe', pushRateLimit, pushManager.subscribeHandler);
+app.post('/v1/push/unsubscribe', pushRateLimit, pushManager.unsubscribeHandler);
+app.post('/v1/push/test', pushRateLimit, pushManager.testNotifyHandler);
 
 // --- Internal broadcast endpoint (called by other services) ---
 // POST /internal/agent-event

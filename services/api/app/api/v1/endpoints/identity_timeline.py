@@ -17,13 +17,15 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+import structlog
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 
 router = APIRouter(prefix="/identity-timeline", tags=["identity_timeline"])
+log = structlog.get_logger(__name__)
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic schemas
@@ -66,14 +68,6 @@ class BuildTimelineRequest(BaseModel):
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ────────────────────────────────────────────────────────────────────────────
-
-_FIELD_MAP: dict[IdentityKind, list[str]] = {
-    "user": ["user", "username", "src_user", "dest_user", "actor"],
-    "device": ["hostname", "device", "src_host", "computer_name"],
-    "service_account": ["service_account", "svc_account", "process_user"],
-    "ip": ["src_ip", "source_ip", "ip_address", "remote_ip"],
-}
-
 
 def _risk_score(events: list[TimelineEvent]) -> float:
     """Simple heuristic: sum severity weights, cap at 100."""
@@ -148,8 +142,8 @@ async def build_timeline(
                     raw=row.evidence,
                 )
             )
-    except Exception:
-        pass  # table may not exist in all deployments
+    except Exception as exc:
+        log.debug("aisoc_alerts table not available; skipping", error=str(exc))
 
     # ── 2. Raw events from aisoc_events (if table exists) ──────────────────
     try:
@@ -183,8 +177,8 @@ async def build_timeline(
                     raw=row.raw_event,
                 )
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("aisoc_events table not available; skipping", error=str(exc))
 
     # ── 3. Sort chronologically ─────────────────────────────────────────────
     events.sort(key=lambda e: e.timestamp)

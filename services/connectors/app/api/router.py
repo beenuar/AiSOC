@@ -25,6 +25,7 @@ service's lifespan), not in this router.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import structlog
@@ -37,6 +38,17 @@ from app.federated.query import QueryError, parse_unified_query
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _safe_log_val(value: str) -> str:
+    """Strip ASCII control characters (incl. newlines) from a string before logging.
+
+    Prevents log-injection attacks where a user-controlled value such as a
+    connector_id could embed newline sequences that forge extra log lines.
+    """
+    return _CTRL_RE.sub("", value)
 
 
 class TestConnectionRequest(BaseModel):
@@ -151,7 +163,7 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
             detail=f"connector config does not match schema: {exc}",
         ) from exc
     except Exception:  # pragma: no cover - last-ditch
-        logger.exception("connector.test.constructor_error", connector_id=connector_id)
+        logger.exception("connector.test.constructor_error", connector_id=_safe_log_val(connector_id))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to construct connector. Check your configuration.",
@@ -164,7 +176,7 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
         # {"success": False, "error": ...}. If one raises anyway, we
         # convert to the same shape so the wizard UI doesn't have two
         # error formats to deal with.
-        logger.exception("connector.test.runtime_error", connector_id=connector_id)
+        logger.exception("connector.test.runtime_error", connector_id=_safe_log_val(connector_id))
         result = {"success": False, "connector": connector_id, "error": "Connection test failed"}
 
     if not isinstance(result, dict):
@@ -222,7 +234,7 @@ async def run_federated_query(connector_id: str, payload: FederatedQueryRequest)
     except QueryError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except Exception:
-        logger.exception("connector.query.runtime_error", connector_id=connector_id)
+        logger.exception("connector.query.runtime_error", connector_id=_safe_log_val(connector_id))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Backend query failed. Check connector configuration and connectivity.",

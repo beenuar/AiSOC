@@ -235,7 +235,7 @@ async def oidc_callback(
         }
     )
 
-    redirect_url = state_data.get("redirect", "/")
+    redirect_url = _safe_redirect(state_data.get("redirect", "/"))
     response = RedirectResponse(url=redirect_url, status_code=302)
     response.set_cookie("aisoc_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
     response.delete_cookie("oidc_state")

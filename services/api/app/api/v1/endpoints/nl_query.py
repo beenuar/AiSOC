@@ -17,15 +17,39 @@ import textwrap
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser
 from app.core.config import settings
 
 router = APIRouter(prefix="/nl-query", tags=["nl_query"])
+
+
+def _validate_es_url(url: str) -> str:
+    """Validate that *url* matches the configured Elasticsearch/OpenSearch host.
+
+    Raises ValueError if the host or scheme does not match, preventing SSRF
+    by ensuring the client can only reach the pre-approved endpoint.
+    """
+    allowed_raw = (
+        getattr(settings, "ES_URL", None)
+        or getattr(settings, "ELASTICSEARCH_URL", None)
+        or getattr(settings, "OPENSEARCH_URL", "http://localhost:9200")
+    )
+    allowed = urlparse(allowed_raw)
+    candidate = urlparse(url)
+    if candidate.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {candidate.scheme!r}")
+    if candidate.netloc != allowed.netloc:
+        raise ValueError(
+            f"ES URL host {candidate.netloc!r} is not the configured host "
+            f"{allowed.netloc!r}"
+        )
+    return url
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic schemas
@@ -178,6 +202,12 @@ async def _execute_esql(
     esql: str, es_url: str, es_api_key: str, max_rows: int
 ) -> QueryResult:
     """Run an ES|QL query against Elasticsearch and return structured results."""
+    # Validate URL against configured host before making any outbound request.
+    try:
+        safe_url = _validate_es_url(es_url)
+    except ValueError as exc:
+        raise httpx.RequestError(str(exc)) from exc
+
     # Ensure LIMIT clause
     query = esql if "| LIMIT" in esql.upper() else f"{esql}\n| LIMIT {max_rows}"
     import time
@@ -185,7 +215,7 @@ async def _execute_esql(
     t0 = time.monotonic()
     async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.post(
-            f"{es_url.rstrip('/')}/_query",
+            f"{safe_url.rstrip('/')}/_query",
             headers={
                 "Authorization": f"ApiKey {es_api_key}",
                 "Content-Type": "application/json",
