@@ -26,6 +26,7 @@ const sidebars: SidebarsConfig = {
         "connectors/google-workspace",
         "connectors/cloudflare",
         "connectors/github",
+        "connectors/tailscale",
       ],
     },
     {

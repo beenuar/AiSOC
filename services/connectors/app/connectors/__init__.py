@@ -32,6 +32,7 @@ from app.connectors.m365_audit import M365AuditConnector
 from app.connectors.microsoft_sentinel import MicrosoftSentinelConnector
 from app.connectors.okta import OktaConnector
 from app.connectors.splunk import SplunkConnector
+from app.connectors.tailscale import TailscaleConnector
 
 if TYPE_CHECKING:
     pass
@@ -55,6 +56,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     MicrosoftSentinelConnector,
     OktaConnector,
     SplunkConnector,
+    TailscaleConnector,
 )
 
 
@@ -108,6 +110,7 @@ __all__ = [
     "OAuthHints",
     "OktaConnector",
     "SplunkConnector",
+    "TailscaleConnector",
     "get_connector_class",
     "list_connector_schemas",
 ]

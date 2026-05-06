@@ -1,7 +1,7 @@
 {
   "$schema": "https://aisoc.dev/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-05T22:11:19Z",
+  "generated": "2026-05-06T08:25:33Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,19 +20,20 @@
     }
   ],
   "stats": {
-    "total": 6987,
+    "total": 6989,
     "playbooks": 50,
-    "detections": 6913,
-    "plugins": 24,
-    "verified": 874,
+    "detections": 6914,
+    "plugins": 25,
+    "verified": 875,
     "community": 0,
     "by_tier": {
+      "beta": 1,
       "imported": 6113,
-      "stable": 874
+      "stable": 875
     },
     "detections_by_tier": {
       "imported": 6113,
-      "stable": 800
+      "stable": 801
     },
     "quarantined": 5937
   },
@@ -152,7 +153,7 @@
       "T1070.006": 6,
       "T1070.008": 7,
       "T1071": 12,
-      "T1071.001": 53,
+      "T1071.001": 54,
       "T1071.002": 1,
       "T1071.003": 3,
       "T1071.004": 23,
@@ -163,7 +164,7 @@
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 11,
-      "T1078.004": 91,
+      "T1078.004": 92,
       "T1082": 49,
       "T1083": 28,
       "T1087": 21,
@@ -372,7 +373,7 @@
       "T1552.002": 7,
       "T1552.003": 3,
       "T1552.004": 14,
-      "T1552.005": 2,
+      "T1552.005": 3,
       "T1552.006": 7,
       "T1552.007": 9,
       "T1553": 4,
@@ -531,7 +532,7 @@
       "T1690": 1
     },
     "unique_techniques": 491,
-    "total_with_mitre": 5710,
+    "total_with_mitre": 5711,
     "by_tier": {
       "stable": {
         "T1003": 2,
@@ -576,14 +577,14 @@
         "T1070.002": 1,
         "T1070.003": 2,
         "T1071": 2,
-        "T1071.001": 9,
+        "T1071.001": 10,
         "T1071.004": 5,
         "T1074.001": 1,
         "T1078": 35,
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 1,
-        "T1078.004": 32,
+        "T1078.004": 33,
         "T1083": 2,
         "T1087.001": 2,
         "T1087.002": 5,
@@ -683,7 +684,7 @@
         "T1552": 1,
         "T1552.001": 12,
         "T1552.004": 2,
-        "T1552.005": 1,
+        "T1552.005": 2,
         "T1552.007": 1,
         "T1553": 1,
         "T1553.001": 4,
@@ -34399,6 +34400,31 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/cloud/cloud-org-rootmail-modified.yaml"
+    },
+    {
+      "id": "det-cloud-191",
+      "type": "detection",
+      "name": "AWS GuardDuty \u2014 UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration",
+      "description": "Detects GuardDuty HIGH-severity finding that EC2 instance credentials (obtained via the IMDS) were used from an IP address outside of AWS \u2014 a strong signal of instance metadata theft and subsequent exfiltration of the temporary credentials to an attacker-controlled host. GuardDuty generates this when the calling IP is publicly routable and does not belong to the originating EC2 instance's region.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1552.005",
+        "T1078.004",
+        "T1071.001"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-credential-access",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/aws-guardduty-instance-credential-exfiltration.yaml"
     },
     {
       "id": "det-data-exfil-001",
@@ -222183,6 +222209,32 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/tailscale-acl/plugin.yaml"
+    },
+    {
+      "id": "tailscale-connector",
+      "type": "plugin",
+      "name": "Tailscale Connector",
+      "description": "Tailscale zero-trust network audit log connector. Ingests every administrative action from your tailnet:  ACL/policy changes, device approvals and removals, key rotations, user role changes, exit-node and subnet-router updates, OIDC/SAML configuration mutations, and more. Supports both long-lived API keys and OAuth 2.0 client-credential flow for production deployments.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "network",
+        "zero-trust",
+        "vpn",
+        "tailscale",
+        "audit",
+        "iam"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/plugins/tailscale-connector",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": false,
+      "source": "core",
+      "tier": "beta",
+      "path": "plugins/tailscale-connector/plugin.yaml"
     },
     {
       "id": "twilio-sms",

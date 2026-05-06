@@ -1,0 +1,45 @@
+id: tailscale-connector
+name: Tailscale Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Tailscale zero-trust network audit log connector.
+  Ingests every administrative action from your tailnet:  ACL/policy changes,
+  device approvals and removals, key rotations, user role changes, exit-node
+  and subnet-router updates, OIDC/SAML configuration mutations, and more.
+  Supports both long-lived API keys and OAuth 2.0 client-credential flow for
+  production deployments.
+author: AiSOC Core Team
+tags:
+  - network
+  - zero-trust
+  - vpn
+  - tailscale
+  - audit
+  - iam
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/tailscale-connector
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tailnet]
+  properties:
+    tailnet:
+      type: string
+      description: >
+        Your tailnet name (organisation slug or email address shown in the
+        Tailscale admin console).  Use '-' to use the default tailnet of the
+        authenticated token.
+    api_key:
+      type: string
+      description: >
+        Tailscale API key (starts with 'tskey-api-').
+        Use this *or* the OAuth client credentials below — not both.
+      secret: true
+    client_id:
+      type: string
+      description: OAuth 2.0 client ID (from the Tailscale admin console).
+    client_secret:
+      type: string
+      description: OAuth 2.0 client secret.
+      secret: true
