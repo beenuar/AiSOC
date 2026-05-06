@@ -2,7 +2,7 @@
  * AiSOC Alert and Incident types
  */
 
-import type { OcsfAttack, OcsfDevice, OcsfNetworkEndpoint, OcsfObservable, OcsfUser, Severity, SeverityId } from "./ocsf";
+import type { OcsfDevice, OcsfNetworkEndpoint, OcsfObservable, OcsfUser, Severity, SeverityId } from "./ocsf";
 
 export type AlertStatus =
   | "new"
