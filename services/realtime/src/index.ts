@@ -157,10 +157,13 @@ const SSE_RATE_LIMIT = 20;
 const SSE_RATE_WINDOW_MS = 60_000;
 const sseRateLimitExceeded = makeRateLimiter(SSE_RATE_LIMIT, SSE_RATE_WINDOW_MS);
 
-// Rate limiter for the internal agent-event endpoint: max 200 req/s per IP.
+// Rate limiter for the internal agent-event endpoint: max 200 req/min per IP.
 // This endpoint is internal-only (token-gated) but we still rate-limit to
 // protect against misconfigured or runaway callers.
 const internalEventRateLimitExceeded = makeRateLimiter(200, 60_000);
+
+// Rate limiter for the internal push endpoint: max 200 req/min per IP.
+const internalPushRateLimitExceeded = makeRateLimiter(200, 60_000);
 
 // --- SSE endpoint ---
 app.get('/sse', (req, res) => {
@@ -294,6 +297,15 @@ function requireInternal(req: express.Request, res: express.Response): boolean {
 // `internal/agent-event`.
 app.post('/internal/push', async (req, res) => {
   if (!requireInternal(req, res)) return;
+
+  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+    || req.socket.remoteAddress
+    || 'unknown';
+  if (internalPushRateLimitExceeded(ip)) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
+
   await pushManager.internalNotifyHandler(req, res);
 });
 
