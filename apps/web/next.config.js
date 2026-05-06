@@ -17,6 +17,7 @@ const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8001';
 // We surface those to the browser under the same-origin namespace
 // /api/v1/fusion/* so the bundle stays host-agnostic.
 const FUSION_HOST = process.env.FUSION_URL || 'http://localhost:8082';
+const ENRICHMENT_HOST = process.env.ENRICHMENT_URL || 'http://localhost:8083';
 
 const nextConfig = {
   reactStrictMode: true,
@@ -78,10 +79,9 @@ const nextConfig = {
         source: '/api/v1/realtime/healthz',
         destination: `${REALTIME_HOST}/healthz`,
       },
-      // Agents service owns contextual actions, playbooks, and investigations.
-      // These must come before the `/api/v1/:path*` catch-all so they don't
-      // get sent to the core API (which doesn't have those routes and would
-      // 503).
+      // Agents service owns contextual actions, playbooks, investigations,
+      // hunt search, and copilot chat. These must come before the
+      // `/api/v1/:path*` catch-all so they don't get sent to the core API.
       {
         source: '/api/v1/contextual/:path*',
         destination: `${AGENTS_HOST}/api/v1/contextual/:path*`,
@@ -101,6 +101,42 @@ const nextConfig = {
       {
         source: '/api/v1/investigations',
         destination: `${AGENTS_HOST}/api/v1/investigations`,
+      },
+      // Hunt search + saved searches (singular /hunt, distinct from /hunts corpus)
+      {
+        source: '/api/v1/hunt/:path*',
+        destination: `${AGENTS_HOST}/api/v1/hunt/:path*`,
+      },
+      {
+        source: '/api/v1/hunt',
+        destination: `${AGENTS_HOST}/api/v1/hunt`,
+      },
+      // Copilot persistent chat conversations
+      {
+        source: '/api/v1/copilot/:path*',
+        destination: `${AGENTS_HOST}/api/v1/copilot/:path*`,
+      },
+      {
+        source: '/api/v1/copilot',
+        destination: `${AGENTS_HOST}/api/v1/copilot`,
+      },
+      // Hunt corpus management (plural /hunts)
+      {
+        source: '/api/v1/hunts/:path*',
+        destination: `${AGENTS_HOST}/api/v1/hunts/:path*`,
+      },
+      {
+        source: '/api/v1/hunts',
+        destination: `${AGENTS_HOST}/api/v1/hunts`,
+      },
+      // Enrichment service (Go service; paths differ from /api/v1 prefix)
+      {
+        source: '/api/v1/enrichment/lookup',
+        destination: `${ENRICHMENT_HOST}/enrich`,
+      },
+      {
+        source: '/api/v1/enrichment/bulk',
+        destination: `${ENRICHMENT_HOST}/enrich/bulk`,
       },
       // Fusion service exposes the Risk-Based Alerting (entity rollup) queue
       // and ML scoring endpoints at its own root (no /api/v1 prefix on the

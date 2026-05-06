@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.contextual import router as contextual_router
+from app.api.copilot import router as copilot_router
+from app.api.hunt_search import router as hunt_search_router
 from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
 from app.api.playbooks import router as playbook_router
@@ -121,6 +123,8 @@ app.include_router(investigate_router)  # prefix already set in investigate.py
 app.include_router(playbook_router)  # prefix: /api/v1/playbooks
 app.include_router(contextual_router)  # prefix: /api/v1/contextual
 app.include_router(hunts_router)  # prefix: /api/v1/hunts
+app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)
+app.include_router(copilot_router)  # prefix: /api/v1/copilot
 
 
 @app.get("/health")

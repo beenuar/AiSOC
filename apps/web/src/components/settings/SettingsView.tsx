@@ -1312,7 +1312,7 @@ function AboutPanel() {
         description="Open-source SOC platform — community-built, MIT licensed."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Version" value="v5.2.0" />
+        <InfoTile label="Version" value="v6.0.0" />
         <InfoTile label="Build" value="local • dev" />
         <InfoTile label="License" value="MIT" />
         <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />

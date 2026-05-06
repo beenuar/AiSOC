@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     insider_threat,
     investigations,
     marketplace,
+    metrics,
     mssp,
     oncall,
     passkeys,
@@ -55,6 +56,7 @@ api_router.include_router(marketplace.router)
 api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(compliance.router)
+api_router.include_router(metrics.router)
 api_router.include_router(sla.router)
 api_router.include_router(investigations.router)
 

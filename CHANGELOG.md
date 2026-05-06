@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] — 2026-05-06
+
+### Added
+
+#### Wave 3 — Operational Maturity
+
+- **MSSP / parent-tenant console** (`services/api/migrations/012_mssp_console.sql`,
+  `services/api/app/models/mssp.py`, `services/api/app/api/v1/endpoints/mssp.py`) —
+  Parent tenants can onboard child tenants, manage cross-tenant delegations, add
+  per-tenant notes, and view an aggregated metrics rollup in a single pane.
+
+- **Asset inventory + vuln-to-alert correlation** (`services/api/migrations/013_asset_inventory.sql`,
+  `services/api/app/models/asset.py`, `services/api/app/api/v1/endpoints/assets.py`) —
+  CRUD for discovered assets with vulnerability findings auto-correlated to alerts.
+  Surfaces asset blast radius and enables asset-context enrichment during triage.
+
+- **Insider threat module** (`services/api/migrations/014_insider_threat.sql`,
+  `services/api/app/models/insider_threat.py`,
+  `services/api/app/api/v1/endpoints/insider_threat.py`) —
+  User risk profiles, behavioural indicators, peer-group deviation scoring, and
+  watchlist management. Risk scores update incrementally as new indicators arrive.
+
+- **L0–L4 auto-remediation maturity tiers** (`services/api/migrations/015_remediation_maturity.sql`,
+  `services/api/app/models/remediation.py`,
+  `services/api/app/api/v1/endpoints/remediation.py`,
+  `services/actions/app/services/maturity.py`) —
+  Per-tenant configuration of remediation autonomy from L0 (manual only) through L4
+  (fully autonomous). Gate log records every approve/block decision. Per-action whitelist
+  pre-approves low-risk actions regardless of tier.
+
+#### Wave 4 — Advanced Capabilities
+
+- **Internal threat intelligence** (`services/api/migrations/016_threat_intel.sql`,
+  `services/api/app/models/threat_intel.py`,
+  `services/api/app/api/v1/endpoints/threat_intel.py`) —
+  IOC harvesting from alert history, threat actor and campaign profiles, and STIX/TAXII
+  feed subscription management, all queryable via the REST API.
+
+- **Cloud security posture management (CSPM/KSPM)** (`services/api/migrations/017_cspm.sql`,
+  `services/api/app/models/posture.py`, `services/api/app/api/v1/endpoints/posture.py`) —
+  Ingests posture findings from cloud providers, tracks drift between scan runs, and
+  surfaces a per-provider posture summary with suppress/resolve workflows.
+
+- **Identity-centric correlation graph** (`services/api/migrations/018_identity_graph.sql`,
+  `services/api/app/models/identity_graph.py`,
+  `services/api/app/api/v1/endpoints/identity_graph.py`) —
+  Graph of users, devices, service accounts, and roles with typed relationship edges.
+  Alerts link to identity nodes, enabling blast-radius queries and attack-path
+  reconstruction.
+
+- **Auto-generated board reports** (`services/api/migrations/019_board_reports.sql`,
+  `services/api/app/models/report.py`, `services/api/app/api/v1/endpoints/reports.py`) —
+  Report templates and scheduled generation of PDF/HTML executive summaries. Artefacts
+  are stored, versioned, and deliverable via email or webhook.
+
+#### Platform
+
+- **Dashboard metrics API** (`services/api/app/api/v1/endpoints/metrics.py`) —
+  `/api/v1/metrics/dashboard` aggregates alert KPIs, case counts, connector source
+  stats, top MITRE tactics, 24-hour alert trend, and threats-by-source for the
+  frontend dashboard tiles. `/api/v1/metrics/alerts/trend` supports `1h / 24h / 7d / 30d`
+  period buckets.
+
+- **Tailscale connector** (`services/connectors/app/connectors/tailscale.py`) —
+  Pulls audit logs and policy-file change events from the Tailscale API with
+  OAuth client-credential and API-key auth, cursor-based pagination, and four-tier
+  severity mapping.
+
+- **AWS GuardDuty credential-exfiltration detection** (`detections/cloud/aws-guardduty-instance-credential-exfiltration.yaml`) —
+  Sigma rule covering EC2 instance credential exfiltration via `UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration`.
+
+---
+
 ### Click-and-connect cloud connector platform
 
 This pass turns connectors from a hardcoded, code-edit-only feature into a

@@ -92,29 +92,27 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ---
 
-## v6.0 — Planned
+## v6.0 — Shipped (2026-05-06)
 
-### Investigation & Forensics Depth
-- Super-timeline view (Plaso-style, all event sources on one scrubbable axis)
-- Process tree and lateral movement graph (extending `graph_service.py`)
-- PCAP viewer and network session reconstruction
-- Memory and disk artifact viewer (Volatility / Velociraptor integration)
-- Evidence vault — signed, hashed, chain-of-custody for every artifact
+### Wave 3 — Operational Maturity
 
-### Data Source Breadth
-- Identity: Okta, Azure AD/Entra, Google Workspace, Duo (full production connectors)
-- Cloud: AWS CloudTrail/GuardDuty, Azure Defender, GCP Security Command Center, Kubernetes audit + Falco
-- EDR: CrowdStrike Falcon, SentinelOne, Microsoft Defender for Endpoint, Wazuh
-- Email: Gmail/Workspace, Microsoft 365, Mimecast, Proofpoint — phishing triage agent
-- Network: Zeek, Suricata/NFSen, NDR (Arkime/Stenographer)
-- STIX/TAXII server (both consume and serve IOCs)
-- MISP and OpenCTI federation
+- [x] MSSP / parent-tenant console — onboard child tenants, delegate cross-tenant actions, view rollup metrics
+- [x] Asset inventory + vuln-to-alert correlation — asset CRUD, vulnerability findings, blast-radius context
+- [x] Insider threat module — user risk profiles, behavioural indicators, peer-group deviation scoring
+- [x] L0–L4 auto-remediation maturity tiers — per-tenant autonomy gate with audit log and per-action whitelist
 
-### Attack Surface & Vulnerability
-- ASM / CTEM module — external attack surface discovery feeding TI
-- CVE + EPSS + KEV joined to asset inventory for vuln↔alert correlation
-- ITDR (Identity Threat Detection & Response) module
-- CSPM / CNAPP lite — cloud misconfiguration with runtime correlation
+### Wave 4 — Advanced Capabilities
+
+- [x] Internal threat intelligence — IOC harvesting, threat actor profiles, STIX/TAXII feed subscriptions
+- [x] Cloud security posture management (CSPM/KSPM) — posture findings, drift tracking, suppress/resolve workflows
+- [x] Identity-centric correlation graph — identity node/edge graph, alert-to-identity linking, attack-path queries
+- [x] Auto-generated board reports — report templates, scheduled PDF/HTML artefacts, email/webhook delivery
+
+### Platform
+
+- [x] Dashboard metrics API — aggregated KPI endpoint powering frontend dashboard tiles
+- [x] Tailscale connector — audit log and policy-change events with cursor-based pagination
+- [x] AWS GuardDuty credential-exfiltration Sigma detection rule
 
 ---
 
