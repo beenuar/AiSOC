@@ -277,10 +277,10 @@ async def execute_query(
         body.question, body.index_pattern, body.time_range_hours
     )
 
-    es_url = (
-        body.es_url
-        or getattr(settings, "ES_URL", None)
-        or getattr(settings, "ELASTICSEARCH_URL", None)
+    # Always read the ES URL from server-side settings — never from user-supplied
+    # body fields — to prevent partial-SSRF attacks (CodeQL py/partial-ssrf).
+    es_url = getattr(settings, "ES_URL", None) or getattr(
+        settings, "ELASTICSEARCH_URL", None
     )
     es_api_key = body.es_api_key or getattr(settings, "ES_API_KEY", None)
 

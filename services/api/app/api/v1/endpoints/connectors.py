@@ -233,9 +233,9 @@ async def _proxy_test_connection(
             resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
         logger.warning(
-            "connectors_service.test.unreachable url=%s err=%s",
-            _safe_log_val(url),
-            str(exc).replace("\n", " ").replace("\r", " "),
+            "connectors_service.test.unreachable connector_type=%s err=%s",
+            connector_type,
+            type(exc).__name__,
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

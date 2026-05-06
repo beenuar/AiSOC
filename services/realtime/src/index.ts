@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import { Kafka } from 'kafkajs';
 import Redis from 'ioredis';
 import pino from 'pino';
+import rateLimit from 'express-rate-limit';
 
 import { PushManager } from './push';
 
@@ -152,74 +153,30 @@ function makeRateLimiter(limit: number, windowMs: number) {
   };
 }
 
-// Simple IP-based rate limiter for SSE: max 20 connections per IP per minute.
-const SSE_RATE_LIMIT = 20;
-const SSE_RATE_WINDOW_MS = 60_000;
-const sseRateLimitExceeded = makeRateLimiter(SSE_RATE_LIMIT, SSE_RATE_WINDOW_MS);
+// Rate limiters using express-rate-limit (recognised by CodeQL js/missing-rate-limiting).
+const sseRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
 
-// Rate limiter for the internal agent-event endpoint: max 200 req/min per IP.
-// This endpoint is internal-only (token-gated) but we still rate-limit to
-// protect against misconfigured or runaway callers.
-const internalEventRateLimitExceeded = makeRateLimiter(200, 60_000);
+const internalEventRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
 
-// Rate limiter for the internal push endpoint: max 200 req/min per IP.
-const internalPushRateLimitExceeded = makeRateLimiter(200, 60_000);
-
-// Express middleware wrappers so CodeQL recognises these as rate-limiting guards
-// (the inline-check pattern is not detected by CodeQL's js/missing-rate-limiting query).
-function sseRateLimit(
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction,
-): void {
-  const ip =
-    (req.headers['x-forwarded-for'] as string | undefined)
-      ?.split(',')[0]
-      ?.trim() ||
-    req.socket.remoteAddress ||
-    'unknown';
-  if (sseRateLimitExceeded(ip)) {
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
-  next();
-}
-
-function internalEventRateLimit(
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction,
-): void {
-  const ip =
-    (req.headers['x-forwarded-for'] as string | undefined)
-      ?.split(',')[0]
-      ?.trim() ||
-    req.socket.remoteAddress ||
-    'unknown';
-  if (internalEventRateLimitExceeded(ip)) {
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
-  next();
-}
-
-function internalPushRateLimit(
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction,
-): void {
-  const ip =
-    (req.headers['x-forwarded-for'] as string | undefined)
-      ?.split(',')[0]
-      ?.trim() ||
-    req.socket.remoteAddress ||
-    'unknown';
-  if (internalPushRateLimitExceeded(ip)) {
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
-  next();
-}
+const internalPushRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
 
 // --- SSE endpoint ---
 app.get('/sse', sseRateLimit, (req, res) => {
@@ -321,25 +278,13 @@ async function startKafkaConsumer() {
 // Public key is needed by the browser to subscribe; the rest are
 // authenticated routes the API gateway forwards on behalf of a user.
 // Rate-limit push mutation routes: 20 req / min per IP to prevent abuse.
-const pushSubscribeRateLimitExceeded = makeRateLimiter(20, 60_000);
-
-function pushRateLimit(
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction,
-): void {
-  const ip =
-    (req.headers['x-forwarded-for'] as string | undefined)
-      ?.split(',')[0]
-      ?.trim() ||
-    req.socket.remoteAddress ||
-    'unknown';
-  if (pushSubscribeRateLimitExceeded(ip)) {
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
-  next();
-}
+const pushRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
 
 app.get('/v1/push/public-key', pushManager.publicKeyHandler);
 app.post('/v1/push/subscribe', pushRateLimit, pushManager.subscribeHandler);
