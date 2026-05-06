@@ -21,7 +21,7 @@ python-jose = { version = "^3.3.0", extras = ["cryptography"] }
 cryptography = "^42.0.0"  # Direct dep for credential vault Fernet
 passlib = { version = "^1.7.4", extras = ["bcrypt"] }
 python-multipart = "^0.0.9"
-tenacity = "^8.3.0"
+tenacity = ">=8.3,<10.0"
 structlog = "^24.1.0"
 prometheus-client = ">=0.20,<0.26"
 opentelemetry-sdk = "^1.24.0"
