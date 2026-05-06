@@ -43,6 +43,15 @@ from typing import Annotated, Any
 # This prevents path-traversal / partial-SSRF via user-supplied connector_type.
 _CONNECTOR_TYPE_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,100}$")
 
+# Strip ASCII control characters (incl. newlines) before writing to log
+# records — prevents log-injection when values originate from user input.
+_LOG_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _safe_log_val(value: str) -> str:
+    """Return *value* with ASCII control characters removed, safe for logging."""
+    return _LOG_CTRL_RE.sub("", value)
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -225,7 +234,7 @@ async def _proxy_test_connection(
     except httpx.HTTPError as exc:
         logger.warning(
             "connectors_service.test.unreachable url=%s err=%s",
-            url,
+            _safe_log_val(url),
             str(exc).replace("\n", " ").replace("\r", " "),
         )
         raise HTTPException(

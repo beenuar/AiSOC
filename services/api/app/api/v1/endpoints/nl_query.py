@@ -30,10 +30,12 @@ router = APIRouter(prefix="/nl-query", tags=["nl_query"])
 
 
 def _validate_es_url(url: str) -> str:
-    """Validate that *url* matches the configured Elasticsearch/OpenSearch host.
+    """Validate *url* against the configured Elasticsearch/OpenSearch host.
 
-    Raises ValueError if the host or scheme does not match, preventing SSRF
-    by ensuring the client can only reach the pre-approved endpoint.
+    Raises ValueError if the host or scheme does not match, preventing SSRF.
+    Returns a *reconstructed* URL built solely from the validated scheme and
+    netloc — this discards any user-supplied path/query components so that
+    CodeQL's taint tracking does not flag the returned value as tainted.
     """
     allowed_raw = (
         getattr(settings, "ES_URL", None)
@@ -49,7 +51,8 @@ def _validate_es_url(url: str) -> str:
             f"ES URL host {candidate.netloc!r} is not the configured host "
             f"{allowed.netloc!r}"
         )
-    return url
+    # Reconstruct from validated components only — no user-supplied path/query.
+    return f"{candidate.scheme}://{candidate.netloc}"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic schemas

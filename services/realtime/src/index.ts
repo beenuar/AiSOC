@@ -165,15 +165,64 @@ const internalEventRateLimitExceeded = makeRateLimiter(200, 60_000);
 // Rate limiter for the internal push endpoint: max 200 req/min per IP.
 const internalPushRateLimitExceeded = makeRateLimiter(200, 60_000);
 
-// --- SSE endpoint ---
-app.get('/sse', (req, res) => {
-  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
-    || req.socket.remoteAddress
-    || 'unknown';
+// Express middleware wrappers so CodeQL recognises these as rate-limiting guards
+// (the inline-check pattern is not detected by CodeQL's js/missing-rate-limiting query).
+function sseRateLimit(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  const ip =
+    (req.headers['x-forwarded-for'] as string | undefined)
+      ?.split(',')[0]
+      ?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
   if (sseRateLimitExceeded(ip)) {
     res.status(429).json({ error: 'Rate limit exceeded' });
     return;
   }
+  next();
+}
+
+function internalEventRateLimit(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  const ip =
+    (req.headers['x-forwarded-for'] as string | undefined)
+      ?.split(',')[0]
+      ?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
+  if (internalEventRateLimitExceeded(ip)) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
+  next();
+}
+
+function internalPushRateLimit(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  const ip =
+    (req.headers['x-forwarded-for'] as string | undefined)
+      ?.split(',')[0]
+      ?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
+  if (internalPushRateLimitExceeded(ip)) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
+  next();
+}
+
+// --- SSE endpoint ---
+app.get('/sse', sseRateLimit, (req, res) => {
   const tenantId = (req.query.tenant_id as string) || 'default';
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -316,30 +365,14 @@ function requireInternal(req: express.Request, res: express.Response): boolean {
 // Internal push fan-out used by the agents/api services to send a
 // notification to a tenant, user list, or topic. Same auth contract as
 // `internal/agent-event`.
-app.post('/internal/push', async (req, res) => {
+app.post('/internal/push', internalPushRateLimit, async (req, res) => {
   if (!requireInternal(req, res)) return;
-
-  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
-    || req.socket.remoteAddress
-    || 'unknown';
-  if (internalPushRateLimitExceeded(ip)) {
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
 
   await pushManager.internalNotifyHandler(req, res);
 });
 
-app.post('/internal/agent-event', (req, res) => {
+app.post('/internal/agent-event', internalEventRateLimit, (req, res) => {
   if (!requireInternal(req, res)) return;
-
-  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
-    || req.socket.remoteAddress
-    || 'unknown';
-  if (internalEventRateLimitExceeded(ip)) {
-    res.status(429).json({ error: 'Rate limit exceeded' });
-    return;
-  }
 
   const { tenant_id, run_id, kind, agent, summary, data } = req.body as {
     tenant_id?: string;
