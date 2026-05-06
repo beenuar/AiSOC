@@ -48,9 +48,7 @@ async def post_timeline_event(
     settings = get_settings()
     base = settings.AISOC_API_BASE_URL.rstrip("/")
     if not settings.AISOC_API_SERVICE_TOKEN:
-        raise TimelineClientError(
-            "AISOC_API_SERVICE_TOKEN is not configured; cannot write ChatOps responses to the case timeline"
-        )
+        raise TimelineClientError("AISOC_API_SERVICE_TOKEN is not configured; cannot write ChatOps responses to the case timeline")
 
     url = f"{base}/api/v1/cases/{case_id}/timeline"
     payload = {
@@ -74,8 +72,6 @@ async def post_timeline_event(
             status_code=resp.status_code,
             body=resp.text[:500],
         )
-        raise TimelineClientError(
-            f"timeline write failed: HTTP {resp.status_code} — {resp.text[:200]}"
-        )
+        raise TimelineClientError(f"timeline write failed: HTTP {resp.status_code} — {resp.text[:200]}")
 
     return resp.json()

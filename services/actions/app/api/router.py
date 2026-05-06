@@ -160,8 +160,8 @@ def _chatops_response_html(headline: str, body: str, *, ok: bool = True) -> str:
     """
     color = "#0a7" if ok else "#a33"
     return (
-        "<!doctype html><html lang=\"en\"><head>"
-        "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        '<!doctype html><html lang="en"><head>'
+        '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         "<title>AiSOC verification</title>"
         "<style>"
         "body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;"
@@ -173,7 +173,7 @@ def _chatops_response_html(headline: str, body: str, *, ok: bool = True) -> str:
         "h1{margin:0 0 12px 0;font-size:18px;display:flex;align-items:center}"
         "p{margin:0;color:#9ca3af;line-height:1.5}"
         "</style></head><body>"
-        f"<div class=\"card\"><h1><span class=\"dot\"></span>{headline}</h1><p>{body}</p></div>"
+        f'<div class="card"><h1><span class="dot"></span>{headline}</h1><p>{body}</p></div>'
         "</body></html>"
     )
 
@@ -201,10 +201,7 @@ async def chatops_callback(token: str = Query(..., min_length=8)):
         reason = str(exc)
         logger.info("ChatOps callback rejected", reason=reason)
         message = {
-            "expired": (
-                "This verification link has expired. If you still need to respond, "
-                "contact your security team."
-            ),
+            "expired": ("This verification link has expired. If you still need to respond, contact your security team."),
             "invalid_signature": "This verification link is invalid.",
         }.get(reason, "This verification link is invalid.")
         return HTMLResponse(
@@ -232,10 +229,7 @@ async def chatops_callback(token: str = Query(..., min_length=8)):
         await post_timeline_event(
             case_id=claims.case_id,
             event_type="chatops.verify.responded",
-            content=(
-                f"User {claims.user_ref or 'unknown'} responded "
-                f"'{claims.choice}' to the ChatOps verification prompt."
-            ),
+            content=(f"User {claims.user_ref or 'unknown'} responded '{claims.choice}' to the ChatOps verification prompt."),
             metadata={
                 "action_id": action_id_str,
                 "tenant_id": str(claims.tenant_id),

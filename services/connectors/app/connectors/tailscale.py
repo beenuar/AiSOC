@@ -136,8 +136,7 @@ class TailscaleConnector(BaseConnector):
                     "API Key (optional if using OAuth)",
                     required=False,
                     help_text=(
-                        "Tailscale API key (starts with 'tskey-api-'). "
-                        "Use either this *or* the OAuth client credentials below — not both."
+                        "Tailscale API key (starts with 'tskey-api-'). Use either this *or* the OAuth client credentials below — not both."
                     ),
                 ),
                 Field(
@@ -145,20 +144,14 @@ class TailscaleConnector(BaseConnector):
                     "string",
                     "OAuth Client ID (optional)",
                     required=False,
-                    help_text=(
-                        "OAuth 2.0 client ID from the Tailscale admin console. "
-                        "Required scope: 'audit:read'."
-                    ),
+                    help_text=("OAuth 2.0 client ID from the Tailscale admin console. Required scope: 'audit:read'."),
                 ),
                 Field(
                     "client_secret",
                     "secret",
                     "OAuth Client Secret (optional)",
                     required=False,
-                    help_text=(
-                        "OAuth 2.0 client secret. "
-                        "Only needed when using client-credential flow instead of an API key."
-                    ),
+                    help_text=("OAuth 2.0 client secret. Only needed when using client-credential flow instead of an API key."),
                 ),
             ],
             oauth=OAuthHints(
@@ -210,10 +203,7 @@ class TailscaleConnector(BaseConnector):
                 self._oauth_expires_at = time.time() + int(payload.get("expires_in", 3600))
             return self._oauth_token  # type: ignore[return-value]
 
-        raise ValueError(
-            "TailscaleConnector: provide either 'api_key' or "
-            "both 'client_id' and 'client_secret'."
-        )
+        raise ValueError("TailscaleConnector: provide either 'api_key' or both 'client_id' and 'client_secret'.")
 
     async def _auth_header(self) -> dict[str, str]:
         token = await self._ensure_token()
@@ -296,12 +286,7 @@ class TailscaleConnector(BaseConnector):
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         action: str = raw.get("action") or raw.get("type") or ""
-        actor: str = (
-            raw.get("actor", {}).get("loginName")
-            or raw.get("actor", {}).get("id")
-            or raw.get("user")
-            or "unknown"
-        )
+        actor: str = raw.get("actor", {}).get("loginName") or raw.get("actor", {}).get("id") or raw.get("user") or "unknown"
 
         if action in _HIGH_SEVERITY_ACTIONS:
             severity = "high"

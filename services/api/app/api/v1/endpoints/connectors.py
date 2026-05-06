@@ -304,11 +304,7 @@ async def list_connectors(
     db: DBSession,
 ) -> list[ConnectorResponse]:
     """List all connector instances for the caller's tenant."""
-    result = await db.execute(
-        select(Connector)
-        .where(Connector.tenant_id == current_user.tenant_id)
-        .order_by(Connector.created_at)
-    )
+    result = await db.execute(select(Connector).where(Connector.tenant_id == current_user.tenant_id).order_by(Connector.created_at))
     connectors = result.scalars().all()
     return [ConnectorResponse.model_validate(c) for c in connectors]
 

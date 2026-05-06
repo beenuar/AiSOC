@@ -132,8 +132,7 @@ def evaluate_gate(request: ActionRequest, config: TenantMaturityConfig) -> GateD
                 maturity_tier=int(tier),
                 decision="queued_approval",
                 rationale=(
-                    f"HIGH blast-radius action at L4 requires whitelist entry. "
-                    f"No matching whitelist entry found for '{action_key}'."
+                    f"HIGH blast-radius action at L4 requires whitelist entry. No matching whitelist entry found for '{action_key}'."
                 ),
             )
         overrides_applied.append(f"whitelist:{whitelist_match}")
@@ -159,16 +158,12 @@ def evaluate_gate(request: ActionRequest, config: TenantMaturityConfig) -> GateD
         blast_radius=blast.value,
         maturity_tier=int(tier),
         decision="queued_approval",
-        rationale=(
-            f"Tier {tier.label}: '{blast.value}' blast-radius requires human approval."
-        ),
+        rationale=(f"Tier {tier.label}: '{blast.value}' blast-radius requires human approval."),
         overrides_applied=overrides_applied,
     )
 
 
-def _check_whitelist(
-    request: ActionRequest, whitelist: list[dict[str, Any]]
-) -> str | None:
+def _check_whitelist(request: ActionRequest, whitelist: list[dict[str, Any]]) -> str | None:
     """
     Return the whitelist entry id/key if the action matches a whitelist entry,
     or None if no match.

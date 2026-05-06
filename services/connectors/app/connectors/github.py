@@ -128,11 +128,7 @@ class GitHubConnector(BaseConnector):
                     return {
                         "success": False,
                         "connector": self.connector_id,
-                        "error": (
-                            f"Org reachable but audit-log probe failed: "
-                            f"HTTP {audit_resp.status_code}: "
-                            f"{audit_resp.text[:200]}"
-                        ),
+                        "error": (f"Org reachable but audit-log probe failed: HTTP {audit_resp.status_code}: {audit_resp.text[:200]}"),
                     }
                 audit_available = audit_resp.status_code == 200
 
@@ -205,9 +201,7 @@ class GitHubConnector(BaseConnector):
                     created_at = alert.get("created_at")
                     if created_at:
                         try:
-                            created_dt = datetime.fromisoformat(
-                                created_at.replace("Z", "+00:00")
-                            )
+                            created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                             if created_dt.timestamp() * 1000 < start_ms:
                                 # Sorted desc → first too-old result means
                                 # all subsequent ones are also too old.
@@ -292,12 +286,7 @@ class GitHubConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": str(raw.get("_document_id") or raw.get("@timestamp") or ""),
             "title": action or "GitHub audit event",
-            "description": (
-                f"actor={actor}; "
-                f"action={action}; "
-                f"repo={raw.get('repo', '')}; "
-                f"org={raw.get('org', self._org)}"
-            ),
+            "description": (f"actor={actor}; action={action}; repo={raw.get('repo', '')}; org={raw.get('org', self._org)}"),
             "severity": severity,
             "actor": actor,
             "actor_email": raw.get("user_email"),

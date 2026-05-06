@@ -65,9 +65,7 @@ class DriftScheduler:
         async with self._session_factory() as session:
             for tenant_id in tenants:
                 try:
-                    snap = await capture_snapshot(
-                        session, tenant_id, trigger="scheduled"
-                    )
+                    snap = await capture_snapshot(session, tenant_id, trigger="scheduled")
                     LOG.info(
                         "Captured drift snapshot tenant=%s coverage=%.3f tested=%d",
                         tenant_id,
@@ -75,9 +73,7 @@ class DriftScheduler:
                         snap.tested_techniques,
                     )
                 except Exception:
-                    LOG.exception(
-                        "Drift snapshot failed for tenant=%s", tenant_id
-                    )
+                    LOG.exception("Drift snapshot failed for tenant=%s", tenant_id)
             await session.commit()
 
     def start(self) -> None:
@@ -98,9 +94,7 @@ class DriftScheduler:
         )
         if not self._scheduler.running:
             self._scheduler.start()
-        LOG.info(
-            "Drift scheduler started (interval=%ss)", self._interval_seconds
-        )
+        LOG.info("Drift scheduler started (interval=%ss)", self._interval_seconds)
 
     def stop(self) -> None:
         """Gracefully stop the scheduler."""

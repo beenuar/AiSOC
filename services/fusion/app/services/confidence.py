@@ -289,9 +289,7 @@ class ConfidenceScorer:
         fused.confidence_label = label
         # Sort rationale by absolute contribution, descending — UI shows the
         # most-impactful evidence first.
-        fused.confidence_rationale = sorted(
-            rationale, key=lambda f: abs(f.contribution * f.weight), reverse=True
-        )
+        fused.confidence_rationale = sorted(rationale, key=lambda f: abs(f.contribution * f.weight), reverse=True)
 
         logger.debug(
             "confidence_scored",

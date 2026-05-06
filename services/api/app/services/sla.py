@@ -158,14 +158,10 @@ async def _compute_kpi_bar(
     total_r = await db.execute(select(func.count()).select_from(Alert).where(*base))
     total = int(total_r.scalar_one() or 0)
 
-    fp_r = await db.execute(
-        select(func.count()).select_from(Alert).where(*base, Alert.status == "fp")
-    )
+    fp_r = await db.execute(select(func.count()).select_from(Alert).where(*base, Alert.status == "fp"))
     fp = int(fp_r.scalar_one() or 0)
 
-    cases_r = await db.execute(
-        select(func.count(func.distinct(Alert.case_id))).select_from(Alert).where(*base, Alert.case_id.is_not(None))
-    )
+    cases_r = await db.execute(select(func.count(func.distinct(Alert.case_id))).select_from(Alert).where(*base, Alert.case_id.is_not(None)))
     distinct_cases = int(cases_r.scalar_one() or 0)
 
     tagged_r = await db.execute(
@@ -202,8 +198,7 @@ async def _compute_kpi_bar(
     # alerts with zero linked cases are treated as meeting the ratio bar.
     breaches = {
         "false_positive_rate": fp_rate_pct > targets["false_positive_rate_max_pct"],
-        "alert_to_incident_ratio": distinct_cases > 0
-        and alert_to_incident < targets["alert_to_incident_ratio_min"],
+        "alert_to_incident_ratio": distinct_cases > 0 and alert_to_incident < targets["alert_to_incident_ratio_min"],
         "mitre_technique_tagging": mitre_tag_pct < targets["mitre_technique_tagging_min_pct"],
         "mitre_subtechnique_tagging": mitre_sub_pct < targets["mitre_subtechnique_tagging_min_pct"],
     }

@@ -207,10 +207,7 @@ async def _fetch_target_connectors(
         if missing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    "connector_ids not found, not enabled, or not federated-capable: "
-                    + ", ".join(missing)
-                ),
+                detail=("connector_ids not found, not enabled, or not federated-capable: " + ", ".join(missing)),
             )
 
     return rows
@@ -436,9 +433,7 @@ async def federated_search(
             detail="query must include free_text or at least one indicator",
         )
 
-    targets = await _fetch_target_connectors(
-        db, current_user.tenant_id, request.connector_ids
-    )
+    targets = await _fetch_target_connectors(db, current_user.tenant_id, request.connector_ids)
     if not targets:
         # No federated-capable connectors configured: don't 404, return
         # an empty merged result with empty sources[]. Lets the caller
@@ -464,10 +459,7 @@ async def federated_search(
     )
 
     fan_out = await asyncio.gather(
-        *(
-            _query_one_backend(connector, query_payload, timeout)
-            for connector in targets
-        ),
+        *(_query_one_backend(connector, query_payload, timeout) for connector in targets),
         return_exceptions=False,
     )
 

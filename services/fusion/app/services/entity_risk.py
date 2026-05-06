@@ -174,9 +174,7 @@ class EntityRiskEngine:
             records.append(rec)
         return records
 
-    async def get(
-        self, tenant_id: UUID | str, entity_type: str, entity_value: str
-    ) -> EntityRiskRecord | None:
+    async def get(self, tenant_id: UUID | str, entity_type: str, entity_value: str) -> EntityRiskRecord | None:
         return await self._load(str(tenant_id), entity_type, entity_value)
 
     async def stats(self, tenant_id: UUID | str) -> dict:
@@ -331,17 +329,13 @@ class EntityRiskEngine:
         await self._redis.zremrangebyrank(topn_key, 0, -(self._max_top + 1))
         await self._redis.expire(topn_key, self._window)
 
-    async def _load(
-        self, tenant_id: str, entity_type: str, entity_value: str
-    ) -> EntityRiskRecord | None:
+    async def _load(self, tenant_id: str, entity_type: str, entity_value: str) -> EntityRiskRecord | None:
         key = _ENTITY_PREFIX + f"{tenant_id}:{entity_type}:{entity_value}"
         data = await self._redis.hgetall(key)
         if not data:
             return None
         decoded = {
-            (k.decode() if isinstance(k, (bytes, bytearray)) else k): (
-                v.decode() if isinstance(v, (bytes, bytearray)) else v
-            )
+            (k.decode() if isinstance(k, (bytes, bytearray)) else k): (v.decode() if isinstance(v, (bytes, bytearray)) else v)
             for k, v in data.items()
         }
         promoted_at = None

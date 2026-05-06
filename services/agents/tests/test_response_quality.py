@@ -497,8 +497,7 @@ class TestResponseQuality(unittest.TestCase):
         self.assertGreaterEqual(
             summary["template_macro_score"],
             0.75,
-            "Per-template response-quality below 0.75.\n"
-            f"Failing templates: {summary['failing_templates']}",
+            f"Per-template response-quality below 0.75.\nFailing templates: {summary['failing_templates']}",
         )
 
 

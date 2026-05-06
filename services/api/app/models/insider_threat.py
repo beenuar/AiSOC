@@ -17,9 +17,7 @@ class UserRiskProfile(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
-    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     external_user_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)
     risk_tier: Mapped[str] = mapped_column(String(20), default="low")
@@ -33,9 +31,7 @@ class UserRiskProfile(Base):
     is_watchlisted: Mapped[bool] = mapped_column(Boolean, default=False)
     watchlist_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     watchlisted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    watchlisted_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    watchlisted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     # timestamps
     last_evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
@@ -45,9 +41,7 @@ class UserRiskProfile(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    indicators: Mapped[list[InsiderIndicator]] = relationship(
-        "InsiderIndicator", back_populates="profile", lazy="noload"
-    )
+    indicators: Mapped[list[InsiderIndicator]] = relationship("InsiderIndicator", back_populates="profile", lazy="noload")
 
 
 class InsiderIndicator(Base):
@@ -55,18 +49,14 @@ class InsiderIndicator(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    profile_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user_risk_profiles.id", ondelete="CASCADE"), nullable=False
-    )
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user_risk_profiles.id", ondelete="CASCADE"), nullable=False)
     indicator_type: Mapped[str] = mapped_column(String(100), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), default="medium")
     description: Mapped[str] = mapped_column(Text, nullable=False)
     source_alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     evidence: Mapped[dict] = mapped_column(JSONB, default=dict)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 

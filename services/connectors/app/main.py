@@ -36,10 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start/stop the scheduler alongside the HTTP server."""
     scheduler: ConnectorScheduler | None = None
     if scheduler_disabled():
-        logger.info(
-            "connector.scheduler.disabled "
-            "AISOC_CONNECTORS_DISABLE_SCHEDULER set; HTTP only mode"
-        )
+        logger.info("connector.scheduler.disabled AISOC_CONNECTORS_DISABLE_SCHEDULER set; HTTP only mode")
     else:
         try:
             scheduler = ConnectorScheduler()

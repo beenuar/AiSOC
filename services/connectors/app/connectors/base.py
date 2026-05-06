@@ -185,6 +185,4 @@ class BaseConnector(ABC):
         rather than silently returning an empty result set (which would
         be indistinguishable from "no matches" and is a footgun).
         """
-        raise NotImplementedError(
-            f"connector '{self.connector_id}' does not support federated search"
-        )
+        raise NotImplementedError(f"connector '{self.connector_id}' does not support federated search")

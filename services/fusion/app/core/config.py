@@ -37,9 +37,7 @@ class Settings(BaseSettings):
     rba_enabled: bool = Field(default=True, alias="AISOC_FEATURE_RBA")
     rba_promotion_threshold: float = Field(default=80.0, alias="RBA_PROMOTION_THRESHOLD")
     rba_window_seconds: int = Field(default=86400, alias="RBA_WINDOW_SECONDS")  # 24h decay window
-    rba_decay_half_life_seconds: int = Field(
-        default=14400, alias="RBA_DECAY_HALF_LIFE_SECONDS"
-    )  # 4h half-life
+    rba_decay_half_life_seconds: int = Field(default=14400, alias="RBA_DECAY_HALF_LIFE_SECONDS")  # 4h half-life
     # Severity points contributed by each correlated alert. Keep additive and
     # capped so a single noisy detection can't promote on its own.
     rba_severity_weights_critical: float = Field(default=40.0, alias="RBA_W_CRITICAL")

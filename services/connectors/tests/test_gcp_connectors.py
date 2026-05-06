@@ -145,9 +145,7 @@ def test_cloud_audit_normalize_failed_op_bumps_to_medium(fake_sa_json):
         "resource": {"type": "gce_instance"},
     }
     out = connector.normalize(raw)
-    assert out["severity"] == "medium", (
-        "failed control-plane operations should escalate above info"
-    )
+    assert out["severity"] == "medium", "failed control-plane operations should escalate above info"
 
 
 def test_cloud_audit_normalize_routine_read_is_info(fake_sa_json):
@@ -209,10 +207,7 @@ def test_scc_normalize_critical_collapses_to_high(fake_sa_json):
     }
     out = connector.normalize(raw)
     assert out["source"] == "gcp_scc"
-    assert out["severity"] == "high", (
-        "SCC CRITICAL collapses to AiSOC 'high' since downstream pipelines "
-        "expect that vocabulary"
-    )
+    assert out["severity"] == "high", "SCC CRITICAL collapses to AiSOC 'high' since downstream pipelines expect that vocabulary"
     assert out["title"] == "MALWARE_BAD_DOMAIN"
     assert out["actor_email"] == "compromised@example.com"
     assert out["resource_type"] == "google.compute.Instance"
@@ -253,13 +248,9 @@ def test_scc_normalize_unknown_severity_falls_back_to_info(fake_sa_json):
 @respx.mock
 async def test_cloud_audit_test_connection_success(fake_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
-    respx.post("https://logging.googleapis.com/v2/entries:list").mock(
-        return_value=httpx.Response(200, json={"entries": []})
-    )
+    respx.post("https://logging.googleapis.com/v2/entries:list").mock(return_value=httpx.Response(200, json={"entries": []}))
 
     connector = GCPCloudAuditConnector(_PROJECT, fake_sa_json)
     result = await connector.test_connection()
@@ -272,9 +263,7 @@ async def test_cloud_audit_test_connection_success(fake_sa_json):
 @respx.mock
 async def test_cloud_audit_test_connection_surfaces_403(fake_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
     respx.post("https://logging.googleapis.com/v2/entries:list").mock(
         return_value=httpx.Response(403, text="caller does not have permission")
@@ -290,9 +279,7 @@ async def test_cloud_audit_test_connection_surfaces_403(fake_sa_json):
 @respx.mock
 async def test_cloud_audit_fetch_alerts_returns_normalized_events(fake_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
     respx.post("https://logging.googleapis.com/v2/entries:list").mock(
         return_value=httpx.Response(
@@ -306,9 +293,7 @@ async def test_cloud_audit_fetch_alerts_returns_normalized_events(fake_sa_json):
                         "protoPayload": {
                             "methodName": "SetIamPolicy",
                             "serviceName": "cloudresourcemanager.googleapis.com",
-                            "authenticationInfo": {
-                                "principalEmail": "alice@example.com"
-                            },
+                            "authenticationInfo": {"principalEmail": "alice@example.com"},
                             "status": {},
                         },
                         "resource": {"type": "project"},
@@ -330,13 +315,9 @@ async def test_cloud_audit_fetch_alerts_returns_normalized_events(fake_sa_json):
 @respx.mock
 async def test_cloud_audit_fetch_alerts_returns_empty_on_500(fake_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
-    respx.post("https://logging.googleapis.com/v2/entries:list").mock(
-        return_value=httpx.Response(500, text="internal")
-    )
+    respx.post("https://logging.googleapis.com/v2/entries:list").mock(return_value=httpx.Response(500, text="internal"))
 
     connector = GCPCloudAuditConnector(_PROJECT, fake_sa_json)
     events = await connector.fetch_alerts(since_seconds=300)
@@ -347,13 +328,11 @@ async def test_cloud_audit_fetch_alerts_returns_empty_on_500(fake_sa_json):
 @respx.mock
 async def test_scc_test_connection_success(fake_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
-    respx.get(
-        f"https://securitycenter.googleapis.com/v1/organizations/{_ORG}/sources"
-    ).mock(return_value=httpx.Response(200, json={"sources": []}))
+    respx.get(f"https://securitycenter.googleapis.com/v1/organizations/{_ORG}/sources").mock(
+        return_value=httpx.Response(200, json={"sources": []})
+    )
 
     connector = GCPSCCConnector(_ORG, fake_sa_json)
     result = await connector.test_connection()
@@ -365,13 +344,9 @@ async def test_scc_test_connection_success(fake_sa_json):
 @respx.mock
 async def test_scc_fetch_alerts_returns_normalized_findings(fake_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
-    respx.get(
-        f"https://securitycenter.googleapis.com/v1/organizations/{_ORG}/sources/-/findings"
-    ).mock(
+    respx.get(f"https://securitycenter.googleapis.com/v1/organizations/{_ORG}/sources/-/findings").mock(
         return_value=httpx.Response(
             200,
             json={

@@ -308,9 +308,7 @@ class ConnectorScheduler:
             )
             return
 
-        target: ConnectorInstance | None = next(
-            (i for i in instances if i.id == connector_id), None
-        )
+        target: ConnectorInstance | None = next((i for i in instances if i.id == connector_id), None)
         if target is None:
             # Instance was deleted / disabled between reload and poll.
             # Reload will clean up the job on its next tick.
@@ -350,11 +348,7 @@ class ConnectorScheduler:
         # Filter out the scheduler-only knobs from connector_config before
         # passing to the constructor — connectors don't accept
         # ``poll_interval_seconds`` as a kwarg.
-        runtime_config = {
-            k: v
-            for k, v in (target.connector_config or {}).items()
-            if k not in {"poll_interval_seconds"}
-        }
+        runtime_config = {k: v for k, v in (target.connector_config or {}).items() if k not in {"poll_interval_seconds"}}
         kwargs = {**auth, **runtime_config}
 
         started = datetime.now(UTC)

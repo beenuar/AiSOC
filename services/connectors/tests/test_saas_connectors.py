@@ -171,12 +171,10 @@ def test_m365_normalize_routine_user_op_is_info():
 @pytest.mark.asyncio
 @respx.mock
 async def test_m365_test_connection_success():
-    respx.post(
-        f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token"
-    ).mock(return_value=httpx.Response(200, json={"access_token": "tok-abc"}))
-    respx.get(
-        f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/list"
-    ).mock(
+    respx.post(f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-abc"})
+    )
+    respx.get(f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/list").mock(
         return_value=httpx.Response(
             200,
             json=[
@@ -197,12 +195,10 @@ async def test_m365_test_connection_success():
 @pytest.mark.asyncio
 @respx.mock
 async def test_m365_test_connection_surfaces_403():
-    respx.post(
-        f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token"
-    ).mock(return_value=httpx.Response(200, json={"access_token": "tok-abc"}))
-    respx.get(
-        f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/list"
-    ).mock(
+    respx.post(f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-abc"})
+    )
+    respx.get(f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/list").mock(
         return_value=httpx.Response(403, text="ActivityFeed.Read not granted")
     )
 
@@ -218,22 +214,20 @@ async def test_m365_fetch_alerts_pulls_blob_content():
     # The Activity API is a two-step flow: list content blobs, then GET each
     # blob URI. We mock both layers and assert the connector materializes
     # the inner events through normalize().
-    respx.post(
-        f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token"
-    ).mock(return_value=httpx.Response(200, json={"access_token": "tok-abc"}))
+    respx.post(f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-abc"})
+    )
 
     # Idempotent subscribe on every content type — return 200 OK.
-    respx.post(
-        f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/start"
-    ).mock(return_value=httpx.Response(200, json={"contentType": "ok"}))
+    respx.post(f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/start").mock(
+        return_value=httpx.Response(200, json={"contentType": "ok"})
+    )
 
     blob_uri = "https://manage.office.com/api/v1.0/blob/abc"
     # Only the AzureActiveDirectory listing returns a blob; the rest are
     # empty so we can assert filtering plus de-duplication of empty content
     # types in a single test.
-    aad_url = (
-        f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/content"
-    )
+    aad_url = f"https://manage.office.com/api/v1.0/{_TENANT}/activity/feed/subscriptions/content"
 
     def list_handler(request: httpx.Request) -> httpx.Response:
         if request.url.params.get("contentType") == "Audit.AzureActiveDirectory":
@@ -363,13 +357,11 @@ def test_workspace_normalize_routine_event_is_info(fake_workspace_sa_json):
 @respx.mock
 async def test_workspace_test_connection_success(fake_workspace_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
-    respx.get(
-        "https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/login"
-    ).mock(return_value=httpx.Response(200, json={"items": []}))
+    respx.get("https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/login").mock(
+        return_value=httpx.Response(200, json={"items": []})
+    )
 
     connector = GoogleWorkspaceConnector(_ADMIN_EMAIL, fake_workspace_sa_json)
     result = await connector.test_connection()
@@ -382,16 +374,10 @@ async def test_workspace_test_connection_success(fake_workspace_sa_json):
 @respx.mock
 async def test_workspace_test_connection_surfaces_403(fake_workspace_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
-    respx.get(
-        "https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/login"
-    ).mock(
-        return_value=httpx.Response(
-            403, text="The user is not authorized to access this resource"
-        )
+    respx.get("https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/login").mock(
+        return_value=httpx.Response(403, text="The user is not authorized to access this resource")
     )
 
     connector = GoogleWorkspaceConnector(_ADMIN_EMAIL, fake_workspace_sa_json)
@@ -404,9 +390,7 @@ async def test_workspace_test_connection_surfaces_403(fake_workspace_sa_json):
 @respx.mock
 async def test_workspace_fetch_alerts_iterates_apps(fake_workspace_sa_json):
     respx.post("https://oauth2.googleapis.com/token").mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "tok-abc", "expires_in": 3600}
-        )
+        return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
 
     # Each ApplicationName has its own URL. We return one event for
@@ -427,9 +411,9 @@ async def test_workspace_fetch_alerts_iterates_apps(fake_workspace_sa_json):
         app = request.url.path.rsplit("/", 1)[-1]
         return httpx.Response(200, json={"items": apps_with_data.get(app, [])})
 
-    respx.get(
-        url__regex=r"^https://admin\.googleapis\.com/admin/reports/v1/activity/users/all/applications/.*"
-    ).mock(side_effect=app_handler)
+    respx.get(url__regex=r"^https://admin\.googleapis\.com/admin/reports/v1/activity/users/all/applications/.*").mock(
+        side_effect=app_handler
+    )
 
     connector = GoogleWorkspaceConnector(_ADMIN_EMAIL, fake_workspace_sa_json)
     events = await connector.fetch_alerts(since_seconds=300)
@@ -521,9 +505,9 @@ async def test_cloudflare_test_connection_success():
     respx.get("https://api.cloudflare.com/client/v4/user/tokens/verify").mock(
         return_value=httpx.Response(200, json={"result": {"status": "active"}})
     )
-    respx.get(
-        f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs"
-    ).mock(return_value=httpx.Response(200, json={"result": []}))
+    respx.get(f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs").mock(
+        return_value=httpx.Response(200, json={"result": []})
+    )
 
     connector = CloudflareConnector(_ACCOUNT_ID, "cf-token")
     result = await connector.test_connection()
@@ -550,9 +534,9 @@ async def test_cloudflare_test_connection_missing_audit_perm_fails():
     respx.get("https://api.cloudflare.com/client/v4/user/tokens/verify").mock(
         return_value=httpx.Response(200, json={"result": {"status": "active"}})
     )
-    respx.get(
-        f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs"
-    ).mock(return_value=httpx.Response(403, text="missing scope"))
+    respx.get(f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs").mock(
+        return_value=httpx.Response(403, text="missing scope")
+    )
 
     connector = CloudflareConnector(_ACCOUNT_ID, "cf-token")
     result = await connector.test_connection()
@@ -563,9 +547,7 @@ async def test_cloudflare_test_connection_missing_audit_perm_fails():
 @pytest.mark.asyncio
 @respx.mock
 async def test_cloudflare_fetch_alerts_returns_normalized_events():
-    respx.get(
-        f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs"
-    ).mock(
+    respx.get(f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -596,9 +578,9 @@ async def test_cloudflare_fetch_alerts_returns_normalized_events():
 @pytest.mark.asyncio
 @respx.mock
 async def test_cloudflare_fetch_alerts_returns_empty_on_500():
-    respx.get(
-        f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs"
-    ).mock(return_value=httpx.Response(500, text="bad gateway"))
+    respx.get(f"https://api.cloudflare.com/client/v4/accounts/{_ACCOUNT_ID}/audit_logs").mock(
+        return_value=httpx.Response(500, text="bad gateway")
+    )
 
     connector = CloudflareConnector(_ACCOUNT_ID, "cf-token")
     events = await connector.fetch_alerts(since_seconds=300)
@@ -746,12 +728,8 @@ def test_github_normalize_code_scanning_unknown_severity_falls_back_to_info():
 @pytest.mark.asyncio
 @respx.mock
 async def test_github_test_connection_success_with_audit_log():
-    respx.get(f"https://api.github.com/orgs/{_ORG}").mock(
-        return_value=httpx.Response(200, json={"login": _ORG})
-    )
-    respx.get(f"https://api.github.com/orgs/{_ORG}/audit-log").mock(
-        return_value=httpx.Response(200, json=[])
-    )
+    respx.get(f"https://api.github.com/orgs/{_ORG}").mock(return_value=httpx.Response(200, json={"login": _ORG}))
+    respx.get(f"https://api.github.com/orgs/{_ORG}/audit-log").mock(return_value=httpx.Response(200, json=[]))
 
     connector = GitHubConnector(_ORG, _TOKEN)
     result = await connector.test_connection()
@@ -767,12 +745,8 @@ async def test_github_test_connection_succeeds_when_audit_log_404():
     # That's a legitimate operational state — we still consider the
     # connector "connected" but flag audit_log_available = False so the
     # frontend can warn the operator.
-    respx.get(f"https://api.github.com/orgs/{_ORG}").mock(
-        return_value=httpx.Response(200, json={"login": _ORG})
-    )
-    respx.get(f"https://api.github.com/orgs/{_ORG}/audit-log").mock(
-        return_value=httpx.Response(404, text="not found")
-    )
+    respx.get(f"https://api.github.com/orgs/{_ORG}").mock(return_value=httpx.Response(200, json={"login": _ORG}))
+    respx.get(f"https://api.github.com/orgs/{_ORG}/audit-log").mock(return_value=httpx.Response(404, text="not found"))
 
     connector = GitHubConnector(_ORG, _TOKEN)
     result = await connector.test_connection()
@@ -783,9 +757,7 @@ async def test_github_test_connection_succeeds_when_audit_log_404():
 @pytest.mark.asyncio
 @respx.mock
 async def test_github_test_connection_403_org_fails():
-    respx.get(f"https://api.github.com/orgs/{_ORG}").mock(
-        return_value=httpx.Response(403, text="bad token")
-    )
+    respx.get(f"https://api.github.com/orgs/{_ORG}").mock(return_value=httpx.Response(403, text="bad token"))
 
     connector = GitHubConnector(_ORG, _TOKEN)
     result = await connector.test_connection()
@@ -839,9 +811,7 @@ async def test_github_fetch_alerts_merges_audit_and_code_scanning():
 @respx.mock
 async def test_github_fetch_alerts_handles_audit_log_unavailable():
     # 404 on audit log shouldn't stop us from delivering code scanning.
-    respx.get(f"https://api.github.com/orgs/{_ORG}/audit-log").mock(
-        return_value=httpx.Response(404, text="not found")
-    )
+    respx.get(f"https://api.github.com/orgs/{_ORG}/audit-log").mock(return_value=httpx.Response(404, text="not found"))
     respx.get(f"https://api.github.com/orgs/{_ORG}/code-scanning/alerts").mock(
         return_value=httpx.Response(
             200,

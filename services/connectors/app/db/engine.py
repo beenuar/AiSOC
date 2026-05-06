@@ -33,13 +33,11 @@ def _resolve_database_url() -> str:
     """
     url = os.getenv("DATABASE_URL")
     if not url:
-        raise RuntimeError(
-            "DATABASE_URL is not set; the connectors service requires it to read the connectors table."
-        )
+        raise RuntimeError("DATABASE_URL is not set; the connectors service requires it to read the connectors table.")
     if url.startswith("postgresql://"):
-        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+        url = "postgresql+asyncpg://" + url[len("postgresql://") :]
     elif url.startswith("postgres://"):
-        url = "postgresql+asyncpg://" + url[len("postgres://"):]
+        url = "postgresql+asyncpg://" + url[len("postgres://") :]
     return url
 
 

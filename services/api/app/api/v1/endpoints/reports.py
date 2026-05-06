@@ -87,9 +87,7 @@ async def list_templates(
     current_user: User = Depends(get_current_user),
 ) -> list[ReportTemplate]:
     result = await db.execute(
-        select(ReportTemplate)
-        .where(ReportTemplate.tenant_id == current_user.tenant_id)
-        .order_by(ReportTemplate.name)
+        select(ReportTemplate).where(ReportTemplate.tenant_id == current_user.tenant_id).order_by(ReportTemplate.name)
     )
     return list(result.scalars().all())
 

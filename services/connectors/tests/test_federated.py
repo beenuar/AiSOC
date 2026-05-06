@@ -153,9 +153,7 @@ def test_federated_capable_connectors_are_registered_and_advertised():
     for connector_id in ("splunk", "microsoft_sentinel", "elastic"):
         cls = CONNECTOR_REGISTRY.get(connector_id)
         assert cls is not None, f"connector '{connector_id}' missing from registry"
-        assert getattr(cls, "supports_federated_search", False), (
-            f"connector '{connector_id}' must opt into federated search"
-        )
+        assert getattr(cls, "supports_federated_search", False), f"connector '{connector_id}' must opt into federated search"
 
 
 def test_elastic_connector_flattens_esql_columns_and_values():
@@ -304,9 +302,7 @@ async def test_sentinel_query_assembles_loganalytics_call(monkeypatch):
     connector._access_token = "fake-bearer"  # noqa: SLF001
 
     rows = await connector.query(_SAMPLE_QUERY)
-    assert rows == [
-        {"TimeGenerated": "2026-05-05T00:00:00Z", "UserPrincipalName": "alice@example.com"}
-    ]
+    assert rows == [{"TimeGenerated": "2026-05-05T00:00:00Z", "UserPrincipalName": "alice@example.com"}]
     # Log Analytics API path; workspace id must appear in the URL.
     assert "loganalytics" in captured["url"].lower()
     assert "workspace-uuid" in captured["url"]

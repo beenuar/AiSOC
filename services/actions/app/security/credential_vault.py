@@ -69,13 +69,12 @@ class CredentialVault:
             raise CredentialVaultError(f"vault.decrypt expects str, got {type(value).__name__}")
         if not value.startswith(_CIPHER_PREFIX):
             return value
-        token = value[len(_CIPHER_PREFIX):].encode("ascii")
+        token = value[len(_CIPHER_PREFIX) :].encode("ascii")
         try:
             return self._fernet.decrypt(token).decode("utf-8")
         except InvalidToken as exc:
             raise CredentialVaultError(
-                "ciphertext failed integrity check — likely AISOC_CREDENTIAL_KEY mismatch "
-                "between API and actions services"
+                "ciphertext failed integrity check — likely AISOC_CREDENTIAL_KEY mismatch between API and actions services"
             ) from exc
 
     def encrypt_dict(self, payload: Mapping[str, Any], *, secret_keys: set[str] | None = None) -> dict[str, Any]:

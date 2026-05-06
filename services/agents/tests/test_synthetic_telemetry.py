@@ -53,18 +53,14 @@ _TELEMETRY_PATH = _TESTS_DIR / "eval_data" / "synthetic_telemetry.jsonl"
 
 def _load_incidents() -> list[dict[str, Any]]:
     if not _INCIDENTS_PATH.exists():
-        raise FileNotFoundError(
-            f"Missing {_INCIDENTS_PATH}. Run `python3 scripts/generate_eval_incidents.py`."
-        )
+        raise FileNotFoundError(f"Missing {_INCIDENTS_PATH}. Run `python3 scripts/generate_eval_incidents.py`.")
     with _INCIDENTS_PATH.open() as f:
         return json.load(f)
 
 
 def _load_telemetry() -> list[dict[str, Any]]:
     if not _TELEMETRY_PATH.exists():
-        raise FileNotFoundError(
-            f"Missing {_TELEMETRY_PATH}. Run `python3 scripts/generate_eval_incidents.py`."
-        )
+        raise FileNotFoundError(f"Missing {_TELEMETRY_PATH}. Run `python3 scripts/generate_eval_incidents.py`.")
     events: list[dict[str, Any]] = []
     with _TELEMETRY_PATH.open() as f:
         for i, line in enumerate(f, start=1):
@@ -74,9 +70,7 @@ def _load_telemetry() -> list[dict[str, Any]]:
             try:
                 events.append(json.loads(line))
             except json.JSONDecodeError as exc:  # pragma: no cover
-                raise AssertionError(
-                    f"{_TELEMETRY_PATH.name}: line {i} is not valid JSON ({exc})"
-                ) from exc
+                raise AssertionError(f"{_TELEMETRY_PATH.name}: line {i} is not valid JSON ({exc})") from exc
     return events
 
 
@@ -213,8 +207,7 @@ class TestSyntheticTelemetrySchema(unittest.TestCase):
         self.assertEqual(
             missing,
             [],
-            "synthetic_telemetry.jsonl is missing events for the following "
-            f"advertised sources: {missing}",
+            f"synthetic_telemetry.jsonl is missing events for the following advertised sources: {missing}",
         )
 
     def test_per_source_required_fields(self) -> None:
@@ -233,8 +226,7 @@ class TestSyntheticTelemetrySchema(unittest.TestCase):
         self.assertEqual(
             bad,
             [],
-            f"{len(bad)} events missing per-source required fields "
-            f"(sample: {bad[:3]}). See REQUIRED_FIELDS_BY_SOURCE.",
+            f"{len(bad)} events missing per-source required fields (sample: {bad[:3]}). See REQUIRED_FIELDS_BY_SOURCE.",
         )
 
     def test_no_unresolved_placeholders(self) -> None:
@@ -249,8 +241,7 @@ class TestSyntheticTelemetrySchema(unittest.TestCase):
         self.assertEqual(
             bad,
             [],
-            f"{len(bad)} events still contain unresolved placeholders "
-            f"(sample: {bad[:3]}).",
+            f"{len(bad)} events still contain unresolved placeholders (sample: {bad[:3]}).",
         )
 
     def test_template_telemetry_is_not_concentrated(self) -> None:
@@ -267,8 +258,7 @@ class TestSyntheticTelemetrySchema(unittest.TestCase):
         self.assertLessEqual(
             share,
             0.05,
-            f"Template '{top_template}' accounts for {share:.1%} of telemetry — "
-            "dataset has skewed; rebalance the templates.",
+            f"Template '{top_template}' accounts for {share:.1%} of telemetry — dataset has skewed; rebalance the templates.",
         )
 
     def test_telemetry_template_ids_match_incident_template_ids(self) -> None:
@@ -286,8 +276,7 @@ class TestSyntheticTelemetrySchema(unittest.TestCase):
         self.assertEqual(
             bad,
             [],
-            f"{len(bad)} events disagree with the incident dataset on template_id "
-            f"(sample: {bad[:3]}).",
+            f"{len(bad)} events disagree with the incident dataset on template_id (sample: {bad[:3]}).",
         )
 
 

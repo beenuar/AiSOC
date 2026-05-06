@@ -31,16 +31,16 @@ from typing import Any, Literal
 # Operator vocabulary kept deliberately narrow. Adding a new operator
 # means updating every translator, so we keep the surface tight.
 Operator = Literal[
-    "eq",            # field == value
-    "ne",            # field != value
-    "contains",      # substring match (case-insensitive when the backend supports it)
-    "starts_with",   # prefix match
-    "ends_with",     # suffix match
-    "gt",            # field > value (numeric / timestamp)
-    "gte",           # field >= value
-    "lt",            # field < value
-    "lte",           # field <= value
-    "in",            # field is one of [...]
+    "eq",  # field == value
+    "ne",  # field != value
+    "contains",  # substring match (case-insensitive when the backend supports it)
+    "starts_with",  # prefix match
+    "ends_with",  # suffix match
+    "gt",  # field > value (numeric / timestamp)
+    "gte",  # field >= value
+    "lt",  # field < value
+    "lte",  # field <= value
+    "in",  # field is one of [...]
 ]
 
 _VALID_OPERATORS: frozenset[str] = frozenset(
@@ -79,9 +79,7 @@ class Indicator:
         if not isinstance(self.field, str) or not self.field.strip():
             raise QueryError("indicator.field must be a non-empty string")
         if self.operator not in _VALID_OPERATORS:
-            raise QueryError(
-                f"indicator.operator '{self.operator}' is not one of {sorted(_VALID_OPERATORS)}"
-            )
+            raise QueryError(f"indicator.operator '{self.operator}' is not one of {sorted(_VALID_OPERATORS)}")
         if self.operator == "in":
             if not isinstance(self.value, (list, tuple)) or not self.value:
                 raise QueryError("indicator with operator='in' requires a non-empty list value")
@@ -124,10 +122,7 @@ class UnifiedQuery:
     def to_dict(self) -> dict[str, Any]:
         return {
             "free_text": self.free_text,
-            "indicators": [
-                {"field": i.field, "operator": i.operator, "value": i.value}
-                for i in self.indicators
-            ],
+            "indicators": [{"field": i.field, "operator": i.operator, "value": i.value} for i in self.indicators],
             "since_seconds": self.since_seconds,
             "limit": self.limit,
         }

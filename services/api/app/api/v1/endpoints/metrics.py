@@ -74,34 +74,12 @@ async def get_dashboard_metrics(
     week_start = now - timedelta(days=7)
 
     # ── Alert counts ──────────────────────────────────────────────────────────
-    total_q = await db.scalar(
-        select(func.count()).where(Alert.tenant_id == tenant_id)
-    )
-    new_q = await db.scalar(
-        select(func.count()).where(
-            and_(Alert.tenant_id == tenant_id, Alert.status == "new")
-        )
-    )
-    critical_q = await db.scalar(
-        select(func.count()).where(
-            and_(Alert.tenant_id == tenant_id, Alert.severity == "critical")
-        )
-    )
-    high_q = await db.scalar(
-        select(func.count()).where(
-            and_(Alert.tenant_id == tenant_id, Alert.severity == "high")
-        )
-    )
-    medium_q = await db.scalar(
-        select(func.count()).where(
-            and_(Alert.tenant_id == tenant_id, Alert.severity == "medium")
-        )
-    )
-    low_q = await db.scalar(
-        select(func.count()).where(
-            and_(Alert.tenant_id == tenant_id, Alert.severity == "low")
-        )
-    )
+    total_q = await db.scalar(select(func.count()).where(Alert.tenant_id == tenant_id))
+    new_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.status == "new")))
+    critical_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "critical")))
+    high_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "high")))
+    medium_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "medium")))
+    low_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "low")))
     resolved_today_q = await db.scalar(
         select(func.count()).where(
             and_(
@@ -124,16 +102,8 @@ async def get_dashboard_metrics(
     )
 
     # ── Case counts ───────────────────────────────────────────────────────────
-    open_cases_q = await db.scalar(
-        select(func.count()).where(
-            and_(Case.tenant_id == tenant_id, Case.status == "open")
-        )
-    )
-    in_progress_q = await db.scalar(
-        select(func.count()).where(
-            and_(Case.tenant_id == tenant_id, Case.status == "in_progress")
-        )
-    )
+    open_cases_q = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status == "open")))
+    in_progress_q = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status == "in_progress")))
     resolved_week_q = await db.scalar(
         select(func.count()).where(
             and_(
@@ -152,26 +122,16 @@ async def get_dashboard_metrics(
 
     # ── Sources (connectors) ──────────────────────────────────────────────────
     connectors_rows = (
-        await db.execute(
-            select(Connector.name, Connector.connector_type, Connector.health_status).where(
-                Connector.tenant_id == tenant_id
-            )
-        )
+        await db.execute(select(Connector.name, Connector.connector_type, Connector.health_status).where(Connector.tenant_id == tenant_id))
     ).all()
 
     # Count alerts per connector_type
     source_counts_rows = (
         await db.execute(
-            select(Alert.connector_type, func.count().label("cnt"))
-            .where(Alert.tenant_id == tenant_id)
-            .group_by(Alert.connector_type)
+            select(Alert.connector_type, func.count().label("cnt")).where(Alert.tenant_id == tenant_id).group_by(Alert.connector_type)
         )
     ).all()
-    source_count_map: dict[str, int] = {
-        row.connector_type: row.cnt
-        for row in source_counts_rows
-        if row.connector_type
-    }
+    source_count_map: dict[str, int] = {row.connector_type: row.cnt for row in source_counts_rows if row.connector_type}
 
     sources: list[SourceStat] = []
     seen: set[str] = set()
@@ -234,9 +194,7 @@ async def get_dashboard_metrics(
     ]
 
     # ── Threats by source ─────────────────────────────────────────────────────
-    threats_by_source = [
-        SourceThreat(source=k, count=v) for k, v in source_count_map.items()
-    ]
+    threats_by_source = [SourceThreat(source=k, count=v) for k, v in source_count_map.items()]
 
     return DashboardMetrics(
         alerts=alert_metrics,

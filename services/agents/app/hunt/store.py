@@ -26,9 +26,7 @@ _POOL: asyncpg.Pool | None = None
 
 
 def _normalise_dsn(url: str) -> str:
-    return url.replace("postgresql+asyncpg://", "postgresql://").replace(
-        "postgres+asyncpg://", "postgresql://"
-    )
+    return url.replace("postgresql+asyncpg://", "postgresql://").replace("postgres+asyncpg://", "postgresql://")
 
 
 async def _get_pool() -> asyncpg.Pool | None:
@@ -101,9 +99,7 @@ async def sync_catalog(
         async with pool.acquire() as conn:
             tenant_id = await _resolve_tenant_id(conn, tenant_ref)
             if tenant_id is None:
-                logger.debug(
-                    "hunt.store.catalog.skip", reason="unknown_tenant", tenant_ref=tenant_ref
-                )
+                logger.debug("hunt.store.catalog.skip", reason="unknown_tenant", tenant_ref=tenant_ref)
                 return 0
             await _set_rls_context(conn, tenant_id)
 
@@ -187,9 +183,7 @@ async def record_run(
         async with pool.acquire() as conn:
             tenant_id = await _resolve_tenant_id(conn, tenant_ref)
             if tenant_id is None:
-                logger.debug(
-                    "hunt.store.run.skip", reason="unknown_tenant", tenant_ref=tenant_ref
-                )
+                logger.debug("hunt.store.run.skip", reason="unknown_tenant", tenant_ref=tenant_ref)
                 return None
             await _set_rls_context(conn, tenant_id)
 
@@ -276,9 +270,7 @@ async def _insert_finding(
 # ---------------------------------------------------------------------------
 
 
-async def list_recent_runs(
-    *, tenant_ref: str = "default", limit: int = 50
-) -> list[dict[str, Any]]:
+async def list_recent_runs(*, tenant_ref: str = "default", limit: int = 50) -> list[dict[str, Any]]:
     pool = await _get_pool()
     if pool is None:
         return []
@@ -337,7 +329,7 @@ async def list_recent_findings(
                        primary_entity, primary_log_source, match_score,
                        mitre_techniques, status, created_at
                 FROM hunt_findings
-                WHERE {' AND '.join(clauses)}
+                WHERE {" AND ".join(clauses)}
                 ORDER BY created_at DESC
                 LIMIT ${len(params)}
             """

@@ -158,9 +158,7 @@ async def hunt_search(query: HuntQuery) -> HuntResponse:
 @router.get("/saved")
 async def list_saved_searches() -> dict[str, list[dict[str, Any]]]:
     """Return all saved searches."""
-    return {
-        "searches": [s.model_dump() for s in _SAVED_SEARCHES.values()]
-    }
+    return {"searches": [s.model_dump() for s in _SAVED_SEARCHES.values()]}
 
 
 @router.post("/saved", response_model=SavedSearch, status_code=201)

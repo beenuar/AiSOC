@@ -84,9 +84,7 @@ async def get_maturity_config(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> RemediationMaturity:
-    result = await db.execute(
-        select(RemediationMaturity).where(RemediationMaturity.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(RemediationMaturity).where(RemediationMaturity.tenant_id == current_user.tenant_id))
     config = result.scalar_one_or_none()
     if not config:
         config = RemediationMaturity(
@@ -105,9 +103,7 @@ async def update_maturity_config(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> RemediationMaturity:
-    result = await db.execute(
-        select(RemediationMaturity).where(RemediationMaturity.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(RemediationMaturity).where(RemediationMaturity.tenant_id == current_user.tenant_id))
     config = result.scalar_one_or_none()
     if not config:
         config = RemediationMaturity(tenant_id=current_user.tenant_id)
@@ -153,9 +149,7 @@ async def list_whitelist(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[RemediationWhitelist]:
-    result = await db.execute(
-        select(RemediationWhitelist).where(RemediationWhitelist.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(RemediationWhitelist).where(RemediationWhitelist.tenant_id == current_user.tenant_id))
     return list(result.scalars().all())
 
 

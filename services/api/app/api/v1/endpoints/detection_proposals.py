@@ -98,8 +98,7 @@ class EvalAttachRequest(BaseModel):
     eval_report: dict[str, Any] = Field(
         ...,
         description=(
-            "Full JSON output of `python3 scripts/run_evals.py --baseline ... "
-            "--max-regression-pp ...` for the candidate ruleset."
+            "Full JSON output of `python3 scripts/run_evals.py --baseline ... --max-regression-pp ...` for the candidate ruleset."
         ),
     )
     max_regression_pp: float = Field(
@@ -185,9 +184,7 @@ def _evaluate_eval_report(
     if cmp.get("available"):
         regressed = bool(cmp.get("regressed"))
         drop_pp = float(cmp.get("mitre_drop_pp", 0.0))
-        baseline = float(
-            cmp.get("deltas", {}).get("mitre_accuracy", {}).get("baseline", baseline_score or candidate_score)
-        )
+        baseline = float(cmp.get("deltas", {}).get("mitre_accuracy", {}).get("baseline", baseline_score or candidate_score))
     else:
         baseline = baseline_score if baseline_score is not None else candidate_score
         drop_pp = round(max(0.0, (baseline - candidate_score) * 100), 4)
@@ -235,10 +232,7 @@ async def list_proposals(
     if proposal_status:
         filters.append(DetectionRuleProposal.status == proposal_status)
     result = await db.execute(
-        select(DetectionRuleProposal)
-        .where(and_(*filters))
-        .order_by(DetectionRuleProposal.created_at.desc())
-        .limit(limit)
+        select(DetectionRuleProposal).where(and_(*filters)).order_by(DetectionRuleProposal.created_at.desc()).limit(limit)
     )
     return [ProposalResponse.model_validate(p) for p in result.scalars().all()]
 
@@ -289,11 +283,7 @@ async def list_baselines(
     ]
     if suite:
         filters.append(DetectionEvalBaseline.suite == suite)
-    result = await db.execute(
-        select(DetectionEvalBaseline)
-        .where(and_(*filters))
-        .order_by(DetectionEvalBaseline.created_at.desc())
-    )
+    result = await db.execute(select(DetectionEvalBaseline).where(and_(*filters)).order_by(DetectionEvalBaseline.created_at.desc()))
     return [BaselineResponse.model_validate(b) for b in result.scalars().all()]
 
 

@@ -50,18 +50,14 @@ def _load_hunt_corpus() -> list[HuntDefinition]:
     hunts = corpus.list()
     if not hunts:
         raise FileNotFoundError(
-            f"No hunt YAMLs found under {corpus.directory}. "
-            "Add at least one hunt to `hunts/` before the gate can grade them."
+            f"No hunt YAMLs found under {corpus.directory}. Add at least one hunt to `hunts/` before the gate can grade them."
         )
     return hunts
 
 
 def _load_hunt_telemetry() -> list[dict[str, Any]]:
     if not _HUNT_TELEMETRY_PATH.exists():
-        raise FileNotFoundError(
-            f"Missing {_HUNT_TELEMETRY_PATH}. "
-            "Add positive and negative scenarios for each hunt before merging."
-        )
+        raise FileNotFoundError(f"Missing {_HUNT_TELEMETRY_PATH}. Add positive and negative scenarios for each hunt before merging.")
     events: list[dict[str, Any]] = []
     with _HUNT_TELEMETRY_PATH.open() as f:
         for line_no, raw in enumerate(f, 1):
@@ -71,9 +67,7 @@ def _load_hunt_telemetry() -> list[dict[str, Any]]:
             try:
                 events.append(json.loads(line))
             except json.JSONDecodeError as exc:
-                raise AssertionError(
-                    f"{_HUNT_TELEMETRY_PATH.name}:{line_no} is not valid JSON: {exc}"
-                ) from exc
+                raise AssertionError(f"{_HUNT_TELEMETRY_PATH.name}:{line_no} is not valid JSON: {exc}") from exc
     return events
 
 
@@ -115,8 +109,7 @@ class TestHuntCorpusEval(unittest.TestCase):
             with self.subTest(hunt=hunt.id):
                 self.assertTrue(
                     hunt.expected.positive_incident_id,
-                    f"hunt {hunt.id} is missing expected.positive_incident_id; "
-                    "every hunt YAML must declare a positive synthetic scenario.",
+                    f"hunt {hunt.id} is missing expected.positive_incident_id; every hunt YAML must declare a positive synthetic scenario.",
                 )
 
     def test_positive_scenarios_fire(self) -> None:
@@ -130,8 +123,7 @@ class TestHuntCorpusEval(unittest.TestCase):
             with self.subTest(hunt=hunt.id, scenario=pos_id):
                 self.assertTrue(
                     pos_events,
-                    f"hunt {hunt.id} declares positive_incident_id={pos_id} "
-                    f"but no matching events exist in {_HUNT_TELEMETRY_PATH.name}.",
+                    f"hunt {hunt.id} declares positive_incident_id={pos_id} but no matching events exist in {_HUNT_TELEMETRY_PATH.name}.",
                 )
                 result = self.engine.run(hunt, pos_events)
                 threshold = hunt.expected.min_match_score
@@ -142,10 +134,7 @@ class TestHuntCorpusEval(unittest.TestCase):
                         f"best score {result.match_score:.2f} < {threshold:.2f}"
                     )
         if misses:
-            self.fail(
-                "Positive-scenario miss — these hunts did not fire on their "
-                "declared synthetic incident:\n" + "\n".join(misses)
-            )
+            self.fail("Positive-scenario miss — these hunts did not fire on their declared synthetic incident:\n" + "\n".join(misses))
 
     def test_negative_scenarios_do_not_fire(self) -> None:
         """Hunt MUST NOT fire on its declared negative incident (false positive guard)."""
@@ -158,8 +147,7 @@ class TestHuntCorpusEval(unittest.TestCase):
             with self.subTest(hunt=hunt.id, scenario=neg_id):
                 self.assertTrue(
                     neg_events,
-                    f"hunt {hunt.id} declares negative_incident_id={neg_id} "
-                    f"but no matching events exist in {_HUNT_TELEMETRY_PATH.name}.",
+                    f"hunt {hunt.id} declares negative_incident_id={neg_id} but no matching events exist in {_HUNT_TELEMETRY_PATH.name}.",
                 )
                 result = self.engine.run(hunt, neg_events)
                 if result.findings:
@@ -169,10 +157,7 @@ class TestHuntCorpusEval(unittest.TestCase):
                         f"{result.match_score:.2f})"
                     )
         if false_positives:
-            self.fail(
-                "False-positive regression — these hunts fired on their "
-                "declared negative scenario:\n" + "\n".join(false_positives)
-            )
+            self.fail("False-positive regression — these hunts fired on their declared negative scenario:\n" + "\n".join(false_positives))
 
     def test_every_hunt_telemetry_event_is_owned(self) -> None:
         """Every INC-HUNT-* event must be referenced by at least one hunt YAML.
@@ -187,13 +172,7 @@ class TestHuntCorpusEval(unittest.TestCase):
             if hunt.expected.negative_incident_id:
                 owned[hunt.expected.negative_incident_id].add(hunt.id)
 
-        orphans = sorted(
-            {
-                e["incident_id"]
-                for e in self.events
-                if e["incident_id"] not in owned
-            }
-        )
+        orphans = sorted({e["incident_id"] for e in self.events if e["incident_id"] not in owned})
         self.assertFalse(
             orphans,
             "These hunt-telemetry incident_ids are not referenced by any hunt "
@@ -258,25 +237,29 @@ def evaluate_hunt_corpus() -> HuntCorpusEvalResult:
             positives_expected += 1
             pos_events = _events_for_incident(events, pos_id)
             if not pos_events:
-                misses.append({
-                    "hunt_id": hunt.id,
-                    "scenario": pos_id,
-                    "reason": "no_matching_events",
-                })
+                misses.append(
+                    {
+                        "hunt_id": hunt.id,
+                        "scenario": pos_id,
+                        "reason": "no_matching_events",
+                    }
+                )
             else:
                 result = engine.run(hunt, pos_events)
                 threshold = hunt.expected.min_match_score
                 if result.findings and result.match_score >= threshold:
                     positives_caught += 1
                 else:
-                    misses.append({
-                        "hunt_id": hunt.id,
-                        "scenario": pos_id,
-                        "events_scanned": result.events_scanned,
-                        "findings": len(result.findings),
-                        "match_score": round(result.match_score, 4),
-                        "threshold": threshold,
-                    })
+                    misses.append(
+                        {
+                            "hunt_id": hunt.id,
+                            "scenario": pos_id,
+                            "events_scanned": result.events_scanned,
+                            "findings": len(result.findings),
+                            "match_score": round(result.match_score, 4),
+                            "threshold": threshold,
+                        }
+                    )
 
         neg_id = hunt.expected.negative_incident_id
         if neg_id:
@@ -287,16 +270,16 @@ def evaluate_hunt_corpus() -> HuntCorpusEvalResult:
                 result = engine.run(hunt, neg_events)
                 if result.findings:
                     false_positive_count += 1
-                    false_positives.append({
-                        "hunt_id": hunt.id,
-                        "scenario": neg_id,
-                        "findings": len(result.findings),
-                        "match_score": round(result.match_score, 4),
-                    })
+                    false_positives.append(
+                        {
+                            "hunt_id": hunt.id,
+                            "scenario": neg_id,
+                            "findings": len(result.findings),
+                            "match_score": round(result.match_score, 4),
+                        }
+                    )
 
-    orphans = sorted(
-        {e["incident_id"] for e in events if e["incident_id"] not in owned}
-    )
+    orphans = sorted({e["incident_id"] for e in events if e["incident_id"] not in owned})
 
     return HuntCorpusEvalResult(
         hunts_total=len(hunts),

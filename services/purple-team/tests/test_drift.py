@@ -65,12 +65,8 @@ class TestComputeDrift:
         assert drift["summary"]["removed"] == 1
 
     def test_regression_lowers_detection_count(self) -> None:
-        prev = build_coverage_matrix(
-            [_exec("T1078", "initial-access", status="success", detected=True)]
-        )
-        curr = build_coverage_matrix(
-            [_exec("T1078", "initial-access", status="success", detected=False)]
-        )
+        prev = build_coverage_matrix([_exec("T1078", "initial-access", status="success", detected=True)])
+        curr = build_coverage_matrix([_exec("T1078", "initial-access", status="success", detected=False)])
         drift = compute_drift(curr, prev)
         regressed = [t for t in drift["techniques"] if t["status"] == "regressed"]
         assert len(regressed) == 1
@@ -78,12 +74,8 @@ class TestComputeDrift:
         assert drift["summary"]["regressed"] == 1
 
     def test_improvement_raises_detection_count(self) -> None:
-        prev = build_coverage_matrix(
-            [_exec("T1078", "initial-access", status="success", detected=False)]
-        )
-        curr = build_coverage_matrix(
-            [_exec("T1078", "initial-access", status="success", detected=True)]
-        )
+        prev = build_coverage_matrix([_exec("T1078", "initial-access", status="success", detected=False)])
+        curr = build_coverage_matrix([_exec("T1078", "initial-access", status="success", detected=True)])
         drift = compute_drift(curr, prev)
         improved = [t for t in drift["techniques"] if t["status"] == "improved"]
         assert len(improved) == 1
@@ -91,9 +83,7 @@ class TestComputeDrift:
         assert drift["summary"]["improved"] == 1
 
     def test_summary_delta_reflects_aggregate_change(self) -> None:
-        prev = build_coverage_matrix(
-            [_exec("T1078", "initial-access", status="success", detected=False)]
-        )
+        prev = build_coverage_matrix([_exec("T1078", "initial-access", status="success", detected=False)])
         curr = build_coverage_matrix(
             [
                 _exec("T1078", "initial-access", status="success", detected=True),

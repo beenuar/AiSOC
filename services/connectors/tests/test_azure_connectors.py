@@ -44,8 +44,7 @@ def test_azure_activity_schema_includes_subscription_field():
     schema = AzureActivityConnector.schema()
     field_names = {f.name for f in schema.fields}
     assert "subscription_id" in field_names, (
-        "azure_activity must collect a subscription_id; without it the polling "
-        "loop has no scope to query"
+        "azure_activity must collect a subscription_id; without it the polling loop has no scope to query"
     )
     assert {"tenant_id", "client_id", "client_secret"} <= field_names
     assert schema.category == "cloud"
@@ -123,9 +122,7 @@ def test_azure_activity_normalize_role_assignment_write_is_high():
         "eventTimestamp": "2026-01-01T00:00:00Z",
     }
     out = connector.normalize(raw)
-    assert out["severity"] == "high", (
-        "writing role assignments is a high-blast-radius operation"
-    )
+    assert out["severity"] == "high", "writing role assignments is a high-blast-radius operation"
     assert out["external_id"] == "act-1"
     assert out["actor"] == "service-principal@example.com"
     assert out["actor_email"] == "service-principal@example.com"
@@ -209,9 +206,7 @@ async def test_azure_entra_test_connection_success():
         return_value=httpx.Response(200, json={"access_token": "abc"})
     )
     respx.get("https://graph.microsoft.com/v1.0/organization").mock(
-        return_value=httpx.Response(
-            200, json={"value": [{"id": "org-1", "displayName": "Acme Corp"}]}
-        )
+        return_value=httpx.Response(200, json={"value": [{"id": "org-1", "displayName": "Acme Corp"}]})
     )
 
     connector = AzureEntraConnector(_TENANT, _CLIENT, _SECRET)
@@ -256,9 +251,7 @@ async def test_azure_entra_fetch_alerts_returns_normalized_events():
             },
         )
     )
-    respx.get("https://graph.microsoft.com/v1.0/auditLogs/signIns").mock(
-        return_value=httpx.Response(200, json={"value": []})
-    )
+    respx.get("https://graph.microsoft.com/v1.0/auditLogs/signIns").mock(return_value=httpx.Response(200, json={"value": []}))
 
     connector = AzureEntraConnector(_TENANT, _CLIENT, _SECRET)
     events = await connector.fetch_alerts(since_seconds=300)
@@ -274,9 +267,7 @@ async def test_azure_activity_test_connection_success():
         return_value=httpx.Response(200, json={"access_token": "abc"})
     )
     respx.get(f"https://management.azure.com/subscriptions/{_SUB}").mock(
-        return_value=httpx.Response(
-            200, json={"id": f"/subscriptions/{_SUB}", "displayName": "Production"}
-        )
+        return_value=httpx.Response(200, json={"id": f"/subscriptions/{_SUB}", "displayName": "Production"})
     )
 
     connector = AzureActivityConnector(_TENANT, _CLIENT, _SECRET, _SUB)
@@ -291,13 +282,8 @@ async def test_azure_activity_fetch_alerts_handles_empty_response():
     respx.post(f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token").mock(
         return_value=httpx.Response(200, json={"access_token": "abc"})
     )
-    activity_url = (
-        f"https://management.azure.com/subscriptions/{_SUB}"
-        "/providers/Microsoft.Insights/eventtypes/management/values"
-    )
-    respx.get(activity_url).mock(
-        return_value=httpx.Response(200, json={"value": []})
-    )
+    activity_url = f"https://management.azure.com/subscriptions/{_SUB}/providers/Microsoft.Insights/eventtypes/management/values"
+    respx.get(activity_url).mock(return_value=httpx.Response(200, json={"value": []}))
 
     connector = AzureActivityConnector(_TENANT, _CLIENT, _SECRET, _SUB)
     events = await connector.fetch_alerts(since_seconds=600)
@@ -310,9 +296,7 @@ async def test_azure_defender_test_connection_handles_failure():
     respx.post(f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token").mock(
         return_value=httpx.Response(200, json={"access_token": "abc"})
     )
-    respx.get("https://graph.microsoft.com/v1.0/security/alerts_v2").mock(
-        return_value=httpx.Response(403, text="insufficient_privileges")
-    )
+    respx.get("https://graph.microsoft.com/v1.0/security/alerts_v2").mock(return_value=httpx.Response(403, text="insufficient_privileges"))
 
     connector = AzureDefenderConnector(_TENANT, _CLIENT, _SECRET)
     result = await connector.test_connection()

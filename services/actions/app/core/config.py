@@ -62,10 +62,7 @@ class ActionsSettings(BaseSettings):
 
     AISOC_CHATOPS_RESPONSE_SECRET: str = Field(
         default="",
-        description=(
-            "HMAC secret used to sign ChatOps response tokens so we can verify a "
-            "callback genuinely came from a message we sent."
-        ),
+        description=("HMAC secret used to sign ChatOps response tokens so we can verify a callback genuinely came from a message we sent."),
     )
 
     AISOC_CHATOPS_TIMEOUT_SECONDS: int = Field(
@@ -76,8 +73,7 @@ class ActionsSettings(BaseSettings):
     AISOC_ACTIONS_PUBLIC_URL: str = Field(
         default="http://localhost:8003",
         description=(
-            "Externally-reachable base URL of services/actions. Used to build "
-            "the callback links embedded in ChatOps verification messages."
+            "Externally-reachable base URL of services/actions. Used to build the callback links embedded in ChatOps verification messages."
         ),
     )
 

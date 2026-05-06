@@ -37,9 +37,7 @@ class PostureFinding(Base):
     last_evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     suppressed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    suppressed_by: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    suppressed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     suppress_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
@@ -79,7 +77,5 @@ class PostureDriftEvent(Base):
     old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     severity: Mapped[str] = mapped_column(String(20), default="medium")
-    linked_finding: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("posture_findings.id", ondelete="SET NULL"), nullable=True
-    )
+    linked_finding: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("posture_findings.id", ondelete="SET NULL"), nullable=True)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

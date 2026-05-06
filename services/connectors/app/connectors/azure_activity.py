@@ -160,20 +160,13 @@ class AzureActivityConnector(BaseConnector):
             await self._authenticate()
 
         # Activity log filter is OData; quote the literal datetime.
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         until = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        url = (
-            f"{_ARM_BASE}/subscriptions/{self._subscription_id}"
-            f"/providers/Microsoft.Insights/eventtypes/management/values"
-        )
+        url = f"{_ARM_BASE}/subscriptions/{self._subscription_id}/providers/Microsoft.Insights/eventtypes/management/values"
         params = {
             "api-version": _ACTIVITY_API_VERSION,
-            "$filter": (
-                f"eventTimestamp ge '{since}' and eventTimestamp le '{until}'"
-            ),
+            "$filter": (f"eventTimestamp ge '{since}' and eventTimestamp le '{until}'"),
         }
 
         events: list[dict[str, Any]] = []
@@ -231,10 +224,7 @@ class AzureActivityConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": raw.get("eventDataId") or raw.get("id", ""),
             "title": op_name or "Azure Activity Log Event",
-            "description": (
-                f"status={status}; subStatus={sub_status}; "
-                f"resource={resource_id}"
-            ),
+            "description": (f"status={status}; subStatus={sub_status}; resource={resource_id}"),
             "severity": severity,
             "actor": caller,
             "actor_email": caller if "@" in caller else None,

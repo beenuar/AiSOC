@@ -85,10 +85,7 @@ class GoogleWorkspaceConnector(BaseConnector):
                     "service_account_json",
                     "secret",
                     "Service account JSON key",
-                    help_text=(
-                        "Paste the full JSON key file. Encrypted at rest by "
-                        "the credential vault."
-                    ),
+                    help_text=("Paste the full JSON key file. Encrypted at rest by the credential vault."),
                 ),
             ],
             oauth=OAuthHints(
@@ -112,15 +109,10 @@ class GoogleWorkspaceConnector(BaseConnector):
         try:
             sa = json.loads(blob)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                "service_account_json is not valid JSON. Paste the entire "
-                "key file contents."
-            ) from exc
+            raise ValueError("service_account_json is not valid JSON. Paste the entire key file contents.") from exc
         for required in ("client_email", "private_key", "token_uri"):
             if required not in sa:
-                raise ValueError(
-                    f"service_account_json missing required field: {required}"
-                )
+                raise ValueError(f"service_account_json missing required field: {required}")
         return sa
 
     def _build_jwt(self) -> str:
@@ -139,9 +131,7 @@ class GoogleWorkspaceConnector(BaseConnector):
             "sub": self._admin_email,
         }
         signing_input = (
-            _b64url(json.dumps(header, separators=(",", ":")).encode())
-            + "."
-            + _b64url(json.dumps(claims, separators=(",", ":")).encode())
+            _b64url(json.dumps(header, separators=(",", ":")).encode()) + "." + _b64url(json.dumps(claims, separators=(",", ":")).encode())
         ).encode("ascii")
         private_key = serialization.load_pem_private_key(
             self._sa_info["private_key"].encode("utf-8"),
@@ -209,9 +199,7 @@ class GoogleWorkspaceConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         await self._authenticate()
-        start_time = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.000Z"
-        )
+        start_time = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         events: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -289,9 +277,7 @@ class GoogleWorkspaceConnector(BaseConnector):
     )
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
-        application = raw.get("_aisoc_application") or raw.get("id", {}).get(
-            "applicationName"
-        )
+        application = raw.get("_aisoc_application") or raw.get("id", {}).get("applicationName")
         actor = (raw.get("actor") or {}).get("email", "unknown")
         # The Reports API encodes individual events as a list under each
         # activity. Most activities have a single event; a few bundle
@@ -325,21 +311,13 @@ class GoogleWorkspaceConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": (raw.get("id") or {}).get("uniqueQualifier", ""),
             "title": event_name or f"Workspace {application} event",
-            "description": (
-                f"application={application}; "
-                f"event={event_name}; "
-                f"actor={actor}"
-            ),
+            "description": (f"application={application}; event={event_name}; actor={actor}"),
             "severity": severity,
             "actor": actor,
             "actor_email": actor if "@" in actor else None,
             "src_ip": ip_address,
             "application": application,
-            "event_type": (
-                f"workspace.{application}.{event_name}".lower()
-                if application and event_name
-                else "workspace.audit"
-            ),
+            "event_type": (f"workspace.{application}.{event_name}".lower() if application and event_name else "workspace.audit"),
             "raw_event": raw,
             "created_at": (raw.get("id") or {}).get("time"),
         }

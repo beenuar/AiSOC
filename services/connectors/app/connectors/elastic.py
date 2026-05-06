@@ -72,9 +72,7 @@ class ElasticConnector(BaseConnector):
         index: str = "logs-*",
     ):
         if not api_key and not (username and password):
-            raise ValueError(
-                "Elastic connector requires either api_key or username+password"
-            )
+            raise ValueError("Elastic connector requires either api_key or username+password")
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._username = username
@@ -111,11 +109,7 @@ class ElasticConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         # Elastic Security stores detection rule alerts in this hidden index pattern.
-        esql = (
-            f'FROM .alerts-security.alerts-* '
-            f'| WHERE @timestamp > NOW() - {since_seconds} seconds '
-            f'| LIMIT 100'
-        )
+        esql = f"FROM .alerts-security.alerts-* | WHERE @timestamp > NOW() - {since_seconds} seconds | LIMIT 100"
         async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
             resp = await client.post(
                 f"{self._base_url}/_query",

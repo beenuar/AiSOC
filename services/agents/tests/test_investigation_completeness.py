@@ -285,8 +285,7 @@ class TestInvestigationCompleteness(unittest.TestCase):
         self.assertGreaterEqual(
             summary["template_macro_mean"],
             0.80,
-            "Per-template completeness below 0.80.\n"
-            f"Failing templates: {summary['failing_templates']}",
+            f"Per-template completeness below 0.80.\nFailing templates: {summary['failing_templates']}",
         )
 
 

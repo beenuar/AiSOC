@@ -141,9 +141,7 @@ class M365AuditConnector(BaseConnector):
                 "success": True,
                 "connector": self.connector_id,
                 "tenant_id": self._tenant_id,
-                "active_subscriptions": [
-                    s.get("contentType") for s in resp.json() if s.get("status") == "enabled"
-                ],
+                "active_subscriptions": [s.get("contentType") for s in resp.json() if s.get("status") == "enabled"],
             }
         except httpx.HTTPStatusError as exc:
             return {
@@ -312,21 +310,13 @@ class M365AuditConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": raw.get("Id", ""),
             "title": operation or f"M365 {workload} event",
-            "description": (
-                f"workload={workload}; "
-                f"operation={operation}; "
-                f"result={result_status or 'success'}"
-            ),
+            "description": (f"workload={workload}; operation={operation}; result={result_status or 'success'}"),
             "severity": severity,
             "actor": actor,
             "actor_email": actor if "@" in actor else None,
             "src_ip": raw.get("ClientIP"),
             "workload": workload,
-            "event_type": (
-                f"m365.{workload.lower()}.{operation.replace(' ', '').lower()}"
-                if workload and operation
-                else "m365.audit"
-            ),
+            "event_type": (f"m365.{workload.lower()}.{operation.replace(' ', '').lower()}" if workload and operation else "m365.audit"),
             "raw_event": raw,
             "created_at": raw.get("CreationTime"),
         }

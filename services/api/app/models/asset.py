@@ -39,9 +39,7 @@ class Asset(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    vulnerabilities: Mapped[list[AssetVulnerability]] = relationship(
-        "AssetVulnerability", back_populates="asset", lazy="noload"
-    )
+    vulnerabilities: Mapped[list[AssetVulnerability]] = relationship("AssetVulnerability", back_populates="asset", lazy="noload")
 
 
 class AssetVulnerability(Base):
@@ -75,12 +73,8 @@ class AlertAssetCorrelation(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     alert_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
-    )
-    vuln_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("asset_vulnerabilities.id", ondelete="SET NULL"), nullable=True
-    )
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    vuln_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("asset_vulnerabilities.id", ondelete="SET NULL"), nullable=True)
     match_field: Mapped[str] = mapped_column(String(50), default="ip")
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

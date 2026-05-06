@@ -39,12 +39,8 @@ class IdentityEdge(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    source_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("identity_nodes.id", ondelete="CASCADE"), nullable=False
-    )
-    target_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("identity_nodes.id", ondelete="CASCADE"), nullable=False
-    )
+    source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_nodes.id", ondelete="CASCADE"), nullable=False)
+    target_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_nodes.id", ondelete="CASCADE"), nullable=False)
     edge_type: Mapped[str] = mapped_column(String(50), nullable=False)
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
@@ -59,9 +55,7 @@ class AlertIdentityLink(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     alert_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    node_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("identity_nodes.id", ondelete="CASCADE"), nullable=False
-    )
+    node_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_nodes.id", ondelete="CASCADE"), nullable=False)
     link_reason: Mapped[str] = mapped_column(String(50), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

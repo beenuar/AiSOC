@@ -97,9 +97,7 @@ async def run_hunt(hunt_id: str) -> dict[str, Any]:
     sched = hunt_scheduler.get_scheduler()
     out = await sched.run_one(hunt_id)
     if not out.get("ok"):
-        raise HTTPException(
-            status_code=404, detail=out.get("error", "hunt run failed")
-        )
+        raise HTTPException(status_code=404, detail=out.get("error", "hunt run failed"))
     return out
 
 
@@ -121,6 +119,4 @@ async def list_findings(
     status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict[str, Any]]:
-    return await hunt_store.list_recent_findings(
-        hunt_id=hunt_id, status=status, limit=limit
-    )
+    return await hunt_store.list_recent_findings(hunt_id=hunt_id, status=status, limit=limit)

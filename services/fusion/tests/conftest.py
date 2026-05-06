@@ -18,5 +18,6 @@ def pytest_collection_modifyitems(items):
         if isinstance(item, pytest.Function) and item.get_closest_marker("asyncio") is None:
             if callable(item.function):
                 import asyncio
+
                 if asyncio.iscoroutinefunction(item.function):
                     item.add_marker(pytest.mark.asyncio)

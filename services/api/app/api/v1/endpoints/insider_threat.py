@@ -217,9 +217,7 @@ async def list_peer_groups(
     current_user: User = Depends(get_current_user),
 ) -> list[InsiderPeerGroup]:
     result = await db.execute(
-        select(InsiderPeerGroup)
-        .where(InsiderPeerGroup.tenant_id == current_user.tenant_id)
-        .order_by(InsiderPeerGroup.name)
+        select(InsiderPeerGroup).where(InsiderPeerGroup.tenant_id == current_user.tenant_id).order_by(InsiderPeerGroup.name)
     )
     return list(result.scalars().all())
 

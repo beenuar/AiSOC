@@ -383,9 +383,7 @@ class MitreAccuracyResult:
             )
         templates.sort(key=lambda t: (t["accuracy"], -t["cases"]))
 
-        macro = (
-            sum(t["accuracy"] for t in templates) / len(templates) if templates else 0.0
-        )
+        macro = sum(t["accuracy"] for t in templates) / len(templates) if templates else 0.0
         failing = [t for t in templates if t["accuracy"] < 0.80]
         return {
             "templates": templates,
@@ -565,8 +563,7 @@ class TestMitreAccuracy(unittest.TestCase):
         self.assertGreaterEqual(
             summary["template_macro_accuracy"],
             0.80,
-            "Per-template MITRE accuracy below 80%.\n"
-            f"Failing templates: {summary['failing_templates']}",
+            f"Per-template MITRE accuracy below 80%.\nFailing templates: {summary['failing_templates']}",
         )
 
     def test_each_incident_has_template_id(self) -> None:
@@ -597,8 +594,7 @@ class TestMitreAccuracy(unittest.TestCase):
         self.assertLessEqual(
             worst[1],
             max(4, int(len(SYNTHETIC_INCIDENTS_DATA) * 0.05)),
-            f"Template '{worst[0]}' appears {worst[1]} times "
-            f"(>{int(len(SYNTHETIC_INCIDENTS_DATA) * 0.05)} = 5% of dataset).",
+            f"Template '{worst[0]}' appears {worst[1]} times (>{int(len(SYNTHETIC_INCIDENTS_DATA) * 0.05)} = 5% of dataset).",
         )
 
 

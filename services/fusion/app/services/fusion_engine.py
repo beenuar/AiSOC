@@ -107,9 +107,7 @@ class FusionEngine:
                     logger.info(
                         "rba_promotions",
                         alert_id=str(alert.id),
-                        promoted=[
-                            f"{p.entity_type}:{p.entity_value}" for p in promotions
-                        ],
+                        promoted=[f"{p.entity_type}:{p.entity_value}" for p in promotions],
                     )
             except Exception as exc:
                 logger.warning("rba_observation_failed", error=str(exc))

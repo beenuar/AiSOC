@@ -145,9 +145,7 @@ def test_score_is_deterministic(scorer: ConfidenceScorer) -> None:
     b = scorer.score(_fused(alert, anomaly_score=0.7, priority_score=0.6))
     assert a.confidence_score == b.confidence_score
     assert a.confidence_label == b.confidence_label
-    assert [f.factor for f in a.confidence_rationale] == [
-        f.factor for f in b.confidence_rationale
-    ]
+    assert [f.factor for f in a.confidence_rationale] == [f.factor for f in b.confidence_rationale]
 
 
 # ─── Banding ─────────────────────────────────────────────────────────────────

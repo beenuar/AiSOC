@@ -209,30 +209,30 @@ class Settings(BaseSettings):
     # individual flags via env vars (e.g. ``AISOC_FEATURE_RBA=false``).
     # ------------------------------------------------------------------
     # Wave 1 — close 2026 table-stakes
-    AISOC_FEATURE_RBA: bool = True                # Risk-Based Alerting + entity rollup
-    AISOC_FEATURE_CONFIDENCE: bool = True         # Detection confidence + explainability
-    AISOC_FEATURE_CHATOPS_VERIFY: bool = True     # Slack/Teams interactive user verification
-    AISOC_FEATURE_DETECTION_DRIFT: bool = True    # Weekly purple-team drift sweep
-    AISOC_FEATURE_KPI_BAR: bool = True            # 2026 KPI bar in SLA dashboard
+    AISOC_FEATURE_RBA: bool = True  # Risk-Based Alerting + entity rollup
+    AISOC_FEATURE_CONFIDENCE: bool = True  # Detection confidence + explainability
+    AISOC_FEATURE_CHATOPS_VERIFY: bool = True  # Slack/Teams interactive user verification
+    AISOC_FEATURE_DETECTION_DRIFT: bool = True  # Weekly purple-team drift sweep
+    AISOC_FEATURE_KPI_BAR: bool = True  # 2026 KPI bar in SLA dashboard
 
     # Wave 2 — eval-graded differentiation
-    AISOC_FEATURE_DAC: bool = True                # Detection-as-code lifecycle
-    AISOC_FEATURE_HUNT_AS_CODE: bool = True       # YAML hunt corpus + scheduler
-    AISOC_FEATURE_BENCHMARK_PUBLIC: bool = True   # Public scoreboard
-    AISOC_FEATURE_AIVAI_EVAL: bool = True         # AI-vs-AI adversary suite
+    AISOC_FEATURE_DAC: bool = True  # Detection-as-code lifecycle
+    AISOC_FEATURE_HUNT_AS_CODE: bool = True  # YAML hunt corpus + scheduler
+    AISOC_FEATURE_BENCHMARK_PUBLIC: bool = True  # Public scoreboard
+    AISOC_FEATURE_AIVAI_EVAL: bool = True  # AI-vs-AI adversary suite
 
     # Wave 3 — operational maturity
-    AISOC_FEATURE_FED_SEARCH: bool = True         # Federated SIEM search
-    AISOC_FEATURE_MSSP: bool = True               # Parent-tenant console
-    AISOC_FEATURE_ASSET_INVENTORY: bool = True    # Asset table + KEV/EPSS
-    AISOC_FEATURE_INSIDER_THREAT: bool = True     # Insider-threat module
+    AISOC_FEATURE_FED_SEARCH: bool = True  # Federated SIEM search
+    AISOC_FEATURE_MSSP: bool = True  # Parent-tenant console
+    AISOC_FEATURE_ASSET_INVENTORY: bool = True  # Asset table + KEV/EPSS
+    AISOC_FEATURE_INSIDER_THREAT: bool = True  # Insider-threat module
     AISOC_FEATURE_REMEDIATION_TIERS: bool = True  # L0–L4 maturity tiers
 
     # Wave 4 — strategic moat
-    AISOC_FEATURE_INTERNAL_TI: bool = True        # Closed-case IOC extraction
-    AISOC_FEATURE_CSPM: bool = True               # Cloud security posture
-    AISOC_FEATURE_IDENTITY_GRAPH: bool = True     # Identity-first correlation graph
-    AISOC_FEATURE_BOARD_REPORTS: bool = True      # Auto-generated monthly board reports
+    AISOC_FEATURE_INTERNAL_TI: bool = True  # Closed-case IOC extraction
+    AISOC_FEATURE_CSPM: bool = True  # Cloud security posture
+    AISOC_FEATURE_IDENTITY_GRAPH: bool = True  # Identity-first correlation graph
+    AISOC_FEATURE_BOARD_REPORTS: bool = True  # Auto-generated monthly board reports
 
     # Drift sweep cadence (hours). Used by services/purple-team scheduler when
     # AISOC_FEATURE_DETECTION_DRIFT is True. Defaults to 168h (weekly).

@@ -98,8 +98,7 @@ class AdversaryEvalResult:
 def _load_adversary_dataset() -> list[dict[str, Any]]:
     if not _ADVERSARY_PATH.exists():
         raise FileNotFoundError(
-            f"Adversary dataset missing at {_ADVERSARY_PATH}. "
-            "Generate with: python3 scripts/generate_adversary_incidents.py"
+            f"Adversary dataset missing at {_ADVERSARY_PATH}. Generate with: python3 scripts/generate_adversary_incidents.py"
         )
     return json.loads(_ADVERSARY_PATH.read_text())
 
@@ -160,8 +159,7 @@ class TestAdversaryEval(unittest.TestCase):
     def test_dataset_present(self) -> None:
         self.assertTrue(
             _ADVERSARY_PATH.exists(),
-            f"Adversary dataset missing at {_ADVERSARY_PATH}. "
-            "Run scripts/generate_adversary_incidents.py to (re)generate it.",
+            f"Adversary dataset missing at {_ADVERSARY_PATH}. Run scripts/generate_adversary_incidents.py to (re)generate it.",
         )
         # The mutated set must mirror the base set 1:1 so per-template
         # diffs are meaningful.
@@ -183,16 +181,12 @@ class TestAdversaryEval(unittest.TestCase):
         """
         mutated = _load_adversary_dataset()
         unchanged = sum(
-            1
-            for inc in mutated
-            if inc["title"] == inc.get("original_title")
-            and inc["description"] == inc.get("original_description")
+            1 for inc in mutated if inc["title"] == inc.get("original_title") and inc["description"] == inc.get("original_description")
         )
         self.assertLess(
             unchanged,
             (len(mutated) * 35) // 100,
-            f"{unchanged}/{len(mutated)} incidents unchanged — "
-            "mutation grammar may have regressed.",
+            f"{unchanged}/{len(mutated)} incidents unchanged — mutation grammar may have regressed.",
         )
 
     def test_overall_graceful_degradation(self) -> None:
@@ -208,8 +202,7 @@ class TestAdversaryEval(unittest.TestCase):
             result.accuracy,
             _OVERALL_FLOOR,
             f"Adversary catch rate {result.accuracy:.1%} below "
-            f"graceful-degradation floor of {_OVERALL_FLOOR:.0%}.\n"
-            + json.dumps(result.to_summary(), indent=2)[:4000],
+            f"graceful-degradation floor of {_OVERALL_FLOOR:.0%}.\n" + json.dumps(result.to_summary(), indent=2)[:4000],
         )
 
     def test_light_bucket_still_caught(self) -> None:
@@ -248,8 +241,7 @@ class TestAdversaryEval(unittest.TestCase):
         self.assertGreater(
             result.bucket_counts["heavy"],
             result.total // 4,
-            f"Heavy bucket only {result.bucket_counts['heavy']}/{result.total} "
-            "— mutation distribution may have drifted.",
+            f"Heavy bucket only {result.bucket_counts['heavy']}/{result.total} — mutation distribution may have drifted.",
         )
         self.assertGreater(
             result.bucket_counts["light"],

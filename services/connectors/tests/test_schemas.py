@@ -37,12 +37,9 @@ def test_registry_has_expected_baseline_connectors(registry):
 def test_every_connector_returns_a_schema(registry):
     for connector_id, cls in registry.items():
         schema = cls.schema()
-        assert isinstance(schema, ConnectorSchema), (
-            f"{cls.__name__}.schema() must return ConnectorSchema, got {type(schema).__name__}"
-        )
+        assert isinstance(schema, ConnectorSchema), f"{cls.__name__}.schema() must return ConnectorSchema, got {type(schema).__name__}"
         assert schema.connector_id == connector_id, (
-            f"{cls.__name__}.schema().connector_id ({schema.connector_id!r}) "
-            f"does not match registry key ({connector_id!r})"
+            f"{cls.__name__}.schema().connector_id ({schema.connector_id!r}) does not match registry key ({connector_id!r})"
         )
 
 
@@ -50,9 +47,7 @@ def test_schema_metadata_is_well_formed(registry):
     for cls in registry.values():
         schema = cls.schema()
         assert schema.connector_name, f"{cls.__name__}: connector_name is empty"
-        assert schema.category in ALLOWED_CATEGORIES, (
-            f"{cls.__name__}: category {schema.category!r} not in {ALLOWED_CATEGORIES}"
-        )
+        assert schema.category in ALLOWED_CATEGORIES, f"{cls.__name__}: category {schema.category!r} not in {ALLOWED_CATEGORIES}"
         assert schema.description, f"{cls.__name__}: description is empty"
         assert schema.fields, f"{cls.__name__}: at least one field is required"
 
@@ -64,18 +59,12 @@ def test_schema_fields_are_well_formed(registry):
         for field in schema.fields:
             assert isinstance(field, Field)
             assert field.name, f"{cls.__name__}: field with empty name"
-            assert field.name not in seen_names, (
-                f"{cls.__name__}: duplicate field name {field.name!r}"
-            )
+            assert field.name not in seen_names, f"{cls.__name__}: duplicate field name {field.name!r}"
             seen_names.add(field.name)
             assert field.label, f"{cls.__name__}.{field.name}: label is empty"
-            assert field.type in ALLOWED_FIELD_TYPES, (
-                f"{cls.__name__}.{field.name}: unknown field type {field.type!r}"
-            )
+            assert field.type in ALLOWED_FIELD_TYPES, f"{cls.__name__}.{field.name}: unknown field type {field.type!r}"
             if field.type == "select":
-                assert field.options, (
-                    f"{cls.__name__}.{field.name}: select fields require options"
-                )
+                assert field.options, f"{cls.__name__}.{field.name}: select fields require options"
 
 
 def test_schemas_are_json_serialisable():
@@ -105,6 +94,5 @@ def test_secret_fields_are_marked_secret(registry):
         for field in cls.schema().fields:
             if any(s in field.name.lower() for s in suspicious):
                 assert field.type == "secret", (
-                    f"{cls.__name__}.{field.name}: looks like a credential but type is "
-                    f"{field.type!r}, expected 'secret'"
+                    f"{cls.__name__}.{field.name}: looks like a credential but type is {field.type!r}, expected 'secret'"
                 )

@@ -80,10 +80,7 @@ class GCPSCCConnector(BaseConnector):
                     "service_account_json",
                     "secret",
                     "Service account JSON key",
-                    help_text=(
-                        "Paste the full JSON key file. It will be encrypted "
-                        "at rest by the credential vault."
-                    ),
+                    help_text=("Paste the full JSON key file. It will be encrypted at rest by the credential vault."),
                 ),
             ],
             oauth=OAuthHints(
@@ -107,15 +104,10 @@ class GCPSCCConnector(BaseConnector):
         try:
             sa = json.loads(blob)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                "service_account_json is not valid JSON. Paste the entire "
-                "key file contents."
-            ) from exc
+            raise ValueError("service_account_json is not valid JSON. Paste the entire key file contents.") from exc
         for required in ("client_email", "private_key", "token_uri"):
             if required not in sa:
-                raise ValueError(
-                    f"service_account_json missing required field: {required}"
-                )
+                raise ValueError(f"service_account_json missing required field: {required}")
         return sa
 
     def _build_jwt(self) -> str:
@@ -129,9 +121,7 @@ class GCPSCCConnector(BaseConnector):
             "exp": now + 3600,
         }
         signing_input = (
-            _b64url(json.dumps(header, separators=(",", ":")).encode())
-            + "."
-            + _b64url(json.dumps(claims, separators=(",", ":")).encode())
+            _b64url(json.dumps(header, separators=(",", ":")).encode()) + "." + _b64url(json.dumps(claims, separators=(",", ":")).encode())
         ).encode("ascii")
 
         private_key = serialization.load_pem_private_key(
@@ -199,18 +189,13 @@ class GCPSCCConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         await self._authenticate()
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # ``-`` as the source ID means "across all sources" — the standard
         # way to enumerate findings in an org without iterating sources.
         # We filter on ``eventTime`` so we get net-new findings since the
         # last poll, and exclude already-resolved findings.
-        scc_filter = (
-            f'state="ACTIVE" '
-            f'AND eventTime >= "{since}"'
-        )
+        scc_filter = f'state="ACTIVE" AND eventTime >= "{since}"'
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
@@ -261,11 +246,7 @@ class GCPSCCConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": finding.get("name", ""),
             "title": finding.get("category", "GCP SCC Finding"),
-            "description": (
-                finding.get("description")
-                or finding.get("category", "")
-                or "GCP Security Command Center finding"
-            ),
+            "description": (finding.get("description") or finding.get("category", "") or "GCP Security Command Center finding"),
             "severity": severity,
             "actor": (finding.get("access", {}) or {}).get("principalEmail"),
             "actor_email": (finding.get("access", {}) or {}).get("principalEmail"),

@@ -134,10 +134,7 @@ class TestGraphQLTenantIsolation:
         stmt = _scope(select(Alert), info, Alert)
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
         assert "tenant_id" in compiled.lower()
-        assert (
-            "00000000-0000-0000-0000-000000000000" in compiled
-            or "00000000000000000000000000000000" in compiled
-        )
+        assert "00000000-0000-0000-0000-000000000000" in compiled or "00000000000000000000000000000000" in compiled
 
     def test_scope_isolates_tenants(self):
         """A query scoped to tenant A must not match rows from tenant B."""

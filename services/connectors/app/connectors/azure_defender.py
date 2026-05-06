@@ -124,9 +124,7 @@ class AzureDefenderConnector(BaseConnector):
         if not self._access_token:
             await self._authenticate()
 
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.000Z"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         params = {
             "$filter": f"createdDateTime ge {since}",
             "$top": _PAGE_SIZE,
@@ -194,9 +192,7 @@ class AzureDefenderConnector(BaseConnector):
             "service_source": raw.get("serviceSource"),
             "tactics": raw.get("mitreTechniques", []),
             "category": raw.get("category"),
-            "event_type": (
-                f"azure.defender.{(raw.get('serviceSource') or 'unknown').lower()}"
-            ),
+            "event_type": (f"azure.defender.{(raw.get('serviceSource') or 'unknown').lower()}"),
             "raw_event": raw,
             "created_at": raw.get("createdDateTime"),
         }

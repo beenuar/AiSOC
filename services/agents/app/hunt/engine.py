@@ -213,11 +213,7 @@ class HuntEngine:
     ) -> HuntFindingDraft:
         primary_entity = _pick_primary_entity(event)
         log_source = _pick_log_source(event, hunt)
-        title = (
-            f"{hunt.name} matched {primary_entity}"
-            if primary_entity
-            else hunt.name
-        )
+        title = f"{hunt.name} matched {primary_entity}" if primary_entity else hunt.name
         summary = hunt.hypothesis.question.strip() or hunt.description.strip() or hunt.name
         return HuntFindingDraft(
             hunt_id=hunt.id,

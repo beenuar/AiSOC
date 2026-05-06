@@ -38,11 +38,7 @@ def _mock_response(status_code: int, json_body: Any) -> MagicMock:
     resp.status_code = status_code
     resp.json = MagicMock(return_value=json_body)
     if status_code >= 400:
-        resp.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                f"upstream {status_code}", request=MagicMock(), response=resp
-            )
-        )
+        resp.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError(f"upstream {status_code}", request=MagicMock(), response=resp))
     else:
         resp.raise_for_status = MagicMock()
     return resp

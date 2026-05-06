@@ -71,8 +71,8 @@ def test_encrypt_dict_recursive(vault: CredentialVault) -> None:
 def test_encrypt_dict_with_secret_keys_filter(vault: CredentialVault) -> None:
     payload = {
         "client_id": "public-id",  # leave alone
-        "client_secret": "shh",     # encrypt
-        "region": "us-east-1",      # leave alone
+        "client_secret": "shh",  # encrypt
+        "region": "us-east-1",  # leave alone
     }
     encrypted = vault.encrypt_dict(payload, secret_keys={"client_secret"})
     assert encrypted["client_id"] == "public-id"

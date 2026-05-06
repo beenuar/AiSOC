@@ -135,9 +135,7 @@ class AzureEntraConnector(BaseConnector):
             await self._authenticate()
 
         # Graph wants ISO 8601 with milliseconds, e.g. ``2024-01-01T00:00:00.000Z``.
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.000Z"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         events: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -172,10 +170,7 @@ class AzureEntraConnector(BaseConnector):
 
             # Risky sign-ins — these are higher-signal than every signIn.
             signin_params = {
-                "$filter": (
-                    f"createdDateTime ge {since} and "
-                    f"riskLevelAggregated ne 'none'"
-                ),
+                "$filter": (f"createdDateTime ge {since} and riskLevelAggregated ne 'none'"),
                 "$top": _PAGE_SIZE,
                 "$orderby": "createdDateTime desc",
             }
@@ -251,11 +246,7 @@ class AzureEntraConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": raw.get("id", ""),
             "title": raw.get("activityDisplayName", "Entra Directory Audit"),
-            "description": (
-                f"category={category}; "
-                f"result={raw.get('result')}; "
-                f"resultReason={raw.get('resultReason', '')}"
-            ),
+            "description": (f"category={category}; result={raw.get('result')}; resultReason={raw.get('resultReason', '')}"),
             "severity": severity,
             "actor": user_part.get("displayName") or app_part.get("displayName"),
             "actor_email": user_part.get("userPrincipalName"),

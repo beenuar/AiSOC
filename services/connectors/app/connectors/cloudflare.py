@@ -56,19 +56,13 @@ class CloudflareConnector(BaseConnector):
                     "string",
                     "Account ID",
                     placeholder="abc123def456...",
-                    help_text=(
-                        "Found in the Cloudflare dashboard under any zone's "
-                        "Overview, lower-right pane (\"Account ID\")."
-                    ),
+                    help_text=('Found in the Cloudflare dashboard under any zone\'s Overview, lower-right pane ("Account ID").'),
                 ),
                 Field(
                     "api_token",
                     "secret",
                     "API Token",
-                    help_text=(
-                        "Account-scoped API token with the Audit Logs: Read "
-                        "permission. Avoid using the legacy Global API Key."
-                    ),
+                    help_text=("Account-scoped API token with the Audit Logs: Read permission. Avoid using the legacy Global API Key."),
                 ),
             ],
             # Cloudflare doesn't have a meaningful OAuth flow for this API;
@@ -134,11 +128,7 @@ class CloudflareConnector(BaseConnector):
                     return {
                         "success": False,
                         "connector": self.connector_id,
-                        "error": (
-                            f"Token verified but audit_logs failed: "
-                            f"HTTP {audit_resp.status_code}: "
-                            f"{audit_resp.text[:200]}"
-                        ),
+                        "error": (f"Token verified but audit_logs failed: HTTP {audit_resp.status_code}: {audit_resp.text[:200]}"),
                     }
 
             return {
@@ -150,9 +140,7 @@ class CloudflareConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         params = {
             "since": since,
             "per_page": _PER_PAGE,

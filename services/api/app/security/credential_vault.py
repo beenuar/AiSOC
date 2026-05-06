@@ -134,7 +134,7 @@ class CredentialVault:
             raise CredentialVaultError(f"vault.decrypt expects str, got {type(value).__name__}")
         if not value.startswith(_CIPHER_PREFIX):
             return value
-        token = value[len(_CIPHER_PREFIX):].encode("ascii")
+        token = value[len(_CIPHER_PREFIX) :].encode("ascii")
         try:
             return self._fernet.decrypt(token).decode("utf-8")
         except InvalidToken as exc:
@@ -219,7 +219,7 @@ def get_vault() -> CredentialVault:
             logger.warning(
                 "AISOC_CREDENTIAL_KEY is not set; using ephemeral process-local key. Connector secrets will not survive a restart. "
                 "Generate a key with "
-                "`python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"`"
+                '`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`'
                 " and set AISOC_CREDENTIAL_KEY."
             )
         rotation = _split_keys(settings.AISOC_CREDENTIAL_KEY_ROTATION_FROM or "")

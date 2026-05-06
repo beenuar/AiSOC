@@ -68,12 +68,10 @@ def compute_drift(
                 "current": cur,
                 "previous": prev,
                 "delta_coverage": round(
-                    float((cur or {}).get("coverage", 0.0))
-                    - float((prev or {}).get("coverage", 0.0)),
+                    float((cur or {}).get("coverage", 0.0)) - float((prev or {}).get("coverage", 0.0)),
                     3,
                 ),
-                "delta_detected": int((cur or {}).get("detected", 0))
-                - int((prev or {}).get("detected", 0)),
+                "delta_detected": int((cur or {}).get("detected", 0)) - int((prev or {}).get("detected", 0)),
                 "status": status,
             }
         )
@@ -81,15 +79,11 @@ def compute_drift(
     cur_sum = current.get("summary") or {}
     prev_sum = previous.get("summary") or {}
     summary_delta = {
-        "delta_total": int(cur_sum.get("total_techniques", 0))
-        - int(prev_sum.get("total_techniques", 0)),
-        "delta_tested": int(cur_sum.get("tested_techniques", 0))
-        - int(prev_sum.get("tested_techniques", 0)),
-        "delta_detected": int(cur_sum.get("detected_techniques", 0))
-        - int(prev_sum.get("detected_techniques", 0)),
+        "delta_total": int(cur_sum.get("total_techniques", 0)) - int(prev_sum.get("total_techniques", 0)),
+        "delta_tested": int(cur_sum.get("tested_techniques", 0)) - int(prev_sum.get("tested_techniques", 0)),
+        "delta_detected": int(cur_sum.get("detected_techniques", 0)) - int(prev_sum.get("detected_techniques", 0)),
         "delta_coverage": round(
-            float(cur_sum.get("overall_coverage", 0.0))
-            - float(prev_sum.get("overall_coverage", 0.0)),
+            float(cur_sum.get("overall_coverage", 0.0)) - float(prev_sum.get("overall_coverage", 0.0)),
             3,
         ),
     }

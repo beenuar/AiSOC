@@ -37,9 +37,7 @@ class _FakeRedis:
     async def hset(self, key: str, mapping: dict[str, Any]) -> int:
         bucket = self.hashes.setdefault(key, {})
         for k, v in mapping.items():
-            bucket[k.encode() if isinstance(k, str) else k] = (
-                v.encode() if isinstance(v, str) else v
-            )
+            bucket[k.encode() if isinstance(k, str) else k] = v.encode() if isinstance(v, str) else v
         return len(mapping)
 
     async def hgetall(self, key: str) -> dict[bytes, bytes]:
@@ -57,9 +55,7 @@ class _FakeRedis:
             bucket[member] = float(score)
         return added
 
-    async def zrevrange(
-        self, key: str, start: int, stop: int, withscores: bool = False
-    ) -> list[Any]:
+    async def zrevrange(self, key: str, start: int, stop: int, withscores: bool = False) -> list[Any]:
         bucket = self.zsets.get(key, {})
         sorted_pairs = sorted(bucket.items(), key=lambda kv: kv[1], reverse=True)
         # Redis ranges are inclusive on both ends.

@@ -40,9 +40,7 @@ class CopilotMessage(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     role: str  # "user" | "assistant"
     content: str
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class CopilotChatRequest(BaseModel):

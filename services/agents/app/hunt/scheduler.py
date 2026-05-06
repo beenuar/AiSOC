@@ -126,15 +126,11 @@ class HuntScheduler:
             try:
                 await self._run_hunt(hunt, events)
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "hunt.scheduler.run_failed", hunt_id=hunt.id, error=str(exc)
-                )
+                logger.warning("hunt.scheduler.run_failed", hunt_id=hunt.id, error=str(exc))
             finally:
                 self._last_run[hunt.id] = now
 
-    async def _run_hunt(
-        self, hunt: HuntDefinition, events: list[dict[str, Any]]
-    ) -> None:
+    async def _run_hunt(self, hunt: HuntDefinition, events: list[dict[str, Any]]) -> None:
         result = self._engine.run(hunt, events)
         await record_run(
             hunt,

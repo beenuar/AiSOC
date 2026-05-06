@@ -64,13 +64,10 @@ def _build_registry() -> dict[str, type[BaseConnector]]:
     registry: dict[str, type[BaseConnector]] = {}
     for cls in _CONNECTOR_CLASSES:
         if not cls.connector_id:
-            raise RuntimeError(
-                f"connector class {cls.__name__} has empty connector_id; refusing to register"
-            )
+            raise RuntimeError(f"connector class {cls.__name__} has empty connector_id; refusing to register")
         if cls.connector_id in registry:
             raise RuntimeError(
-                f"duplicate connector_id '{cls.connector_id}' between "
-                f"{registry[cls.connector_id].__name__} and {cls.__name__}"
+                f"duplicate connector_id '{cls.connector_id}' between {registry[cls.connector_id].__name__} and {cls.__name__}"
             )
         registry[cls.connector_id] = cls
     return registry

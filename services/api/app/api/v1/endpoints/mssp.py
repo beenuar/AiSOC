@@ -91,9 +91,7 @@ async def list_child_tenants(
     current_user: User = Depends(get_current_user),
 ) -> list[Tenant]:
     """Return all child tenants of the current parent tenant."""
-    result = await db.execute(
-        select(Tenant).where(Tenant.parent_tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Tenant).where(Tenant.parent_tenant_id == current_user.tenant_id))
     return list(result.scalars().all())
 
 
@@ -220,9 +218,7 @@ async def list_metrics(
 ) -> list[MSSPTenantMetrics]:
     """Return the latest metrics snapshot for every child tenant."""
     # Get child tenant ids
-    children_result = await db.execute(
-        select(Tenant.id).where(Tenant.parent_tenant_id == current_user.tenant_id)
-    )
+    children_result = await db.execute(select(Tenant.id).where(Tenant.parent_tenant_id == current_user.tenant_id))
     child_ids = list(children_result.scalars().all())
     if not child_ids:
         return []
@@ -242,8 +238,7 @@ async def list_metrics(
     result = await db.execute(
         select(MSSPTenantMetrics).join(
             subq,
-            (MSSPTenantMetrics.tenant_id == subq.c.tenant_id)
-            & (MSSPTenantMetrics.snapshot_at == subq.c.snapshot_at),
+            (MSSPTenantMetrics.tenant_id == subq.c.tenant_id) & (MSSPTenantMetrics.snapshot_at == subq.c.snapshot_at),
         )
     )
     return list(result.scalars().all())

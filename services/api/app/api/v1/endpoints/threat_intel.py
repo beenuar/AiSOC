@@ -208,9 +208,7 @@ async def list_feeds(
     current_user: User = Depends(get_current_user),
 ) -> list[ThreatIntelFeed]:
     result = await db.execute(
-        select(ThreatIntelFeed)
-        .where(ThreatIntelFeed.tenant_id == current_user.tenant_id)
-        .order_by(ThreatIntelFeed.name)
+        select(ThreatIntelFeed).where(ThreatIntelFeed.tenant_id == current_user.tenant_id).order_by(ThreatIntelFeed.name)
     )
     return list(result.scalars().all())
 

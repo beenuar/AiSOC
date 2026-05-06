@@ -79,19 +79,13 @@ class GCPCloudAuditConnector(BaseConnector):
                     "string",
                     "Project ID",
                     placeholder="my-prod-project",
-                    help_text=(
-                        "The GCP project to read audit logs from. Use a "
-                        "log-sink aggregator project if you've consolidated."
-                    ),
+                    help_text=("The GCP project to read audit logs from. Use a log-sink aggregator project if you've consolidated."),
                 ),
                 Field(
                     "service_account_json",
                     "secret",
                     "Service account JSON key",
-                    help_text=(
-                        "Paste the full JSON key file. It will be encrypted "
-                        "at rest by the credential vault."
-                    ),
+                    help_text=("Paste the full JSON key file. It will be encrypted at rest by the credential vault."),
                 ),
             ],
             oauth=OAuthHints(
@@ -116,15 +110,10 @@ class GCPCloudAuditConnector(BaseConnector):
         try:
             sa = json.loads(blob)
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                "service_account_json is not valid JSON. Paste the entire "
-                "key file contents."
-            ) from exc
+            raise ValueError("service_account_json is not valid JSON. Paste the entire key file contents.") from exc
         for required in ("client_email", "private_key", "token_uri"):
             if required not in sa:
-                raise ValueError(
-                    f"service_account_json missing required field: {required}"
-                )
+                raise ValueError(f"service_account_json missing required field: {required}")
         return sa
 
     def _build_jwt(self) -> str:
@@ -140,9 +129,7 @@ class GCPCloudAuditConnector(BaseConnector):
             "exp": now + 3600,
         }
         signing_input = (
-            _b64url(json.dumps(header, separators=(",", ":")).encode())
-            + "."
-            + _b64url(json.dumps(claims, separators=(",", ":")).encode())
+            _b64url(json.dumps(header, separators=(",", ":")).encode()) + "." + _b64url(json.dumps(claims, separators=(",", ":")).encode())
         ).encode("ascii")
 
         private_key = serialization.load_pem_private_key(
@@ -217,9 +204,7 @@ class GCPCloudAuditConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         await self._authenticate()
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Filter to the three Cloud Audit log streams. We exclude DataAccess
         # by default because most projects emit it at huge volume; operators

@@ -48,16 +48,10 @@ async def compute_coverage_for_tenant(
     used.
     """
 
-    exec_result = await session.execute(
-        select(TestExecution).where(TestExecution.tenant_id == tenant_id)
-    )
+    exec_result = await session.execute(select(TestExecution).where(TestExecution.tenant_id == tenant_id))
     executions = exec_result.scalars().all()
 
-    atomic_result = await session.execute(
-        select(AtomicTest.technique_id, AtomicTest.tactic).where(
-            AtomicTest.tenant_id == tenant_id
-        )
-    )
+    atomic_result = await session.execute(select(AtomicTest.technique_id, AtomicTest.tactic).where(AtomicTest.tenant_id == tenant_id))
     tactic_by_technique: dict[str, str] = {}
     for technique_id, tactic in atomic_result.all():
         # Atomic Red Team can list the same technique under multiple

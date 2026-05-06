@@ -98,17 +98,13 @@ async def test_poll_one_happy_path(monkeypatch):
     fake_vault = _FakeVault()
     fake_ingest = _FakeIngestClient(accepted=1)
 
-    scheduler = ConnectorScheduler(
-        engine=fake_engine, ingest_client=fake_ingest, vault=fake_vault
-    )
+    scheduler = ConnectorScheduler(engine=fake_engine, ingest_client=fake_ingest, vault=fake_vault)
     # We don't call start() because we don't want APScheduler running for
     # this test — _poll_one operates on the injected fakes directly.
 
     await scheduler._poll_one(connector_id=inst.id)
 
-    fake_connector_class.assert_called_once_with(
-        client_id="id", client_secret="secret"
-    )
+    fake_connector_class.assert_called_once_with(client_id="id", client_secret="secret")
     fake_connector.fetch_alerts.assert_awaited_once_with(since_seconds=60)
     assert fake_ingest.calls == 1
     pushed = fake_ingest.last_payload
@@ -127,9 +123,7 @@ async def test_poll_one_unknown_connector_type(monkeypatch):
     inst = _make_instance(connector_type="not_in_registry")
     monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
 
-    scheduler = ConnectorScheduler(
-        engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
     await scheduler._poll_one(connector_id=inst.id)
 
     engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
@@ -139,16 +133,12 @@ async def test_poll_one_unknown_connector_type(monkeypatch):
 @pytest.mark.asyncio
 async def test_poll_one_decrypt_failure(monkeypatch):
     inst = _make_instance(connector_type="fake_connector")
-    monkeypatch.setattr(
-        "app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": MagicMock()}
-    )
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": MagicMock()})
 
     bad_vault = _FakeVault()
     bad_vault.fail = True
 
-    scheduler = ConnectorScheduler(
-        engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=bad_vault
-    )
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=bad_vault)
     await scheduler._poll_one(connector_id=inst.id)
 
     engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
@@ -165,13 +155,9 @@ async def test_poll_one_constructor_typeerror(monkeypatch):
     def bad_ctor(**_kwargs: Any) -> Any:
         raise TypeError("got unexpected keyword argument")
 
-    monkeypatch.setattr(
-        "app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": bad_ctor}
-    )
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": bad_ctor})
 
-    scheduler = ConnectorScheduler(
-        engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
     await scheduler._poll_one(connector_id=inst.id)
 
     engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
@@ -188,9 +174,7 @@ async def test_poll_one_fetch_raises(monkeypatch):
         {"fake_connector": MagicMock(return_value=fake_connector)},
     )
 
-    scheduler = ConnectorScheduler(
-        engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
     await scheduler._poll_one(connector_id=inst.id)
 
     engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
@@ -213,9 +197,7 @@ async def test_poll_one_ingest_raises(monkeypatch):
     bad_ingest = _FakeIngestClient()
     bad_ingest.exc = IngestClientError("ingest down")
 
-    scheduler = ConnectorScheduler(
-        engine=_FakeEngine([inst]), ingest_client=bad_ingest, vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=bad_ingest, vault=_FakeVault())
     await scheduler._poll_one(connector_id=inst.id)
 
     engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
@@ -226,9 +208,7 @@ async def test_poll_one_ingest_raises(monkeypatch):
 async def test_poll_one_instance_disappeared(monkeypatch):
     """If the connector row was deleted between reload and poll, we no-op."""
     monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
-    scheduler = ConnectorScheduler(
-        engine=_FakeEngine([]), ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=_FakeEngine([]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
     await scheduler._poll_one(connector_id=uuid.uuid4())
 
     engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
@@ -247,9 +227,7 @@ async def test_reload_adds_and_drops_jobs(monkeypatch):
     a = _make_instance()
     b = _make_instance()
     engine = _FakeEngine([a, b])
-    scheduler = ConnectorScheduler(
-        engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
     fake_aps = _FakeAPScheduler()
     scheduler._scheduler = fake_aps
 
@@ -269,9 +247,7 @@ async def test_reload_skips_unchanged_jobs(monkeypatch):
     monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
     inst = _make_instance(connector_config={"poll_interval_seconds": 120})
     engine = _FakeEngine([inst])
-    scheduler = ConnectorScheduler(
-        engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
     fake_aps = _FakeAPScheduler()
     scheduler._scheduler = fake_aps
 
@@ -288,9 +264,7 @@ async def test_reload_reschedules_when_interval_changes(monkeypatch):
     monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
     inst = _make_instance(connector_config={"poll_interval_seconds": 120})
     engine = _FakeEngine([inst])
-    scheduler = ConnectorScheduler(
-        engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault()
-    )
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
     fake_aps = _FakeAPScheduler()
     scheduler._scheduler = fake_aps
 

@@ -116,18 +116,14 @@ class IngestClient:
         try:
             resp = await client.post(url, headers=headers, json=payload)
         except httpx.HTTPError as exc:
-            raise IngestClientError(
-                f"ingest service unreachable at {url}: {exc}"
-            ) from exc
+            raise IngestClientError(f"ingest service unreachable at {url}: {exc}") from exc
 
         if resp.status_code >= 400:
             # Pull the body so logs show *why* — typically a missing tenant
             # header or oversized batch, both of which we want surfaced
             # rather than swallowed.
             body_preview = resp.text[:500]
-            raise IngestClientError(
-                f"ingest service returned {resp.status_code} for connector {connector_id}: {body_preview}"
-            )
+            raise IngestClientError(f"ingest service returned {resp.status_code} for connector {connector_id}: {body_preview}")
 
         try:
             data = resp.json()
