@@ -50,9 +50,16 @@ class AssetOut(AssetCreate):
     updated_at: str
     last_seen: str
     first_seen: str
+    # ORM attribute is asset_metadata; expose as metadata in JSON via validator
+    asset_metadata: dict[str, Any] = Field(default_factory=dict)
 
     class Config:
         from_attributes = True
+
+    def model_post_init(self, __context: Any) -> None:
+        # Populate the `metadata` field from the ORM's `asset_metadata` column.
+        if self.asset_metadata and not self.metadata:
+            object.__setattr__(self, "metadata", self.asset_metadata)
 
 
 class VulnerabilityCreate(BaseModel):
@@ -76,9 +83,15 @@ class VulnerabilityOut(VulnerabilityCreate):
     first_found: str
     last_found: str
     remediated_at: str | None
+    # ORM attribute is asset_metadata; expose as metadata in JSON via validator
+    asset_metadata: dict[str, Any] = Field(default_factory=dict)
 
     class Config:
         from_attributes = True
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.asset_metadata and not self.metadata:
+            object.__setattr__(self, "metadata", self.asset_metadata)
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +124,12 @@ async def create_asset(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Asset:
-    asset = Asset(**body.model_dump(), tenant_id=current_user.tenant_id)
+    data = body.model_dump()
+    asset = Asset(
+        **{k: v for k, v in data.items() if k != "metadata"},
+        asset_metadata=data.get("metadata", {}),
+        tenant_id=current_user.tenant_id,
+    )
     db.add(asset)
     await db.commit()
     await db.refresh(asset)
@@ -141,7 +159,10 @@ async def update_asset(
     if not asset or asset.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Asset not found")
     for k, v in body.model_dump(exclude_none=True).items():
-        setattr(asset, k, v)
+        if k == "metadata":
+            asset.asset_metadata = v
+        else:
+            setattr(asset, k, v)
     await db.commit()
     await db.refresh(asset)
     return asset
@@ -194,7 +215,12 @@ async def create_vulnerability(
     asset = await db.get(Asset, body.asset_id)
     if not asset or asset.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Asset not found")
-    vuln = AssetVulnerability(**body.model_dump(), tenant_id=current_user.tenant_id)
+    data = body.model_dump()
+    vuln = AssetVulnerability(
+        **{k: v for k, v in data.items() if k != "metadata"},
+        asset_metadata=data.get("metadata", {}),
+        tenant_id=current_user.tenant_id,
+    )
     db.add(vuln)
     await db.commit()
     await db.refresh(vuln)
