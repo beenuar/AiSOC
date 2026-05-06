@@ -22,7 +22,6 @@ runs happened.
 
 from __future__ import annotations
 
-import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -32,8 +31,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.purple_team import AtomicTest, DetectionDriftSnapshot, TestExecution
 from app.services.coverage import build_coverage_matrix
-
-LOG = logging.getLogger(__name__)
 
 
 async def compute_coverage_for_tenant(
@@ -141,7 +138,7 @@ from app.services.drift_diff import compute_drift  # noqa: E402
 
 __all__ = [
     "compute_drift",
-    "get_latest_snapshots",
+    "latest_two_snapshots",
     "list_snapshots",
-    "take_snapshot",
+    "capture_snapshot",
 ]

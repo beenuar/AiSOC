@@ -351,10 +351,16 @@ async def investigate_case(
     return InvestigateResponse(**data)
 
 
-def _validate_run_id(run_id: str) -> None:
-    """Raise 422 if run_id is not a UUID to prevent partial-SSRF via path injection."""
-    if not _RUN_ID_RE.match(run_id):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid run_id format")
+def _validate_run_id(run_id: str) -> str:
+    """Raise 422 if run_id is not a UUID; return canonicalized UUID string to break taint flow."""
+    try:
+        # Round-trip through uuid.UUID to produce a safe, canonical string
+        return str(uuid.UUID(run_id))
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid run_id format",
+        ) from exc
 
 
 @router.get("/{case_id}/investigations/{run_id}")
@@ -364,10 +370,10 @@ async def get_case_investigation(
     current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
 ) -> dict[str, Any]:
     """Proxy: poll investigation run status from the agents service."""
-    _validate_run_id(run_id)
+    safe_run_id = _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}")
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}")
             resp.raise_for_status()
             return resp.json()
     except httpx.HTTPStatusError as exc:
@@ -385,10 +391,10 @@ async def get_case_report_md(
     """Proxy: download Markdown incident report from the agents service."""
     from fastapi.responses import PlainTextResponse
 
-    _validate_run_id(run_id)
+    safe_run_id = _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.md")
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}/report.md")
             resp.raise_for_status()
             return PlainTextResponse(content=resp.text)
     except httpx.HTTPStatusError as exc:
@@ -406,10 +412,10 @@ async def get_case_report_html(
     """Proxy: download HTML incident report from the agents service."""
     from fastapi.responses import HTMLResponse
 
-    _validate_run_id(run_id)
+    safe_run_id = _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.html")
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}/report.html")
             resp.raise_for_status()
             return HTMLResponse(content=resp.text)
     except httpx.HTTPStatusError as exc:
@@ -427,15 +433,15 @@ async def get_case_report_pdf(
     """Proxy: download PDF incident report (rendered by weasyprint in agents service)."""
     from fastapi.responses import Response as FastAPIResponse
 
-    _validate_run_id(run_id)
+    safe_run_id = _validate_run_id(run_id)
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{run_id}/report.pdf")
+            resp = await client.get(f"{_AGENTS_URL}/api/v1/investigations/{safe_run_id}/report.pdf")
             resp.raise_for_status()
             return FastAPIResponse(
                 content=resp.content,
                 media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="aisoc-report-{run_id}.pdf"'},
+                headers={"Content-Disposition": f'attachment; filename="aisoc-report-{safe_run_id}.pdf"'},
             )
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=exc.response.status_code, detail="Upstream service error") from exc

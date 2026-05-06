@@ -24,12 +24,20 @@ router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 _SAFE_ID_RE = re.compile(r"^[0-9a-zA-Z_\-]{1,128}$")
 
 
-def _validate_path_id(value: str, name: str = "id") -> None:
+def _validate_path_id(value: str, name: str = "id") -> str:
+    """Validate that *value* is a safe ID and return it to break the taint flow.
+
+    Raising HTTPException here prevents any tainted data from reaching _proxy.
+    Returning the validated string (rather than void) lets callers use the
+    return value in path construction, which CodeQL recognises as untainted.
+    """
     if not _SAFE_ID_RE.match(value):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid {name} format",
         )
+    # Return a new string built from the match to break the taint chain.
+    return _SAFE_ID_RE.match(value).group(0)  # type: ignore[union-attr]
 
 
 async def _proxy(method: str, path: str, **kwargs) -> Any:
@@ -70,31 +78,31 @@ async def list_runs(limit: int = 50):
 
 @router.get("/runs/{run_id}", summary="Get a playbook run")
 async def get_run(run_id: str):
-    _validate_path_id(run_id, "run_id")
-    return await _proxy("GET", f"/runs/{run_id}")
+    safe_run_id = _validate_path_id(run_id, "run_id")
+    return await _proxy("GET", f"/runs/{safe_run_id}")
 
 
 @router.get("/{playbook_id}", summary="Get a playbook")
 async def get_playbook(playbook_id: str):
-    _validate_path_id(playbook_id, "playbook_id")
-    return await _proxy("GET", f"/{playbook_id}")
+    safe_id = _validate_path_id(playbook_id, "playbook_id")
+    return await _proxy("GET", f"/{safe_id}")
 
 
 @router.put("/{playbook_id}", summary="Update a playbook")
 async def update_playbook(playbook_id: str, request: Request):
-    _validate_path_id(playbook_id, "playbook_id")
+    safe_id = _validate_path_id(playbook_id, "playbook_id")
     body = await request.json()
-    return await _proxy("PUT", f"/{playbook_id}", json=body)
+    return await _proxy("PUT", f"/{safe_id}", json=body)
 
 
 @router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
 async def delete_playbook(playbook_id: str):
-    _validate_path_id(playbook_id, "playbook_id")
-    await _proxy("DELETE", f"/{playbook_id}")
+    safe_id = _validate_path_id(playbook_id, "playbook_id")
+    await _proxy("DELETE", f"/{safe_id}")
 
 
 @router.post("/{playbook_id}/run", summary="Execute a playbook", status_code=202)
 async def run_playbook(playbook_id: str, request: Request):
-    _validate_path_id(playbook_id, "playbook_id")
+    safe_id = _validate_path_id(playbook_id, "playbook_id")
     body = await request.json()
-    return await _proxy("POST", f"/{playbook_id}/run", json=body)
+    return await _proxy("POST", f"/{safe_id}/run", json=body)

@@ -137,21 +137,30 @@ function broadcastToTenant(tenantId: string, message: { type: string } & Record<
   }
 }
 
+// Generic IP-based rate limiter factory.
+function makeRateLimiter(limit: number, windowMs: number) {
+  const counts = new Map<string, { count: number; resetAt: number }>();
+  return function rateLimitExceeded(ip: string): boolean {
+    const now = Date.now();
+    let entry = counts.get(ip);
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+      counts.set(ip, entry);
+    }
+    entry.count += 1;
+    return entry.count > limit;
+  };
+}
+
 // Simple IP-based rate limiter for SSE: max 20 connections per IP per minute.
-const sseConnectCounts = new Map<string, { count: number; resetAt: number }>();
 const SSE_RATE_LIMIT = 20;
 const SSE_RATE_WINDOW_MS = 60_000;
+const sseRateLimitExceeded = makeRateLimiter(SSE_RATE_LIMIT, SSE_RATE_WINDOW_MS);
 
-function sseRateLimitExceeded(ip: string): boolean {
-  const now = Date.now();
-  let entry = sseConnectCounts.get(ip);
-  if (!entry || now > entry.resetAt) {
-    entry = { count: 0, resetAt: now + SSE_RATE_WINDOW_MS };
-    sseConnectCounts.set(ip, entry);
-  }
-  entry.count += 1;
-  return entry.count > SSE_RATE_LIMIT;
-}
+// Rate limiter for the internal agent-event endpoint: max 200 req/s per IP.
+// This endpoint is internal-only (token-gated) but we still rate-limit to
+// protect against misconfigured or runaway callers.
+const internalEventRateLimitExceeded = makeRateLimiter(200, 60_000);
 
 // --- SSE endpoint ---
 app.get('/sse', (req, res) => {
@@ -290,6 +299,14 @@ app.post('/internal/push', async (req, res) => {
 
 app.post('/internal/agent-event', (req, res) => {
   if (!requireInternal(req, res)) return;
+
+  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+    || req.socket.remoteAddress
+    || 'unknown';
+  if (internalEventRateLimitExceeded(ip)) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
 
   const { tenant_id, run_id, kind, agent, summary, data } = req.body as {
     tenant_id?: string;

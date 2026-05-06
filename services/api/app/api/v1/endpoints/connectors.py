@@ -223,7 +223,11 @@ async def _proxy_test_connection(
         async with httpx.AsyncClient(timeout=_CATALOG_TIMEOUT) as client:
             resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
-        logger.warning("connectors_service.test.unreachable url=%s err=%s", url, exc)
+        logger.warning(
+            "connectors_service.test.unreachable url=%s err=%s",
+            url,
+            str(exc).replace("\n", " ").replace("\r", " "),
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="connectors service is unavailable; cannot test connection",

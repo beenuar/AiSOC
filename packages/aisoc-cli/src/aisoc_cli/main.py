@@ -25,7 +25,6 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from jsonschema import ValidationError, validate
 from rich.console import Console
 from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.table import Table
 
 console = Console()

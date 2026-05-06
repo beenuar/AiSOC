@@ -28,7 +28,7 @@ import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import jwt as _jwt
@@ -282,10 +282,15 @@ async def oidc_logout(request: Request, post_logout_redirect_uri: str = "/") -> 
         try:
             provider = await _discover(issuer)
             end_session = provider.get("end_session_endpoint")
-            if end_session:
-                params = urlencode({"post_logout_redirect_uri": safe_uri})
-                response = RedirectResponse(url=f"{end_session}?{params}", status_code=302)
-                response.delete_cookie("aisoc_token")
+            if end_session and isinstance(end_session, str):
+                # Validate end_session_endpoint is a safe HTTPS URL to prevent open redirect
+                _parsed = urlparse(end_session)
+                if _parsed.scheme == "https" and _parsed.netloc:
+                    params = urlencode({"post_logout_redirect_uri": safe_uri})
+                    response = RedirectResponse(url=f"{end_session}?{params}", status_code=302)
+                    response.delete_cookie("aisoc_token")
+                else:
+                    logger.warning("OIDC end_session_endpoint is not a valid HTTPS URL, skipping: %s", end_session)
         except Exception as exc:  # noqa: BLE001
             logger.debug("OIDC end_session discovery failed, falling back to local logout: %s", exc)
 

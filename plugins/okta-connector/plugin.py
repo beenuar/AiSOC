@@ -68,6 +68,7 @@ class Plugin:
         action = payload.get("action", "get_user")
         user_id = payload.get("user_id", "")
 
+        result: dict = {"error": f"Unknown action: {action}"}
         async with self._client(context) as client:
             match action:
                 case "get_user":
