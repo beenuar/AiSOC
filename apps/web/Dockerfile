@@ -15,6 +15,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml ./
 COPY pnpm-lock.yaml* ./
 COPY turbo.json ./
+COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/web ./apps/web
 
