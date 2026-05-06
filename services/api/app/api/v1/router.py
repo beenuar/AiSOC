@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     alerts,
     api_keys,
     approvals,
+    assets,
     audit,
     auth,
     cases,
@@ -16,16 +17,23 @@ from app.api.v1.endpoints import (
     detection_rules,
     federated,
     graph,
+    identity_graph,
+    insider_threat,
     investigations,
     marketplace,
+    mssp,
     oncall,
     passkeys,
     playbooks,
     plugins,
+    posture,
     push,
     rbac,
+    remediation,
+    reports,
     sla,
     tenants,
+    threat_intel,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -55,3 +63,15 @@ api_router.include_router(push.router)
 api_router.include_router(oncall.router)
 api_router.include_router(approvals.router)
 api_router.include_router(passkeys.router)
+
+# Wave 3 — operational maturity
+api_router.include_router(assets.router)
+api_router.include_router(mssp.router)
+api_router.include_router(insider_threat.router)
+api_router.include_router(remediation.router)
+
+# Wave 4 — advanced capabilities
+api_router.include_router(threat_intel.router)
+api_router.include_router(posture.router)
+api_router.include_router(identity_graph.router)
+api_router.include_router(reports.router)
