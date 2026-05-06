@@ -61,7 +61,7 @@ class PostureScanRun(Base):
     findings_new: Mapped[int] = mapped_column(Integer, default=0)
     findings_closed: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
+    scan_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
 
 
 class PostureDriftEvent(Base):
