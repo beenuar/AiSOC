@@ -12,7 +12,7 @@ vi.mock('next/link', () => ({
 // in a unit test. The "motion." factory is just a thin wrapper here — render
 // the underlying tag.
 vi.mock('framer-motion', () => {
-  const factory = (Tag: keyof JSX.IntrinsicElements) =>
+  const factory = (Tag: React.ElementType) =>
     function MotionStub(props: Record<string, unknown>) {
       const { children, ...rest } = props as {
         children?: React.ReactNode;
@@ -26,7 +26,7 @@ vi.mock('framer-motion', () => {
       return <Tag {...(rest as Record<string, unknown>)}>{children}</Tag>;
     };
   return {
-    motion: new Proxy({}, { get: (_t, key: string) => factory(key as keyof JSX.IntrinsicElements) }),
+    motion: new Proxy({}, { get: (_t, key: string) => factory(key as React.ElementType) }),
   };
 });
 

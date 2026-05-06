@@ -6,7 +6,9 @@ import path from 'node:path';
 // (jsdom) — no SSR, no Next.js server runtime. Anything that requires the
 // full Next.js stack should live in an e2e suite (Playwright) instead.
 export default defineConfig({
-  plugins: [react()],
+  // react() returns vite@7 Plugin types; vitest@2 expects vite@5 Plugin types.
+  // Cast through unknown to bridge the version gap without changing the runtime.
+  plugins: [react() as unknown as import('vitest/config').UserConfig['plugins']],
   test: {
     environment: 'jsdom',
     globals: true,
