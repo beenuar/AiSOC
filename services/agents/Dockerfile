@@ -47,12 +47,14 @@ RUN set -eux; \
             "opentelemetry-instrumentation-fastapi>=0.45b0" \
             "opentelemetry-instrumentation-httpx>=0.45b0" \
             "asyncpg>=0.29,<0.30" \
-            "sqlalchemy[asyncio]>=2.0.25,<3" ; \
+            "sqlalchemy[asyncio]>=2.0.25,<3" \
+            "apscheduler>=3.10.4,<4" \
+            "pyyaml>=6.0.1,<7" ; \
     fi
 
 # Smoke-import the modules the orchestrator pulls in at module load time.
 # Catches "image built but broken" cases at build time instead of runtime.
-RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog"
+RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog, apscheduler, yaml"
 
 COPY app/ ./app/
 

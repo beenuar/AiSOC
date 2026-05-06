@@ -1,7 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { threatIntelApi, type ThreatIndicator } from '@/lib/api';
+import {
+  threatIntelApi,
+  type AlertSeverity,
+  type IndicatorType,
+  type ThreatIndicator,
+} from '@/lib/api';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
@@ -79,7 +84,7 @@ const MOCK_INDICATORS: ThreatIndicator[] = [
 
 // ─── Type badges ──────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
+const TYPE_CONFIG: Record<IndicatorType, { label: string; color: string }> = {
   ip: { label: 'IP', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
   domain: { label: 'Domain', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   hash: { label: 'Hash', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
@@ -87,11 +92,12 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   email: { label: 'Email', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
 };
 
-const SEVERITY_CONFIG = {
+const SEVERITY_CONFIG: Record<AlertSeverity, string> = {
   critical: 'text-red-400 bg-red-500/10 border-red-500/20',
   high: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
   medium: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
   low: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  info: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
 };
 
 // ─── Lookup Form ──────────────────────────────────────────────────────────────
@@ -151,9 +157,11 @@ function LookupForm() {
             <span className="text-red-400 font-medium text-sm">Malicious indicator</span>
             <span className="text-xs text-gray-500">Confidence: {result.confidence}%</span>
           </div>
-          <p className="text-xs text-gray-400">{result.description}</p>
+          {result.description ? (
+            <p className="text-xs text-gray-400">{result.description}</p>
+          ) : null}
           <div className="flex flex-wrap gap-1">
-            {result.tags.map((t) => (
+            {(result.tags ?? []).map((t) => (
               <span key={t} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{t}</span>
             ))}
           </div>
@@ -179,7 +187,7 @@ function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-mono text-gray-300 truncate">{ioc.value}</p>
-        <p className="text-xs text-gray-600 mt-0.5 truncate">{ioc.description}</p>
+        <p className="text-xs text-gray-600 mt-0.5 truncate">{ioc.description ?? ''}</p>
       </div>
 
       <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border shrink-0', SEVERITY_CONFIG[ioc.severity])}>
@@ -197,7 +205,9 @@ function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
           </span>
         </div>
         <p className="text-xs text-gray-600 mt-0.5">
-          {format(new Date(ioc.lastSeen), 'MMM dd HH:mm')}
+          {ioc.lastSeen || ioc.firstSeen
+            ? format(new Date(ioc.lastSeen ?? ioc.firstSeen ?? 0), 'MMM dd HH:mm')
+            : '—'}
         </p>
       </div>
 
@@ -220,8 +230,13 @@ export function ThreatIntelView() {
 
   const indicators = MOCK_INDICATORS.filter((ioc) => {
     if (typeFilter !== 'all' && ioc.type !== typeFilter) return false;
-    if (search && !ioc.value.toLowerCase().includes(search.toLowerCase()) &&
-        !ioc.description.toLowerCase().includes(search.toLowerCase())) return false;
+    if (
+      search &&
+      !ioc.value.toLowerCase().includes(search.toLowerCase()) &&
+      !(ioc.description ?? '').toLowerCase().includes(search.toLowerCase())
+    ) {
+      return false;
+    }
     return true;
   });
 

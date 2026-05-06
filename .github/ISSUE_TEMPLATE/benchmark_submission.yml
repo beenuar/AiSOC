@@ -1,0 +1,86 @@
+name: Benchmark submission
+description: Submit a run of the AiSOC public eval harness for the community scoreboard.
+title: "[benchmark] <agent name> @ <commit-sha>"
+labels: ["benchmark-submission", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to submit a run of the AiSOC public eval harness against the fixed 200-incident dataset.
+        The harness, dataset, and grading code are MIT-licensed and fully reproducible. See the full rules at
+        [tryaisoc.com/benchmark](https://tryaisoc.com/benchmark) and the methodology in
+        [`apps/docs/docs/benchmark.md`](../blob/main/apps/docs/docs/benchmark.md).
+
+        Reviewers will re-run your submission on a clean checkout. Submissions that cannot be reproduced
+        will not be merged onto the public leaderboard.
+  - type: input
+    id: agent_name
+    attributes:
+      label: Agent name
+      description: A short, recognizable name (e.g. "AiSOC main", "team-foo-detector-v2").
+      placeholder: e.g. AiSOC main
+    validations:
+      required: true
+  - type: input
+    id: agent_url
+    attributes:
+      label: Agent source URL
+      description: Link to the source repo or release. If closed-source, write "closed-source" — your entry will still be accepted, just labeled.
+      placeholder: e.g. https://github.com/your-org/your-agent OR closed-source
+    validations:
+      required: true
+  - type: input
+    id: commit_sha
+    attributes:
+      label: AiSOC commit SHA
+      description: The commit of the AiSOC repo you ran against (must include `services/agents/tests/eval_data/synthetic_incidents.json` unchanged).
+      placeholder: e.g. abc1234
+    validations:
+      required: true
+  - type: dropdown
+    id: dataset_modified
+    attributes:
+      label: Was the dataset modified?
+      description: The substrate is fixed — modifying it disqualifies the submission.
+      options:
+        - "No — I ran against the unmodified 200-incident dataset"
+        - "Yes — I added/changed cases (this submission will be rejected)"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command used
+      description: The exact command you ran to produce the report.
+      placeholder: |
+        python3 scripts/run_evals.py --json --out report.json
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: report_json
+    attributes:
+      label: Report JSON
+      description: |
+        Paste the full contents of the generated `report.json` (or attach as a file by dragging it into the comment box after submission).
+        Reviewers need every field — per-template macros are not optional.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything reviewers should know — hardware, model used, deviations from defaults, etc.
+      placeholder: e.g. ran with GPT-4o + temperature 0.0; 64GB M3 Max; 12-minute total runtime
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I ran the unmodified `scripts/run_evals.py` against the fixed dataset.
+          required: true
+        - label: I did not template-stuff the substrate self-consistency suites (MITRE / completeness / response).
+          required: true
+        - label: I understand reviewers will re-run my submission on a clean checkout before merging.
+          required: true

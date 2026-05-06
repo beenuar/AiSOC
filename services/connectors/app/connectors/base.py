@@ -20,7 +20,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from app.federated.query import UnifiedQuery
 
 # ---------------------------------------------------------------------------
 # Schema dataclasses
@@ -166,3 +169,22 @@ class BaseConnector(ABC):
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         """Normalize a raw event to a common AiSOC alert schema."""
         return raw
+
+    # ----------------------------- federated search --------------------------
+
+    # Connectors that opt into federated search override ``supports_federated_search``
+    # to True and implement ``query()``. Keeping it opt-in means a brand new
+    # connector author doesn't have to think about query translation on day one.
+    supports_federated_search: bool = False
+
+    async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
+        """Translate a ``UnifiedQuery`` and return matching rows.
+
+        Default behaviour is to refuse, so a connector that hasn't been
+        wired for federated search returns a clear error to the API layer
+        rather than silently returning an empty result set (which would
+        be indistinguishable from "no matches" and is a footgun).
+        """
+        raise NotImplementedError(
+            f"connector '{self.connector_id}' does not support federated search"
+        )

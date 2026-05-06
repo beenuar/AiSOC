@@ -175,6 +175,16 @@ export interface AlertIOC {
   malicious?: boolean;
 }
 
+export type ConfidenceLabel = 'high' | 'medium' | 'low';
+
+export interface ConfidenceFactor {
+  factor: string;
+  label: string;
+  value: number;
+  contribution: number;
+  weight: number;
+}
+
 export interface Alert {
   id: string;
   title: string;
@@ -194,6 +204,10 @@ export interface Alert {
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
+  confidenceLabel?: ConfidenceLabel;
+  confidenceScore?: number;
+  confidenceRationale?: ConfidenceFactor[];
+  ledgerRunId?: string;
 }
 
 export interface AlertsResponse {
@@ -250,6 +264,122 @@ export const alertsApi = {
         description: string;
       }>;
     }>(`/api/v1/alerts/${id}/timeline`),
+};
+
+// ─── Risk-Based Alerting (entity rollup) ─────────────────────────────────────
+//
+// Wave 1 of the AiSOC v6 capability roadmap: alerts contribute time-decayed
+// risk *points* onto the entities they touch (user / host / src_ip / domain).
+// Once an entity crosses ``rba_promotion_threshold`` it becomes the primary
+// unit of triage in the UI — so the analyst opens "the user fox.beach" with
+// 47 contributing alerts attached, not 47 separate alert rows. The endpoints
+// live on the fusion service (port 8082) and are proxied same-origin via
+// next.config.js → ``/api/v1/fusion/*``.
+
+export type EntityType = 'user' | 'host' | 'ip' | 'domain';
+
+/** A single alert that contributed risk to an entity. */
+export interface EntityRiskContribution {
+  alert_id: string;
+  severity: AlertSeverity;
+  /** Points contributed *at the moment of observation* — not decayed. */
+  raw_points: number;
+  /** ISO-8601 timestamp the alert was observed. */
+  observed_at: string;
+  title?: string | null;
+  source?: string | null;
+}
+
+/** A rolled-up entity with its current decayed risk score. */
+export interface EntityRiskRecord {
+  tenant_id: string;
+  entity_type: EntityType;
+  entity_value: string;
+  /** Time-decayed score (0 → ∞ in theory, capped in practice by the engine). */
+  score: number;
+  /** Same as ``score`` rounded — convenience for the UI's badge. */
+  display_score: number;
+  /** Promotion threshold the engine was configured with at observation time. */
+  threshold: number;
+  /** True if ``score`` has crossed ``threshold`` at least once. */
+  promoted: boolean;
+  /** ID of the incident the entity was promoted into, if any. */
+  promoted_incident_id?: string | null;
+  /** ISO-8601 timestamp of the last contributing alert. */
+  last_seen: string;
+  /** ISO-8601 timestamp the entity first picked up any risk. */
+  first_seen: string;
+  /** Top contributing alerts, newest first, capped to ~25. */
+  contributions: EntityRiskContribution[];
+  /** Count by severity over the decay window — drives the queue badge. */
+  severity_histogram: Record<AlertSeverity, number>;
+  /** Convenience: total alert count in the decay window. */
+  alert_count: number;
+}
+
+export interface EntityRiskQueueResponse {
+  tenant_id: string;
+  threshold: number;
+  entities: EntityRiskRecord[];
+}
+
+export interface EntityRiskStats {
+  tenant_id: string;
+  /** Promotion threshold (mirrored from the engine). */
+  threshold: number;
+  /** Total active entities in the window. */
+  total: number;
+  /** Entities currently at or above ``threshold``. */
+  promoted: number;
+  /** Banded counts for the queue header chips. */
+  bands: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  /** Total alerts contributing across all entities in the window. */
+  alert_count: number;
+  /** Convenience: alert-to-incident ratio observed in the current window. */
+  alert_to_incident_ratio?: number | null;
+}
+
+/**
+ * Path namespace served by the fusion service. Goes through Next.js
+ * rewrites (`/api/v1/fusion/*` → ``${FUSION_HOST}/*``) so the bundle
+ * stays same-origin.
+ */
+const FUSION_PATH = '/api/v1/fusion';
+
+export const entityRiskApi = {
+  /** Top-N entities by current decayed risk score. */
+  queue: (params: {
+    tenantId?: string;
+    limit?: number;
+    promotedOnly?: boolean;
+  } = {}) =>
+    request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
+      params: {
+        tenant_id: params.tenantId ?? TENANT_ID,
+        limit: params.limit ?? 25,
+        promoted_only: params.promotedOnly ? 'true' : undefined,
+      },
+    }),
+
+  /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
+  stats: (tenantId?: string) =>
+    request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
+      params: { tenant_id: tenantId ?? TENANT_ID },
+    }),
+
+  /** Full risk record for a single entity (drawer detail). */
+  get: (entityType: EntityType, entityValue: string, tenantId?: string) => {
+    const pathType = entityType === 'ip' ? 'src_ip' : entityType;
+    return request<EntityRiskRecord>(
+      `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
+      { params: { tenant_id: tenantId ?? TENANT_ID } },
+    );
+  },
 };
 
 // ─── Cases ───────────────────────────────────────────────────────────────────
@@ -1079,6 +1209,155 @@ export const detectionApi = {
     ),
 };
 
+// ─── Detection-as-code proposals (Wave 2 — w2-dac) ──────────────────────────
+//
+// Mirrors `services/api/app/api/v1/endpoints/detection_proposals.py`. Backed
+// by `DetectionRuleProposal` + `DetectionEvalBaseline` tables. The eval
+// verdict is computed server-side from a `scripts/run_evals.py` JSON report
+// and the most recent active MITRE accuracy baseline; ≥ 1pp regression
+// blocks approval / merge.
+
+export type DetectionProposalStatus =
+  | 'proposed'
+  | 'in_review'
+  | 'eval_passed'
+  | 'eval_failed'
+  | 'approved'
+  | 'rejected'
+  | 'promoted';
+
+export interface DetectionProposalEvalVerdict {
+  ran_at?: string;
+  candidate?: { mitre_accuracy?: number; all_passed?: boolean };
+  baseline?: { mitre_accuracy?: number };
+  drop_pp?: number;
+  max_regression_pp?: number;
+  regressed?: boolean;
+  passed?: boolean;
+}
+
+export interface DetectionProposal {
+  id: string;
+  tenant_id: string | null;
+  base_rule_id: string | null;
+  promoted_rule_id: string | null;
+  name: string;
+  description: string | null;
+  rule_language: string;
+  rule_body: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  mitre_tactics: string[];
+  mitre_techniques: string[];
+  tags: string[];
+  status: DetectionProposalStatus;
+  eval_result: DetectionProposalEvalVerdict | Record<string, never>;
+  review_comments: Array<{
+    actor_id: string;
+    actor_email?: string;
+    comment: string;
+    at: string;
+  }>;
+  proposed_by_id: string | null;
+  decided_by_id: string | null;
+  decision_comment: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DetectionEvalBaseline {
+  id: string;
+  tenant_id: string | null;
+  suite: string;
+  score: number;
+  payload: Record<string, unknown>;
+  is_active: boolean;
+  recorded_by_id: string | null;
+  created_at: string;
+}
+
+export const detectionProposalsApi = {
+  list: (params?: { status?: DetectionProposalStatus; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<DetectionProposal[]>(
+      `/api/v1/detection-proposals${suffix}`,
+    );
+  },
+
+  get: (id: string) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}`),
+
+  create: (proposal: {
+    name: string;
+    description?: string | null;
+    rule_language: string;
+    rule_body: string;
+    category: string;
+    severity?: string;
+    confidence?: number;
+    mitre_tactics?: string[];
+    mitre_techniques?: string[];
+    tags?: string[];
+    base_rule_id?: string | null;
+  }) =>
+    request<DetectionProposal>('/api/v1/detection-proposals', {
+      method: 'POST',
+      body: JSON.stringify(proposal),
+    }),
+
+  comment: (id: string, comment: string) =>
+    request<DetectionProposal>(
+      `/api/v1/detection-proposals/${id}/comment`,
+      { method: 'POST', body: JSON.stringify({ comment }) },
+    ),
+
+  attachEval: (
+    id: string,
+    body: { eval_report: Record<string, unknown>; max_regression_pp?: number },
+  ) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/eval`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  decide: (
+    id: string,
+    body: { decision: 'approve' | 'reject'; comment?: string | null },
+  ) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/decide`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  promote: (id: string) =>
+    request<DetectionProposal>(
+      `/api/v1/detection-proposals/${id}/promote`,
+      { method: 'POST' },
+    ),
+
+  listBaselines: (suite?: string) => {
+    const suffix = suite ? `?suite=${encodeURIComponent(suite)}` : '';
+    return request<DetectionEvalBaseline[]>(
+      `/api/v1/detection-proposals/baselines${suffix}`,
+    );
+  },
+
+  recordBaseline: (body: {
+    suite: string;
+    score: number;
+    payload?: Record<string, unknown>;
+  }) =>
+    request<DetectionEvalBaseline>(
+      '/api/v1/detection-proposals/baselines',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+};
+
 // ─── AI Copilot ──────────────────────────────────────────────────────────────
 
 export type CopilotRole = 'user' | 'assistant' | 'system';
@@ -1565,6 +1844,7 @@ export const realtimeApi = {
 
 export default {
   alerts: alertsApi,
+  entityRisk: entityRiskApi,
   cases: casesApi,
   metrics: metricsApi,
   connectors: connectorsApi,
@@ -1573,6 +1853,7 @@ export default {
   hunt: huntApi,
   graph: graphApi,
   detection: detectionApi,
+  detectionProposals: detectionProposalsApi,
   copilot: copilotApi,
   contextual: contextualApi,
   ledger: ledgerApi,

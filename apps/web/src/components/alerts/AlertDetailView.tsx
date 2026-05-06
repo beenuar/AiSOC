@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { alertsApi, agentsApi, type Alert, type AgentInvestigation } from '@/lib/api';
+import {
+  alertsApi,
+  agentsApi,
+  ledgerApi,
+  type Alert,
+  type AgentInvestigation,
+  type ConfidenceFactor,
+  type ConfidenceLabel,
+} from '@/lib/api';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
@@ -25,6 +33,27 @@ const STATUS_CONFIG = {
   resolved: { label: 'Resolved', badge: 'bg-green-500/10 text-green-400 ring-green-500/20' },
   false_positive: { label: 'False Positive', badge: 'bg-gray-500/10 text-gray-400 ring-gray-500/20' },
 } as const;
+
+const CONFIDENCE_CONFIG: Record<ConfidenceLabel, { label: string; badge: string; dot: string; description: string }> = {
+  high: {
+    label: 'High Confidence',
+    badge: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20',
+    dot: 'bg-emerald-500',
+    description: 'Multiple corroborating signals; low risk of false positive.',
+  },
+  medium: {
+    label: 'Medium Confidence',
+    badge: 'bg-amber-500/10 text-amber-400 ring-amber-500/20',
+    dot: 'bg-amber-500',
+    description: 'Mixed signals; review supporting evidence before action.',
+  },
+  low: {
+    label: 'Low Confidence',
+    badge: 'bg-slate-500/10 text-slate-300 ring-slate-500/20',
+    dot: 'bg-slate-400',
+    description: 'Weak or partial signal; likely needs analyst validation.',
+  },
+};
 
 // Mock alert for development
 const MOCK_ALERT: Alert = {
@@ -51,6 +80,53 @@ const MOCK_ALERT: Alert = {
   assignee: 'analyst@aisoc.dev',
   createdAt: new Date(Date.now() - 3600000).toISOString(),
   updatedAt: new Date(Date.now() - 1800000).toISOString(),
+  confidenceLabel: 'high',
+  confidenceScore: 0.86,
+  confidenceRationale: [
+    {
+      factor: 'severity',
+      label: 'Critical severity from source',
+      value: 1.0,
+      contribution: 0.20,
+      weight: 0.20,
+    },
+    {
+      factor: 'mitre_coverage',
+      label: '3 MITRE techniques mapped (T1059.001, T1027, T1071)',
+      value: 1.0,
+      contribution: 0.18,
+      weight: 0.18,
+    },
+    {
+      factor: 'threat_intel',
+      label: 'IOC matched against known C2 infrastructure',
+      value: 1.0,
+      contribution: 0.20,
+      weight: 0.20,
+    },
+    {
+      factor: 'ml_score',
+      label: 'Anomaly score 0.94 (UEBA baseline deviation)',
+      value: 0.94,
+      contribution: 0.14,
+      weight: 0.15,
+    },
+    {
+      factor: 'upstream_risk',
+      label: 'Affected user is in elevated-risk cohort',
+      value: 0.78,
+      contribution: 0.08,
+      weight: 0.10,
+    },
+    {
+      factor: 'ioc_density',
+      label: '3 distinct malicious IOCs in single event',
+      value: 0.85,
+      contribution: 0.06,
+      weight: 0.07,
+    },
+  ],
+  ledgerRunId: 'run-mock-c2-beacon-investigation',
 };
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
@@ -89,6 +165,171 @@ function IOCBadge({ type, value, malicious }: { type: string; value: string; mal
       </span>
       <span className="truncate max-w-xs">{value}</span>
       {malicious && <span className="ml-auto text-red-400 shrink-0 text-[10px] font-semibold uppercase tracking-wide">malicious</span>}
+    </div>
+  );
+}
+
+// ─── Detection Confidence ─────────────────────────────────────────────────────
+
+function ConfidenceChip({ label, score }: { label: ConfidenceLabel; score?: number }) {
+  const cfg = CONFIDENCE_CONFIG[label];
+  const pct = typeof score === 'number' ? Math.round(score * 100) : null;
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded ring-1 ring-inset',
+        cfg.badge,
+      )}
+      title={cfg.description}
+    >
+      <span className={clsx('w-2 h-2 rounded-full', cfg.dot)} />
+      {cfg.label}
+      {pct !== null && <span className="opacity-70 font-mono">· {pct}%</span>}
+    </span>
+  );
+}
+
+function ConfidenceFactorBar({ factor }: { factor: ConfidenceFactor }) {
+  const pct = Math.max(0, Math.min(1, factor.contribution / Math.max(factor.weight, 0.001)));
+  const widthPct = Math.round(pct * 100);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <span className="text-sm text-gray-200">{factor.label}</span>
+        <span className="text-xs font-mono text-gray-500 shrink-0">
+          +{factor.contribution.toFixed(2)} / {factor.weight.toFixed(2)}
+        </span>
+      </div>
+      <div className="h-1.5 bg-gray-800 rounded overflow-hidden">
+        <div
+          className="h-full bg-emerald-500/70"
+          style={{ width: `${widthPct}%` }}
+          aria-hidden="true"
+        />
+      </div>
+      <div className="text-[10px] text-gray-600 uppercase tracking-wider mt-1 font-mono">
+        {factor.factor}
+      </div>
+    </div>
+  );
+}
+
+function ConfidenceExplainability({
+  label,
+  score,
+  rationale,
+  ledgerRunId,
+}: {
+  label: ConfidenceLabel;
+  score?: number;
+  rationale: ConfidenceFactor[];
+  ledgerRunId?: string;
+}) {
+  const cfg = CONFIDENCE_CONFIG[label];
+  const sortedRationale = [...rationale].sort((a, b) => b.contribution - a.contribution);
+
+  return (
+    <Section title="Detection Confidence">
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <span className={clsx('w-2.5 h-2.5 rounded-full mt-1.5 shrink-0', cfg.dot)} />
+          <div className="flex-1">
+            <div className="flex items-baseline gap-3">
+              <span className="text-sm font-semibold text-gray-100">{cfg.label}</span>
+              {typeof score === 'number' && (
+                <span className="text-xs font-mono text-gray-500">
+                  score {score.toFixed(2)} ({Math.round(score * 100)}%)
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">{cfg.description}</p>
+          </div>
+        </div>
+
+        {sortedRationale.length > 0 && (
+          <div className="space-y-3 pt-2 border-t border-gray-800/60">
+            <p className="text-xs font-medium text-gray-400">
+              Why this score
+            </p>
+            <div className="space-y-3">
+              {sortedRationale.map((factor) => (
+                <ConfidenceFactorBar key={factor.factor} factor={factor} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {ledgerRunId && (
+          <div className="pt-3 border-t border-gray-800/60">
+            <LedgerEvidenceChain runId={ledgerRunId} />
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+function LedgerEvidenceChain({ runId }: { runId: string }) {
+  const { data, error, isLoading } = useSWR(
+    ['ledger-events', runId],
+    () => ledgerApi.listEvents(runId, { limit: 8 }),
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-gray-400">Investigation Ledger evidence chain</p>
+        <Link
+          href={`/investigations/${runId}`}
+          className="text-xs text-blue-400 hover:text-blue-300"
+        >
+          Open full ledger →
+        </Link>
+      </div>
+
+      {isLoading && (
+        <p className="text-xs text-gray-600">Loading evidence chain…</p>
+      )}
+
+      {error && !data && (
+        <p className="text-xs text-gray-500">
+          Evidence chain not yet available for this alert.
+        </p>
+      )}
+
+      {data && data.items.length === 0 && (
+        <p className="text-xs text-gray-500">
+          No ledger events recorded yet — start an investigation to populate the chain.
+        </p>
+      )}
+
+      {data && data.items.length > 0 && (
+        <ol className="space-y-2">
+          {data.items.map((event) => (
+            <li key={event.id} className="flex gap-3">
+              <div className="flex flex-col items-center shrink-0 pt-1">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] font-mono text-gray-600 shrink-0">
+                    #{event.seq}
+                  </span>
+                  <span className="text-xs font-mono text-blue-400 shrink-0">
+                    {event.kind}
+                  </span>
+                  <span className="text-xs text-gray-200 truncate">
+                    {event.summary}
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-600 mt-0.5">
+                  {event.agent} · {format(new Date(event.ts), 'HH:mm:ss')}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
@@ -285,7 +526,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <span className={clsx('inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded ring-1 ring-inset', sevCfg.badge)}>
               <span className={clsx('w-2 h-2 rounded-full', sevCfg.dot)} />
               {sevCfg.label}
@@ -293,6 +534,12 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             <span className={clsx('inline-flex px-2.5 py-1 text-xs font-medium rounded ring-1 ring-inset', stsCfg.badge)}>
               {stsCfg.label}
             </span>
+            {alert.confidenceLabel && (
+              <ConfidenceChip
+                label={alert.confidenceLabel}
+                score={alert.confidenceScore}
+              />
+            )}
             <span className="text-xs text-gray-500">Risk Score: <span className="text-white font-bold">{alert.riskScore}</span></span>
           </div>
           <h1 className="text-lg font-semibold text-gray-100">{alert.title}</h1>
@@ -365,6 +612,15 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             <Section title="Description">
               <p className="text-sm text-gray-300 leading-relaxed">{alert.description}</p>
             </Section>
+
+            {alert.confidenceLabel && (
+              <ConfidenceExplainability
+                label={alert.confidenceLabel}
+                score={alert.confidenceScore}
+                rationale={alert.confidenceRationale ?? []}
+                ledgerRunId={alert.ledgerRunId}
+              />
+            )}
 
             <Section title="Details">
               <div className="space-y-3">

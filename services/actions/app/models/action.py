@@ -25,6 +25,10 @@ class ActionType(str, Enum):
     NOTIFY_SLACK = "notify_slack"
     CREATE_TICKET = "create_ticket"
     RUN_PLAYBOOK = "run_playbook"
+    # Wave 1 — ChatOps user verification: outbound interactive Slack/Teams prompt
+    # asking the affected user to confirm or deny an event ("Was this you?").
+    # The response is HMAC-validated and routed back into the case timeline.
+    CHATOPS_VERIFY = "chatops_verify"
 
 
 class ActionStatus(str, Enum):
@@ -60,6 +64,8 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     ActionType.NOTIFY_SLACK: BlastRadius.MINIMAL,
     ActionType.CREATE_TICKET: BlastRadius.MINIMAL,
     ActionType.RUN_PLAYBOOK: BlastRadius.MEDIUM,
+    # ChatOps verification asks a user a yes/no question — no infra changes.
+    ActionType.CHATOPS_VERIFY: BlastRadius.MINIMAL,
 }
 
 # Actions that require explicit human approval

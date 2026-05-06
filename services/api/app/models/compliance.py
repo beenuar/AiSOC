@@ -10,7 +10,6 @@ from sqlalchemy.types import TIMESTAMP
 
 from app.db.database import Base
 
-
 # Aliased for readability; on Postgres this renders as TIMESTAMPTZ.
 # (The PG dialect never exported a `TIMESTAMPTZ` symbol — that's just SQL
 # syntax. The correct way to get a tz-aware column is `TIMESTAMP(timezone=True)`.)

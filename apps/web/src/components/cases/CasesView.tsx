@@ -41,9 +41,13 @@ const SEVERITY_CONFIG = {
   low: { label: 'Low', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 };
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<
+  Case['status'],
+  { label: string; className: string; dot: string }
+> = {
   open: { label: 'Open', className: 'text-gray-300 bg-gray-700/50 border-gray-600/50', dot: 'bg-gray-400' },
   in_progress: { label: 'In Progress', className: 'text-blue-300 bg-blue-500/10 border-blue-500/20', dot: 'bg-blue-400 animate-pulse' },
+  pending: { label: 'Pending', className: 'text-amber-300 bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400' },
   resolved: { label: 'Resolved', className: 'text-green-300 bg-green-500/10 border-green-500/20', dot: 'bg-green-400' },
   closed: { label: 'Closed', className: 'text-gray-500 bg-gray-800/50 border-gray-700/50', dot: 'bg-gray-600' },
 };
@@ -113,7 +117,14 @@ export function CasesView() {
   const { data: casesData, isLoading } = useSWR(
     ['cases', statusFilter, severityFilter],
     () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
-    { fallbackData: { cases: MOCK_CASES, total: MOCK_CASES.length } }
+    {
+      fallbackData: {
+        cases: MOCK_CASES,
+        total: MOCK_CASES.length,
+        page: 1,
+        pageSize: MOCK_CASES.length,
+      },
+    }
   );
 
   const cases = (casesData?.cases || []).filter((c) => {

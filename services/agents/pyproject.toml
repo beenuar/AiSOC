@@ -31,6 +31,8 @@ opentelemetry-instrumentation-fastapi = "^0.45b0"
 opentelemetry-instrumentation-httpx = "^0.45b0"
 asyncpg = "^0.29.0"
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
+apscheduler = "^3.10.4"
+pyyaml = "^6.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

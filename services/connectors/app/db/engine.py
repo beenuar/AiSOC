@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 from threading import Lock
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 

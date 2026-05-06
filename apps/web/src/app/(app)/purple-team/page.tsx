@@ -46,6 +46,52 @@ interface CoverageMatrix {
   summary: CoverageSummary
 }
 
+// --------------------------------------------------------------------------
+// Detection drift (w1-drift) — delta-vs-last-week overlay on the heatmap.
+// --------------------------------------------------------------------------
+type DriftStatus = 'new' | 'removed' | 'improved' | 'regressed' | 'unchanged'
+
+interface DriftTechnique {
+  technique_id: string
+  status: DriftStatus
+  delta_coverage: number
+  delta_detected: number
+}
+
+interface DriftSummary {
+  current: Partial<CoverageSummary>
+  previous: Partial<CoverageSummary>
+  delta: {
+    delta_total: number
+    delta_tested: number
+    delta_detected: number
+    delta_coverage: number
+  }
+  regressed: number
+  improved: number
+  new: number
+  removed: number
+}
+
+interface SnapshotMeta {
+  id: string
+  captured_at: string
+  trigger: string
+  total_techniques: number
+  tested_techniques: number
+  detected_techniques: number
+  overall_coverage: number
+}
+
+interface DriftLatestResponse {
+  current: SnapshotMeta | null
+  previous: SnapshotMeta | null
+  drift: {
+    techniques: DriftTechnique[]
+    summary: DriftSummary
+  }
+}
+
 interface TabletopSession {
   id: string
   name: string
@@ -88,6 +134,28 @@ function coverageColor(c: number): string {
   return 'bg-gray-200'
 }
 
+// Visual ring around a technique cell that reflects how it changed since the
+// previous snapshot. Kept subtle so the underlying coverage color still reads.
+function driftRing(status: DriftStatus | undefined): string {
+  switch (status) {
+    case 'improved':
+      return 'ring-2 ring-emerald-500 ring-offset-1'
+    case 'regressed':
+      return 'ring-2 ring-red-500 ring-offset-1'
+    case 'new':
+      return 'ring-2 ring-blue-500 ring-offset-1'
+    case 'removed':
+      return 'ring-2 ring-amber-500 ring-offset-1 opacity-60'
+    default:
+      return ''
+  }
+}
+
+function driftDeltaLabel(d: number, suffix = ''): string {
+  if (d === 0) return '±0' + suffix
+  return `${d > 0 ? '+' : ''}${d}${suffix}`
+}
+
 // --------------------------------------------------------------------------
 // Components
 // --------------------------------------------------------------------------
@@ -99,27 +167,157 @@ function CoverageHeatmap() {
     { refreshInterval: 30000 }
   )
 
+  // Drift snapshot — overlays delta-vs-last-week onto the heatmap and feeds
+  // the summary banner. Refreshed less often than coverage since snapshots
+  // are weekly by default.
+  const { data: drift, mutate: mutateDrift } = useSWR<DriftLatestResponse>(
+    `${API}/api/v1/purple-team/drift/latest?tenant_id=${TENANT_ID}`,
+    fetcher,
+    { refreshInterval: 60000 }
+  )
+
+  const [capturing, setCapturing] = useState(false)
+  const [captureError, setCaptureError] = useState<string | null>(null)
+
+  async function captureNow() {
+    setCapturing(true)
+    setCaptureError(null)
+    try {
+      const res = await fetch(
+        `${API}/api/v1/purple-team/drift/snapshot?tenant_id=${TENANT_ID}&trigger=manual`,
+        { method: 'POST' }
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await mutateDrift()
+    } catch (e) {
+      setCaptureError(e instanceof Error ? e.message : 'Snapshot failed')
+    } finally {
+      setCapturing(false)
+    }
+  }
+
   if (isLoading) return <div className="text-sm text-gray-500 p-4">Loading coverage…</div>
   if (error || !data) return <div className="text-sm text-red-500 p-4">Failed to load coverage</div>
 
   const { summary, tactics, techniques } = data
 
+  // Index drift status by technique_id for O(1) lookup while rendering cells.
+  const driftByTid = new Map<string, DriftTechnique>()
+  for (const t of drift?.drift.techniques ?? []) {
+    driftByTid.set(t.technique_id, t)
+  }
+  const driftSummary = drift?.drift.summary
+  const hasPrevious = Boolean(drift?.previous)
+
   return (
     <div className="space-y-4">
-      {/* Summary cards */}
+      {/* Summary cards — show absolute values + delta-vs-last-snapshot when available. */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total Techniques', value: summary.total_techniques },
-          { label: 'Tested', value: summary.tested_techniques },
-          { label: 'Detected', value: summary.detected_techniques },
-          { label: 'Coverage', value: `${(summary.overall_coverage * 100).toFixed(0)}%` },
+          {
+            label: 'Total Techniques',
+            value: summary.total_techniques,
+            delta: driftSummary?.delta.delta_total ?? 0,
+          },
+          {
+            label: 'Tested',
+            value: summary.tested_techniques,
+            delta: driftSummary?.delta.delta_tested ?? 0,
+          },
+          {
+            label: 'Detected',
+            value: summary.detected_techniques,
+            delta: driftSummary?.delta.delta_detected ?? 0,
+          },
+          {
+            label: 'Coverage',
+            value: `${(summary.overall_coverage * 100).toFixed(0)}%`,
+            delta: driftSummary
+              ? Math.round(driftSummary.delta.delta_coverage * 100)
+              : 0,
+            deltaSuffix: 'pp',
+          },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-lg border border-gray-200 p-3 text-center">
             <div className="text-xl font-bold text-gray-900">{s.value}</div>
             <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+            {hasPrevious && (
+              <div
+                className={`text-[10px] font-medium mt-1 ${
+                  s.delta > 0
+                    ? 'text-emerald-600'
+                    : s.delta < 0
+                    ? 'text-red-600'
+                    : 'text-gray-400'
+                }`}
+              >
+                {driftDeltaLabel(s.delta, s.deltaSuffix ?? '')} vs last snapshot
+              </div>
+            )}
           </div>
         ))}
       </div>
+
+      {/* Drift banner — controls + counts of regressions/improvements. */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3 flex flex-wrap items-center gap-4">
+        <div className="flex-1 min-w-[200px]">
+          <div className="text-xs font-semibold text-gray-700">Detection drift</div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            {drift?.current
+              ? `Last snapshot ${new Date(drift.current.captured_at).toLocaleString()} (${drift.current.trigger})`
+              : 'No snapshots yet — capture one to start tracking drift week-over-week.'}
+          </div>
+        </div>
+        {driftSummary && hasPrevious && (
+          <div className="flex gap-2 text-xs">
+            <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+              new {driftSummary.new}
+            </span>
+            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+              improved {driftSummary.improved}
+            </span>
+            <span className="px-2 py-0.5 rounded bg-red-100 text-red-700">
+              regressed {driftSummary.regressed}
+            </span>
+            <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+              removed {driftSummary.removed}
+            </span>
+          </div>
+        )}
+        <button
+          onClick={captureNow}
+          disabled={capturing}
+          className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {capturing ? 'Capturing…' : 'Capture snapshot'}
+        </button>
+        {captureError && (
+          <span className="text-xs text-red-600">{captureError}</span>
+        )}
+      </div>
+
+      {/* Drift legend — explains the per-cell ring colors. */}
+      {hasPrevious && (
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
+          <span className="font-medium">Delta-vs-last-snapshot:</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3 h-3 rounded ring-2 ring-emerald-500 ring-offset-1" />
+            improved
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3 h-3 rounded ring-2 ring-red-500 ring-offset-1" />
+            regressed
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3 h-3 rounded ring-2 ring-blue-500 ring-offset-1" />
+            new
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3 h-3 rounded ring-2 ring-amber-500 ring-offset-1 opacity-60" />
+            removed
+          </span>
+        </div>
+      )}
 
       {/* Heatmap grid */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
@@ -139,28 +337,61 @@ function CoverageHeatmap() {
             {(() => {
               const allTechniques = new Set<string>()
               tactics.forEach((t) => (techniques[t] ?? []).forEach((tc) => allTechniques.add(tc.technique_id)))
-              return Array.from(allTechniques).sort().map((tid) => (
-                <tr key={tid} className="border-t border-gray-100">
-                  <td className="px-3 py-1.5 font-mono text-gray-700">{tid}</td>
-                  {tactics.map((tactic) => {
-                    const cell = (techniques[tactic] ?? []).find((tc) => tc.technique_id === tid)
-                    return (
-                      <td key={tactic} className="px-2 py-1.5 text-center">
-                        {cell ? (
-                          <div
-                            className={`inline-flex items-center justify-center w-8 h-5 rounded text-white text-[10px] font-semibold ${coverageColor(cell.coverage)}`}
-                            title={`${cell.test_count} tests, ${cell.pass_count} passed, ${cell.detected} detected`}
-                          >
-                            {(cell.coverage * 100).toFixed(0)}%
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center justify-center w-8 h-5 rounded bg-gray-100 text-gray-400 text-[10px]">—</div>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))
+              // Surface "removed" techniques in the table even when they're
+              // gone from the live matrix, so analysts see what dropped off.
+              for (const t of drift?.drift.techniques ?? []) {
+                if (t.status === 'removed') allTechniques.add(t.technique_id)
+              }
+              return Array.from(allTechniques).sort().map((tid) => {
+                const tDrift = driftByTid.get(tid)
+                return (
+                  <tr key={tid} className="border-t border-gray-100">
+                    <td className="px-3 py-1.5 font-mono text-gray-700">
+                      {tid}
+                      {tDrift && hasPrevious && tDrift.status !== 'unchanged' && (
+                        <span
+                          className={`ml-2 text-[9px] uppercase font-semibold tracking-wide ${
+                            tDrift.status === 'improved'
+                              ? 'text-emerald-600'
+                              : tDrift.status === 'regressed'
+                              ? 'text-red-600'
+                              : tDrift.status === 'new'
+                              ? 'text-blue-600'
+                              : 'text-amber-600'
+                          }`}
+                        >
+                          {tDrift.status}
+                        </span>
+                      )}
+                    </td>
+                    {tactics.map((tactic) => {
+                      const cell = (techniques[tactic] ?? []).find((tc) => tc.technique_id === tid)
+                      const ring = hasPrevious ? driftRing(tDrift?.status) : ''
+                      const tooltipBase = cell
+                        ? `${cell.test_count} tests, ${cell.pass_count} passed, ${cell.detected} detected`
+                        : ''
+                      const tooltipDelta =
+                        tDrift && hasPrevious
+                          ? ` • ${tDrift.status} (Δdetected ${driftDeltaLabel(tDrift.delta_detected)}, Δcoverage ${driftDeltaLabel(Math.round(tDrift.delta_coverage * 100), 'pp')})`
+                          : ''
+                      return (
+                        <td key={tactic} className="px-2 py-1.5 text-center">
+                          {cell ? (
+                            <div
+                              className={`inline-flex items-center justify-center w-8 h-5 rounded text-white text-[10px] font-semibold ${coverageColor(cell.coverage)} ${ring}`}
+                              title={tooltipBase + tooltipDelta}
+                            >
+                              {(cell.coverage * 100).toFixed(0)}%
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center justify-center w-8 h-5 rounded bg-gray-100 text-gray-400 text-[10px]">—</div>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })
             })()}
           </tbody>
         </table>

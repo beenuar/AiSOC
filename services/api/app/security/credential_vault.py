@@ -218,7 +218,9 @@ def get_vault() -> CredentialVault:
             primary = Fernet.generate_key()
             logger.warning(
                 "AISOC_CREDENTIAL_KEY is not set; using ephemeral process-local key. Connector secrets will not survive a restart. "
-                "Generate a key with `python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"` and set AISOC_CREDENTIAL_KEY."
+                "Generate a key with "
+                "`python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"`"
+                " and set AISOC_CREDENTIAL_KEY."
             )
         rotation = _split_keys(settings.AISOC_CREDENTIAL_KEY_ROTATION_FROM or "")
         _vault_singleton = CredentialVault(primary, historical_keys=rotation)

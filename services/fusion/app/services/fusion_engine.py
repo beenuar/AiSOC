@@ -9,8 +9,10 @@ from uuid import UUID
 import structlog
 
 from app.models.alert import FusedAlert, FusionDecision, RawAlert
+from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
+from app.services.entity_risk import EntityRiskEngine
 from app.services.ml_scorer import MLScorer
 
 logger = structlog.get_logger()
@@ -24,10 +26,17 @@ class FusionEngine:
         deduplicator: Deduplicator,
         correlator: Correlator,
         ml_scorer: MLScorer | None = None,
+        entity_risk: EntityRiskEngine | None = None,
+        confidence_scorer: ConfidenceScorer | None = None,
     ) -> None:
         self._dedup = deduplicator
         self._correlator = correlator
         self._ml_scorer = ml_scorer or MLScorer()
+        self._entity_risk = entity_risk
+        # Confidence + explainability is intrinsic to a fused alert — every
+        # alert leaves the engine with a high/med/low label and an evidence
+        # chain. The scorer is pure / stateless so we instantiate a default.
+        self._confidence_scorer = confidence_scorer or ConfidenceScorer()
 
     async def process(self, alert: RawAlert) -> FusedAlert:
         """
@@ -78,6 +87,33 @@ class FusionEngine:
         except Exception as exc:
             logger.warning("ML scoring failed; using defaults", error=str(exc))
 
+        # --- Step 3b: Detection confidence + explainability ---
+        # Pure, synchronous projection of the values already on ``fused``.
+        # Runs after ML scoring so the rationale picks up anomaly / priority.
+        try:
+            fused = self._confidence_scorer.score(fused)
+        except Exception as exc:
+            logger.warning("confidence_scoring_failed", error=str(exc))
+
+        # --- Step 4: Risk-Based Alerting (entity rollup) ---
+        # RBA accumulates points on the entities this alert touches and may
+        # promote one or more of them to an entity-incident. Failures here
+        # never block the alert pipeline — RBA is additive signal, not
+        # the primary correlation path.
+        if self._entity_risk is not None and self._entity_risk.enabled:
+            try:
+                promotions = await self._entity_risk.observe(alert)
+                if promotions:
+                    logger.info(
+                        "rba_promotions",
+                        alert_id=str(alert.id),
+                        promoted=[
+                            f"{p.entity_type}:{p.entity_value}" for p in promotions
+                        ],
+                    )
+            except Exception as exc:
+                logger.warning("rba_observation_failed", error=str(exc))
+
         logger.info(
             "Alert fusion complete",
             alert_id=str(alert.id),
@@ -86,6 +122,7 @@ class FusionEngine:
             incident_alert_count=incident.alert_count,
             anomaly_score=fused.anomaly_score,
             priority_score=fused.priority_score,
+            confidence=fused.confidence_label.value,
         )
 
         return fused
@@ -93,3 +130,11 @@ class FusionEngine:
     @property
     def ml_scorer(self) -> MLScorer:
         return self._ml_scorer
+
+    @property
+    def entity_risk(self) -> EntityRiskEngine | None:
+        return self._entity_risk
+
+    @property
+    def confidence_scorer(self) -> ConfidenceScorer:
+        return self._confidence_scorer

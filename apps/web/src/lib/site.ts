@@ -1,0 +1,137 @@
+/**
+ * Canonical public URL for SEO, Open Graph, and sitemap.
+ * Set NEXT_PUBLIC_SITE_URL at build/deploy (e.g. https://tryaisoc.com for the live demo).
+ */
+export function getPublicSiteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (raw) {
+    return raw.replace(/\/$/, "");
+  }
+  return "https://tryaisoc.com";
+}
+
+/** Meta keywords for cyber/SOC discovery (tryaisoc.com demo + self-host). */
+export const DISCOVERY_KEYWORDS: readonly string[] = [
+  // Brand
+  "AiSOC",
+  "AI SOC",
+  "tryaisoc",
+  "tryaisoc.com",
+  // Core value prop
+  "open source SOC",
+  "open-source security operations center",
+  "self-hosted SOC",
+  "free SOC platform",
+  "MIT license",
+  "SIEM alternative",
+  "open source SIEM",
+  // Platform capabilities
+  "security operations",
+  "SOC platform",
+  "SOC automation",
+  "threat detection",
+  "alert triage",
+  "alert fusion",
+  "alert deduplication",
+  "noise reduction",
+  "incident response",
+  "security automation",
+  "SOAR",
+  "security orchestration",
+  "security operations automation",
+  // AI / agentic
+  "AI security",
+  "AI-powered SOC",
+  "security AI",
+  "agentic SOC",
+  "LLM security",
+  "security copilot",
+  "generative AI security",
+  "LLM threat detection",
+  "LangGraph",
+  "MCP security",
+  "AI agent security",
+  "autonomous SOC",
+  "GPT security",
+  // Detection & hunting
+  "detection engineering",
+  "detection-as-code",
+  "MITRE ATT&CK",
+  "Sigma rules",
+  "YARA rules",
+  "threat hunting",
+  "detection validation",
+  "eval-driven security",
+  "rule validation",
+  "ATT&CK mapping",
+  // Team concepts
+  "purple team",
+  "blue team",
+  "red team",
+  "SOC analyst",
+  "security analyst",
+  "tier-1 automation",
+  "L1 automation",
+  // Standards & frameworks
+  "SIEM",
+  "XDR",
+  "EDR",
+  "NDR",
+  "cloud SIEM",
+  "cloud security",
+  "cloud security posture",
+  "CSPM",
+  "UEBA",
+  "identity security",
+  "zero trust",
+  "insider threat",
+  "behavioral analytics",
+  // Threat intel
+  "threat intelligence",
+  "CTI",
+  "TAXII",
+  "MISP",
+  "STIX",
+  "IOC",
+  "indicator of compromise",
+  "threat feed",
+  // Compliance & reporting
+  "SOC 2",
+  "compliance monitoring",
+  "audit logging",
+  "security reporting",
+  "MSSP",
+  "managed security",
+  // DFIR
+  "DFIR",
+  "digital forensics",
+  "incident investigation",
+  "forensic timeline",
+  "root cause analysis",
+  // Integrations
+  "Microsoft Sentinel",
+  "CrowdStrike",
+  "Splunk",
+  "Elastic Security",
+  "Defender XDR",
+  "AWS Security Hub",
+  "Google Chronicle",
+  "Okta SIEM",
+  // Tech stack (devs searching)
+  "FastAPI SOC",
+  "NextJS security",
+  "Python security",
+  "Docker security",
+  "Kubernetes security",
+  "LangGraph security",
+  // Community
+  "cybersecurity",
+  "infosec",
+  "DevSecOps",
+  "security monitoring",
+  "log correlation",
+  "security analytics",
+  "open security",
+  "cybersecurity open source",
+  "security community",
+];

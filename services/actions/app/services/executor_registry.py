@@ -2,6 +2,7 @@
 Executor registry: maps ActionType to executor implementation.
 """
 
+from app.executors.chatops import ChatOpsVerifyExecutor
 from app.executors.endpoint import IsolateHostExecutor, KillProcessExecutor, QuarantineFileExecutor
 from app.executors.network import BlockDomainExecutor, BlockIPExecutor
 from app.executors.notification import CreateTicketExecutor, NotifySlackExecutor
@@ -15,4 +16,5 @@ EXECUTOR_REGISTRY = {
     ActionType.KILL_PROCESS: KillProcessExecutor(),
     ActionType.NOTIFY_SLACK: NotifySlackExecutor(),
     ActionType.CREATE_TICKET: CreateTicketExecutor(),
+    ActionType.CHATOPS_VERIFY: ChatOpsVerifyExecutor(),
 }

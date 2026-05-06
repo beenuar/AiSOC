@@ -31,6 +31,29 @@ class Settings(BaseSettings):
     max_alerts_per_incident: int = Field(default=500, alias="MAX_ALERTS_PER_INCIDENT")
     incident_auto_close_hours: int = Field(default=72, alias="INCIDENT_AUTO_CLOSE_HOURS")
 
+    # Risk-Based Alerting (RBA) — accumulates signals onto entities (user / host /
+    # ip / domain) before promotion. Targets the published 2026 KPI bar of
+    # alert-to-incident ratio ≥ 50:1.
+    rba_enabled: bool = Field(default=True, alias="AISOC_FEATURE_RBA")
+    rba_promotion_threshold: float = Field(default=80.0, alias="RBA_PROMOTION_THRESHOLD")
+    rba_window_seconds: int = Field(default=86400, alias="RBA_WINDOW_SECONDS")  # 24h decay window
+    rba_decay_half_life_seconds: int = Field(
+        default=14400, alias="RBA_DECAY_HALF_LIFE_SECONDS"
+    )  # 4h half-life
+    # Severity points contributed by each correlated alert. Keep additive and
+    # capped so a single noisy detection can't promote on its own.
+    rba_severity_weights_critical: float = Field(default=40.0, alias="RBA_W_CRITICAL")
+    rba_severity_weights_high: float = Field(default=20.0, alias="RBA_W_HIGH")
+    rba_severity_weights_medium: float = Field(default=8.0, alias="RBA_W_MEDIUM")
+    rba_severity_weights_low: float = Field(default=3.0, alias="RBA_W_LOW")
+    rba_severity_weights_info: float = Field(default=1.0, alias="RBA_W_INFO")
+    rba_max_top_entities: int = Field(default=100, alias="RBA_MAX_TOP_ENTITIES")
+
+    # Detection confidence + explainability — every fused alert carries a
+    # high/medium/low label and an evidence chain. Disabled only as a
+    # break-glass; the UI degrades gracefully (no chip / no rationale panel).
+    confidence_enabled: bool = Field(default=True, alias="AISOC_FEATURE_CONFIDENCE")
+
     # Enrichment service
     enrichment_service_url: str = Field(default="http://localhost:8082", alias="ENRICHMENT_SERVICE_URL")
 

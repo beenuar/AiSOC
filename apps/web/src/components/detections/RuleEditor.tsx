@@ -459,7 +459,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
                 <div className="h-56 overflow-y-auto px-4 py-3 text-sm">
                   {!testResult ? (
                     <div className="flex h-full items-center justify-center text-xs text-gray-600">
-                      Click "Run test" to evaluate the rule.
+                      Click &ldquo;Run test&rdquo; to evaluate the rule.
                     </div>
                   ) : testResult.matches > 0 ? (
                     <div className="space-y-2">
@@ -709,6 +709,8 @@ function severityActive(sev: AlertSeverity): string {
       return 'bg-yellow-500/15 text-yellow-300 ring-yellow-500/40';
     case 'low':
       return 'bg-blue-500/15 text-blue-300 ring-blue-500/40';
+    case 'info':
+      return 'bg-slate-500/15 text-slate-300 ring-slate-500/40';
   }
 }
 

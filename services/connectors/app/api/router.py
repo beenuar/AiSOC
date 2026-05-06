@@ -29,9 +29,11 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field as PydField
+from pydantic import BaseModel
+from pydantic import Field as PydField
 
 from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
+from app.federated.query import QueryError, parse_unified_query
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -53,6 +55,22 @@ class TestConnectionRequest(BaseModel):
     connector_config: dict[str, Any] = PydField(
         default_factory=dict,
         description="Non-secret runtime config that's passed to the connector constructor.",
+    )
+
+
+class FederatedQueryRequest(BaseModel):
+    """Run a unified query against a single connector instance.
+
+    Same trust model as ``TestConnectionRequest``: the API service
+    decrypts ``auth_config`` before forwarding here. ``query`` is the
+    JSON-shaped ``UnifiedQuery`` (see ``app.federated.query``).
+    """
+
+    auth_config: dict[str, Any] = PydField(default_factory=dict)
+    connector_config: dict[str, Any] = PydField(default_factory=dict)
+    query: dict[str, Any] = PydField(
+        ...,
+        description="UnifiedQuery payload: free_text, indicators[], since_seconds, limit.",
     )
 
 
@@ -153,6 +171,68 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
         # Defensive: some connectors might return None on success. Coerce.
         result = {"success": bool(result), "connector": connector_id}
     return result
+
+
+@router.post("/connectors/{connector_id}/query")
+async def run_federated_query(connector_id: str, payload: FederatedQueryRequest):
+    """Translate a ``UnifiedQuery`` and run it against the connector's backend.
+
+    Trust boundary mirrors ``/connectors/{id}/test``: the API service has
+    already decrypted ``auth_config`` against the credential vault before
+    we see it, and the connector instance lives only for the duration of
+    this request — we never persist credentials in the connectors
+    microservice.
+
+    Connectors that haven't opted into federated search return 501 via
+    the ``NotImplementedError`` raised by ``BaseConnector.query``'s
+    default. Translation failures (un-translatable operator, malformed
+    payload) become 422 so the API layer can surface the offending field.
+    """
+    cls = CONNECTOR_REGISTRY.get(connector_id)
+    if cls is None:
+        raise HTTPException(status_code=404, detail=f"Connector '{connector_id}' not found")
+
+    if not getattr(cls, "supports_federated_search", False):
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"connector '{connector_id}' does not support federated search",
+        )
+
+    try:
+        unified = parse_unified_query(payload.query)
+    except QueryError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    kwargs = {**payload.auth_config, **payload.connector_config}
+    try:
+        connector = cls(**kwargs)
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"connector config does not match schema: {exc}",
+        ) from exc
+
+    try:
+        rows = await connector.query(unified)
+    except NotImplementedError as exc:
+        # Defensive: a connector class can advertise supports_federated_search
+        # but a future refactor could leave query() unimplemented. Map to
+        # the same 501 we'd return up top.
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+    except QueryError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("connector.query.runtime_error", connector_id=connector_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"backend query failed: {exc}",
+        ) from exc
+
+    return {
+        "connector_id": connector_id,
+        "row_count": len(rows),
+        "rows": rows,
+    }
 
 
 @router.get("/health")

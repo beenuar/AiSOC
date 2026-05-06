@@ -214,21 +214,29 @@ export function DetectionsView() {
             triggered.
           </p>
         </div>
-        <Link
-          href="/detection/new"
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600"
-        >
-          <svg
-            className="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/detection/proposals"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800"
           >
-            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-          </svg>
-          New rule
-        </Link>
+            Proposals
+          </Link>
+          <Link
+            href="/detection/new"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600"
+          >
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+            </svg>
+            New rule
+          </Link>
+        </div>
       </div>
 
       {/* Demo banner */}

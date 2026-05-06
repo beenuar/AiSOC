@@ -11,6 +11,8 @@ import httpx
 import structlog
 
 from app.connectors.base import BaseConnector, ConnectorSchema, Field
+from app.federated.query import UnifiedQuery
+from app.federated.translators import to_spl
 
 logger = structlog.get_logger()
 
@@ -19,6 +21,7 @@ class SplunkConnector(BaseConnector):
     connector_id = "splunk"
     connector_name = "Splunk SIEM"
     connector_category = "siem"
+    supports_federated_search = True
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -112,6 +115,25 @@ class SplunkConnector(BaseConnector):
             results = results_resp.json().get("results", [])
 
         return [self.normalize(r) for r in results]
+
+    async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
+        """Run a translated SPL search and return raw rows.
+
+        We deliberately do *not* call ``normalize`` here because federated
+        search returns rows for analyst pivoting, not alerts that should
+        flow into the fusion engine. The API layer wraps each row with
+        connector identity so downstream consumers can tell sources apart.
+        """
+        index = self._saved_search if self._saved_search.startswith("index=") else "notable"
+        spl = to_spl(unified, index=index)
+        async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+            resp = await client.post(
+                f"{self._base_url}/services/search/jobs",
+                headers=self._headers(),
+                data={"search": spl, "output_mode": "json", "exec_mode": "oneshot"},
+            )
+            resp.raise_for_status()
+            return list(resp.json().get("results", []))
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         urgency_map = {"critical": "critical", "high": "high", "medium": "medium", "low": "low", "informational": "info"}

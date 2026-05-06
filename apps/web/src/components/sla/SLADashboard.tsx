@@ -17,6 +17,31 @@ interface SeverityMetrics {
   mttc_target: number | null;
 }
 
+interface KpiBarPayload {
+  targets: {
+    false_positive_rate_max_pct: number;
+    alert_to_incident_ratio_min: number;
+    mitre_technique_tagging_min_pct: number;
+    mitre_subtechnique_tagging_min_pct: number;
+  };
+  observed: {
+    total_alerts: number;
+    false_positives: number;
+    false_positive_rate_pct: number;
+    distinct_cases: number;
+    alert_to_incident_ratio: number;
+    mitre_technique_tagging_pct: number;
+    mitre_subtechnique_tagging_pct: number;
+  };
+  breaches: {
+    false_positive_rate: boolean;
+    alert_to_incident_ratio: boolean;
+    mitre_technique_tagging: boolean;
+    mitre_subtechnique_tagging: boolean;
+  };
+  breach_count: number;
+}
+
 interface SLAMetrics {
   period_days: number;
   computed_at: string;
@@ -29,6 +54,7 @@ interface SLAMetrics {
     mttc_avg: number | null;
   };
   per_severity: Record<string, SeverityMetrics>;
+  kpi_bar: KpiBarPayload | null;
 }
 
 interface SLAConfig {
@@ -142,9 +168,243 @@ function EditConfigModal({
   );
 }
 
+type KpiBarTargets = KpiBarPayload['targets'];
+
+function EditKpiBarModal({
+  targets,
+  onClose,
+  onSaved,
+}: {
+  targets: KpiBarTargets;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [fpMax, setFpMax] = useState(targets.false_positive_rate_max_pct);
+  const [ratioMin, setRatioMin] = useState(targets.alert_to_incident_ratio_min);
+  const [mitreMin, setMitreMin] = useState(targets.mitre_technique_tagging_min_pct);
+  const [subMin, setSubMin] = useState(targets.mitre_subtechnique_tagging_min_pct);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = async () => {
+    setErr(null);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/v1/sla/kpi-targets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          false_positive_rate_max_pct: fpMax,
+          alert_to_incident_ratio_min: ratioMin,
+          mitre_technique_tagging_min_pct: mitreMin,
+          mitre_subtechnique_tagging_min_pct: subMin,
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr((j as { detail?: string }).detail ?? `HTTP ${res.status}`);
+        setSaving(false);
+        return;
+      }
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="w-full max-w-md space-y-4 rounded-xl border border-gray-700 bg-gray-900 p-6">
+        <h3 className="text-lg font-semibold text-white">2026 KPI bar targets</h3>
+        <p className="text-xs text-gray-500">
+          Published defaults apply until you override. Metrics use the same look-back as SLA metrics.
+        </p>
+        {[
+          {
+            label: 'False positive rate (max %)',
+            val: fpMax,
+            set: setFpMax,
+            min: 0,
+            max: 100,
+            step: 0.5,
+          },
+          {
+            label: 'Alert-to-incident ratio (min)',
+            val: ratioMin,
+            set: setRatioMin,
+            min: 1,
+            max: 500,
+            step: 1,
+          },
+          {
+            label: 'MITRE technique tagging (min %)',
+            val: mitreMin,
+            set: setMitreMin,
+            min: 0,
+            max: 100,
+            step: 1,
+          },
+          {
+            label: 'MITRE sub-technique tagging (min %)',
+            val: subMin,
+            set: setSubMin,
+            min: 0,
+            max: 100,
+            step: 1,
+          },
+        ].map(({ label, val, set, min, max, step }) => (
+          <div key={label}>
+            <label className="mb-1 block text-xs text-gray-400">{label}</label>
+            <input
+              type="number"
+              min={min}
+              max={max}
+              step={step}
+              value={val}
+              onChange={(e) => set(Number(e.target.value))}
+              className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white"
+            />
+          </div>
+        ))}
+        {err && <p className="text-sm text-red-400">{err}</p>}
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="flex-1 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded bg-gray-700 px-3 py-2 text-sm text-white hover:bg-gray-600"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiBarSection({
+  kpi,
+  days,
+  onEditTargets,
+}: {
+  kpi: KpiBarPayload;
+  days: number;
+  onEditTargets: () => void;
+}) {
+  const { targets, observed, breaches, breach_count } = kpi;
+
+  const rows: {
+    key: string;
+    label: string;
+    observed: string;
+    target: string;
+    breach: boolean;
+  }[] = [
+    {
+      key: 'fp',
+      label: 'False positive rate',
+      observed: `${observed.false_positive_rate_pct}% (${observed.false_positives} / ${observed.total_alerts})`,
+      target: `≤ ${targets.false_positive_rate_max_pct}%`,
+      breach: breaches.false_positive_rate,
+    },
+    {
+      key: 'ratio',
+      label: 'Alert-to-incident ratio',
+      observed:
+        observed.distinct_cases > 0
+          ? `${observed.alert_to_incident_ratio}:1`
+          : `${observed.total_alerts} alerts, no linked cases`,
+      target: `≥ ${targets.alert_to_incident_ratio_min}:1 when cases exist`,
+      breach: breaches.alert_to_incident_ratio,
+    },
+    {
+      key: 'mitre',
+      label: 'MITRE technique coverage',
+      observed: `${observed.mitre_technique_tagging_pct}%`,
+      target: `≥ ${targets.mitre_technique_tagging_min_pct}%`,
+      breach: breaches.mitre_technique_tagging,
+    },
+    {
+      key: 'sub',
+      label: 'MITRE sub-technique coverage',
+      observed: `${observed.mitre_subtechnique_tagging_pct}%`,
+      target: `≥ ${targets.mitre_subtechnique_tagging_min_pct}%`,
+      breach: breaches.mitre_subtechnique_tagging,
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border border-violet-500/25 bg-violet-950/20 p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold text-white">2026 KPI bar</h2>
+          <p className="text-xs text-gray-500">
+            Operational quality vs tenant targets (last {days} days)
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className={
+              breach_count > 0
+                ? 'rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-300'
+                : 'rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300'
+            }
+          >
+            {breach_count === 0 ? 'All KPIs met' : `${breach_count} breach${breach_count === 1 ? '' : 'es'}`}
+          </span>
+          <button
+            type="button"
+            onClick={onEditTargets}
+            className="text-xs text-violet-300 hover:text-violet-200"
+          >
+            Edit targets
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-700 text-gray-500">
+              <th className="py-2 pr-4 font-medium">Metric</th>
+              <th className="py-2 pr-4 font-medium">Observed</th>
+              <th className="py-2 pr-4 font-medium">Target</th>
+              <th className="py-2 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key} className="border-b border-gray-800/80">
+                <td className="py-2.5 pr-4 text-gray-200">{r.label}</td>
+                <td className="py-2.5 pr-4 text-white">{r.observed}</td>
+                <td className="py-2.5 pr-4 text-gray-400">{r.target}</td>
+                <td className="py-2.5">
+                  {r.breach ? (
+                    <span className="text-red-400">Breach</span>
+                  ) : (
+                    <span className="text-emerald-400">OK</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function SLADashboard() {
   const [days, setDays] = useState(30);
   const [editConfig, setEditConfig] = useState<SLAConfig | null>(null);
+  const [editKpiTargets, setEditKpiTargets] = useState<KpiBarTargets | null>(null);
 
   const { data: metrics, isLoading: metricsLoading } = useSWR<SLAMetrics>(
     `/api/v1/sla/metrics?days=${days}`,
@@ -203,6 +463,14 @@ export function SLADashboard() {
             </div>
           ))}
         </div>
+      )}
+
+      {metrics?.kpi_bar && (
+        <KpiBarSection
+          kpi={metrics.kpi_bar}
+          days={days}
+          onEditTargets={() => setEditKpiTargets(metrics.kpi_bar!.targets)}
+        />
       )}
 
       {/* Per-severity breakdown */}
@@ -284,6 +552,17 @@ export function SLADashboard() {
           onClose={() => setEditConfig(null)}
           onSaved={() => {
             mutate('/api/v1/sla/config');
+            mutate(`/api/v1/sla/metrics?days=${days}`);
+          }}
+        />
+      )}
+
+      {editKpiTargets && (
+        <EditKpiBarModal
+          targets={editKpiTargets}
+          onClose={() => setEditKpiTargets(null)}
+          onSaved={() => {
+            mutate('/api/v1/sla/kpi-targets');
             mutate(`/api/v1/sla/metrics?days=${days}`);
           }}
         />

@@ -107,3 +107,35 @@ class TabletopSession(Base):
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class DetectionDriftSnapshot(Base):
+    """Point-in-time snapshot of ATT&CK detection coverage for a tenant.
+
+    Snapshots are produced by the weekly scheduler (or on-demand via API)
+    and used to surface "delta vs. last week" on the MITRE heatmap. The
+    full coverage matrix is stored in JSONB so the API can replay
+    historical coverage without recomputing from raw executions, which
+    can age out under retention policies.
+    """
+
+    __tablename__ = "purple_team_detection_drift_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    # "scheduled" | "manual" | "post-run"
+    trigger: Mapped[str] = mapped_column(String(32), nullable=False, server_default="scheduled")
+
+    # Aggregate counters lifted from coverage["summary"] for cheap historical queries.
+    total_techniques: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tested_techniques: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    detected_techniques: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    overall_coverage: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+
+    # Full ATT&CK coverage matrix (tactics + techniques + summary) at capture time.
+    coverage: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")

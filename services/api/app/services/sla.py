@@ -8,13 +8,80 @@ per-severity SLA compliance summaries.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Text, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
+from app.core.config import get_settings
+from app.models.alert import Alert
 from app.models.sla import AlertSLAEvent, TenantSLAConfig
+from app.models.tenant import Tenant
+
+# 2026 published KPI bar defaults (tenants can override via ``settings.kpi_bar``).
+DEFAULT_KPI_BAR_TARGETS: dict[str, float] = {
+    "false_positive_rate_max_pct": 5.0,
+    "alert_to_incident_ratio_min": 50.0,
+    "mitre_technique_tagging_min_pct": 85.0,
+    "mitre_subtechnique_tagging_min_pct": 60.0,
+}
+
+
+def merge_kpi_bar_dict(existing: dict | None, patch: dict[str, float]) -> dict[str, float]:
+    """Merge ``patch`` into stored ``kpi_bar`` and coerce to the four known keys + defaults."""
+    kb = {**(existing or {}), **patch}
+    out = {**DEFAULT_KPI_BAR_TARGETS}
+    for k in DEFAULT_KPI_BAR_TARGETS:
+        if k in kb:
+            try:
+                out[k] = float(kb[k])
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def merge_tenant_settings_patch(existing: dict | None, patch: dict) -> dict:
+    """Shallow-merge ``patch`` into tenant ``settings``; deep-merge only ``kpi_bar``."""
+    out = dict(existing or {})
+    for k, v in patch.items():
+        if k == "kpi_bar" and isinstance(v, dict):
+            prev = out.get("kpi_bar")
+            base = prev if isinstance(prev, dict) else {}
+            out["kpi_bar"] = merge_kpi_bar_dict(base, v)
+        else:
+            out[k] = v
+    return out
+
+
+async def load_kpi_bar_targets(db: AsyncSession, tenant_id: uuid.UUID) -> dict[str, float]:
+    row = await db.execute(select(Tenant.settings).where(Tenant.id == tenant_id))
+    raw = row.scalar_one_or_none() or {}
+    kb = (raw or {}).get("kpi_bar") if isinstance((raw or {}).get("kpi_bar"), dict) else {}
+    return merge_kpi_bar_dict(kb, {})
+
+
+async def patch_tenant_kpi_bar_targets(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    patch: dict[str, float],
+) -> dict[str, float]:
+    """Persist merged KPI bar targets on the tenant row."""
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    if tenant is None:
+        raise ValueError("tenant not found")
+    settings = dict(tenant.settings or {})
+    prev_bar = settings.get("kpi_bar") if isinstance(settings.get("kpi_bar"), dict) else {}
+    merged_bar = merge_kpi_bar_dict(prev_bar, patch)
+    settings["kpi_bar"] = merged_bar
+    tenant.settings = settings
+    tenant.updated_at = datetime.now(UTC)
+    flag_modified(tenant, "settings")
+    await db.commit()
+    return merged_bar
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -79,9 +146,82 @@ def _compute_durations(
     }
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+async def _compute_kpi_bar(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    since: datetime,
+    targets: dict[str, float],
+) -> dict[str, Any]:
+    """Aggregate 2026 KPI bar metrics from ``alerts`` for the look-back window."""
+    base = Alert.tenant_id == tenant_id, Alert.created_at >= since
+
+    total_r = await db.execute(select(func.count()).select_from(Alert).where(*base))
+    total = int(total_r.scalar_one() or 0)
+
+    fp_r = await db.execute(
+        select(func.count()).select_from(Alert).where(*base, Alert.status == "fp")
+    )
+    fp = int(fp_r.scalar_one() or 0)
+
+    cases_r = await db.execute(
+        select(func.count(func.distinct(Alert.case_id))).select_from(Alert).where(*base, Alert.case_id.is_not(None))
+    )
+    distinct_cases = int(cases_r.scalar_one() or 0)
+
+    tagged_r = await db.execute(
+        select(func.count())
+        .select_from(Alert)
+        .where(
+            *base,
+            func.coalesce(func.jsonb_array_length(Alert.mitre_techniques), 0) > 0,
+        )
+    )
+    tagged = int(tagged_r.scalar_one() or 0)
+
+    sub_r = await db.execute(
+        select(func.count())
+        .select_from(Alert)
+        .where(
+            *base,
+            func.coalesce(func.jsonb_array_length(Alert.mitre_techniques), 0) > 0,
+            Alert.mitre_techniques.cast(Text).like("%.%"),
+        )
+    )
+    sub_tagged = int(sub_r.scalar_one() or 0)
+
+    fp_rate_pct = round(fp / total * 100, 2) if total else 0.0
+    if distinct_cases > 0:
+        alert_to_incident = round(total / distinct_cases, 2)
+    else:
+        alert_to_incident = float(total) if total else 0.0
+
+    mitre_tag_pct = round(tagged / total * 100, 2) if total else 0.0
+    mitre_sub_pct = round(sub_tagged / total * 100, 2) if total else 0.0
+
+    # Alert-to-incident: only evaluate when there is at least one incident;
+    # alerts with zero linked cases are treated as meeting the ratio bar.
+    breaches = {
+        "false_positive_rate": fp_rate_pct > targets["false_positive_rate_max_pct"],
+        "alert_to_incident_ratio": distinct_cases > 0
+        and alert_to_incident < targets["alert_to_incident_ratio_min"],
+        "mitre_technique_tagging": mitre_tag_pct < targets["mitre_technique_tagging_min_pct"],
+        "mitre_subtechnique_tagging": mitre_sub_pct < targets["mitre_subtechnique_tagging_min_pct"],
+    }
+
+    return {
+        "targets": targets,
+        "observed": {
+            "total_alerts": total,
+            "false_positives": fp,
+            "false_positive_rate_pct": fp_rate_pct,
+            "distinct_cases": distinct_cases,
+            "alert_to_incident_ratio": alert_to_incident,
+            "mitre_technique_tagging_pct": mitre_tag_pct,
+            "mitre_subtechnique_tagging_pct": mitre_sub_pct,
+        },
+        "breaches": breaches,
+        "breach_count": sum(1 for v in breaches.values() if v),
+    }
 
 
 async def compute_sla_metrics(
@@ -170,9 +310,15 @@ async def compute_sla_metrics(
         "mttc_avg": round(sum(all_mttc) / len(all_mttc), 1) if all_mttc else None,
     }
 
-    return {
+    out: dict[str, Any] = {
         "period_days": days,
         "computed_at": datetime.utcnow().isoformat(),
         "overall": overall,
         "per_severity": per_severity,
     }
+    if get_settings().AISOC_FEATURE_KPI_BAR:
+        kpi_targets = await load_kpi_bar_targets(db, tenant_id)
+        out["kpi_bar"] = await _compute_kpi_bar(db, tenant_id, since, kpi_targets)
+    else:
+        out["kpi_bar"] = None
+    return out

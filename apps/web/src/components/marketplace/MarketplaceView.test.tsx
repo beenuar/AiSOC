@@ -73,7 +73,10 @@ describe('MarketplaceView install flow', () => {
   });
 
   it('POSTs to /api/v1/marketplace/install when the user clicks Install', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi.fn(
+      async (): Promise<Response> =>
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     render(<MarketplaceView />);
@@ -92,9 +95,10 @@ describe('MarketplaceView install flow', () => {
     });
 
     // Body must include the item type+id, not arbitrary data.
-    const call = fetchMock.mock.calls.find((c) => c[0] === '/api/v1/marketplace/install');
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const call = calls.find((c) => c[0] === '/api/v1/marketplace/install');
     expect(call).toBeTruthy();
-    const body = JSON.parse((call as [string, RequestInit])[1].body as string);
+    const body = JSON.parse(String(call![1]?.body));
     expect(body).toEqual({ type: 'plugin', id: 'cloudflare-waf' });
 
     // After a successful POST the optimistic toggle flips to the per-card
@@ -104,8 +108,9 @@ describe('MarketplaceView install flow', () => {
   });
 
   it('rolls back the optimistic install toggle when the API returns 500', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ detail: 'boom' }), { status: 500 }),
+    const fetchMock = vi.fn(
+      async (): Promise<Response> =>
+        new Response(JSON.stringify({ detail: 'boom' }), { status: 500 }),
     );
     vi.stubGlobal('fetch', fetchMock);
 

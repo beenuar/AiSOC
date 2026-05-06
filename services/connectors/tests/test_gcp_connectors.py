@@ -17,11 +17,10 @@ import json
 import httpx
 import pytest
 import respx
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-
 from app.connectors.gcp_cloud_audit import GCPCloudAuditConnector
 from app.connectors.gcp_scc import GCPSCCConnector
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 _PROJECT = "aisoc-test-project"
 _ORG = "1234567890"

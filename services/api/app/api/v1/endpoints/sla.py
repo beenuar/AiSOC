@@ -1,9 +1,11 @@
 """SLA tracking API endpoints.
 
-GET  /api/v1/sla/metrics          — Aggregated MTTD/MTTR/MTTC metrics
-GET  /api/v1/sla/config           — Current per-severity SLA targets
-PUT  /api/v1/sla/config/{severity} — Update SLA target for a severity
-POST /api/v1/sla/events           — Record a lifecycle event for an alert
+GET  /api/v1/sla/metrics            — Aggregated MTTD/MTTR/MTTC metrics (+ optional 2026 KPI bar)
+GET  /api/v1/sla/config             — Current per-severity SLA targets
+PUT  /api/v1/sla/config/{severity}  — Update SLA target for a severity
+GET  /api/v1/sla/kpi-targets        — Tenant 2026 KPI bar targets (defaults + overrides)
+PUT  /api/v1/sla/kpi-targets        — Patch KPI bar targets (deep-merge ``kpi_bar`` in tenant settings)
+POST /api/v1/sla/events             — Record a lifecycle event for an alert
 """
 
 from __future__ import annotations
@@ -17,9 +19,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.core.config import get_settings
 from app.db.rls import TenantDBSession
 from app.models.sla import AlertSLAEvent, TenantSLAConfig
-from app.services.sla import compute_sla_metrics
+from app.services import sla as sla_service
 
 router = APIRouter(prefix="/sla", tags=["sla"])
 
@@ -70,6 +73,20 @@ class SLAEventOut(BaseModel):
         from_attributes = True
 
 
+class KpiBarTargetsOut(BaseModel):
+    false_positive_rate_max_pct: float = Field(..., ge=0, le=100)
+    alert_to_incident_ratio_min: float = Field(..., ge=1)
+    mitre_technique_tagging_min_pct: float = Field(..., ge=0, le=100)
+    mitre_subtechnique_tagging_min_pct: float = Field(..., ge=0, le=100)
+
+
+class KpiBarTargetsUpdate(BaseModel):
+    false_positive_rate_max_pct: float | None = Field(default=None, ge=0, le=100)
+    alert_to_incident_ratio_min: float | None = Field(default=None, ge=1)
+    mitre_technique_tagging_min_pct: float | None = Field(default=None, ge=0, le=100)
+    mitre_subtechnique_tagging_min_pct: float | None = Field(default=None, ge=0, le=100)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -82,7 +99,39 @@ async def get_sla_metrics(
     days: int = Query(default=30, ge=1, le=365, description="Look-back window in days"),
 ):
     """Return aggregated MTTD / MTTR / MTTC metrics for the tenant."""
-    return await compute_sla_metrics(db, current_user.tenant_id, days=days)
+    return await sla_service.compute_sla_metrics(db, current_user.tenant_id, days=days)
+
+
+def _require_kpi_bar_feature() -> None:
+    if not get_settings().AISOC_FEATURE_KPI_BAR:
+        raise HTTPException(status_code=404, detail="2026 KPI bar feature is disabled")
+
+
+@router.get("/kpi-targets", response_model=KpiBarTargetsOut)
+async def get_kpi_bar_targets(
+    current_user: Annotated[AuthUser, Depends(require_permission("sla:read"))],
+    db: TenantDBSession,
+) -> KpiBarTargetsOut:
+    """Return merged 2026 KPI bar targets (published defaults plus tenant ``settings.kpi_bar``)."""
+    _require_kpi_bar_feature()
+    merged = await sla_service.load_kpi_bar_targets(db, current_user.tenant_id)
+    return KpiBarTargetsOut.model_validate(merged)
+
+
+@router.put("/kpi-targets", response_model=KpiBarTargetsOut)
+async def put_kpi_bar_targets(
+    body: KpiBarTargetsUpdate,
+    current_user: Annotated[AuthUser, Depends(require_permission("sla:write"))],
+    db: TenantDBSession,
+) -> KpiBarTargetsOut:
+    """Patch tenant KPI bar targets; unspecified fields keep previous values."""
+    _require_kpi_bar_feature()
+    patch = {k: float(v) for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    try:
+        merged = await sla_service.patch_tenant_kpi_bar_targets(db, current_user.tenant_id, patch)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Tenant not found") from None
+    return KpiBarTargetsOut.model_validate(merged)
 
 
 @router.get("/config", response_model=list[SLAConfigOut])

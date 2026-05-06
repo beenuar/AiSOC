@@ -12,17 +12,21 @@ import httpx
 import structlog
 
 from app.connectors.base import BaseConnector, ConnectorSchema, Field
+from app.federated.query import UnifiedQuery
+from app.federated.translators import to_kql
 
 logger = structlog.get_logger()
 
 _TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 _SENTINEL_API = "https://management.azure.com/subscriptions/{sub_id}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{workspace}/providers/Microsoft.SecurityInsights/incidents"
+_LOGS_API = "https://api.loganalytics.io/v1/workspaces/{workspace_id}/query"
 
 
 class MicrosoftSentinelConnector(BaseConnector):
     connector_id = "microsoft_sentinel"
     connector_name = "Microsoft Sentinel"
     connector_category = "siem"
+    supports_federated_search = True
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -109,6 +113,39 @@ class MicrosoftSentinelConnector(BaseConnector):
             incidents = resp.json().get("value", [])
 
         return [self.normalize(i) for i in incidents]
+
+    async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
+        """Run a translated KQL query against Log Analytics.
+
+        Sentinel KQL runs against the workspace's Log Analytics endpoint,
+        which uses a different API base than the Security Insights REST
+        endpoint used by ``fetch_alerts``. The federated layer scopes auth
+        to ``api.loganalytics.io`` separately from the management API.
+        """
+        if not self._access_token:
+            await self._authenticate()
+
+        kql = to_kql(unified, table="CommonSecurityLog")
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            url = _LOGS_API.format(workspace_id=self._workspace)
+            headers = {
+                "Authorization": f"Bearer {self._access_token}",
+                "Content-Type": "application/json",
+            }
+            resp = await client.post(url, headers=headers, json={"query": kql})
+            resp.raise_for_status()
+            data = resp.json()
+
+        # Log Analytics returns { "tables": [ { "columns": [...], "rows": [[...]] } ] }
+        # Flatten the first table into a list of column-keyed dicts so the API
+        # layer doesn't need to know the wire shape.
+        tables = data.get("tables") or []
+        if not tables:
+            return []
+        primary = tables[0]
+        columns = [c.get("name") for c in primary.get("columns", [])]
+        rows = primary.get("rows", [])
+        return [dict(zip(columns, row, strict=False)) for row in rows]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         props = raw.get("properties", {})

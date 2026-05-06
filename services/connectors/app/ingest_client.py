@@ -131,8 +131,8 @@ class IngestClient:
 
         try:
             data = resp.json()
-        except ValueError:
-            raise IngestClientError("ingest service returned non-JSON response")
+        except ValueError as err:
+            raise IngestClientError("ingest service returned non-JSON response") from err
         return data
 
 

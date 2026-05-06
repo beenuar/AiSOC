@@ -1,0 +1,46 @@
+id: hunt-lolbin-rundll32-network
+name: rundll32.exe making outbound network connections
+description: |
+  rundll32.exe is a signed Windows binary frequently abused by adversaries to
+  proxy execution of malicious DLLs. Legitimate rundll32 invocations almost
+  never make outbound network connections to non-Microsoft IPs; when they do,
+  it is a high-fidelity signal of LOLBin abuse (Cobalt Strike, IcedID, Qakbot).
+version: 1.0.0
+severity: high
+category: endpoint
+tags:
+  - mitre.attack.t1218.011
+  - hunt.endpoint
+  - threat.lolbin
+log_sources:
+  - sysmon
+schedule:
+  enabled: true
+  interval_minutes: 30
+  jitter_seconds: 30
+hypothesis:
+  question: |
+    Did rundll32.exe (Sysmon EventID 3 — Network connection) initiate an
+    outbound connection to a non-RFC1918, non-Microsoft destination?
+  indicators:
+    - field: source
+      equals: sysmon
+    - field: EventID
+      equals: 3
+    - field: Image
+      iendswith: "\\rundll32.exe"
+    - field: DestinationIp_is_public
+      equals: true
+    - field: DestinationIp_is_microsoft
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-005
+  positive_template_id: hunt-lolbin-rundll32-network
+  min_match_score: 0.85
+  negative_incident_id: INC-HUNT-005-NEG
+references:
+  - https://attack.mitre.org/techniques/T1218/011/
+  - https://lolbas-project.github.io/lolbas/Binaries/Rundll32/
+author: AiSOC
+created: '2026-05-05'
+modified: '2026-05-05'

@@ -16,7 +16,6 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
-
 from app.connectors.azure_activity import AzureActivityConnector
 from app.connectors.azure_defender import AzureDefenderConnector
 from app.connectors.azure_entra import AzureEntraConnector

@@ -29,7 +29,6 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
-    and_,
     select,
     update,
 )

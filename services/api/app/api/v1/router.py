@@ -12,7 +12,9 @@ from app.api.v1.endpoints import (
     community,
     compliance,
     connectors,
+    detection_proposals,
     detection_rules,
+    federated,
     graph,
     investigations,
     marketplace,
@@ -35,6 +37,8 @@ api_router.include_router(cases.router)
 api_router.include_router(connectors.router)
 api_router.include_router(tenants.router)
 api_router.include_router(detection_rules.router)
+api_router.include_router(detection_proposals.router)
+api_router.include_router(federated.router)
 api_router.include_router(graph.router)
 api_router.include_router(playbooks.router)
 api_router.include_router(plugins.router)

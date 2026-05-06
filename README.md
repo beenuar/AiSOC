@@ -15,6 +15,8 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 
 <sub>The demo at <a href="https://tryaisoc.com">tryaisoc.com</a> is a self-hosted instance fronted by a Cloudflare Tunnel — when it's reachable, the stack is running locally on a maintainer's box. It can therefore go offline at any time. To run your own (in 3.5 min, with seeded data), see <a href="#one-shot-demo">One-shot demo</a>; to expose your own instance on your own domain via Cloudflare Tunnel, see <a href="#public-demo-on-your-own-domain">Public demo on your own domain</a>.</sub>
 
+[![GitHub topics](https://img.shields.io/badge/topics-soc%20%7C%20siem%20%7C%20ai--security%20%7C%20mitre--attack-0ea5e9?style=flat-square)](https://github.com/beenuar/AiSOC/topics)
+
 </div>
 
 ---
@@ -92,6 +94,7 @@ AiSOC bundles the components a SOC normally pieces together from separate vendor
 - **Connect data sources in three clicks** — a click-and-connect catalog (Microsoft Entra, Azure Activity, Defender XDR, GCP Cloud Audit, GCP SCC, Microsoft 365 audit, Google Workspace, Cloudflare, GitHub, plus the original CrowdStrike / Splunk / AWS Security Hub / Okta / Microsoft Sentinel set) renders a schema-driven form per connector, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
 - **Ingest** events from any connector into a Kafka spine.
 - **Correlate** them in real time with deduplication, ML scoring, and Sigma/YARA detection.
+- **Roll up signal onto entities** — Risk-Based Alerting accumulates time-decayed risk points on the user, host, IP, and domain each alert touches, promotes them to entity-incidents at a tunable threshold, and surfaces an entity-centric queue in the alerts UI. Hits the published 2026 KPI bar of ≥ 50:1 alert-to-incident ratio (CI-gated in [`services/fusion/tests/test_entity_risk.py`](services/fusion/tests/test_entity_risk.py)).
 - **Enrich** every signal with threat intelligence from TAXII 2.1, MISP, OTX, and CISA KEV.
 - **Reason** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.
 - **Detect deviations** with UEBA — per-user behavioural baselines and Z-score anomaly scoring.
@@ -114,6 +117,7 @@ Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 - Kafka spine with sub-second ingestion
 - Bloom-filter dedup on 10M+ IOCs
 - LightGBM + Isolation Forest scoring
+- Risk-Based Alerting entity rollup (≥ 50:1 alert-to-incident, CI-gated)
 - Live WebSocket feed into the console
 
 ### AI Copilot

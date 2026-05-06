@@ -23,11 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -53,11 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -76,11 +72,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -100,11 +94,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install workspace deps
@@ -258,11 +250,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install workspace deps
@@ -364,8 +354,42 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Pull last published baseline from eval-results branch
+        # Wave 2 — w2-dac. We fetch `eval/results/latest.json` from the
+        # `eval-results` orphan branch (published by the publish step below
+        # on main). When present, the eval runner gates a ≥1pp MITRE
+        # regression vs. that baseline; missing baseline = no-op.
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p /tmp/eval-baseline
+          if git fetch origin eval-results:eval-results 2>/dev/null; then
+            git --no-pager show eval-results:eval/results/latest.json \
+              > /tmp/eval-baseline/latest.json 2>/dev/null \
+              || rm -f /tmp/eval-baseline/latest.json
+          fi
+          if [ -f /tmp/eval-baseline/latest.json ]; then
+            echo "Baseline found at /tmp/eval-baseline/latest.json"
+          else
+            echo "No baseline yet — first run will publish one."
+          fi
       - name: Run all eval suites
-        run: python3 scripts/run_evals.py --ci --out eval_report.json
+        # On PRs we additionally gate against the published baseline so a
+        # detection-as-code merge that drops MITRE accuracy by ≥ 1pp blocks
+        # CI (exit code 2). On push to main, `--baseline` is omitted so the
+        # publish step below establishes a fresh baseline.
+        run: |
+          if [ -f /tmp/eval-baseline/latest.json ]; then
+            python3 scripts/run_evals.py \
+              --ci \
+              --baseline /tmp/eval-baseline/latest.json \
+              --max-regression-pp 1.0 \
+              --out eval_report.json
+          else
+            python3 scripts/run_evals.py --ci --out eval_report.json
+          fi
       - name: Post job summary
         if: always()
         run: |

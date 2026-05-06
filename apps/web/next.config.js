@@ -13,6 +13,10 @@
 const REALTIME_HOST = process.env.REALTIME_URL || 'http://localhost:8086';
 const API_HOST = process.env.API_URL || 'http://localhost:8000';
 const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8001';
+// Fusion service exposes /entity-risk/*, /ml/*, /metrics, /health at root.
+// We surface those to the browser under the same-origin namespace
+// /api/v1/fusion/* so the bundle stays host-agnostic.
+const FUSION_HOST = process.env.FUSION_URL || 'http://localhost:8082';
 
 const nextConfig = {
   reactStrictMode: true,
@@ -97,6 +101,14 @@ const nextConfig = {
       {
         source: '/api/v1/investigations',
         destination: `${AGENTS_HOST}/api/v1/investigations`,
+      },
+      // Fusion service exposes the Risk-Based Alerting (entity rollup) queue
+      // and ML scoring endpoints at its own root (no /api/v1 prefix on the
+      // service side). Proxy /api/v1/fusion/:path* → fusion's /:path* so the
+      // browser only ever sees same-origin URLs.
+      {
+        source: '/api/v1/fusion/:path*',
+        destination: `${FUSION_HOST}/:path*`,
       },
       // Catch-all for the core API.
       {

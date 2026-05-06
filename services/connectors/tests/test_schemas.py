@@ -9,7 +9,6 @@ without a well-formed schema.
 from __future__ import annotations
 
 import pytest
-
 from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
 from app.connectors.base import BaseConnector, ConnectorSchema, Field
 

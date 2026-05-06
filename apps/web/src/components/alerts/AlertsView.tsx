@@ -3,9 +3,17 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { alertsApi, type Alert, type AlertFilters } from '@/lib/api';
+import { alertsApi, type Alert, type AlertFilters, type ConfidenceLabel } from '@/lib/api';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
+import { EntityRiskQueue } from './EntityRiskQueue';
+
+// Wave 1 of the AiSOC v6 capability roadmap. The "entities" tab renders the
+// rolled-up Risk-Based Alerting queue — alerts contribute time-decayed risk
+// points to the entities they touch, and the queue surfaces those entities
+// (not the raw alerts) to the analyst. The "alerts" tab keeps the legacy
+// alert-centric grid for tenants that prefer it or have RBA disabled.
+type ViewMode = 'entities' | 'alerts';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +39,8 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
   const sev = (['critical', 'high', 'high', 'medium', 'medium', 'medium', 'low', 'info'] as const)[i % 8];
   const src = ['CrowdStrike', 'Splunk', 'AWS Security Hub', 'Okta', 'Microsoft Sentinel'][i % 5];
   const status = (['new', 'investigating', 'new', 'resolved', 'false_positive'] as const)[i % 5];
+  const conf = (['high', 'high', 'medium', 'medium', 'medium', 'low'] as const)[i % 6];
+  const confScore = conf === 'high' ? 0.78 + (i % 5) * 0.03 : conf === 'medium' ? 0.45 + (i % 5) * 0.03 : 0.18 + (i % 5) * 0.03;
   return {
     id: `ALT-${String(1000 + i).padStart(4, '0')}`,
     title: [
@@ -57,8 +67,31 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
     iocs: [],
     mitreAttack: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' }] : [],
     riskScore: Math.floor(Math.random() * 100),
+    confidenceLabel: conf,
+    confidenceScore: Number(confScore.toFixed(2)),
   };
 });
+
+// Wave 1 — Detection confidence chip rendered inline in the alert grid so an
+// analyst can spot low-confidence alerts at a glance without clicking through.
+// Click-through still goes to AlertDetailView for the full evidence chain.
+const CONFIDENCE_ROW_CONFIG: Record<ConfidenceLabel, { label: string; cls: string }> = {
+  high: { label: 'HIGH', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  medium: { label: 'MED', cls: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
+  low: { label: 'LOW', cls: 'text-gray-400 bg-gray-500/10 border-gray-500/20' },
+};
+
+function ConfidencePill({ label }: { label: ConfidenceLabel }) {
+  const cfg = CONFIDENCE_ROW_CONFIG[label];
+  return (
+    <span
+      className={clsx('text-[10px] font-mono font-medium px-1.5 py-0.5 rounded border shrink-0', cfg.cls)}
+      title={`Detection confidence: ${cfg.label}`}
+    >
+      {cfg.label}
+    </span>
+  );
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -167,6 +200,7 @@ function AlertRow({ alert }: { alert: Alert }) {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {alert.confidenceLabel && <ConfidencePill label={alert.confidenceLabel} />}
         <SeverityBadge severity={alert.severity} />
         <StatusBadge status={alert.status} />
         <span className="text-xs text-gray-600 w-24 text-right">
@@ -182,6 +216,10 @@ function AlertRow({ alert }: { alert: Alert }) {
 export function AlertsView() {
   const [filters, setFilters] = useState<AlertFilters>({ page: 1, pageSize: 25 });
   const [selectedIds] = useState(new Set<string>());
+  // Default to the entity-centric queue — that's the whole point of Wave 1's
+  // RBA work. Analysts can flip back to the raw alert grid for legacy
+  // workflows or when triaging a specific alert ID.
+  const [viewMode, setViewMode] = useState<ViewMode>('entities');
 
   const { data, error, isLoading } = useSWR(
     ['alerts', filters],
@@ -214,13 +252,97 @@ export function AlertsView() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-100">Alerts</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Real-time security event monitoring and triage</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {viewMode === 'entities'
+              ? 'Risk-Based Alerting · entity-centric triage queue'
+              : 'Real-time security event monitoring and triage'}
+          </p>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">
-          + Create Alert
-        </button>
+        <div className="flex items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="View mode"
+            className="inline-flex items-center bg-gray-900/60 border border-gray-800/60 rounded-lg p-0.5"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'entities'}
+              onClick={() => setViewMode('entities')}
+              className={clsx(
+                'text-xs px-3 py-1.5 rounded-md transition-colors',
+                viewMode === 'entities'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200',
+              )}
+            >
+              Entities
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'alerts'}
+              onClick={() => setViewMode('alerts')}
+              className={clsx(
+                'text-xs px-3 py-1.5 rounded-md transition-colors',
+                viewMode === 'alerts'
+                  ? 'bg-gray-700 text-gray-100'
+                  : 'text-gray-400 hover:text-gray-200',
+              )}
+            >
+              Alerts
+            </button>
+          </div>
+          <button className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+            + Create Alert
+          </button>
+        </div>
       </div>
 
+      {viewMode === 'entities' ? (
+        <EntityRiskQueue />
+      ) : (
+        <AlertsTable
+          alerts={alerts}
+          total={total}
+          critCount={critCount}
+          highCount={highCount}
+          newCount={newCount}
+          filters={filters}
+          isLoading={isLoading}
+          error={error}
+          onFilterChange={handleFilterChange}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Legacy alert-centric grid (extracted for the view-mode toggle) ──────────
+
+function AlertsTable({
+  alerts,
+  total,
+  critCount,
+  highCount,
+  newCount,
+  filters,
+  isLoading,
+  error,
+  onFilterChange,
+}: {
+  alerts: Alert[];
+  total: number;
+  critCount: number;
+  highCount: number;
+  newCount: number;
+  filters: AlertFilters;
+  isLoading: boolean;
+  error: unknown;
+  onFilterChange: (f: AlertFilters) => void;
+}) {
+  return (
+    <div className="space-y-4">
       {/* Stats strip */}
       <div className="grid grid-cols-4 gap-3">
         {[
@@ -236,7 +358,7 @@ export function AlertsView() {
         ))}
       </div>
 
-      <FiltersBar filters={filters} onChange={handleFilterChange} total={total} />
+      <FiltersBar filters={filters} onChange={onFilterChange} total={total} />
 
       {/* Table */}
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
@@ -273,7 +395,7 @@ export function AlertsView() {
         <span>Showing {alerts.length} of {total} alerts</span>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => handleFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}
+            onClick={() => onFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}
             disabled={(filters.page || 1) <= 1}
             className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -281,7 +403,7 @@ export function AlertsView() {
           </button>
           <span className="px-2">Page {filters.page || 1}</span>
           <button
-            onClick={() => handleFilterChange({ ...filters, page: (filters.page || 1) + 1 })}
+            onClick={() => onFilterChange({ ...filters, page: (filters.page || 1) + 1 })}
             disabled={alerts.length < (filters.pageSize || 25)}
             className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >

@@ -23,6 +23,24 @@ const config: Config = {
   organizationName: "beenuar",
   projectName: "AiSOC",
 
+  headTags: [
+    {
+      tagName: "meta",
+      attributes: {
+        name: "keywords",
+        content:
+          "AiSOC, AI SOC, open source SOC, SIEM alternative, MITRE ATT&CK, Sigma, purple team, alert fusion, detection engineering, SOAR, security automation, tryaisoc, self-hosted SOC, threat hunting, incident response, cybersecurity, infosec, LangGraph, MCP server",
+      },
+    },
+    {
+      tagName: "meta",
+      attributes: {
+        property: "og:site_name",
+        content: "AiSOC Docs",
+      },
+    },
+  ],
+
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
 

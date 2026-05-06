@@ -7,8 +7,10 @@ from fastapi import FastAPI
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
+from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
+from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
 from app.workers.consumer import FusionWorker
 
@@ -22,7 +24,14 @@ async def lifespan(app: FastAPI):
 
     dedup = Deduplicator(redis_client)
     correlator = Correlator(redis_client)
-    engine = FusionEngine(dedup, correlator)
+    entity_risk = EntityRiskEngine(redis_client)
+    confidence_scorer = ConfidenceScorer(enabled=settings.confidence_enabled)
+    engine = FusionEngine(
+        dedup,
+        correlator,
+        entity_risk=entity_risk,
+        confidence_scorer=confidence_scorer,
+    )
     worker = FusionWorker(engine)
     set_worker(worker)
 

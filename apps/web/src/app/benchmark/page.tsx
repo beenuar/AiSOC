@@ -2,51 +2,94 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { Footer } from '@/components/landing/Footer';
-import { BenchmarkResults } from '@/components/benchmark/BenchmarkResults';
+import {
+  BenchmarkResults,
+  fetchLatestEvalReport,
+} from '@/components/benchmark/BenchmarkResults';
 import { ComparisonTable } from '@/components/benchmark/ComparisonTable';
+import { KpiBar } from '@/components/benchmark/KpiBar';
+import { CommunitySubmissions } from '@/components/benchmark/CommunitySubmissions';
 
 export const metadata: Metadata = {
-  title: 'Public eval harness — AiSOC',
+  title: 'Public benchmark scoreboard — AiSOC',
   description:
-    'A reproducible regression harness over the AiSOC substrate. Four CI gates over a 200-incident synthetic dataset (MITRE / completeness / response quality) plus a 1,000-alert noisy stream (alert reduction). One real measurement (alert reduction) and three substrate self-consistency checks. The page documents what each metric measures and what it does not.',
+    'A reproducible regression harness over the AiSOC substrate. Four CI gates over a 200-incident synthetic dataset (MITRE / completeness / response quality) plus a 1,000-alert noisy stream (alert reduction). Per-template macros, per-case means, alert-reduction %, the 2026 KPI bar, and a fixed-dataset community leaderboard. The page documents what each metric measures and what it does not.',
   alternates: { canonical: '/benchmark' },
   openGraph: {
-    title: 'AiSOC public eval harness',
+    title: 'AiSOC public benchmark scoreboard',
     description:
-      'A regression-gate harness over the AiSOC substrate. Open dataset, open harness, CI-enforced. The page is explicit that this is not an LLM-agent leaderboard.',
+      'Regression-gate harness over the AiSOC substrate plus a fixed-dataset community leaderboard. Open dataset, open harness, CI-enforced.',
     type: 'article',
   },
 };
 
 const REPRODUCE_SNIPPET = `git clone https://github.com/beenuar/AiSOC && cd AiSOC
-python3 scripts/run_evals.py`;
+python3 scripts/run_evals.py --json --out report.json`;
 
-const EXPECTED_OUTPUT = `============================================================================
+function fmtPct(value: number | undefined, digits = 1): string {
+  if (typeof value !== 'number') return 'n/a';
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+function fmtScore(value: number | undefined, digits = 3): string {
+  if (typeof value !== 'number') return 'n/a';
+  return value.toFixed(digits);
+}
+
+function generatedAtLabel(iso: string | undefined): string {
+  if (!iso) return 'unknown';
+  try {
+    const d = new Date(iso);
+    return `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  } catch {
+    return iso;
+  }
+}
+
+export default async function BenchmarkPage() {
+  const report = await fetchLatestEvalReport();
+  const ar = report.suites.alert_reduction;
+  const mt = report.suites.mitre_accuracy;
+  const ic = report.suites.investigation_completeness;
+  const rq = report.suites.response_quality;
+  const expectedOutput = `============================================================================
   AiSOC Pillar-1 Eval - 200-incident synthetic benchmark
 ============================================================================
-  [PASS] mitre_accuracy               accuracy               0.970  (target >= 0.80)
-  [PASS] alert_reduction              reduction_ratio        0.753  (target >= 0.70)
-  [PASS] investigation_completeness   mean_keyword_coverage  0.943  (target >= 0.85)
-  [PASS] response_quality             mean_rubric_score      1.000  (target >= 0.80)
+  [${mt?.passed ? 'PASS' : 'FAIL'}] mitre_accuracy               accuracy               ${fmtScore(mt?.value)}  (target >= ${fmtScore(mt?.target, 2)})
+  [${ar?.passed ? 'PASS' : 'FAIL'}] alert_reduction              reduction_ratio        ${fmtScore(ar?.value)}  (target >= ${fmtScore(ar?.target, 2)})
+  [${ic?.passed ? 'PASS' : 'FAIL'}] investigation_completeness   mean_keyword_coverage  ${fmtScore(ic?.value)}  (target >= ${fmtScore(ic?.target, 2)})
+  [${rq?.passed ? 'PASS' : 'FAIL'}] response_quality             mean_rubric_score      ${fmtScore(rq?.value)}  (target >= ${fmtScore(rq?.target, 2)})
 ============================================================================
-  ALL GATES PASSED`;
+  ${report.all_passed ? 'ALL GATES PASSED' : 'ONE OR MORE GATES FAILED'}`;
 
-export default function BenchmarkPage() {
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-surface-base text-white">
       <LandingNav />
 
       <section className="relative px-6 pt-32 pb-20">
         <div className="mx-auto max-w-4xl">
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
               Reproducible
             </span>
-            <span className="text-xs text-gray-500">Runs on every PR targeting main / develop</span>
+            {report._stale ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                Snapshot fallback
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
+                Live from main
+              </span>
+            )}
+            <span className="text-xs text-gray-500">
+              Last run {generatedAtLabel(report.generated_at)} · refreshes every push
+            </span>
           </div>
           <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-            Public eval harness
+            Public benchmark scoreboard
           </h1>
           <p className="mt-4 max-w-3xl text-lg text-gray-400">
             A deterministic regression harness over the AiSOC substrate &mdash;
@@ -56,7 +99,10 @@ export default function BenchmarkPage() {
             DB-backed dedup and ML scoring), the report and response
             templates, and the offline judges that grade them. The dataset,
             the harness, and the CI gate are in the repo. The numbers on this
-            page reproduce in roughly 25&nbsp;ms on a laptop.
+            page are pulled from{' '}
+            <code className="text-gray-300">eval/results/latest.json</code> on
+            the <code className="text-gray-300">eval-results</code> branch
+            and refresh on every push to <code className="text-gray-300">main</code>.
           </p>
 
           <div className="mt-5 max-w-3xl rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-4 text-sm text-amber-100/80">
@@ -123,15 +169,24 @@ export default function BenchmarkPage() {
 
       <section className="px-6 pb-20">
         <div className="mx-auto max-w-5xl">
+          <KpiBar report={report} />
+        </div>
+      </section>
+
+      <section className="px-6 pb-20">
+        <div className="mx-auto max-w-5xl">
           <h2 className="text-2xl font-semibold tracking-tight">Latest results</h2>
           <p className="mt-2 max-w-3xl text-sm text-gray-400">
             Four metrics, four CI gates. A regression on any gate blocks the
-            build. The numbers below come from the most recent successful run
-            on <code className="text-gray-300">main</code>. Each card describes
-            what the metric measures and what it does not.
+            build. Each card shows the per-case mean and, where applicable, the
+            per-template macro &mdash; an equal-weight average across 55
+            distinct incident templates that surfaces a single weak template
+            the per-case mean would mask. Numbers come from{' '}
+            <code className="text-gray-300">latest.json</code> on the most
+            recent successful run on <code className="text-gray-300">main</code>.
           </p>
           <div className="mt-8">
-            <BenchmarkResults />
+            <BenchmarkResults report={report} />
           </div>
         </div>
       </section>
@@ -145,7 +200,7 @@ export default function BenchmarkPage() {
             <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.03] p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-semibold text-white">
-                  Alert reduction (75.3%)
+                  Alert reduction ({fmtPct(ar?.value)})
                 </h3>
                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-200">
                   Real measurement
@@ -169,7 +224,7 @@ export default function BenchmarkPage() {
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-semibold text-white">
-                  MITRE tactic accuracy (97.0%)
+                  MITRE tactic accuracy ({fmtPct(mt?.value)})
                 </h3>
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
                   Substrate self-consistency
@@ -189,7 +244,7 @@ export default function BenchmarkPage() {
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-semibold text-white">
-                  Investigation completeness (94.3%)
+                  Investigation completeness ({fmtPct(ic?.value)})
                 </h3>
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
                   Substrate self-consistency
@@ -209,7 +264,7 @@ export default function BenchmarkPage() {
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.03] p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-semibold text-white">
-                  Response-plan quality (1.000)
+                  Response-plan quality ({fmtScore(rq?.value)})
                 </h3>
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
                   Substrate self-consistency
@@ -258,7 +313,7 @@ export default function BenchmarkPage() {
           </pre>
           <p className="mt-5 text-sm text-gray-400">Expected output:</p>
           <pre className="mt-2 overflow-x-auto rounded-lg border border-white/5 bg-black/40 p-4 text-xs leading-relaxed text-gray-300">
-            <code>{EXPECTED_OUTPUT}</code>
+            <code>{expectedOutput}</code>
           </pre>
           <p className="mt-5 text-sm text-gray-400">
             For machine-readable output, pass <code className="text-gray-300">--json</code>{' '}
@@ -324,6 +379,12 @@ export default function BenchmarkPage() {
               extend the harness.
             </li>
           </ul>
+        </div>
+      </section>
+
+      <section className="px-6 pb-20">
+        <div className="mx-auto max-w-5xl">
+          <CommunitySubmissions />
         </div>
       </section>
 

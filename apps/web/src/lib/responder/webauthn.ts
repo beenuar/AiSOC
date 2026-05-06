@@ -133,12 +133,16 @@ export async function createPasskey(
     id: cred.id,
     rawId: bytesToB64url(cred.rawId),
     type: 'public-key',
-    authenticatorAttachment: cred.authenticatorAttachment ?? null,
+    authenticatorAttachment: (cred.authenticatorAttachment ?? null) as
+      | AuthenticatorAttachment
+      | null,
     response: {
       attestationObject: bytesToB64url(att.attestationObject),
       clientDataJSON: bytesToB64url(att.clientDataJSON),
       transports:
-        typeof att.getTransports === 'function' ? att.getTransports() : [],
+        typeof att.getTransports === 'function'
+          ? (att.getTransports() as AuthenticatorTransport[])
+          : [],
     },
   };
 }
@@ -164,7 +168,9 @@ export async function getPasskey(
     id: cred.id,
     rawId: bytesToB64url(cred.rawId),
     type: 'public-key',
-    authenticatorAttachment: cred.authenticatorAttachment ?? null,
+    authenticatorAttachment: (cred.authenticatorAttachment ?? null) as
+      | AuthenticatorAttachment
+      | null,
     response: {
       authenticatorData: bytesToB64url(ass.authenticatorData),
       clientDataJSON: bytesToB64url(ass.clientDataJSON),

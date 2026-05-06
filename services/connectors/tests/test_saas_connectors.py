@@ -23,13 +23,12 @@ import json
 import httpx
 import pytest
 import respx
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-
 from app.connectors.cloudflare import CloudflareConnector
 from app.connectors.github import GitHubConnector
 from app.connectors.google_workspace import GoogleWorkspaceConnector
 from app.connectors.m365_audit import M365AuditConnector
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 _TENANT = "00000000-0000-0000-0000-000000000000"
 _CLIENT_ID = "11111111-1111-1111-1111-111111111111"

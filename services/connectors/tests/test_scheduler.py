@@ -20,7 +20,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.db.connector_repo import ConnectorInstance
 from app.scheduler import ConnectorScheduler, _coerce_poll_interval
 

@@ -23,6 +23,7 @@ from app.connectors.azure_entra import AzureEntraConnector
 from app.connectors.base import BaseConnector, ConnectorSchema, Field, OAuthHints
 from app.connectors.cloudflare import CloudflareConnector
 from app.connectors.crowdstrike import CrowdStrikeConnector
+from app.connectors.elastic import ElasticConnector
 from app.connectors.gcp_cloud_audit import GCPCloudAuditConnector
 from app.connectors.gcp_scc import GCPSCCConnector
 from app.connectors.github import GitHubConnector
@@ -45,6 +46,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     AzureEntraConnector,
     CloudflareConnector,
     CrowdStrikeConnector,
+    ElasticConnector,
     GCPCloudAuditConnector,
     GCPSCCConnector,
     GitHubConnector,
@@ -95,6 +97,7 @@ __all__ = [
     "CloudflareConnector",
     "ConnectorSchema",
     "CrowdStrikeConnector",
+    "ElasticConnector",
     "Field",
     "GCPCloudAuditConnector",
     "GCPSCCConnector",

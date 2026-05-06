@@ -273,7 +273,7 @@ export function SOC2View() {
                   </h4>
                   {item.evidence.length === 0 ? (
                     <p className="text-sm text-gray-400 italic">
-                      No evidence collected yet. Click "Collect Evidence" to auto-gather.
+                      No evidence collected yet. Click &ldquo;Collect Evidence&rdquo; to auto-gather.
                     </p>
                   ) : (
                     <div className="space-y-2">

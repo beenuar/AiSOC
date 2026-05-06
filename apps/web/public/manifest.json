@@ -1,7 +1,7 @@
 {
   "name": "AiSOC Responder",
   "short_name": "AiSOC",
-  "description": "On-call responder PWA for the AiSOC Security Operations Center. Triage alerts, approve agent actions, and manage cases from your phone.",
+  "description": "On-call responder PWA for AiSOC — open-source AI SOC. Triage fused alerts, approve agent actions, and manage cases from your phone. tryaisoc.com demo stack.",
   "id": "/responder",
   "start_url": "/responder",
   "scope": "/",
@@ -10,7 +10,7 @@
   "orientation": "portrait-primary",
   "background_color": "#0a0d14",
   "theme_color": "#0a0d14",
-  "categories": ["productivity", "security", "business"],
+  "categories": ["productivity", "utilities", "business"],
   "lang": "en-US",
   "dir": "ltr",
   "prefer_related_applications": false,

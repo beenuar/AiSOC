@@ -95,6 +95,35 @@ class RawAlert(BaseModel):
         return f"{self.tenant_id}:{entity}:{tactic}"
 
 
+class ConfidenceLabel(str, Enum):
+    """High/medium/low confidence label surfaced on every alert.
+
+    Wave 1 of the AiSOC v6 capability roadmap — every alert ships with a
+    transparent confidence label and a chain of contributing factors so the
+    analyst can decide whether to action it without re-deriving the score.
+    """
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ConfidenceFactor(BaseModel):
+    """One row of the explainability chain attached to a fused alert.
+
+    The frontend renders these as a stack of evidence pills in the alert
+    detail drawer. ``contribution`` is signed in [-1.0, +1.0] — positive
+    increases confidence, negative decreases it. ``weight`` is the relative
+    importance of the factor inside the model (sums to ~1.0 across factors).
+    """
+
+    factor: str  # short machine-friendly name, e.g. "ml_anomaly"
+    label: str  # human-readable label, e.g. "ML anomaly score"
+    value: str  # observed value, e.g. "0.82" or "3 techniques"
+    contribution: float = Field(ge=-1.0, le=1.0)  # signed effect on confidence
+    weight: float = Field(ge=0.0, le=1.0)  # relative importance
+
+
 class FusedAlert(BaseModel):
     """Alert after fusion processing, ready for downstream consumption."""
 
@@ -111,6 +140,14 @@ class FusedAlert(BaseModel):
     # ML scores — populated by MLScorer
     anomaly_score: float = 0.0  # 0.0 = normal, 1.0 = highly anomalous (Isolation Forest)
     priority_score: float = 0.0  # 0.0–1.0 priority rank (LightGBM ranker)
+
+    # Detection confidence + explainability — Wave 1 of v6 roadmap.
+    # ``confidence_score`` is the raw [0.0, 1.0] number used to derive the
+    # human-readable ``confidence_label``. ``confidence_rationale`` is the
+    # ordered evidence chain rendered in the alert detail drawer.
+    confidence_label: ConfidenceLabel = ConfidenceLabel.MEDIUM
+    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence_rationale: list[ConfidenceFactor] = Field(default_factory=list)
 
     fused_at: datetime = Field(default_factory=datetime.utcnow)
 

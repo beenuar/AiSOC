@@ -7,10 +7,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.contextual import router as contextual_router
+from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
 from app.api.playbooks import router as playbook_router
 from app.api.router import router
 from app.core.telemetry import instrument_app
+from app.hunt import scheduler as hunt_scheduler
+from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
 from app.playbook import PlaybookStore
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
@@ -55,7 +58,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("investigation_ledger.warmup_failed", error=str(exc))
 
+    # Start the continuous hunt scheduler (Wave 2 — w2-hac). Gated by env
+    # so dev/CI runs that don't want background jobs can opt out via
+    # AISOC_HUNT_SCHEDULER_DISABLE=1. Best-effort: a corpus load failure
+    # or DB outage must not block API startup.
+    if os.getenv("AISOC_HUNT_SCHEDULER_DISABLE", "").strip() not in ("1", "true", "yes"):
+        try:
+            await hunt_scheduler.start_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("hunt.scheduler.start_failed", error=str(exc))
+
     yield
+
+    # Stop the hunt scheduler before draining DB pools so in-flight runs
+    # can flush their writes.
+    try:
+        await hunt_scheduler.stop_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("hunt.scheduler.stop_failed", error=str(exc))
+
+    try:
+        await hunt_store.close_pool()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("hunt.store.close_failed", error=str(exc))
 
     # Drain the pool so the container exits cleanly on shutdown.
     try:
@@ -95,6 +120,7 @@ app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
 app.include_router(playbook_router)  # prefix: /api/v1/playbooks
 app.include_router(contextual_router)  # prefix: /api/v1/contextual
+app.include_router(hunts_router)  # prefix: /api/v1/hunts
 
 
 @app.get("/health")

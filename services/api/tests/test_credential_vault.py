@@ -8,13 +8,12 @@ process env vars or the order other test modules import settings in.
 from __future__ import annotations
 
 import pytest
-from cryptography.fernet import Fernet
-
 from app.security.credential_vault import (
+    _CIPHER_PREFIX,
     CredentialVault,
     CredentialVaultError,
-    _CIPHER_PREFIX,
 )
+from cryptography.fernet import Fernet
 
 
 @pytest.fixture

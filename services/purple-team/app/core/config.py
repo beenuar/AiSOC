@@ -30,5 +30,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8006
 
+    # Drift snapshot scheduler
+    # Default cadence: weekly (7 days) — matches the 2026 KPI bar's
+    # "delta vs. last week" mandate. Set to 0 to disable.
+    drift_snapshot_interval_seconds: int = 7 * 24 * 60 * 60
+    drift_scheduler_enabled: bool = True
+
 
 settings = Settings()

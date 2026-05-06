@@ -14,10 +14,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.models.purple_team import AtomicTest, TabletopSession, TestExecution
+from app.models.purple_team import (
+    AtomicTest,
+    DetectionDriftSnapshot,
+    TabletopSession,
+    TestExecution,
+)
 from app.services.atomic_loader import load_atomics
 from app.services.caldera_client import CalderaClient
-from app.services.coverage import build_coverage_matrix
+from app.services.drift import (
+    capture_snapshot,
+    compute_coverage_for_tenant,
+    compute_drift,
+    latest_two_snapshots,
+    list_snapshots,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -307,21 +318,98 @@ async def report_detection(execution_id: uuid.UUID, body: ReportDetectionRequest
 # ---------------------------------------------------------------------------
 @router.get("/api/v1/purple-team/coverage", tags=["Coverage"])
 async def get_coverage(tenant_id: uuid.UUID) -> dict:
-    async with _async_session() as session:
-        result = await session.execute(select(TestExecution).where(TestExecution.tenant_id == tenant_id))
-        executions = result.scalars().all()
+    """Live coverage matrix computed from current execution history.
 
-    rows = [
-        {
-            "technique_id": ex.technique_id,
-            "test_name": ex.test_name,
-            "tactic": "unknown",
-            "status": ex.status,
-            "detected": ex.detected,
-        }
-        for ex in executions
-    ]
-    return build_coverage_matrix(rows)
+    Tactics are resolved by joining executions to the tenant's Atomic
+    Red Team catalog (see ``compute_coverage_for_tenant``), so the
+    heatmap is grouped by real ATT&CK tactics rather than the legacy
+    placeholder.
+    """
+    async with _async_session() as session:
+        return await compute_coverage_for_tenant(session, tenant_id)
+
+
+# ---------------------------------------------------------------------------
+# Detection drift (w1-drift)
+# ---------------------------------------------------------------------------
+class DriftSnapshotOut(BaseModel):
+    id: uuid.UUID
+    captured_at: datetime
+    trigger: str
+    total_techniques: int
+    tested_techniques: int
+    detected_techniques: int
+    overall_coverage: float
+
+    model_config = {"from_attributes": True}
+
+
+class DriftSnapshotDetail(DriftSnapshotOut):
+    coverage: dict[str, Any]
+
+
+@router.post(
+    "/api/v1/purple-team/drift/snapshot",
+    response_model=DriftSnapshotDetail,
+    tags=["Drift"],
+)
+async def trigger_drift_snapshot(
+    tenant_id: uuid.UUID,
+    trigger: str = Query(
+        "manual",
+        description="Why this snapshot was captured (manual|scheduled|post-run)",
+    ),
+) -> DetectionDriftSnapshot:
+    """Capture a coverage snapshot on demand (e.g. after a purple-team run)."""
+    async with _async_session() as session:
+        snap = await capture_snapshot(session, tenant_id, trigger=trigger)
+        await session.commit()
+        await session.refresh(snap)
+        return snap
+
+
+@router.get(
+    "/api/v1/purple-team/drift/snapshots",
+    response_model=list[DriftSnapshotOut],
+    tags=["Drift"],
+)
+async def list_drift_snapshots(
+    tenant_id: uuid.UUID,
+    limit: int = Query(50, le=200),
+) -> list[DetectionDriftSnapshot]:
+    async with _async_session() as session:
+        return await list_snapshots(session, tenant_id, limit=limit)
+
+
+@router.get("/api/v1/purple-team/drift/latest", tags=["Drift"])
+async def get_latest_drift(tenant_id: uuid.UUID) -> dict:
+    """Return the most recent snapshot plus delta-vs-previous for the heatmap."""
+    async with _async_session() as session:
+        current, previous = await latest_two_snapshots(session, tenant_id)
+
+    return {
+        "current": _serialize_snapshot(current),
+        "previous": _serialize_snapshot(previous),
+        "drift": compute_drift(
+            current.coverage if current else None,
+            previous.coverage if previous else None,
+        ),
+    }
+
+
+def _serialize_snapshot(snap: DetectionDriftSnapshot | None) -> dict | None:
+    if snap is None:
+        return None
+    return {
+        "id": str(snap.id),
+        "captured_at": snap.captured_at.isoformat() if snap.captured_at else None,
+        "trigger": snap.trigger,
+        "total_techniques": snap.total_techniques,
+        "tested_techniques": snap.tested_techniques,
+        "detected_techniques": snap.detected_techniques,
+        "overall_coverage": snap.overall_coverage,
+        "coverage": snap.coverage,
+    }
 
 
 # ---------------------------------------------------------------------------
