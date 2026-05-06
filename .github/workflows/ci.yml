@@ -376,7 +376,7 @@ jobs:
             echo "No baseline yet — first run will publish one."
           fi
       - name: Install eval dependencies
-        run: pip install --quiet pyyaml pytest pytest-asyncio structlog
+        run: pip install --quiet pyyaml pytest pytest-asyncio structlog pydantic
       - name: Run all eval suites
         # On PRs we additionally gate against the published baseline so a
         # detection-as-code merge that drops MITRE accuracy by ≥ 1pp blocks

@@ -26,7 +26,7 @@ env:
     opentelemetry-sdk opentelemetry-api
     opentelemetry-exporter-otlp-proto-grpc
     "opentelemetry-instrumentation-fastapi"
-    "strawberry-graphql[fastapi]"
+    "strawberry-graphql[fastapi]" httpx email-validator
 
 jobs:
   openapi-check:

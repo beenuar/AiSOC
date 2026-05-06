@@ -7,7 +7,9 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, DBSession, get_current_user
+
+__all__ = ["router", "get_current_user"]
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
