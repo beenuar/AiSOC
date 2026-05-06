@@ -104,7 +104,7 @@ app = FastAPI(
 # the CORS_ORIGINS env var; default keeps localhost dev usable out of the box.
 _cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000",
+    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,https://tryaisoc.com,https://www.tryaisoc.com",
 )
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
 app.add_middleware(

@@ -127,7 +127,12 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://localhost:6333"
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://tryaisoc.com",
+        "https://www.tryaisoc.com",
+    ]
 
     # Observability
     OTEL_ENDPOINT: str = ""
