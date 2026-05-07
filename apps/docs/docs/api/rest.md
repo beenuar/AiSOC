@@ -80,6 +80,53 @@ The full spec is also committed at [`docs/openapi.yaml`](https://github.com/been
 | `GET/POST` | `/detections` | Detection events |
 | `GET` | `/detections/stats` | Aggregated detection metrics |
 
+### Detection Proposals (Detection-as-Code)
+
+The DAC lifecycle manages detection rule proposals from creation through
+eval-gated promotion into the live rule set.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/detection-proposals` | List proposals (filterable by `status`) |
+| `POST` | `/detection-proposals` | Create a new proposal (title, description, logic, MITRE tags) |
+| `GET` | `/detection-proposals/{id}` | Proposal detail |
+| `POST` | `/detection-proposals/{id}/comment` | Add a review comment |
+| `POST` | `/detection-proposals/{id}/eval` | Attach eval result (metric deltas from `scripts/run_evals.py`) |
+| `POST` | `/detection-proposals/{id}/decide` | Approve or reject the proposal |
+| `POST` | `/detection-proposals/{id}/promote` | Promote an approved proposal to `detection_rules` |
+| `GET` | `/detection-proposals/baseline` | Current eval baseline metrics |
+| `POST` | `/detection-proposals/baseline` | Reset eval baseline to latest harness run |
+
+### Federated Search
+
+Fan out a single query to connected SIEMs. The API translates the query
+into each target's native dialect (SPL for Splunk, KQL for Sentinel,
+ES|QL for Elastic).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/federated/query` | Submit a federated query (`query`, `targets[]`, optional `time_range`) |
+
+### Hunt-as-Code
+
+YAML hunt definitions live in `hunts/` and are loaded by the agents
+service. The API exposes read-only access for the UI.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/hunts` | List loaded hunt definitions |
+| `GET` | `/hunts/{hunt_id}` | Hunt detail (hypothesis, MITRE tags, indicators) |
+| `GET` | `/hunts/{hunt_id}/results` | Results from the latest scheduled run |
+
+### Entity Risk (Risk-Based Alerting)
+
+Time-decayed risk scores per entity, computed by the fusion service.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/entity-risk` | Top entities by risk score (descending) |
+| `GET` | `/entity-risk/{entity}` | Risk detail for a specific entity |
+
 ### Cases & Response
 
 | Method | Path | Description |
@@ -93,7 +140,7 @@ The full spec is also committed at [`docs/openapi.yaml`](https://github.com/been
 | `GET` | `/playbooks/{id}/runs` | Execution history |
 | `POST` | `/actions/dry-run` | Simulate an action |
 
-### Investigations & Ledger *(v5.2)*
+### Investigations & Ledger
 
 Every prompt, response, evidence citation, and tool call the AI investigator
 emits is appended to the **Investigation Ledger**. See
@@ -107,14 +154,14 @@ the data model and rationale.
 | `POST` | `/cases/{case_id}/investigations:replay` | Replay an investigation deterministically |
 | `POST` | `/cases/{case_id}/investigations:start` | Kick off a fresh agent investigation |
 
-### Ambient Copilot *(v5.2)*
+### Ambient Copilot
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/copilot/context/{resource_type}/{resource_id}` | Context-aware suggestions for an alert / case / rule / playbook |
 | `POST` | `/copilot/actions/{action_id}:run` | Run a suggested action with the right agent tool |
 
-### Marketplace *(v5.2)*
+### Marketplace
 
 The marketplace surface is backed by the JSON index at
 [`marketplace/index.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/index.json)
@@ -126,7 +173,7 @@ and re-published to the web app at `/marketplace/index.json`.
 | `GET` | `/marketplace/items/{slug}` | Item detail with manifest + signature |
 | `POST` | `/marketplace/items/{slug}:install` | Install a plugin / detection / playbook into the tenant |
 
-### Responder PWA *(v5.2)*
+### Responder PWA
 
 These endpoints back the mobile-first `/responder/*` route group.
 
@@ -186,6 +233,9 @@ These endpoints back the mobile-first `/responder/*` route group.
 | `GET` | `/purple-team/coverage` | ATT&CK coverage heatmap |
 | `GET/POST` | `/purple-team/tabletop` | Tabletop session list / create |
 | `POST` | `/purple-team/tabletop/{id}/steps` | Add step to session |
+| `POST` | `/purple-team/drift/snapshot` | Take an ATT&CK coverage snapshot |
+| `GET` | `/purple-team/drift/snapshots` | List drift snapshots |
+| `GET` | `/purple-team/drift/diff` | Delta between two snapshots (added/dropped techniques) |
 
 ### Governance
 

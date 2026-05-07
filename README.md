@@ -93,8 +93,14 @@ AiSOC bundles the components a SOC normally pieces together from separate vendor
 
 - **Connect data sources in three clicks** — a click-and-connect catalog (Microsoft Entra, Azure Activity, Defender XDR, GCP Cloud Audit, GCP SCC, Microsoft 365 audit, Google Workspace, Cloudflare, GitHub, plus the original CrowdStrike / Splunk / AWS Security Hub / Okta / Microsoft Sentinel set) renders a schema-driven form per connector, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
 - **Ingest** events from any connector into a Kafka spine.
-- **Correlate** them in real time with deduplication, ML scoring, and Sigma/YARA detection.
+- **Correlate** them in real time with deduplication, ML scoring, per-alert confidence scoring, and Sigma/YARA detection.
 - **Roll up signal onto entities** — Risk-Based Alerting accumulates time-decayed risk points on the user, host, IP, and domain each alert touches, promotes them to entity-incidents at a tunable threshold, and surfaces an entity-centric queue in the alerts UI. Hits the published 2026 KPI bar of ≥ 50:1 alert-to-incident ratio (CI-gated in [`services/fusion/tests/test_entity_risk.py`](services/fusion/tests/test_entity_risk.py)).
+- **Search across SIEMs** — Federated Search fans out a single query to connected Splunk, Microsoft Sentinel, and Elastic instances, translating the query into each target's native dialect (SPL, KQL, ES|QL) via pluggable translators in [`services/connectors/app/federated/`](services/connectors/app/federated/).
+- **Manage detections as code** — Detection-as-Code (DAC) provides a propose → review → eval-gate → promote lifecycle for detection rules. Every proposal carries an eval result from the harness; candidates that regress MITRE accuracy cannot be promoted. Endpoints in [`services/api/app/api/v1/endpoints/detection_proposals.py`](services/api/app/api/v1/endpoints/detection_proposals.py).
+- **Run hypothesis-driven hunts on a schedule** — Hunt-as-Code YAML definitions in [`hunts/`](hunts/) declare a hypothesis, MITRE ATT&CK tags, log sources, indicators, and a cron schedule. The hunt engine in [`services/agents/app/hunt/`](services/agents/app/hunt/) loads the corpus at startup, runs hunts on their schedule, and stores findings in the DB.
+- **Track detection drift** — the Purple Team service takes ATT&CK coverage snapshots and diffs them over time, so you can see which techniques gained or lost coverage between releases. Implementation in [`services/purple-team/app/services/drift.py`](services/purple-team/app/services/drift.py).
+- **Verify ChatOps actions** — HMAC-signed approval prompts are sent to Slack or Teams before high-impact SOAR actions execute, with a time-limited verification token. Implementation in [`services/actions/app/executors/chatops.py`](services/actions/app/executors/chatops.py).
+- **Benchmark against adversary LLMs** — a deterministic attacker-LLM mutator generates adversary incidents to test detection resilience. Script: [`scripts/generate_adversary_incidents.py`](scripts/generate_adversary_incidents.py); eval: [`services/agents/tests/test_adversary_eval.py`](services/agents/tests/test_adversary_eval.py).
 - **Enrich** every signal with threat intelligence from TAXII 2.1, MISP, OTX, and CISA KEV.
 - **Reason** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.
 - **Detect deviations** with UEBA — per-user behavioural baselines and Z-score anomaly scoring.
@@ -138,6 +144,7 @@ Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 - Kafka spine with sub-second ingestion
 - Bloom-filter dedup on 10M+ IOCs
 - LightGBM + Isolation Forest scoring
+- Per-alert confidence scoring (source reliability × indicator fidelity)
 - Risk-Based Alerting entity rollup (≥ 50:1 alert-to-incident, CI-gated)
 - Live WebSocket feed into the console
 
@@ -162,10 +169,17 @@ Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 <td valign="top" width="50%">
 
 ### Detection engineering
+- Detection-as-Code (DAC) lifecycle: propose → review → eval-gate → promote
 - Sigma over OpenSearch + ClickHouse
 - YARA file/memory scanning
 - KQL, EQL, Lucene, regex query types
 - Community detection catalog with one-click install
+- Detection drift snapshots (ATT&CK coverage deltas between releases)
+- Hunt-as-Code: YAML hunt definitions with cron schedules
+
+### Federated search
+- Fan out a single query to Splunk, Sentinel, and Elastic
+- Pluggable translators: SPL, KQL, ES|QL
 
 ### Honeytokens
 - HMAC-SHA256 signed tokens (URL, file, AWS key, email)
@@ -178,6 +192,7 @@ Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 - ATT&CK coverage heatmap (tactic × technique)
 - Detection reporting (true positive / false negative)
 - Tabletop exercise session manager
+- Detection drift monitoring
 
 ### Governance
 - SAML 2.0 + OIDC SSO
@@ -186,6 +201,7 @@ Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 - Immutable audit log with tamper-proof trigger
 - SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA dashboards
 - MTTD / MTTR / MTTC SLA tracking
+- ChatOps verification (HMAC-signed Slack/Teams approval prompts)
 
 </td>
 </tr>
@@ -263,16 +279,17 @@ flowchart LR
 
 | Service | Lang | Port | Role |
 |---|---|---|---|
-| `web` | Next.js 14 + React | 3000 | SOC console + marketing landing |
-| `api` | Python · FastAPI | 8000 | Alerts, cases, RBAC, graph, rules, audit, compliance |
-| `realtime` | Node.js · `ws` | 8086 | Per-channel WebSocket fan-out |
-| `agents` | Python · LangGraph | 8001 | Multi-agent reasoning + Qdrant RAG |
-| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest) |
-| `actions` | Python | 8002 | SOAR with blast-radius gating |
+| `web` | Next.js 14 + React | 3000 | SOC console, benchmark scoreboard, marketing landing |
+| `api` | Python · FastAPI | 8000 | Alerts, cases, RBAC, graph, rules, audit, compliance, detection proposals (DAC), federated search fan-out, SLA tracking |
+| `realtime` | Node.js · `ws` | 8086 | Per-channel WebSocket fan-out + VAPID Web Push |
+| `agents` | Python · LangGraph | 8001 | Multi-agent reasoning + Qdrant RAG + Hunt-as-Code engine & scheduler |
+| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest), alert confidence, entity risk / RBA |
+| `actions` | Python | 8002 | SOAR with blast-radius gating + ChatOps verification |
+| `connectors` | Python | — | Connector polling (APScheduler), credential vault, federated query translators |
 | `threatintel` | Python | 8005 | TAXII / MISP / OTX / KEV polling |
 | `ueba` | Python | 8007 | User & Entity Behavior Analytics |
 | `honeytokens` | Python | 8008 | Honeytoken lifecycle + webhook alerting |
-| `purple-team` | Python | 8006 | Atomic Red Team + Caldera + ATT&CK heatmap |
+| `purple-team` | Python | 8006 | Atomic Red Team + Caldera + ATT&CK heatmap + detection drift snapshots |
 | `ingest` | Go | 8081 | OCSF normalization + Shodan/CVE |
 | `enrichment` | Go | 8080 | IOC enrichment (VT, AbuseIPDB, GreyNoise) |
 
@@ -579,6 +596,7 @@ AiSOC/
 │   ├── plugin-sdk-go/    # Go plugin development SDK (module: github.com/beenuar/aisoc/plugin-sdk-go)
 │   └── aisoc-cli/        # CLI: scaffold / validate / publish plugins & detections
 ├── detections/           # Community Sigma detection rules (YAML)
+├── hunts/                # Hunt-as-Code YAML definitions (hypothesis + indicators + schedule)
 ├── playbooks/            # Community SOAR playbooks (YAML)
 ├── plugins/              # First-party plugins (Go + Python)
 ├── marketplace/          # Marketplace index (JSON, generated by scripts/build_marketplace.py)
@@ -619,6 +637,10 @@ The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](docs/openapi.yaml). End
 | `cases` | `/api/v1/cases/` | Create, link alerts, evidence |
 | `rules` | `/api/v1/rules/` | Sigma / YARA / KQL CRUD + test |
 | `detections` | `/api/v1/detections/` | Catalog browse + install |
+| `detection-proposals` | `/api/v1/detection-proposals/` | DAC lifecycle: propose, review, eval-gate, promote |
+| `federated` | `/api/v1/federated/` | Fan-out query to connected SIEMs (Splunk, Sentinel, Elastic) |
+| `hunts` | `/api/v1/hunts/` | Hunt-as-Code: list, get, run, findings |
+| `entity-risk` | `/api/v1/entity-risk/` | RBA: top entities by risk score, entity detail |
 | `plugins` | `/api/v1/plugins/` | Registry, publish, rate, approve |
 | `playbooks` | `/api/v1/playbooks/` | Community + private playbooks |
 | `marketplace` | `/api/v1/marketplace/` | Plugin marketplace with filters |
@@ -790,6 +812,7 @@ Good first issues:
 
 - New connector integrations in `integrations/`
 - Community Sigma detections in `detections/`
+- Hunt-as-Code YAML definitions in `hunts/`
 - New plugins published to the marketplace
 - Frontend UI polish (Tailwind / React)
 - Documentation and tutorials in `apps/docs/`

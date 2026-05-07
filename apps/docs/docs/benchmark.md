@@ -319,6 +319,63 @@ head -n 5 services/agents/tests/eval_data/synthetic_telemetry.jsonl
 Each line is a self-contained event with `incident_id`, `template_id`,
 `source`, and the event payload. Filter by `source` to focus your tests.
 
+### 6. AI-vs-AI adversary eval — `Graceful-degradation gate`
+
+**Source:** [`services/agents/tests/test_adversary_eval.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_adversary_eval.py)
+· **Dataset:** [`eval_data/adversary_incidents.json`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/eval_data/adversary_incidents.json)
+· **Generator:** [`scripts/generate_adversary_incidents.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/generate_adversary_incidents.py)
+
+A deterministic attacker-LLM **mutator** rewrites every defender keyword in
+the 200-incident dataset into evasive synonyms, character obfuscation, and
+fragmentation. Three intensity buckets control how aggressively the text is
+mutated:
+
+| Bucket   | Share | Mutation |
+|----------|-------|----------|
+| **heavy**  | ~45 % | Every keyword swapped to synonym / obfuscated |
+| **medium** | ~35 % | One expected tactic preserved cleanly |
+| **light**  | ~20 % | Leetspeak only (control bucket) |
+
+Three regression floors are enforced:
+
+| Gate | Floor / ceiling | Rationale |
+|------|-----------------|-----------|
+| Overall catch rate | ≥ 0.40 | Under heavy mutation the extractor is expected to drop ~50 pp from its unmutated 0.95 baseline. The floor keeps graceful degradation honest. |
+| Light-bucket catch rate | ≥ 0.85 | Light-tier obfuscation is just leetspeak; if the defender fails this bucket, a heavier failure is hiding a deeper regression. |
+| Heavy-bucket catch rate | ≤ 0.50 | If the heavy bucket starts catching too much, the dataset is no longer adversarial — the mutation grammar has drifted. |
+
+This suite answers a specific question: **does the substrate fall off a cliff
+when an attacker deliberately evades the keyword catalogue?** It does not
+attempt to prove the defender is great under adversarial pressure — it proves
+the defender doesn't silently collapse to zero. The per-bucket accuracy curve
+is the metric to watch over time.
+
+To regenerate the adversary dataset:
+
+```bash
+python3 scripts/generate_adversary_incidents.py
+```
+
+## Community benchmark scoreboard
+
+The dataset and the harness are MIT-licensed and fully reproducible. Any third
+party — another open-source project, a vendor, or an internal team — can run
+the same suite against the same 200 incidents and submit a result:
+
+```bash
+python3 scripts/run_evals.py --json --out report.json
+```
+
+Submissions go through a structured GitHub issue template
+([`.github/ISSUE_TEMPLATE/benchmark_submission.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/ISSUE_TEMPLATE/benchmark_submission.yml)).
+Accepted entries are rendered on the [benchmark scoreboard](/benchmark) in the
+web console. Submission rules:
+
+1. **Same fixed dataset** — run against the deterministic 200-incident dataset on the commit you submit. No private fixtures.
+2. **Same harness** — run `scripts/run_evals.py --json --out report.json` with no flags that disable gates. Attach the full `report.json` so per-template macros are auditable.
+3. **Open agent or label as closed** — if your agent code is open, link it. If it is closed, the entry is accepted but labeled "closed-source".
+4. **No template-stuffing** — the three substrate self-consistency suites are gameable by stuffing keywords into reports. Submissions caught doing this are rejected; the alert-reduction measurement is not gameable in the same way.
+
 ## Comparison to other AI SOC offerings
 
 | Capability                                     | AiSOC | Wazuh | Splunk | Closed-source AI SOC |
