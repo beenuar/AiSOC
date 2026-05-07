@@ -9,7 +9,7 @@ description = "AiSOC Plugin SDK for Python — build custom enrichers, connector
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-  { name = "AiSOC Contributors" },
+  { name = "Beenu Arora", email = "beenu@cyble.com" },
 ]
 keywords = ["aisoc", "soc", "security", "plugin", "sdk"]
 classifiers = [
@@ -37,8 +37,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://aisoc.dev"
-Documentation = "https://aisoc.dev/docs/plugins/python"
+Homepage = "https://github.com/beenuar/AiSOC"
+Documentation = "https://github.com/beenuar/AiSOC#readme"
 Repository = "https://github.com/beenuar/AiSOC"
 
 [tool.hatch.build.targets.wheel]

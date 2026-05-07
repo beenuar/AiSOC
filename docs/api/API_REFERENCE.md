@@ -290,7 +290,7 @@ All endpoints return RFC 7807 Problem Details:
 
 ```json
 {
-  "type": "https://aisoc.dev/errors/rule-validation",
+  "type": "https://example.com/errors/rule-validation",
   "title": "Sigma rule failed validation",
   "status": 422,
   "detail": "Unknown field 'EventID' in selection 'sel_powershell'",

@@ -2,7 +2,7 @@
 name = "aisoc-connectors"
 version = "0.1.0"
 description = "AiSOC Security Source Connectors"
-authors = ["AiSOC contributors <opensource@aisoc.dev>"]
+authors = ["Beenu Arora <beenu@cyble.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]

@@ -536,7 +536,7 @@ def build_index() -> dict[str, Any]:
     items = collect_items()
     items.sort(key=lambda i: (i["type"], i.get("id", "")))
     return {
-        "$schema": "https://aisoc.dev/schemas/marketplace/v1.json",
+        "$schema": "https://example.com/schemas/marketplace/v1.json",
         "version": "1.0.0",
         "generated": dt.datetime.now(dt.timezone.utc)
         .replace(microsecond=0)

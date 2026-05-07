@@ -4,8 +4,8 @@
     "template_id": "phishing-macro-email",
     "template_index": 0,
     "adversary_intensity": "heavy",
-    "title": "narrow-cast baiting email with m@cro-laden attachment delivered to dave@aisoc.dev",
-    "description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious doc-embedded autom m@cro to dave@aisoc.dev. Attachment opened on WIN-DC-PRIMARY; m@cro spawned command interpreter binary and downloaded a second-tier dropper from a known Lazarus infrastructure.",
+    "title": "narrow-cast baiting email with m@cro-laden attachment delivered to dave@example.com",
+    "description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious doc-embedded autom m@cro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; m@cro spawned command interpreter binary and downloaded a second-tier dropper from a known Lazarus infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -21,11 +21,11 @@
       "macro",
       "45.142.122.111",
       "WIN-DC-PRIMARY",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "stage-2 payload"
     ],
-    "original_title": "Spear-phishing email with macro-laden attachment delivered to dave@aisoc.dev",
-    "original_description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious VBA macro to dave@aisoc.dev. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure."
+    "original_title": "Spear-phishing email with macro-laden attachment delivered to dave@example.com",
+    "original_description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious VBA macro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure."
   },
   {
     "id": "INC-EVAL-002",
@@ -61,7 +61,7 @@
     "template_index": 2,
     "adversary_intensity": "light",
     "title": "Watering-hole exploit served from internal Confluence by 203.0.113.45",
-    "description": "Internal Confluence page injected with malicious JavaScript by 203.0.113.45. Drive-by exploit triggered browser exploitation on multiple visitors including ops-lead@aisoc.dev. Linked to Lazarus TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 203.0.113.45. Drive-by exploit triggered browser exploitation on multiple visitors including ops-lead@example.com. Linked to Lazarus TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -77,11 +77,11 @@
       "drive-by",
       "Confluence",
       "203.0.113.45",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Lazarus"
     ],
     "original_title": "Watering-hole exploit served from internal Confluence by 203.0.113.45",
-    "original_description": "Internal Confluence page injected with malicious JavaScript by 203.0.113.45. Drive-by exploit triggered browser exploitation on multiple visitors including ops-lead@aisoc.dev. Linked to Lazarus TTPs."
+    "original_description": "Internal Confluence page injected with malicious JavaScript by 203.0.113.45. Drive-by exploit triggered browser exploitation on multiple visitors including ops-lead@example.com. Linked to Lazarus TTPs."
   },
   {
     "id": "INC-EVAL-004",
@@ -117,7 +117,7 @@
     "template_index": 4,
     "adversary_intensity": "light",
     "title": "Malicious USB autorun on air-gapped host WIN-DEVOPS-LT",
-    "description": "USB device inserted on air-gapped WIN-DEVOPS-LT by cfo@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "USB device inserted on air-gapped WIN-DEVOPS-LT by cfo@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -133,19 +133,19 @@
       "autorun",
       "air-gapped",
       "WIN-DEVOPS-LT",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "Python stager"
     ],
     "original_title": "Malicious USB autorun on air-gapped host WIN-DEVOPS-LT",
-    "original_description": "USB device inserted on air-gapped WIN-DEVOPS-LT by cfo@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
+    "original_description": "USB device inserted on air-gapped WIN-DEVOPS-LT by cfo@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
   },
   {
     "id": "INC-EVAL-006",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "adversary_intensity": "medium",
-    "title": "delegated grant consent phishing targeting ceo@aisoc.dev",
-    "description": "Malicious delegated grant application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 91.134.231.15.",
+    "title": "delegated grant consent phishing targeting ceo@example.com",
+    "description": "Malicious delegated grant application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -160,12 +160,12 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "91.134.231.15",
       "forwarding rule"
     ],
-    "original_title": "OAuth consent phishing targeting ceo@aisoc.dev",
-    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 91.134.231.15."
+    "original_title": "OAuth consent phishing targeting ceo@example.com",
+    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 91.134.231.15."
   },
   {
     "id": "INC-EVAL-007",
@@ -173,7 +173,7 @@
     "template_index": 6,
     "adversary_intensity": "light",
     "title": "Obfuscated powershell dropper executed on LIN-OBS-LOGGER",
-    "description": "powershell dropper executed on LIN-OBS-LOGGER by ceo@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to MagicWeb ransomware staging.",
+    "description": "powershell dropper executed on LIN-OBS-LOGGER by ceo@example.com; payload base64-encoded and decoded in-memory. Linked to MagicWeb ransomware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -189,11 +189,11 @@
       "obfuscated",
       "base64",
       "LIN-OBS-LOGGER",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "MagicWeb"
     ],
     "original_title": "Obfuscated PowerShell dropper executed on LIN-OBS-LOGGER",
-    "original_description": "PowerShell dropper executed on LIN-OBS-LOGGER by ceo@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to MagicWeb ransomware staging."
+    "original_description": "PowerShell dropper executed on LIN-OBS-LOGGER by ceo@example.com; payload base64-encoded and decoded in-memory. Linked to MagicWeb ransomware staging."
   },
   {
     "id": "INC-EVAL-008",
@@ -259,7 +259,7 @@
     "template_index": 9,
     "adversary_intensity": "heavy",
     "title": "Malicious WM\u200bI subautomation snippetion on AZURE-VM-FIN-001",
-    "description": "perm wm\u200bi event subautomation snippetion created on AZURE-VM-FIN-001 by admin@aisoc.dev. Consumer runs byte-wrapd automation snippet. re-establish footing + binary launch mechanism.",
+    "description": "perm wm\u200bi event subautomation snippetion created on AZURE-VM-FIN-001 by admin@example.com. Consumer runs byte-wrapd automation snippet. re-establish footing + binary launch mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -275,18 +275,18 @@
       "subscription",
       "permanent",
       "AZURE-VM-FIN-001",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "encoded script"
     ],
     "original_title": "Malicious WMI subscription on AZURE-VM-FIN-001",
-    "original_description": "Permanent WMI event subscription created on AZURE-VM-FIN-001 by admin@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism."
+    "original_description": "Permanent WMI event subscription created on AZURE-VM-FIN-001 by admin@example.com. Consumer runs encoded script. Persistence + execution mechanism."
   },
   {
     "id": "INC-EVAL-011",
     "template_id": "registry-run-persistence",
     "template_index": 10,
     "adversary_intensity": "medium",
-    "title": "Registry Run key persistence created by ops-lead@aisoc.dev on AWS-Ec\u200b2-PROD-API",
+    "title": "Registry Run key persistence created by ops-lead@example.com on AWS-Ec\u200b2-PROD-API",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-Ec\u200b2-PROD-API. Points to roaming binary signed with revoked cert. Linked to Volt Typhoon.",
     "expected_tactics": [
       "TA0003"
@@ -301,10 +301,10 @@
       "persistence",
       "revoked cert",
       "AWS-EC2-PROD-API",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Volt Typhoon"
     ],
-    "original_title": "Registry Run key persistence created by ops-lead@aisoc.dev on AWS-EC2-PROD-API",
+    "original_title": "Registry Run key persistence created by ops-lead@example.com on AWS-EC2-PROD-API",
     "original_description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-EC2-PROD-API. Points to roaming binary signed with revoked cert. Linked to Volt Typhoon."
   },
   {
@@ -313,7 +313,7 @@
     "template_index": 11,
     "adversary_intensity": "light",
     "title": "Scheduled task persistence on GCP-GKE-NODE-04",
-    "description": "Hidden scheduled task created on GCP-GKE-NODE-04 by carol@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on GCP-GKE-NODE-04 by carol@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -327,10 +327,10 @@
       "persistence",
       "APPDATA",
       "GCP-GKE-NODE-04",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Scheduled task persistence on GCP-GKE-NODE-04",
-    "original_description": "Hidden scheduled task created on GCP-GKE-NODE-04 by carol@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
+    "original_description": "Hidden scheduled task created on GCP-GKE-NODE-04 by carol@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
   },
   {
     "id": "INC-EVAL-013",
@@ -366,7 +366,7 @@
     "template_index": 13,
     "adversary_intensity": "medium",
     "title": "Backdoor cron job installed on WIN-HR-DESKTOP",
-    "description": "/etc/cron.d entry created by svc-deploy@aisoc.dev on WIN-HR-DESKTOP. Reverse shell regular check-in to 203.0.113.45 every 5 minutes.",
+    "description": "/etc/cron.d entry created by svc-deploy@example.com on WIN-HR-DESKTOP. Reverse shell regular check-in to 203.0.113.45 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -382,11 +382,11 @@
       "backdoor",
       "reverse shell",
       "WIN-HR-DESKTOP",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "203.0.113.45"
     ],
     "original_title": "Backdoor cron job installed on WIN-HR-DESKTOP",
-    "original_description": "/etc/cron.d entry created by svc-deploy@aisoc.dev on WIN-HR-DESKTOP. Reverse shell beacon to 203.0.113.45 every 5 minutes."
+    "original_description": "/etc/cron.d entry created by svc-deploy@example.com on WIN-HR-DESKTOP. Reverse shell beacon to 203.0.113.45 every 5 minutes."
   },
   {
     "id": "INC-EVAL-015",
@@ -394,7 +394,7 @@
     "template_index": 14,
     "adversary_intensity": "medium",
     "title": "UAC bypass observed on MAC-LEGAL-LAPTOP",
-    "description": "fodhelper.exe abuse on MAC-LEGAL-LAPTOP by svc-deploy@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "description": "fodhelper.exe abuse on MAC-LEGAL-LAPTOP by svc-deploy@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -409,11 +409,11 @@
       "fodhelper",
       "auto-elevation",
       "MAC-LEGAL-LAPTOP",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "SYSTEM"
     ],
     "original_title": "UAC bypass observed on MAC-LEGAL-LAPTOP",
-    "original_description": "fodhelper.exe abuse on MAC-LEGAL-LAPTOP by svc-deploy@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
+    "original_description": "fodhelper.exe abuse on MAC-LEGAL-LAPTOP by svc-deploy@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
   },
   {
     "id": "INC-EVAL-016",
@@ -421,7 +421,7 @@
     "template_index": 15,
     "adversary_intensity": "heavy",
     "title": "namespace breakout via p0werful pod on K8S-PROD-CLUSTER",
-    "description": "Kubernetes p0werful pod created on K8S-PROD-CLUSTER by eve@aisoc.dev. cgroup escape to host namespace observed. n0de runtime filesystem accessed.",
+    "description": "Kubernetes p0werful pod created on K8S-PROD-CLUSTER by eve@example.com. cgroup escape to host namespace observed. n0de runtime filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -438,10 +438,10 @@
       "container escape",
       "cgroup",
       "K8S-PROD-CLUSTER",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "original_title": "Container escape via privileged pod on K8S-PROD-CLUSTER",
-    "original_description": "Kubernetes privileged pod created on K8S-PROD-CLUSTER by eve@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed."
+    "original_description": "Kubernetes privileged pod created on K8S-PROD-CLUSTER by eve@example.com. cgroup escape to host namespace observed. Node filesystem accessed."
   },
   {
     "id": "INC-EVAL-017",
@@ -449,7 +449,7 @@
     "template_index": 16,
     "adversary_intensity": "heavy",
     "title": "Linux su\u200bid binary abuse on LIN-DB-REPLICA",
-    "description": "Custom su\u200bid binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command payload delivery step as root. Likely rights step-up by svc-deploy@aisoc.dev.",
+    "description": "Custom su\u200bid binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command payload delivery step as root. Likely rights step-up by svc-deploy@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -463,10 +463,10 @@
       "/tmp",
       "root escalation",
       "LIN-DB-REPLICA",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "original_title": "Linux SUID binary abuse on LIN-DB-REPLICA",
-    "original_description": "Custom SUID binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command execution as root. Likely escalation by svc-deploy@aisoc.dev."
+    "original_description": "Custom SUID binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command execution as root. Likely escalation by svc-deploy@example.com."
   },
   {
     "id": "INC-EVAL-018",
@@ -502,7 +502,7 @@
     "template_index": 18,
     "adversary_intensity": "light",
     "title": "Indicator removal: Windows event log cleared on LIN-EDGE-VPN02",
-    "description": "Security event log cleared on LIN-EDGE-VPN02 by frank@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "description": "Security event log cleared on LIN-EDGE-VPN02 by frank@example.com. wevtutil.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -516,10 +516,10 @@
       "log cleared",
       "indicator removal",
       "LIN-EDGE-VPN02",
-      "frank@aisoc.dev"
+      "frank@example.com"
     ],
     "original_title": "Indicator removal: Windows event log cleared on LIN-EDGE-VPN02",
-    "original_description": "Security event log cleared on LIN-EDGE-VPN02 by frank@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry."
+    "original_description": "Security event log cleared on LIN-EDGE-VPN02 by frank@example.com. wevtutil.exe cl Security observed in command-line telemetry."
   },
   {
     "id": "INC-EVAL-020",
@@ -527,7 +527,7 @@
     "template_index": 19,
     "adversary_intensity": "medium",
     "title": "Disable security tooling on GCP-GKE-n\u200bode.js-04",
-    "description": "eve@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-n\u200bode.js-04. Tampering telemetry triggered alert.",
+    "description": "eve@example.com attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-n\u200bode.js-04. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -542,17 +542,17 @@
       "sysmon",
       "tampering",
       "GCP-GKE-NODE-04",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "original_title": "Disable security tooling on GCP-GKE-NODE-04",
-    "original_description": "eve@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert."
+    "original_description": "eve@example.com attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert."
   },
   {
     "id": "INC-EVAL-021",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
     "adversary_intensity": "heavy",
-    "title": "l$ass memory proc-mem snapshot on AZURE-VM-FIN-001 by carol@aisoc.dev",
+    "title": "l$ass memory proc-mem snapshot on AZURE-VM-FIN-001 by carol@example.com",
     "description": "comsvcs.loadable code module proc-snapshot observed on AZURE-VM-FIN-001. l$ass.exe memory proc-mem snapshoted to C:\\Windows\\Temp\\. m1m1katz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -568,9 +568,9 @@
       "comsvcs",
       "mimikatz",
       "AZURE-VM-FIN-001",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
-    "original_title": "LSASS memory dump on AZURE-VM-FIN-001 by carol@aisoc.dev",
+    "original_title": "LSASS memory dump on AZURE-VM-FIN-001 by carol@example.com",
     "original_description": "comsvcs.dll MiniDump observed on AZURE-VM-FIN-001. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected."
   },
   {
@@ -578,8 +578,8 @@
     "template_id": "credential-spray",
     "template_index": 21,
     "adversary_intensity": "heavy",
-    "title": "repeated-guess auth-token probe spread against svc-deploy@aisoc.dev from 45.142.122.111",
-    "description": "auth-token probe spread from 45.142.122.111 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "repeated-guess auth-token probe spread against svc-deploy@example.com from 45.142.122.111",
+    "description": "auth-token probe spread from 45.142.122.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -591,12 +591,12 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "45.142.122.111",
       "azure ad"
     ],
-    "original_title": "Brute-force credential spray against svc-deploy@aisoc.dev from 45.142.122.111",
-    "original_description": "Credential spray from 45.142.122.111 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
+    "original_title": "Brute-force credential spray against svc-deploy@example.com from 45.142.122.111",
+    "original_description": "Credential spray from 45.142.122.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
   },
   {
     "id": "INC-EVAL-023",
@@ -604,7 +604,7 @@
     "template_index": 22,
     "adversary_intensity": "heavy",
     "title": "kerb-ticket grinding from MAC-CFO-LAPTOP",
-    "description": "background unit account tg\u200bs tickets requested en-masse from MAC-CFO-LAPTOP by svc-backup@aisoc.dev. AES256 \u2192 RC4 downgrade observed. auth-secrets puller tooling indicators.",
+    "description": "background unit account tg\u200bs tickets requested en-masse from MAC-CFO-LAPTOP by svc-backup@example.com. AES256 \u2192 RC4 downgrade observed. auth-secrets puller tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -621,10 +621,10 @@
       "RC4",
       "mimikatz",
       "MAC-CFO-LAPTOP",
-      "svc-backup@aisoc.dev"
+      "svc-backup@example.com"
     ],
     "original_title": "Kerberoasting from MAC-CFO-LAPTOP",
-    "original_description": "Service account TGS tickets requested en-masse from MAC-CFO-LAPTOP by svc-backup@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
+    "original_description": "Service account TGS tickets requested en-masse from MAC-CFO-LAPTOP by svc-backup@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
   },
   {
     "id": "INC-EVAL-024",
@@ -632,7 +632,7 @@
     "template_index": 23,
     "adversary_intensity": "medium",
     "title": "Active Directory dc-replica-pull abuse from non-DC host AWS-Ecallback infra-PROD-API",
-    "description": "directory replica use rights abused from AWS-Ecallback infra-PROD-API by carol@aisoc.dev. All domain challenge-response auth hashes replicated. Severe login secret exposure.",
+    "description": "directory replica use rights abused from AWS-Ecallback infra-PROD-API by carol@example.com. All domain challenge-response auth hashes replicated. Severe login secret exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -648,18 +648,18 @@
       "replication",
       "ntlm hash",
       "AWS-EC2-PROD-API",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Active Directory DCSync from non-DC host AWS-EC2-PROD-API",
-    "original_description": "Replication rights abused from AWS-EC2-PROD-API by carol@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure."
+    "original_description": "Replication rights abused from AWS-EC2-PROD-API by carol@example.com. All domain NTLM hashes replicated. Severe credential exposure."
   },
   {
     "id": "INC-EVAL-025",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
     "adversary_intensity": "heavy",
-    "title": "federation token golden-ticket: forged assertion targeting ceo@aisoc.dev",
-    "description": "Forged federation token assertion detected for ceo@aisoc.dev. Attacker pivoted to Azure AD; account listing-oution followed from 198.51.100.23.",
+    "title": "federation token golden-ticket: forged assertion targeting ceo@example.com",
+    "description": "Forged federation token assertion detected for ceo@example.com. Attacker pivoted to Azure AD; account listing-oution followed from 198.51.100.23.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -675,11 +675,11 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "198.51.100.23"
     ],
-    "original_title": "SAML golden-ticket: forged assertion targeting ceo@aisoc.dev",
-    "original_description": "Forged SAML assertion detected for ceo@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23."
+    "original_title": "SAML golden-ticket: forged assertion targeting ceo@example.com",
+    "original_description": "Forged SAML assertion detected for ceo@example.com. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23."
   },
   {
     "id": "INC-EVAL-026",
@@ -687,7 +687,7 @@
     "template_index": 25,
     "adversary_intensity": "heavy",
     "title": "Domain listing-oution from LIN-K8S-n0de runtime01",
-    "description": "x.500 query scout-stage from LIN-K8S-n0de runtime01 by svc-deploy@aisoc.dev: bl0odhound-style queries listing-outing users, groups, ACLs.",
+    "description": "x.500 query scout-stage from LIN-K8S-n0de runtime01 by svc-deploy@example.com: bl0odhound-style queries listing-outing users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -701,10 +701,10 @@
       "bloodhound",
       "domain enumeration",
       "LIN-K8S-NODE01",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "original_title": "Domain enumeration from LIN-K8S-NODE01",
-    "original_description": "ldap discovery from LIN-K8S-NODE01 by svc-deploy@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs."
+    "original_description": "ldap discovery from LIN-K8S-NODE01 by svc-deploy@example.com: BloodHound-style queries enumerating users, groups, ACLs."
   },
   {
     "id": "INC-EVAL-027",
@@ -712,7 +712,7 @@
     "template_index": 26,
     "adversary_intensity": "heavy",
     "title": "fileshare mount listing-oution on LIN-EDGE-VPN02",
-    "description": "Mass SMB fileshare listingeration from LIN-EDGE-VPN02 by svc-deploy@aisoc.dev; net.exe and PoSh Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB fileshare listingeration from LIN-EDGE-VPN02 by svc-deploy@example.com; net.exe and PoSh Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -727,10 +727,10 @@
       "Get-SmbShare",
       "share enumeration",
       "LIN-EDGE-VPN02",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "original_title": "Network share enumeration on LIN-EDGE-VPN02",
-    "original_description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by svc-deploy@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
+    "original_description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by svc-deploy@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
   },
   {
     "id": "INC-EVAL-028",
@@ -738,7 +738,7 @@
     "template_index": 27,
     "adversary_intensity": "light",
     "title": "Pass-the-hash from AZURE-VM-FIN-001 to LIN-EDGE-VPN02",
-    "description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to LIN-EDGE-VPN02 by ceo@aisoc.dev. Golden ticket indicators present. Linked to APT28.",
+    "description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to LIN-EDGE-VPN02 by ceo@example.com. Golden ticket indicators present. Linked to APT28.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -754,11 +754,11 @@
       "golden ticket",
       "AZURE-VM-FIN-001",
       "LIN-EDGE-VPN02",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "APT28"
     ],
     "original_title": "Pass-the-hash from AZURE-VM-FIN-001 to LIN-EDGE-VPN02",
-    "original_description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to LIN-EDGE-VPN02 by ceo@aisoc.dev. Golden ticket indicators present. Linked to APT28."
+    "original_description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to LIN-EDGE-VPN02 by ceo@example.com. Golden ticket indicators present. Linked to APT28."
   },
   {
     "id": "INC-EVAL-029",
@@ -766,7 +766,7 @@
     "template_index": 28,
     "adversary_intensity": "medium",
     "title": "RDP lateral movement from LIN-BUILD-CI03",
-    "description": "Anomalous RDP session from LIN-BUILD-CI03 (ops-lead@aisoc.dev) to AZURE-VM-FIN-001 outside business hours. Source admin not normal for AZURE-VM-FIN-001.",
+    "description": "Anomalous RDP session from LIN-BUILD-CI03 (ops-lead@example.com) to AZURE-VM-FIN-001 outside business hours. Source admin not normal for AZURE-VM-FIN-001.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -781,10 +781,10 @@
       "outside hours",
       "LIN-BUILD-CI03",
       "AZURE-VM-FIN-001",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "original_title": "RDP lateral movement from LIN-BUILD-CI03",
-    "original_description": "Anomalous RDP session from LIN-BUILD-CI03 (ops-lead@aisoc.dev) to AZURE-VM-FIN-001 outside business hours. Source admin not normal for AZURE-VM-FIN-001."
+    "original_description": "Anomalous RDP session from LIN-BUILD-CI03 (ops-lead@example.com) to AZURE-VM-FIN-001 outside business hours. Source admin not normal for AZURE-VM-FIN-001."
   },
   {
     "id": "INC-EVAL-030",
@@ -792,7 +792,7 @@
     "template_index": 29,
     "adversary_intensity": "light",
     "title": "WMI lateral execution from WIN-PROD-WEB02 to AWS-EC2-PROD-API",
-    "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -807,19 +807,19 @@
       "lateral",
       "WIN-PROD-WEB02",
       "AWS-EC2-PROD-API",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "91.134.231.15"
     ],
     "original_title": "WMI lateral execution from WIN-PROD-WEB02 to AWS-EC2-PROD-API",
-    "original_description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@aisoc.dev. Remote command execution; payload from 91.134.231.15."
+    "original_description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 91.134.231.15."
   },
   {
     "id": "INC-EVAL-031",
     "template_id": "bulk-pii-download",
     "template_index": 30,
     "adversary_intensity": "heavy",
-    "title": "Bulk user identity data download by ops-lead@aisoc.dev",
-    "description": "ops-lead@aisoc.dev downloaded >10 GB of customer rows from production database from LIN-DB-REPLICA. Outside normal access p@ttern.",
+    "title": "Bulk user identity data download by ops-lead@example.com",
+    "description": "ops-lead@example.com downloaded >10 GB of customer rows from production database from LIN-DB-REPLICA. Outside normal access p@ttern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -835,10 +835,10 @@
       "pii",
       "customer record",
       "LIN-DB-REPLICA",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
-    "original_title": "Bulk PII download by ops-lead@aisoc.dev",
-    "original_description": "ops-lead@aisoc.dev downloaded >10 GB of customer records from production database from LIN-DB-REPLICA. Outside normal access pattern."
+    "original_title": "Bulk PII download by ops-lead@example.com",
+    "original_description": "ops-lead@example.com downloaded >10 GB of customer records from production database from LIN-DB-REPLICA. Outside normal access pattern."
   },
   {
     "id": "INC-EVAL-032",
@@ -846,7 +846,7 @@
     "template_index": 31,
     "adversary_intensity": "heavy",
     "title": "paste buffer logging imp1ant on WIN-DC-SECONDARY",
-    "description": "paste buffer contents from WIN-DC-SECONDARY (ops-lead@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include creds and crypto addresses.",
+    "description": "paste buffer contents from WIN-DC-SECONDARY (ops-lead@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include creds and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -860,10 +860,10 @@
       "keylog",
       "credentials",
       "WIN-DC-SECONDARY",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "original_title": "Clipboard logging implant on WIN-DC-SECONDARY",
-    "original_description": "Clipboard contents from WIN-DC-SECONDARY (ops-lead@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
+    "original_description": "Clipboard contents from WIN-DC-SECONDARY (ops-lead@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
   },
   {
     "id": "INC-EVAL-033",
@@ -899,7 +899,7 @@
     "template_index": 33,
     "adversary_intensity": "heavy",
     "title": "blob-store push target exfil: data outflow to attacker-controlled S3 from WIN-DC-PRIMARY",
-    "description": "outbound flow from WIN-DC-PRIMARY to object-store-uriatk-stage-91.134.231.15/d\u200bump/ by carol@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "outbound flow from WIN-DC-PRIMARY to object-store-uriatk-stage-91.134.231.15/d\u200bump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -915,18 +915,18 @@
       "exfiltrat",
       "WIN-DC-PRIMARY",
       "91.134.231.15",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-DC-PRIMARY",
-    "original_description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-91.134.231.15/dump/ by carol@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
+    "original_description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-91.134.231.15/dump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
   },
   {
     "id": "INC-EVAL-035",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
     "adversary_intensity": "light",
-    "title": "Personal Drive exfil by admin@aisoc.dev",
-    "description": "admin@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "title": "Personal Drive exfil by admin@example.com",
+    "description": "admin@example.com on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -944,10 +944,10 @@
       "source code",
       "pii",
       "LIN-K8S-NODE01",
-      "admin@aisoc.dev"
+      "admin@example.com"
     ],
-    "original_title": "Personal Drive exfil by admin@aisoc.dev",
-    "original_description": "admin@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
+    "original_title": "Personal Drive exfil by admin@example.com",
+    "original_description": "admin@example.com on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
   },
   {
     "id": "INC-EVAL-036",
@@ -1008,7 +1008,7 @@
     "template_index": 37,
     "adversary_intensity": "light",
     "title": "Ransomware encryption in progress on GCP-GKE-NODE-04",
-    "description": "Mass file rename observed on GCP-GKE-NODE-04 (frank@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-LockBit 3.0.txt found.",
+    "description": "Mass file rename observed on GCP-GKE-NODE-04 (frank@example.com); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-LockBit 3.0.txt found.",
     "expected_tactics": [
       "TA0040"
     ],
@@ -1023,11 +1023,11 @@
       "rename",
       "ransom note",
       "GCP-GKE-NODE-04",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "LockBit 3.0"
     ],
     "original_title": "Ransomware encryption in progress on GCP-GKE-NODE-04",
-    "original_description": "Mass file rename observed on GCP-GKE-NODE-04 (frank@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-LockBit 3.0.txt found."
+    "original_description": "Mass file rename observed on GCP-GKE-NODE-04 (frank@example.com); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-LockBit 3.0.txt found."
   },
   {
     "id": "INC-EVAL-039",
@@ -1061,8 +1061,8 @@
     "template_id": "bec-wire-fraud",
     "template_index": 39,
     "adversary_intensity": "medium",
-    "title": "boss-impersonation fraud: payment redirect by cfo@aisoc.dev",
-    "description": "Spear-phishing email spoofed CFO. Wire transfer of a quarter-million-dollar k initiated by cfo@aisoc.dev from AWS-Ecallback infra-PROD-API to threat-actor account. Linked to ALPHV/BlackCat.",
+    "title": "boss-impersonation fraud: payment redirect by cfo@example.com",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of a quarter-million-dollar k initiated by cfo@example.com from AWS-Ecallback infra-PROD-API to threat-actor account. Linked to ALPHV/BlackCat.",
     "expected_tactics": [
       "TA0001",
       "TA0040"
@@ -1078,12 +1078,12 @@
       "spoofed cfo",
       "wire transfer",
       "$250",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "AWS-EC2-PROD-API",
       "ALPHV/BlackCat"
     ],
-    "original_title": "BEC: payment redirect by cfo@aisoc.dev",
-    "original_description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by cfo@aisoc.dev from AWS-EC2-PROD-API to threat-actor account. Linked to ALPHV/BlackCat."
+    "original_title": "BEC: payment redirect by cfo@example.com",
+    "original_description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by cfo@example.com from AWS-EC2-PROD-API to threat-actor account. Linked to ALPHV/BlackCat."
   },
   {
     "id": "INC-EVAL-041",
@@ -1117,8 +1117,8 @@
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
     "adversary_intensity": "medium",
-    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@aisoc.dev",
-    "description": "Successful Azure AD sign-in for grace@aisoc.dev from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via session-takeover token.",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@example.com",
+    "description": "Successful Azure AD sign-in for grace@example.com from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via session-takeover token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -1134,11 +1134,11 @@
       "impossible travel",
       "session token",
       "mfa",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "45.142.122.111"
     ],
-    "original_title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@aisoc.dev",
-    "original_description": "Successful Azure AD sign-in for grace@aisoc.dev from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token."
+    "original_title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@example.com",
+    "original_description": "Successful Azure AD sign-in for grace@example.com from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token."
   },
   {
     "id": "INC-EVAL-043",
@@ -1170,8 +1170,8 @@
     "template_id": "insider-mailbox-export",
     "template_index": 43,
     "adversary_intensity": "heavy",
-    "title": "Insider preparing departure: large inbox extract by ops-lead@aisoc.dev",
-    "description": "ops-lead@aisoc.dev exported full mailbox mail archive (8 GB) from AZURE-VM-FIN-001. HR flag: notice given last week.",
+    "title": "Insider preparing departure: large inbox extract by ops-lead@example.com",
+    "description": "ops-lead@example.com exported full mailbox mail archive (8 GB) from AZURE-VM-FIN-001. HR flag: notice given last week.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -1187,19 +1187,19 @@
       "PST",
       "insider",
       "departure",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "AZURE-VM-FIN-001"
     ],
-    "original_title": "Insider preparing departure: large mailbox export by ops-lead@aisoc.dev",
-    "original_description": "ops-lead@aisoc.dev exported full mailbox PST (8 GB) from AZURE-VM-FIN-001. HR flag: notice given last week."
+    "original_title": "Insider preparing departure: large mailbox export by ops-lead@example.com",
+    "original_description": "ops-lead@example.com exported full mailbox PST (8 GB) from AZURE-VM-FIN-001. HR flag: notice given last week."
   },
   {
     "id": "INC-EVAL-045",
     "template_id": "office-vsto-addin",
     "template_index": 44,
     "adversary_intensity": "medium",
-    "title": "Malicious Office add-in installed for grace@aisoc.dev",
-    "description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on WIN-EXCHANGE-01; loads on every Outlook startup; b\u200beacons to 185.220.101.7.",
+    "title": "Malicious Office add-in installed for grace@example.com",
+    "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; b\u200beacons to 185.220.101.7.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -1214,12 +1214,12 @@
       "office add-in",
       "vsto",
       "outlook",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "WIN-EXCHANGE-01",
       "185.220.101.7"
     ],
-    "original_title": "Malicious Office add-in installed for grace@aisoc.dev",
-    "original_description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 185.220.101.7."
+    "original_title": "Malicious Office add-in installed for grace@example.com",
+    "original_description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 185.220.101.7."
   },
   {
     "id": "INC-EVAL-046",
@@ -1227,7 +1227,7 @@
     "template_index": 45,
     "adversary_intensity": "heavy",
     "title": "GitHub p@t leaked and abused from 185.220.101.7",
-    "description": "user-issued api token belonging to grace@aisoc.dev used from 185.220.101.7 to clone 14 non-public repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "description": "user-issued api token belonging to grace@example.com used from 185.220.101.7 to clone 14 non-public repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -1243,11 +1243,11 @@
       "pat",
       "token",
       "private repo",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "185.220.101.7"
     ],
     "original_title": "GitHub PAT leaked and abused from 185.220.101.7",
-    "original_description": "Personal access token belonging to grace@aisoc.dev used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier."
+    "original_description": "Personal access token belonging to grace@example.com used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier."
   },
   {
     "id": "INC-EVAL-047",
@@ -1282,8 +1282,8 @@
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
     "adversary_intensity": "heavy",
-    "title": "Vendor admin pw rotation request abuse for ops-lead@aisoc.dev",
-    "description": "pw rotation request for ops-lead@aisoc.dev performed by helpdesk in response to human-factor pretexting call from 185.220.101.7. Token claimed within 90 seconds.",
+    "title": "Vendor admin pw rotation request abuse for ops-lead@example.com",
+    "description": "pw rotation request for ops-lead@example.com performed by helpdesk in response to human-factor pretexting call from 185.220.101.7. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -1298,19 +1298,19 @@
       "password reset",
       "social engineering",
       "helpdesk",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "185.220.101.7"
     ],
-    "original_title": "Vendor admin password reset abuse for ops-lead@aisoc.dev",
-    "original_description": "Password reset for ops-lead@aisoc.dev performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds."
+    "original_title": "Vendor admin password reset abuse for ops-lead@example.com",
+    "original_description": "Password reset for ops-lead@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds."
   },
   {
     "id": "INC-EVAL-049",
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
     "adversary_intensity": "light",
-    "title": "OAuth refresh-token theft for ops-lead@aisoc.dev",
-    "description": "Refresh token for ops-lead@aisoc.dev replayed from 172.16.50.7. Granted access to mailbox + OneDrive without re-prompt.",
+    "title": "OAuth refresh-token theft for ops-lead@example.com",
+    "description": "Refresh token for ops-lead@example.com replayed from 172.16.50.7. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -1325,11 +1325,11 @@
       "replay",
       "onedrive",
       "mailbox",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "172.16.50.7"
     ],
-    "original_title": "OAuth refresh-token theft for ops-lead@aisoc.dev",
-    "original_description": "Refresh token for ops-lead@aisoc.dev replayed from 172.16.50.7. Granted access to mailbox + OneDrive without re-prompt."
+    "original_title": "OAuth refresh-token theft for ops-lead@example.com",
+    "original_description": "Refresh token for ops-lead@example.com replayed from 172.16.50.7. Granted access to mailbox + OneDrive without re-prompt."
   },
   {
     "id": "INC-EVAL-050",
@@ -1363,8 +1363,8 @@
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
     "adversary_intensity": "light",
-    "title": "Outlook rule auto-forwarding mail from dave@aisoc.dev",
-    "description": "Outlook inbox rule created for dave@aisoc.dev that forwards all mail to external address at 203.0.113.45. Linked to MagicWeb.",
+    "title": "Outlook rule auto-forwarding mail from dave@example.com",
+    "description": "Outlook inbox rule created for dave@example.com that forwards all mail to external address at 203.0.113.45. Linked to MagicWeb.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -1379,12 +1379,12 @@
       "outlook rule",
       "forward",
       "mail",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "203.0.113.45",
       "MagicWeb"
     ],
-    "original_title": "Outlook rule auto-forwarding mail from dave@aisoc.dev",
-    "original_description": "Outlook inbox rule created for dave@aisoc.dev that forwards all mail to external address at 203.0.113.45. Linked to MagicWeb."
+    "original_title": "Outlook rule auto-forwarding mail from dave@example.com",
+    "original_description": "Outlook inbox rule created for dave@example.com that forwards all mail to external address at 203.0.113.45. Linked to MagicWeb."
   },
   {
     "id": "INC-EVAL-052",
@@ -1392,7 +1392,7 @@
     "template_index": 51,
     "adversary_intensity": "heavy",
     "title": "Linux journald log modify-on-the-fly on K8S-PROD-CLUSTER",
-    "description": "systemd log cli --rotate --v@cuum-time=1s observed on K8S-PROD-CLUSTER by carol@aisoc.dev; recent journal entries purged. footprint cleanup.",
+    "description": "systemd log cli --rotate --v@cuum-time=1s observed on K8S-PROD-CLUSTER by carol@example.com; recent journal entries purged. footprint cleanup.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -1406,10 +1406,10 @@
       "log tampering",
       "vacuum",
       "K8S-PROD-CLUSTER",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Linux journald log tampering on K8S-PROD-CLUSTER",
-    "original_description": "journalctl --rotate --vacuum-time=1s observed on K8S-PROD-CLUSTER by carol@aisoc.dev; recent journal entries purged. Indicator removal."
+    "original_description": "journalctl --rotate --vacuum-time=1s observed on K8S-PROD-CLUSTER by carol@example.com; recent journal entries purged. Indicator removal."
   },
   {
     "id": "INC-EVAL-053",
@@ -1445,8 +1445,8 @@
     "template_id": "vpn-new-geography",
     "template_index": 53,
     "adversary_intensity": "medium",
-    "title": "Suspicious remote-access portal entry from anomalous origin for admin@aisoc.dev",
-    "description": "remote-access portal entry for admin@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB probe-pass from VPN range to LIN-K8S-n0de runtime01.",
+    "title": "Suspicious remote-access portal entry from anomalous origin for admin@example.com",
+    "description": "remote-access portal entry for admin@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB probe-pass from VPN range to LIN-K8S-n0de runtime01.",
     "expected_tactics": [
       "TA0001",
       "TA0008"
@@ -1462,12 +1462,12 @@
       "new geography",
       "lateral",
       "smb scan",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "10.0.99.42",
       "LIN-K8S-NODE01"
     ],
-    "original_title": "Suspicious VPN login from new geography for admin@aisoc.dev",
-    "original_description": "VPN login for admin@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01."
+    "original_title": "Suspicious VPN login from new geography for admin@example.com",
+    "original_description": "VPN login for admin@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01."
   },
   {
     "id": "INC-EVAL-055",
@@ -1475,7 +1475,7 @@
     "template_index": 54,
     "adversary_intensity": "heavy",
     "title": "Privileged command run as background unit account on WIN-PROD-WEB02",
-    "description": "background unit account eve@aisoc.dev (no interactive use expected) ran privileged net.exe + win-log cli cl Security on WIN-PROD-WEB02. Anomalous.",
+    "description": "background unit account eve@example.com (no interactive use expected) ran privileged net.exe + win-log cli cl Security on WIN-PROD-WEB02. Anomalous.",
     "expected_tactics": [
       "TA0005",
       "TA0006"
@@ -1490,19 +1490,19 @@
       "service account",
       "wevtutil",
       "log clear",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "WIN-PROD-WEB02"
     ],
     "original_title": "Privileged command run as service account on WIN-PROD-WEB02",
-    "original_description": "Service account eve@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-PROD-WEB02. Anomalous."
+    "original_description": "Service account eve@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-PROD-WEB02. Anomalous."
   },
   {
     "id": "INC-EVAL-056",
     "template_id": "phishing-macro-email",
     "template_index": 0,
     "adversary_intensity": "heavy",
-    "title": "narrow-cast baiting email with off1ce-automation routine-laden attachment delivered to bob@aisoc.dev",
-    "description": "Inbound email from 10.0.99.42 delivered an Office document with a malicious v\u200bba off1ce-automation routine to bob@aisoc.dev. Attachment opened on LIN-DB-REPLICA; off1ce-automation routine spawned cm\u200bd.exe and downloaded a follow-on artifact from a known Scattered Spider infrastructure.",
+    "title": "narrow-cast baiting email with off1ce-automation routine-laden attachment delivered to bob@example.com",
+    "description": "Inbound email from 10.0.99.42 delivered an Office document with a malicious v\u200bba off1ce-automation routine to bob@example.com. Attachment opened on LIN-DB-REPLICA; off1ce-automation routine spawned cm\u200bd.exe and downloaded a follow-on artifact from a known Scattered Spider infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -1518,11 +1518,11 @@
       "macro",
       "10.0.99.42",
       "LIN-DB-REPLICA",
-      "bob@aisoc.dev",
+      "bob@example.com",
       "stage-2 payload"
     ],
-    "original_title": "Spear-phishing email with macro-laden attachment delivered to bob@aisoc.dev",
-    "original_description": "Inbound email from 10.0.99.42 delivered an Office document with a malicious VBA macro to bob@aisoc.dev. Attachment opened on LIN-DB-REPLICA; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure."
+    "original_title": "Spear-phishing email with macro-laden attachment delivered to bob@example.com",
+    "original_description": "Inbound email from 10.0.99.42 delivered an Office document with a malicious VBA macro to bob@example.com. Attachment opened on LIN-DB-REPLICA; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure."
   },
   {
     "id": "INC-EVAL-057",
@@ -1558,7 +1558,7 @@
     "template_index": 2,
     "adversary_intensity": "medium",
     "title": "Watering-hole exploit served from internal Confluence by 198.51.100.23",
-    "description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.23. Drive-by exploit triggered browser exploitation on multiple visitors including cfo@aisoc.dev. Linked to APT29 TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.23. Drive-by exploit triggered browser exploitation on multiple visitors including cfo@example.com. Linked to APT29 TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -1574,11 +1574,11 @@
       "drive-by",
       "Confluence",
       "198.51.100.23",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "APT29"
     ],
     "original_title": "Watering-hole exploit served from internal Confluence by 198.51.100.23",
-    "original_description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.23. Drive-by exploit triggered browser exploitation on multiple visitors including cfo@aisoc.dev. Linked to APT29 TTPs."
+    "original_description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.23. Drive-by exploit triggered browser exploitation on multiple visitors including cfo@example.com. Linked to APT29 TTPs."
   },
   {
     "id": "INC-EVAL-059",
@@ -1614,7 +1614,7 @@
     "template_index": 4,
     "adversary_intensity": "heavy",
     "title": "Malicious portable storage stick autorun on air-gapped host MAC-LEGAL-LAPTOP",
-    "description": "portable storage stick device inserted on air-gapped MAC-LEGAL-LAPTOP by ops-lead@aisoc.dev. AutoRun executed py-runtime stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "portable storage stick device inserted on air-gapped MAC-LEGAL-LAPTOP by ops-lead@example.com. AutoRun executed py-runtime stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -1630,19 +1630,19 @@
       "autorun",
       "air-gapped",
       "MAC-LEGAL-LAPTOP",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Python stager"
     ],
     "original_title": "Malicious USB autorun on air-gapped host MAC-LEGAL-LAPTOP",
-    "original_description": "USB device inserted on air-gapped MAC-LEGAL-LAPTOP by ops-lead@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
+    "original_description": "USB device inserted on air-gapped MAC-LEGAL-LAPTOP by ops-lead@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
   },
   {
     "id": "INC-EVAL-061",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "adversary_intensity": "medium",
-    "title": "delegated grant consent phishing targeting admin@aisoc.dev",
-    "description": "Malicious delegated grant application granted Mail.Read and Files.Read.All scopes by admin@aisoc.dev. Inbox forwarding rule created sending mail to 172.16.50.7.",
+    "title": "delegated grant consent phishing targeting admin@example.com",
+    "description": "Malicious delegated grant application granted Mail.Read and Files.Read.All scopes by admin@example.com. Inbox forwarding rule created sending mail to 172.16.50.7.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -1657,12 +1657,12 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "172.16.50.7",
       "forwarding rule"
     ],
-    "original_title": "OAuth consent phishing targeting admin@aisoc.dev",
-    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by admin@aisoc.dev. Inbox forwarding rule created sending mail to 172.16.50.7."
+    "original_title": "OAuth consent phishing targeting admin@example.com",
+    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by admin@example.com. Inbox forwarding rule created sending mail to 172.16.50.7."
   },
   {
     "id": "INC-EVAL-062",
@@ -1670,7 +1670,7 @@
     "template_index": 6,
     "adversary_intensity": "light",
     "title": "Obfuscated powershell dropper executed on WIN-DC-PRIMARY",
-    "description": "powershell dropper executed on WIN-DC-PRIMARY by heidi@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to LockBit 3.0 ransomware staging.",
+    "description": "powershell dropper executed on WIN-DC-PRIMARY by heidi@example.com; payload base64-encoded and decoded in-memory. Linked to LockBit 3.0 ransomware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -1686,11 +1686,11 @@
       "obfuscated",
       "base64",
       "WIN-DC-PRIMARY",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "LockBit 3.0"
     ],
     "original_title": "Obfuscated PowerShell dropper executed on WIN-DC-PRIMARY",
-    "original_description": "PowerShell dropper executed on WIN-DC-PRIMARY by heidi@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to LockBit 3.0 ransomware staging."
+    "original_description": "PowerShell dropper executed on WIN-DC-PRIMARY by heidi@example.com; payload base64-encoded and decoded in-memory. Linked to LockBit 3.0 ransomware staging."
   },
   {
     "id": "INC-EVAL-063",
@@ -1756,7 +1756,7 @@
     "template_index": 9,
     "adversary_intensity": "medium",
     "title": "Malicious windows-mgmt-fabric subautomation snippetion on LIN-BUILD-CI03",
-    "description": "Permanent windows-mgmt-fabric event subautomation snippetion created on LIN-BUILD-CI03 by svc-backup@aisoc.dev. Consumer runs transformd automation snippet. Persistence + code activation mechanism.",
+    "description": "Permanent windows-mgmt-fabric event subautomation snippetion created on LIN-BUILD-CI03 by svc-backup@example.com. Consumer runs transformd automation snippet. Persistence + code activation mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -1772,18 +1772,18 @@
       "subscription",
       "permanent",
       "LIN-BUILD-CI03",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "encoded script"
     ],
     "original_title": "Malicious WMI subscription on LIN-BUILD-CI03",
-    "original_description": "Permanent WMI event subscription created on LIN-BUILD-CI03 by svc-backup@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism."
+    "original_description": "Permanent WMI event subscription created on LIN-BUILD-CI03 by svc-backup@example.com. Consumer runs encoded script. Persistence + execution mechanism."
   },
   {
     "id": "INC-EVAL-066",
     "template_id": "registry-run-persistence",
     "template_index": 10,
     "adversary_intensity": "heavy",
-    "title": "winreg autorun stanza key long-term foothold created by svc-backup@aisoc.dev on LIN-DB-REPLICA",
+    "title": "winreg autorun stanza key long-term foothold created by svc-backup@example.com on LIN-DB-REPLICA",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on LIN-DB-REPLICA. Points to roaming binary signed with revoked cert. Linked to Lazarus.",
     "expected_tactics": [
       "TA0003"
@@ -1798,10 +1798,10 @@
       "persistence",
       "revoked cert",
       "LIN-DB-REPLICA",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "Lazarus"
     ],
-    "original_title": "Registry Run key persistence created by svc-backup@aisoc.dev on LIN-DB-REPLICA",
+    "original_title": "Registry Run key persistence created by svc-backup@example.com on LIN-DB-REPLICA",
     "original_description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on LIN-DB-REPLICA. Points to roaming binary signed with revoked cert. Linked to Lazarus."
   },
   {
@@ -1810,7 +1810,7 @@
     "template_index": 11,
     "adversary_intensity": "medium",
     "title": "Scheduled task persistence on AWS-Ecallback infra-PROD-API",
-    "description": "Hidden scheduled task created on AWS-Ecallback infra-PROD-API by cfo@aisoc.dev: triggers every 30 minutes, runs scr1pt from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on AWS-Ecallback infra-PROD-API by cfo@example.com: triggers every 30 minutes, runs scr1pt from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -1824,10 +1824,10 @@
       "persistence",
       "APPDATA",
       "AWS-EC2-PROD-API",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
     "original_title": "Scheduled task persistence on AWS-EC2-PROD-API",
-    "original_description": "Hidden scheduled task created on AWS-EC2-PROD-API by cfo@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
+    "original_description": "Hidden scheduled task created on AWS-EC2-PROD-API by cfo@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
   },
   {
     "id": "INC-EVAL-068",
@@ -1863,7 +1863,7 @@
     "template_index": 13,
     "adversary_intensity": "medium",
     "title": "Backdoor cron job installed on LIN-DB-REPLICA",
-    "description": "/etc/cron.d entry created by ceo@aisoc.dev on LIN-DB-REPLICA. Reverse shell b\u200beacon to 45.142.122.111 every 5 minutes.",
+    "description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell b\u200beacon to 45.142.122.111 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -1879,11 +1879,11 @@
       "backdoor",
       "reverse shell",
       "LIN-DB-REPLICA",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "45.142.122.111"
     ],
     "original_title": "Backdoor cron job installed on LIN-DB-REPLICA",
-    "original_description": "/etc/cron.d entry created by ceo@aisoc.dev on LIN-DB-REPLICA. Reverse shell beacon to 45.142.122.111 every 5 minutes."
+    "original_description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell beacon to 45.142.122.111 every 5 minutes."
   },
   {
     "id": "INC-EVAL-070",
@@ -1891,7 +1891,7 @@
     "template_index": 14,
     "adversary_intensity": "heavy",
     "title": "consent-prompt sidestep observed on LIN-BUILD-CI03",
-    "description": "f0dhelper.exe abuse on LIN-BUILD-CI03 by eve@aisoc.dev; auto-rights step-up triggered without prompt. Process tree shows rights uplift to SYSTEM.",
+    "description": "f0dhelper.exe abuse on LIN-BUILD-CI03 by eve@example.com; auto-rights step-up triggered without prompt. Process tree shows rights uplift to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -1906,11 +1906,11 @@
       "fodhelper",
       "auto-elevation",
       "LIN-BUILD-CI03",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "SYSTEM"
     ],
     "original_title": "UAC bypass observed on LIN-BUILD-CI03",
-    "original_description": "fodhelper.exe abuse on LIN-BUILD-CI03 by eve@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
+    "original_description": "fodhelper.exe abuse on LIN-BUILD-CI03 by eve@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
   },
   {
     "id": "INC-EVAL-071",
@@ -1918,7 +1918,7 @@
     "template_index": 15,
     "adversary_intensity": "heavy",
     "title": "isolation-layer break via host-shared workload on WIN-PROD-WEB02",
-    "description": "Kubernetes host-shared workload created on WIN-PROD-WEB02 by dave@aisoc.dev. cgroup escape to host namespace observed. n0de runtime filesystem accessed.",
+    "description": "Kubernetes host-shared workload created on WIN-PROD-WEB02 by dave@example.com. cgroup escape to host namespace observed. n0de runtime filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -1935,10 +1935,10 @@
       "container escape",
       "cgroup",
       "WIN-PROD-WEB02",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "original_title": "Container escape via privileged pod on WIN-PROD-WEB02",
-    "original_description": "Kubernetes privileged pod created on WIN-PROD-WEB02 by dave@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed."
+    "original_description": "Kubernetes privileged pod created on WIN-PROD-WEB02 by dave@example.com. cgroup escape to host namespace observed. Node filesystem accessed."
   },
   {
     "id": "INC-EVAL-072",
@@ -1946,7 +1946,7 @@
     "template_index": 16,
     "adversary_intensity": "heavy",
     "title": "Linux setuser bit binary abuse on WIN-DEVOPS-LT",
-    "description": "Custom setuser bit binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command code activation as root. Likely rights uplift by bob@aisoc.dev.",
+    "description": "Custom setuser bit binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command code activation as root. Likely rights uplift by bob@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -1960,10 +1960,10 @@
       "/tmp",
       "root escalation",
       "WIN-DEVOPS-LT",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "original_title": "Linux SUID binary abuse on WIN-DEVOPS-LT",
-    "original_description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by bob@aisoc.dev."
+    "original_description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by bob@example.com."
   },
   {
     "id": "INC-EVAL-073",
@@ -1999,7 +1999,7 @@
     "template_index": 18,
     "adversary_intensity": "heavy",
     "title": "evidence cleanup: Windows event telemetry erased on AZURE-VM-FIN-001",
-    "description": "Security event telemetry erased on AZURE-VM-FIN-001 by heidi@aisoc.dev. win event tool.exe cl Security observed in command-line telemetry.",
+    "description": "Security event telemetry erased on AZURE-VM-FIN-001 by heidi@example.com. win event tool.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -2013,10 +2013,10 @@
       "log cleared",
       "indicator removal",
       "AZURE-VM-FIN-001",
-      "heidi@aisoc.dev"
+      "heidi@example.com"
     ],
     "original_title": "Indicator removal: Windows event log cleared on AZURE-VM-FIN-001",
-    "original_description": "Security event log cleared on AZURE-VM-FIN-001 by heidi@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry."
+    "original_description": "Security event log cleared on AZURE-VM-FIN-001 by heidi@example.com. wevtutil.exe cl Security observed in command-line telemetry."
   },
   {
     "id": "INC-EVAL-075",
@@ -2024,7 +2024,7 @@
     "template_index": 19,
     "adversary_intensity": "medium",
     "title": "Disable security tooling on LIN-OBS-LOGGER",
-    "description": "admin@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert.",
+    "description": "admin@example.com attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -2039,17 +2039,17 @@
       "sysmon",
       "tampering",
       "LIN-OBS-LOGGER",
-      "admin@aisoc.dev"
+      "admin@example.com"
     ],
     "original_title": "Disable security tooling on LIN-OBS-LOGGER",
-    "original_description": "admin@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert."
+    "original_description": "admin@example.com attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert."
   },
   {
     "id": "INC-EVAL-076",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
     "adversary_intensity": "light",
-    "title": "LSASS memory dump on WIN-DEVOPS-LT by cfo@aisoc.dev",
+    "title": "LSASS memory dump on WIN-DEVOPS-LT by cfo@example.com",
     "description": "comsvcs.dll MiniDump observed on WIN-DEVOPS-LT. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -2065,9 +2065,9 @@
       "comsvcs",
       "mimikatz",
       "WIN-DEVOPS-LT",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
-    "original_title": "LSASS memory dump on WIN-DEVOPS-LT by cfo@aisoc.dev",
+    "original_title": "LSASS memory dump on WIN-DEVOPS-LT by cfo@example.com",
     "original_description": "comsvcs.dll MiniDump observed on WIN-DEVOPS-LT. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected."
   },
   {
@@ -2075,8 +2075,8 @@
     "template_id": "credential-spray",
     "template_index": 21,
     "adversary_intensity": "light",
-    "title": "Brute-force credentia1 spray against dave@aisoc.dev from 172.16.50.7",
-    "description": "credentia1 spray from 172.16.50.7 against dave@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credentia1 spray against dave@example.com from 172.16.50.7",
+    "description": "credentia1 spray from 172.16.50.7 against dave@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -2088,12 +2088,12 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "172.16.50.7",
       "azure ad"
     ],
-    "original_title": "Brute-force credential spray against dave@aisoc.dev from 172.16.50.7",
-    "original_description": "Credential spray from 172.16.50.7 against dave@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
+    "original_title": "Brute-force credential spray against dave@example.com from 172.16.50.7",
+    "original_description": "Credential spray from 172.16.50.7 against dave@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
   },
   {
     "id": "INC-EVAL-078",
@@ -2101,7 +2101,7 @@
     "template_index": 22,
     "adversary_intensity": "medium",
     "title": "kerb-ticket roasting from WIN-FILE-SHARE",
-    "description": "long-running unit account tg\u200bs tickets requested en-masse from WIN-FILE-SHARE by cfo@aisoc.dev. AES256 \u2192 RC4 downgrade observed. secrets extractor tooling indicators.",
+    "description": "long-running unit account tg\u200bs tickets requested en-masse from WIN-FILE-SHARE by cfo@example.com. AES256 \u2192 RC4 downgrade observed. secrets extractor tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -2118,10 +2118,10 @@
       "RC4",
       "mimikatz",
       "WIN-FILE-SHARE",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
     "original_title": "Kerberoasting from WIN-FILE-SHARE",
-    "original_description": "Service account TGS tickets requested en-masse from WIN-FILE-SHARE by cfo@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
+    "original_description": "Service account TGS tickets requested en-masse from WIN-FILE-SHARE by cfo@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
   },
   {
     "id": "INC-EVAL-079",
@@ -2129,7 +2129,7 @@
     "template_index": 23,
     "adversary_intensity": "heavy",
     "title": "Active Directory msrpc replica-pull abuse from non-DC host AZURE-VM-FIN-001",
-    "description": "dir-sync abuse rights abused from AZURE-VM-FIN-001 by ops-lead@aisoc.dev. All domain challenge-response auth hashes replicated. Severe login secret exposure.",
+    "description": "dir-sync abuse rights abused from AZURE-VM-FIN-001 by ops-lead@example.com. All domain challenge-response auth hashes replicated. Severe login secret exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -2145,18 +2145,18 @@
       "replication",
       "ntlm hash",
       "AZURE-VM-FIN-001",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "original_title": "Active Directory DCSync from non-DC host AZURE-VM-FIN-001",
-    "original_description": "Replication rights abused from AZURE-VM-FIN-001 by ops-lead@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure."
+    "original_description": "Replication rights abused from AZURE-VM-FIN-001 by ops-lead@example.com. All domain NTLM hashes replicated. Severe credential exposure."
   },
   {
     "id": "INC-EVAL-080",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
     "adversary_intensity": "heavy",
-    "title": "federation token golden-ticket: forged assertion targeting frank@aisoc.dev",
-    "description": "Forged federation token assertion detected for frank@aisoc.dev. Attacker pivoted to Azure AD; account walking the directoryion followed from 10.0.99.42.",
+    "title": "federation token golden-ticket: forged assertion targeting frank@example.com",
+    "description": "Forged federation token assertion detected for frank@example.com. Attacker pivoted to Azure AD; account walking the directoryion followed from 10.0.99.42.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -2172,11 +2172,11 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "10.0.99.42"
     ],
-    "original_title": "SAML golden-ticket: forged assertion targeting frank@aisoc.dev",
-    "original_description": "Forged SAML assertion detected for frank@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 10.0.99.42."
+    "original_title": "SAML golden-ticket: forged assertion targeting frank@example.com",
+    "original_description": "Forged SAML assertion detected for frank@example.com. Attacker pivoted to Azure AD; account enumeration followed from 10.0.99.42."
   },
   {
     "id": "INC-EVAL-081",
@@ -2184,7 +2184,7 @@
     "template_index": 25,
     "adversary_intensity": "heavy",
     "title": "Domain iterating acrossion from LIN-OBS-LOGGER",
-    "description": "l\u200bdap scout-stage from LIN-OBS-LOGGER by grace@aisoc.dev: bl0odhound-style queries iterating acrossing users, groups, ACLs.",
+    "description": "l\u200bdap scout-stage from LIN-OBS-LOGGER by grace@example.com: bl0odhound-style queries iterating acrossing users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -2198,10 +2198,10 @@
       "bloodhound",
       "domain enumeration",
       "LIN-OBS-LOGGER",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "original_title": "Domain enumeration from LIN-OBS-LOGGER",
-    "original_description": "ldap discovery from LIN-OBS-LOGGER by grace@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs."
+    "original_description": "ldap discovery from LIN-OBS-LOGGER by grace@example.com: BloodHound-style queries enumerating users, groups, ACLs."
   },
   {
     "id": "INC-EVAL-082",
@@ -2209,7 +2209,7 @@
     "template_index": 26,
     "adversary_intensity": "light",
     "title": "Network share enumeration on WIN-FIN-DB01",
-    "description": "Mass SMB share enumeration from WIN-FIN-DB01 by alice@aisoc.dev; net.exe and powershell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB share enumeration from WIN-FIN-DB01 by alice@example.com; net.exe and powershell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -2224,10 +2224,10 @@
       "Get-SmbShare",
       "share enumeration",
       "WIN-FIN-DB01",
-      "alice@aisoc.dev"
+      "alice@example.com"
     ],
     "original_title": "Network share enumeration on WIN-FIN-DB01",
-    "original_description": "Mass SMB share enumeration from WIN-FIN-DB01 by alice@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
+    "original_description": "Mass SMB share enumeration from WIN-FIN-DB01 by alice@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
   },
   {
     "id": "INC-EVAL-083",
@@ -2235,7 +2235,7 @@
     "template_index": 27,
     "adversary_intensity": "medium",
     "title": "secret-hash replay from GCP-GKE-n\u200bode.js-04 to WIN-DEVOPS-LT",
-    "description": "secret-hash replay horizontal hop from GCP-GKE-n\u200bode.js-04 to WIN-DEVOPS-LT by eve@aisoc.dev. Golden ticket indicators present. Linked to MosaicRoutward trafficor.",
+    "description": "secret-hash replay horizontal hop from GCP-GKE-n\u200bode.js-04 to WIN-DEVOPS-LT by eve@example.com. Golden ticket indicators present. Linked to MosaicRoutward trafficor.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -2251,11 +2251,11 @@
       "golden ticket",
       "GCP-GKE-NODE-04",
       "WIN-DEVOPS-LT",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "MosaicRegressor"
     ],
     "original_title": "Pass-the-hash from GCP-GKE-NODE-04 to WIN-DEVOPS-LT",
-    "original_description": "Pass-the-hash lateral movement from GCP-GKE-NODE-04 to WIN-DEVOPS-LT by eve@aisoc.dev. Golden ticket indicators present. Linked to MosaicRegressor."
+    "original_description": "Pass-the-hash lateral movement from GCP-GKE-NODE-04 to WIN-DEVOPS-LT by eve@example.com. Golden ticket indicators present. Linked to MosaicRegressor."
   },
   {
     "id": "INC-EVAL-084",
@@ -2263,7 +2263,7 @@
     "template_index": 28,
     "adversary_intensity": "heavy",
     "title": "ts/mstsc sess side-to-side traversal from MAC-LEGAL-LAPTOP",
-    "description": "Anomalous ts/mstsc sess session from MAC-LEGAL-LAPTOP (eve@aisoc.dev) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02.",
+    "description": "Anomalous ts/mstsc sess session from MAC-LEGAL-LAPTOP (eve@example.com) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -2278,10 +2278,10 @@
       "outside hours",
       "MAC-LEGAL-LAPTOP",
       "LIN-EDGE-VPN02",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "original_title": "RDP lateral movement from MAC-LEGAL-LAPTOP",
-    "original_description": "Anomalous RDP session from MAC-LEGAL-LAPTOP (eve@aisoc.dev) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02."
+    "original_description": "Anomalous RDP session from MAC-LEGAL-LAPTOP (eve@example.com) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02."
   },
   {
     "id": "INC-EVAL-085",
@@ -2289,7 +2289,7 @@
     "template_index": 29,
     "adversary_intensity": "medium",
     "title": "WMI side-to-side execution from WIN-FILE-SHARE to MAC-CFO-LAPTOP",
-    "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -2304,19 +2304,19 @@
       "lateral",
       "WIN-FILE-SHARE",
       "MAC-CFO-LAPTOP",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "91.134.231.15"
     ],
     "original_title": "WMI lateral execution from WIN-FILE-SHARE to MAC-CFO-LAPTOP",
-    "original_description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@aisoc.dev. Remote command execution; payload from 91.134.231.15."
+    "original_description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15."
   },
   {
     "id": "INC-EVAL-086",
     "template_id": "bulk-pii-download",
     "template_index": 30,
     "adversary_intensity": "heavy",
-    "title": "Bulk user identity data download by grace@aisoc.dev",
-    "description": "grace@aisoc.dev downloaded >10 GB of client account rows from production database from WIN-EXCHANGE-01. Outside normal access p@ttern.",
+    "title": "Bulk user identity data download by grace@example.com",
+    "description": "grace@example.com downloaded >10 GB of client account rows from production database from WIN-EXCHANGE-01. Outside normal access p@ttern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -2332,10 +2332,10 @@
       "pii",
       "customer record",
       "WIN-EXCHANGE-01",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
-    "original_title": "Bulk PII download by grace@aisoc.dev",
-    "original_description": "grace@aisoc.dev downloaded >10 GB of customer records from production database from WIN-EXCHANGE-01. Outside normal access pattern."
+    "original_title": "Bulk PII download by grace@example.com",
+    "original_description": "grace@example.com downloaded >10 GB of customer records from production database from WIN-EXCHANGE-01. Outside normal access pattern."
   },
   {
     "id": "INC-EVAL-087",
@@ -2343,7 +2343,7 @@
     "template_index": 31,
     "adversary_intensity": "heavy",
     "title": "clip-store logging resident dropper on WIN-PROD-WEB02",
-    "description": "clip-store contents from WIN-PROD-WEB02 (bob@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include auth-tokens and crypto addresses.",
+    "description": "clip-store contents from WIN-PROD-WEB02 (bob@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include auth-tokens and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -2357,10 +2357,10 @@
       "keylog",
       "credentials",
       "WIN-PROD-WEB02",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "original_title": "Clipboard logging implant on WIN-PROD-WEB02",
-    "original_description": "Clipboard contents from WIN-PROD-WEB02 (bob@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
+    "original_description": "Clipboard contents from WIN-PROD-WEB02 (bob@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
   },
   {
     "id": "INC-EVAL-088",
@@ -2396,7 +2396,7 @@
     "template_index": 33,
     "adversary_intensity": "heavy",
     "title": "blob-store push target exfil: ex-bound data flow to attacker-controlled S3 from WIN-EXCHANGE-01",
-    "description": "outward traffic from WIN-EXCHANGE-01 to aws://obj/atk-stage-192.168.1.100/proc-mem snapshot/ by bob@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "outward traffic from WIN-EXCHANGE-01 to aws://obj/atk-stage-192.168.1.100/proc-mem snapshot/ by bob@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -2412,18 +2412,18 @@
       "exfiltrat",
       "WIN-EXCHANGE-01",
       "192.168.1.100",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "original_title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-EXCHANGE-01",
-    "original_description": "Egress from WIN-EXCHANGE-01 to s3://atk-stage-192.168.1.100/dump/ by bob@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
+    "original_description": "Egress from WIN-EXCHANGE-01 to s3://atk-stage-192.168.1.100/dump/ by bob@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
   },
   {
     "id": "INC-EVAL-090",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
     "adversary_intensity": "heavy",
-    "title": "personal cloud bucket exfil by bob@aisoc.dev",
-    "description": "bob@aisoc.dev on GCP-GKE-j$-runtime daemon-04 push-outed 4 GB to personal consumer-cloud drive. Files include source code and customer personal data.",
+    "title": "personal cloud bucket exfil by bob@example.com",
+    "description": "bob@example.com on GCP-GKE-j$-runtime daemon-04 push-outed 4 GB to personal consumer-cloud drive. Files include source code and customer personal data.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -2441,10 +2441,10 @@
       "source code",
       "pii",
       "GCP-GKE-NODE-04",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
-    "original_title": "Personal Drive exfil by bob@aisoc.dev",
-    "original_description": "bob@aisoc.dev on GCP-GKE-NODE-04 uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
+    "original_title": "Personal Drive exfil by bob@example.com",
+    "original_description": "bob@example.com on GCP-GKE-NODE-04 uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
   },
   {
     "id": "INC-EVAL-091",
@@ -2505,7 +2505,7 @@
     "template_index": 37,
     "adversary_intensity": "medium",
     "title": "Ransomware encryption in progress on WIN-FIN-DB01",
-    "description": "Mass file rename observed on WIN-FIN-DB01 (eve@aisoc.dev); ..pwned extension applied to ~20 k files. Ransomware note R3ADM3-FIN7.txt found.",
+    "description": "Mass file rename observed on WIN-FIN-DB01 (eve@example.com); ..pwned extension applied to ~20 k files. Ransomware note R3ADM3-FIN7.txt found.",
     "expected_tactics": [
       "TA0040"
     ],
@@ -2520,11 +2520,11 @@
       "rename",
       "ransom note",
       "WIN-FIN-DB01",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "FIN7"
     ],
     "original_title": "Ransomware encryption in progress on WIN-FIN-DB01",
-    "original_description": "Mass file rename observed on WIN-FIN-DB01 (eve@aisoc.dev); ..pwned extension applied to ~20 k files. Ransomware note R3ADM3-FIN7.txt found."
+    "original_description": "Mass file rename observed on WIN-FIN-DB01 (eve@example.com); ..pwned extension applied to ~20 k files. Ransomware note R3ADM3-FIN7.txt found."
   },
   {
     "id": "INC-EVAL-094",
@@ -2558,8 +2558,8 @@
     "template_id": "bec-wire-fraud",
     "template_index": 39,
     "adversary_intensity": "heavy",
-    "title": "b\u200bec: payment redirect by alice@aisoc.dev",
-    "description": "directed baiting email spoofed CFO. ach payment instruction of two-fifty-K k initiated by alice@aisoc.dev from GCP-GKE-n\u200bode.js-04 to threat-actor account. Linked to APT29.",
+    "title": "b\u200bec: payment redirect by alice@example.com",
+    "description": "directed baiting email spoofed CFO. ach payment instruction of two-fifty-K k initiated by alice@example.com from GCP-GKE-n\u200bode.js-04 to threat-actor account. Linked to APT29.",
     "expected_tactics": [
       "TA0001",
       "TA0040"
@@ -2575,12 +2575,12 @@
       "spoofed cfo",
       "wire transfer",
       "$250",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "GCP-GKE-NODE-04",
       "APT29"
     ],
-    "original_title": "BEC: payment redirect by alice@aisoc.dev",
-    "original_description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by alice@aisoc.dev from GCP-GKE-NODE-04 to threat-actor account. Linked to APT29."
+    "original_title": "BEC: payment redirect by alice@example.com",
+    "original_description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by alice@example.com from GCP-GKE-NODE-04 to threat-actor account. Linked to APT29."
   },
   {
     "id": "INC-EVAL-096",
@@ -2614,8 +2614,8 @@
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
     "adversary_intensity": "heavy",
-    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for svc-backup@aisoc.dev",
-    "description": "Successful Azure AD sign-in for svc-backup@aisoc.dev from 192.168.1.100 (impossible-travel from prior location). MFA satisfied via hijacked sess1on token.",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for svc-backup@example.com",
+    "description": "Successful Azure AD sign-in for svc-backup@example.com from 192.168.1.100 (impossible-travel from prior location). MFA satisfied via hijacked sess1on token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -2631,11 +2631,11 @@
       "impossible travel",
       "session token",
       "mfa",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "192.168.1.100"
     ],
-    "original_title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for svc-backup@aisoc.dev",
-    "original_description": "Successful Azure AD sign-in for svc-backup@aisoc.dev from 192.168.1.100 (impossible-travel from prior location). MFA satisfied via stolen session token."
+    "original_title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for svc-backup@example.com",
+    "original_description": "Successful Azure AD sign-in for svc-backup@example.com from 192.168.1.100 (impossible-travel from prior location). MFA satisfied via stolen session token."
   },
   {
     "id": "INC-EVAL-098",
@@ -2667,8 +2667,8 @@
     "template_id": "insider-mailbox-export",
     "template_index": 43,
     "adversary_intensity": "medium",
-    "title": "Insider preparing departure: large mailstore export by svc-backup@aisoc.dev",
-    "description": "svc-backup@aisoc.dev exported full mailbox p\u200bst (8 GB) from MAC-LEGAL-LAPTOP. HR flag: notice given last week.",
+    "title": "Insider preparing departure: large mailstore export by svc-backup@example.com",
+    "description": "svc-backup@example.com exported full mailbox p\u200bst (8 GB) from MAC-LEGAL-LAPTOP. HR flag: notice given last week.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -2684,19 +2684,19 @@
       "PST",
       "insider",
       "departure",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "MAC-LEGAL-LAPTOP"
     ],
-    "original_title": "Insider preparing departure: large mailbox export by svc-backup@aisoc.dev",
-    "original_description": "svc-backup@aisoc.dev exported full mailbox PST (8 GB) from MAC-LEGAL-LAPTOP. HR flag: notice given last week."
+    "original_title": "Insider preparing departure: large mailbox export by svc-backup@example.com",
+    "original_description": "svc-backup@example.com exported full mailbox PST (8 GB) from MAC-LEGAL-LAPTOP. HR flag: notice given last week."
   },
   {
     "id": "INC-EVAL-100",
     "template_id": "office-vsto-addin",
     "template_index": 44,
     "adversary_intensity": "light",
-    "title": "Malicious Office add-in installed for grace@aisoc.dev",
-    "description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 10.0.99.42.",
+    "title": "Malicious Office add-in installed for grace@example.com",
+    "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 10.0.99.42.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -2711,12 +2711,12 @@
       "office add-in",
       "vsto",
       "outlook",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "WIN-FILE-SHARE",
       "10.0.99.42"
     ],
-    "original_title": "Malicious Office add-in installed for grace@aisoc.dev",
-    "original_description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 10.0.99.42."
+    "original_title": "Malicious Office add-in installed for grace@example.com",
+    "original_description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 10.0.99.42."
   },
   {
     "id": "INC-EVAL-101",
@@ -2724,7 +2724,7 @@
     "template_index": 45,
     "adversary_intensity": "heavy",
     "title": "GitHub github-token leaked and abused from 45.142.122.111",
-    "description": "dev-portal token belonging to admin@aisoc.dev used from 45.142.122.111 to clone 14 closed repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "description": "dev-portal token belonging to admin@example.com used from 45.142.122.111 to clone 14 closed repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -2740,11 +2740,11 @@
       "pat",
       "token",
       "private repo",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "45.142.122.111"
     ],
     "original_title": "GitHub PAT leaked and abused from 45.142.122.111",
-    "original_description": "Personal access token belonging to admin@aisoc.dev used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier."
+    "original_description": "Personal access token belonging to admin@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier."
   },
   {
     "id": "INC-EVAL-102",
@@ -2779,8 +2779,8 @@
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
     "adversary_intensity": "heavy",
-    "title": "Vendor admin cred rotation request abuse for heidi@aisoc.dev",
-    "description": "cred rotation request for heidi@aisoc.dev performed by helpdesk in response to human-factor pretexting call from 185.220.101.7. Token claimed within 90 seconds.",
+    "title": "Vendor admin cred rotation request abuse for heidi@example.com",
+    "description": "cred rotation request for heidi@example.com performed by helpdesk in response to human-factor pretexting call from 185.220.101.7. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -2795,19 +2795,19 @@
       "password reset",
       "social engineering",
       "helpdesk",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "185.220.101.7"
     ],
-    "original_title": "Vendor admin password reset abuse for heidi@aisoc.dev",
-    "original_description": "Password reset for heidi@aisoc.dev performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds."
+    "original_title": "Vendor admin password reset abuse for heidi@example.com",
+    "original_description": "Password reset for heidi@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds."
   },
   {
     "id": "INC-EVAL-104",
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
     "adversary_intensity": "medium",
-    "title": "OAuth refresh-token theft for alice@aisoc.dev",
-    "description": "Refresh token for alice@aisoc.dev replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
+    "title": "OAuth refresh-token theft for alice@example.com",
+    "description": "Refresh token for alice@example.com replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -2822,11 +2822,11 @@
       "replay",
       "onedrive",
       "mailbox",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "91.134.231.15"
     ],
-    "original_title": "OAuth refresh-token theft for alice@aisoc.dev",
-    "original_description": "Refresh token for alice@aisoc.dev replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt."
+    "original_title": "OAuth refresh-token theft for alice@example.com",
+    "original_description": "Refresh token for alice@example.com replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt."
   },
   {
     "id": "INC-EVAL-105",
@@ -2860,8 +2860,8 @@
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
     "adversary_intensity": "light",
-    "title": "Outlook rule auto-forwarding mail from eve@aisoc.dev",
-    "description": "Outlook inbox rule created for eve@aisoc.dev that forwards all mail to external address at 192.168.1.100. Linked to MosaicRegressor.",
+    "title": "Outlook rule auto-forwarding mail from eve@example.com",
+    "description": "Outlook inbox rule created for eve@example.com that forwards all mail to external address at 192.168.1.100. Linked to MosaicRegressor.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -2876,12 +2876,12 @@
       "outlook rule",
       "forward",
       "mail",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "192.168.1.100",
       "MosaicRegressor"
     ],
-    "original_title": "Outlook rule auto-forwarding mail from eve@aisoc.dev",
-    "original_description": "Outlook inbox rule created for eve@aisoc.dev that forwards all mail to external address at 192.168.1.100. Linked to MosaicRegressor."
+    "original_title": "Outlook rule auto-forwarding mail from eve@example.com",
+    "original_description": "Outlook inbox rule created for eve@example.com that forwards all mail to external address at 192.168.1.100. Linked to MosaicRegressor."
   },
   {
     "id": "INC-EVAL-107",
@@ -2889,7 +2889,7 @@
     "template_index": 51,
     "adversary_intensity": "light",
     "title": "Linux journald log tampering on LIN-OBS-LOGGER",
-    "description": "journalctl --rotate --vacuum-time=1s observed on LIN-OBS-LOGGER by ceo@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "description": "journalctl --rotate --vacuum-time=1s observed on LIN-OBS-LOGGER by ceo@example.com; recent journal entries purged. Indicator removal.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -2903,10 +2903,10 @@
       "log tampering",
       "vacuum",
       "LIN-OBS-LOGGER",
-      "ceo@aisoc.dev"
+      "ceo@example.com"
     ],
     "original_title": "Linux journald log tampering on LIN-OBS-LOGGER",
-    "original_description": "journalctl --rotate --vacuum-time=1s observed on LIN-OBS-LOGGER by ceo@aisoc.dev; recent journal entries purged. Indicator removal."
+    "original_description": "journalctl --rotate --vacuum-time=1s observed on LIN-OBS-LOGGER by ceo@example.com; recent journal entries purged. Indicator removal."
   },
   {
     "id": "INC-EVAL-108",
@@ -2942,8 +2942,8 @@
     "template_id": "vpn-new-geography",
     "template_index": 53,
     "adversary_intensity": "heavy",
-    "title": "Suspicious corp tunnel sign-in from first-time origin for grace@aisoc.dev",
-    "description": "corp tunnel sign-in for grace@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent e-w hop fileshare probe from VPN range to LIN-K8S-n\u200bode.js01.",
+    "title": "Suspicious corp tunnel sign-in from first-time origin for grace@example.com",
+    "description": "corp tunnel sign-in for grace@example.com from 10.0.99.42 (new country, no prior history). Subsequent e-w hop fileshare probe from VPN range to LIN-K8S-n\u200bode.js01.",
     "expected_tactics": [
       "TA0001",
       "TA0008"
@@ -2959,12 +2959,12 @@
       "new geography",
       "lateral",
       "smb scan",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "10.0.99.42",
       "LIN-K8S-NODE01"
     ],
-    "original_title": "Suspicious VPN login from new geography for grace@aisoc.dev",
-    "original_description": "VPN login for grace@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01."
+    "original_title": "Suspicious VPN login from new geography for grace@example.com",
+    "original_description": "VPN login for grace@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01."
   },
   {
     "id": "INC-EVAL-110",
@@ -2972,7 +2972,7 @@
     "template_index": 54,
     "adversary_intensity": "light",
     "title": "Privileged command run as service account on WIN-DEVOPS-LT",
-    "description": "Service account frank@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-DEVOPS-LT. Anomalous.",
+    "description": "Service account frank@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-DEVOPS-LT. Anomalous.",
     "expected_tactics": [
       "TA0005",
       "TA0006"
@@ -2987,19 +2987,19 @@
       "service account",
       "wevtutil",
       "log clear",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "WIN-DEVOPS-LT"
     ],
     "original_title": "Privileged command run as service account on WIN-DEVOPS-LT",
-    "original_description": "Service account frank@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-DEVOPS-LT. Anomalous."
+    "original_description": "Service account frank@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-DEVOPS-LT. Anomalous."
   },
   {
     "id": "INC-EVAL-111",
     "template_id": "phishing-macro-email",
     "template_index": 0,
     "adversary_intensity": "heavy",
-    "title": "directed baiting email with embedded automation routine-laden attachment delivered to eve@aisoc.dev",
-    "description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious off1ce-automation language embedded automation routine to eve@aisoc.dev. Attachment opened on LIN-OBS-LOGGER; embedded automation routine spawned command interpreter binary and downloaded a follow-on artifact from a known Scattered Spider infrastructure.",
+    "title": "directed baiting email with embedded automation routine-laden attachment delivered to eve@example.com",
+    "description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious off1ce-automation language embedded automation routine to eve@example.com. Attachment opened on LIN-OBS-LOGGER; embedded automation routine spawned command interpreter binary and downloaded a follow-on artifact from a known Scattered Spider infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -3015,11 +3015,11 @@
       "macro",
       "192.168.1.100",
       "LIN-OBS-LOGGER",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "stage-2 payload"
     ],
-    "original_title": "Spear-phishing email with macro-laden attachment delivered to eve@aisoc.dev",
-    "original_description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious VBA macro to eve@aisoc.dev. Attachment opened on LIN-OBS-LOGGER; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure."
+    "original_title": "Spear-phishing email with macro-laden attachment delivered to eve@example.com",
+    "original_description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious VBA macro to eve@example.com. Attachment opened on LIN-OBS-LOGGER; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure."
   },
   {
     "id": "INC-EVAL-112",
@@ -3055,7 +3055,7 @@
     "template_index": 2,
     "adversary_intensity": "heavy",
     "title": "Watering-hole exploit served from internal Confluence by 185.220.101.7",
-    "description": "Internal Confluence page injected with malicious browser-side code by 185.220.101.7. auto-load infection exploit triggered DOM-engine abuse on multiple visitors including admin@aisoc.dev. Linked to MagicWeb TTPs.",
+    "description": "Internal Confluence page injected with malicious browser-side code by 185.220.101.7. auto-load infection exploit triggered DOM-engine abuse on multiple visitors including admin@example.com. Linked to MagicWeb TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -3071,11 +3071,11 @@
       "drive-by",
       "Confluence",
       "185.220.101.7",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "MagicWeb"
     ],
     "original_title": "Watering-hole exploit served from internal Confluence by 185.220.101.7",
-    "original_description": "Internal Confluence page injected with malicious JavaScript by 185.220.101.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@aisoc.dev. Linked to MagicWeb TTPs."
+    "original_description": "Internal Confluence page injected with malicious JavaScript by 185.220.101.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@example.com. Linked to MagicWeb TTPs."
   },
   {
     "id": "INC-EVAL-114",
@@ -3111,7 +3111,7 @@
     "template_index": 4,
     "adversary_intensity": "medium",
     "title": "Malicious rem0vable media autorun on air-gapped host WIN-PROD-WEB02",
-    "description": "rem0vable media device inserted on air-gapped WIN-PROD-WEB02 by alice@aisoc.dev. AutoRun executed p\u200bython stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "rem0vable media device inserted on air-gapped WIN-PROD-WEB02 by alice@example.com. AutoRun executed p\u200bython stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -3127,19 +3127,19 @@
       "autorun",
       "air-gapped",
       "WIN-PROD-WEB02",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "Python stager"
     ],
     "original_title": "Malicious USB autorun on air-gapped host WIN-PROD-WEB02",
-    "original_description": "USB device inserted on air-gapped WIN-PROD-WEB02 by alice@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
+    "original_description": "USB device inserted on air-gapped WIN-PROD-WEB02 by alice@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
   },
   {
     "id": "INC-EVAL-116",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "adversary_intensity": "medium",
-    "title": "0auth consent phishing targeting eve@aisoc.dev",
-    "description": "Malicious 0auth application granted Mail.Read and Files.Read.All scopes by eve@aisoc.dev. Inbox forwarding rule created sending mail to 91.134.231.15.",
+    "title": "0auth consent phishing targeting eve@example.com",
+    "description": "Malicious 0auth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -3154,12 +3154,12 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "91.134.231.15",
       "forwarding rule"
     ],
-    "original_title": "OAuth consent phishing targeting eve@aisoc.dev",
-    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@aisoc.dev. Inbox forwarding rule created sending mail to 91.134.231.15."
+    "original_title": "OAuth consent phishing targeting eve@example.com",
+    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 91.134.231.15."
   },
   {
     "id": "INC-EVAL-117",
@@ -3167,7 +3167,7 @@
     "template_index": 6,
     "adversary_intensity": "heavy",
     "title": "deob h@rd'ned p\u200bow\u200bersh\u200bell dropper executed on WIN-HR-DESKTOP",
-    "description": "p\u200bow\u200bersh\u200bell dropper executed on WIN-HR-DESKTOP by frank@aisoc.dev; payload base64-byte-wrapd and decoded in-memory. Linked to MosaicRex-bound flowor lockout-for-payware staging.",
+    "description": "p\u200bow\u200bersh\u200bell dropper executed on WIN-HR-DESKTOP by frank@example.com; payload base64-byte-wrapd and decoded in-memory. Linked to MosaicRex-bound flowor lockout-for-payware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -3183,11 +3183,11 @@
       "obfuscated",
       "base64",
       "WIN-HR-DESKTOP",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "MosaicRegressor"
     ],
     "original_title": "Obfuscated PowerShell dropper executed on WIN-HR-DESKTOP",
-    "original_description": "PowerShell dropper executed on WIN-HR-DESKTOP by frank@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to MosaicRegressor ransomware staging."
+    "original_description": "PowerShell dropper executed on WIN-HR-DESKTOP by frank@example.com; payload base64-encoded and decoded in-memory. Linked to MosaicRegressor ransomware staging."
   },
   {
     "id": "INC-EVAL-118",
@@ -3253,7 +3253,7 @@
     "template_index": 9,
     "adversary_intensity": "heavy",
     "title": "Malicious windows-mgmt-fabric subscr1ption on WIN-PROD-WEB02",
-    "description": "perm wm\u200bi event subscr1ption created on WIN-PROD-WEB02 by eve@aisoc.dev. Consumer runs byte-wrapd scr1pt. reboot survival + binary launch mechanism.",
+    "description": "perm wm\u200bi event subscr1ption created on WIN-PROD-WEB02 by eve@example.com. Consumer runs byte-wrapd scr1pt. reboot survival + binary launch mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -3269,18 +3269,18 @@
       "subscription",
       "permanent",
       "WIN-PROD-WEB02",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "encoded script"
     ],
     "original_title": "Malicious WMI subscription on WIN-PROD-WEB02",
-    "original_description": "Permanent WMI event subscription created on WIN-PROD-WEB02 by eve@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism."
+    "original_description": "Permanent WMI event subscription created on WIN-PROD-WEB02 by eve@example.com. Consumer runs encoded script. Persistence + execution mechanism."
   },
   {
     "id": "INC-EVAL-121",
     "template_id": "registry-run-persistence",
     "template_index": 10,
     "adversary_intensity": "medium",
-    "title": "Registry Run key persistence created by eve@aisoc.dev on K8S-PROD-CLUSTER",
+    "title": "Registry Run key persistence created by eve@example.com on K8S-PROD-CLUSTER",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on K8S-PROD-CLUSTER. Points to roaming binary signed with revoked cert. Linked to ALPHV/BlackCat.",
     "expected_tactics": [
       "TA0003"
@@ -3295,10 +3295,10 @@
       "persistence",
       "revoked cert",
       "K8S-PROD-CLUSTER",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "ALPHV/BlackCat"
     ],
-    "original_title": "Registry Run key persistence created by eve@aisoc.dev on K8S-PROD-CLUSTER",
+    "original_title": "Registry Run key persistence created by eve@example.com on K8S-PROD-CLUSTER",
     "original_description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on K8S-PROD-CLUSTER. Points to roaming binary signed with revoked cert. Linked to ALPHV/BlackCat."
   },
   {
@@ -3307,7 +3307,7 @@
     "template_index": 11,
     "adversary_intensity": "heavy",
     "title": "schtasks job reboot survival on WIN-PROD-WEB02",
-    "description": "Hidden schtasks job created on WIN-PROD-WEB02 by carol@aisoc.dev: triggers every 30 minutes, runs automation snippet from %APPDATA%\\Roaming. reboot survival mechanism.",
+    "description": "Hidden schtasks job created on WIN-PROD-WEB02 by carol@example.com: triggers every 30 minutes, runs automation snippet from %APPDATA%\\Roaming. reboot survival mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -3321,10 +3321,10 @@
       "persistence",
       "APPDATA",
       "WIN-PROD-WEB02",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Scheduled task persistence on WIN-PROD-WEB02",
-    "original_description": "Hidden scheduled task created on WIN-PROD-WEB02 by carol@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
+    "original_description": "Hidden scheduled task created on WIN-PROD-WEB02 by carol@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
   },
   {
     "id": "INC-EVAL-123",
@@ -3360,7 +3360,7 @@
     "template_index": 13,
     "adversary_intensity": "heavy",
     "title": "covert reverse access cr0n job installed on MAC-LEGAL-LAPTOP",
-    "description": "/etc/cr0n.d entry created by alice@aisoc.dev on MAC-LEGAL-LAPTOP. Reverse shell regular check-in to 91.134.231.15 every 5 minutes.",
+    "description": "/etc/cr0n.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell regular check-in to 91.134.231.15 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -3376,11 +3376,11 @@
       "backdoor",
       "reverse shell",
       "MAC-LEGAL-LAPTOP",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "91.134.231.15"
     ],
     "original_title": "Backdoor cron job installed on MAC-LEGAL-LAPTOP",
-    "original_description": "/etc/cron.d entry created by alice@aisoc.dev on MAC-LEGAL-LAPTOP. Reverse shell beacon to 91.134.231.15 every 5 minutes."
+    "original_description": "/etc/cron.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell beacon to 91.134.231.15 every 5 minutes."
   },
   {
     "id": "INC-EVAL-125",
@@ -3388,7 +3388,7 @@
     "template_index": 14,
     "adversary_intensity": "medium",
     "title": "ua\u200bc circumvention observed on WIN-EXCHANGE-01",
-    "description": "f0dhelper.exe abuse on WIN-EXCHANGE-01 by dave@aisoc.dev; auto-rights uplift triggered without prompt. Process tree shows level-up to SYSTEM.",
+    "description": "f0dhelper.exe abuse on WIN-EXCHANGE-01 by dave@example.com; auto-rights uplift triggered without prompt. Process tree shows level-up to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -3403,11 +3403,11 @@
       "fodhelper",
       "auto-elevation",
       "WIN-EXCHANGE-01",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "SYSTEM"
     ],
     "original_title": "UAC bypass observed on WIN-EXCHANGE-01",
-    "original_description": "fodhelper.exe abuse on WIN-EXCHANGE-01 by dave@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
+    "original_description": "fodhelper.exe abuse on WIN-EXCHANGE-01 by dave@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
   },
   {
     "id": "INC-EVAL-126",
@@ -3415,7 +3415,7 @@
     "template_index": 15,
     "adversary_intensity": "medium",
     "title": "workload sandbox break via high-cap pod on GCP-GKE-n0de runtime-04",
-    "description": "Kubernetes high-cap pod created on GCP-GKE-n0de runtime-04 by carol@aisoc.dev. cgroup escape to host namespace observed. n0de runtime filesystem accessed.",
+    "description": "Kubernetes high-cap pod created on GCP-GKE-n0de runtime-04 by carol@example.com. cgroup escape to host namespace observed. n0de runtime filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -3432,10 +3432,10 @@
       "container escape",
       "cgroup",
       "GCP-GKE-NODE-04",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Container escape via privileged pod on GCP-GKE-NODE-04",
-    "original_description": "Kubernetes privileged pod created on GCP-GKE-NODE-04 by carol@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed."
+    "original_description": "Kubernetes privileged pod created on GCP-GKE-NODE-04 by carol@example.com. cgroup escape to host namespace observed. Node filesystem accessed."
   },
   {
     "id": "INC-EVAL-127",
@@ -3443,7 +3443,7 @@
     "template_index": 16,
     "adversary_intensity": "medium",
     "title": "Linux SUID binary abuse on WIN-DEVOPS-LT",
-    "description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command binary launch as root. Likely escalation by frank@aisoc.dev.",
+    "description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command binary launch as root. Likely escalation by frank@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -3457,10 +3457,10 @@
       "/tmp",
       "root escalation",
       "WIN-DEVOPS-LT",
-      "frank@aisoc.dev"
+      "frank@example.com"
     ],
     "original_title": "Linux SUID binary abuse on WIN-DEVOPS-LT",
-    "original_description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by frank@aisoc.dev."
+    "original_description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by frank@example.com."
   },
   {
     "id": "INC-EVAL-128",
@@ -3496,7 +3496,7 @@
     "template_index": 18,
     "adversary_intensity": "medium",
     "title": "Indicator removal: Windows event log cleared on MAC-CFO-LAPTOP",
-    "description": "Security event log cleared on MAC-CFO-LAPTOP by dave@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "description": "Security event log cleared on MAC-CFO-LAPTOP by dave@example.com. wevtutil.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -3510,10 +3510,10 @@
       "log cleared",
       "indicator removal",
       "MAC-CFO-LAPTOP",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "original_title": "Indicator removal: Windows event log cleared on MAC-CFO-LAPTOP",
-    "original_description": "Security event log cleared on MAC-CFO-LAPTOP by dave@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry."
+    "original_description": "Security event log cleared on MAC-CFO-LAPTOP by dave@example.com. wevtutil.exe cl Security observed in command-line telemetry."
   },
   {
     "id": "INC-EVAL-130",
@@ -3521,7 +3521,7 @@
     "template_index": 19,
     "adversary_intensity": "heavy",
     "title": "Disable security tooling on GCP-GKE-n0de runtime-04",
-    "description": "grace@aisoc.dev attempted to halt windows av, CrowdStrike, and Sysmon on GCP-GKE-n0de runtime-04. d0ctoring telemetry triggered alert.",
+    "description": "grace@example.com attempted to halt windows av, CrowdStrike, and Sysmon on GCP-GKE-n0de runtime-04. d0ctoring telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -3536,17 +3536,17 @@
       "sysmon",
       "tampering",
       "GCP-GKE-NODE-04",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "original_title": "Disable security tooling on GCP-GKE-NODE-04",
-    "original_description": "grace@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert."
+    "original_description": "grace@example.com attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert."
   },
   {
     "id": "INC-EVAL-131",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
     "adversary_intensity": "heavy",
-    "title": "auth subsystem proc memory proc-mem snapshot on GCP-GKE-n0de runtime-04 by grace@aisoc.dev",
+    "title": "auth subsystem proc memory proc-mem snapshot on GCP-GKE-n0de runtime-04 by grace@example.com",
     "description": "comsvcs.loadable code module proc-snapshot observed on GCP-GKE-n0de runtime-04. auth subsystem proc.exe memory proc-mem snapshoted to C:\\Windows\\Temp\\. auth-secrets puller signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -3562,9 +3562,9 @@
       "comsvcs",
       "mimikatz",
       "GCP-GKE-NODE-04",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
-    "original_title": "LSASS memory dump on GCP-GKE-NODE-04 by grace@aisoc.dev",
+    "original_title": "LSASS memory dump on GCP-GKE-NODE-04 by grace@example.com",
     "original_description": "comsvcs.dll MiniDump observed on GCP-GKE-NODE-04. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected."
   },
   {
@@ -3572,8 +3572,8 @@
     "template_id": "credential-spray",
     "template_index": 21,
     "adversary_intensity": "heavy",
-    "title": "repeated-guess spread-out cred probe against cfo@aisoc.dev from 91.134.231.15",
-    "description": "spread-out cred probe from 91.134.231.15 against cfo@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "repeated-guess spread-out cred probe against cfo@example.com from 91.134.231.15",
+    "description": "spread-out cred probe from 91.134.231.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -3585,12 +3585,12 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "91.134.231.15",
       "azure ad"
     ],
-    "original_title": "Brute-force credential spray against cfo@aisoc.dev from 91.134.231.15",
-    "original_description": "Credential spray from 91.134.231.15 against cfo@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
+    "original_title": "Brute-force credential spray against cfo@example.com from 91.134.231.15",
+    "original_description": "Credential spray from 91.134.231.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
   },
   {
     "id": "INC-EVAL-133",
@@ -3598,7 +3598,7 @@
     "template_index": 22,
     "adversary_intensity": "medium",
     "title": "Kerberoasting from WIN-EXCHANGE-01",
-    "description": "d@emon entry account TGS tickets requested en-masse from WIN-EXCHANGE-01 by svc-backup@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "description": "d@emon entry account TGS tickets requested en-masse from WIN-EXCHANGE-01 by svc-backup@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -3615,10 +3615,10 @@
       "RC4",
       "mimikatz",
       "WIN-EXCHANGE-01",
-      "svc-backup@aisoc.dev"
+      "svc-backup@example.com"
     ],
     "original_title": "Kerberoasting from WIN-EXCHANGE-01",
-    "original_description": "Service account TGS tickets requested en-masse from WIN-EXCHANGE-01 by svc-backup@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
+    "original_description": "Service account TGS tickets requested en-masse from WIN-EXCHANGE-01 by svc-backup@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
   },
   {
     "id": "INC-EVAL-134",
@@ -3626,7 +3626,7 @@
     "template_index": 23,
     "adversary_intensity": "heavy",
     "title": "Active Directory msrpc replica-pull abuse from non-DC host WIN-FIN-DB01",
-    "description": "ad-sync abuse rights abused from WIN-FIN-DB01 by grace@aisoc.dev. All domain n\u200btlm hashes replicated. Severe cred exposure.",
+    "description": "ad-sync abuse rights abused from WIN-FIN-DB01 by grace@example.com. All domain n\u200btlm hashes replicated. Severe cred exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -3642,18 +3642,18 @@
       "replication",
       "ntlm hash",
       "WIN-FIN-DB01",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "original_title": "Active Directory DCSync from non-DC host WIN-FIN-DB01",
-    "original_description": "Replication rights abused from WIN-FIN-DB01 by grace@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure."
+    "original_description": "Replication rights abused from WIN-FIN-DB01 by grace@example.com. All domain NTLM hashes replicated. Severe credential exposure."
   },
   {
     "id": "INC-EVAL-135",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
     "adversary_intensity": "heavy",
-    "title": "fed-assertion golden-ticket: forged assertion targeting svc-deploy@aisoc.dev",
-    "description": "Forged fed-assertion assertion detected for svc-deploy@aisoc.dev. Attacker pivoted to Azure AD; account listing-oution followed from 45.142.122.111.",
+    "title": "fed-assertion golden-ticket: forged assertion targeting svc-deploy@example.com",
+    "description": "Forged fed-assertion assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account listing-oution followed from 45.142.122.111.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -3669,11 +3669,11 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "45.142.122.111"
     ],
-    "original_title": "SAML golden-ticket: forged assertion targeting svc-deploy@aisoc.dev",
-    "original_description": "Forged SAML assertion detected for svc-deploy@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 45.142.122.111."
+    "original_title": "SAML golden-ticket: forged assertion targeting svc-deploy@example.com",
+    "original_description": "Forged SAML assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account enumeration followed from 45.142.122.111."
   },
   {
     "id": "INC-EVAL-136",
@@ -3681,7 +3681,7 @@
     "template_index": 25,
     "adversary_intensity": "light",
     "title": "Domain enumeration from GCP-GKE-NODE-04",
-    "description": "ldap discovery from GCP-GKE-NODE-04 by ceo@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "description": "ldap discovery from GCP-GKE-NODE-04 by ceo@example.com: BloodHound-style queries enumerating users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -3695,10 +3695,10 @@
       "bloodhound",
       "domain enumeration",
       "GCP-GKE-NODE-04",
-      "ceo@aisoc.dev"
+      "ceo@example.com"
     ],
     "original_title": "Domain enumeration from GCP-GKE-NODE-04",
-    "original_description": "ldap discovery from GCP-GKE-NODE-04 by ceo@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs."
+    "original_description": "ldap discovery from GCP-GKE-NODE-04 by ceo@example.com: BloodHound-style queries enumerating users, groups, ACLs."
   },
   {
     "id": "INC-EVAL-137",
@@ -3706,7 +3706,7 @@
     "template_index": 26,
     "adversary_intensity": "light",
     "title": "Network share enumeration on LIN-EDGE-VPN02",
-    "description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by ops-lead@aisoc.dev; net.exe and powershell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by ops-lead@example.com; net.exe and powershell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -3721,10 +3721,10 @@
       "Get-SmbShare",
       "share enumeration",
       "LIN-EDGE-VPN02",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "original_title": "Network share enumeration on LIN-EDGE-VPN02",
-    "original_description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by ops-lead@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
+    "original_description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by ops-lead@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
   },
   {
     "id": "INC-EVAL-138",
@@ -3732,7 +3732,7 @@
     "template_index": 27,
     "adversary_intensity": "heavy",
     "title": "auth-hash replay from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP",
-    "description": "auth-hash replay side-to-side traversal from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP by svc-deploy@aisoc.dev. Golden ticket indicators present. Linked to MagicWeb.",
+    "description": "auth-hash replay side-to-side traversal from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP by svc-deploy@example.com. Golden ticket indicators present. Linked to MagicWeb.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -3748,11 +3748,11 @@
       "golden ticket",
       "LIN-DB-REPLICA",
       "MAC-LEGAL-LAPTOP",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "MagicWeb"
     ],
     "original_title": "Pass-the-hash from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP",
-    "original_description": "Pass-the-hash lateral movement from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP by svc-deploy@aisoc.dev. Golden ticket indicators present. Linked to MagicWeb."
+    "original_description": "Pass-the-hash lateral movement from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP by svc-deploy@example.com. Golden ticket indicators present. Linked to MagicWeb."
   },
   {
     "id": "INC-EVAL-139",
@@ -3760,7 +3760,7 @@
     "template_index": 28,
     "adversary_intensity": "medium",
     "title": "RDP lateral movement from WIN-EXCHANGE-01",
-    "description": "Anomalous RDP session from WIN-EXCHANGE-01 (dave@aisoc.dev) to AWS-Ecallback infra-PROD-API outside business hours. Source admin not normal for AWS-Ecallback infra-PROD-API.",
+    "description": "Anomalous RDP session from WIN-EXCHANGE-01 (dave@example.com) to AWS-Ecallback infra-PROD-API outside business hours. Source admin not normal for AWS-Ecallback infra-PROD-API.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -3775,10 +3775,10 @@
       "outside hours",
       "WIN-EXCHANGE-01",
       "AWS-EC2-PROD-API",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "original_title": "RDP lateral movement from WIN-EXCHANGE-01",
-    "original_description": "Anomalous RDP session from WIN-EXCHANGE-01 (dave@aisoc.dev) to AWS-EC2-PROD-API outside business hours. Source admin not normal for AWS-EC2-PROD-API."
+    "original_description": "Anomalous RDP session from WIN-EXCHANGE-01 (dave@example.com) to AWS-EC2-PROD-API outside business hours. Source admin not normal for AWS-EC2-PROD-API."
   },
   {
     "id": "INC-EVAL-140",
@@ -3786,7 +3786,7 @@
     "template_index": 29,
     "adversary_intensity": "heavy",
     "title": "windows-mgmt-fabric e-w hop code activation from MAC-CFO-LAPTOP to MAC-LEGAL-LAPTOP",
-    "description": "wm\u200bic.exe /j$-runtime daemon:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@aisoc.dev. Remote command code activation; payload from 91.134.231.15.",
+    "description": "wm\u200bic.exe /j$-runtime daemon:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command code activation; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -3801,19 +3801,19 @@
       "lateral",
       "MAC-CFO-LAPTOP",
       "MAC-LEGAL-LAPTOP",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "91.134.231.15"
     ],
     "original_title": "WMI lateral execution from MAC-CFO-LAPTOP to MAC-LEGAL-LAPTOP",
-    "original_description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@aisoc.dev. Remote command execution; payload from 91.134.231.15."
+    "original_description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command execution; payload from 91.134.231.15."
   },
   {
     "id": "INC-EVAL-141",
     "template_id": "bulk-pii-download",
     "template_index": 30,
     "adversary_intensity": "light",
-    "title": "Bulk PII download by ops-lead@aisoc.dev",
-    "description": "ops-lead@aisoc.dev downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern.",
+    "title": "Bulk PII download by ops-lead@example.com",
+    "description": "ops-lead@example.com downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -3829,10 +3829,10 @@
       "pii",
       "customer record",
       "WIN-DC-PRIMARY",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
-    "original_title": "Bulk PII download by ops-lead@aisoc.dev",
-    "original_description": "ops-lead@aisoc.dev downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern."
+    "original_title": "Bulk PII download by ops-lead@example.com",
+    "original_description": "ops-lead@example.com downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern."
   },
   {
     "id": "INC-EVAL-142",
@@ -3840,7 +3840,7 @@
     "template_index": 31,
     "adversary_intensity": "heavy",
     "title": "clip-store logging imp1ant on WIN-PROD-WEB02",
-    "description": "clip-store contents from WIN-PROD-WEB02 (svc-deploy@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include creds and crypto addresses.",
+    "description": "clip-store contents from WIN-PROD-WEB02 (svc-deploy@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include creds and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -3854,10 +3854,10 @@
       "keylog",
       "credentials",
       "WIN-PROD-WEB02",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "original_title": "Clipboard logging implant on WIN-PROD-WEB02",
-    "original_description": "Clipboard contents from WIN-PROD-WEB02 (svc-deploy@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
+    "original_description": "Clipboard contents from WIN-PROD-WEB02 (svc-deploy@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
   },
   {
     "id": "INC-EVAL-143",
@@ -3893,7 +3893,7 @@
     "template_index": 33,
     "adversary_intensity": "heavy",
     "title": "external bucket exfil: outbound data flow to attacker-controlled S3 from WIN-PROD-WEB02",
-    "description": "outbound flow from WIN-PROD-WEB02 to aws://obj/atk-stage-185.220.101.7/proc-mem snapshot/ by ops-lead@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "outbound flow from WIN-PROD-WEB02 to aws://obj/atk-stage-185.220.101.7/proc-mem snapshot/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -3909,18 +3909,18 @@
       "exfiltrat",
       "WIN-PROD-WEB02",
       "185.220.101.7",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "original_title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-PROD-WEB02",
-    "original_description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-185.220.101.7/dump/ by ops-lead@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
+    "original_description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-185.220.101.7/dump/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
   },
   {
     "id": "INC-EVAL-145",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
     "adversary_intensity": "heavy",
-    "title": "non-corp drive exfil by ceo@aisoc.dev",
-    "description": "ceo@aisoc.dev on AWS-Eops channel-PROD-API push-outed 4 GB to personal consumer-cloud drive. Files include source code and customer personal data.",
+    "title": "non-corp drive exfil by ceo@example.com",
+    "description": "ceo@example.com on AWS-Eops channel-PROD-API push-outed 4 GB to personal consumer-cloud drive. Files include source code and customer personal data.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -3938,10 +3938,10 @@
       "source code",
       "pii",
       "AWS-EC2-PROD-API",
-      "ceo@aisoc.dev"
+      "ceo@example.com"
     ],
-    "original_title": "Personal Drive exfil by ceo@aisoc.dev",
-    "original_description": "ceo@aisoc.dev on AWS-EC2-PROD-API uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
+    "original_title": "Personal Drive exfil by ceo@example.com",
+    "original_description": "ceo@example.com on AWS-EC2-PROD-API uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
   },
   {
     "id": "INC-EVAL-146",
@@ -4002,7 +4002,7 @@
     "template_index": 37,
     "adversary_intensity": "medium",
     "title": "Ransomware encryption in progress on LIN-DB-REPLICA",
-    "description": "Mass file rename observed on LIN-DB-REPLICA (heidi@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Emotet epoch 5.txt found.",
+    "description": "Mass file rename observed on LIN-DB-REPLICA (heidi@example.com); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Emotet epoch 5.txt found.",
     "expected_tactics": [
       "TA0040"
     ],
@@ -4017,11 +4017,11 @@
       "rename",
       "ransom note",
       "LIN-DB-REPLICA",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "Emotet epoch 5"
     ],
     "original_title": "Ransomware encryption in progress on LIN-DB-REPLICA",
-    "original_description": "Mass file rename observed on LIN-DB-REPLICA (heidi@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Emotet epoch 5.txt found."
+    "original_description": "Mass file rename observed on LIN-DB-REPLICA (heidi@example.com); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Emotet epoch 5.txt found."
   },
   {
     "id": "INC-EVAL-149",
@@ -4055,8 +4055,8 @@
     "template_id": "bec-wire-fraud",
     "template_index": 39,
     "adversary_intensity": "medium",
-    "title": "exec-impersonation fraud: payment redirect by admin@aisoc.dev",
-    "description": "Spear-phishing email spoofed CFO. Wire transfer of two-fifty-K k initiated by admin@aisoc.dev from WIN-FILE-SHARE to threat-actor account. Linked to APT29.",
+    "title": "exec-impersonation fraud: payment redirect by admin@example.com",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of two-fifty-K k initiated by admin@example.com from WIN-FILE-SHARE to threat-actor account. Linked to APT29.",
     "expected_tactics": [
       "TA0001",
       "TA0040"
@@ -4072,12 +4072,12 @@
       "spoofed cfo",
       "wire transfer",
       "$250",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "WIN-FILE-SHARE",
       "APT29"
     ],
-    "original_title": "BEC: payment redirect by admin@aisoc.dev",
-    "original_description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by admin@aisoc.dev from WIN-FILE-SHARE to threat-actor account. Linked to APT29."
+    "original_title": "BEC: payment redirect by admin@example.com",
+    "original_description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by admin@example.com from WIN-FILE-SHARE to threat-actor account. Linked to APT29."
   },
   {
     "id": "INC-EVAL-151",
@@ -4111,8 +4111,8 @@
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
     "adversary_intensity": "heavy",
-    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@aisoc.dev",
-    "description": "Successful Azure AD sign-in for carol@aisoc.dev from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via co-opted active sess token.",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@example.com",
+    "description": "Successful Azure AD sign-in for carol@example.com from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via co-opted active sess token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -4128,11 +4128,11 @@
       "impossible travel",
       "session token",
       "mfa",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "91.134.231.15"
     ],
-    "original_title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@aisoc.dev",
-    "original_description": "Successful Azure AD sign-in for carol@aisoc.dev from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token."
+    "original_title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@example.com",
+    "original_description": "Successful Azure AD sign-in for carol@example.com from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token."
   },
   {
     "id": "INC-EVAL-153",
@@ -4164,8 +4164,8 @@
     "template_id": "insider-mailbox-export",
     "template_index": 43,
     "adversary_intensity": "light",
-    "title": "Insider preparing departure: large mailbox export by heidi@aisoc.dev",
-    "description": "heidi@aisoc.dev exported full mailbox PST (8 GB) from WIN-EXCHANGE-01. HR flag: notice given last week.",
+    "title": "Insider preparing departure: large mailbox export by heidi@example.com",
+    "description": "heidi@example.com exported full mailbox PST (8 GB) from WIN-EXCHANGE-01. HR flag: notice given last week.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -4181,19 +4181,19 @@
       "PST",
       "insider",
       "departure",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "WIN-EXCHANGE-01"
     ],
-    "original_title": "Insider preparing departure: large mailbox export by heidi@aisoc.dev",
-    "original_description": "heidi@aisoc.dev exported full mailbox PST (8 GB) from WIN-EXCHANGE-01. HR flag: notice given last week."
+    "original_title": "Insider preparing departure: large mailbox export by heidi@example.com",
+    "original_description": "heidi@example.com exported full mailbox PST (8 GB) from WIN-EXCHANGE-01. HR flag: notice given last week."
   },
   {
     "id": "INC-EVAL-155",
     "template_id": "office-vsto-addin",
     "template_index": 44,
     "adversary_intensity": "medium",
-    "title": "Malicious Office add-in installed for carol@aisoc.dev",
-    "description": "Office VSTO add-in registered under HKCU for carol@aisoc.dev on WIN-DC-SECONDARY; loads on every Outlook startup; regular check-ins to 45.142.122.111.",
+    "title": "Malicious Office add-in installed for carol@example.com",
+    "description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; regular check-ins to 45.142.122.111.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -4208,12 +4208,12 @@
       "office add-in",
       "vsto",
       "outlook",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "WIN-DC-SECONDARY",
       "45.142.122.111"
     ],
-    "original_title": "Malicious Office add-in installed for carol@aisoc.dev",
-    "original_description": "Office VSTO add-in registered under HKCU for carol@aisoc.dev on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 45.142.122.111."
+    "original_title": "Malicious Office add-in installed for carol@example.com",
+    "original_description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 45.142.122.111."
   },
   {
     "id": "INC-EVAL-156",
@@ -4221,7 +4221,7 @@
     "template_index": 45,
     "adversary_intensity": "heavy",
     "title": "GitHub p@t leaked and abused from 45.142.122.111",
-    "description": "user-issued api token belonging to dave@aisoc.dev used from 45.142.122.111 to clone 14 non-public repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "description": "user-issued api token belonging to dave@example.com used from 45.142.122.111 to clone 14 non-public repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -4237,11 +4237,11 @@
       "pat",
       "token",
       "private repo",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "45.142.122.111"
     ],
     "original_title": "GitHub PAT leaked and abused from 45.142.122.111",
-    "original_description": "Personal access token belonging to dave@aisoc.dev used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier."
+    "original_description": "Personal access token belonging to dave@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier."
   },
   {
     "id": "INC-EVAL-157",
@@ -4276,8 +4276,8 @@
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
     "adversary_intensity": "heavy",
-    "title": "Vendor admin self-serve cred change abuse for frank@aisoc.dev",
-    "description": "self-serve cred change for frank@aisoc.dev performed by helpdesk in response to human-factor pretexting call from 91.134.231.15. Token claimed within 90 seconds.",
+    "title": "Vendor admin self-serve cred change abuse for frank@example.com",
+    "description": "self-serve cred change for frank@example.com performed by helpdesk in response to human-factor pretexting call from 91.134.231.15. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -4292,19 +4292,19 @@
       "password reset",
       "social engineering",
       "helpdesk",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "91.134.231.15"
     ],
-    "original_title": "Vendor admin password reset abuse for frank@aisoc.dev",
-    "original_description": "Password reset for frank@aisoc.dev performed by helpdesk in response to social-engineering call from 91.134.231.15. Token claimed within 90 seconds."
+    "original_title": "Vendor admin password reset abuse for frank@example.com",
+    "original_description": "Password reset for frank@example.com performed by helpdesk in response to social-engineering call from 91.134.231.15. Token claimed within 90 seconds."
   },
   {
     "id": "INC-EVAL-159",
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
     "adversary_intensity": "medium",
-    "title": "OAuth refresh-token theft for carol@aisoc.dev",
-    "description": "Refresh token for carol@aisoc.dev replayed from 10.0.99.42. Granted access to mailbox + OneDrive without re-prompt.",
+    "title": "OAuth refresh-token theft for carol@example.com",
+    "description": "Refresh token for carol@example.com replayed from 10.0.99.42. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -4319,11 +4319,11 @@
       "replay",
       "onedrive",
       "mailbox",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "10.0.99.42"
     ],
-    "original_title": "OAuth refresh-token theft for carol@aisoc.dev",
-    "original_description": "Refresh token for carol@aisoc.dev replayed from 10.0.99.42. Granted access to mailbox + OneDrive without re-prompt."
+    "original_title": "OAuth refresh-token theft for carol@example.com",
+    "original_description": "Refresh token for carol@example.com replayed from 10.0.99.42. Granted access to mailbox + OneDrive without re-prompt."
   },
   {
     "id": "INC-EVAL-160",
@@ -4357,8 +4357,8 @@
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
     "adversary_intensity": "medium",
-    "title": "Outlook rule auto-forwarding mail from carol@aisoc.dev",
-    "description": "Outlook inbox rule created for carol@aisoc.dev that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0.",
+    "title": "Outlook rule auto-forwarding mail from carol@example.com",
+    "description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -4373,12 +4373,12 @@
       "outlook rule",
       "forward",
       "mail",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "185.220.101.7",
       "LockBit 3.0"
     ],
-    "original_title": "Outlook rule auto-forwarding mail from carol@aisoc.dev",
-    "original_description": "Outlook inbox rule created for carol@aisoc.dev that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0."
+    "original_title": "Outlook rule auto-forwarding mail from carol@example.com",
+    "original_description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0."
   },
   {
     "id": "INC-EVAL-162",
@@ -4386,7 +4386,7 @@
     "template_index": 51,
     "adversary_intensity": "heavy",
     "title": "Linux journald log modify-on-the-fly on WIN-PROD-WEB02",
-    "description": "j0urnalctl --rotate --c0mpact db-time=1s observed on WIN-PROD-WEB02 by heidi@aisoc.dev; recent journal entries purged. footprint cleanup.",
+    "description": "j0urnalctl --rotate --c0mpact db-time=1s observed on WIN-PROD-WEB02 by heidi@example.com; recent journal entries purged. footprint cleanup.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -4400,10 +4400,10 @@
       "log tampering",
       "vacuum",
       "WIN-PROD-WEB02",
-      "heidi@aisoc.dev"
+      "heidi@example.com"
     ],
     "original_title": "Linux journald log tampering on WIN-PROD-WEB02",
-    "original_description": "journalctl --rotate --vacuum-time=1s observed on WIN-PROD-WEB02 by heidi@aisoc.dev; recent journal entries purged. Indicator removal."
+    "original_description": "journalctl --rotate --vacuum-time=1s observed on WIN-PROD-WEB02 by heidi@example.com; recent journal entries purged. Indicator removal."
   },
   {
     "id": "INC-EVAL-163",
@@ -4439,8 +4439,8 @@
     "template_id": "vpn-new-geography",
     "template_index": 53,
     "adversary_intensity": "medium",
-    "title": "Suspicious VPN login from new geography for bob@aisoc.dev",
-    "description": "VPN login for bob@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent e-w hop windows-share probe from VPN range to LIN-EDGE-VPN02.",
+    "title": "Suspicious VPN login from new geography for bob@example.com",
+    "description": "VPN login for bob@example.com from 10.0.99.42 (new country, no prior history). Subsequent e-w hop windows-share probe from VPN range to LIN-EDGE-VPN02.",
     "expected_tactics": [
       "TA0001",
       "TA0008"
@@ -4456,12 +4456,12 @@
       "new geography",
       "lateral",
       "smb scan",
-      "bob@aisoc.dev",
+      "bob@example.com",
       "10.0.99.42",
       "LIN-EDGE-VPN02"
     ],
-    "original_title": "Suspicious VPN login from new geography for bob@aisoc.dev",
-    "original_description": "VPN login for bob@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-EDGE-VPN02."
+    "original_title": "Suspicious VPN login from new geography for bob@example.com",
+    "original_description": "VPN login for bob@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-EDGE-VPN02."
   },
   {
     "id": "INC-EVAL-165",
@@ -4469,7 +4469,7 @@
     "template_index": 54,
     "adversary_intensity": "medium",
     "title": "Privileged command run as background unit account on K8S-PROD-CLUSTER",
-    "description": "background unit account carol@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on K8S-PROD-CLUSTER. Anomalous.",
+    "description": "background unit account carol@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on K8S-PROD-CLUSTER. Anomalous.",
     "expected_tactics": [
       "TA0005",
       "TA0006"
@@ -4484,19 +4484,19 @@
       "service account",
       "wevtutil",
       "log clear",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "K8S-PROD-CLUSTER"
     ],
     "original_title": "Privileged command run as service account on K8S-PROD-CLUSTER",
-    "original_description": "Service account carol@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on K8S-PROD-CLUSTER. Anomalous."
+    "original_description": "Service account carol@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on K8S-PROD-CLUSTER. Anomalous."
   },
   {
     "id": "INC-EVAL-166",
     "template_id": "phishing-macro-email",
     "template_index": 0,
     "adversary_intensity": "heavy",
-    "title": "directed baiting email with m@cro-laden attachment delivered to ops-lead@aisoc.dev",
-    "description": "Inbound email from 203.0.113.45 delivered an Office document with a malicious off1ce-automation language m@cro to ops-lead@aisoc.dev. Attachment opened on LIN-BUILD-CI03; m@cro spawned shell-host.exe and downloaded a second-tier dropper from a known Emotet epoch 5 infrastructure.",
+    "title": "directed baiting email with m@cro-laden attachment delivered to ops-lead@example.com",
+    "description": "Inbound email from 203.0.113.45 delivered an Office document with a malicious off1ce-automation language m@cro to ops-lead@example.com. Attachment opened on LIN-BUILD-CI03; m@cro spawned shell-host.exe and downloaded a second-tier dropper from a known Emotet epoch 5 infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -4512,11 +4512,11 @@
       "macro",
       "203.0.113.45",
       "LIN-BUILD-CI03",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "stage-2 payload"
     ],
-    "original_title": "Spear-phishing email with macro-laden attachment delivered to ops-lead@aisoc.dev",
-    "original_description": "Inbound email from 203.0.113.45 delivered an Office document with a malicious VBA macro to ops-lead@aisoc.dev. Attachment opened on LIN-BUILD-CI03; macro spawned cmd.exe and downloaded a stage-2 payload from a known Emotet epoch 5 infrastructure."
+    "original_title": "Spear-phishing email with macro-laden attachment delivered to ops-lead@example.com",
+    "original_description": "Inbound email from 203.0.113.45 delivered an Office document with a malicious VBA macro to ops-lead@example.com. Attachment opened on LIN-BUILD-CI03; macro spawned cmd.exe and downloaded a stage-2 payload from a known Emotet epoch 5 infrastructure."
   },
   {
     "id": "INC-EVAL-167",
@@ -4552,7 +4552,7 @@
     "template_index": 2,
     "adversary_intensity": "medium",
     "title": "Watering-hole exploit served from internal Confluence by 172.16.50.7",
-    "description": "Internal Confluence page injected with malicious JavaScript by 172.16.50.7. Drive-by exploit triggered browser exploitation on multiple visitors including svc-backup@aisoc.dev. Linked to ALPHV/BlackCat TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 172.16.50.7. Drive-by exploit triggered browser exploitation on multiple visitors including svc-backup@example.com. Linked to ALPHV/BlackCat TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -4568,11 +4568,11 @@
       "drive-by",
       "Confluence",
       "172.16.50.7",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "ALPHV/BlackCat"
     ],
     "original_title": "Watering-hole exploit served from internal Confluence by 172.16.50.7",
-    "original_description": "Internal Confluence page injected with malicious JavaScript by 172.16.50.7. Drive-by exploit triggered browser exploitation on multiple visitors including svc-backup@aisoc.dev. Linked to ALPHV/BlackCat TTPs."
+    "original_description": "Internal Confluence page injected with malicious JavaScript by 172.16.50.7. Drive-by exploit triggered browser exploitation on multiple visitors including svc-backup@example.com. Linked to ALPHV/BlackCat TTPs."
   },
   {
     "id": "INC-EVAL-169",
@@ -4608,7 +4608,7 @@
     "template_index": 4,
     "adversary_intensity": "medium",
     "title": "Malicious USB autorun on air-gapped host AWS-Eops channel-PROD-API",
-    "description": "USB device inserted on air-gapped AWS-Eops channel-PROD-API by admin@aisoc.dev. AutoRun executed py interpreter stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "USB device inserted on air-gapped AWS-Eops channel-PROD-API by admin@example.com. AutoRun executed py interpreter stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -4624,19 +4624,19 @@
       "autorun",
       "air-gapped",
       "AWS-EC2-PROD-API",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "Python stager"
     ],
     "original_title": "Malicious USB autorun on air-gapped host AWS-EC2-PROD-API",
-    "original_description": "USB device inserted on air-gapped AWS-EC2-PROD-API by admin@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
+    "original_description": "USB device inserted on air-gapped AWS-EC2-PROD-API by admin@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\."
   },
   {
     "id": "INC-EVAL-171",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "adversary_intensity": "light",
-    "title": "OAuth consent phi$hing targeting ceo@aisoc.dev",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 45.142.122.111.",
+    "title": "OAuth consent phi$hing targeting ceo@example.com",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 45.142.122.111.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -4651,12 +4651,12 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "45.142.122.111",
       "forwarding rule"
     ],
-    "original_title": "OAuth consent phishing targeting ceo@aisoc.dev",
-    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 45.142.122.111."
+    "original_title": "OAuth consent phishing targeting ceo@example.com",
+    "original_description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 45.142.122.111."
   },
   {
     "id": "INC-EVAL-172",
@@ -4664,7 +4664,7 @@
     "template_index": 6,
     "adversary_intensity": "medium",
     "title": "Obfuscated p\u200bow\u200bersh\u200bell dropper executed on AWS-Ecallback infra-PROD-API",
-    "description": "p\u200bow\u200bersh\u200bell dropper executed on AWS-Ecallback infra-PROD-API by grace@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon data-lockout demandware staging.",
+    "description": "p\u200bow\u200bersh\u200bell dropper executed on AWS-Ecallback infra-PROD-API by grace@example.com; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon data-lockout demandware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -4680,11 +4680,11 @@
       "obfuscated",
       "base64",
       "AWS-EC2-PROD-API",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "Volt Typhoon"
     ],
     "original_title": "Obfuscated PowerShell dropper executed on AWS-EC2-PROD-API",
-    "original_description": "PowerShell dropper executed on AWS-EC2-PROD-API by grace@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon ransomware staging."
+    "original_description": "PowerShell dropper executed on AWS-EC2-PROD-API by grace@example.com; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon ransomware staging."
   },
   {
     "id": "INC-EVAL-173",
@@ -4750,7 +4750,7 @@
     "template_index": 9,
     "adversary_intensity": "light",
     "title": "Malicious WMI subscription on MAC-CFO-LAPTOP",
-    "description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by bob@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by bob@example.com. Consumer runs encoded script. Persistence + execution mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -4766,18 +4766,18 @@
       "subscription",
       "permanent",
       "MAC-CFO-LAPTOP",
-      "bob@aisoc.dev",
+      "bob@example.com",
       "encoded script"
     ],
     "original_title": "Malicious WMI subscription on MAC-CFO-LAPTOP",
-    "original_description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by bob@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism."
+    "original_description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by bob@example.com. Consumer runs encoded script. Persistence + execution mechanism."
   },
   {
     "id": "INC-EVAL-176",
     "template_id": "registry-run-persistence",
     "template_index": 10,
     "adversary_intensity": "heavy",
-    "title": "reg-autostart entry key re-establish footing created by eve@aisoc.dev on AWS-Ec\u200b2-PROD-API",
+    "title": "reg-autostart entry key re-establish footing created by eve@example.com on AWS-Ec\u200b2-PROD-API",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-Ec\u200b2-PROD-API. Points to roaming binary signed with revoked cert. Linked to APT29.",
     "expected_tactics": [
       "TA0003"
@@ -4792,10 +4792,10 @@
       "persistence",
       "revoked cert",
       "AWS-EC2-PROD-API",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "APT29"
     ],
-    "original_title": "Registry Run key persistence created by eve@aisoc.dev on AWS-EC2-PROD-API",
+    "original_title": "Registry Run key persistence created by eve@example.com on AWS-EC2-PROD-API",
     "original_description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-EC2-PROD-API. Points to roaming binary signed with revoked cert. Linked to APT29."
   },
   {
@@ -4804,7 +4804,7 @@
     "template_index": 11,
     "adversary_intensity": "medium",
     "title": "Scheduled task persistence on WIN-DC-SECONDARY",
-    "description": "Hidden scheduled task created on WIN-DC-SECONDARY by svc-deploy@aisoc.dev: triggers every 30 minutes, runs in-line code blob from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on WIN-DC-SECONDARY by svc-deploy@example.com: triggers every 30 minutes, runs in-line code blob from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -4818,10 +4818,10 @@
       "persistence",
       "APPDATA",
       "WIN-DC-SECONDARY",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "original_title": "Scheduled task persistence on WIN-DC-SECONDARY",
-    "original_description": "Hidden scheduled task created on WIN-DC-SECONDARY by svc-deploy@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
+    "original_description": "Hidden scheduled task created on WIN-DC-SECONDARY by svc-deploy@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism."
   },
   {
     "id": "INC-EVAL-178",
@@ -4857,7 +4857,7 @@
     "template_index": 13,
     "adversary_intensity": "medium",
     "title": "b@ckdoor unix periodic job job installed on LIN-BUILD-CI03",
-    "description": "/etc/unix periodic job.d entry created by alice@aisoc.dev on LIN-BUILD-CI03. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
+    "description": "/etc/unix periodic job.d entry created by alice@example.com on LIN-BUILD-CI03. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -4873,11 +4873,11 @@
       "backdoor",
       "reverse shell",
       "LIN-BUILD-CI03",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "10.0.99.42"
     ],
     "original_title": "Backdoor cron job installed on LIN-BUILD-CI03",
-    "original_description": "/etc/cron.d entry created by alice@aisoc.dev on LIN-BUILD-CI03. Reverse shell beacon to 10.0.99.42 every 5 minutes."
+    "original_description": "/etc/cron.d entry created by alice@example.com on LIN-BUILD-CI03. Reverse shell beacon to 10.0.99.42 every 5 minutes."
   },
   {
     "id": "INC-EVAL-180",
@@ -4885,7 +4885,7 @@
     "template_index": 14,
     "adversary_intensity": "heavy",
     "title": "ua\u200bc circumvention observed on LIN-BUILD-CI03",
-    "description": "trusted helper binary.exe abuse on LIN-BUILD-CI03 by cfo@aisoc.dev; auto-rights step-up triggered without prompt. Process tree shows rights uplift to SYSTEM.",
+    "description": "trusted helper binary.exe abuse on LIN-BUILD-CI03 by cfo@example.com; auto-rights step-up triggered without prompt. Process tree shows rights uplift to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -4900,11 +4900,11 @@
       "fodhelper",
       "auto-elevation",
       "LIN-BUILD-CI03",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "SYSTEM"
     ],
     "original_title": "UAC bypass observed on LIN-BUILD-CI03",
-    "original_description": "fodhelper.exe abuse on LIN-BUILD-CI03 by cfo@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
+    "original_description": "fodhelper.exe abuse on LIN-BUILD-CI03 by cfo@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM."
   },
   {
     "id": "INC-EVAL-181",
@@ -4912,7 +4912,7 @@
     "template_index": 15,
     "adversary_intensity": "heavy",
     "title": "namespace breakout via host-shared workload on WIN-DC-SECONDARY",
-    "description": "Kubernetes host-shared workload created on WIN-DC-SECONDARY by dave@aisoc.dev. cgroup escape to host namespace observed. j$-runtime daemon filesystem accessed.",
+    "description": "Kubernetes host-shared workload created on WIN-DC-SECONDARY by dave@example.com. cgroup escape to host namespace observed. j$-runtime daemon filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -4929,10 +4929,10 @@
       "container escape",
       "cgroup",
       "WIN-DC-SECONDARY",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "original_title": "Container escape via privileged pod on WIN-DC-SECONDARY",
-    "original_description": "Kubernetes privileged pod created on WIN-DC-SECONDARY by dave@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed."
+    "original_description": "Kubernetes privileged pod created on WIN-DC-SECONDARY by dave@example.com. cgroup escape to host namespace observed. Node filesystem accessed."
   },
   {
     "id": "INC-EVAL-182",
@@ -4940,7 +4940,7 @@
     "template_index": 16,
     "adversary_intensity": "heavy",
     "title": "Linux setid-perm bit binary abuse on WIN-DC-SECONDARY",
-    "description": "Custom setid-perm bit binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command code activation as root. Likely level-up by carol@aisoc.dev.",
+    "description": "Custom setid-perm bit binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command code activation as root. Likely level-up by carol@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -4954,10 +4954,10 @@
       "/tmp",
       "root escalation",
       "WIN-DC-SECONDARY",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "original_title": "Linux SUID binary abuse on WIN-DC-SECONDARY",
-    "original_description": "Custom SUID binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command execution as root. Likely escalation by carol@aisoc.dev."
+    "original_description": "Custom SUID binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command execution as root. Likely escalation by carol@example.com."
   },
   {
     "id": "INC-EVAL-183",
@@ -4993,7 +4993,7 @@
     "template_index": 18,
     "adversary_intensity": "heavy",
     "title": "trace cleanup: Windows event audit history erased on LIN-EDGE-VPN02",
-    "description": "Security event audit history erased on LIN-EDGE-VPN02 by admin@aisoc.dev. win-log cli.exe cl Security observed in command-line telemetry.",
+    "description": "Security event audit history erased on LIN-EDGE-VPN02 by admin@example.com. win-log cli.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -5007,10 +5007,10 @@
       "log cleared",
       "indicator removal",
       "LIN-EDGE-VPN02",
-      "admin@aisoc.dev"
+      "admin@example.com"
     ],
     "original_title": "Indicator removal: Windows event log cleared on LIN-EDGE-VPN02",
-    "original_description": "Security event log cleared on LIN-EDGE-VPN02 by admin@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry."
+    "original_description": "Security event log cleared on LIN-EDGE-VPN02 by admin@example.com. wevtutil.exe cl Security observed in command-line telemetry."
   },
   {
     "id": "INC-EVAL-185",
@@ -5018,7 +5018,7 @@
     "template_index": 19,
     "adversary_intensity": "medium",
     "title": "Disable security tooling on LIN-K8S-n\u200bode.js01",
-    "description": "bob@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-K8S-n\u200bode.js01. Tampering telemetry triggered alert.",
+    "description": "bob@example.com attempted to stop Defender, CrowdStrike, and Sysmon on LIN-K8S-n\u200bode.js01. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -5033,17 +5033,17 @@
       "sysmon",
       "tampering",
       "LIN-K8S-NODE01",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "original_title": "Disable security tooling on LIN-K8S-NODE01",
-    "original_description": "bob@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-K8S-NODE01. Tampering telemetry triggered alert."
+    "original_description": "bob@example.com attempted to stop Defender, CrowdStrike, and Sysmon on LIN-K8S-NODE01. Tampering telemetry triggered alert."
   },
   {
     "id": "INC-EVAL-186",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
     "adversary_intensity": "medium",
-    "title": "LSASS memory dump on K8S-PROD-CLUSTER by svc-deploy@aisoc.dev",
+    "title": "LSASS memory dump on K8S-PROD-CLUSTER by svc-deploy@example.com",
     "description": "comsvcs.loadable code module MiniDump observed on K8S-PROD-CLUSTER. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -5059,9 +5059,9 @@
       "comsvcs",
       "mimikatz",
       "K8S-PROD-CLUSTER",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
-    "original_title": "LSASS memory dump on K8S-PROD-CLUSTER by svc-deploy@aisoc.dev",
+    "original_title": "LSASS memory dump on K8S-PROD-CLUSTER by svc-deploy@example.com",
     "original_description": "comsvcs.dll MiniDump observed on K8S-PROD-CLUSTER. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected."
   },
   {
@@ -5069,8 +5069,8 @@
     "template_id": "credential-spray",
     "template_index": 21,
     "adversary_intensity": "heavy",
-    "title": "iterative-login auth-token probe spread against svc-deploy@aisoc.dev from 198.51.100.23",
-    "description": "auth-token probe spread from 198.51.100.23 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "iterative-login auth-token probe spread against svc-deploy@example.com from 198.51.100.23",
+    "description": "auth-token probe spread from 198.51.100.23 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -5082,12 +5082,12 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "198.51.100.23",
       "azure ad"
     ],
-    "original_title": "Brute-force credential spray against svc-deploy@aisoc.dev from 198.51.100.23",
-    "original_description": "Credential spray from 198.51.100.23 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
+    "original_title": "Brute-force credential spray against svc-deploy@example.com from 198.51.100.23",
+    "original_description": "Credential spray from 198.51.100.23 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in."
   },
   {
     "id": "INC-EVAL-188",
@@ -5095,7 +5095,7 @@
     "template_index": 22,
     "adversary_intensity": "medium",
     "title": "Kerberoasting from WIN-FIN-DB01",
-    "description": "background unit account TGS tickets requested en-masse from WIN-FIN-DB01 by dave@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "description": "background unit account TGS tickets requested en-masse from WIN-FIN-DB01 by dave@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -5112,10 +5112,10 @@
       "RC4",
       "mimikatz",
       "WIN-FIN-DB01",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "original_title": "Kerberoasting from WIN-FIN-DB01",
-    "original_description": "Service account TGS tickets requested en-masse from WIN-FIN-DB01 by dave@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
+    "original_description": "Service account TGS tickets requested en-masse from WIN-FIN-DB01 by dave@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators."
   },
   {
     "id": "INC-EVAL-189",
@@ -5123,7 +5123,7 @@
     "template_index": 23,
     "adversary_intensity": "light",
     "title": "Active Directory DCSync from non-DC host LIN-OBS-LOGGER",
-    "description": "Replication rights abused from LIN-OBS-LOGGER by ops-lead@aisoc.dev. All domain NTLM hashes replicated. Severe credentia1 exposure.",
+    "description": "Replication rights abused from LIN-OBS-LOGGER by ops-lead@example.com. All domain NTLM hashes replicated. Severe credentia1 exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -5139,18 +5139,18 @@
       "replication",
       "ntlm hash",
       "LIN-OBS-LOGGER",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "original_title": "Active Directory DCSync from non-DC host LIN-OBS-LOGGER",
-    "original_description": "Replication rights abused from LIN-OBS-LOGGER by ops-lead@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure."
+    "original_description": "Replication rights abused from LIN-OBS-LOGGER by ops-lead@example.com. All domain NTLM hashes replicated. Severe credential exposure."
   },
   {
     "id": "INC-EVAL-190",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
     "adversary_intensity": "heavy",
-    "title": "fed-assertion golden-ticket: forged assertion targeting heidi@aisoc.dev",
-    "description": "Forged fed-assertion assertion detected for heidi@aisoc.dev. Attacker pivoted to Azure AD; account iterating acrossion followed from 198.51.100.23.",
+    "title": "fed-assertion golden-ticket: forged assertion targeting heidi@example.com",
+    "description": "Forged fed-assertion assertion detected for heidi@example.com. Attacker pivoted to Azure AD; account iterating acrossion followed from 198.51.100.23.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -5166,11 +5166,11 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "198.51.100.23"
     ],
-    "original_title": "SAML golden-ticket: forged assertion targeting heidi@aisoc.dev",
-    "original_description": "Forged SAML assertion detected for heidi@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23."
+    "original_title": "SAML golden-ticket: forged assertion targeting heidi@example.com",
+    "original_description": "Forged SAML assertion detected for heidi@example.com. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23."
   },
   {
     "id": "INC-EVAL-191",
@@ -5178,7 +5178,7 @@
     "template_index": 25,
     "adversary_intensity": "light",
     "title": "Domain enumeration from AWS-EC2-PROD-API",
-    "description": "ldap discovery from AWS-EC2-PROD-API by bob@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "description": "ldap discovery from AWS-EC2-PROD-API by bob@example.com: BloodHound-style queries enumerating users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -5192,10 +5192,10 @@
       "bloodhound",
       "domain enumeration",
       "AWS-EC2-PROD-API",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "original_title": "Domain enumeration from AWS-EC2-PROD-API",
-    "original_description": "ldap discovery from AWS-EC2-PROD-API by bob@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs."
+    "original_description": "ldap discovery from AWS-EC2-PROD-API by bob@example.com: BloodHound-style queries enumerating users, groups, ACLs."
   },
   {
     "id": "INC-EVAL-192",
@@ -5203,7 +5203,7 @@
     "template_index": 26,
     "adversary_intensity": "heavy",
     "title": "remote folder iterating acrossion on LIN-DB-REPLICA",
-    "description": "Mass SMB fileshare listingeration from LIN-DB-REPLICA by svc-deploy@aisoc.dev; net.exe and p0wer$hell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB fileshare listingeration from LIN-DB-REPLICA by svc-deploy@example.com; net.exe and p0wer$hell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -5218,10 +5218,10 @@
       "Get-SmbShare",
       "share enumeration",
       "LIN-DB-REPLICA",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "original_title": "Network share enumeration on LIN-DB-REPLICA",
-    "original_description": "Mass SMB share enumeration from LIN-DB-REPLICA by svc-deploy@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
+    "original_description": "Mass SMB share enumeration from LIN-DB-REPLICA by svc-deploy@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet."
   },
   {
     "id": "INC-EVAL-193",
@@ -5229,7 +5229,7 @@
     "template_index": 27,
     "adversary_intensity": "heavy",
     "title": "hash-replay attack from WIN-EXCHANGE-01 to AWS-Eops channel-PROD-API",
-    "description": "hash-replay attack east-west pivot from WIN-EXCHANGE-01 to AWS-Eops channel-PROD-API by ops-lead@aisoc.dev. Golden ticket indicators present. Linked to Lazarus.",
+    "description": "hash-replay attack east-west pivot from WIN-EXCHANGE-01 to AWS-Eops channel-PROD-API by ops-lead@example.com. Golden ticket indicators present. Linked to Lazarus.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -5245,11 +5245,11 @@
       "golden ticket",
       "WIN-EXCHANGE-01",
       "AWS-EC2-PROD-API",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Lazarus"
     ],
     "original_title": "Pass-the-hash from WIN-EXCHANGE-01 to AWS-EC2-PROD-API",
-    "original_description": "Pass-the-hash lateral movement from WIN-EXCHANGE-01 to AWS-EC2-PROD-API by ops-lead@aisoc.dev. Golden ticket indicators present. Linked to Lazarus."
+    "original_description": "Pass-the-hash lateral movement from WIN-EXCHANGE-01 to AWS-EC2-PROD-API by ops-lead@example.com. Golden ticket indicators present. Linked to Lazarus."
   },
   {
     "id": "INC-EVAL-194",
@@ -5257,7 +5257,7 @@
     "template_index": 28,
     "adversary_intensity": "heavy",
     "title": "remote desktop sess horizontal hop from WIN-DEVOPS-LT",
-    "description": "Anomalous remote desktop sess session from WIN-DEVOPS-LT (eve@aisoc.dev) to MAC-CFO-LAPTOP outside business hours. Source admin not normal for MAC-CFO-LAPTOP.",
+    "description": "Anomalous remote desktop sess session from WIN-DEVOPS-LT (eve@example.com) to MAC-CFO-LAPTOP outside business hours. Source admin not normal for MAC-CFO-LAPTOP.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -5272,10 +5272,10 @@
       "outside hours",
       "WIN-DEVOPS-LT",
       "MAC-CFO-LAPTOP",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "original_title": "RDP lateral movement from WIN-DEVOPS-LT",
-    "original_description": "Anomalous RDP session from WIN-DEVOPS-LT (eve@aisoc.dev) to MAC-CFO-LAPTOP outside business hours. Source admin not normal for MAC-CFO-LAPTOP."
+    "original_description": "Anomalous RDP session from WIN-DEVOPS-LT (eve@example.com) to MAC-CFO-LAPTOP outside business hours. Source admin not normal for MAC-CFO-LAPTOP."
   },
   {
     "id": "INC-EVAL-195",
@@ -5283,7 +5283,7 @@
     "template_index": 29,
     "adversary_intensity": "medium",
     "title": "WMI horizontal execution from WIN-FILE-SHARE to LIN-DB-REPLICA",
-    "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -5298,19 +5298,19 @@
       "lateral",
       "WIN-FILE-SHARE",
       "LIN-DB-REPLICA",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "91.134.231.15"
     ],
     "original_title": "WMI lateral execution from WIN-FILE-SHARE to LIN-DB-REPLICA",
-    "original_description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@aisoc.dev. Remote command execution; payload from 91.134.231.15."
+    "original_description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15."
   },
   {
     "id": "INC-EVAL-196",
     "template_id": "bulk-pii-download",
     "template_index": 30,
     "adversary_intensity": "medium",
-    "title": "Bulk personal data download by cfo@aisoc.dev",
-    "description": "cfo@aisoc.dev downloaded >10 GB of subscriber records from production database from LIN-K8S-n\u200bode.js01. Outside normal access p@ttern.",
+    "title": "Bulk personal data download by cfo@example.com",
+    "description": "cfo@example.com downloaded >10 GB of subscriber records from production database from LIN-K8S-n\u200bode.js01. Outside normal access p@ttern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -5326,10 +5326,10 @@
       "pii",
       "customer record",
       "LIN-K8S-NODE01",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
-    "original_title": "Bulk PII download by cfo@aisoc.dev",
-    "original_description": "cfo@aisoc.dev downloaded >10 GB of customer records from production database from LIN-K8S-NODE01. Outside normal access pattern."
+    "original_title": "Bulk PII download by cfo@example.com",
+    "original_description": "cfo@example.com downloaded >10 GB of customer records from production database from LIN-K8S-NODE01. Outside normal access pattern."
   },
   {
     "id": "INC-EVAL-197",
@@ -5337,7 +5337,7 @@
     "template_index": 31,
     "adversary_intensity": "medium",
     "title": "Clipboard logging long-residence agent on WIN-PROD-WEB02",
-    "description": "Clipboard contents from WIN-PROD-WEB02 (heidi@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include auth-tokens and crypto addresses.",
+    "description": "Clipboard contents from WIN-PROD-WEB02 (heidi@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include auth-tokens and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -5351,10 +5351,10 @@
       "keylog",
       "credentials",
       "WIN-PROD-WEB02",
-      "heidi@aisoc.dev"
+      "heidi@example.com"
     ],
     "original_title": "Clipboard logging implant on WIN-PROD-WEB02",
-    "original_description": "Clipboard contents from WIN-PROD-WEB02 (heidi@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
+    "original_description": "Clipboard contents from WIN-PROD-WEB02 (heidi@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses."
   },
   {
     "id": "INC-EVAL-198",
@@ -5390,7 +5390,7 @@
     "template_index": 33,
     "adversary_intensity": "medium",
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from K8S-PROD-CLUSTER",
-    "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/d\u200bump/ by alice@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/d\u200bump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -5406,18 +5406,18 @@
       "exfiltrat",
       "K8S-PROD-CLUSTER",
       "45.142.122.111",
-      "alice@aisoc.dev"
+      "alice@example.com"
     ],
     "original_title": "Cloud storage exfil: data egress to attacker-controlled S3 from K8S-PROD-CLUSTER",
-    "original_description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/dump/ by alice@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
+    "original_description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/dump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match."
   },
   {
     "id": "INC-EVAL-200",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
     "adversary_intensity": "light",
-    "title": "Personal Drive exfil by grace@aisoc.dev",
-    "description": "grace@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "title": "Personal Drive exfil by grace@example.com",
+    "description": "grace@example.com on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -5435,9 +5435,9 @@
       "source code",
       "pii",
       "LIN-K8S-NODE01",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
-    "original_title": "Personal Drive exfil by grace@aisoc.dev",
-    "original_description": "grace@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
+    "original_title": "Personal Drive exfil by grace@example.com",
+    "original_description": "grace@example.com on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII."
   }
 ]

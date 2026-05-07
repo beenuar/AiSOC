@@ -50,11 +50,11 @@ type connectorProfile struct {
 var (
 	hosts = []string{
 		"WIN-FIN-DB01", "WIN-PROD-WEB02", "MAC-SARAH-LT", "LIN-K8S-NODE-03",
-		"WIN-HR-DESKTOP", "DC01.corp.aisoc.dev", "WIN-DEVOPS-LT", "WIN-CFO-LT",
+		"WIN-HR-DESKTOP", "DC01.corp.example.com", "WIN-DEVOPS-LT", "WIN-CFO-LT",
 	}
 	users = []string{
-		"alice@aisoc.dev", "bob@aisoc.dev", "carol@aisoc.dev", "dave@aisoc.dev",
-		"svc-backup@aisoc.dev", "eve@aisoc.dev", "ceo@aisoc.dev",
+		"alice@example.com", "bob@example.com", "carol@example.com", "dave@example.com",
+		"svc-backup@example.com", "eve@example.com", "ceo@example.com",
 	}
 	processes = []string{
 		"powershell.exe", "cmd.exe", "explorer.exe", "wmic.exe", "rundll32.exe",

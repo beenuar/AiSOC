@@ -17,7 +17,7 @@ const KAFKA_BROKERS = (process.env.KAFKA_BOOTSTRAP_SERVERS || 'localhost:9092').
 const KAFKA_TOPIC_FUSED = process.env.KAFKA_TOPIC_FUSED || 'aisoc.alerts.fused';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:soc@aisoc.dev';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:soc@example.com';
 const PUSH_REDIS = new Redis(REDIS_URL);
 
 const pushManager = new PushManager({

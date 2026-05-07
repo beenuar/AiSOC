@@ -2,7 +2,7 @@
 name = "aisoc-api"
 version = "0.1.0"
 description = "AiSOC Core API Service — Open-source AI Security Operations Center"
-authors = ["AiSOC contributors <opensource@aisoc.dev>"]
+authors = ["Beenu Arora <beenu@cyble.com>"]
 license = "MIT"
 readme = "README.md"
 

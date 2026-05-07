@@ -157,7 +157,7 @@ Source: [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob
 | `KAFKA_TOPIC_FUSED` | `aisoc.alerts.fused` | Topic with fused alerts that should reach connected SOC clients |
 | `VAPID_PUBLIC_KEY` | — | VAPID public key for Web Push — generate with `npx web-push generate-vapid-keys` |
 | `VAPID_PRIVATE_KEY` | — | VAPID private key — keep in a secret manager |
-| `VAPID_SUBJECT` | `mailto:soc@aisoc.dev` | Contact email or URL surfaced to push services |
+| `VAPID_SUBJECT` | `mailto:soc@example.com` | Contact email or URL surfaced to push services |
 | `INTERNAL_TOKEN` | — | Must match the API's `REALTIME_INTERNAL_TOKEN` (used by the API to fan out push events) |
 
 ---

@@ -29,7 +29,7 @@ aisoc plugin validate ./my-enricher/plugin.yaml
 
 ### Plugin Publish
 ```bash
-export AISOC_API_URL=https://api.aisoc.dev
+export AISOC_API_URL=https://api.example.com
 export AISOC_API_KEY=sk-...
 aisoc plugin publish ./my-enricher
 ```
