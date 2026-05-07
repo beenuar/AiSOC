@@ -10,6 +10,7 @@ from sqlalchemy import and_, or_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.detection_rule import DetectionRule
+from app.services.mssp_rule_resolver import resolve_effective_rules
 from app.services.rule_engine import execute_rule, run_hunt
 
 router = APIRouter(prefix="/rules", tags=["detection_rules"])
@@ -70,17 +71,54 @@ async def list_rules(
     category: str | None = Query(default=None),
     rule_language: str | None = Query(default=None),
     include_builtin: bool = Query(default=True),
+    include_packs: bool = Query(default=True),
 ) -> list[DetectionRuleResponse]:
-    """List detection rules for the tenant (includes built-in platform rules)."""
-    # Return tenant's own rules + platform-wide built-in rules
-    filters = [
-        or_(
-            DetectionRule.tenant_id == current_user.tenant_id,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
+    """List detection rules for the tenant.
+
+    Returns the tenant's own rules, plus optionally platform-wide built-in
+    rules and rules sourced from MSSP-assigned rule packs (with excluded
+    overrides removed).
+    """
+    from app.models.mssp import (
+        MSSPRuleOverride,
+        MSSPRulePackAssignment,
+        MSSPRulePackRule,
+    )
+
+    tid = current_user.tenant_id
+
+    conditions = [DetectionRule.tenant_id == tid]
+
+    if include_builtin:
+        conditions = [
+            or_(
+                DetectionRule.tenant_id == tid,
+                and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
+            )
+        ]
+
+    if include_packs:
+        pack_rule_ids = (
+            select(MSSPRulePackRule.rule_id)
+            .join(MSSPRulePackAssignment, MSSPRulePackAssignment.pack_id == MSSPRulePackRule.pack_id)
+            .where(
+                MSSPRulePackAssignment.child_tenant_id == tid,
+                MSSPRulePackAssignment.enabled.is_(True),
+            )
         )
-    ]
-    if not include_builtin:
-        filters = [DetectionRule.tenant_id == current_user.tenant_id]
+        conditions = [
+            or_(
+                *conditions,
+                DetectionRule.id.in_(pack_rule_ids),
+            )
+        ]
+
+    excluded_ids = (
+        select(MSSPRuleOverride.rule_id)
+        .where(MSSPRuleOverride.child_tenant_id == tid, MSSPRuleOverride.action == "exclude")
+    )
+    filters = [and_(*conditions), DetectionRule.id.notin_(excluded_ids)]
+
     if category:
         filters.append(DetectionRule.category == category)
     if rule_language:
@@ -320,40 +358,32 @@ async def hunt(
 ) -> HuntResponse:
     """
     Run multiple detection rules against provided events (threat hunting).
-    If rule_ids is omitted, all active tenant rules are used.
+
+    The effective rule set is resolved through
+    :func:`app.services.mssp_rule_resolver.resolve_effective_rules`, which layers:
+
+      1. Tenant-owned rules
+      2. Platform-wide built-in rules
+      3. Rules sourced from MSSP-assigned rule packs
+      4. Per-tenant exclude / customize overrides
+
+    If ``rule_ids`` is omitted, all active rules in the resolved set are used.
     """
-    # Build filter
-    filters = [
-        or_(
-            DetectionRule.tenant_id == current_user.tenant_id,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
-        ),
-        DetectionRule.status == "active",
-    ]
-    if request.rule_ids:
-        filters.append(DetectionRule.id.in_(request.rule_ids))
-    if request.rule_language:
-        filters.append(DetectionRule.rule_language == request.rule_language)
+    resolved = await resolve_effective_rules(
+        db,
+        current_user.tenant_id,
+        rule_ids=request.rule_ids,
+        rule_language=request.rule_language,
+        only_active=True,
+    )
 
-    result = await db.execute(select(DetectionRule).where(and_(*filters)))
-    rules = result.scalars().all()
-
-    if not rules:
+    if not resolved:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No active detection rules found matching the criteria",
         )
 
-    rule_dicts = [
-        {
-            "id": str(r.id),
-            "name": r.name,
-            "rule_language": r.rule_language,
-            "rule_body": r.rule_body,
-            "severity": r.severity,
-        }
-        for r in rules
-    ]
+    rule_dicts = [r.to_engine_dict() for r in resolved]
 
     hunt_result = await run_hunt(
         tenant_id=str(current_user.tenant_id),

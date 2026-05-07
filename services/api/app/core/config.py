@@ -145,6 +145,9 @@ class Settings(BaseSettings):
     # Plugin system
     AISOC_PLUGINS_DIR: str = "/opt/aisoc/plugins"
 
+    # Feature flags (Tier 3.5)
+    AISOC_VULN_BOOST: bool = True
+
     # Plugin signature trust gate.
     #   strict   – signed-and-verified manifests are required; unsigned or
     #              invalid plugins are refused. Default in production.
@@ -238,6 +241,55 @@ class Settings(BaseSettings):
     # AISOC_FEATURE_DETECTION_DRIFT is True. Defaults to 168h (weekly).
     AISOC_DRIFT_SWEEP_INTERVAL_HOURS: int = 168
 
+    # ------------------------------------------------------------------
+    # Air-gapped operating mode (Tier 3.1 — air-gapped certification).
+    # When AISOC_AIRGAPPED is True the API:
+    #   * refuses to make any LLM / threat-intel / model-phone-home
+    #     HTTP request to a host not in AISOC_AIRGAP_ALLOWLIST (or a
+    #     private IP / .local / *.internal hostname),
+    #   * surfaces a banner in the UI and a structured warning at boot
+    #     when an LLM is configured against a public host,
+    #   * pins detection rule and threat-intel feeds to local-only
+    #     sources (the rule loader skips any feed whose URL violates
+    #     the egress rule and logs the skip).
+    # The flag is honored by ``services/api/app/core/airgap.py`` —
+    # any HTTP outbound code path can call ``enforce_airgap_for_url(url)``
+    # to assert before issuing a request.
+    # ------------------------------------------------------------------
+    # EASM (External Attack Surface Management) — Tier 3.6.
+    # ------------------------------------------------------------------
+    AISOC_FEATURE_EASM: bool = True
+    AISOC_EASM_SHODAN_API_KEY: str = ""
+    AISOC_EASM_CENSYS_API_ID: str = ""
+    AISOC_EASM_CENSYS_API_SECRET: str = ""
+    AISOC_EASM_ACTIVE_SCAN_ENABLED: bool = False  # lightweight port probe; off by default
+    AISOC_EASM_SCAN_PORTS: list[int] = [22, 80, 443, 8080, 8443, 3389]
+
+    @field_validator("AISOC_EASM_SCAN_PORTS", mode="before")
+    @classmethod
+    def parse_scan_ports(cls, v: Any) -> list[int]:
+        if isinstance(v, str):
+            return [int(p.strip()) for p in v.split(",") if p.strip()]
+        return v
+
+    AISOC_AIRGAPPED: bool = False
+    # Comma-separated host (or host:port) allowlist that overrides the
+    # blanket egress block when AISOC_AIRGAPPED=True. Use this for an
+    # internal LLM gateway (e.g. ``llm.corp.local``) or a private
+    # threat-intel mirror. Private IPs (RFC1918, loopback, link-local)
+    # and ``.local`` / ``.internal`` / ``.lan`` hostnames are always
+    # implicitly allowed.
+    AISOC_AIRGAP_ALLOWLIST: list[str] = []
+
+    @field_validator("AISOC_AIRGAP_ALLOWLIST", mode="before")
+    @classmethod
+    def parse_airgap_allowlist(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [host.strip().lower() for host in v.split(",") if host.strip()]
+        if isinstance(v, list):
+            return [str(host).strip().lower() for host in v if str(host).strip()]
+        return v
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors(cls, v: Any) -> list[str]:
@@ -287,6 +339,30 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     # round-trip in plaintext.
     if not _is_dev_env(s.ENVIRONMENT) and not s.AISOC_CREDENTIAL_KEY:
         msgs.append("AISOC_CREDENTIAL_KEY is empty in a non-development environment — connector credentials cannot be encrypted at rest.")
+
+    # Air-gap sanity check: if an operator flipped on AISOC_AIRGAPPED but
+    # the LLM is still pointed at a public endpoint (api.openai.com, etc.)
+    # surface that as an insecure-default rather than silently 503-ing
+    # every LLM-backed endpoint at request time.
+    if s.AISOC_AIRGAPPED:
+        # Lazy import to avoid a circular reference (airgap.py imports settings).
+        try:
+            from app.core.airgap import is_host_allowed_for_airgap
+            import os as _os
+
+            llm_base = _os.getenv("LLM_BASE_URL") or _os.getenv("OPENAI_BASE_URL") or ""
+            if llm_base:
+                from urllib.parse import urlparse as _urlparse
+
+                host = (_urlparse(llm_base).hostname or "").lower()
+                if host and not is_host_allowed_for_airgap(host, s.AISOC_AIRGAP_ALLOWLIST):
+                    msgs.append(
+                        f"AISOC_AIRGAPPED=true but LLM_BASE_URL host '{host}' is not in the airgap allowlist — "
+                        "LLM calls will be refused. Point LLM_BASE_URL at a local Ollama/vLLM endpoint or add "
+                        "the host to AISOC_AIRGAP_ALLOWLIST."
+                    )
+        except Exception:  # pragma: no cover - never let the warning helper itself fail boot
+            pass
 
     logger = logging.getLogger("aisoc.config")
     for msg in msgs:

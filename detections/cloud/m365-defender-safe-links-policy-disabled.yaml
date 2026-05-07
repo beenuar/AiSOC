@@ -1,0 +1,25 @@
+id: det-cloud-201
+name: M365 Defender Safe Links Policy Disabled
+description: A Safe Links policy was disabled or URL scanning turned off. This removes
+  time-of-click URL protection and allows deferred phishing links to reach users
+  unchecked.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: defender-admin
+detection:
+  condition: |
+    operation IN ["Disable-SafeLinksRule", "Set-SafeLinksPolicy"]
+    AND (parameters.EnableSafeLinksForEmail == false OR parameters.IsEnabled == false)
+false_positives:
+- Temporary disable during vendor URL-rewrite conflict resolution
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

@@ -29,6 +29,12 @@ class Tenant(Base):
 
     users: Mapped[list["User"]] = relationship("User", back_populates="tenant", lazy="noload")
     connectors: Mapped[list["Connector"]] = relationship("Connector", back_populates="tenant", lazy="noload")
+    external_assets: Mapped[list["ExternalAsset"]] = relationship(
+        "ExternalAsset", back_populates="tenant", lazy="noload"
+    )
+    external_asset_drift: Mapped[list["ExternalAssetDrift"]] = relationship(
+        "ExternalAssetDrift", back_populates="tenant", lazy="noload"
+    )
 
 
 class User(Base):

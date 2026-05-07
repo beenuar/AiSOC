@@ -30,6 +30,41 @@ extensions.  Tier 3 items are advanced analyst workflows.
 
 ---
 
+## Agent Intelligence (2026 H2)
+
+Six capabilities make the agent loop honest, calibrated, and steerable. Every
+verdict the AI produces is measurable, configurable, and learnable from.
+
+| Capability | API / Surface | Description |
+|---|---|---|
+| **Three-tier memory** | `services/agents/app/memory/` | Session (in-process LRU) + working (Redis, 24h TTL) + institutional (Postgres, permanent) tiers; pgvector-ready schema |
+| **Calibrated confidence** | every agent output | Each verdict carries `confidence` (0–1) + `confidence_basis` (list of factors); Brier-score gate in CI eval harness |
+| **Autonomy guardrails** | `/api/v1/autonomy-policy` | Per-action `auto / review / escalate / reject` thresholds in YAML; tenant-specific overrides via DB; admin UI in **Settings → Autonomy Policy** |
+| **SOC metrics dashboard** | `/api/v1/metrics/soc` | MTTD / MTTR / MTTC / FPR / escalation rate / ATT&CK heatmap / confidence calibration over time; auto-refresh every 60s |
+| **Analyst-override feedback loop** | `/api/v1/feedback` | When an analyst corrects a verdict: persists `disposition`, writes the lesson to `aisoc_institutional_memory`, and surfaces *retroactive candidates* — past alerts in the same tenant matching the same coarse signature that would now flip disposition; bulk-apply with one click |
+| **Investigation cost telemetry** | `services/agents/app/core/cost_telemetry.py` | Tokens / model / $ / latency per run; aggregate in metrics dashboard |
+
+### Override loop pipeline
+
+```
+analyst override
+  ├── PATCH alert.disposition           ← correct verdict on the alert
+  ├── INSERT aisoc_institutional_memory ← agent learns for next investigation
+  │     key: override:<sig-hash>
+  │     tags: [analyst-override, <category>, <connector>, <mitre>]
+  └── SELECT similar past alerts        ← coarse signature match (category +
+        WHERE tenant_id = ?               connector_type + primary MITRE technique)
+          AND signature = ?               returned to UI as RedispositionCandidates
+          AND disposition IS DISTINCT FROM corrected_verdict
+```
+
+The signature is a deterministic SHA-256 over `(category, connector_type,
+primary_mitre_technique)` so identical alerts produce identical memory keys
+across runs. Empty signatures (alerts missing all three components) skip
+institutional memory ingestion to avoid polluting the knowledge base.
+
+---
+
 ## Tier 2 — Intelligent Automation
 
 | Capability | API prefix | Description |

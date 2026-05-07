@@ -14,6 +14,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ContributorLeaderboard } from './ContributorLeaderboard';
 
 // ─── Demo fallback ────────────────────────────────────────────────────────────
 
@@ -370,6 +371,9 @@ export function DetectionsView() {
           onRetry={() => mutate()}
         />
       )}
+
+      {/* Contributor leaderboard */}
+      <ContributorLeaderboard />
     </div>
   );
 }

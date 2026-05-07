@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import structlog
 
+from app.confidence import score_triage
 from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
 from app.tools.mitre import map_techniques_to_kill_chain
 
@@ -106,6 +107,20 @@ async def run_triage(state: InvestigationState) -> InvestigationState:
             )
         )
 
+    confidence, basis, verdict = score_triage(state)
+    state.confidence = confidence
+    state.confidence_basis = basis
+    state.verdict = verdict
+    state.add_finding(
+        f"Triage verdict: {verdict} (confidence={confidence:.2f})"
+    )
+
     state.add_finding("Triage phase complete — proceeding to enrichment")
-    logger.info("Triage complete", severity=severity, ioc_count=len(iocs))
+    logger.info(
+        "Triage complete",
+        severity=severity,
+        ioc_count=len(iocs),
+        confidence=round(confidence, 2),
+        verdict=verdict,
+    )
     return state

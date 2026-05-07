@@ -1,0 +1,26 @@
+id: det-cloud-203
+name: M365 Purview DLP Policy Disabled
+description: A Data Loss Prevention policy was disabled in Microsoft Purview. Disabling
+  DLP removes the guardrails that prevent sensitive data from leaving the tenant via
+  email, Teams, or SharePoint.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- mitre.attack.t1537
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-audit
+detection:
+  condition: |
+    operation == "Set-DlpCompliancePolicy"
+    AND parameters.Enabled == false
+false_positives:
+- Policy disabled during migration to a replacement DLP policy
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

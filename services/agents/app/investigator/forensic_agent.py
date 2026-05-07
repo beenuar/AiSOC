@@ -19,6 +19,8 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from app.core.cost_telemetry import record_llm_call
+
 from .state import ForensicFindings, InvestigatorState, StepKind
 from .tools import sha256_of
 
@@ -85,6 +87,15 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
         tokens = 0
         if hasattr(response, "response_metadata"):
             tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
+        # Tier 1.6: record cost telemetry on the active CostTracker.
+        call_record = record_llm_call(
+            response,
+            model=model,
+            latency_ms=latency_ms,
+            step="forensic",
+            tool="llm.forensic",
+        )
+        cost_usd = call_record.cost_usd if call_record is not None else 0.0
         state.log_llm_response(
             agent="ForensicAgent",
             response=content if isinstance(content, str) else str(content),
@@ -92,6 +103,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
             model=model,
             tokens_used=tokens,
             latency_ms=latency_ms,
+            cost_usd=cost_usd,
         )
         json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:

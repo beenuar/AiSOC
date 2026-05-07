@@ -1,0 +1,26 @@
+id: det-cloud-212
+name: Azure Key Vault Purge Protection Disabled
+description: Purge protection was disabled on an Azure Key Vault. Without purge
+  protection, soft-deleted secrets, keys, and certificates can be permanently
+  destroyed before the retention period expires, enabling evidence destruction.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1485
+- mitre.attack.t1070
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: activity-log
+detection:
+  condition: |
+    operation_name == "Microsoft.KeyVault/vaults/write"
+    AND properties.enablePurgeProtection == false
+false_positives:
+- Dev/test vault with no production secrets
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

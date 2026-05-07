@@ -1,0 +1,27 @@
+id: det-cloud-202
+name: M365 Defender Anti-Phishing Policy Weakened
+description: An anti-phishing policy had impersonation protection or spoof intelligence
+  disabled. This lowers the barrier for BEC and brand-impersonation phishing campaigns.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1562.001
+- mitre.attack.t1566.002
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: defender-admin
+detection:
+  condition: |
+    operation == "Set-AntiPhishPolicy"
+    AND (parameters.EnableMailboxIntelligenceProtection == false
+         OR parameters.EnableSpoofIntelligence == false
+         OR parameters.EnableTargetedUserProtection == false)
+false_positives:
+- Policy adjustment during phased rollout of Defender for Office 365
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

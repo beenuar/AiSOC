@@ -1,0 +1,110 @@
+# AiSOC autonomy policy — site-wide per-action confidence thresholds.
+#
+# This file is the second-precedence layer in the guardrail stack:
+#
+#   hard-coded defaults   <  autonomy_policy.yaml  <  per-tenant DB overrides
+#
+# Loaded once per process by services/agents/app/policy/guardrails.py.
+# Override the path with the AISOC_AUTONOMY_POLICY environment variable.
+#
+# Each action carries three confidence cutoffs in [0.0, 1.0]:
+#
+#   auto       — at or above this, the agent acts autonomously
+#   review     — below auto but at or above this, queue for analyst review
+#   escalation — below review but at or above this, page senior on-call
+#                (anything below escalation is rejected outright)
+#
+# Either form is accepted:
+#
+#   block_ip: 0.90              # scalar form == auto threshold; review and
+#                               # escalation derived as auto-0.10 and auto-0.30
+#
+#   isolate_host:               # explicit three-tier form (preferred for
+#     auto: 0.92                # high-blast-radius actions)
+#     review: 0.72
+#     escalation: 0.45
+#
+# Calibration note: confidence values come from the calibrated scoring layer
+# in services/agents/app/confidence — they are NOT raw LLM self-reported
+# confidence. The Brier-score gate in scripts/run_evals.py protects against
+# drift; if calibration regresses, raise these thresholds until it recovers.
+#
+# Editing guidance:
+#   - Read-only enrichments (lookups, mitre, log search) are safe at 0.0.
+#   - Anything that mutates customer state defaults to 0.5+.
+#   - Anything that touches identity, network, or production hosts defaults
+#     to 0.85+. Lower these only after running a tabletop with the security
+#     team and capturing the decision in your case-management trail.
+
+version: 1
+
+thresholds:
+  # ---------------------------------------------------------------------------
+  # Read / enrichment — autonomous by default
+  # ---------------------------------------------------------------------------
+  lookup_ip: 0.0
+  lookup_domain: 0.0
+  search_logs: 0.0
+  enrich_alert: 0.0
+  mitre_lookup: 0.0
+  get_alert_context: 0.0
+
+  # ---------------------------------------------------------------------------
+  # Case workflow — analyst can take back at any time
+  # ---------------------------------------------------------------------------
+  add_alert_tag:
+    auto: 0.50
+    review: 0.30
+    escalation: 0.10
+  close_alert:
+    auto: 0.60
+    review: 0.40
+    escalation: 0.20
+  create_case:
+    auto: 0.50
+    review: 0.30
+    escalation: 0.10
+  add_case_comment:
+    auto: 0.40
+    review: 0.20
+    escalation: 0.05
+  assign_case:
+    auto: 0.60
+    review: 0.40
+    escalation: 0.20
+
+  # ---------------------------------------------------------------------------
+  # Containment — high blast radius, require strong calibration
+  # ---------------------------------------------------------------------------
+  quarantine_file:
+    auto: 0.85
+    review: 0.65
+    escalation: 0.40
+  block_ip:
+    auto: 0.90
+    review: 0.70
+    escalation: 0.40
+  isolate_host:
+    auto: 0.92
+    review: 0.72
+    escalation: 0.45
+  disable_user_account:
+    auto: 0.90
+    review: 0.70
+    escalation: 0.40
+  revoke_session:
+    auto: 0.80
+    review: 0.60
+    escalation: 0.30
+  delete_object:
+    auto: 0.95
+    review: 0.80
+    escalation: 0.50
+  firewall_rule_add:
+    auto: 0.88
+    review: 0.68
+    escalation: 0.40
+  firewall_rule_remove:
+    auto: 0.90
+    review: 0.70
+    escalation: 0.40

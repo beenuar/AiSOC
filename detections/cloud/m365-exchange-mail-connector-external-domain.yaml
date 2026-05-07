@@ -1,0 +1,26 @@
+id: det-cloud-195
+name: M365 Exchange Inbound Connector From Untrusted Domain
+description: Detects creation of an Exchange Online inbound connector that accepts mail
+  from a specific external sender domain. Adversaries create connectors to bypass spam
+  filters for phishing infrastructure.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1566
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: exchange-admin
+detection:
+  condition: |
+    operation == "New-InboundConnector"
+    AND parameters.SenderDomains IS NOT NULL
+false_positives:
+- Approved partner mail relay
+- Migration from on-premises Exchange
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

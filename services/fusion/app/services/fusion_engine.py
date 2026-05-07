@@ -14,6 +14,9 @@ from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
 from app.services.entity_risk import EntityRiskEngine
 from app.services.ml_scorer import MLScorer
+from app.services.vuln_boost import apply_vuln_boost
+
+from app.core.config import settings
 
 logger = structlog.get_logger()
 
@@ -94,6 +97,14 @@ class FusionEngine:
             fused = self._confidence_scorer.score(fused)
         except Exception as exc:
             logger.warning("confidence_scoring_failed", error=str(exc))
+
+        # --- Step 3c: Exploit-in-wild boost (Tier 3.5) ---
+        # Inspects enrichments for exploited CVEs and raises confidence when present.
+        if settings.vuln_boost_enabled:
+            try:
+                fused = apply_vuln_boost(fused)
+            except Exception as exc:
+                logger.warning("vuln_boost_failed", error=str(exc))
 
         # --- Step 4: Risk-Based Alerting (entity rollup) ---
         # RBA accumulates points on the entities this alert touches and may

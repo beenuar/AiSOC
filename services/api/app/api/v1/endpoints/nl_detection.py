@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 
 import structlog
 
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/nl-detection", tags=["nl_detection"])
@@ -125,12 +127,19 @@ async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
         f"Return JSON with keys matching the platform names (sigma, kql, spl, esql)."
     )
 
+    completions_url = "https://api.openai.com/v1/chat/completions"
+    try:
+        enforce_airgap_for_url(completions_url)
+    except AirgapViolation as exc:
+        logger.info("nl_detection.airgap_block", url=completions_url, reason=str(exc))
+        return _template_fallback(request)
+
     try:
         import httpx
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),

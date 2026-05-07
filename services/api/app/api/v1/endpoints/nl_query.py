@@ -24,6 +24,7 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
 
 router = APIRouter(prefix="/nl-query", tags=["nl_query"])
@@ -154,10 +155,15 @@ async def _translate(
             "time_range_hours": time_range_hours,
         }
     )
+    completions_url = "https://api.openai.com/v1/chat/completions"
+    try:
+        enforce_airgap_for_url(completions_url)
+    except AirgapViolation:
+        return _template_fallback(question, index_pattern, time_range_hours)
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": "gpt-4o-mini",
@@ -211,6 +217,9 @@ async def _execute_esql(
     except ValueError as exc:
         raise httpx.RequestError(str(exc)) from exc
 
+    es_query_url = f"{safe_url.rstrip('/')}/_query"
+    enforce_airgap_for_url(es_query_url)
+
     # Ensure LIMIT clause
     query = esql if "| LIMIT" in esql.upper() else f"{esql}\n| LIMIT {max_rows}"
     import time
@@ -218,7 +227,7 @@ async def _execute_esql(
     t0 = time.monotonic()
     async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.post(
-            f"{safe_url.rstrip('/')}/_query",
+            es_query_url,
             headers={
                 "Authorization": f"ApiKey {es_api_key}",
                 "Content-Type": "application/json",
@@ -307,6 +316,11 @@ async def execute_query(
             es_url=es_url,
             es_api_key=es_api_key,
             max_rows=body.max_rows,
+        )
+    except AirgapViolation as exc:
+        base.execution_error = (
+            f"Air-gapped policy refused outbound request: {exc}. "
+            "Add the Elasticsearch host to AISOC_AIRGAP_ALLOWLIST or point ES_URL at a private endpoint."
         )
     except httpx.HTTPStatusError as exc:
         base.execution_error = f"ES query failed ({exc.response.status_code}): {exc.response.text[:500]}"

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 
 router = APIRouter(prefix="/phishing", tags=["phishing"])
 
@@ -94,10 +95,14 @@ async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageRe
         user_msg += f"URLS: {', '.join(urls[:10])}\n"
     if content:
         user_msg += f"CONTENT (first 2000 chars):\n{content[:2000]}"
+    completions_url = f"{base_url}/chat/completions"
+    # Air-gap enforcement: refuse the call rather than letting httpx fan out.
+    # AirgapViolation propagates to the caller so the endpoint can surface 503.
+    enforce_airgap_for_url(completions_url)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             resp = await client.post(
-                f"{base_url}/chat/completions",
+                completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": model,
@@ -165,7 +170,14 @@ def _row_to_submission(row: Any) -> SubmissionResponse:
 
 @router.post("/submit", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED, summary="Submit artifact for phishing triage")
 async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> SubmissionResponse:
-    result = await _triage(body.artifact_kind, body.raw_content or "", body.urls)
+    try:
+        result = await _triage(body.artifact_kind, body.raw_content or "", body.urls)
+    except AirgapViolation:
+        # Air-gapped mode is on but the configured LLM endpoint isn't on the
+        # allowlist — fall through to heuristic triage rather than 503-ing
+        # the user. Phishing triage degrades gracefully; the heuristic path
+        # still produces a usable verdict.
+        result = None
     if not result:
         result = _heuristic_triage(body.raw_content, body.urls)
 
@@ -238,7 +250,10 @@ async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> S
     if not existing:
         raise HTTPException(status_code=404, detail="Submission not found.")
 
-    result = await _triage(existing.artifact_kind, existing.raw_content or "", list(existing.urls or []))
+    try:
+        result = await _triage(existing.artifact_kind, existing.raw_content or "", list(existing.urls or []))
+    except AirgapViolation:
+        result = None
     if not result:
         result = _heuristic_triage(existing.raw_content, list(existing.urls or []))
 

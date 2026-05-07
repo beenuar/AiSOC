@@ -1,0 +1,26 @@
+id: det-cloud-194
+name: M365 eDiscovery Compliance Search Across All Mailboxes
+description: A compliance search targeting all mailboxes was created via eDiscovery or
+  Purview. This is a common precursor to mass email exfiltration via
+  New-ComplianceSearchAction -Export.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.002
+- mitre.attack.t1530
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-audit
+detection:
+  condition: |
+    operation == "New-ComplianceSearch"
+    AND exchange_location == "All"
+false_positives:
+- Legal hold or HR investigation with prior approval
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

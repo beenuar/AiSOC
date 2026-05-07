@@ -21,6 +21,7 @@ Usage::
 
 from __future__ import annotations
 
+import contextvars
 import os
 import time
 from dataclasses import dataclass, field
@@ -29,6 +30,24 @@ from typing import Any
 import structlog
 
 logger = structlog.get_logger()
+
+# ---------------------------------------------------------------------------
+# Active-tracker context variable
+# ---------------------------------------------------------------------------
+# LangGraph threads the agent state through its nodes as a plain dict, so we
+# cannot pass a CostTracker via the call signature without rewriting every
+# agent. A contextvar lets each agent look up the tracker bound by its caller
+# (the orchestrator) without changing the graph schema.
+
+_current_tracker: contextvars.ContextVar["CostTracker | None"] = contextvars.ContextVar(
+    "aisoc_cost_tracker",
+    default=None,
+)
+
+
+def current_cost_tracker() -> "CostTracker | None":
+    """Return the cost tracker bound to the current async context, if any."""
+    return _current_tracker.get()
 
 # ---------------------------------------------------------------------------
 # Model pricing (USD per 1 k tokens, input / output)
@@ -189,11 +208,23 @@ class CostTracker:
     _records: list[CallRecord] = field(default_factory=list, init=False)
     _start: float = field(default_factory=time.monotonic, init=False)
 
+    _token: Any = field(default=None, init=False, repr=False)
+
     async def __aenter__(self) -> "CostTracker":
+        # Bind into the current context so nested agents can find us.
+        self._token = _current_tracker.set(self)
         return self
 
     async def __aexit__(self, *_: Any) -> None:
-        await self.flush()
+        try:
+            await self.flush()
+        finally:
+            if self._token is not None:
+                try:
+                    _current_tracker.reset(self._token)
+                except (LookupError, ValueError):
+                    pass
+                self._token = None
 
     def record(
         self,
@@ -254,3 +285,75 @@ class CostTracker:
         summary = self.summary()
         logger.info("cost_telemetry.run_summary", **summary)
         await _flush_to_db(self.run_id, self.tenant_id, self._records)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for extracting token usage from LLM responses
+# ---------------------------------------------------------------------------
+
+
+def _extract_token_usage(response: Any) -> tuple[int, int]:
+    """Best-effort extraction of (prompt_tokens, completion_tokens) from a
+    LangChain / OpenAI / Anthropic response object.
+
+    Newer LangChain releases expose ``response.usage_metadata`` with
+    ``input_tokens`` / ``output_tokens``. Older paths populate
+    ``response.response_metadata['token_usage']``. Some providers only give a
+    ``total_tokens`` rollup; in that case we attribute everything to prompt.
+    Returns ``(0, 0)`` when nothing is available so that recording never
+    crashes the investigation.
+    """
+    if response is None:
+        return 0, 0
+
+    usage_meta = getattr(response, "usage_metadata", None)
+    if isinstance(usage_meta, dict):
+        prompt = int(usage_meta.get("input_tokens", 0) or 0)
+        completion = int(usage_meta.get("output_tokens", 0) or 0)
+        if prompt or completion:
+            return prompt, completion
+        total = int(usage_meta.get("total_tokens", 0) or 0)
+        if total:
+            return total, 0
+
+    response_meta = getattr(response, "response_metadata", None)
+    if isinstance(response_meta, dict):
+        token_usage = response_meta.get("token_usage")
+        if isinstance(token_usage, dict):
+            prompt = int(token_usage.get("prompt_tokens", 0) or 0)
+            completion = int(token_usage.get("completion_tokens", 0) or 0)
+            if prompt or completion:
+                return prompt, completion
+            total = int(token_usage.get("total_tokens", 0) or 0)
+            if total:
+                return total, 0
+
+    return 0, 0
+
+
+def record_llm_call(
+    response: Any,
+    *,
+    model: str,
+    latency_ms: float,
+    step: str | None = None,
+    tool: str | None = None,
+) -> CallRecord | None:
+    """Record an LLM call against the currently active CostTracker, if any.
+
+    No-op when no tracker is bound. Returns the ``CallRecord`` so callers can
+    persist ``cost_usd`` into the audit log alongside the existing
+    ``tokens_used`` field.
+    """
+    tracker = current_cost_tracker()
+    if tracker is None:
+        return None
+    prompt_tokens, completion_tokens = _extract_token_usage(response)
+    return tracker.record(
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        latency_ms=latency_ms,
+        tool=tool,
+        step=step,
+    )

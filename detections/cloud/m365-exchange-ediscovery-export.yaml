@@ -1,0 +1,26 @@
+id: det-cloud-195
+name: M365 eDiscovery Search Results Exported
+description: Results from a compliance search were exported. When paired with a broad
+  compliance search this represents confirmed data exfiltration through M365 native
+  tooling.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.002
+- mitre.attack.t1567
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-audit
+detection:
+  condition: |
+    operation == "New-ComplianceSearchAction"
+    AND action == "Export"
+false_positives:
+- Authorized legal discovery export with case reference
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

@@ -28,7 +28,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.db.rls import TenantDBSession
@@ -61,12 +61,49 @@ class RunSummary(BaseModel):
     error: str | None
 
 
+class ModelCostBreakdown(BaseModel):
+    """Per-model cost telemetry for a single run.
+
+    Sourced from ``aisoc_run_costs`` (populated by ``CostTracker`` in the
+    agents service). Lets operators audit which model drove spend on a
+    given investigation.
+    """
+
+    model: str
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    total_cost_usd: float
+    total_latency_ms: int
+    call_count: int
+
+
 class RunDetail(RunSummary):
     """Full run view including counts of attached children."""
 
     alert_summary: str | None
     event_count: int
     artifact_count: int
+    model_costs: list[ModelCostBreakdown]
+
+
+class CostAggregateRow(BaseModel):
+    """Aggregate spend grouped by model across runs."""
+
+    model: str
+    runs: int
+    calls: int
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    total_cost_usd: float
+    total_latency_ms: int
+    avg_cost_per_run: float
+    avg_latency_per_call_ms: float
+
+
+class CostAggregateResponse(BaseModel):
+    window_days: int
+    by_model: list[CostAggregateRow]
+    totals: CostAggregateRow | None
 
 
 class EventOut(BaseModel):
@@ -176,6 +213,73 @@ async def _fetch_run(
     return run
 
 
+def _aggregate_row(row: dict) -> CostAggregateRow:
+    """Convert a single ``aisoc_run_costs`` aggregate row into the API model.
+
+    Centralises the SUM-COALESCE-cast dance and the divide-by-zero guards
+    for the two derived averages so the per-model and totals branches stay
+    consistent.
+    """
+    runs = int(row["runs"] or 0)
+    calls = int(row["calls"] or 0)
+    cost = float(row["total_cost_usd"] or 0.0)
+    latency = int(row["total_latency_ms"] or 0)
+    return CostAggregateRow(
+        model=row["model"],
+        runs=runs,
+        calls=calls,
+        total_prompt_tokens=int(row["total_prompt_tokens"] or 0),
+        total_completion_tokens=int(row["total_completion_tokens"] or 0),
+        total_cost_usd=cost,
+        total_latency_ms=latency,
+        avg_cost_per_run=(cost / runs) if runs else 0.0,
+        avg_latency_per_call_ms=(latency / calls) if calls else 0.0,
+    )
+
+
+async def _fetch_model_costs(
+    db: TenantDBSession,
+    run_id: uuid.UUID,
+) -> list[ModelCostBreakdown]:
+    """Fetch per-model cost rows from ``aisoc_run_costs`` for one run.
+
+    The agents service's ``CostTracker`` writes ``run_id`` as TEXT, so we
+    cast at the query boundary. Tenant scoping is already enforced by the
+    caller's prior ``_fetch_run`` check (``run_id`` is unique and tenant-
+    bound in ``investigation_runs``). Returns an empty list when no
+    telemetry rows exist — runs that predate the cost-tracker rollout
+    still load cleanly.
+    """
+    result = await db.execute(
+        text(
+            """
+            SELECT model,
+                   total_prompt_tokens,
+                   total_completion_tokens,
+                   total_cost_usd,
+                   total_latency_ms,
+                   call_count
+            FROM aisoc_run_costs
+            WHERE run_id = :run_id
+            ORDER BY total_cost_usd DESC, model ASC
+            """
+        ),
+        {"run_id": str(run_id)},
+    )
+    rows = result.mappings().all()
+    return [
+        ModelCostBreakdown(
+            model=row["model"],
+            total_prompt_tokens=int(row["total_prompt_tokens"] or 0),
+            total_completion_tokens=int(row["total_completion_tokens"] or 0),
+            total_cost_usd=float(row["total_cost_usd"] or 0.0),
+            total_latency_ms=int(row["total_latency_ms"] or 0),
+            call_count=int(row["call_count"] or 0),
+        )
+        for row in rows
+    ]
+
+
 # ---------------------------------------------------------------------------
 # List + detail
 # ---------------------------------------------------------------------------
@@ -206,6 +310,75 @@ async def list_runs(
     return [_run_to_summary(r) for r in runs]
 
 
+@router.get("/costs/aggregate", response_model=CostAggregateResponse)
+async def aggregate_costs(
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+    db: TenantDBSession,
+    window_days: int = Query(
+        default=30,
+        ge=1,
+        le=365,
+        description="Look-back window in days (anchored on run start time)",
+    ),
+) -> CostAggregateResponse:
+    """Aggregate LLM spend across investigation runs for this tenant.
+
+    Joins ``aisoc_run_costs`` against ``investigation_runs`` on ``run_id``
+    and filters by ``investigation_runs.tenant_id``. We deliberately do NOT
+    filter on ``aisoc_run_costs.tenant_id`` directly: the agents service
+    writes whatever ``tenant_id`` string the request carried (e.g. the slug
+    ``"default"``), which need not match the API-side UUID. Anchoring on
+    the run's canonical tenant column keeps the answer correct regardless
+    of how the cost row was tagged, and cannot leak across tenants because
+    ``investigation_runs`` is RLS-bound and we re-filter explicitly.
+
+    Uses Postgres ``GROUPING SETS`` to compute per-model rows and the
+    grand total in one round-trip; ``COUNT(DISTINCT run_id)`` then yields
+    a correct run count for both groupings (a naive ``SUM(runs)`` across
+    models would double-count runs that touched more than one model).
+    """
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT GROUPING(c.model)              AS is_total,
+                       COALESCE(c.model, '__total__') AS model,
+                       COUNT(DISTINCT c.run_id)       AS runs,
+                       SUM(c.call_count)              AS calls,
+                       SUM(c.total_prompt_tokens)     AS total_prompt_tokens,
+                       SUM(c.total_completion_tokens) AS total_completion_tokens,
+                       SUM(c.total_cost_usd)          AS total_cost_usd,
+                       SUM(c.total_latency_ms)        AS total_latency_ms
+                FROM aisoc_run_costs c
+                JOIN investigation_runs r ON r.id::text = c.run_id
+                WHERE r.tenant_id = :tenant_id
+                  AND r.started_at >= now() - make_interval(days => :window_days)
+                GROUP BY GROUPING SETS ((c.model), ())
+                ORDER BY GROUPING(c.model), SUM(c.total_cost_usd) DESC
+                """
+            ),
+            {
+                "tenant_id": current_user.tenant_id,
+                "window_days": window_days,
+            },
+        )
+    ).mappings().all()
+
+    by_model: list[CostAggregateRow] = []
+    totals: CostAggregateRow | None = None
+    for row in rows:
+        if int(row["is_total"]) == 1:
+            totals = _aggregate_row(row)
+        else:
+            by_model.append(_aggregate_row(row))
+
+    return CostAggregateResponse(
+        window_days=window_days,
+        by_model=by_model,
+        totals=totals,
+    )
+
+
 @router.get("/{run_id}", response_model=RunDetail)
 async def get_run(
     run_id: uuid.UUID,
@@ -219,6 +392,7 @@ async def get_run(
     artifact_count = (
         await db.execute(select(func.count(InvestigationArtifact.id)).where(InvestigationArtifact.run_id == run_id))
     ).scalar_one()
+    model_costs = await _fetch_model_costs(db, run_id)
 
     base = _run_to_summary(run)
     return RunDetail(
@@ -226,6 +400,7 @@ async def get_run(
         alert_summary=run.alert_summary,
         event_count=event_count,
         artifact_count=artifact_count,
+        model_costs=model_costs,
     )
 
 

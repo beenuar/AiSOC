@@ -141,6 +141,9 @@ class FusedAlert(BaseModel):
     anomaly_score: float = 0.0  # 0.0 = normal, 1.0 = highly anomalous (Isolation Forest)
     priority_score: float = 0.0  # 0.0–1.0 priority rank (LightGBM ranker)
 
+    # Exploit-in-wild boost (Tier 3.5) — set when alert entity matches an asset vulnerability with is_exploited=True
+    exploit_in_wild: bool = False
+
     # Detection confidence + explainability — Wave 1 of v6 roadmap.
     # ``confidence_score`` is the raw [0.0, 1.0] number used to derive the
     # human-readable ``confidence_label``. ``confidence_rationale`` is the

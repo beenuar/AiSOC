@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     # Legacy alias
     CISA_POLL_INTERVAL: int = 86400
 
+    # Air-gap egress policy (Tier 3.1).
+    # When enabled, public threat-intel feeds (OTX, CISA KEV, MISP/TAXII/
+    # OpenCTI hosted on the public Internet) will refuse to register at
+    # boot and any direct outbound HTTP from this service is blocked at
+    # request time. Mirror the AiSOC API service contract so a single
+    # AISOC_AIRGAPPED=1 in the deploy environment turns the whole stack
+    # into zero-egress mode.
+    AISOC_AIRGAPPED: bool = False
+    AISOC_AIRGAP_ALLOWLIST: list[str] = []
+
     class Config:
         env_file = ".env"
         case_sensitive = True

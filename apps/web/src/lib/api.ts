@@ -232,6 +232,8 @@ export interface Alert {
   confidenceScore?: number;
   confidenceRationale?: ConfidenceFactor[];
   ledgerRunId?: string;
+  /** Analyst-corrected verdict (Tier 1.5 override loop). */
+  disposition?: 'true_positive' | 'false_positive' | 'benign' | 'escalate' | null;
 }
 
 export interface AlertsResponse {
@@ -587,10 +589,24 @@ export interface LedgerRunSummary {
   error: string | null;
 }
 
+export interface LedgerModelCost {
+  model: string;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_cost_usd: number;
+  total_latency_ms: number;
+  call_count: number;
+}
+
 export interface LedgerRunDetail extends LedgerRunSummary {
   alert_summary: string | null;
   event_count: number;
   artifact_count: number;
+  /**
+   * Per-model token/spend/latency breakdown. Empty list when the run pre-dates
+   * the cost-telemetry rollout or used no LLM models.
+   */
+  model_costs: LedgerModelCost[];
 }
 
 export interface LedgerEvent {
@@ -1846,6 +1862,180 @@ export const passkeyApi = {
     request<void>(`/api/v1/passkeys/credentials/${id}`, { method: 'DELETE' }),
 };
 
+// ─── Autonomy policy (Tier 1.3 — configurable autonomy guardrails) ──────────
+//
+// Three-tier confidence cutoffs per agent action: at or above ``auto`` the
+// agent executes silently, between ``auto`` and ``review`` it queues for an
+// analyst, between ``review`` and ``escalation`` it pages on-call, and below
+// ``escalation`` it refuses. The admin UI in
+// ``apps/web/src/components/settings/AutonomyPolicy.tsx`` reads + writes
+// these thresholds; the agent re-reads them on the next investigation.
+
+export interface AutonomyThresholdTriple {
+  auto: number;
+  review: number;
+  escalation: number;
+}
+
+export type AutonomyBlastRadius =
+  | 'read'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'critical'
+  | 'custom'
+  | 'unknown';
+
+export interface AutonomyActionPolicy {
+  action: string;
+  blast_radius: AutonomyBlastRadius;
+  thresholds: AutonomyThresholdTriple;
+  default_thresholds: AutonomyThresholdTriple;
+  overridden: boolean;
+  override_source?: string | null;
+  last_updated_at?: string | null;
+  last_updated_by?: string | null;
+  last_reason?: string | null;
+}
+
+export interface AutonomyPolicyResponse {
+  tenant_id: string;
+  actions: AutonomyActionPolicy[];
+}
+
+export interface AutonomyThresholdUpdate {
+  auto: number;
+  review: number;
+  escalation: number;
+  reason?: string | null;
+}
+
+export interface AutonomyThresholdUpdateResponse {
+  action: string;
+  thresholds: AutonomyThresholdTriple;
+  updated_at: string;
+  updated_by: string;
+}
+
+export const autonomyPolicyApi = {
+  /** Effective policy (defaults + DB overrides) for the calling tenant. */
+  list: () => request<AutonomyPolicyResponse>('/api/v1/autonomy-policy'),
+
+  /** Upsert one action's three-tier thresholds. */
+  update: (action: string, payload: AutonomyThresholdUpdate) =>
+    request<AutonomyThresholdUpdateResponse>(
+      `/api/v1/autonomy-policy/${encodeURIComponent(action)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  /** Clear a tenant override and revert the action to the hard-coded default. */
+  reset: (action: string) =>
+    request<void>(
+      `/api/v1/autonomy-policy/${encodeURIComponent(action)}`,
+      { method: 'DELETE' },
+    ),
+};
+
+// ─── Analyst override feedback loop (Tier 1.5) ───────────────────────────────
+//
+// When an analyst corrects an AI verdict, the API:
+//   1. updates the alert's ``disposition``
+//   2. writes the lesson into ``aisoc_institutional_memory`` (so future
+//      investigations of similar alerts pull this up)
+//   3. surfaces *retroactive candidates* — past alerts in the same tenant
+//      sharing the same coarse signature that would now flip disposition.
+//
+// The analyst can then bulk-apply the new disposition to those candidates
+// via ``POST /api/v1/feedback/redisposition/apply``.
+
+export type AnalystVerdict =
+  | 'true_positive'
+  | 'false_positive'
+  | 'benign'
+  | 'escalate';
+
+export interface AlertOverrideRequest {
+  alert_id: string;
+  /** The AI-generated verdict being overridden. */
+  original_verdict: string;
+  /** Analyst's corrected verdict. */
+  corrected_verdict: AnalystVerdict;
+  /** Optional free-text justification surfaced in institutional memory. */
+  reason?: string;
+}
+
+export interface RedispositionCandidate {
+  alert_id: string;
+  title: string;
+  severity: string;
+  current_disposition: string | null;
+  proposed_disposition: AnalystVerdict;
+  event_time: string;
+}
+
+export interface AlertOverrideResponse {
+  alert_id: string;
+  corrected_verdict: AnalystVerdict;
+  recorded_at: string;
+  /** Stable institutional-memory key, only present when a signature was derivable. */
+  memory_key: string | null;
+  redisposition_candidates: RedispositionCandidate[];
+}
+
+export interface RedispositionApplyRequest {
+  alert_ids: string[];
+  new_disposition: AnalystVerdict;
+}
+
+export interface RedispositionApplyResponse {
+  updated: number;
+  new_disposition: AnalystVerdict;
+}
+
+export interface OverrideEntry {
+  key: string;
+  tags: string[];
+  reason: string | null;
+  created_at: string | null;
+  value: Record<string, unknown>;
+}
+
+export interface OverrideSummary {
+  total_overrides: number;
+  false_positive_corrections: number;
+  true_positive_corrections: number;
+  benign_corrections: number;
+  escalate_corrections: number;
+}
+
+export const feedbackApi = {
+  /** Persist an analyst correction and get retroactive re-disposition candidates back. */
+  submitOverride: (payload: AlertOverrideRequest) =>
+    request<AlertOverrideResponse>('/api/v1/feedback/alert-override', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** Bulk-apply a new disposition to past alerts the analyst confirmed. */
+  applyRedisposition: (payload: RedispositionApplyRequest) =>
+    request<RedispositionApplyResponse>('/api/v1/feedback/redisposition/apply', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** List analyst overrides the agent has 'learned' from for this tenant. */
+  listOverrides: (limit = 100) =>
+    request<OverrideEntry[]>('/api/v1/feedback/overrides', {
+      params: { limit: String(limit) },
+    }),
+
+  /** Counts of dispositions for the FPR card on the SOC dashboard. */
+  summary: () => request<OverrideSummary>('/api/v1/feedback/summary'),
+};
+
 // ─── Realtime / WebSocket helpers ────────────────────────────────────────────
 
 export const realtimeApi = {
@@ -1884,4 +2074,6 @@ export default {
   realtime: realtimeApi,
   responder: responderApi,
   passkey: passkeyApi,
+  autonomyPolicy: autonomyPolicyApi,
+  feedback: feedbackApi,
 };

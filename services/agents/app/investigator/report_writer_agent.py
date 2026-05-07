@@ -17,6 +17,8 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from app.core.cost_telemetry import record_llm_call
+
 from .state import InvestigatorState, StepKind
 from .tools import sha256_of
 
@@ -147,6 +149,15 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
         tokens = 0
         if hasattr(response, "response_metadata"):
             tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
+        # Tier 1.6: record cost telemetry on the active CostTracker.
+        call_record = record_llm_call(
+            response,
+            model=model,
+            latency_ms=latency_ms,
+            step="report_writer",
+            tool="llm.report_writer",
+        )
+        cost_usd = call_record.cost_usd if call_record is not None else 0.0
         state.log_llm_response(
             agent="ReportWriterAgent",
             response=state.report_md if isinstance(state.report_md, str) else str(state.report_md),
@@ -154,6 +165,7 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
             model=model,
             tokens_used=tokens,
             latency_ms=latency_ms,
+            cost_usd=cost_usd,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("report_writer llm failed", error=str(exc))

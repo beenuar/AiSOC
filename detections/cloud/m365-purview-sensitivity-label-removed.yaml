@@ -1,0 +1,26 @@
+id: det-cloud-204
+name: M365 Purview Sensitivity Label Removed From Document
+description: A sensitivity label was downgraded or removed from a document in
+  SharePoint or OneDrive. This may indicate an attempt to bypass DLP controls
+  before exfiltrating classified content.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1565.001
+- mitre.attack.t1537
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-audit
+detection:
+  condition: |
+    operation IN ["SensitivityLabelRemoved", "SensitivityLabelUpdated"]
+    AND new_label_sensitivity < old_label_sensitivity
+false_positives:
+- User correcting a mislabeled document
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

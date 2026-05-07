@@ -1,0 +1,26 @@
+id: det-cloud-206
+name: M365 Power Platform DLP Connector Policy Modified
+description: A Power Platform data policy was modified to reclassify or unblock
+  connectors. Moving connectors out of the blocked group allows low-code flows
+  to exfiltrate data via HTTP, Dropbox, or other external services.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1562.001
+- mitre.attack.t1537
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: power-platform-admin
+detection:
+  condition: |
+    operation IN ["UpdateDlpPolicy", "CreateDlpPolicy"]
+    AND connector_groups_changed == true
+false_positives:
+- Planned connector policy update during Power Platform governance review
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

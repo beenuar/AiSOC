@@ -133,6 +133,12 @@ class InvestigatorState(BaseModel):
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: datetime | None = None
 
+    # Aggregate cost telemetry for this run (Tier 1.6).
+    # Populated by the orchestrator from CostTracker.summary() before the
+    # "done" event is emitted. Shape: {"tokens_total", "prompt_tokens",
+    # "completion_tokens", "cost_usd", "calls", "by_model": [...], "latency_ms_total"}.
+    cost_summary: dict[str, Any] = Field(default_factory=dict)
+
     # ---------- helpers ----------
 
     def log(self, kind: StepKind, agent: str, summary: str, **meta: Any) -> None:

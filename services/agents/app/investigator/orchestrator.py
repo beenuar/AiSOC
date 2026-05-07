@@ -20,6 +20,8 @@ import structlog
 from langgraph.graph import END, START, StateGraph
 from opentelemetry import trace
 
+from app.core.cost_telemetry import CostTracker
+
 from . import ledger
 from .forensic_agent import run_forensic
 from .recon_agent import run_recon
@@ -165,8 +167,11 @@ class InvestigatorOrchestrator:
             )
 
             logger.info("investigation.start", case_id=case_id, run_id=str(run_uuid))
-            result = await self._graph.ainvoke(initial.to_dict())
-            final = InvestigatorState.from_dict(result)
+            async with CostTracker(run_id=str(run_uuid), tenant_id=tenant_id) as tracker:
+                result = await self._graph.ainvoke(initial.to_dict())
+                final = InvestigatorState.from_dict(result)
+                # Stash cost summary so the API/UI can surface it.
+                final.cost_summary = tracker.summary()
 
             # Persist the full audit log post-hoc (one shot, no streaming)
             if tenant_uuid is not None:
@@ -205,12 +210,16 @@ class InvestigatorOrchestrator:
             span.set_attribute("investigation.status", final.status)
             span.set_attribute("investigation.iterations", final.iteration)
             span.set_attribute("investigation.run_id", str(run_uuid))
+            if final.cost_summary:
+                span.set_attribute("investigation.cost_usd", final.cost_summary.get("cost_usd", 0.0))
+                span.set_attribute("investigation.tokens_total", final.cost_summary.get("tokens_total", 0))
             logger.info(
                 "investigation.end",
                 case_id=case_id,
                 run_id=str(run_uuid),
                 status=final.status,
                 iterations=final.iteration,
+                cost_usd=final.cost_summary.get("cost_usd") if final.cost_summary else None,
             )
             return final
 
@@ -259,7 +268,9 @@ class InvestigatorOrchestrator:
         logger.info("investigation.stream.start", case_id=case_id, run_id=str(run_uuid))
         last_state: InvestigatorState | None = None
         emitted_count = 0  # how many audit_log entries already streamed
+        tracker = CostTracker(run_id=str(run_uuid), tenant_id=tenant_id)
         try:
+            await tracker.__aenter__()
             async for event in self._graph.astream(initial.to_dict()):
                 # event is {node_name: state_dict}
                 for node_name, state_dict in event.items():
@@ -299,6 +310,11 @@ class InvestigatorOrchestrator:
                         }
                     emitted_count = len(state.audit_log)
 
+            # Capture cost summary before emitting done so the UI sees it.
+            cost_summary = tracker.summary()
+            if last_state is not None:
+                last_state.cost_summary = cost_summary
+
             # Emit the final "done" event with the complete state payload
             if last_state is not None:
                 if tenant_uuid is not None and last_state.report_md:
@@ -330,6 +346,7 @@ class InvestigatorOrchestrator:
                         "started_at": last_state.started_at.isoformat(),
                         "completed_at": last_state.completed_at.isoformat() if last_state.completed_at else None,
                         "error": last_state.error,
+                        "cost_summary": cost_summary,
                     },
                 }
         except Exception as exc:  # noqa: BLE001
@@ -352,6 +369,12 @@ class InvestigatorOrchestrator:
                 "case_id": case_id,
                 "run_id": str(run_uuid),
             }
+        finally:
+            # Always flush + reset the tracker so the contextvar is cleared.
+            try:
+                await tracker.__aexit__(None, None, None)
+            except Exception:  # noqa: BLE001
+                logger.warning("cost_tracker.flush_failed", run_id=str(run_uuid))
 
 
 async def run_investigation(

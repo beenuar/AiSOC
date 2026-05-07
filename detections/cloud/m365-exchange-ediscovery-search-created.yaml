@@ -1,0 +1,26 @@
+id: det-cloud-193
+name: M365 eDiscovery Compliance Search Created
+description: Detects creation of an eDiscovery compliance search in Microsoft Purview.
+  Insider threats and compromised admin accounts abuse eDiscovery to search and export
+  mailbox contents at scale.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.002
+- mitre.attack.t1213
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-compliance
+detection:
+  condition: |
+    operation == "New-ComplianceSearch"
+    AND user_type != "eDiscoveryManager"
+false_positives:
+- Authorised legal hold or HR investigation
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

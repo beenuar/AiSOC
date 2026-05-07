@@ -3,14 +3,18 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import {
   alertsApi,
   agentsApi,
   ledgerApi,
+  feedbackApi,
   type Alert,
   type AgentInvestigation,
   type ConfidenceFactor,
   type ConfidenceLabel,
+  type AnalystVerdict,
+  type RedispositionCandidate,
 } from '@/lib/api';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
@@ -478,6 +482,342 @@ The PowerShell execution event represents a multi-stage attack with C2 communica
   );
 }
 
+// ─── Analyst Override Panel — Tier 1.5 feedback loop ────────────────────────
+//
+// When the AI agent gets a verdict wrong, the analyst clicks the corrected
+// verdict here. The override:
+//   1. updates the alert's ``disposition`` server-side
+//   2. is persisted to ``aisoc_institutional_memory`` so future investigations
+//      of similar alerts pull this up
+//   3. surfaces *retroactive candidates* — past alerts that share the same
+//      coarse signature (category + connector + primary MITRE technique) and
+//      would now flip disposition. The analyst can bulk-apply with one click.
+//
+// This is the single highest-leverage learning loop in the platform: every
+// override = one teaching moment that re-grades the past *and* improves the
+// future. Without this UI, the backend pipeline is invisible to the SOC.
+
+const VERDICT_OPTIONS: Array<{
+  value: AnalystVerdict;
+  label: string;
+  description: string;
+  badge: string;
+}> = [
+  {
+    value: 'true_positive',
+    label: 'True Positive',
+    description: 'Real threat — the AI got it right or under-called it',
+    badge: 'bg-red-500/10 text-red-300 ring-red-500/30',
+  },
+  {
+    value: 'false_positive',
+    label: 'False Positive',
+    description: 'Not a threat — the AI over-called it',
+    badge: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
+  },
+  {
+    value: 'benign',
+    label: 'Benign',
+    description: 'Expected behaviour — suppress for the same signature in future',
+    badge: 'bg-sky-500/10 text-sky-300 ring-sky-500/30',
+  },
+  {
+    value: 'escalate',
+    label: 'Escalate',
+    description: 'Needs human follow-up beyond what the agent can do',
+    badge: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
+  },
+];
+
+const VERDICT_LABEL: Record<AnalystVerdict, string> = {
+  true_positive: 'True Positive',
+  false_positive: 'False Positive',
+  benign: 'Benign',
+  escalate: 'Escalate',
+};
+
+function AnalystOverridePanel({
+  alert,
+  onMutate,
+}: {
+  alert: Alert;
+  onMutate: () => void;
+}) {
+  const currentDisposition = alert.disposition ?? null;
+  const [verdict, setVerdict] = useState<AnalystVerdict | null>(null);
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [candidates, setCandidates] = useState<RedispositionCandidate[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const [memoryKey, setMemoryKey] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!verdict) return;
+    setSubmitting(true);
+    try {
+      const resp = await feedbackApi.submitOverride({
+        alert_id: alert.id,
+        // We record the AI's confidence band as the original_verdict — it's
+        // the most honest summary of what the AI thought before the analyst
+        // intervened. Falls back to "unverified" when the AI never produced
+        // a labelled output.
+        original_verdict:
+          currentDisposition ??
+          alert.confidenceLabel ??
+          'unverified',
+        corrected_verdict: verdict,
+        reason: reason.trim() || undefined,
+      });
+      setCandidates(resp.redisposition_candidates);
+      setMemoryKey(resp.memory_key);
+      // Pre-select every candidate; the analyst opts *out* by unchecking.
+      setSelectedIds(new Set(resp.redisposition_candidates.map((c) => c.alert_id)));
+      toast.success(
+        resp.redisposition_candidates.length > 0
+          ? `Recorded — ${resp.redisposition_candidates.length} similar past alerts found`
+          : 'Recorded — institutional memory updated',
+      );
+      onMutate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit override');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const applyAll = async () => {
+    if (!verdict || selectedIds.size === 0) return;
+    setApplying(true);
+    try {
+      const resp = await feedbackApi.applyRedisposition({
+        alert_ids: Array.from(selectedIds),
+        new_disposition: verdict,
+      });
+      toast.success(
+        `Re-dispositioned ${resp.updated} past alert${resp.updated === 1 ? '' : 's'}`,
+      );
+      // Drop applied candidates from the panel so we don't bulk-apply twice.
+      setCandidates((prev) =>
+        prev.filter((c) => !selectedIds.has(c.alert_id)),
+      );
+      setSelectedIds(new Set());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to apply re-disposition');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const toggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(candidates.map((c) => c.alert_id)));
+  };
+  const clearAll = () => setSelectedIds(new Set());
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-gray-300">
+            Was the AI right?
+          </p>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            Your correction is written to institutional memory and re-grades
+            similar past alerts.
+          </p>
+        </div>
+        {currentDisposition && (
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 shrink-0">
+            current ·{' '}
+            <span className="text-gray-300">
+              {VERDICT_LABEL[currentDisposition as AnalystVerdict] ??
+                currentDisposition}
+            </span>
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {VERDICT_OPTIONS.map((opt) => {
+          const active = verdict === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setVerdict(opt.value)}
+              className={clsx(
+                'text-left p-2.5 rounded-md ring-1 transition-colors',
+                active
+                  ? `${opt.badge} ring-inset`
+                  : 'bg-gray-900/40 text-gray-300 ring-gray-800 hover:bg-gray-900/80 hover:ring-gray-700',
+              )}
+            >
+              <div className="text-xs font-medium">{opt.label}</div>
+              <div
+                className={clsx(
+                  'text-[10px] mt-0.5 leading-snug',
+                  active ? 'opacity-90' : 'text-gray-500',
+                )}
+              >
+                {opt.description}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div>
+        <label className="text-[11px] text-gray-500 block mb-1">
+          Reason (optional, surfaced in institutional memory)
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. matches our weekly vuln-scanner sweep — known benign"
+          rows={2}
+          className="w-full bg-gray-900/60 border border-gray-800 rounded-md px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-none"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={submit}
+        disabled={!verdict || submitting}
+        className={clsx(
+          'w-full text-sm font-medium px-3 py-2 rounded-md transition-colors',
+          !verdict || submitting
+            ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-500 text-white',
+        )}
+      >
+        {submitting ? 'Recording…' : 'Record correction'}
+      </button>
+
+      {memoryKey && (
+        <p className="text-[10px] text-gray-500 font-mono break-all">
+          memory key · {memoryKey}
+        </p>
+      )}
+
+      {candidates.length > 0 && (
+        <div className="space-y-2 pt-3 border-t border-gray-800">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium text-amber-300">
+                {candidates.length} past alert
+                {candidates.length === 1 ? '' : 's'} match this signature
+              </p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Apply &ldquo;{verdict ? VERDICT_LABEL[verdict] : ''}&rdquo; to
+                everything still selected.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px]">
+              <button
+                type="button"
+                onClick={selectAll}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                all
+              </button>
+              <span className="text-gray-700">·</span>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-gray-400 hover:text-gray-300"
+              >
+                none
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+            {candidates.map((c) => {
+              const checked = selectedIds.has(c.alert_id);
+              return (
+                <label
+                  key={c.alert_id}
+                  className={clsx(
+                    'flex items-start gap-2 p-2 rounded-md ring-1 cursor-pointer transition-colors',
+                    checked
+                      ? 'bg-blue-500/5 ring-blue-500/40'
+                      : 'bg-gray-900/40 ring-gray-800 hover:bg-gray-900/80',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(c.alert_id)}
+                    className="mt-0.5 accent-blue-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                        {c.severity}
+                      </span>
+                      <span className="text-[10px] text-gray-600">·</span>
+                      <span className="text-[10px] text-gray-500">
+                        {format(new Date(c.event_time), 'MMM d, HH:mm')}
+                      </span>
+                      {c.current_disposition && (
+                        <>
+                          <span className="text-[10px] text-gray-600">·</span>
+                          <span className="text-[10px] text-gray-500">
+                            was{' '}
+                            <span className="text-gray-300">
+                              {VERDICT_LABEL[
+                                c.current_disposition as AnalystVerdict
+                              ] ?? c.current_disposition}
+                            </span>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <Link
+                      href={`/alerts/${c.alert_id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-gray-200 hover:text-blue-300 line-clamp-2 leading-snug block"
+                    >
+                      {c.title}
+                    </Link>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={applyAll}
+            disabled={selectedIds.size === 0 || applying}
+            className={clsx(
+              'w-full text-xs font-medium px-3 py-2 rounded-md transition-colors',
+              selectedIds.size === 0 || applying
+                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 ring-1 ring-amber-500/30',
+            )}
+          >
+            {applying
+              ? 'Applying…'
+              : `Re-disposition ${selectedIds.size} alert${
+                  selectedIds.size === 1 ? '' : 's'
+                }`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AlertDetailView({ alertId }: { alertId: string }) {
@@ -674,6 +1014,10 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           <div className="space-y-4">
             <Section title="AI Investigation">
               <AIInvestigation alertId={alertId} />
+            </Section>
+
+            <Section title="Verdict & feedback">
+              <AnalystOverridePanel alert={alert} onMutate={mutate} />
             </Section>
           </div>
         </div>

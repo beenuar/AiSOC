@@ -1,0 +1,29 @@
+id: det-cloud-192
+name: M365 Exchange Transport Rule Redirects Mail Externally
+description: Detects creation or modification of an Exchange Online transport rule that
+  redirects or forwards mail to an external domain. Commonly abused in BEC attacks to
+  silently siphon conversations.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.003
+- mitre.attack.t1020
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: exchange-admin
+detection:
+  condition: |
+    operation IN ["New-TransportRule", "Set-TransportRule"]
+    AND (parameters.RedirectMessageTo MATCHES "*@*"
+         OR parameters.BlindCopyTo MATCHES "*@*")
+    AND recipient_domain NOT IN org_domains
+false_positives:
+- Approved compliance journaling rule
+- Partner organisation relay
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

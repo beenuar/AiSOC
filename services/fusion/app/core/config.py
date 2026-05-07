@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # break-glass; the UI degrades gracefully (no chip / no rationale panel).
     confidence_enabled: bool = Field(default=True, alias="AISOC_FEATURE_CONFIDENCE")
 
+    # Vuln↔alert correlation w/ exploit-in-wild boost (Tier 3.5)
+    vuln_boost_enabled: bool = Field(default=True, alias="AISOC_VULN_BOOST")
+
     # Enrichment service
     enrichment_service_url: str = Field(default="http://localhost:8082", alias="ENRICHMENT_SERVICE_URL")
 

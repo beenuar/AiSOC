@@ -1,0 +1,111 @@
+name: Detection rule proposal
+description: Propose a new detection rule or improvement to an existing rule.
+title: "[detection] <brief description>"
+labels: ["detection-rule", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to propose a detection rule before opening a PR.
+        See the full detection schema at [`detections/`](../tree/main/detections)
+        and the [PR template](../blob/main/.github/PULL_REQUEST_TEMPLATE/detection_rule.md) for contribution guidelines.
+
+  - type: dropdown
+    id: contribution-type
+    attributes:
+      label: Type
+      options:
+        - New detection rule
+        - Translation to new platform (SPL/KQL/ES|QL/YARA-L2)
+        - Improvement to existing rule
+        - False-positive report
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - cloud
+        - endpoint
+        - identity
+        - network
+        - application
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+
+  - type: input
+    id: mitre
+    attributes:
+      label: MITRE ATT&CK technique(s)
+      description: "Comma-separated, e.g. T1078.004, T1098.001"
+      placeholder: T1059.001
+    validations:
+      required: false
+
+  - type: input
+    id: log-source
+    attributes:
+      label: Log source
+      description: "product/service, e.g. aws/cloudtrail, windows/sysmon, azure/signin"
+      placeholder: aws/cloudtrail
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What should the detection catch?
+      description: |
+        Describe the attack scenario, the telemetry signal, and why this detection
+        matters. Include links to blog posts, CVEs, or threat reports if available.
+      placeholder: |
+        This rule should fire when an attacker modifies an IAM role trust policy
+        to allow cross-account access from an unknown principal...
+    validations:
+      required: true
+
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: Known false-positive scenarios
+      description: List situations where this detection would fire on benign activity.
+      placeholder: |
+        - Sandbox accounts with intentionally broad trust policies
+        - Automated deployment pipelines that rotate trust policies
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to threat research, vendor docs, or CVEs.
+      placeholder: |
+        - https://example.com/blog/iam-trust-abuse
+        - CVE-2024-XXXXX
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing detections in `detections/` and this is not a duplicate.
+          required: true
+        - label: I am willing to submit a PR implementing this detection (optional).
+          required: false

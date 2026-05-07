@@ -21,6 +21,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+
 router = APIRouter(prefix="/translation", tags=["translation"])
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -110,10 +112,18 @@ async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
         return None
     base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
     model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    completions_url = f"{base_url}/chat/completions"
+    # Air-gap check: refuses the call entirely (rather than silently
+    # falling back to template-substitution) so misconfigurations are
+    # loud. The except-Exception below would otherwise swallow this.
+    try:
+        enforce_airgap_for_url(completions_url)
+    except AirgapViolation:
+        raise
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                f"{base_url}/chat/completions",
+                completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": model,
@@ -227,7 +237,17 @@ async def translate_rule(body: TranslateRequest) -> TranslateResponse:
     if not body.target_formats:
         raise HTTPException(status_code=400, detail="At least one target_format is required.")
 
-    payload = await _llm_translate(body)
+    try:
+        payload = await _llm_translate(body)
+    except AirgapViolation as exc:
+        # Surface the misconfig clearly instead of silently falling back —
+        # otherwise an operator who flipped on AISOC_AIRGAPPED would see
+        # quietly degraded translations with no signal that the LLM was
+        # being refused.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "airgap_violation", "message": str(exc)},
+        ) from exc
     if not payload:
         payload = _fallback_templates(body)
 

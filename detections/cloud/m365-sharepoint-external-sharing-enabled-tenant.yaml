@@ -1,0 +1,25 @@
+id: det-cloud-196
+name: M365 SharePoint External Sharing Enabled Tenant-Wide
+description: Detects tenant-level SharePoint sharing policy changed to allow external
+  or anonymous sharing. Widens the data-loss attack surface across all sites.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1567
+- mitre.attack.t1537
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: sharepoint-admin
+detection:
+  condition: |
+    operation == "Set-SPOTenant"
+    AND parameters.SharingCapability IN ["ExternalUserAndGuestSharing", "ExternalUserSharingOnly"]
+false_positives:
+- Planned collaboration project with external partners
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

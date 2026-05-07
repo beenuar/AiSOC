@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { LiveFeedPanel } from './LiveFeedPanel';
+import { SOCMetricsDashboard } from './SOCMetricsDashboard';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,19 @@ export function DashboardView() {
 
         {/* Live Feed (realtime via WebSocket) */}
         <LiveFeedPanel />
+      </div>
+
+      {/* SOC Metrics — Tier 1.4: MTTD/MTTR/MTTC/FPR/escalation rate, calibration curve, ATT&CK heatmap */}
+      <div className="pt-2">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-100">SOC Performance</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Outcome metrics, agent calibration, and technique coverage. Auto-computed every 30s.
+            </p>
+          </div>
+        </div>
+        <SOCMetricsDashboard />
       </div>
     </div>
   );

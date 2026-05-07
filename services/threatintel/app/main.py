@@ -23,6 +23,7 @@ from opensearchpy import AsyncOpenSearch
 from prometheus_client import Counter, make_asgi_app
 from qdrant_client import AsyncQdrantClient
 
+from app.airgap import airgap_status, is_host_allowed_for_airgap
 from app.clients.cisa_kev import CisaKevClient
 from app.clients.misp import MispClient
 from app.clients.otx import OtxClient
@@ -65,9 +66,46 @@ actors_ingested = Counter("threatintel_actors_ingested_total", "Total actors ing
 # ─── Application lifespan ─────────────────────────────────────────────────────
 
 
+def _airgap_check_feed_url(feed_name: str, url: str | None) -> bool:
+    """Return True if a feed at ``url`` may be polled under current air-gap policy.
+
+    Logs and refuses registration when air-gap mode is on and the feed's URL
+    points at a public host that is not on the allowlist. Internal mirrors
+    (RFC1918, ``.local``, ``.internal``, single-label hosts, allowlisted
+    suffixes) are always permitted so customers running their own MISP or
+    TAXII server inside the perimeter can keep polling normally.
+    """
+
+    if not settings.AISOC_AIRGAPPED:
+        return True
+
+    if not url:
+        # Feeds without a configured URL (e.g. CISA KEV uses a hardcoded
+        # public URL inside the client) are evaluated by their default URL
+        # at the call site below; the bare check here only short-circuits
+        # operator-supplied URLs.
+        return True
+
+    from urllib.parse import urlparse
+
+    host = urlparse(url).hostname or ""
+    allowed = is_host_allowed_for_airgap(host)
+    if not allowed:
+        logger.warning(
+            "airgap.feed_blocked",
+            feed=feed_name,
+            host=host,
+            reason="public host blocked by AISOC_AIRGAPPED policy",
+        )
+    return allowed
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("ThreatIntel service starting…")
+    logger.info(
+        "ThreatIntel service starting…",
+        airgap=airgap_status(),
+    )
 
     # ── Redis ──────────────────────────────────────────────────────────────────
     redis = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
@@ -149,8 +187,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ── Scheduler ─────────────────────────────────────────────────────────────
     scheduler = FeedScheduler(pipeline)
 
-    # Register TAXII feeds
-    if settings.TAXII_URL and settings.TAXII_COLLECTION_IDS:
+    # Register TAXII feeds (skipped entirely if the configured TAXII server
+    # is on the public Internet and AISOC_AIRGAPPED=1 — this prevents even
+    # a single boot-time DNS lookup from leaking the deployment).
+    if (
+        settings.TAXII_URL
+        and settings.TAXII_COLLECTION_IDS
+        and _airgap_check_feed_url("taxii", settings.TAXII_URL)
+    ):
         for col_id in settings.TAXII_COLLECTION_IDS.split(","):
             col_id = col_id.strip()
             if col_id:
@@ -167,27 +211,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
 
     # Register MISP feed
-    if misp_client:
+    if misp_client and _airgap_check_feed_url("misp", settings.MISP_URL):
         scheduler.register(
             feed_name="misp",
             handler=partial(handle_misp_feed, client=misp_client, pipeline=pipeline),
             interval_seconds=settings.MISP_POLL_INTERVAL,
         )
 
-    # Register OTX feed
-    if otx_client:
+    # Register OTX feed (always public, so air-gapped mode unconditionally
+    # disables it — there is no internal mirror of AlienVault OTX).
+    if otx_client and _airgap_check_feed_url("otx", "https://otx.alienvault.com"):
         scheduler.register(
             feed_name="otx",
             handler=partial(handle_otx_feed, client=otx_client, pipeline=pipeline),
             interval_seconds=settings.OTX_POLL_INTERVAL,
         )
 
-    # CISA KEV (always enabled — no key required)
-    scheduler.register(
-        feed_name="cisa-kev",
-        handler=partial(handle_cisa_kev_feed, client=kev_client, pipeline=pipeline),
-        interval_seconds=settings.CISA_KEV_POLL_INTERVAL,
-    )
+    # CISA KEV (always enabled — no key required) — public CISA URL, so
+    # an air-gapped deployment must mirror the JSON internally and
+    # override via an internal allowlist entry, otherwise we skip.
+    if _airgap_check_feed_url("cisa-kev", "https://www.cisa.gov"):
+        scheduler.register(
+            feed_name="cisa-kev",
+            handler=partial(handle_cisa_kev_feed, client=kev_client, pipeline=pipeline),
+            interval_seconds=settings.CISA_KEV_POLL_INTERVAL,
+        )
 
     scheduler.start()
 
@@ -235,6 +283,7 @@ async def health() -> dict:
         "status": "ok",
         "redis": redis_ok,
         "scheduler": app.state.scheduler._scheduler.running if hasattr(app.state, "scheduler") else False,
+        "airgap": airgap_status(),
     }
 
 

@@ -1,0 +1,27 @@
+id: det-cloud-216
+name: GCP VPC Firewall Rule Allows All Ingress
+description: A firewall rule was created or updated to allow ingress from 0.0.0.0/0
+  on all ports or a wide port range. This exposes compute instances to the public
+  internet without restriction.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.007
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: cloud-audit
+detection:
+  condition: |
+    method_name IN ["v1.compute.firewalls.insert", "v1.compute.firewalls.update"]
+    AND direction == "INGRESS"
+    AND source_ranges CONTAINS "0.0.0.0/0"
+    AND (allowed_ports == "all" OR allowed_port_range_size > 1000)
+false_positives:
+- Load balancer health-check rule with backend security groups
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

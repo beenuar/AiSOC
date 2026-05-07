@@ -36,6 +36,13 @@ from app.hunt.loader import HuntCorpus, HuntDefinition
 _TESTS_DIR = Path(__file__).parent
 _HUNT_TELEMETRY_PATH = _TESTS_DIR / "eval_data" / "synthetic_hunt_telemetry.jsonl"
 
+# CI gates (used by both this module's unittest classes and the unified runner
+# in scripts/run_evals.py). The hunt corpus is small and hand-authored, so we
+# require perfect coverage on declared positives and zero false positives on
+# declared negatives. Tighten these only with a corresponding corpus expansion.
+_POSITIVE_FLOOR = 1.0
+_NEGATIVE_CEILING = 0.0
+
 
 def _load_hunt_corpus() -> list[HuntDefinition]:
     """Load the YAML hunt corpus from ``hunts/`` (repo root)."""

@@ -1,0 +1,26 @@
+id: det-cloud-196
+name: M365 SharePoint External Sharing Enabled at Org Level
+description: SharePoint Online tenant sharing capability was changed to allow sharing
+  with anonymous or new external users. This broadens the blast radius of any future
+  data exposure.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1537
+- mitre.attack.t1213.002
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: sharepoint-admin
+detection:
+  condition: |
+    operation == "Set-SPOTenant"
+    AND parameters.SharingCapability IN ["ExternalUserAndGuestSharing", "ExternalUserSharingOnly"]
+false_positives:
+- Planned collaboration policy change during partner onboarding
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

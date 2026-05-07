@@ -1,0 +1,25 @@
+id: det-cloud-205
+name: M365 Purview Retention Policy Deleted
+description: A retention or preservation policy was deleted. Removing retention
+  enables permanent deletion of email and documents that may be relevant to
+  legal holds or incident investigations.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1485
+- mitre.attack.t1070
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-audit
+detection:
+  condition: |
+    operation == "Remove-RetentionCompliancePolicy"
+false_positives:
+- Scheduled policy lifecycle cleanup approved by compliance team
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

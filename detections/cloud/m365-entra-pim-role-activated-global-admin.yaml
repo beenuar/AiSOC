@@ -1,0 +1,26 @@
+id: det-cloud-209
+name: M365 Entra PIM Global Admin Role Activated
+description: A user activated the Global Administrator role via Privileged Identity
+  Management. While PIM is a legitimate workflow, Global Admin activation should be
+  rare and audited since it grants unrestricted tenant access.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.004
+- mitre.attack.t1098.003
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: entra-audit
+detection:
+  condition: |
+    operation == "Add member to role completed (PIM activation)"
+    AND role_display_name == "Global Administrator"
+false_positives:
+- Break-glass account activation during a planned emergency drill
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

@@ -3,12 +3,14 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    airgap,
     alerts,
     api_keys,
     approvals,
     assets,
     audit,
     auth,
+    autonomy_policy,
     cases,
     community,
     compliance,
@@ -16,6 +18,7 @@ from app.api.v1.endpoints import (
     detection_loop,
     detection_proposals,
     detection_rules,
+    easm,
     feedback,
     federated,
     hunts,
@@ -84,6 +87,9 @@ api_router.include_router(remediation.router)
 # Analyst feedback loop
 api_router.include_router(feedback.router)
 
+# Configurable autonomy guardrails — three-tier per-action confidence (Tier 1.3)
+api_router.include_router(autonomy_policy.router)
+
 # NL detection authoring (Tier 2)
 api_router.include_router(nl_detection.router)
 
@@ -111,5 +117,9 @@ api_router.include_router(knowledge_base.router)
 # Wave 4 — advanced capabilities
 api_router.include_router(threat_intel.router)
 api_router.include_router(posture.router)
+api_router.include_router(easm.router)
 api_router.include_router(identity_graph.router)
 api_router.include_router(reports.router)
+
+# Air-gap status snapshot for operators — Tier 3.1 (air-gapped certification)
+api_router.include_router(airgap.router)

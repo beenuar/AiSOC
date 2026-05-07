@@ -1,0 +1,28 @@
+id: det-cloud-211
+name: M365 OAuth App Accessing Mailbox via Graph API
+description: An OAuth application accessed a mailbox through Microsoft Graph with
+  application-level (not delegated) permissions. Compromised OAuth apps with
+  Mail.Read or Mail.ReadWrite can silently exfiltrate email at scale.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.002
+- mitre.attack.t1528
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: purview-audit
+detection:
+  condition: |
+    operation == "MailItemsAccessed"
+    AND app_id != ""
+    AND auth_type == "ApplicationPermission"
+    AND mail_items_count > 50
+false_positives:
+- Approved backup or archival SaaS using application permissions
+playbook: tpl-collection
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

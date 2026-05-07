@@ -32,7 +32,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Operations",
-      items: ["operations/credentials"],
+      items: ["operations/credentials", "operations/airgap"],
     },
     {
       type: "category",

@@ -1,4 +1,18 @@
-"""Dashboard metrics endpoint — aggregated counts for the frontend KPI tiles."""
+"""Dashboard metrics endpoint — aggregated counts for the frontend KPI tiles.
+
+Tier 1.4 (SOC metrics dashboard) — exposes:
+  * MTTD (mean time to detect): alert.created_at → alert.first_seen_at
+  * MTTR (mean time to respond): alert.created_at → alert.resolved_at
+  * MTTC (mean time to contain): alert.created_at → alert.resolved_at for
+    alerts with disposition='true_positive' (proxy for confirmed-contained)
+  * False-positive rate (FPR): disposition='false_positive' / total resolved
+  * Escalation rate: RemediationGateLog.decision in {'escalate','review'} /
+    total decisions
+  * Analyst overrides 7d: alerts with disposition set in last 7 days
+  * Confidence calibration over time: reliability curve buckets — actual
+    true-positive rate within each predicted-confidence bin
+  * ATT&CK heatmap: tactic × technique counts
+"""
 
 from datetime import UTC, datetime, timedelta
 
@@ -10,6 +24,7 @@ from app.api.v1.deps import AuthUser, DBSession
 from app.models.alert import Alert
 from app.models.case import Case
 from app.models.connector import Connector
+from app.models.remediation import RemediationGateLog
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -90,6 +105,19 @@ async def get_dashboard_metrics(
         )
     )
 
+    # MTTR for the dashboard tile: average resolved-alert duration over last 7d
+    mttr_dashboard_q = await db.scalar(
+        select(
+            func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)
+        ).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.resolved_at.isnot(None),
+                Alert.created_at >= week_start,
+            )
+        )
+    )
+
     alert_metrics = AlertMetrics(
         total=total_q or 0,
         new=new_q or 0,
@@ -98,7 +126,7 @@ async def get_dashboard_metrics(
         medium=medium_q or 0,
         low=low_q or 0,
         resolvedToday=resolved_today_q or 0,
-        mttr=0.0,
+        mttr=round(float(mttr_dashboard_q or 0.0), 2),
     )
 
     # ── Case counts ───────────────────────────────────────────────────────────
@@ -209,7 +237,9 @@ async def get_dashboard_metrics(
 class SOCKpis(BaseModel):
     mttd_hours: float
     mttr_hours: float
+    mttc_hours: float
     false_positive_rate: float
+    escalation_rate: float
     alert_volume_7d: int
     cases_opened_7d: int
     cases_closed_7d: int
@@ -222,9 +252,25 @@ class AttackHeatmapCell(BaseModel):
     count: int
 
 
+class CalibrationBucket(BaseModel):
+    """One bucket of the agent confidence reliability curve.
+
+    `predicted_lower` and `predicted_upper` define the AI-confidence range
+    (e.g., 0.8–1.0). `actual_tp_rate` is the observed true-positive rate
+    among analyst-dispositioned alerts whose ai_score landed in that bucket
+    — i.e., the empirical hit-rate the model claimed.
+    """
+
+    predicted_lower: float
+    predicted_upper: float
+    sample_count: int
+    actual_tp_rate: float
+
+
 class SOCMetrics(BaseModel):
     kpis: SOCKpis
     attack_heatmap: list[AttackHeatmapCell]
+    calibration_curve: list[CalibrationBucket]
 
 
 @router.get("/soc", response_model=SOCMetrics)
@@ -232,16 +278,23 @@ async def get_soc_metrics(
     user: AuthUser,
     db: DBSession,
 ) -> SOCMetrics:
-    """Return SOC-level KPIs: MTTD, MTTR, FPR, and ATT&CK heatmap data."""
+    """Return SOC-level KPIs, ATT&CK heatmap, and confidence calibration curve.
+
+    Tier 1.4 metrics:
+      - MTTD, MTTR, MTTC, FPR, escalation rate, analyst overrides
+      - ATT&CK technique × tactic heatmap
+      - Confidence calibration over time (reliability curve)
+    """
     tenant_id = user.tenant_id
     now = datetime.now(UTC)
     week_start = now - timedelta(days=7)
 
-    # MTTD: mean time from alert creation to first investigation start
+    # ── MTTD ──────────────────────────────────────────────────────────────────
+    # Mean time from alert creation to first analyst view (first_seen_at).
     mttd_q = await db.scalar(
-        select(func.avg(
-            func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600
-        )).where(
+        select(
+            func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)
+        ).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.first_seen_at.isnot(None),
@@ -251,26 +304,45 @@ async def get_soc_metrics(
     )
     mttd_hours = float(mttd_q or 0.0)
 
-    # MTTR: mean time from alert creation to resolution
+    # ── MTTR ──────────────────────────────────────────────────────────────────
+    # Mean time from alert creation to resolved_at, for any resolved alert.
     mttr_q = await db.scalar(
-        select(func.avg(
-            func.extract("epoch", Alert.updated_at - Alert.created_at) / 3600
-        )).where(
+        select(
+            func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)
+        ).where(
             and_(
                 Alert.tenant_id == tenant_id,
-                Alert.status == "resolved",
+                Alert.resolved_at.isnot(None),
                 Alert.created_at >= week_start,
             )
         )
     )
     mttr_hours = float(mttr_q or 0.0)
 
-    # FPR: false positives / total resolved alerts (last 7d)
+    # ── MTTC (Mean Time to Contain) ───────────────────────────────────────────
+    # For confirmed true-positive alerts only — proxy for "incident contained".
+    # Uses resolved_at since we don't track a separate contained_at.
+    mttc_q = await db.scalar(
+        select(
+            func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)
+        ).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.resolved_at.isnot(None),
+                Alert.disposition == "true_positive",
+                Alert.created_at >= week_start,
+            )
+        )
+    )
+    mttc_hours = float(mttc_q or 0.0)
+
+    # ── FPR ───────────────────────────────────────────────────────────────────
+    # False-positive dispositions / total resolved-and-dispositioned alerts.
     total_resolved = await db.scalar(
         select(func.count()).where(
             and_(
                 Alert.tenant_id == tenant_id,
-                Alert.status == "resolved",
+                Alert.disposition.isnot(None),
                 Alert.created_at >= week_start,
             )
         )
@@ -279,7 +351,6 @@ async def get_soc_metrics(
         select(func.count()).where(
             and_(
                 Alert.tenant_id == tenant_id,
-                Alert.status == "resolved",
                 Alert.disposition == "false_positive",
                 Alert.created_at >= week_start,
             )
@@ -287,14 +358,36 @@ async def get_soc_metrics(
     ) or 0
     fpr = (fp_count / total_resolved) if total_resolved > 0 else 0.0
 
-    # Alert volume 7d
+    # ── Escalation rate ───────────────────────────────────────────────────────
+    # Fraction of remediation gate decisions that escaped autonomous handling.
+    escalation_decisions = {"escalate", "review"}
+    total_decisions = await db.scalar(
+        select(func.count()).where(
+            and_(
+                RemediationGateLog.tenant_id == tenant_id,
+                RemediationGateLog.created_at >= week_start,
+            )
+        )
+    ) or 0
+    escalated_count = await db.scalar(
+        select(func.count()).where(
+            and_(
+                RemediationGateLog.tenant_id == tenant_id,
+                RemediationGateLog.created_at >= week_start,
+                RemediationGateLog.decision.in_(escalation_decisions),
+            )
+        )
+    ) or 0
+    escalation_rate = (
+        escalated_count / total_decisions if total_decisions > 0 else 0.0
+    )
+
+    # ── Volume / case counts ──────────────────────────────────────────────────
     alert_vol = await db.scalar(
         select(func.count()).where(
             and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start)
         )
     ) or 0
-
-    # Cases opened/closed 7d
     cases_opened = await db.scalar(
         select(func.count()).where(
             and_(Case.tenant_id == tenant_id, Case.created_at >= week_start)
@@ -310,17 +403,31 @@ async def get_soc_metrics(
         )
     ) or 0
 
+    # ── Analyst overrides (7d) ────────────────────────────────────────────────
+    # Any alert with a disposition set in the last 7 days = analyst weighed in.
+    overrides_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.disposition.isnot(None),
+                Alert.updated_at >= week_start,
+            )
+        )
+    ) or 0
+
     kpis = SOCKpis(
         mttd_hours=round(mttd_hours, 2),
         mttr_hours=round(mttr_hours, 2),
+        mttc_hours=round(mttc_hours, 2),
         false_positive_rate=round(fpr, 4),
+        escalation_rate=round(escalation_rate, 4),
         alert_volume_7d=alert_vol,
         cases_opened_7d=cases_opened,
         cases_closed_7d=cases_closed,
-        analyst_overrides_7d=0,
+        analyst_overrides_7d=overrides_q,
     )
 
-    # ATT&CK heatmap: technique + tactic breakdown
+    # ── ATT&CK heatmap ────────────────────────────────────────────────────────
     heatmap_rows = (
         await db.execute(
             select(
@@ -340,7 +447,58 @@ async def get_soc_metrics(
         for r in heatmap_rows
     ]
 
-    return SOCMetrics(kpis=kpis, attack_heatmap=heatmap)
+    # ── Confidence calibration curve ──────────────────────────────────────────
+    # 5 buckets across [0, 1]. For each bucket, count alerts with ai_score in
+    # range AND a non-null disposition, plus the fraction that were
+    # 'true_positive' (i.e., the model was correct to be confident).
+    bucket_edges = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0001)]
+    calibration_curve: list[CalibrationBucket] = []
+    for lower, upper in bucket_edges:
+        # Total dispositioned alerts in this bucket
+        bucket_total_q = await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.ai_score.isnot(None),
+                    Alert.ai_score >= lower,
+                    Alert.ai_score < upper,
+                    Alert.disposition.isnot(None),
+                    Alert.created_at >= now - timedelta(days=30),
+                )
+            )
+        )
+        bucket_total = int(bucket_total_q or 0)
+
+        # True-positives in this bucket
+        bucket_tp_q = await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.ai_score.isnot(None),
+                    Alert.ai_score >= lower,
+                    Alert.ai_score < upper,
+                    Alert.disposition == "true_positive",
+                    Alert.created_at >= now - timedelta(days=30),
+                )
+            )
+        )
+        bucket_tp = int(bucket_tp_q or 0)
+
+        actual_tp_rate = (bucket_tp / bucket_total) if bucket_total > 0 else 0.0
+        calibration_curve.append(
+            CalibrationBucket(
+                predicted_lower=round(lower, 2),
+                predicted_upper=round(min(upper, 1.0), 2),
+                sample_count=bucket_total,
+                actual_tp_rate=round(actual_tp_rate, 4),
+            )
+        )
+
+    return SOCMetrics(
+        kpis=kpis,
+        attack_heatmap=heatmap,
+        calibration_curve=calibration_curve,
+    )
 
 
 @router.get("/alerts/trend")

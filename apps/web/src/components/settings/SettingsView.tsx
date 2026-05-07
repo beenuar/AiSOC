@@ -28,6 +28,7 @@ import { connectorsApi, type Connector, type ConnectorStatus } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AutonomyPolicyPanel } from '@/components/settings/AutonomyPolicy';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ type TabId =
   | 'profile'
   | 'workspace'
   | 'integrations'
+  | 'autonomy'
   | 'api-keys'
   | 'notifications'
   | 'appearance'
@@ -302,6 +304,11 @@ const TABS: { id: TabId; label: string; description: string }[] = [
     description: 'Connected log sources, EDRs, identity providers.',
   },
   {
+    id: 'autonomy',
+    label: 'Autonomy guardrails',
+    description: 'Per-action confidence thresholds for agent actions.',
+  },
+  {
     id: 'api-keys',
     label: 'API keys',
     description: 'Programmatic access for pipelines and integrations.',
@@ -390,6 +397,7 @@ export function SettingsView() {
               {tab === 'profile' && <ProfilePanel />}
               {tab === 'workspace' && <WorkspacePanel />}
               {tab === 'integrations' && <IntegrationsPanel />}
+              {tab === 'autonomy' && <AutonomyPolicyPanel />}
               {tab === 'api-keys' && <ApiKeysPanel />}
               {tab === 'notifications' && <NotificationsPanel />}
               {tab === 'appearance' && <AppearancePanel />}
@@ -1314,7 +1322,7 @@ function AboutPanel() {
         description="Open-source SOC platform — community-built, MIT licensed."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Version" value="v6.0.0" />
+        <InfoTile label="Version" value="v6.0.1" />
         <InfoTile label="Build" value="local • dev" />
         <InfoTile label="License" value="MIT" />
         <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />

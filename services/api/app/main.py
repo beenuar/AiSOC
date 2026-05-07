@@ -15,6 +15,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from app.api.v1.router import api_router
 from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
+from app.core.airgap import airgap_status
 from app.core.config import settings, warn_if_insecure_defaults
 from app.core.logging import configure_logging
 from app.core.telemetry import instrument_app
@@ -163,11 +164,16 @@ async def metrics_middleware(request: Request, call_next) -> Response:
 
 @app.get("/health", tags=["system"])
 async def health_check() -> dict:
-    """Health check endpoint."""
+    """Health check endpoint.
+
+    Includes the current air-gap policy snapshot so operators can confirm
+    zero-egress mode is engaged on this pod (Tier 3.1).
+    """
     return {
         "status": "healthy",
         "service": "aisoc-api",
         "version": settings.VERSION,
+        "airgap": airgap_status(),
     }
 
 

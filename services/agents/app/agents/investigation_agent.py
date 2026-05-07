@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import structlog
 
+from app.confidence import score_investigation
 from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
 from app.tools.mitre import lookup_technique
 
@@ -84,6 +85,14 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
             )
         )
 
+    confidence, basis, verdict = score_investigation(state)
+    state.confidence = confidence
+    state.confidence_basis = basis
+    state.verdict = verdict
+    state.add_finding(
+        f"Investigation verdict: {verdict} (confidence={confidence:.2f})"
+    )
+
     state.status = AgentStatus.COMPLETED
     state.add_finding(f"Investigation complete. Total proposed actions: {len(state.proposed_actions)}")
 
@@ -91,6 +100,8 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
         "Investigation complete",
         findings_count=len(state.findings),
         proposed_actions=len(state.proposed_actions),
+        confidence=round(confidence, 2),
+        verdict=verdict,
     )
     return state
 

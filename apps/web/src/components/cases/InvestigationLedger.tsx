@@ -34,6 +34,8 @@ import {
   type LedgerArtifactDetail,
   type LedgerEvent,
   type LedgerExplain,
+  type LedgerModelCost,
+  type LedgerRunDetail,
   type LedgerRunSummary,
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -154,6 +156,21 @@ export function InvestigationLedger({
     const id = setInterval(() => void refreshRuns(), 4000);
     return () => clearInterval(id);
   }, [isLive, refreshRuns]);
+
+  // ─── Run detail (includes per-model cost breakdown) ──────────────────────
+  // Pulled separately from the run-list summary because `model_costs` is only
+  // populated once the agents service has flushed its `CostTracker` to the
+  // `aisoc_run_costs` table, which can lag the run-summary row by a heartbeat.
+  // Refresh while live so the breakdown materializes as soon as it's there.
+  const { data: runDetail } = useSWR<LedgerRunDetail>(
+    resolvedRunId ? ['ledger.run', resolvedRunId] : null,
+    () => ledgerApi.getRun(resolvedRunId as string),
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+      refreshInterval: isLive ? 4000 : 0,
+    },
+  );
 
   // ─── Filtering ────────────────────────────────────────────────────────────
   const [kindFilter, setKindFilter] = useState<string | null>(null);
@@ -336,6 +353,13 @@ export function InvestigationLedger({
       {/* Run summary */}
       {activeRun && <RunSummaryCard run={activeRun} eventCount={events?.length ?? 0} />}
 
+      {/* Per-model cost breakdown — only renders once at least one row has
+          flushed to `aisoc_run_costs`. Pre-cost-telemetry runs (and runs that
+          never invoked an LLM) intentionally render nothing. */}
+      {runDetail && runDetail.model_costs.length > 0 && (
+        <ModelCostsCard costs={runDetail.model_costs} />
+      )}
+
       {/* Two-pane layout: timeline on the left, explain on the right */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="lg:col-span-5">
@@ -472,6 +496,85 @@ function RunSummaryCard({
       </div>
     </div>
   );
+}
+
+// ─── Per-model cost breakdown ────────────────────────────────────────────────
+
+/**
+ * Renders the per-model token / cost / latency breakdown for the active run.
+ *
+ * Companion to `RunSummaryCard`: that card shows aggregate `total_tokens` /
+ * `total_cost_usd`, this one explains *which models* spent that budget. Useful
+ * when the orchestrator routes recon to a cheap model and forensic to a
+ * frontier model — operators want to see the split without exporting the
+ * ledger JSON.
+ *
+ * Sorted by spend descending so the most expensive model surfaces first.
+ */
+function ModelCostsCard({ costs }: { costs: LedgerModelCost[] }) {
+  // Defensive sort — backend already orders by total_cost_usd DESC, but a
+  // future caller could pass an arbitrary list and we want the UI invariant
+  // (most expensive first) to hold regardless.
+  const sorted = useMemo(
+    () => [...costs].sort((a, b) => b.total_cost_usd - a.total_cost_usd),
+    [costs],
+  );
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/40">
+      <div className="flex items-center justify-between border-b border-slate-800/80 px-3 py-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          Cost by model
+        </h3>
+        <span className="text-[10px] text-slate-500">
+          {sorted.length} model{sorted.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-slate-800/60 text-xs">
+          <thead className="bg-slate-950/40">
+            <tr className="text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-2">Model</th>
+              <th className="px-3 py-2 text-right">Calls</th>
+              <th className="px-3 py-2 text-right">Prompt tok</th>
+              <th className="px-3 py-2 text-right">Completion tok</th>
+              <th className="px-3 py-2 text-right">Cost (USD)</th>
+              <th className="px-3 py-2 text-right">Latency</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/40">
+            {sorted.map((c) => (
+              <tr key={c.model} className="text-slate-300">
+                <td className="px-3 py-2 font-mono text-[11px] text-slate-200">
+                  {c.model}
+                </td>
+                <td className="px-3 py-2 text-right">{c.call_count.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right">
+                  {c.total_prompt_tokens.toLocaleString()}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  {c.total_completion_tokens.toLocaleString()}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  ${c.total_cost_usd.toFixed(4)}
+                </td>
+                <td className="px-3 py-2 text-right text-slate-400">
+                  {formatLatencyMs(c.total_latency_ms)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Compact human-friendly latency string. ms under 1s, seconds otherwise. */
+function formatLatencyMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 // ─── Timeline row ─────────────────────────────────────────────────────────────

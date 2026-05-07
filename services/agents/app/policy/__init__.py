@@ -1,24 +1,51 @@
 """Autonomy guardrails — per-action confidence thresholds.
 
-Each action the agent can take (e.g. ``block_ip``, ``isolate_host``)
-is associated with a minimum confidence threshold.  If the agent's
-self-assessed confidence for an action is below the threshold, the
-action is held for human review rather than executed autonomously.
+Every action the agent can take (e.g. ``block_ip``, ``isolate_host``) carries
+three confidence cutoffs:
 
-Defaults live here; tenant admins can override via the DB / API.
+* ``auto``        — execute autonomously
+* ``review``      — queue for analyst review
+* ``escalation``  — escalate to senior on-call (anything below is rejected)
+
+Defaults live here; site policy can override via YAML; tenant admins can
+override per-tenant via the DB / admin UI.
 
 Usage::
 
-    from app.policy import GuardrailPolicy, ActionResult
+    from app.policy import GuardrailPolicy, AutonomyDecision
 
     policy = await GuardrailPolicy.load(tenant_id="t1")
-    result = policy.evaluate("block_ip", confidence=0.72)
-    if result.allowed:
+    decision = policy.decide("block_ip", confidence=0.72)
+    if decision.decision is AutonomyDecision.AUTO:
         await do_block(ip)
-    else:
-        await queue_for_human_review(action, result.reason)
+    elif decision.decision is AutonomyDecision.REVIEW:
+        await queue_for_analyst_review(decision)
+    elif decision.decision is AutonomyDecision.ESCALATE:
+        await page_oncall(decision)
+    else:  # REJECT
+        await abandon_action(decision)
 """
 
-from .guardrails import ActionResult, GuardrailPolicy
+from .guardrails import (
+    ActionResult,
+    ActionThresholds,
+    AutonomyDecision,
+    DecisionResult,
+    GuardrailPolicy,
+    default_thresholds,
+    reset_tenant_cache,
+    reset_yaml_cache,
+    yaml_thresholds,
+)
 
-__all__ = ["GuardrailPolicy", "ActionResult"]
+__all__ = [
+    "ActionResult",
+    "ActionThresholds",
+    "AutonomyDecision",
+    "DecisionResult",
+    "GuardrailPolicy",
+    "default_thresholds",
+    "reset_tenant_cache",
+    "reset_yaml_cache",
+    "yaml_thresholds",
+]

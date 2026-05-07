@@ -1,0 +1,25 @@
+id: det-cloud-197
+name: M365 SharePoint Site Collection Admin Added
+description: A new site collection administrator was added. Site collection admins
+  bypass item-level permissions and can access all content including OneDrive for
+  Business sites.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: cloud
+log_source:
+  product: m365
+  service: sharepoint-admin
+detection:
+  condition: |
+    operation == "Set-SPOUser"
+    AND parameters.IsSiteCollectionAdmin == true
+false_positives:
+- IT admin onboarding a new SharePoint administrator
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

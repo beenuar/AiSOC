@@ -75,6 +75,21 @@ from tests.test_hunt_corpus import (  # type: ignore
     _POSITIVE_FLOOR as _HUNT_POSITIVE_FLOOR,
     _NEGATIVE_CEILING as _HUNT_NEGATIVE_CEILING,
 )
+from tests.test_confidence_calibration import (  # type: ignore
+    BRIER_THRESHOLD_INVESTIGATION as _CALIB_BRIER_INV,
+    BRIER_THRESHOLD_TRIAGE as _CALIB_BRIER_TRIAGE,
+    ECE_THRESHOLD_INVESTIGATION as _CALIB_ECE_INV,
+    ECE_THRESHOLD_TRIAGE as _CALIB_ECE_TRIAGE,
+    run_evaluation as _run_calibration_eval,
+)
+from tests.test_memory_recall import (  # type: ignore
+    RECALL_ACCURACY_FLOOR as _RECALL_FLOOR,
+    run_evaluation as _run_memory_recall_eval,
+)
+from tests.test_override_accuracy import (  # type: ignore
+    OVERRIDE_ACCURACY_FLOOR as _OVERRIDE_FLOOR,
+    run_evaluation as _run_override_accuracy_eval,
+)
 
 
 # Per-suite floors (must match what tests assert)
@@ -85,6 +100,11 @@ _TARGETS = {
     "response_quality": 0.80,
     "hunt_corpus": _HUNT_POSITIVE_FLOOR,
     "adversary_eval": _ADVERSARY_OVERALL_FLOOR,
+    # Calibration target is "Brier score *at or below* this value", so the
+    # display logic in main() inverts the pass condition for this suite.
+    "confidence_calibration": _CALIB_BRIER_INV,
+    "memory_recall": _RECALL_FLOOR,
+    "override_accuracy": _OVERRIDE_FLOOR,
 }
 
 # Per-template macro floors (kept slightly below per-case floors because each
@@ -308,6 +328,108 @@ def _run_adversary() -> dict:
     }
 
 
+def _run_confidence_calibration() -> dict:
+    """Seventh gate (tier1-confidence): Brier-score gate over 200 positive +
+    200 deterministic benign cases.
+
+    Calibration is a *lower-is-better* metric, so unlike the other suites the
+    pass condition is "value <= target" for both Brier score and ECE. We
+    surface the investigation Brier as the headline number because it's the
+    end-to-end agent verdict; triage gates are exposed via ``details``.
+    """
+    t0 = time.perf_counter()
+    res = _run_calibration_eval()
+    dur = (time.perf_counter() - t0) * 1000
+
+    inv_brier = res["investigation"]["brier"]
+    inv_ece = res["investigation"]["ece"]
+    triage_brier = res["triage"]["brier"]
+    triage_ece = res["triage"]["ece"]
+
+    inv_brier_pass = inv_brier <= _CALIB_BRIER_INV
+    inv_ece_pass = inv_ece <= _CALIB_ECE_INV
+    triage_brier_pass = triage_brier <= _CALIB_BRIER_TRIAGE
+    triage_ece_pass = triage_ece <= _CALIB_ECE_TRIAGE
+
+    return {
+        "metric": "investigation_brier_score",
+        "value": inv_brier,
+        "target": _CALIB_BRIER_INV,
+        # Lower-is-better: passed iff *all* sub-gates pass.
+        "passed": (
+            inv_brier_pass
+            and inv_ece_pass
+            and triage_brier_pass
+            and triage_ece_pass
+            and bool(res.get("passed", False))
+        ),
+        "duration_ms": round(dur, 1),
+        "details": {
+            "lower_is_better": True,
+            "investigation_brier": inv_brier,
+            "investigation_brier_max": _CALIB_BRIER_INV,
+            "investigation_ece": inv_ece,
+            "investigation_ece_max": _CALIB_ECE_INV,
+            "triage_brier": triage_brier,
+            "triage_brier_max": _CALIB_BRIER_TRIAGE,
+            "triage_ece": triage_ece,
+            "triage_ece_max": _CALIB_ECE_TRIAGE,
+            "investigation_separation": res["investigation"]["separation"],
+            "triage_separation": res["triage"]["separation"],
+            "mean_confidence_positive_investigation": res["investigation"][
+                "mean_confidence_positive"
+            ],
+            "mean_confidence_benign_investigation": res["investigation"][
+                "mean_confidence_benign"
+            ],
+            "investigation_brier_pass": inv_brier_pass,
+            "investigation_ece_pass": inv_ece_pass,
+            "triage_brier_pass": triage_brier_pass,
+            "triage_ece_pass": triage_ece_pass,
+        },
+    }
+
+
+def _run_memory_recall() -> dict:
+    """Memory-recall gate: validates three-tier memory fidelity, priority,
+    isolation, and override ingestion using offline in-process fallbacks."""
+    t0 = time.perf_counter()
+    res = _run_memory_recall_eval()
+    dur = (time.perf_counter() - t0) * 1000
+    return {
+        "metric": "memory_recall_accuracy",
+        "value": res["recall_accuracy"],
+        "target": _RECALL_FLOOR,
+        "passed": res["passed"],
+        "duration_ms": round(dur, 1),
+        "details": {
+            "total_cases": res["total_cases"],
+            "passed_cases": res["passed_cases"],
+            "failed_cases": res.get("failed_cases", []),
+        },
+    }
+
+
+def _run_override_accuracy() -> dict:
+    """Override-accuracy gate: validates analyst-feedback ingestion, retrieval,
+    idempotent upsert, and cross-tenant isolation using offline fallbacks."""
+    t0 = time.perf_counter()
+    res = _run_override_accuracy_eval()
+    dur = (time.perf_counter() - t0) * 1000
+    return {
+        "metric": "override_accuracy",
+        "value": res["override_accuracy"],
+        "target": _OVERRIDE_FLOOR,
+        "passed": res["passed"],
+        "duration_ms": round(dur, 1),
+        "details": {
+            "total_cases": res["total_cases"],
+            "passed_cases": res["passed_cases"],
+            "failed_cases": res.get("failed_cases", []),
+        },
+    }
+
+
 def _summarise_telemetry() -> dict:
     """Summarise the synthetic-telemetry corpus produced alongside the dataset.
 
@@ -385,6 +507,9 @@ def main() -> None:
             "response_quality": _run_response_quality(),
             "hunt_corpus": _run_hunt_corpus(),
             "adversary_eval": _run_adversary(),
+            "confidence_calibration": _run_confidence_calibration(),
+            "memory_recall": _run_memory_recall(),
+            "override_accuracy": _run_override_accuracy(),
         },
         "telemetry": _summarise_telemetry(),
     }
@@ -442,9 +567,11 @@ def main() -> None:
         print("=" * 78)
         for name, suite in summary["suites"].items():
             mark = "PASS" if suite["passed"] else "FAIL"
+            lower_is_better = bool(suite.get("details", {}).get("lower_is_better"))
+            comparator = "<=" if lower_is_better else ">="
             print(
-                f"  [{mark}] {name:<28} {suite['metric']:<22} "
-                f"{suite['value']:.3f}  (target >= {suite['target']:.2f})"
+                f"  [{mark}] {name:<28} {suite['metric']:<28} "
+                f"{suite['value']:.3f}  (target {comparator} {suite['target']:.2f})"
             )
             tpl = suite.get("per_template")
             if tpl:

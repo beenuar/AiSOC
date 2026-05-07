@@ -30,6 +30,7 @@ class AlertResponse(BaseModel):
     ai_score: float | None
     ai_summary: str | None
     ai_recommendations: list
+    disposition: str | None = None
     affected_ips: list
     affected_hosts: list
     affected_users: list

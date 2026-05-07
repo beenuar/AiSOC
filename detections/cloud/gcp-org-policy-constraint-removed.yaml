@@ -1,0 +1,26 @@
+id: det-cloud-215
+name: GCP Organization Policy Constraint Removed
+description: An organization policy constraint was deleted or reset to default.
+  Removing constraints like domain-restricted sharing or uniform bucket-level
+  access weakens tenant-wide security guardrails.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: cloud-audit
+detection:
+  condition: |
+    method_name IN ["google.cloud.orgpolicy.v2.OrgPolicy.DeletePolicy",
+                     "google.cloud.orgpolicy.v2.OrgPolicy.UpdatePolicy"]
+    AND resource_type == "orgpolicy.googleapis.com/Policy"
+false_positives:
+- Policy migration during organizational restructuring
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-07'
+modified: '2026-05-07'

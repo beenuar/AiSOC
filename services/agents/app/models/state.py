@@ -77,6 +77,13 @@ class InvestigationState(BaseModel):
     # LLM messages (for LangGraph)
     messages: list[dict[str, Any]] = Field(default_factory=list)
 
+    # Calibrated confidence on the agent's verdict (0.0–1.0). Calibrated via
+    # the Brier-score gate in the eval harness — see services/agents/app/confidence
+    # and tests/test_confidence_calibration.py.
+    confidence: float = 0.0
+    confidence_basis: list[str] = Field(default_factory=list)
+    verdict: str | None = None
+
     # Metadata
     iteration_count: int = 0
     max_iterations: int = 10
