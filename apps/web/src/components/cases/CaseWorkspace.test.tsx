@@ -71,7 +71,7 @@ const fakeCase: Case = {
   description: 'Multiple high-severity alerts indicate a pivot via SMB.',
   status: 'in_progress',
   severity: 'critical',
-  assignee: 'sasha.lin@aisoc.dev',
+  assignee: 'sasha.lin@example.com',
   tags: ['lateral-movement'],
   mitre: ['T1021.002', 'T1078'],
   alertIds: ['alert-1'],

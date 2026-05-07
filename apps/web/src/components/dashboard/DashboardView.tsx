@@ -30,11 +30,12 @@ const MOCK_METRICS: DashboardMetrics = {
     resolvedThisWeek: 34,
   },
   sources: [
-    { name: 'Endpoint Telemetry', count: 412, status: 'active' },
-    { name: 'SIEM Events', count: 287, status: 'active' },
-    { name: 'Cloud Audit', count: 198, status: 'active' },
-    { name: 'Network Sensors', count: 243, status: 'active' },
-    { name: 'Identity Provider', count: 107, status: 'active' },
+    { name: 'CrowdStrike EDR', count: 412, status: 'active' },
+    { name: 'Microsoft Sentinel', count: 287, status: 'active' },
+    { name: 'AWS CloudTrail', count: 198, status: 'active' },
+    { name: 'Okta Identity', count: 163, status: 'active' },
+    { name: 'Google Workspace', count: 107, status: 'active' },
+    { name: 'GitHub Audit', count: 84, status: 'active' },
   ],
   topMitre: [
     { tactic: 'Execution', count: 89 },
@@ -50,11 +51,12 @@ const MOCK_METRICS: DashboardMetrics = {
     severity: 'all',
   })),
   threatsBySource: [
-    { source: 'Endpoint Telemetry', count: 412 },
-    { source: 'SIEM Events', count: 287 },
-    { source: 'Cloud Audit', count: 198 },
-    { source: 'Network Sensors', count: 243 },
-    { source: 'Identity Provider', count: 107 },
+    { source: 'CrowdStrike EDR', count: 412 },
+    { source: 'Microsoft Sentinel', count: 287 },
+    { source: 'AWS CloudTrail', count: 198 },
+    { source: 'Okta Identity', count: 163 },
+    { source: 'Google Workspace', count: 107 },
+    { source: 'GitHub Audit', count: 84 },
   ],
 };
 
@@ -142,12 +144,14 @@ export function DashboardView() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Overview of alerts, cases, and detection sources</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Entity-risk alerting, confidence-scored triage, and 16 connected sources
+          </p>
         </div>
       </div>
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <MetricCard
           label="Active Alerts"
           value={metrics.alerts.total}
@@ -174,6 +178,12 @@ export function DashboardView() {
           sub="Mean time to resolve"
           color="green"
           trend={{ value: -8, label: 'vs last week' }}
+        />
+        <MetricCard
+          label="Connected Sources"
+          value={metrics.sources.filter(s => s.status === 'active').length}
+          sub="EDR, SIEM, Cloud, IAM, SaaS"
+          color="purple"
         />
       </div>
 
@@ -247,7 +257,7 @@ export function DashboardView() {
 
         {/* Sources */}
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Alert Sources</h3>
+          <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
           <div className="space-y-3">
             {metrics.sources.map((src) => {
               const maxCount = Math.max(...metrics.sources.map(s => s.count));

@@ -49,7 +49,7 @@ const DEMO_GRAPH: AttackGraph = {
   nodes: [
     { id: 'host:WIN-FIN-DB01', label: 'WIN-FIN-DB01', kind: 'host', riskScore: 92 },
     { id: 'host:WIN-PROD-WEB02', label: 'WIN-PROD-WEB02', kind: 'host', riskScore: 71 },
-    { id: 'user:alice@aisoc.dev', label: 'alice@aisoc.dev', kind: 'user', riskScore: 78 },
+    { id: 'user:alice@example.com', label: 'alice@example.com', kind: 'user', riskScore: 78 },
     { id: 'user:svc-backup', label: 'svc-backup', kind: 'user', riskScore: 60 },
     { id: 'ip:185.220.101.7', label: '185.220.101.7', kind: 'ip', riskScore: 95 },
     { id: 'ip:10.0.4.12', label: '10.0.4.12', kind: 'ip', riskScore: 30 },
@@ -62,7 +62,7 @@ const DEMO_GRAPH: AttackGraph = {
     { id: 'alert:A-1030', label: 'Alert A-1030', kind: 'alert', severity: 'high' },
   ],
   edges: [
-    { id: 'e1', source: 'user:alice@aisoc.dev', target: 'host:WIN-FIN-DB01', label: 'logged_on' },
+    { id: 'e1', source: 'user:alice@example.com', target: 'host:WIN-FIN-DB01', label: 'logged_on' },
     { id: 'e2', source: 'host:WIN-FIN-DB01', target: 'process:powershell.exe', label: 'spawned' },
     { id: 'e3', source: 'process:powershell.exe', target: 'tech:T1059.001', label: 'matched' },
     { id: 'e4', source: 'host:WIN-FIN-DB01', target: 'process:lsass.exe', label: 'accessed' },

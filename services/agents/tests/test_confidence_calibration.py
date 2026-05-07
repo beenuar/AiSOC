@@ -124,9 +124,9 @@ _BENIGN_RULES = [
 ]
 _BENIGN_USERS = [
     "system",
-    "monitoring@aisoc.dev",
-    "backup-svc@aisoc.dev",
-    "audit-bot@aisoc.dev",
+    "monitoring@example.com",
+    "backup-svc@example.com",
+    "audit-bot@example.com",
 ]
 _BENIGN_HOSTS = [
     "MON-PROBE-01",

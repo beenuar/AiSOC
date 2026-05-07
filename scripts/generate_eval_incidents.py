@@ -76,10 +76,10 @@ HOSTNAMES = [
 ]
 
 USERS = [
-    "alice@aisoc.dev", "bob@aisoc.dev", "carol@aisoc.dev", "dave@aisoc.dev",
-    "eve@aisoc.dev", "frank@aisoc.dev", "grace@aisoc.dev", "heidi@aisoc.dev",
-    "svc-deploy@aisoc.dev", "svc-backup@aisoc.dev", "admin@aisoc.dev",
-    "cfo@aisoc.dev", "ceo@aisoc.dev", "ops-lead@aisoc.dev",
+    "alice@example.com", "bob@example.com", "carol@example.com", "dave@example.com",
+    "eve@example.com", "frank@example.com", "grace@example.com", "heidi@example.com",
+    "svc-deploy@example.com", "svc-backup@example.com", "admin@example.com",
+    "cfo@example.com", "ceo@example.com", "ops-lead@example.com",
 ]
 
 ATTACKER_IPS = [
@@ -367,7 +367,7 @@ TEMPLATES: list[Template] = [
         telemetry=(
             _web(
                 "POST",
-                url="https://confluence.aisoc.dev/pages/editpage.action?pageId=8472",
+                url="https://confluence.example.com/pages/editpage.action?pageId=8472",
                 status=200,
                 src_ip="{ip}",
                 user_agent="Mozilla/5.0",
@@ -1023,7 +1023,7 @@ TEMPLATES: list[Template] = [
                 4769,
                 Computer="WIN-DC-PRIMARY",
                 TargetUserName="{user}",
-                ServiceName="MSSQLSvc/sql.aisoc.dev",
+                ServiceName="MSSQLSvc/sql.example.com",
                 TicketEncryptionType="0x17",
                 IpAddress="{host}",
             ),
@@ -1031,7 +1031,7 @@ TEMPLATES: list[Template] = [
                 4769,
                 Computer="WIN-DC-PRIMARY",
                 TargetUserName="{user}",
-                ServiceName="HTTP/web01.aisoc.dev",
+                ServiceName="HTTP/web01.example.com",
                 TicketEncryptionType="0x17",
                 IpAddress="{host}",
             ),
@@ -1082,7 +1082,7 @@ TEMPLATES: list[Template] = [
                 resultType=0,
                 authenticationDetails=[{"authenticationMethod": "Federated", "succeeded": True}],
                 tokenIssuerType="ADFederationServices",
-                tokenIssuerName="forged-adfs.aisoc.dev",
+                tokenIssuerName="forged-adfs.example.com",
             ),
             _m365(
                 "Add member to role.",
@@ -1521,7 +1521,7 @@ TEMPLATES: list[Template] = [
                 UserId="{user}",
                 ClientIP="{host}",
                 Subject="URGENT: Wire instructions from CFO",
-                From="cfo@aisoc.dev.spoof",
+                From="cfo@example.com.spoof",
                 ReplyTo="cfo-aisoc@protonmail.com",
                 threat_actor="{campaign}",
             ),
@@ -1547,7 +1547,7 @@ TEMPLATES: list[Template] = [
             _cloudtrail(
                 "PutBucketAcl",
                 event_source="s3.amazonaws.com",
-                userIdentity={"type": "IAMUser", "userName": "ops-lead@aisoc.dev"},
+                userIdentity={"type": "IAMUser", "userName": "ops-lead@example.com"},
                 requestParameters={"bucketName": "aisoc-employees", "AccessControlPolicy": {"Grants": [{"Grantee": "AllUsers", "Permission": "READ"}]}},
             ),
             _cloudtrail(
@@ -1742,7 +1742,7 @@ TEMPLATES: list[Template] = [
             _m365(
                 "Reset user password.",
                 workload="AzureActiveDirectory",
-                UserId="helpdesk@aisoc.dev",
+                UserId="helpdesk@example.com",
                 TargetUserId="{user}",
                 ClientIP="10.0.0.50",
             ),

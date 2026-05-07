@@ -234,17 +234,17 @@ _HOSTS = [
     "MAC-SARAH-LT",
     "LIN-K8S-NODE-03",
     "WIN-HR-DESKTOP",
-    "DC01.corp.aisoc.dev",
+    "DC01.corp.example.com",
     "WIN-DEVOPS-LT",
 ]
 
 _USERS = [
-    "alice@aisoc.dev",
-    "bob@aisoc.dev",
-    "carol@aisoc.dev",
-    "dave@aisoc.dev",
-    "svc-backup@aisoc.dev",
-    "eve@aisoc.dev",
+    "alice@example.com",
+    "bob@example.com",
+    "carol@example.com",
+    "dave@example.com",
+    "svc-backup@example.com",
+    "eve@example.com",
 ]
 
 

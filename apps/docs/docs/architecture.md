@@ -35,7 +35,7 @@ Fusion  UEBA                           Detections
                replayable per case)
 ```
 
-The new structural pieces in v5.2 are the **Investigation Ledger** (every
+Key structural pieces include the **Investigation Ledger** (every
 agent prompt, response, evidence citation, and tool call is logged step-by-
 step against a case and replayable in the UI), the **Ambient Copilot**
 (context-aware next-action surface across alerts, cases, rules, and
@@ -45,6 +45,17 @@ real measurement plus three substrate self-consistency gates, run in CI),
 the **MCP server** (`@aisoc/mcp`, exposes 11 tools to Claude / Cursor /
 Continue / Cody), and the **click-and-connect connector platform** (next
 section).
+
+Additional capabilities introduced in 2026 H2:
+
+- **Detection-as-Code (DAC)** — propose → review → eval-gate → promote lifecycle for detection rules, with eval results gating promotion.
+- **Detection confidence** — each fused alert carries a derived confidence label (`high / medium / low`) with an ordered evidence chain.
+- **Detection drift monitoring** — scheduled ATT&CK coverage snapshots with delta tracking.
+- **Hunt-as-Code** — YAML hunt definitions in `hunts/` with hypothesis-driven indicator matching and APScheduler-driven continuous execution.
+- **Risk-Based Alerting (RBA)** — time-decayed entity risk scoring that promotes high-risk entities to incidents.
+- **Federated search** — translate a single query into SPL, KQL, and ES|QL and fan out to connected SIEMs.
+- **ChatOps verification** — HMAC-signed Slack/Teams interactive prompts for human-in-the-loop response actions.
+- **AI-vs-AI adversary eval** — deterministic attacker-LLM mutator for testing detection resilience.
 
 ## Connector polling and credential vault
 
@@ -115,6 +126,8 @@ AiSOC/
 │   ├── ueba/               # User behavior analytics      (port 8007)
 │   ├── honeytokens/        # Deception platform           (port 8008)
 │   ├── purple-team/        # Adversary emulation          (port 8006)
+│   ├── connectors/         # Connector polling + credential vault
+│   ├── demo-producer/      # Synthetic event generator for demos
 │   └── mcp/                # Model Context Protocol server (TypeScript)
 ├── packages/
 │   ├── plugin-sdk-py/      # Python plugin SDK
@@ -130,6 +143,7 @@ AiSOC/
 │   ├── railway/            # Railway templates
 │   └── render/             # render.yaml blueprint
 ├── detections/             # 200+ Sigma/YARA/KQL detection rules (YAML)
+├── hunts/                  # Hunt-as-Code YAML definitions (hypothesis + indicators)
 ├── playbooks/              # 50+ SOAR playbooks (YAML)
 ├── plugins/                # 15 first-party plugins (Go + Python)
 ├── marketplace/            # Marketplace index (index.json)
@@ -143,19 +157,21 @@ AiSOC/
 
 | Service | Port | Language | Responsibility |
 |---------|------|----------|----------------|
-| `api` | 8000 | Python (FastAPI) | REST gateway, auth, RBAC, RLS, audit log, **Investigation Ledger**, Ambient Copilot, marketplace, approvals, on-call, passkeys, push subscriptions |
-| `agents` | 8001 | Python (LangGraph) | Orchestrator + recon + forensic + responder + report-writer agents, playbook engine, ledger writes |
+| `api` | 8000 | Python (FastAPI) | REST gateway, auth, RBAC, RLS, audit log, **Investigation Ledger**, Ambient Copilot, marketplace, approvals, on-call, passkeys, push subscriptions, **Detection Proposals** (DAC lifecycle), **Federated Search** fan-out, SLA tracking |
+| `agents` | 8001 | Python (LangGraph) | Orchestrator + recon + forensic + responder + report-writer agents, playbook engine, ledger writes, **Hunt-as-Code** engine + scheduler |
 | `realtime` | 8086 | TypeScript (Node.js) | WebSocket streaming of agent steps; **VAPID Web Push** delivery for the Responder PWA |
 | `ingest` | 8081 | Go | OCSF normalisation, Bloom-filter dedup, Kafka publish |
 | `enrichment` | 8080 | Go | Enrichment fan-out (IP, domain, hash, email, user) |
-| `fusion` | 8003 | Python | ML scoring (LightGBM + Isolation Forest), correlation |
-| `actions` | 8002 | Python | Plugin action executor, blast-radius gating |
+| `fusion` | 8003 | Python | ML scoring (LightGBM + Isolation Forest), correlation, **alert confidence scoring**, **entity risk / RBA** |
+| `actions` | 8002 | Python | Plugin action executor, blast-radius gating, **ChatOps verification** (HMAC-signed Slack/Teams prompts) |
 | `threatintel` | 8005 | Python | TAXII 2.1 / MISP / OTX / KEV ingestion + triple storage |
 | `ueba` | 8007 | Python | Welford baseline, Z-score scoring, anomaly stream |
 | `honeytokens` | 8008 | Python | Token lifecycle, HMAC signing, webhook dispatch |
-| `purple-team` | 8006 | Python | ART YAML parser, Caldera executor, ATT&CK heatmap |
+| `purple-team` | 8006 | Python | ART YAML parser, Caldera executor, ATT&CK heatmap, **detection drift snapshots** |
+| `connectors` | — | Python | Connector polling (APScheduler), credential vault (`CredentialVault`), registry-based connector discovery |
+| `demo-producer` | — | Python | Synthetic event generator for demos and evaluation |
 | `mcp` | n/a | TypeScript | Model Context Protocol stdio server, 11 tools for IDE-side agents |
-| `web` | 3000 | TypeScript (Next.js) | React console + Responder PWA route group |
+| `web` | 3000 | TypeScript (Next.js) | React console + Responder PWA route group, **benchmark scoreboard** |
 
 ## Storage Tier
 
@@ -215,6 +231,6 @@ Plugins extend AiSOC at three key points:
 - **Enrichers** — Add context to indicators (IP, domain, hash, email)
 - **Actions** — Execute response steps (block IP, disable user, create ticket)
 - **Connectors** — Ingest events from external sources (SIEM, EDR, cloud)
-- **Widgets** *(v5.2)* — Render plugin-supplied React panels in the case workspace
+- **Widgets** — Render plugin-supplied React panels in the case workspace
 
 See [Plugin Overview](./plugins/overview) for the full plugin lifecycle.

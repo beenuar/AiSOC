@@ -446,7 +446,7 @@ jobs:
           # Maintain a stable `latest.json` for the eval harness page badge
           cp /tmp/eval_report.json eval/results/latest.json
 
-          git config user.email "ci@aisoc.dev"
+          git config user.email "ci@example.com"
           git config user.name "AiSOC CI"
           git add eval/results
           git commit -m "eval: ${COMMIT_SHA::7} (auto)" || echo "no changes"

@@ -415,7 +415,7 @@ def _fallback_response(system: str, user: str) -> str:
         "1. Set `OPENAI_API_KEY` in your `.env` file\n"
         "2. Optionally set `OPENAI_MODEL` (default: `gpt-4o-mini`)\n"
         "3. Restart the `aisoc-agents` service\n\n"
-        "Refer to [the docs](https://aisoc.dev/docs/copilot) for self-hosted "
+        "Refer to [the docs](https://example.com/docs/copilot) for self-hosted "
         "model alternatives (Ollama, vLLM, Together)."
     )
 

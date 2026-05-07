@@ -1,7 +1,7 @@
 {
   "name": "AiSOC Responder",
   "short_name": "AiSOC",
-  "description": "On-call responder PWA for AiSOC — open-source AI SOC. Triage fused alerts, approve agent actions, and manage cases from your phone. tryaisoc.com demo stack.",
+  "description": "On-call responder PWA for AiSOC — open-source AI SOC. Triage entity-risk alerts, approve agent actions, manage cases, and search across connected SIEMs from your phone. 16 click-and-connect sources, confidence scoring, and detection drift tracking. tryaisoc.com demo.",
   "id": "/responder",
   "start_url": "/responder",
   "scope": "/",

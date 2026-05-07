@@ -6,9 +6,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const base = getPublicSiteUrl();
   const now = new Date();
 
-  const highPriority = ["/", "/benchmark"];
-  const mediumPriority = ["/purple-team", "/responder", "/why-open-source"];
-  const lowPriority = ["/login", "/signup", "/detection", "/threat-intel"];
+  const highPriority = ["/", "/benchmark", "/connectors"];
+  const mediumPriority = [
+    "/purple-team",
+    "/responder",
+    "/why-open-source",
+    "/marketplace",
+    "/compliance",
+    "/hunt",
+    "/copilot",
+    "/graph",
+  ];
+  const lowPriority = ["/login", "/signup", "/detection", "/threat-intel", "/sla"];
 
   return [
     ...highPriority.map((path) => ({

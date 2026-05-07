@@ -101,12 +101,12 @@ _HOSTS = [
 ]
 
 _USERS = [
-    "alice@aisoc.dev",
-    "bob@aisoc.dev",
-    "carol@aisoc.dev",
-    "svc-deploy@aisoc.dev",
-    "admin@aisoc.dev",
-    "cfo@aisoc.dev",
+    "alice@example.com",
+    "bob@example.com",
+    "carol@example.com",
+    "svc-deploy@example.com",
+    "admin@example.com",
+    "cfo@example.com",
     "system",
 ]
 

@@ -94,7 +94,7 @@ interface ProfileData {
 
 const DEFAULT_PROFILE: ProfileData = {
   displayName: 'Sasha Lin',
-  email: 'sasha.lin@aisoc.dev',
+  email: 'sasha.lin@example.com',
   title: 'Senior SOC Analyst',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
 };
@@ -194,14 +194,14 @@ const DEMO_API_KEYS: ApiKey[] = [
 const DEMO_AUDIT: AuditEntry[] = [
   {
     id: 'a-1',
-    actor: 'sasha.lin@aisoc.dev',
+    actor: 'sasha.lin@example.com',
     action: 'enabled',
     target: 'Detection rule “Impossible Travel — Same User”',
     at: ago(12),
   },
   {
     id: 'a-2',
-    actor: 'admin@aisoc.dev',
+    actor: 'admin@example.com',
     action: 'rotated',
     target: 'API key “CI / Detection-as-Code Pipeline”',
     at: ago(60 * 6),
@@ -215,14 +215,14 @@ const DEMO_AUDIT: AuditEntry[] = [
   },
   {
     id: 'a-4',
-    actor: 'sasha.lin@aisoc.dev',
+    actor: 'sasha.lin@example.com',
     action: 'invited',
-    target: 'avi.sharma@aisoc.dev (analyst)',
+    target: 'avi.sharma@example.com (analyst)',
     at: ago(60 * 24 * 1),
   },
   {
     id: 'a-5',
-    actor: 'admin@aisoc.dev',
+    actor: 'admin@example.com',
     action: 'changed',
     target: 'Workspace timezone to America/Los_Angeles',
     at: ago(60 * 24 * 5),
@@ -640,11 +640,11 @@ function WorkspacePanel() {
         </p>
         <ul className="mt-3 divide-y divide-gray-800 rounded-lg border border-gray-800 bg-gray-950/40">
           {[
-            { name: 'Sasha Lin', email: 'sasha.lin@aisoc.dev', role: 'Admin' },
-            { name: 'Avi Sharma', email: 'avi.sharma@aisoc.dev', role: 'Analyst' },
-            { name: 'Diego Vega', email: 'diego.vega@aisoc.dev', role: 'Analyst' },
-            { name: 'Mia Ocampo', email: 'mia.ocampo@aisoc.dev', role: 'Hunter' },
-            { name: 'CI Service', email: 'ci@aisoc.dev', role: 'Service' },
+            { name: 'Sasha Lin', email: 'sasha.lin@example.com', role: 'Admin' },
+            { name: 'Avi Sharma', email: 'avi.sharma@example.com', role: 'Analyst' },
+            { name: 'Diego Vega', email: 'diego.vega@example.com', role: 'Analyst' },
+            { name: 'Mia Ocampo', email: 'mia.ocampo@example.com', role: 'Hunter' },
+            { name: 'CI Service', email: 'ci@example.com', role: 'Service' },
           ].map((m) => (
             <li
               key={m.email}

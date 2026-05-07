@@ -131,12 +131,13 @@ export function CasesView() {
     return true;
   });
 
+  const allCases = casesData?.cases ?? MOCK_CASES;
   const statCounts = {
-    all: MOCK_CASES.length,
-    open: MOCK_CASES.filter(c => c.status === 'open').length,
-    in_progress: MOCK_CASES.filter(c => c.status === 'in_progress').length,
-    resolved: MOCK_CASES.filter(c => c.status === 'resolved').length,
-    closed: MOCK_CASES.filter(c => c.status === 'closed').length,
+    all: allCases.length,
+    open: allCases.filter(c => c.status === 'open').length,
+    in_progress: allCases.filter(c => c.status === 'in_progress').length,
+    resolved: allCases.filter(c => c.status === 'resolved').length,
+    closed: allCases.filter(c => c.status === 'closed').length,
   };
 
   return (

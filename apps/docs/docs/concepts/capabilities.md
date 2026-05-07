@@ -65,6 +65,57 @@ institutional memory ingestion to avoid polluting the knowledge base.
 
 ---
 
+## Detection Engineering (2026 H2)
+
+Five capabilities bring detection content under the same CI rigor as application
+code, with continuous drift tracking, eval-gated promotions, and scheduled
+hypothesis-driven hunts.
+
+| Capability | API / Surface | Description |
+|---|---|---|
+| **Detection-as-Code (DAC)** | `/api/v1/detection-proposals` | Propose → review → eval-gate → promote lifecycle. Every proposal carries an eval result from `scripts/run_evals.py`; candidates that regress MITRE accuracy by ≥ 1 pp cannot be promoted. Endpoints: list, create, comment, attach eval, decide (approve/reject), promote to `detection_rules`, baseline management. |
+| **Detection confidence + explainability** | every fused alert | Each alert leaves the fusion service with a `high / medium / low` confidence label and an ordered evidence chain (`ConfidenceFactor[]`). The label is derived, not assigned — analysts can reproduce the score from the rationale alone. Implemented in `services/fusion/app/services/confidence.py`. |
+| **Detection drift monitoring** | `services/purple-team/app/services/drift.py` | Turns the ATT&CK coverage heatmap from a point-in-time view into a tracked time series. Scheduled snapshots enable "delta vs. last week" on the MITRE heatmap. Includes drift-diff computation in `drift_diff.py`. |
+| **Hunt-as-Code** | `services/agents/app/hunt/` | YAML hunt definitions in `hunts/` with hypothesis, indicators (operators: equals/in/regex/gte/lte/exists/contains_any/iendswith), and schedule metadata. The `HuntEngine` matcher runs against event streams; `HuntScheduler` (APScheduler) executes hunts continuously. Results flow through `HuntStore` to Postgres. API at `services/agents/app/api/hunts.py`. |
+| **Cloud-native detections** | `detections/cloud/` | 27 new cloud-native rules: 20 M365 (Exchange, SharePoint, Teams, Defender, Purview, Power Platform, Entra ID), 3 Azure (Key Vault, management group, Defender for Cloud), 4 GCP (org policy, VPC firewall, Cloud Armor, audit log sink). |
+
+---
+
+## Response & Automation (2026 H2)
+
+| Capability | API / Surface | Description |
+|---|---|---|
+| **Risk-Based Alerting (RBA)** | `services/fusion/app/services/entity_risk.py` | Alerts contribute time-decayed risk points to entities (user, host, src_ip, domain). Points decay exponentially with a configurable half-life. When an entity's score crosses `rba_promotion_threshold`, AiSOC promotes it to an incident with contributing alerts attached. The entity-centric queue surfaces the top-N highest-risk entities. CI-gated at ≥ 50:1 alert-to-incident ratio. |
+| **ChatOps user verification** | `services/actions/app/executors/chatops.py` | Sends Slack/Teams interactive prompts with three HMAC-signed callback choices (acknowledge / deny / escalate). Tokens carry action, case, tenant, user reference, and expiry. Timeout auto-escalates. |
+| **L0–L4 remediation maturity tiers** | `/api/v1/remediation` | Each tier unlocks progressively more autonomous remediation. `evaluate_gate()` checks tier, blast-radius, and per-action whitelist before allowing auto-execution. Full gate audit log. |
+
+---
+
+## Platform Expansion (2026 H2)
+
+| Capability | API prefix | Description |
+|---|---|---|
+| **EASM** | `/api/v1/easm` | External Attack Surface Management — passive (Shodan/Censys) + optional active port scanning. Discovers assets, tracks drift (new ports, certs, subdomains), and generates alerts. Feature-flagged via `AISOC_FEATURE_EASM`. |
+| **Insider threat** | `/api/v1/insider-threat` | User risk profiles, behavioural indicators (login anomaly, data exfil, privilege abuse), peer-group deviation scoring, and watchlist management. |
+| **Asset inventory** | `/api/v1/assets` | Auto-correlated asset records with vulnerability tracking and alert-to-asset linking for blast-radius context. |
+| **MSSP console** | `/api/v1/mssp` | Parent-tenant console — onboard/manage child tenants, delegate actions cross-tenant, view rollup metrics, per-tenant detection scoping via rule packs with overrides. |
+| **CSPM / KSPM** | `/api/v1/posture` | Cloud Security Posture Management — ingest findings, track drift between scan runs, per-provider summary with suppress/resolve workflows. |
+| **Identity graph** | `/api/v1/identity-graph` | Entity relationship graph of users, devices, and service accounts with edge traversal and alert-identity linking. |
+| **Internal threat intelligence** | `/api/v1/threat-intel` (extended) | Harvest IOCs from alert history, track threat actors and campaigns, manage external STIX/TAXII feed subscriptions. |
+| **Board reports** | `/api/v1/reports` | Scheduled PDF/HTML executive summaries with template management, async generation, artefact storage, and webhook/email delivery. |
+
+---
+
+## Eval Harness & Benchmarking (2026 H2)
+
+| Capability | Surface | Description |
+|---|---|---|
+| **Public benchmark scoreboard** | `/benchmark` page | Live-from-main badge, KPI bar (alert-to-incident ratio, MTTD, MTTR, FPR), per-suite results fetched from `eval-results` branch, community submission leaderboard. |
+| **AI-vs-AI adversary eval** | `scripts/run_evals.py` (sixth suite) | Deterministic attacker-LLM mutator (synonym swap, leetspeak, zero-width injection, fragmentation) generates 200 adversarial incidents. Graceful-degradation gate: overall ≥ 0.40, light ≥ 0.85, heavy ≤ 0.50. |
+| **Per-feature eval suites** | `scripts/run_evals.py` | Memory recall, override accuracy, confidence calibration (Brier score + ECE), and autonomy adherence suites — each with floor gates. |
+
+---
+
 ## Tier 2 — Intelligent Automation
 
 | Capability | API prefix | Description |
