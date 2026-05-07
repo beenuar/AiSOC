@@ -6,49 +6,97 @@ const FEATURES = [
   {
     title: 'Streaming correlation',
     description:
-      'Events flow through Kafka into rule- and ML-based detectors. Latency depends on deployment size; on the demo stack alerts typically surface in well under a second.',
+      'Events flow through Kafka into rule- and ML-based detectors. Risk-Based Alerting accumulates time-decayed risk points per entity and promotes them at a tunable threshold — hitting ≥ 50:1 alert-to-incident reduction, CI-gated.',
     icon: (
       <path d="M4 4h16v4H4zM4 10h10v4H4zM4 16h16v4H4z" />
     ),
   },
   {
-    title: 'Agent-assisted triage',
+    title: 'Three-tier agent memory',
     description:
-      'The copilot enriches alerts with threat intel, identity context and host telemetry, and records the prompts and rationale behind each decision.',
+      'Session (in-process LRU), working (Redis, 24 h TTL), and institutional (PostgreSQL + pgvector, permanent). Agents carry context across tool calls, cases, and sessions; institutional knowledge survives restarts.',
     icon: (
-      <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
+      <path d="M12 2a5 5 0 015 5v1h1a3 3 0 010 6h-1v1a5 5 0 01-10 0v-1H6a3 3 0 010-6h1V7a5 5 0 015-5z" />
     ),
   },
   {
-    title: 'MITRE ATT&CK mapping',
+    title: 'Autonomy guardrails',
     description:
-      'Detection rules, alerts and the coverage heatmap reference ATT&CK techniques, so coverage gaps show up alongside live activity.',
+      'Per-action confidence thresholds (e.g. block_ip ≥ 0.90, close_alert ≥ 0.60) gate every autonomous decision. Tenant admins tune thresholds via API; all guardrail decisions are logged with rationale.',
     icon: (
-      <path d="M3 3h7v7H3zm11 0h7v4h-7zm0 6h7v12h-7zm-11 4h7v8H3z" />
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     ),
   },
   {
-    title: 'Attack graph',
+    title: 'NL detection authoring',
     description:
-      'A graph view links identities, hosts and assets, with pivots into the hunter and case views.',
-    icon: (
-      <path d="M5 5a3 3 0 116 0 3 3 0 01-6 0zm8 14a3 3 0 116 0 3 3 0 01-6 0zM7.5 8l5 8" />
-    ),
-  },
-  {
-    title: 'Detection-as-code',
-    description:
-      'Sigma, KQL, EQL and YAML rules can be authored in the inline editor, tested against historical data and version-controlled in Git.',
+      'Describe a threat in plain English; the API translates it to Sigma YAML, KQL, SPL, and ES|QL simultaneously. Closed-loop: FP verdicts trigger automatic DAC proposals with CI regression gates.',
     icon: (
       <path d="M8 9l-5 3 5 3M16 9l5 3-5 3M14 5l-4 14" />
     ),
   },
   {
-    title: 'Pluggable connectors',
+    title: 'Natural-language query',
     description:
-      'A connector framework handles ingest, schema mapping and rate limits for cloud trails, EDR, identity, network and SaaS sources.',
+      'Ask security questions in plain English — the API translates them to ES|QL, SPL, and KQL, executes against Elasticsearch-backed tenants live, and returns structured results with column metadata.',
+    icon: (
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    ),
+  },
+  {
+    title: 'Hypothesis-driven hunting',
+    description:
+      'Hunt YAML corpus (DNS tunnelling, IAM anomalies, LOLBin abuse, OAuth mass-consent, after-hours service accounts) loaded from hunts/ and executed on a schedule against the federated query layer.',
+    icon: (
+      <path d="M10 21l-7-7 7-7M21 10H3" />
+    ),
+  },
+  {
+    title: 'Cross-platform rule translation',
+    description:
+      'Federated query layer translates a single ES|QL hunt into SPL (Splunk) and KQL (Sentinel) at execution time. Connectors for Splunk, Sentinel, and Elastic each hold a dedicated dialect translator.',
     icon: (
       <path d="M4 6h16v4H4zM4 14h10v4H4zM18 14h2v4h-2z" />
+    ),
+  },
+  {
+    title: 'MITRE ATT&CK coverage',
+    description:
+      'Detection rules, alerts, and the live heatmap reference ATT&CK techniques. Coverage gaps appear alongside live activity. The public eval harness gates MITRE accuracy on every PR.',
+    icon: (
+      <path d="M3 3h7v7H3zm11 0h7v4h-7zm0 6h7v12h-7zm-11 4h7v8H3z" />
+    ),
+  },
+  {
+    title: 'Identity-centric investigation',
+    description:
+      'Attack graph links users, devices, and service accounts. Pivot from alert to identity, trace lateral movement, and reconstruct blast radius across a Neo4j graph updated in real time.',
+    icon: (
+      <path d="M5 5a3 3 0 116 0 3 3 0 01-6 0zm8 14a3 3 0 116 0 3 3 0 01-6 0zM7.5 8l5 8" />
+    ),
+  },
+  {
+    title: 'SOC metrics dashboard',
+    description:
+      'Live MTTD, MTTR, False Positive Rate, and alert/case volumes (rolling 7 d) with an ATT&CK technique heatmap. Analyst-override feedback updates FPR automatically; corrections flow into institutional memory.',
+    icon: (
+      <path d="M2 20h20M6 20V10M12 20V4M18 20v-8" />
+    ),
+  },
+  {
+    title: 'Pluggable connectors',
+    description:
+      'Click-and-connect catalog (Defender XDR, Azure, GCP, M365, GitHub, CrowdStrike, Splunk, Sentinel, Okta, and more). Secrets encrypted with CredentialVault (Fernet AES-128-CBC + HMAC-SHA256).',
+    icon: (
+      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+    ),
+  },
+  {
+    title: 'Compliance & governance',
+    description:
+      'SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, and DORA evidence dashboards. Multi-tenant RLS, granular RBAC, immutable audit logs, and an MSSP parent-tenant console for cross-tenant management.',
+    icon: (
+      <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     ),
   },
 ];
