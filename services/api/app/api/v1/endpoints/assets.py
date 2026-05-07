@@ -168,7 +168,7 @@ async def update_asset(
     return asset
 
 
-@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_asset(
     asset_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

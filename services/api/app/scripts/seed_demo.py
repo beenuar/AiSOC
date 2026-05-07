@@ -19,7 +19,7 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.api.v1.dev_auth import (
     DEMO_TENANT_ID,
@@ -458,14 +458,6 @@ def _make_synthetic_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_i
         alert_ids=[str(a) for a in alert_ids],
         tags=["demo", "synthetic", severity] + tactic_ids[:2],
         summary=f"Synthetic incident #{idx + 1} for AI investigator evaluation.",
-        event_metadata={
-            "synthetic": True,
-            "expected_tactics": tactic_ids,
-            "expected_techniques": technique_ids,
-            "host": host,
-            "user": user,
-            "src_ip": ip,
-        },
         created_at=when,
         updated_at=when,
         closed_at=when + timedelta(days=2) if status in ("resolved", "closed") else None,
@@ -548,6 +540,38 @@ async def main() -> None:
         except Exception:
             await session.rollback()
             raise
+
+    # Sync cases from ORM `cases` table → `aisoc_cases` (the tier-2 case API reads from the latter)
+    async with AsyncSessionLocal() as session:
+        try:
+            await session.execute(text("""
+                INSERT INTO aisoc_cases (
+                    id, tenant_id, title, description, severity, status,
+                    mitre_techniques, alert_ids, tags, created_at, updated_at,
+                    closed_at, created_by
+                )
+                SELECT
+                    id, tenant_id, title, description,
+                    CASE severity
+                        WHEN 'critical' THEN 'critical' WHEN 'high' THEN 'high'
+                        WHEN 'medium' THEN 'medium' WHEN 'low' THEN 'low' ELSE 'medium'
+                    END,
+                    CASE status
+                        WHEN 'open' THEN 'new' WHEN 'in_progress' THEN 'investigating'
+                        WHEN 'pending' THEN 'triaged' WHEN 'resolved' THEN 'resolved'
+                        WHEN 'closed' THEN 'closed' ELSE 'new'
+                    END,
+                    COALESCE(mitre_techniques, '[]'::jsonb),
+                    ARRAY(SELECT unnest::uuid FROM jsonb_array_elements_text(alert_ids) AS unnest),
+                    '{}'::jsonb,
+                    created_at, updated_at, closed_at, 'demo@aisoc.local'
+                FROM cases
+                ON CONFLICT (id) DO NOTHING
+            """))
+            await session.commit()
+        except Exception as exc:
+            await session.rollback()
+            print(f"[seed] warning: aisoc_cases sync failed: {exc}", file=sys.stderr)
 
     print(f"[seed] tenant: {tenant.id} ({tenant.slug})")
     print(f"[seed] user: {user.email} (role={user.role})")

@@ -51,6 +51,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_demo_data:/var/lib/postgresql/data
+      - ./services/api/migrations:/docker-entrypoint-initdb.d:ro
     networks:
       - aisoc-demo
     healthcheck:
@@ -84,10 +85,10 @@ services:
     networks:
       - aisoc-demo
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 15
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -111,10 +112,10 @@ services:
     volumes:
       - kafka_demo_data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
 
   # ─── Application Services (prebuilt from GHCR) ──────────────────────────────
 
@@ -137,6 +138,8 @@ services:
       redis:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      agents:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
@@ -162,7 +165,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
 
   agents:
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_TAG:-latest}
@@ -188,6 +191,12 @@ services:
     networks:
       - aisoc-demo
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8084/health\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   realtime:
     image: ghcr.io/beenuar/aisoc-realtime:${AISOC_TAG:-latest}

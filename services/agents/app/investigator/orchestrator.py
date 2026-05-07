@@ -17,7 +17,13 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from langgraph.graph import END, START, StateGraph
+try:
+    from langgraph.graph import END, START, StateGraph
+    _HAS_START_SENTINEL = True
+except ImportError:
+    from langgraph.graph import END, StateGraph
+    START = "__start__"
+    _HAS_START_SENTINEL = False
 from opentelemetry import trace
 
 from app.core.cost_telemetry import CostTracker
@@ -79,7 +85,7 @@ def _safe_node(fn):
 # ---------------------------------------------------------------------------
 
 
-async def _guard(state_dict: dict[str, Any]) -> str:
+def _guard(state_dict: dict[str, Any]) -> str:
     """Conditional edge: 'continue' or 'end'."""
     status = state_dict.get("status", "")
     if status in ("failed", "completed"):
@@ -106,7 +112,10 @@ def _build_graph():
     builder.add_node("responder", _safe_node(run_responder))
     builder.add_node("report_writer", _safe_node(run_report_writer))
 
-    builder.add_edge(START, "recon")
+    if _HAS_START_SENTINEL:
+        builder.add_edge(START, "recon")
+    else:
+        builder.set_entry_point("recon")
 
     for src, dst in [("recon", "forensic"), ("forensic", "responder"), ("responder", "report_writer")]:
         builder.add_conditional_edges(

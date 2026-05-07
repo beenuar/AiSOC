@@ -66,6 +66,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Tables already exist or another worker beat us to it — safe to ignore in dev.
             logger.warning("create_all skipped (likely already applied)", error=str(exc))
 
+        # Apply SQL migration files via a dedicated asyncpg connection that is
+        # separate from the SQLAlchemy pool (exec_driver_sql via the pool
+        # corrupts connection state; asyncpg.execute() handles multi-statement
+        # files natively).
+        import glob
+        import os
+
+        import asyncpg as _asyncpg
+
+        _migrations_dir = os.path.join(os.path.dirname(__file__), "..", "migrations")
+        _migration_files = sorted(glob.glob(os.path.join(_migrations_dir, "*.sql")))
+        if _migration_files:
+            _applied = 0
+            try:
+                _dsn = str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
+                _pg = await _asyncpg.connect(_dsn)
+                try:
+                    for _f in _migration_files:
+                        try:
+                            await _pg.execute(open(_f).read())
+                            _applied += 1
+                        except Exception as _exc:
+                            logger.debug("migration skipped", file=os.path.basename(_f), error=str(_exc))
+                finally:
+                    await _pg.close()
+                logger.info("SQL migrations applied (development mode)", count=_applied)
+            except Exception as exc:
+                logger.warning("SQL migrations skipped", error=str(exc))
+
     # Initialize Neo4j graph layer
     try:
         await init_neo4j()

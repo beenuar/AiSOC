@@ -193,7 +193,7 @@ async def create_delegation(
     return delegation
 
 
-@router.delete("/delegations/{delegation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/delegations/{delegation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_delegation(
     delegation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -435,7 +435,7 @@ async def update_rule_pack(
     return pack
 
 
-@router.delete("/rule-packs/{pack_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/rule-packs/{pack_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_rule_pack(
     pack_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -469,7 +469,7 @@ async def add_rule_to_pack(
     return {"status": "ok", "pack_id": str(pack_id), "rule_id": str(body.rule_id)}
 
 
-@router.delete("/rule-packs/{pack_id}/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/rule-packs/{pack_id}/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def remove_rule_from_pack(
     pack_id: uuid.UUID,
     rule_id: uuid.UUID,
@@ -548,7 +548,7 @@ async def list_overrides(
     return list(result.scalars().all())
 
 
-@router.delete("/overrides/{override_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/overrides/{override_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_override(
     override_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),

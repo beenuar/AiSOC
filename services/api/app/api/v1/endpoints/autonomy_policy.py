@@ -438,7 +438,7 @@ async def upsert_action_threshold(
     )
 
 
-@router.delete("/{action}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{action}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def reset_action_threshold(
     action: str,
     user: AuthUser,

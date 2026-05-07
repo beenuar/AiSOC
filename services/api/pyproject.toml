@@ -18,8 +18,10 @@ alembic = "^1.13.1"
 redis = { version = ">=5.0.4,<8.0.0", extras = ["hiredis"] }
 httpx = ">=0.27,<0.29"
 python-jose = { version = "^3.3.0", extras = ["cryptography"] }
+pyjwt = ">=2.8.0"
 cryptography = "^42.0.0"  # Direct dep for credential vault Fernet
 passlib = { version = "^1.7.4", extras = ["bcrypt"] }
+bcrypt = ">=3.0.0,<4.0.0"
 python-multipart = "^0.0.9"
 tenacity = ">=8.3,<10.0"
 structlog = "^24.1.0"

@@ -157,9 +157,12 @@ def _row_to_case(row: Any) -> CaseResponse:
         severity=row.severity,
         status=row.status,
         assignee=row.assignee,
-        mitre_techniques=list(row.mitre_techniques or []),
+        mitre_techniques=[
+            t["id"] if isinstance(t, dict) else str(t)
+            for t in (row.mitre_techniques or [])
+        ],
         alert_ids=list(row.alert_ids or []),
-        observable_graph=dict(row.observable_graph or {}),
+        observable_graph=dict(row.observable_graph) if isinstance(row.observable_graph, dict) else {},
         evidence_chain=list(row.evidence_chain or []),
         compliance_frameworks=list(row.compliance_frameworks or []),
         opened_at=row.opened_at,
@@ -169,7 +172,7 @@ def _row_to_case(row: Any) -> CaseResponse:
         created_at=row.created_at,
         updated_at=row.updated_at,
         created_by=row.created_by,
-        tags=dict(row.tags or {}),
+        tags=dict(row.tags) if isinstance(row.tags, dict) else {},
         sla_due_at=row.sla_due_at,
     )
 

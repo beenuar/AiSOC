@@ -196,7 +196,7 @@ async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDo
     return _row_to_doc(row)
 
 
-@router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove KB document")
+@router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None, summary="Remove KB document")
 async def delete_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> None:
     existing = (await db.execute(text("SELECT title FROM aisoc_kb_documents WHERE id = :id").bindparams(id=doc_id))).fetchone()
     if not existing:

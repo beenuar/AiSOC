@@ -175,7 +175,7 @@ async def save_search(data: SavedSearchCreate) -> SavedSearch:
     return ss
 
 
-@router.delete("/saved/{search_id}", status_code=204)
+@router.delete("/saved/{search_id}", status_code=204, response_model=None)
 async def delete_saved_search(search_id: str) -> None:
     """Delete a saved search by ID."""
     if search_id not in _SAVED_SEARCHES:
