@@ -243,8 +243,7 @@ async def _proxy_test_connection(
             resp = await client.post(url, json=payload)
     except httpx.HTTPError as exc:
         logger.warning(
-            "connectors_service.test.unreachable connector_type=%s err=%s",
-            _safe_connector_type(connector_type),
+            "connectors_service.test.unreachable err=%s",
             type(exc).__name__,
         )
         raise HTTPException(
