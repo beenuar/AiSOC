@@ -12,7 +12,7 @@ import pytest
 from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
 from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
-ALLOWED_CATEGORIES = {"siem", "edr", "cloud", "iam", "saas", "audit", "vcs", "ndr"}
+ALLOWED_CATEGORIES = {"siem", "edr", "cloud", "iam", "saas", "audit", "vcs", "ndr", "network"}
 ALLOWED_FIELD_TYPES = {"string", "secret", "select", "textarea", "boolean", "number"}
 
 
