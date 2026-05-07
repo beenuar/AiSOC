@@ -223,6 +223,27 @@ This file is for local resume only and is gitignored.
   - 118 files changed, 11,144 insertions(+), 217 deletions(-)
   - Commit pushed to `main` at `4a4741d`
 
+## Mega-Housekeeping Pass — 2026-05-07
+
+Plan: `aisoc-mega-housekeeping-pass_3a4147b8.plan.md`
+
+- [x] Phase 0-4: v1.4 eval-harness, full connector platform, 9 connectors, frontend, marketplace, connector docs — already landed in prior sessions
+- [x] Phase 5: Repo-wide docs / README / CHANGELOG sweep
+  - quickstart.md: already has "connect your first source in 5 minutes" section
+  - CONTRIBUTING.md: already has "Adding New Connectors" section
+  - CHANGELOG.md: already has connector-platform + v1.4 evals entries
+  - architecture.md: already has connector polling diagram + updated service table
+  - AGENTS.md: already has encrypted-creds + registry-pattern conventions
+  - Created `services/connectors/README.md` (supported sources table, dev guide, test instructions)
+  - Spot-checked services/mcp, services/enrichment, services/demo-producer READMEs — all up to date
+- [x] Phase 6: PR triage — no actionable open PRs (all Dependabot)
+- [x] Phase 7: Verification
+  - `services/connectors` pytest: 117 passed
+  - `services/api` pytest: passed
+  - `apps/web` tsc --noEmit: clean
+  - Secret scan (AKIA*, ghp_*, sk-*, PEM keys): only detection-rule test fixtures — no real secrets
+  - Pushed to GitHub at `19107c1`
+
 ## Cross-cutting commitments
 - Every capability ships behind a feature flag (`services/api/app/core/config.py`).
 - Every capability adds at least one eval-harness scenario.

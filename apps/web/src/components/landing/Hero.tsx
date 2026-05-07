@@ -29,15 +29,13 @@ export function Hero() {
           </h1>
 
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
-            Agent prompts, tool calls, and decisions are recorded in an investigation
-            ledger and replayable per case. Three-tier memory, autonomy guardrails,
-            NL detection authoring, closed-loop FP correction, cross-platform rule
-            translation, hypothesis-driven hunting, phishing triage, and a knowledge-base
-            RAG over your runbooks ship in-repo — gated by a 200-incident eval harness on
-            every PR to{' '}
-            <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">main</code>{' '}
-            /{' '}
-            <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">develop</code>.
+            Every agent prompt, tool call, and decision is recorded in an investigation
+            ledger and replayable per case. Click-and-connect 16 security sources with
+            encrypted credentials, entity risk-based alerting, NL detection authoring,
+            federated search across SIEMs, hypothesis-driven hunting, confidence scoring,
+            detection drift tracking, and a knowledge-base RAG over your runbooks — all
+            gated by a 200-incident eval harness on every PR to{' '}
+            <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">main</code>.
             MIT-licensed and self-hostable — tryaisoc.com is the always-on demo.
           </p>
 
@@ -78,9 +76,10 @@ export function Hero() {
 
           {/* Three facts the buyer can verify in the repo: ledger writes, the
               eval harness, and the license. */}
-          <dl className="mt-10 grid grid-cols-3 gap-6 border-t border-white/5 pt-8">
+          <dl className="mt-10 grid grid-cols-4 gap-5 border-t border-white/5 pt-8">
+            <Stat label="Connectors" value="16" caption="cloud, SIEM, IAM, SaaS — encrypted at rest" />
             <Stat label="Agent decisions" value="Ledger" caption="prompt + tool + rationale per step" />
-            <Stat label="Eval harness" value="200 cases" caption="runs in CI on every PR to main / develop" />
+            <Stat label="Eval harness" value="200 cases" caption="runs in CI on every PR to main" />
             <Stat label="License" value="MIT" caption="audit, fork, self-host" />
           </dl>
         </motion.div>

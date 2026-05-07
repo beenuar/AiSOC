@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import {
   threatIntelApi,
   type AlertSeverity,
@@ -228,7 +229,15 @@ export function ThreatIntelView() {
   const [typeFilter, setTypeFilter] = useState<ThreatIndicator['type'] | 'all'>('all');
   const [search, setSearch] = useState('');
 
-  const indicators = MOCK_INDICATORS.filter((ioc) => {
+  const { data } = useSWR(
+    'threat-intel-indicators',
+    () => threatIntelApi.list(),
+    { fallbackData: { indicators: MOCK_INDICATORS, total: MOCK_INDICATORS.length } },
+  );
+
+  const allIndicators = data?.indicators ?? MOCK_INDICATORS;
+
+  const indicators = allIndicators.filter((ioc) => {
     if (typeFilter !== 'all' && ioc.type !== typeFilter) return false;
     if (
       search &&
@@ -241,11 +250,11 @@ export function ThreatIntelView() {
   });
 
   const typeCounts = {
-    all: MOCK_INDICATORS.length,
-    ip: MOCK_INDICATORS.filter(i => i.type === 'ip').length,
-    domain: MOCK_INDICATORS.filter(i => i.type === 'domain').length,
-    hash: MOCK_INDICATORS.filter(i => i.type === 'hash').length,
-    url: MOCK_INDICATORS.filter(i => i.type === 'url').length,
+    all: allIndicators.length,
+    ip: allIndicators.filter(i => i.type === 'ip').length,
+    domain: allIndicators.filter(i => i.type === 'domain').length,
+    hash: allIndicators.filter(i => i.type === 'hash').length,
+    url: allIndicators.filter(i => i.type === 'url').length,
   };
 
   return (
@@ -261,9 +270,9 @@ export function ThreatIntelView() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total IOCs', value: MOCK_INDICATORS.length, color: 'text-blue-400' },
-          { label: 'Malicious', value: MOCK_INDICATORS.filter(i => i.malicious).length, color: 'text-red-400' },
-          { label: 'High Confidence', value: MOCK_INDICATORS.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
+          { label: 'Total IOCs', value: allIndicators.length, color: 'text-blue-400' },
+          { label: 'Malicious', value: allIndicators.filter(i => i.malicious).length, color: 'text-red-400' },
+          { label: 'High Confidence', value: allIndicators.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
           { label: 'Added Today', value: 3, color: 'text-green-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
