@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 interface Permission {
   id: string;
@@ -296,7 +297,24 @@ export function RBACView() {
         </div>
       )}
 
-      {roles && (
+      {roles && roles.length === 0 && (
+        <EmptyState
+          icon={<EmptyStateIcons.Shield />}
+          title="No roles defined yet"
+          description="Create your first role to start managing access control for your organization."
+          action={
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+            >
+              + New Role
+            </button>
+          }
+        />
+      )}
+
+      {roles && roles.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => (
             <RoleCard

@@ -584,7 +584,13 @@ function ProfilePanel() {
             </p>
             <p className="truncate text-sm text-gray-400">{profile.email}</p>
             <p className="mt-1 text-xs text-gray-500">
-              Avatar generated from initials. Custom avatars coming soon.
+              Avatar generated from initials.{' '}
+              <span className="inline-flex items-center gap-1">
+                Custom avatars
+                <span className="text-[10px] font-medium rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1.5 py-0.5">
+                  Planned for v1.1
+                </span>
+              </span>
             </p>
           </div>
         </div>

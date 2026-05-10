@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { clsx } from 'clsx';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 type RiskLevel = 'critical' | 'high' | 'medium' | 'low' | 'info';
 type AssetType = 'domain' | 'ip' | 'cert' | 'subdomain' | 'service';
@@ -147,25 +148,46 @@ export function EASMView() {
               </tr>
             </thead>
             <tbody>
-              {filteredAssets.map((asset) => (
-                <tr key={asset.id} className="border-b border-gray-800/30 hover:bg-gray-800/30 transition-colors">
-                  <td className="px-5 py-3">
-                    <span className="text-gray-200 font-mono text-xs">{asset.asset}</span>
+              {filteredAssets.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-0">
+                    <EmptyState
+                      icon={<EmptyStateIcons.Shield />}
+                      title="No assets match this filter"
+                      description="Try selecting a different status filter or view all assets."
+                      action={
+                        <button
+                          type="button"
+                          onClick={() => setAssetFilter('all')}
+                          className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                        >
+                          Show all assets
+                        </button>
+                      }
+                    />
                   </td>
-                  <td className="px-5 py-3 text-gray-400 text-xs">{TYPE_LABELS[asset.type]}</td>
-                  <td className="px-5 py-3">
-                    <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', STATUS_COLOR[asset.status])}>
-                      {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', RISK_CONFIG[asset.risk].className)}>
-                      {RISK_CONFIG[asset.risk].label}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-xs text-gray-500">{asset.lastSeen}</td>
                 </tr>
-              ))}
+              ) : (
+                filteredAssets.map((asset) => (
+                  <tr key={asset.id} className="border-b border-gray-800/30 hover:bg-gray-800/30 transition-colors">
+                    <td className="px-5 py-3">
+                      <span className="text-gray-200 font-mono text-xs">{asset.asset}</span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-400 text-xs">{TYPE_LABELS[asset.type]}</td>
+                    <td className="px-5 py-3">
+                      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', STATUS_COLOR[asset.status])}>
+                        {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', RISK_CONFIG[asset.risk].className)}>
+                        {RISK_CONFIG[asset.risk].label}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-500">{asset.lastSeen}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

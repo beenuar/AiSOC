@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 interface Tenant {
   name: string;
@@ -50,9 +51,14 @@ function kpiCards(tenants: Tenant[]) {
   ];
 }
 
+type SLAFilter = 'all' | 'compliant' | 'warning' | 'breach';
+
 export default function MSSPDashboardView() {
   const [tenants] = useState(TENANTS);
+  const [slaFilter, setSlaFilter] = useState<SLAFilter>('all');
   const cards = kpiCards(tenants);
+
+  const filteredTenants = slaFilter === 'all' ? tenants : tenants.filter((t) => t.slaStatus === slaFilter);
 
   return (
     <div className="space-y-8 p-6 max-w-7xl mx-auto">
@@ -73,15 +79,46 @@ export default function MSSPDashboardView() {
 
       {/* Tenant Table */}
       <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800/60 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-gray-800/60 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Tenant Overview</h2>
-          <button
-            onClick={() => toast.success('Report exported for all tenants')}
-            className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-          >
-            Export Report
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-gray-500">SLA</span>
+            {(['all', 'compliant', 'warning', 'breach'] as SLAFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setSlaFilter(f)}
+                className={clsx(
+                  'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition',
+                  slaFilter === f ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300',
+                )}
+              >
+                {f}
+              </button>
+            ))}
+            <button
+              onClick={() => toast.success('Report exported for all tenants')}
+              className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            >
+              Export Report
+            </button>
+          </div>
         </div>
+        {filteredTenants.length === 0 ? (
+          <EmptyState
+            icon={<EmptyStateIcons.Shield />}
+            title="No tenants match this SLA filter"
+            description="Try a different status filter to view tenants."
+            action={
+              <button
+                type="button"
+                onClick={() => setSlaFilter('all')}
+                className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+              >
+                Show all tenants
+              </button>
+            }
+          />
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -98,7 +135,7 @@ export default function MSSPDashboardView() {
               </tr>
             </thead>
             <tbody>
-              {tenants.map((t) => {
+              {filteredTenants.map((t) => {
                 const sla = SLA_STYLES[t.slaStatus];
                 return (
                   <tr key={t.name} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
@@ -123,6 +160,7 @@ export default function MSSPDashboardView() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

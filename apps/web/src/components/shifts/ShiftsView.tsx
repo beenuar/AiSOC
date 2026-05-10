@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 const SHIFT_START = '2026-05-07T06:00:00Z';
 const SHIFT_END = '2026-05-07T18:00:00Z';
@@ -42,8 +43,15 @@ const SHIFT_SUMMARY = {
   autoResolved: 18,
 };
 
+type PriorityFilter = HandoffItem['priority'] | 'all';
+
 export function ShiftsView() {
   const [items] = useState(MOCK_HANDOFF_ITEMS);
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+
+  const filteredItems = priorityFilter === 'all'
+    ? items
+    : items.filter((item) => item.priority === priorityFilter);
 
   const handleGenerateReport = () => {
     toast.success('Handoff report generated');
@@ -111,9 +119,27 @@ export function ShiftsView() {
 
       {/* Open Handoff Items */}
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800/60">
-          <h2 className="text-sm font-semibold text-gray-200">Open Handoff Items</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{items.length} items require attention from the incoming shift</p>
+        <div className="px-5 py-4 border-b border-gray-800/60 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm font-semibold text-gray-200">Open Handoff Items</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{filteredItems.length} items require attention from the incoming shift</p>
+          </div>
+          <div className="flex gap-2">
+            {(['all', 'critical', 'high', 'medium', 'low'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setPriorityFilter(f)}
+                className={clsx(
+                  'text-xs px-3 py-1 rounded-lg border transition-colors capitalize',
+                  priorityFilter === f
+                    ? 'bg-blue-600/15 text-blue-300 border-blue-600/30'
+                    : 'text-gray-400 border-gray-800 hover:border-gray-700',
+                )}
+              >
+                {f === 'all' ? 'All' : PRIORITY_CONFIG[f].label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -127,32 +153,53 @@ export function ShiftsView() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
-                const prio = PRIORITY_CONFIG[item.priority];
-                return (
-                  <tr key={item.id} className="border-b border-gray-800/30 hover:bg-gray-800/30 transition-colors">
-                    <td className="px-5 py-3">
-                      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', prio.className)}>
-                        {prio.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div>
-                        <span className="text-gray-200 font-medium">{item.id}</span>
-                        <span className="text-gray-500 ml-2 text-xs">({item.type})</span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{item.title}</p>
-                    </td>
-                    <td className="px-5 py-3 text-gray-300">{item.status}</td>
-                    <td className="px-5 py-3">
-                      <span className={clsx('text-sm', item.assignedTo === 'unassigned' ? 'text-gray-600 italic' : 'text-gray-300')}>
-                        {item.assignedTo}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{item.notes}</td>
-                  </tr>
-                );
-              })}
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-0">
+                    <EmptyState
+                      icon={<EmptyStateIcons.Search />}
+                      title="No items match this priority"
+                      description="Try selecting a different priority level or view all open handoff items."
+                      action={
+                        <button
+                          type="button"
+                          onClick={() => setPriorityFilter('all')}
+                          className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                        >
+                          Show all items
+                        </button>
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filteredItems.map((item) => {
+                  const prio = PRIORITY_CONFIG[item.priority];
+                  return (
+                    <tr key={item.id} className="border-b border-gray-800/30 hover:bg-gray-800/30 transition-colors">
+                      <td className="px-5 py-3">
+                        <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', prio.className)}>
+                          {prio.label}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div>
+                          <span className="text-gray-200 font-medium">{item.id}</span>
+                          <span className="text-gray-500 ml-2 text-xs">({item.type})</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{item.title}</p>
+                      </td>
+                      <td className="px-5 py-3 text-gray-300">{item.status}</td>
+                      <td className="px-5 py-3">
+                        <span className={clsx('text-sm', item.assignedTo === 'unassigned' ? 'text-gray-600 italic' : 'text-gray-300')}>
+                          {item.assignedTo}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{item.notes}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

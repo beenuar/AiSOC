@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 interface AlertRule {
   name: string;
@@ -28,6 +29,11 @@ const INITIAL_RULES: AlertRule[] = [
 
 export default function NoiseTuningView() {
   const [rules, setRules] = useState(INITIAL_RULES);
+  const [search, setSearch] = useState('');
+
+  const filteredRules = search.trim()
+    ? rules.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()))
+    : rules;
 
   const totalVerdicts = rules.reduce((s, r) => s + r.alertsFired, 0);
   const totalFP = rules.reduce((s, r) => s + r.fpCount, 0);
@@ -90,8 +96,15 @@ export default function NoiseTuningView() {
 
       {/* Rules Table */}
       <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800/60 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Alert Rules</h2>
+        <div className="px-5 py-4 border-b border-gray-800/60 flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold text-white flex-1 min-w-0">Alert Rules</h2>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search rules…"
+            className="w-56 rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+          />
           <button
             onClick={() => toast.success('Tuning recommendations applied to 3 rules')}
             className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
@@ -113,42 +126,64 @@ export default function NoiseTuningView() {
               </tr>
             </thead>
             <tbody>
-              {rules.map((r, i) => {
-                const fp = ruleFpRate(r);
-                return (
-                  <tr key={r.name} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
-                    <td className="px-5 py-3 font-medium text-white">{r.name}</td>
-                    <td className="px-5 py-3 text-right text-gray-300">{r.alertsFired.toLocaleString()}</td>
-                    <td className="px-5 py-3 text-right text-gray-300">{r.tpCount}</td>
-                    <td className="px-5 py-3 text-right text-gray-300">{r.fpCount}</td>
-                    <td
-                      className={clsx(
-                        'px-5 py-3 text-right font-medium',
-                        fp >= 70 ? 'text-red-400' : fp >= 30 ? 'text-amber-400' : 'text-green-400',
-                      )}
-                    >
-                      {fp.toFixed(1)}%
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <button
-                        onClick={() => toggleAutoTune(i)}
+              {filteredRules.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-0">
+                    <EmptyState
+                      icon={<EmptyStateIcons.Search />}
+                      title="No rules match your search"
+                      description="Try a different rule name or clear the search field."
+                      action={
+                        <button
+                          type="button"
+                          onClick={() => setSearch('')}
+                          className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+                        >
+                          Clear search
+                        </button>
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filteredRules.map((r, i) => {
+                  const fp = ruleFpRate(r);
+                  const originalIndex = rules.indexOf(r);
+                  return (
+                    <tr key={r.name} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
+                      <td className="px-5 py-3 font-medium text-white">{r.name}</td>
+                      <td className="px-5 py-3 text-right text-gray-300">{r.alertsFired.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-gray-300">{r.tpCount}</td>
+                      <td className="px-5 py-3 text-right text-gray-300">{r.fpCount}</td>
+                      <td
                         className={clsx(
-                          'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                          r.autoTune ? 'bg-blue-600' : 'bg-gray-600',
+                          'px-5 py-3 text-right font-medium',
+                          fp >= 70 ? 'text-red-400' : fp >= 30 ? 'text-amber-400' : 'text-green-400',
                         )}
                       >
-                        <span
+                        {fp.toFixed(1)}%
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          onClick={() => toggleAutoTune(originalIndex)}
                           className={clsx(
-                            'inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform',
-                            r.autoTune ? 'translate-x-4.5' : 'translate-x-0.5',
+                            'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                            r.autoTune ? 'bg-blue-600' : 'bg-gray-600',
                           )}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-5 py-3 text-gray-400 max-w-xs truncate">{r.suggestedAction}</td>
-                  </tr>
-                );
-              })}
+                        >
+                          <span
+                            className={clsx(
+                              'inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform',
+                              r.autoTune ? 'translate-x-4.5' : 'translate-x-0.5',
+                            )}
+                          />
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-gray-400 max-w-xs truncate">{r.suggestedAction}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

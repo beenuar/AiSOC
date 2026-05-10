@@ -318,12 +318,18 @@ export function AlertsView() {
               Alerts
             </button>
           </div>
-          <button
-            onClick={() => toast('Manual alert creation is coming soon.', { icon: '🔔' })}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-          >
-            + Create Alert
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              disabled
+              title="Manual alert creation is planned for v1.1"
+              className="bg-gray-700 text-gray-400 text-sm px-4 py-2 rounded-lg cursor-not-allowed select-none"
+            >
+              + Create Alert
+            </button>
+            <span className="text-xs font-medium rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5">
+              Planned for v1.1
+            </span>
+          </div>
         </div>
       </div>
 

@@ -318,10 +318,12 @@ function ConnectorCard({
         </button>
         <button
           type="button"
-          onClick={() => onConfigure?.(connector)}
-          className="flex-1 text-xs bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-3 py-2 rounded-lg transition-colors border border-blue-500/20"
+          disabled
+          title="Connector editing UI is planned for v1.1"
+          className="flex-1 text-xs bg-gray-800/40 text-gray-500 px-3 py-2 rounded-lg border border-gray-700/40 cursor-not-allowed select-none"
         >
           Configure
+          <span className="ml-1.5 text-[10px] font-medium text-amber-400">v1.1</span>
         </button>
         {onDelete && (
           <button

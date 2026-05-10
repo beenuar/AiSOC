@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 type CoverageStatus = 'covered' | 'partial' | 'gap';
 type Priority = 'high' | 'medium' | 'low';
@@ -48,6 +49,11 @@ const PRIORITY_STYLES: Record<Priority, { bg: string; text: string }> = {
 
 export default function CoverageAdvisorView() {
   const [techniques] = useState(TECHNIQUES);
+  const [statusFilter, setStatusFilter] = useState<CoverageStatus | 'all'>('all');
+
+  const filteredTechniques = statusFilter === 'all'
+    ? techniques
+    : techniques.filter((t) => t.status === statusFilter);
 
   const covered = techniques.filter((t) => t.status === 'covered').length;
   const partial = techniques.filter((t) => t.status === 'partial').length;
@@ -82,8 +88,24 @@ export default function CoverageAdvisorView() {
 
       {/* Gap Analysis Table */}
       <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800/60">
-          <h2 className="text-lg font-semibold text-white">Gap Analysis</h2>
+        <div className="px-5 py-4 border-b border-gray-800/60 flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold text-white flex-1 min-w-0">Gap Analysis</h2>
+          <div className="flex gap-2">
+            {(['all', 'gap', 'partial', 'covered'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={clsx(
+                  'text-xs px-3 py-1 rounded-lg border transition-colors',
+                  statusFilter === f
+                    ? 'bg-blue-600/15 text-blue-300 border-blue-600/30'
+                    : 'text-gray-400 border-gray-800 hover:border-gray-700',
+                )}
+              >
+                {f === 'all' ? 'All' : STATUS_STYLES[f as CoverageStatus].label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -99,38 +121,59 @@ export default function CoverageAdvisorView() {
               </tr>
             </thead>
             <tbody>
-              {techniques.map((t) => {
-                const st = STATUS_STYLES[t.status];
-                const pr = PRIORITY_STYLES[t.priority];
-                return (
-                  <tr key={t.id} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
-                    <td className="px-5 py-3 font-mono text-blue-400 text-xs">{t.id}</td>
-                    <td className="px-5 py-3 text-white">{t.name}</td>
-                    <td className="px-5 py-3 text-gray-300">{t.tactic}</td>
-                    <td className="px-5 py-3 text-center">
-                      <span className={clsx('inline-block px-2.5 py-0.5 rounded-full text-xs font-medium', st.bg, st.text)}>
-                        {st.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <span className={clsx('inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize', pr.bg, pr.text)}>
-                        {t.priority}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-gray-400 max-w-xs truncate">{t.recommendation}</td>
-                    <td className="px-5 py-3 text-center">
-                      {t.status !== 'covered' && (
+              {filteredTechniques.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-0">
+                    <EmptyState
+                      icon={<EmptyStateIcons.Shield />}
+                      title="No techniques match this filter"
+                      description="Try selecting a different coverage status or view all techniques."
+                      action={
                         <button
-                          onClick={() => toast.success(`Detection rule draft created for ${t.id}`)}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors whitespace-nowrap"
+                          type="button"
+                          onClick={() => setStatusFilter('all')}
+                          className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
                         >
-                          Generate Detection
+                          Show all techniques
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filteredTechniques.map((t) => {
+                  const st = STATUS_STYLES[t.status];
+                  const pr = PRIORITY_STYLES[t.priority];
+                  return (
+                    <tr key={t.id} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
+                      <td className="px-5 py-3 font-mono text-blue-400 text-xs">{t.id}</td>
+                      <td className="px-5 py-3 text-white">{t.name}</td>
+                      <td className="px-5 py-3 text-gray-300">{t.tactic}</td>
+                      <td className="px-5 py-3 text-center">
+                        <span className={clsx('inline-block px-2.5 py-0.5 rounded-full text-xs font-medium', st.bg, st.text)}>
+                          {st.label}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <span className={clsx('inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize', pr.bg, pr.text)}>
+                          {t.priority}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-gray-400 max-w-xs truncate">{t.recommendation}</td>
+                      <td className="px-5 py-3 text-center">
+                        {t.status !== 'covered' && (
+                          <button
+                            onClick={() => toast.success(`Detection rule draft created for ${t.id}`)}
+                            className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors whitespace-nowrap"
+                          >
+                            Generate Detection
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -533,7 +533,7 @@ export function DetectionsView() {
                 title="No detection rules yet"
                 description="Author your first detection in Sigma, KQL, or EQL — or import the AiSOC starter pack to bootstrap coverage across the MITRE ATT&CK matrix."
                 action={
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href="/detection/new"
                       className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
@@ -542,13 +542,15 @@ export function DetectionsView() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() =>
-                        toast('Starter pack import is coming soon')
-                      }
-                      className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                      disabled
+                      title="Starter pack import is planned for v1.1"
+                      className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-500 cursor-not-allowed select-none"
                     >
                       Import starter pack
                     </button>
+                    <span className="text-xs font-medium rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5">
+                      Planned for v1.1
+                    </span>
                   </div>
                 }
               />

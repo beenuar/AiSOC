@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { clsx } from 'clsx';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 
 interface Analyst {
   id: string;
@@ -87,20 +88,23 @@ function achievementIcon(icon: Achievement['icon']) {
 
 export function TeamAnalyticsView() {
   const [sortBy, setSortBy] = useState<SortKey>('score');
+  const [search, setSearch] = useState('');
 
   const totalCases = ANALYSTS.reduce((s, a) => s + a.casesClosed, 0);
   const avgResolution = Math.round(ANALYSTS.reduce((s, a) => s + a.avgResolutionMin, 0) / ANALYSTS.length);
   const teamAccuracy = (ANALYSTS.reduce((s, a) => s + a.accuracy, 0) / ANALYSTS.length).toFixed(1);
   const totalBadges = ANALYSTS.reduce((s, a) => s + a.badges.length, 0);
 
-  const sorted = [...ANALYSTS].sort((a, b) => {
-    switch (sortBy) {
-      case 'score':    return b.score - a.score;
-      case 'cases':    return b.casesClosed - a.casesClosed;
-      case 'accuracy': return b.accuracy - a.accuracy;
-      case 'speed':    return a.avgResolutionMin - b.avgResolutionMin;
-    }
-  });
+  const sorted = [...ANALYSTS]
+    .filter((a) => !search.trim() || a.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'score':    return b.score - a.score;
+        case 'cases':    return b.casesClosed - a.casesClosed;
+        case 'accuracy': return b.accuracy - a.accuracy;
+        case 'speed':    return a.avgResolutionMin - b.avgResolutionMin;
+      }
+    });
 
   const SORT_OPTIONS: { key: SortKey; label: string }[] = [
     { key: 'score',    label: 'Score' },
@@ -135,7 +139,14 @@ export function TeamAnalyticsView() {
       <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Analyst Leaderboard</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <input
+              type="search"
+              placeholder="Search analyst…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="rounded-lg border border-gray-700/60 bg-gray-900 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 w-44"
+            />
             <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Sort</span>
             {SORT_OPTIONS.map((opt) => (
               <button
@@ -154,6 +165,22 @@ export function TeamAnalyticsView() {
           </div>
         </div>
 
+        {sorted.length === 0 ? (
+          <EmptyState
+            icon={<EmptyStateIcons.Search />}
+            title="No analysts match your search"
+            description="Try a different name or clear the search to see all analysts."
+            action={
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors"
+              >
+                Clear search
+              </button>
+            }
+          />
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
@@ -230,6 +257,7 @@ export function TeamAnalyticsView() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Team Highlights */}
