@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
+import httpx
 import pytest
 import respx
-import httpx
-
 from app.clients.osctrl_client import OsctrlClient, OsctrlError
 from app.clients.osquery_allowlist import AllowlistError
-
 
 BASE = "https://osctrl.example.com"
 ENV = "prod"

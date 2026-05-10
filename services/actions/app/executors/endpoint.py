@@ -23,7 +23,7 @@ import structlog
 
 from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
 from app.clients.defender_client import DefenderClient
-from app.executors.base import BaseExecutor, _SIM_FUNNEL_CTA
+from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus, BlastRadius
 
 logger = structlog.get_logger()

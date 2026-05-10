@@ -25,7 +25,7 @@ try:
 
     _redis: aioredis.Redis | None = None
 
-    async def _get_redis() -> "aioredis.Redis | None":
+    async def _get_redis() -> aioredis.Redis | None:
         global _redis
         if _redis is not None:
             return _redis

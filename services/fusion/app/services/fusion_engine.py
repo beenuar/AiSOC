@@ -8,6 +8,7 @@ from uuid import UUID
 
 import structlog
 
+from app.core.config import settings
 from app.models.alert import FusedAlert, FusionDecision, RawAlert
 from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
@@ -15,8 +16,6 @@ from app.services.deduplicator import Deduplicator
 from app.services.entity_risk import EntityRiskEngine
 from app.services.ml_scorer import MLScorer
 from app.services.vuln_boost import apply_vuln_boost
-
-from app.core.config import settings
 
 logger = structlog.get_logger()
 

@@ -70,7 +70,7 @@ class ElasticClient:
             data = resp.json()
             columns = [col["name"] for col in data.get("columns", [])]
             rows = data.get("values", [])
-            results = [dict(zip(columns, row)) for row in rows]
+            results = [dict(zip(columns, row, strict=False)) for row in rows]
             logger.info("elastic.esql.complete", query=query[:80], results=len(results))
             return results
 

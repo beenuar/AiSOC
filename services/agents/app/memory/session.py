@@ -11,9 +11,8 @@ import asyncio
 from collections import OrderedDict
 from typing import Any
 
-
 _DEFAULT_MAXSIZE = 512
-_session_caches: dict[str, "_SessionCache"] = {}
+_session_caches: dict[str, _SessionCache] = {}
 _registry_lock = asyncio.Lock()
 
 
@@ -42,7 +41,7 @@ class _SessionCache:
         self._store.clear()
 
 
-async def _get_cache(run_id: str) -> "_SessionCache":
+async def _get_cache(run_id: str) -> _SessionCache:
     async with _registry_lock:
         if run_id not in _session_caches:
             _session_caches[run_id] = _SessionCache()

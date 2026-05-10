@@ -234,8 +234,8 @@ class EmailInboxConnector(BaseConnector):
             # Cheap HTML strip — no external dep. Ingest side's template
             # only cares about subject / sender / received-at, so the
             # body fidelity isn't critical.
-            from html import unescape
             import re
+            from html import unescape
 
             stripped = re.sub(r"<[^>]+>", " ", html_parts[0])
             body = unescape(re.sub(r"\s+", " ", stripped)).strip()

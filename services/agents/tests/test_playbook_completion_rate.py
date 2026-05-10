@@ -59,9 +59,10 @@ import json
 import re
 import unittest
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 _TESTS_DIR = Path(__file__).parent
 _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
@@ -433,7 +434,7 @@ class PlaybookCompletionResult:
     def severity_completion_rate_mapped(
         self,
         severities: Iterable[str],
-        per_incident: Iterable["IncidentEvaluation"],
+        per_incident: Iterable[IncidentEvaluation],
     ) -> tuple[float, int, int]:
         """Severity completion measured *only* over mapped templates.
 

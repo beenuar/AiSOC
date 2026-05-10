@@ -20,10 +20,8 @@ Credentials expected in ActionRequest.parameters:
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
-import httpx
 import structlog
 
 logger = structlog.get_logger()

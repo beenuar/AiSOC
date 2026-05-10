@@ -9,7 +9,7 @@ from datetime import datetime
 import httpx
 import structlog
 
-from app.executors.base import BaseExecutor, _SIM_FUNNEL_CTA
+from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus
 
 logger = structlog.get_logger()

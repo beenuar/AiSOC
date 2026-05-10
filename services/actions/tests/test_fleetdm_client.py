@@ -7,10 +7,8 @@ from typing import Any
 import httpx
 import pytest
 import respx
-
 from app.clients.fleetdm_client import FleetDMClient, FleetDMError
 from app.clients.osquery_allowlist import AllowlistError
-
 
 BASE = "https://fleet.example.com"
 TOKEN = "fleet-api-token-xyz"

@@ -109,7 +109,7 @@ class AiSOCDirectClient:
         return {
             "results": {
                 host: results[qid].get("rows", [])
-                for host, qid in zip(target_hosts, query_ids)
+                for host, qid in zip(target_hosts, query_ids, strict=False)
                 if qid in results
             },
             "error": errors[0]["error"] if errors else None,

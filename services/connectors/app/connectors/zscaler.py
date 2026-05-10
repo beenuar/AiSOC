@@ -78,7 +78,7 @@ class ZscalerConnector(BaseConnector):
         n = now[-6:]
         r = str(int(n) >> 1).zfill(6)
         key = ""
-        for i, ch in enumerate(r):
+        for _i, ch in enumerate(r):
             key += self._api_key[int(ch)]
         return key, now
 

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from app.clients.osquery_allowlist import (
     AllowlistError,
-    TEMPLATES,
     list_templates,
     render_query,
     validate_raw_sql,

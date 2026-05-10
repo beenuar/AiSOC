@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Inject stub modules BEFORE importing the engine (engine does lazy imports
 # inside the handler, so sys.modules stubs are enough).
@@ -84,7 +83,6 @@ _inject_stubs()
 
 from app.playbook.engine import _handle_osquery_live_query  # noqa: E402
 from app.playbook.models import PlaybookStep, StepType  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers

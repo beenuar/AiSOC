@@ -30,10 +30,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
 from app.connectors.jira_connector import JiraConnector
 from app.connectors.servicenow import ServiceNowConnector
-
 
 # ---------------------------------------------------------------------------
 # Helpers — build httpx.Response stubs without instantiating a real Client.

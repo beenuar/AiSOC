@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import structlog
 
@@ -34,7 +35,7 @@ class MemoryManager:
         self._run_id = run_id
 
     @classmethod
-    async def create(cls, tenant_id: str, run_id: str | None = None) -> "MemoryManager":
+    async def create(cls, tenant_id: str, run_id: str | None = None) -> MemoryManager:
         """Async factory — currently a passthrough; reserved for future init work."""
         return cls(tenant_id=tenant_id, run_id=run_id)
 

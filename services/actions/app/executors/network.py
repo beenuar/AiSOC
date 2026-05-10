@@ -19,7 +19,7 @@ from datetime import datetime
 import structlog
 
 from app.clients.aws_security_groups import AWSSecurityGroupsClient
-from app.executors.base import BaseExecutor, _SIM_FUNNEL_CTA
+from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus, BlastRadius
 
 logger = structlog.get_logger()

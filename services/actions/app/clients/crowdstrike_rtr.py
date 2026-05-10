@@ -10,7 +10,6 @@ Credentials are expected in ActionRequest.parameters:
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import httpx

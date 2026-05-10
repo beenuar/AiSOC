@@ -43,10 +43,10 @@ os.environ.setdefault("DATABASE_URL", "")
 os.environ.setdefault("REDIS_URL", "")
 
 from app.memory import MemoryManager  # noqa: E402
+from app.memory.institutional import _FALLBACK as _INSTITUTIONAL_FALLBACK  # noqa: E402
 from app.memory.models import OverrideFeedback  # noqa: E402
 from app.memory.session import _session_caches  # noqa: E402
 from app.memory.working import _FALLBACK as _WORKING_FALLBACK  # noqa: E402
-from app.memory.institutional import _FALLBACK as _INSTITUTIONAL_FALLBACK  # noqa: E402
 
 RECALL_ACCURACY_FLOOR = 1.0
 ISOLATION_FLOOR = 1.0

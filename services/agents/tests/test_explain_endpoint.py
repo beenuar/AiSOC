@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 """Integration tests for ``POST /api/v1/explain`` (WS-D1).
 
 We mount *only* the explain router into a fresh FastAPI app so the test

@@ -39,13 +39,13 @@ logger = structlog.get_logger()
 # agent. A contextvar lets each agent look up the tracker bound by its caller
 # (the orchestrator) without changing the graph schema.
 
-_current_tracker: contextvars.ContextVar["CostTracker | None"] = contextvars.ContextVar(
+_current_tracker: contextvars.ContextVar[CostTracker | None] = contextvars.ContextVar(
     "aisoc_cost_tracker",
     default=None,
 )
 
 
-def current_cost_tracker() -> "CostTracker | None":
+def current_cost_tracker() -> CostTracker | None:
     """Return the cost tracker bound to the current async context, if any."""
     return _current_tracker.get()
 
@@ -210,7 +210,7 @@ class CostTracker:
 
     _token: Any = field(default=None, init=False, repr=False)
 
-    async def __aenter__(self) -> "CostTracker":
+    async def __aenter__(self) -> CostTracker:
         # Bind into the current context so nested agents can find us.
         self._token = _current_tracker.set(self)
         return self

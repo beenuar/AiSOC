@@ -17,8 +17,8 @@ scheduler state — that's the scheduler's job.
 
 from __future__ import annotations
 
-from app.pipeline.fingerprint import compute_fingerprint, diff_fingerprints
 from app.pipeline.filter_rules import FilterDecision, apply_filter_rules
+from app.pipeline.fingerprint import compute_fingerprint, diff_fingerprints
 
 __all__ = [
     "FilterDecision",

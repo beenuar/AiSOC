@@ -385,7 +385,7 @@ class GuardrailPolicy:
     thresholds: dict[str, ActionThresholds] = field(default_factory=dict)
 
     @classmethod
-    async def load(cls, tenant_id: str) -> "GuardrailPolicy":
+    async def load(cls, tenant_id: str) -> GuardrailPolicy:
         # Precedence (low → high): hard-coded defaults → YAML site policy →
         # DB tenant overrides. DB is loaded last so admin UI edits always win.
         yaml_thresholds = _load_yaml_overrides()
@@ -398,7 +398,7 @@ class GuardrailPolicy:
         return cls(tenant_id=tenant_id, thresholds=merged)
 
     @classmethod
-    def load_sync(cls, tenant_id: str) -> "GuardrailPolicy":
+    def load_sync(cls, tenant_id: str) -> GuardrailPolicy:
         """Synchronous loader — defaults + YAML only, no DB.
 
         Useful in CLI tools, tests, and any context where an event loop is not
