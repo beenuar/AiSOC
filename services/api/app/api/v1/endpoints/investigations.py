@@ -12,6 +12,9 @@ Endpoints:
 * ``GET /v1/investigations/{run_id}``                     - run summary + counts
 * ``GET /v1/investigations/{run_id}/events``              - paginated event timeline
 * ``GET /v1/investigations/{run_id}/replay``              - full ordered event list
+* ``GET /v1/investigations/{run_id}/timeline``            - scrubbable timeline with
+                                                             decision-provenance annotations
+                                                             and cross-attempt diffs
 * ``GET /v1/investigations/{run_id}/explain``             - per-step deep-dive: prompt,
                                                              response, evidence, downstream
                                                              effects for a single ``seq``
@@ -628,6 +631,194 @@ class ClosedSummary(BaseModel):
     status: str
     artifact_id: uuid.UUID
     summary_markdown: str
+
+
+# ---------------------------------------------------------------------------
+# Timeline schemas (WS-D3)
+# ---------------------------------------------------------------------------
+
+
+class TimelineDecision(BaseModel):
+    """Agent decision provenance annotation for a single timeline node."""
+
+    reason: str | None
+    confidence: float | None
+    next_phase: str | None
+    tool_name: str | None
+    tool_args: dict | None
+    tool_result_summary: str | None
+
+
+class TimelineNode(BaseModel):
+    """One node in the scrubbable investigation timeline."""
+
+    seq: int
+    ts: datetime
+    kind: str
+    agent: str
+    summary: str
+    duration_ms: int
+    decision: TimelineDecision | None
+    has_artifact: bool
+    diff_vs_prev_attempt: str | None
+
+
+class TimelineResponse(BaseModel):
+    """Full timeline for a closed or in-progress run.
+
+    ``nodes`` are ordered by ``seq`` ascending. ``total_duration_ms`` is the
+    wall-clock span from first to last event. ``attempt_count`` counts unique
+    retry attempts inferred from ``agent_start`` events.
+    """
+
+    run_id: uuid.UUID
+    case_id: str
+    status: str
+    total_duration_ms: int
+    attempt_count: int
+    nodes: list[TimelineNode]
+
+
+def _extract_decision(event: InvestigationEvent) -> TimelineDecision | None:
+    """Extract decision-provenance fields from an event's payload.
+
+    The agent graph stores structured decision metadata in the JSONB
+    ``payload`` column. The keys used here mirror ``StepKind`` labels in
+    ``services/agents/app/investigator/state.py``.  We gracefully tolerate
+    missing keys so older ledger rows still render without error.
+    """
+    if event.payload is None:
+        return None
+    p = event.payload
+    reason = p.get("reason") or p.get("rationale") or p.get("explanation")
+    confidence = p.get("confidence")
+    try:
+        confidence = float(confidence) if confidence is not None else None
+    except (TypeError, ValueError):
+        confidence = None
+
+    next_phase = p.get("next_phase") or p.get("next_step") or p.get("transition")
+    tool_name = p.get("tool") or p.get("tool_name") or p.get("action")
+    tool_args = p.get("tool_args") or p.get("args") or p.get("parameters")
+    result = p.get("result") or p.get("output") or p.get("tool_result")
+    if isinstance(result, dict):
+        tool_result_summary = result.get("summary") or result.get("message") or str(result)[:200]
+    elif isinstance(result, str):
+        tool_result_summary = result[:200]
+    else:
+        tool_result_summary = None
+
+    if not any([reason, confidence, next_phase, tool_name]):
+        return None
+    return TimelineDecision(
+        reason=reason,
+        confidence=confidence,
+        next_phase=next_phase,
+        tool_name=tool_name,
+        tool_args=tool_args,
+        tool_result_summary=tool_result_summary,
+    )
+
+
+def _diff_vs_prev(
+    events: list[InvestigationEvent],
+    idx: int,
+) -> str | None:
+    """Produce a one-line diff annotation when the same agent re-ran a step.
+
+    Compares ``summary`` text between the current event and the last event
+    of the same ``kind`` and ``agent`` combination that occurred earlier
+    in the same run.  Returns ``None`` when no prior attempt exists or the
+    summaries are identical.
+    """
+    current = events[idx]
+    for prior in reversed(events[:idx]):
+        if prior.kind == current.kind and prior.agent == current.agent:
+            if prior.summary == current.summary:
+                return None
+            old_words = set(prior.summary.split())
+            new_words = set(current.summary.split())
+            added = new_words - old_words
+            removed = old_words - new_words
+            parts: list[str] = []
+            if removed:
+                parts.append(f"-{len(removed)} words")
+            if added:
+                parts.append(f"+{len(added)} words")
+            return f"Changed vs seq {prior.seq}: {', '.join(parts)}" if parts else None
+    return None
+
+
+@router.get("/{run_id}/timeline", response_model=TimelineResponse)
+async def get_timeline(
+    run_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+    db: TenantDBSession,
+) -> TimelineResponse:
+    """Return a scrubbable investigation timeline with decision-provenance annotations.
+
+    Each node carries:
+    * ``decision`` — structured provenance (reason, confidence, next phase,
+      tool name/args/result) extracted from the event ``payload``.
+    * ``has_artifact`` — whether a detailed transcript artifact is attached.
+    * ``diff_vs_prev_attempt`` — one-line diff for repeated steps so analysts
+      can see how the agent corrected itself across retry attempts.
+
+    The response is bounded at 10 000 events. Use the paginated ``/events``
+    endpoint for runs that exceed this.
+    """
+    run = await _fetch_run(db, run_id, current_user.tenant_id)
+
+    events_q = (
+        select(InvestigationEvent)
+        .where(InvestigationEvent.run_id == run_id)
+        .order_by(InvestigationEvent.seq.asc())
+        .limit(10000)
+    )
+    events: list[InvestigationEvent] = list((await db.execute(events_q)).scalars().all())
+
+    artifact_event_ids_q = select(InvestigationArtifact.event_id).where(
+        InvestigationArtifact.run_id == run_id,
+        InvestigationArtifact.event_id.isnot(None),
+    )
+    artifact_event_ids: set[uuid.UUID] = set(
+        (await db.execute(artifact_event_ids_q)).scalars().all()
+    )
+
+    nodes: list[TimelineNode] = []
+    for idx, ev in enumerate(events):
+        nodes.append(
+            TimelineNode(
+                seq=ev.seq,
+                ts=ev.ts,
+                kind=ev.kind,
+                agent=ev.agent,
+                summary=ev.summary,
+                duration_ms=ev.duration_ms,
+                decision=_extract_decision(ev),
+                has_artifact=ev.id in artifact_event_ids,
+                diff_vs_prev_attempt=_diff_vs_prev(events, idx),
+            )
+        )
+
+    total_ms = 0
+    if len(events) >= 2:
+        first_ts = events[0].ts
+        last_ts = events[-1].ts
+        total_ms = int((last_ts - first_ts).total_seconds() * 1000)
+
+    attempt_count = sum(1 for e in events if e.kind in ("agent_start", "run_start"))
+    if attempt_count == 0:
+        attempt_count = 1
+
+    return TimelineResponse(
+        run_id=run.id,
+        case_id=run.case_id,
+        status=run.status,
+        total_duration_ms=total_ms,
+        attempt_count=attempt_count,
+        nodes=nodes,
+    )
 
 
 def _build_summary_markdown(
