@@ -1,38 +1,39 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-10T14:50:52Z",
+  "generated": "2026-05-10T18:54:09Z",
   "stats": {
-    "considered": 1011,
-    "eligible": 1008,
-    "selected": 411,
+    "considered": 1047,
+    "eligible": 1043,
+    "selected": 416,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 113,
+    "unique_techniques": 117,
     "selected_by_tier": {
-      "imported": 41,
-      "native": 370
+      "imported": 42,
+      "native": 374
     },
     "selected_by_severity": {
       "critical": 99,
-      "high": 206,
+      "high": 208,
       "low": 6,
-      "medium": 100
+      "medium": 103
     },
     "selected_by_category": {
+      "_migrated": 1,
       "application": 29,
-      "cloud": 162,
+      "cloud": 164,
       "data-exfil": 20,
-      "endpoint": 112,
-      "identity": 76,
+      "endpoint": 115,
+      "identity": 75,
       "network": 12
     }
   },
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 46,
+      "count": 48,
       "rule_ids": [
         "det-application-050",
         "det-cloud-004",
@@ -71,6 +72,7 @@
         "det-endpoint-179",
         "det-endpoint-181",
         "det-endpoint-182",
+        "det-endpoint-286",
         "det-identity-121",
         "mitre-car-car-2021-01-009",
         "mitre-car-car-2021-05-003",
@@ -79,7 +81,8 @@
         "sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e",
         "sigmahq-sigma-87df9ee1-5416-453a-8a08-e8d4a51e9ce1",
         "sigmahq-sigma-add64136-62e5-48ea-807e-88638d02df1e",
-        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2"
+        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2",
+        "splunk-security-content-0c320fea-6e87-4b99-a884-74d09d4b655d"
       ],
       "min_target": 25,
       "covered": true
@@ -177,7 +180,7 @@
     },
     "lateral": {
       "label": "Lateral Movement",
-      "count": 32,
+      "count": 33,
       "rule_ids": [
         "det-endpoint-010",
         "det-endpoint-111",
@@ -185,6 +188,7 @@
         "det-endpoint-113",
         "det-endpoint-114",
         "det-endpoint-226",
+        "det-endpoint-298",
         "det-identity-102",
         "det-identity-103",
         "det-identity-104",
@@ -226,13 +230,13 @@
         "det-cloud-184",
         "det-cloud-186",
         "det-cloud-192",
-        "det-cloud-192",
         "det-cloud-195",
-        "det-cloud-196",
         "det-cloud-196",
         "det-cloud-203",
         "det-cloud-204",
         "det-cloud-206",
+        "det-cloud-221",
+        "det-cloud-222",
         "det-data-exfil-001",
         "det-data-exfil-002",
         "det-data-exfil-003",
@@ -354,7 +358,7 @@
         "det-cloud-185",
         "det-cloud-190",
         "det-cloud-191",
-        "det-cloud-194",
+        "det-cloud-225",
         "det-endpoint-178",
         "det-endpoint-245",
         "det-endpoint-246",
@@ -444,6 +448,7 @@
         "det-endpoint-263",
         "det-endpoint-264",
         "det-endpoint-265",
+        "det-endpoint-300",
         "det-identity-001",
         "det-identity-002",
         "det-identity-003",
@@ -453,7 +458,6 @@
         "det-identity-009",
         "det-identity-011",
         "det-identity-012",
-        "det-identity-013",
         "det-identity-020",
         "det-identity-021",
         "det-identity-027",
@@ -617,15 +621,17 @@
     "T1012": 1,
     "T1016": 1,
     "T1018": 1,
-    "T1020": 1,
+    "T1020": 2,
     "T1021": 11,
     "T1021.001": 1,
     "T1021.002": 6,
     "T1021.003": 1,
     "T1021.004": 1,
     "T1021.006": 4,
+    "T1027": 1,
     "T1029": 1,
     "T1033": 1,
+    "T1036.005": 1,
     "T1039": 1,
     "T1040": 3,
     "T1041": 7,
@@ -635,15 +641,15 @@
     "T1052": 1,
     "T1053": 1,
     "T1057": 1,
-    "T1059": 2,
+    "T1059": 3,
     "T1059.001": 2,
     "T1059.004": 2,
     "T1069": 1,
     "T1069.003": 1,
     "T1070": 4,
     "T1071.001": 1,
-    "T1078": 15,
-    "T1078.001": 3,
+    "T1078": 16,
+    "T1078.001": 2,
     "T1078.004": 27,
     "T1082": 1,
     "T1087": 1,
@@ -651,7 +657,7 @@
     "T1098": 15,
     "T1098.001": 13,
     "T1098.003": 7,
-    "T1098.004": 4,
+    "T1098.004": 5,
     "T1098.007": 1,
     "T1105": 1,
     "T1110": 7,
@@ -660,8 +666,9 @@
     "T1110.004": 2,
     "T1112": 1,
     "T1114.002": 3,
-    "T1114.003": 2,
+    "T1114.003": 3,
     "T1133": 3,
+    "T1136": 1,
     "T1136.001": 2,
     "T1187": 1,
     "T1190": 6,
@@ -669,10 +676,11 @@
     "T1199": 14,
     "T1210": 1,
     "T1212": 2,
+    "T1213.002": 1,
     "T1484.002": 1,
     "T1485": 30,
     "T1486": 5,
-    "T1489": 1,
+    "T1489": 3,
     "T1490": 11,
     "T1496": 6,
     "T1505.003": 2,
@@ -681,7 +689,7 @@
     "T1528": 5,
     "T1530": 24,
     "T1531": 2,
-    "T1537": 9,
+    "T1537": 10,
     "T1539": 2,
     "T1543": 1,
     "T1550": 4,
@@ -711,7 +719,7 @@
     "T1567": 10,
     "T1567.002": 2,
     "T1569": 1,
-    "T1570": 5,
+    "T1570": 6,
     "T1574": 1,
     "T1606": 1,
     "T1606.002": 1,
@@ -5197,31 +5205,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-194",
-      "name": "M365 Unified Audit Log Disabled",
-      "path": "detections/cloud/m365-unified-audit-log-disabled.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1562.008"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-195",
       "name": "M365 eDiscovery Search Results Exported",
       "path": "detections/cloud/m365-exchange-ediscovery-export.yaml",
@@ -5250,26 +5233,26 @@
     },
     {
       "id": "det-cloud-196",
-      "name": "M365 SharePoint External Sharing Enabled Tenant-Wide",
-      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml",
+      "name": "M365 SharePoint External Sharing Enabled at Org Level",
+      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-org.yaml",
       "tier": "native",
       "source": "core",
       "category": "cloud",
-      "severity": "high",
+      "severity": "medium",
       "mitre_techniques": [
-        "T1567",
-        "T1537"
+        "T1537",
+        "T1213.002"
       ],
       "mitre_tactics": [],
       "families": [
         "exfil",
         "cloud"
       ],
-      "quality_score": 0.977,
+      "quality_score": 0.955,
       "quality_notes": [
         "tier:native(+0.5)",
         "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
+        "severity:medium(+0.105)",
         "executable(+0.15)"
       ],
       "log_source_product": "m365",
@@ -5651,6 +5634,85 @@
         "executable(+0.15)"
       ],
       "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-221",
+      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
+      "path": "detections/cloud/m365-exchange-transport-rule-redirect-external.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1114.003",
+        "T1020"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil",
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "m365",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-222",
+      "name": "M365 SharePoint External Sharing Enabled Tenant-Wide",
+      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1567",
+        "T1537"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil",
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "m365",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-225",
+      "name": "M365 Unified Audit Log Disabled",
+      "path": "detections/cloud/m365-unified-audit-log-disabled.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1562.008"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 1.0,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "m365",
       "has_executable_body": true
     },
     {
@@ -8005,6 +8067,86 @@
       "has_executable_body": true
     },
     {
+      "id": "det-endpoint-286",
+      "name": "Linux osqueryd Service Stop Detected via auditd",
+      "path": "detections/endpoint/osquery-linux-auditd-service-stop.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "linux",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-endpoint-298",
+      "name": "Executable Dropped in World-Writable Directory (FIM)",
+      "path": "detections/endpoint/fim-binary-dropped-writable-dir.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1027",
+        "T1059",
+        "T1036.005",
+        "T1570"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.955,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:4(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "osquery",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-endpoint-300",
+      "name": "SSH authorized_keys File Modified (FIM)",
+      "path": "detections/endpoint/fim-ssh-authorized-keys-changed.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098.004",
+        "T1078",
+        "T1136"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "osquery",
+      "has_executable_body": true
+    },
+    {
       "id": "det-identity-001",
       "name": "Authentication Brute-Force Burst",
       "path": "detections/identity/brute-force-login.yaml",
@@ -8245,31 +8387,6 @@
       "id": "det-identity-012",
       "name": "Root SSH Login on Production Host",
       "path": "detections/identity/root-ssh-login.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "linux",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-013",
-      "name": "Login with Vendor Default Credentials",
-      "path": "detections/identity/default-credential-login.yaml",
       "tier": "native",
       "source": "core",
       "category": "identity",
@@ -11336,6 +11453,31 @@
       ],
       "log_source_product": "windows",
       "has_executable_body": true
+    },
+    {
+      "id": "splunk-security-content-0c320fea-6e87-4b99-a884-74d09d4b655d",
+      "name": "Linux Auditd Osquery Service Stop",
+      "path": "detections/splunk-imports/_migrated/linux-auditd-osquery-service-stop.yaml",
+      "tier": "imported",
+      "source": "splunk-security-content",
+      "category": "_migrated",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.605,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "no_executable_body(0)"
+      ],
+      "log_source_product": "splunk",
+      "has_executable_body": false
     }
   ]
 }
