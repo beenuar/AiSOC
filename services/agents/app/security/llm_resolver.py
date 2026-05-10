@@ -77,6 +77,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import asyncpg
 import structlog
@@ -185,13 +186,20 @@ def _airgap_blocks(base_url: str) -> tuple[bool, str]:
     if not airgapped:
         return False, ""
 
-    base = (base_url or "").lower()
+    base = (base_url or "").strip()
     if not base:
         return (
             True,
             "AISOC_AIRGAPPED is on and no base_url is configured (would default to api.openai.com).",
         )
-    if "api.openai.com" in base:
+    try:
+        parsed = urlparse(base)
+        hostname = (parsed.hostname or "").lower()
+    except Exception:  # noqa: BLE001
+        hostname = ""
+    # Check hostname exactly or as a subdomain to avoid substring-match bypass
+    # (e.g. evil.com/api.openai.com or api.openai.com.evil.com).
+    if hostname == "api.openai.com" or hostname.endswith(".api.openai.com"):
         return True, "AISOC_AIRGAPPED is on and base_url points at api.openai.com."
     return False, ""
 

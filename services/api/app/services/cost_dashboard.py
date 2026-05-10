@@ -544,6 +544,7 @@ __all__ = [
     "TopCostCase",
     "build_cost_dashboard",
     "build_dashboard_from_rows",
+    "_internal_helpers",  # accessed by test suite for private helper coverage
 ]
 
 

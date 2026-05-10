@@ -687,6 +687,7 @@ __all__ = [
     "TopSourceHighlight",
     "build_digest_from_rows",
     "build_weekly_digest",
+    "_internal_helpers",  # accessed by test suite for private helper coverage
 ]
 
 

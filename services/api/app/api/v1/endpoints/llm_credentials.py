@@ -351,9 +351,9 @@ async def upsert_llm_credential(
         )
     except Exception as exc:  # noqa: BLE001 — audit must not fail the call
         logger.error(
-            "settings.llm.audit.failed tenant_id=%s error=%s",
-            current_user.tenant_id,
-            exc,
+            "settings.llm.audit.failed tenant_id=%r error=%s",
+            str(current_user.tenant_id),
+            type(exc).__name__,
         )
 
     logger.info(

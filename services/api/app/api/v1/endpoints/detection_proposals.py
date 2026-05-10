@@ -594,8 +594,8 @@ async def run_eval_harness(
             if tmp is not None:
                 try:
                     Path(tmp.name).unlink(missing_ok=True)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    logger.debug("cleanup: failed to remove tmp file: %s", type(exc).__name__)
 
 
 @router.post("/{proposal_id}/eval", response_model=ProposalResponse)
@@ -782,9 +782,9 @@ async def promote_proposal(
         import logging as _logging
 
         _logging.getLogger(__name__).warning(
-            "WS-B4: GitHub PR creation failed for proposal %s — %s",
-            proposal_id,
-            exc,
+            "WS-B4: GitHub PR creation failed for proposal %r — %s",
+            str(proposal_id),
+            type(exc).__name__,
         )
 
     await db.commit()

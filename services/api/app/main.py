@@ -131,18 +131,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         try:
             await oauth_refresh_task
         except asyncio.CancelledError:
-            pass
+            logger.debug("oauth_refresh worker cancelled during shutdown")
         except Exception as exc:
-            logger.warning("oauth_refresh worker shutdown error", error=str(exc))
+            logger.warning("oauth_refresh worker shutdown error", error=type(exc).__name__)
 
     if weekly_digest_task is not None and not weekly_digest_task.done():
         weekly_digest_task.cancel()
         try:
             await weekly_digest_task
         except asyncio.CancelledError:
-            pass
+            logger.debug("weekly_digest worker cancelled during shutdown")
         except Exception as exc:
-            logger.warning("weekly_digest worker shutdown error", error=str(exc))
+            logger.warning("weekly_digest worker shutdown error", error=type(exc).__name__)
     await engine.dispose()
     await close_neo4j()
     # Close the ClickHouse warm-tier client. We don't pre-init it on

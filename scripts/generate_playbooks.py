@@ -38,7 +38,6 @@ Rollback is modelled by pairing every containment action with a
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 

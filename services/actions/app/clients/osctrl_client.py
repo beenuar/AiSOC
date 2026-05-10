@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_POLL_INTERVAL = 3.0  # seconds between result-polling retries
 _DEFAULT_TIMEOUT = 60  # seconds before we stop polling
-_MAX_REDIRECT = 5
 
 
 class OsctrlError(RuntimeError):

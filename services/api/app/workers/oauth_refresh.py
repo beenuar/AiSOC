@@ -435,13 +435,15 @@ async def _record_failure(
     }
     if new_count >= alarm_threshold:
         values["health_status"] = _HEALTH_UNHEALTHY
+        # Sanitize reason: truncate and strip any embedded newlines to prevent
+        # log injection and avoid leaking sensitive OAuth error payloads.
+        safe_reason = reason[:80].replace("\n", " ").replace("\r", " ")
         logger.error(
-            "oauth_refresh.alarm connector_id=%s tenant=%s connector_type=%s failures=%d reason=%s — flipping health_status=unhealthy",
+            "oauth_refresh.alarm connector_id=%s tenant=<redacted> connector_type=%s failures=%d reason=%s — flipping health_status=unhealthy",
             connector.id,
-            connector.tenant_id,
             connector.connector_type,
             new_count,
-            reason,
+            safe_reason,
         )
 
     await db.execute(update(Connector).where(Connector.id == connector.id).values(**values))

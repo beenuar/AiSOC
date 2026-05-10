@@ -700,6 +700,7 @@ __all__ = [
     "TimelineHighlight",
     "build_case_summary",
     "build_summary_from_rows",
+    "_internal_helpers",  # accessed by test suite for private helper coverage
 ]
 
 

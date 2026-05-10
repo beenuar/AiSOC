@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import generate_node_key
+from app.core.crypto import generate_node_key
 from app.models.node import OsqueryNode
 
 

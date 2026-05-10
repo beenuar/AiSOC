@@ -190,7 +190,7 @@ async def _create_branch(
         resp.raise_for_status()
         return True
     except Exception as exc:
-        logger.warning("GitHub: failed to create branch '%s' — %s", branch_name, exc)
+        logger.warning("GitHub: failed to create branch %r — %s", branch_name, type(exc).__name__)
         return False
 
 
@@ -219,8 +219,8 @@ async def _commit_file(
         )
         if existing.status_code == 200:
             payload["sha"] = existing.json().get("sha")
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 — SHA fetch is best-effort; missing SHA just overwrites
+        logger.debug("GitHub: could not fetch existing SHA for %r: %s", file_path, type(exc).__name__)
 
     try:
         resp = await client.put(
@@ -231,7 +231,7 @@ async def _commit_file(
         resp.raise_for_status()
         return True
     except Exception as exc:
-        logger.warning("GitHub: failed to commit file '%s' — %s", file_path, exc)
+        logger.warning("GitHub: failed to commit file %r — %s", file_path, type(exc).__name__)
         return False
 
 
@@ -269,5 +269,5 @@ async def _open_pr(
         resp.raise_for_status()
         return resp.json()["html_url"]
     except Exception as exc:
-        logger.warning("GitHub: failed to open PR for branch '%s' — %s", head, exc)
+        logger.warning("GitHub: failed to open PR for branch %r — %s", head, type(exc).__name__)
         return None

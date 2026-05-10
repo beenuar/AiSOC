@@ -686,7 +686,8 @@ async def _stream_explanation(req: ExplainRequest, llm_config: LlmConfig) -> Asy
 
     except Exception as exc:  # noqa: BLE001 — frontend gets a structured error
         logger.exception("explain.stream_failed", error=str(exc))
-        yield _frame({"kind": "error", "error": str(exc)})
+        # Return a generic message to avoid exposing internal implementation details
+        yield _frame({"kind": "error", "error": "An internal error occurred while generating the explanation."})
 
 
 @router.post("/explain")

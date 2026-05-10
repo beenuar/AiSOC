@@ -193,18 +193,18 @@ def _parse_pack(path: Path) -> OsqueryPack:
 # Registry (in-memory cache with TTL)
 # ---------------------------------------------------------------------------
 
-_CACHE: dict[str, OsqueryPack] = {}
-_CACHE_TS: float = 0.0
 _CACHE_TTL: int = int(os.environ.get("AISOC_PACKS_CACHE_TTL", "300"))  # seconds
+# Use a mutable container so all mutations are visible to CodeQL static analysis
+_cache_state: dict[str, object] = {"packs": {}, "ts": 0.0}
 
 
 def _load_all() -> dict[str, OsqueryPack]:
     """Load (or return cached) all packs from PACKS_DIR."""
-    global _CACHE, _CACHE_TS
-
     now = time.monotonic()
-    if _CACHE and (now - _CACHE_TS) < _CACHE_TTL:
-        return _CACHE
+    cached_packs = _cache_state["packs"]
+    cached_ts = _cache_state["ts"]
+    if cached_packs and (now - cached_ts) < _CACHE_TTL:  # type: ignore[operator]
+        return cached_packs  # type: ignore[return-value]
 
     packs: dict[str, OsqueryPack] = {}
     if PACKS_DIR.is_dir():
@@ -220,9 +220,9 @@ def _load_all() -> dict[str, OsqueryPack]:
                 # a circular import with the service's log config here.
                 print(f"[pack_loader] Failed to parse {yaml_file}: {exc}")
 
-    _CACHE = packs
-    _CACHE_TS = now
-    return _CACHE
+    _cache_state["packs"] = packs
+    _cache_state["ts"] = now
+    return packs
 
 
 def get_all_packs() -> list[OsqueryPack]:

@@ -24,7 +24,10 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.crypto import generate_node_key
 from app.db.session import get_db
+
+__all__ = ["generate_node_key", "verify_enroll_secret", "require_valid_node_key"]
 
 
 def _tenant_from_header(x_aisoc_tenant: str | None) -> str:
@@ -39,11 +42,6 @@ def verify_enroll_secret(submitted_secret: str, tenant_id: str = "default") -> b
     tenant.  For now we use the single-tenant secret from settings.
     """
     return secrets.compare_digest(submitted_secret, settings.enroll_secret)
-
-
-def generate_node_key() -> str:
-    """Generate a cryptographically random node key (128-bit hex)."""
-    return secrets.token_hex(16)
 
 
 async def require_valid_node_key(

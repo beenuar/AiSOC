@@ -146,9 +146,9 @@ class CredentialVault:
         return payload
 
 
-_vault_singleton: CredentialVault | None = None
 _vault_lock = Lock()
-_vault_warned_missing_key = False
+# Use a mutable container so all mutations are visible to CodeQL static analysis
+_vault_state: dict[str, object] = {"singleton": None, "warned_missing_key": False}
 
 
 def get_vault() -> CredentialVault | None:
@@ -159,30 +159,28 @@ def get_vault() -> CredentialVault | None:
     "BYOK decryption not configured" and fall through to the environment
     baseline rather than failing the request.
     """
-    global _vault_singleton, _vault_warned_missing_key
-    if _vault_singleton is not None:
-        return _vault_singleton
+    if _vault_state["singleton"] is not None:
+        return _vault_state["singleton"]  # type: ignore[return-value]
     with _vault_lock:
-        if _vault_singleton is not None:  # pragma: no cover - racing init
-            return _vault_singleton
+        if _vault_state["singleton"] is not None:  # pragma: no cover - racing init
+            return _vault_state["singleton"]  # type: ignore[return-value]
         primary = (os.getenv("AISOC_CREDENTIAL_KEY") or "").strip().encode("ascii")
         if not primary:
-            if not _vault_warned_missing_key:
+            if not _vault_state["warned_missing_key"]:
                 logger.warning(
                     "AISOC_CREDENTIAL_KEY not set; tenant LLM BYOK overrides "
                     "will be ignored and explain will use the environment "
                     "baseline only"
                 )
-                _vault_warned_missing_key = True
+                _vault_state["warned_missing_key"] = True
             return None
         rotation = _split_keys(os.getenv("AISOC_CREDENTIAL_KEY_ROTATION_FROM") or "")
-        _vault_singleton = CredentialVault(primary, historical_keys=rotation)
-        return _vault_singleton
+        _vault_state["singleton"] = CredentialVault(primary, historical_keys=rotation)
+        return _vault_state["singleton"]  # type: ignore[return-value]
 
 
 def reset_vault_for_tests() -> None:
     """Reset the lazy singleton so tests can re-key per case."""
-    global _vault_singleton, _vault_warned_missing_key
     with _vault_lock:
-        _vault_singleton = None
-        _vault_warned_missing_key = False
+        _vault_state["singleton"] = None
+        _vault_state["warned_missing_key"] = False
