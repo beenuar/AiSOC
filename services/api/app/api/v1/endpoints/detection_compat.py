@@ -1037,3 +1037,94 @@ async def get_detection_confidence(
     )
     rules = (await db.execute(stmt)).scalars().all()
     return _build_confidence(list(rules))
+
+
+# ─── WS-B1: Bulk Sigma import endpoint ───────────────────────────────────────
+
+
+class SigmaImportRequest(BaseModel):
+    """Request body for importing Sigma rules."""
+    source: str = Field(..., description="Source identifier (e.g., 'SigmaHQ/sigma')")
+    commit: str = Field(..., description="Git commit SHA to import from")
+    # Add any other parameters needed for the import
+
+
+class SigmaImportResponse(BaseModel):
+    """Response body for Sigma import operation."""
+    imported_count: int
+    failed_count: int
+    total_processed: int
+    failures: list[str] = Field(default_factory=list)
+
+
+@router.post('/sigma/import', response_model=SigmaImportResponse)
+async def import_sigma_rules_endpoint(
+    request: SigmaImportRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission('rules:write'))],
+    db: DBSession,
+) -> SigmaImportResponse:
+    """Import Sigma rules from a git repository at a specific commit.
+    
+    This endpoint triggers the bulk import pipeline that validates and imports
+    Sigma rules from the specified source repository. The import runs in the
+    background and returns a summary of the operation.
+    """
+    try:
+        # Import the required modules
+        import asyncio
+        import tempfile
+        from pathlib import Path
+        from tools.detection_import.sigma_importer import import_rules, SIGMA_REPO_URL
+        from tools.detection_import.common import ImportedRule
+        
+        # Create a temporary directory for the repo clone
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_path = Path(temp_dir) / "sigma"
+            
+            # Run the import in a separate thread to avoid blocking
+            loop = asyncio.get_event_loop()
+            imported_rules = await loop.run_in_executor(
+                None, 
+                lambda: import_rules(request.commit, repo_path=repo_path)
+            )
+            
+            # Convert imported rules to the format expected by the service
+            rules_dicts = []
+            for rule in imported_rules:
+                rules_dicts.append({
+                    'id': rule.rule_id,
+                    'title': rule.title,
+                    'description': rule.description,
+                    'severity': rule.severity,
+                    'logsource': rule.logsource,
+                    'detection': rule.detection,
+                    'tags': rule.tags,
+                    'references': rule.references,
+                    'author': rule.author,
+                    'date': rule.date,
+                    'modified': rule.modified,
+                    'status': rule.status,
+                })
+            
+            # Import the rules using the existing service
+            from app.services.detections.sigma_import import import_sigma_rules
+            report = await import_sigma_rules(
+                session=db,
+                rules=rules_dicts,
+                source=request.source,
+                source_commit=request.commit,
+                license_id="DRL-1.1",
+                license_url="https://github.com/SigmaHQ/Detection-Rule-License"
+            )
+            
+            return SigmaImportResponse(
+                imported_count=report.imported_count,
+                failed_count=report.failed_count,
+                total_processed=report.total_processed,
+                failures=[f"{failure['reason']}: {failure.get('details', '')}" for failure in report.failures]
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Failed to import Sigma rules: {str(e)}'
+        )

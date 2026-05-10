@@ -287,8 +287,38 @@ export function DetectionCatalog() {
             Browse and install community Sigma detection rules for your SOC.
           </p>
         </div>
-        <div className="text-sm text-zinc-500">
-          {total > 0 && <span>{total.toLocaleString()} rules</span>}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={async () => {
+              try {
+                const response = await fetch('/api/v1/detection/sigma/import', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    source: 'SigmaHQ/sigma',
+                    commit: 'latest',
+                  }),
+                });
+                if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                console.log('Import result:', result);
+                // Reload the rules after import
+                loadRules(search, productFilter, levelFilter, sortBy, page);
+              } catch (error) {
+                console.error('Import failed:', error);
+              }
+            }}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            Import Sigma Rules
+          </button>
+          <div className="text-sm text-zinc-500">
+            {total > 0 && <span>{total.toLocaleString()} rules</span>}
+          </div>
         </div>
       </div>
 
