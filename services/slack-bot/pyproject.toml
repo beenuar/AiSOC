@@ -22,7 +22,7 @@ structlog = ">=24.1,<26.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
 pytest-asyncio = "^0.23.0"
-respx = "^0.20.2"
+respx = "^0.21.1"
 
 [build-system]
 requires = ["poetry-core"]

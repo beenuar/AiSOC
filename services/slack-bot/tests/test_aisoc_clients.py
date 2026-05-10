@@ -56,9 +56,9 @@ async def test_list_open_cases_filters_closed_and_caps_to_limit():
         {"id": "c4", "title": "Triaged", "status": "triaged", "severity": "high"},
     ]
 
-    with respx.mock(base_url=API_BASE) as router:
-        route = router.get("/api/v1/cases").mock(return_value=httpx.Response(200, json=sample))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        route = router.get(f"{API_BASE}/api/v1/cases").mock(return_value=httpx.Response(200, json=sample))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             cases = await client.list_open_cases(limit=2)
         finally:
@@ -77,9 +77,9 @@ async def test_list_open_cases_filters_closed_and_caps_to_limit():
 @pytest.mark.asyncio
 async def test_list_open_cases_propagates_severity_filter():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        route = router.get("/api/v1/cases").mock(return_value=httpx.Response(200, json=[]))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        route = router.get(f"{API_BASE}/api/v1/cases").mock(return_value=httpx.Response(200, json=[]))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             await client.list_open_cases(limit=5, severity="high")
         finally:
@@ -91,11 +91,11 @@ async def test_list_open_cases_propagates_severity_filter():
 @pytest.mark.asyncio
 async def test_get_case_url_encodes_identifier():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
+    with respx.mock() as router:
         # User passes a case-number that contains a slash; the client must
         # quote it so the path stays inside ``/api/v1/cases/…``.
-        route = router.get("/api/v1/cases/CASE%2F1").mock(return_value=httpx.Response(200, json={"id": "abc", "title": "ok"}))
-        client = AisocApiClient.from_settings(settings)
+        route = router.get(f"{API_BASE}/api/v1/cases/CASE%2F1").mock(return_value=httpx.Response(200, json={"id": "abc", "title": "ok"}))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             case = await client.get_case("CASE/1")
         finally:
@@ -108,9 +108,9 @@ async def test_get_case_url_encodes_identifier():
 @pytest.mark.asyncio
 async def test_launch_investigation_posts_alert_summary():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        route = router.post("/api/v1/cases/abc/investigate").mock(return_value=httpx.Response(202, json={"run_id": "run-1"}))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        route = router.post(f"{API_BASE}/api/v1/cases/abc/investigate").mock(return_value=httpx.Response(202, json={"run_id": "run-1"}))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             result = await client.launch_investigation("abc", alert_summary="ransomware?")
         finally:
@@ -128,9 +128,9 @@ async def test_launch_investigation_posts_alert_summary():
 @pytest.mark.asyncio
 async def test_get_case_summary_requests_json_format():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        route = router.get("/api/v1/cases/abc/summary").mock(return_value=httpx.Response(200, json={"summary": "..."}))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        route = router.get(f"{API_BASE}/api/v1/cases/abc/summary").mock(return_value=httpx.Response(200, json={"summary": "..."}))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             await client.get_case_summary("abc")
         finally:
@@ -142,9 +142,9 @@ async def test_get_case_summary_requests_json_format():
 @pytest.mark.asyncio
 async def test_non_2xx_raises_aisoc_client_error_with_status():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        router.get("/api/v1/cases").mock(return_value=httpx.Response(503, text="upstream down"))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        router.get(f"{API_BASE}/api/v1/cases").mock(return_value=httpx.Response(503, text="upstream down"))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             with pytest.raises(AisocClientError) as exc:
                 await client.list_open_cases()
@@ -158,9 +158,9 @@ async def test_non_2xx_raises_aisoc_client_error_with_status():
 @pytest.mark.asyncio
 async def test_transport_error_raises_without_status():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        router.get("/api/v1/cases").mock(side_effect=httpx.ConnectError("nope"))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        router.get(f"{API_BASE}/api/v1/cases").mock(side_effect=httpx.ConnectError("nope"))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             with pytest.raises(AisocClientError) as exc:
                 await client.list_open_cases()
@@ -173,9 +173,9 @@ async def test_transport_error_raises_without_status():
 @pytest.mark.asyncio
 async def test_invalid_json_raises_client_error():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        router.get("/api/v1/cases/abc").mock(return_value=httpx.Response(200, text="not json", headers={"content-type": "text/plain"}))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        router.get(f"{API_BASE}/api/v1/cases/abc").mock(return_value=httpx.Response(200, text="not json", headers={"content-type": "text/plain"}))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             with pytest.raises(AisocClientError):
                 await client.get_case("abc")
@@ -186,9 +186,9 @@ async def test_invalid_json_raises_client_error():
 @pytest.mark.asyncio
 async def test_list_open_cases_rejects_non_list_response():
     settings = _settings()
-    with respx.mock(base_url=API_BASE) as router:
-        router.get("/api/v1/cases").mock(return_value=httpx.Response(200, json={"oops": "object"}))
-        client = AisocApiClient.from_settings(settings)
+    with respx.mock() as router:
+        router.get(f"{API_BASE}/api/v1/cases").mock(return_value=httpx.Response(200, json={"oops": "object"}))
+        client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             with pytest.raises(AisocClientError):
                 await client.list_open_cases()
@@ -204,8 +204,8 @@ async def test_list_open_cases_rejects_non_list_response():
 @pytest.mark.asyncio
 async def test_submit_action_posts_full_payload_with_tenant():
     settings = _settings()
-    with respx.mock(base_url=ACTIONS_BASE) as router:
-        route = router.post("/api/v1/actions").mock(
+    with respx.mock() as router:
+        route = router.post(f"{ACTIONS_BASE}/api/v1/actions").mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -216,7 +216,7 @@ async def test_submit_action_posts_full_payload_with_tenant():
                 },
             )
         )
-        client = AisocActionsClient.from_settings(settings)
+        client = AisocActionsClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             result = await client.submit_action(
                 action_type="isolate_host",
@@ -255,9 +255,9 @@ async def test_actions_client_falls_back_to_api_token_when_actions_token_missing
         AISOC_ACTIONS_SERVICE_TOKEN="",
         AISOC_DEFAULT_TENANT_ID=TENANT,
     )
-    with respx.mock(base_url=ACTIONS_BASE) as router:
-        route = router.post("/api/v1/actions/aaa/approve").mock(return_value=httpx.Response(200, json={"id": "aaa", "status": "completed"}))
-        client = AisocActionsClient.from_settings(settings)
+    with respx.mock() as router:
+        route = router.post(f"{ACTIONS_BASE}/api/v1/actions/aaa/approve").mock(return_value=httpx.Response(200, json={"id": "aaa", "status": "completed"}))
+        client = AisocActionsClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             await client.approve_action("aaa")
         finally:
@@ -269,14 +269,14 @@ async def test_actions_client_falls_back_to_api_token_when_actions_token_missing
 @pytest.mark.asyncio
 async def test_approve_and_reject_url_encode_action_id():
     settings = _settings()
-    with respx.mock(base_url=ACTIONS_BASE) as router:
-        approve = router.post("/api/v1/actions/a%2F1/approve").mock(
+    with respx.mock() as router:
+        approve = router.post(f"{ACTIONS_BASE}/api/v1/actions/a%2F1/approve").mock(
             return_value=httpx.Response(200, json={"id": "a/1", "status": "approved"})
         )
-        reject = router.post("/api/v1/actions/a%2F1/reject").mock(
+        reject = router.post(f"{ACTIONS_BASE}/api/v1/actions/a%2F1/reject").mock(
             return_value=httpx.Response(200, json={"id": "a/1", "status": "rejected"})
         )
-        client = AisocActionsClient.from_settings(settings)
+        client = AisocActionsClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             await client.approve_action("a/1")
             await client.reject_action("a/1")
@@ -289,11 +289,11 @@ async def test_approve_and_reject_url_encode_action_id():
 @pytest.mark.asyncio
 async def test_actions_client_propagates_4xx_with_message_snippet():
     settings = _settings()
-    with respx.mock(base_url=ACTIONS_BASE) as router:
-        router.post("/api/v1/actions").mock(
+    with respx.mock() as router:
+        router.post(f"{ACTIONS_BASE}/api/v1/actions").mock(
             return_value=httpx.Response(400, text="invalid action_type"),
         )
-        client = AisocActionsClient.from_settings(settings)
+        client = AisocActionsClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:
             with pytest.raises(AisocClientError) as exc:
                 await client.submit_action(
