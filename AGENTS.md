@@ -37,3 +37,11 @@
   - PRs touching the agent, orchestrator graph, prompts, tools, RAG corpus, or detection content must re-grade against the harness and include before/after deltas in the PR body if any axis regresses.
 - Project website at `tryaisoc.com`; domain registered through Cloudflare.
 - Production hosting target is Fly.io for backend services.
+- v1.0 buyer-value plan (`aisoc_v1.0_—_buyer-value_plan_c8116970.plan.md`) is fully implemented (all WS-A through WS-H workstreams completed as of May 2026). Key additions:
+  - WS-A: Demo seed script at `services/api/app/scripts/seed_demo.py` — 15 realistic incidents, one-click Render deploy (`render.yaml` + README badge).
+  - WS-C: 25 named parameterised playbooks (WS-C1), playbook gallery with eval gate (WS-C2/C3).
+  - WS-D: Auto-summary at investigation close with PDF export (WS-D2), replayable investigation timeline (WS-D3), rate-limit + real-test hardening (WS-D1).
+  - WS-F: Light/dark theme persisted in user profile (WS-F1), WCAG AA axe-core CI gate (WS-F2), saved views on Alerts/Cases/Playbooks + drag-drop dashboard widgets (WS-F3), visual SOAR studio (undo/redo, edge validation, schema-driven forms — WS-F4), empty-state polish + v1.1 deferred badges (WS-F5).
+  - WS-G: Slack Bolt service at `services/slack-bot/` with `/aisoc` ChatOps commands (WS-G1); executive digest with auto-generated PDF + weekly scheduler in `services/api/app/services/digest_pdf.py` and `services/api/app/api/v1/endpoints/reports.py` (WS-G2).
+  - WS-H: LLM cost dashboard (`services/api/app/services/cost_dashboard.py` + `apps/web/src/app/(admin)/costs/page.tsx` — WS-H1); BYOK per-tenant LLM credentials vault-encrypted via `CredentialVault`, model `TenantLlmCredential`, settings UI in `apps/web/src/components/settings/SettingsView.tsx` (WS-H2); compliance audit export CSV + HTML bundles at `services/api/app/services/audit_export.py` (WS-H3); air-gapped / local-LLM mode via Ollama/LiteLLM overlay + zero-external-call demo seed (WS-H4).
+  - Threat actor attribution engine v0 at `services/threatintel/` (rebased, hardened, open as PR #43).
