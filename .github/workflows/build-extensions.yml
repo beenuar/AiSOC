@@ -1,0 +1,129 @@
+name: Build osquery extensions
+
+on:
+  push:
+    tags:
+      - "ext-v*"            # e.g. ext-v1.0.0
+    paths:
+      - "services/osquery-extensions/**"
+  pull_request:
+    paths:
+      - "services/osquery-extensions/**"
+
+permissions:
+  contents: write           # needed by softprops/action-gh-release
+  id-token: write           # needed by cosign keyless signing
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Unit tests (run on every PR and push)
+  # --------------------------------------------------------------------------
+  test:
+    name: Go unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/osquery-extensions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: true
+          cache-dependency-path: services/osquery-extensions/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: services/osquery-extensions/coverage.out
+
+  # --------------------------------------------------------------------------
+  # Cross-platform release builds (tags only)
+  # --------------------------------------------------------------------------
+  release:
+    name: Release ${{ matrix.goos }}/${{ matrix.goarch }}
+    if: startsWith(github.ref, 'refs/tags/ext-v')
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+          - goos: windows
+            goarch: amd64
+            runner: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: services/osquery-extensions
+
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: true
+          cache-dependency-path: services/osquery-extensions/go.sum
+
+      - name: Build
+        run: |
+          SUFFIX=""
+          if [ "$GOOS" = "windows" ]; then SUFFIX=".exe"; fi
+          OUTPUT="dist/aisoc-extension-${GOOS}-${GOARCH}${SUFFIX}"
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w \
+            -X main.version=${{ github.ref_name }} \
+            -X main.commit=${{ github.sha }}" \
+            -o "${OUTPUT}" .
+          echo "ARTIFACT=${OUTPUT}" >> "${GITHUB_ENV}"
+
+      # Sign the binary with cosign (keyless / OIDC)
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign artifact
+        run: |
+          cosign sign-blob \
+            --yes \
+            --output-certificate "${ARTIFACT}.pem" \
+            --output-signature "${ARTIFACT}.sig" \
+            "${ARTIFACT}"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            services/osquery-extensions/${{ env.ARTIFACT }}
+            services/osquery-extensions/${{ env.ARTIFACT }}.pem
+            services/osquery-extensions/${{ env.ARTIFACT }}.sig
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
