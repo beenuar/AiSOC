@@ -113,10 +113,7 @@ async def list_rules(
             )
         ]
 
-    excluded_ids = (
-        select(MSSPRuleOverride.rule_id)
-        .where(MSSPRuleOverride.child_tenant_id == tid, MSSPRuleOverride.action == "exclude")
-    )
+    excluded_ids = select(MSSPRuleOverride.rule_id).where(MSSPRuleOverride.child_tenant_id == tid, MSSPRuleOverride.action == "exclude")
     filters = [and_(*conditions), DetectionRule.id.notin_(excluded_ids)]
 
     if category:

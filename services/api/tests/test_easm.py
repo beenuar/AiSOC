@@ -12,18 +12,17 @@ All tests run with mocked HTTP and socket calls — no live APIs required.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.models.easm import ExternalAsset, ExternalAssetType
 from app.services.easm_discovery import (
     DiscoveredAsset,
-    _shodan_search,
-    _censys_search,
     _active_scan,
+    _censys_search,
+    _shodan_search,
     run_discovery,
 )
 from app.services.easm_drift import (
@@ -31,7 +30,6 @@ from app.services.easm_drift import (
     _merge_metadata,
     detect_drift,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -85,6 +83,7 @@ def _fake_censys_response() -> dict[str, Any]:
 # Discovery: Shodan
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_shodan_search_parses_matches():
     mock_resp = MagicMock()
@@ -130,6 +129,7 @@ async def test_shodan_search_handles_error():
 # Discovery: Censys
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_censys_search_parses_hits():
     mock_resp = MagicMock()
@@ -160,6 +160,7 @@ async def test_censys_search_parses_hits():
 # Discovery: Active scan
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_active_scan_open_ports():
     async def mock_probe(host, port, timeout=3.0):
@@ -188,6 +189,7 @@ async def test_active_scan_no_open_ports():
 # ---------------------------------------------------------------------------
 # Discovery: run_discovery orchestrator
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_run_discovery_uses_configured_connectors():
@@ -248,6 +250,7 @@ async def test_run_discovery_runs_active_when_enabled():
 # Drift: metadata merge
 # ---------------------------------------------------------------------------
 
+
 def test_merge_metadata_combines_ports():
     old = {"source": "shodan", "ports": [22, 80]}
     new = {"source": "censys", "ports": [80, 443]}
@@ -268,6 +271,7 @@ def test_merge_metadata_no_ports():
 # ---------------------------------------------------------------------------
 # Drift: port drift detection
 # ---------------------------------------------------------------------------
+
 
 def test_detect_port_drift_new_ports():
     old = {"ports": [22, 80]}
@@ -306,6 +310,7 @@ def test_detect_port_drift_no_change():
 # Drift: detect_drift integration (mock DB)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_detect_drift_new_asset():
     """A brand-new asset should produce a 'new_asset' drift record."""
@@ -336,7 +341,7 @@ async def test_detect_drift_existing_asset_port_change():
     existing_asset = MagicMock(spec=ExternalAsset)
     existing_asset.id = uuid.uuid4()
     existing_asset.metadata_json = {"source": "shodan", "ports": [22]}
-    existing_asset.last_seen = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    existing_asset.last_seen = datetime(2025, 1, 1, tzinfo=UTC)
 
     db = AsyncMock()
 

@@ -248,14 +248,14 @@ async def list_metrics(
 # MSSP Rule Pack management (parent-only)
 # ---------------------------------------------------------------------------
 
-from app.models.detection_rule import DetectionRule
-from app.models.mssp import (
+from app.models.detection_rule import DetectionRule  # noqa: E402
+from app.models.mssp import (  # noqa: E402
     MSSPRuleOverride,
     MSSPRulePack,
     MSSPRulePackAssignment,
     MSSPRulePackRule,
 )
-from app.services.mssp_rule_resolver import resolve_effective_rules, count_effective_rules
+from app.services.mssp_rule_resolver import count_effective_rules, resolve_effective_rules  # noqa: E402
 
 
 class RulePackCreate(BaseModel):
@@ -371,9 +371,7 @@ async def list_rule_packs(
     """List all rule packs owned by the current parent tenant."""
     _ensure_mssp_parent(current_user)
     result = await db.execute(
-        select(MSSPRulePack)
-        .where(MSSPRulePack.parent_tenant_id == current_user.tenant_id)
-        .order_by(MSSPRulePack.created_at.desc())
+        select(MSSPRulePack).where(MSSPRulePack.parent_tenant_id == current_user.tenant_id).order_by(MSSPRulePack.created_at.desc())
     )
     return list(result.scalars().all())
 
@@ -539,9 +537,9 @@ async def list_overrides(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[MSSPRuleOverride]:
-    q = select(MSSPRuleOverride).where(MSSPRuleOverride.child_tenant_id.in_(
-        select(Tenant.id).where(Tenant.parent_tenant_id == current_user.tenant_id)
-    ))
+    q = select(MSSPRuleOverride).where(
+        MSSPRuleOverride.child_tenant_id.in_(select(Tenant.id).where(Tenant.parent_tenant_id == current_user.tenant_id))
+    )
     if child_id:
         q = q.where(MSSPRuleOverride.child_tenant_id == child_id)
     result = await db.execute(q.order_by(MSSPRuleOverride.created_at.desc()))
@@ -674,19 +672,104 @@ class CrossTenantIncident(BaseModel):
 
 
 _MSSP_TENANTS_MOCK = [
-    ManagedTenantRow(tenant_id="t-acme", name="Acme Corp", health_score=92.4, open_alerts=12, critical_alerts=1, sla_breaches=0, connector_status="healthy", last_event_at="2026-05-07T20:31:00Z"),
-    ManagedTenantRow(tenant_id="t-globex", name="Globex Industries", health_score=78.1, open_alerts=34, critical_alerts=3, sla_breaches=2, connector_status="degraded", last_event_at="2026-05-07T20:28:00Z"),
-    ManagedTenantRow(tenant_id="t-initech", name="Initech LLC", health_score=95.7, open_alerts=5, critical_alerts=0, sla_breaches=0, connector_status="healthy", last_event_at="2026-05-07T20:30:00Z"),
-    ManagedTenantRow(tenant_id="t-wayne", name="Wayne Enterprises", health_score=64.3, open_alerts=58, critical_alerts=7, sla_breaches=4, connector_status="degraded", last_event_at="2026-05-07T20:25:00Z"),
-    ManagedTenantRow(tenant_id="t-stark", name="Stark Solutions", health_score=88.9, open_alerts=9, critical_alerts=1, sla_breaches=0, connector_status="healthy", last_event_at="2026-05-07T20:29:00Z"),
+    ManagedTenantRow(
+        tenant_id="t-acme",
+        name="Acme Corp",
+        health_score=92.4,
+        open_alerts=12,
+        critical_alerts=1,
+        sla_breaches=0,
+        connector_status="healthy",
+        last_event_at="2026-05-07T20:31:00Z",
+    ),
+    ManagedTenantRow(
+        tenant_id="t-globex",
+        name="Globex Industries",
+        health_score=78.1,
+        open_alerts=34,
+        critical_alerts=3,
+        sla_breaches=2,
+        connector_status="degraded",
+        last_event_at="2026-05-07T20:28:00Z",
+    ),
+    ManagedTenantRow(
+        tenant_id="t-initech",
+        name="Initech LLC",
+        health_score=95.7,
+        open_alerts=5,
+        critical_alerts=0,
+        sla_breaches=0,
+        connector_status="healthy",
+        last_event_at="2026-05-07T20:30:00Z",
+    ),
+    ManagedTenantRow(
+        tenant_id="t-wayne",
+        name="Wayne Enterprises",
+        health_score=64.3,
+        open_alerts=58,
+        critical_alerts=7,
+        sla_breaches=4,
+        connector_status="degraded",
+        last_event_at="2026-05-07T20:25:00Z",
+    ),
+    ManagedTenantRow(
+        tenant_id="t-stark",
+        name="Stark Solutions",
+        health_score=88.9,
+        open_alerts=9,
+        critical_alerts=1,
+        sla_breaches=0,
+        connector_status="healthy",
+        last_event_at="2026-05-07T20:29:00Z",
+    ),
 ]
 
 _MSSP_INCIDENTS_MOCK = [
-    CrossTenantIncident(incident_id="INC-4201", tenant_name="Wayne Enterprises", title="Ransomware lateral movement detected", severity="high", status="investigating", created_at="2026-05-07T19:45:00Z", assignee="Jordan Lee"),
-    CrossTenantIncident(incident_id="INC-4198", tenant_name="Globex Industries", title="Suspicious OAuth token abuse in Azure AD", severity="high", status="investigating", created_at="2026-05-07T18:12:00Z", assignee="Morgan Chen"),
-    CrossTenantIncident(incident_id="INC-4195", tenant_name="Wayne Enterprises", title="Data exfiltration via DNS tunneling", severity="high", status="contained", created_at="2026-05-07T16:30:00Z", assignee="Alex Rivera"),
-    CrossTenantIncident(incident_id="INC-4192", tenant_name="Acme Corp", title="Brute-force against VPN gateway", severity="medium", status="resolved", created_at="2026-05-07T14:20:00Z", assignee="Taylor Kim"),
-    CrossTenantIncident(incident_id="INC-4189", tenant_name="Globex Industries", title="Compromised service account in GCP", severity="high", status="investigating", created_at="2026-05-07T12:55:00Z", assignee=None),
+    CrossTenantIncident(
+        incident_id="INC-4201",
+        tenant_name="Wayne Enterprises",
+        title="Ransomware lateral movement detected",
+        severity="high",
+        status="investigating",
+        created_at="2026-05-07T19:45:00Z",
+        assignee="Jordan Lee",
+    ),
+    CrossTenantIncident(
+        incident_id="INC-4198",
+        tenant_name="Globex Industries",
+        title="Suspicious OAuth token abuse in Azure AD",
+        severity="high",
+        status="investigating",
+        created_at="2026-05-07T18:12:00Z",
+        assignee="Morgan Chen",
+    ),
+    CrossTenantIncident(
+        incident_id="INC-4195",
+        tenant_name="Wayne Enterprises",
+        title="Data exfiltration via DNS tunneling",
+        severity="high",
+        status="contained",
+        created_at="2026-05-07T16:30:00Z",
+        assignee="Alex Rivera",
+    ),
+    CrossTenantIncident(
+        incident_id="INC-4192",
+        tenant_name="Acme Corp",
+        title="Brute-force against VPN gateway",
+        severity="medium",
+        status="resolved",
+        created_at="2026-05-07T14:20:00Z",
+        assignee="Taylor Kim",
+    ),
+    CrossTenantIncident(
+        incident_id="INC-4189",
+        tenant_name="Globex Industries",
+        title="Compromised service account in GCP",
+        severity="high",
+        status="investigating",
+        created_at="2026-05-07T12:55:00Z",
+        assignee=None,
+    ),
 ]
 
 

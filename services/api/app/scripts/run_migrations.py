@@ -81,9 +81,7 @@ def _asyncpg_dsn(url: str) -> tuple[str, dict]:
             continue
         remaining.append((key, value))
 
-    new_url = urlunsplit(
-        (parts.scheme, parts.netloc, parts.path, "&".join(f"{k}={v}" for k, v in remaining), parts.fragment)
-    )
+    new_url = urlunsplit((parts.scheme, parts.netloc, parts.path, "&".join(f"{k}={v}" for k, v in remaining), parts.fragment))
     return new_url, kwargs
 
 

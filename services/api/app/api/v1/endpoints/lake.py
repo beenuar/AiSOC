@@ -113,19 +113,13 @@ class LakeQueryRequest(BaseModel):
         default=None,
         ge=1,
         le=MAX_ROW_CAP,
-        description=(
-            f"Optional ``LIMIT`` clamp; defaults to {DEFAULT_ROW_CAP}, "
-            f"hard-capped at {MAX_ROW_CAP}."
-        ),
+        description=(f"Optional ``LIMIT`` clamp; defaults to {DEFAULT_ROW_CAP}, hard-capped at {MAX_ROW_CAP}."),
     )
     timeout_seconds: float | None = Field(
         default=None,
         gt=0,
         le=60.0,
-        description=(
-            "Optional wall-clock cap. Defaults to the server cap "
-            "(30s). Useful for agent loops that need to fail fast."
-        ),
+        description=("Optional wall-clock cap. Defaults to the server cap (30s). Useful for agent loops that need to fail fast."),
     )
 
 
@@ -415,9 +409,7 @@ async def execute_lake_sql(
 async def get_lake_schema(
     response: Response,
     request: Request,
-    current_user: Annotated[
-        AuthUser, Depends(require_permission("lake:read_schema"))
-    ],
+    current_user: Annotated[AuthUser, Depends(require_permission("lake:read_schema"))],
     db: DBSession,
 ) -> LakeSchemaResponse:
     """Return column metadata for the lake's allowlisted tables.

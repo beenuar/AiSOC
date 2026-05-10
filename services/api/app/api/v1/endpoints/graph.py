@@ -168,10 +168,9 @@ async def _attack_path_from_relational(
     """
     row = (
         await db.execute(
-            text(
-                "SELECT id, title, severity, mitre_techniques, alert_ids "
-                "FROM aisoc_cases WHERE id = CAST(:cid AS UUID)"
-            ).bindparams(cid=case_id)
+            text("SELECT id, title, severity, mitre_techniques, alert_ids FROM aisoc_cases WHERE id = CAST(:cid AS UUID)").bindparams(
+                cid=case_id
+            )
         )
     ).fetchone()
     if not row:
@@ -415,7 +414,8 @@ async def get_mitre_coverage_compat(
     ``/graph/mitre-coverage`` and degrade gracefully (empty set) when the
     knowledge graph is offline, mirroring that endpoint's behaviour.
     """
-    from datetime import UTC as _UTC, datetime as _dt
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
 
     try:
         records = await graph_service.get_mitre_coverage(

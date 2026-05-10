@@ -25,7 +25,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from app.services.cost_dashboard import (
     AuditRow,
     CostRow,

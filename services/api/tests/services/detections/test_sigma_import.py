@@ -36,7 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 
-
 # ─── SQLite-friendly compilation overrides for PG types ─────────────────────
 #
 # The model uses Postgres-only types (``JSONB``, ``UUID``) for production
@@ -125,17 +124,13 @@ def _stable_sigma_rule(
 
 class TestExtractMitreTechniques:
     def test_extracts_techniques_and_subtechniques(self) -> None:
-        techniques = si._extract_mitre_techniques(
-            ["attack.t1078", "attack.t1078.004", "attack.execution"]
-        )
+        techniques = si._extract_mitre_techniques(["attack.t1078", "attack.t1078.004", "attack.execution"])
         # Tactic tag (``attack.execution``) is not a technique and is
         # skipped. Sub-technique stays as-is, parent stays as-is.
         assert techniques == ["T1078", "T1078.004"]
 
     def test_dedupes_preserving_order(self) -> None:
-        techniques = si._extract_mitre_techniques(
-            ["attack.t1078", "attack.t1078", "attack.t1027"]
-        )
+        techniques = si._extract_mitre_techniques(["attack.t1078", "attack.t1078", "attack.t1027"])
         assert techniques == ["T1078", "T1027"]
 
     def test_ignores_garbage_tags(self) -> None:
@@ -151,9 +146,7 @@ class TestExtractMitreTechniques:
 
 class TestExtractMitreTactics:
     def test_recognises_canonical_tactics(self) -> None:
-        tactics = si._extract_mitre_tactics(
-            ["attack.execution", "attack.persistence", "attack.t1078"]
-        )
+        tactics = si._extract_mitre_tactics(["attack.execution", "attack.persistence", "attack.t1078"])
         # Technique tags are ignored here (handled by the technique
         # extractor); tactic tags become TA-codes.
         assert tactics == ["TA0002", "TA0003"]
@@ -333,7 +326,8 @@ class TestImportSigmaRulesPipeline:
         bad_not_dict = "not even a dict"
 
         report = await si.import_sigma_rules(
-            session, [good, bad_no_id, bad_not_dict]  # type: ignore[list-item]
+            session,
+            [good, bad_no_id, bad_not_dict],  # type: ignore[list-item]
         )
         assert len(report.inserted) == 1
         assert len(report.failures) == 2

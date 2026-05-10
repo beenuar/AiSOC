@@ -43,26 +43,26 @@ router = APIRouter(prefix="/autonomy-policy", tags=["autonomy-policy"])
 # ---------------------------------------------------------------------------
 _DEFAULTS: dict[str, tuple[float, float, float]] = {
     # Read / enrichment — autonomous by default
-    "lookup_ip":            (0.0, 0.0, 0.0),
-    "lookup_domain":        (0.0, 0.0, 0.0),
-    "search_logs":          (0.0, 0.0, 0.0),
-    "enrich_alert":         (0.0, 0.0, 0.0),
-    "mitre_lookup":         (0.0, 0.0, 0.0),
-    "get_alert_context":    (0.0, 0.0, 0.0),
+    "lookup_ip": (0.0, 0.0, 0.0),
+    "lookup_domain": (0.0, 0.0, 0.0),
+    "search_logs": (0.0, 0.0, 0.0),
+    "enrich_alert": (0.0, 0.0, 0.0),
+    "mitre_lookup": (0.0, 0.0, 0.0),
+    "get_alert_context": (0.0, 0.0, 0.0),
     # Case workflow — moderate autonomy
-    "add_alert_tag":        (0.50, 0.30, 0.10),
-    "close_alert":          (0.60, 0.40, 0.20),
-    "create_case":          (0.50, 0.30, 0.10),
-    "add_case_comment":     (0.40, 0.20, 0.05),
-    "assign_case":          (0.60, 0.40, 0.20),
+    "add_alert_tag": (0.50, 0.30, 0.10),
+    "close_alert": (0.60, 0.40, 0.20),
+    "create_case": (0.50, 0.30, 0.10),
+    "add_case_comment": (0.40, 0.20, 0.05),
+    "assign_case": (0.60, 0.40, 0.20),
     # Containment — high blast radius
-    "quarantine_file":      (0.85, 0.65, 0.40),
-    "block_ip":             (0.90, 0.70, 0.40),
-    "isolate_host":         (0.92, 0.72, 0.45),
+    "quarantine_file": (0.85, 0.65, 0.40),
+    "block_ip": (0.90, 0.70, 0.40),
+    "isolate_host": (0.92, 0.72, 0.45),
     "disable_user_account": (0.90, 0.70, 0.40),
-    "revoke_session":       (0.80, 0.60, 0.30),
-    "delete_object":        (0.95, 0.80, 0.50),
-    "firewall_rule_add":    (0.88, 0.68, 0.40),
+    "revoke_session": (0.80, 0.60, 0.30),
+    "delete_object": (0.95, 0.80, 0.50),
+    "firewall_rule_add": (0.88, 0.68, 0.40),
     "firewall_rule_remove": (0.90, 0.70, 0.40),
 }
 
@@ -105,7 +105,7 @@ class ThresholdTriple(BaseModel):
     escalation: float = Field(..., ge=0.0, le=1.0)
 
     @model_validator(mode="after")
-    def _enforce_ordering(self) -> "ThresholdTriple":
+    def _enforce_ordering(self) -> ThresholdTriple:
         if self.review > self.auto:
             raise ValueError("review threshold must be <= auto threshold")
         if self.escalation > self.review:
@@ -141,7 +141,7 @@ class ThresholdUpdateRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _enforce_ordering(self) -> "ThresholdUpdateRequest":
+    def _enforce_ordering(self) -> ThresholdUpdateRequest:
         if self.review > self.auto:
             raise ValueError("review threshold must be <= auto threshold")
         if self.escalation > self.review:
@@ -221,9 +221,7 @@ def _row_to_triple(row: dict) -> ThresholdTriple:
     review = row.get("review_confidence")
     escalation = row.get("escalation_confidence")
     review_v = float(review) if review is not None else max(0.0, auto - 0.1)
-    escalation_v = (
-        float(escalation) if escalation is not None else max(0.0, review_v - 0.2)
-    )
+    escalation_v = float(escalation) if escalation is not None else max(0.0, review_v - 0.2)
     # Clamp into a valid ordering — older legacy rows may not satisfy it.
     review_v = min(review_v, auto)
     escalation_v = min(escalation_v, review_v)
@@ -266,9 +264,7 @@ async def get_autonomy_policy(
                     default_thresholds=defaults,
                     overridden=True,
                     override_source=row.get("source") or "admin_ui",
-                    last_updated_at=row["updated_at"].isoformat()
-                    if row.get("updated_at")
-                    else None,
+                    last_updated_at=row["updated_at"].isoformat() if row.get("updated_at") else None,
                     last_updated_by=row.get("updated_by"),
                     last_reason=row.get("reason"),
                 )
@@ -298,9 +294,7 @@ async def get_autonomy_policy(
                 default_thresholds=ThresholdTriple(auto=1.0, review=1.0, escalation=1.0),
                 overridden=True,
                 override_source=row.get("source") or "admin_ui",
-                last_updated_at=row["updated_at"].isoformat()
-                if row.get("updated_at")
-                else None,
+                last_updated_at=row["updated_at"].isoformat() if row.get("updated_at") else None,
                 last_updated_by=row.get("updated_by"),
                 last_reason=row.get("reason"),
             )
@@ -430,9 +424,7 @@ async def upsert_action_threshold(
 
     return ThresholdUpdateResponse(
         action=action,
-        thresholds=ThresholdTriple(
-            auto=payload.auto, review=payload.review, escalation=payload.escalation
-        ),
+        thresholds=ThresholdTriple(auto=payload.auto, review=payload.review, escalation=payload.escalation),
         updated_at=now.isoformat(),
         updated_by=user.email,
     )

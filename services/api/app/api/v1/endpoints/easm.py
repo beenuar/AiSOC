@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -46,7 +46,9 @@ async def _run_scan_job(
             await db.commit()
             logger.info(
                 "EASM scan complete: tenant=%s discovered=%d drifts=%d",
-                tenant_id, len(discovered), len(drift_records),
+                tenant_id,
+                len(discovered),
+                len(drift_records),
             )
     except Exception:
         logger.exception("EASM scan failed for tenant=%s", tenant_id)
@@ -57,7 +59,7 @@ async def trigger_easm_scan(
     body: ScanRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Trigger an EASM discovery scan for a tenant (Tier 3.6).
 
@@ -93,23 +95,18 @@ async def trigger_easm_scan(
 @router.get("/assets")
 async def list_external_assets(
     tenant_id: UUID | None = Query(None),
-    asset_type: Optional[ExternalAssetType] = Query(None),
+    asset_type: ExternalAssetType | None = Query(None),
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List externally discovered assets for a tenant.
 
     ``tenant_id`` defaults to the authenticated user's tenant, so the analyst
     console can hit ``/easm/assets`` without explicit tenant scoping.
     """
     effective_tenant = tenant_id or current_user.tenant_id
-    stmt = (
-        select(ExternalAsset)
-        .where(ExternalAsset.tenant_id == effective_tenant)
-        .order_by(ExternalAsset.last_seen.desc())
-        .limit(limit)
-    )
+    stmt = select(ExternalAsset).where(ExternalAsset.tenant_id == effective_tenant).order_by(ExternalAsset.last_seen.desc()).limit(limit)
     if asset_type:
         stmt = stmt.where(ExternalAsset.asset_type == asset_type)
 
@@ -131,11 +128,11 @@ async def list_external_assets(
 @router.get("/drift")
 async def list_external_asset_drift(
     tenant_id: UUID | None = Query(None),
-    external_asset_id: Optional[UUID] = Query(None),
+    external_asset_id: UUID | None = Query(None),
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List drift events (new ports, certs, sub-domains, etc.)."""
     effective_tenant = tenant_id or current_user.tenant_id
     stmt = (

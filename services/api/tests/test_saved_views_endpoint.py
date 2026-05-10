@@ -42,6 +42,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pydantic
 import pytest
 from app.api.v1.endpoints.saved_views import (
     CreateSavedViewRequest,
@@ -58,7 +59,6 @@ from app.api.v1.endpoints.saved_views import (
 )
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures / helpers
@@ -280,14 +280,14 @@ def test_create_request_rejects_empty_name() -> None:
     *also* strips and re-checks (covered separately) so a whitespace-
     only string is caught even if pydantic accepts it.
     """
-    with pytest.raises(Exception):  # pydantic.ValidationError, but importing for the type is overkill
+    with pytest.raises(pydantic.ValidationError):  # pydantic.ValidationError, but importing for the type is overkill
         CreateSavedViewRequest(view_type="alerts", name="")
 
 
 def test_update_request_extra_fields_forbidden() -> None:
     """Unknown PATCH keys are rejected — defends against typos like
     ``is_defualt`` silently being a no-op."""
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         UpdateSavedViewRequest(unknown_field="oops")
 
 
@@ -412,9 +412,7 @@ def _mock_db_for_create(*, integrity_error: bool = False) -> MagicMock:
     db.execute = AsyncMock()
     db.add = MagicMock()
     if integrity_error:
-        db.flush = AsyncMock(
-            side_effect=IntegrityError("duplicate", None, BaseException("dup"))
-        )
+        db.flush = AsyncMock(side_effect=IntegrityError("duplicate", None, BaseException("dup")))
     else:
         db.flush = AsyncMock()
     db.commit = AsyncMock()
@@ -559,9 +557,7 @@ def _mock_db_for_update(
     db.scalar = AsyncMock(return_value=existing_row)
     db.execute = AsyncMock()
     if integrity_error:
-        db.flush = AsyncMock(
-            side_effect=IntegrityError("duplicate", None, BaseException("dup"))
-        )
+        db.flush = AsyncMock(side_effect=IntegrityError("duplicate", None, BaseException("dup")))
     else:
         db.flush = AsyncMock()
     db.commit = AsyncMock()

@@ -98,11 +98,7 @@ def render_audit_csv(rows: list[AuditRow]) -> str:
     writer = csv.writer(buf, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
     writer.writerow(_CSV_HEADERS)
     for row in rows:
-        changes_blob = (
-            ""
-            if row.changes is None
-            else json.dumps(row.changes, sort_keys=True, separators=(",", ":"))
-        )
+        changes_blob = "" if row.changes is None else json.dumps(row.changes, sort_keys=True, separators=(",", ":"))
         writer.writerow(
             (
                 row.id,
@@ -139,7 +135,7 @@ def _filter_chip(label: str, value: str | None) -> str:
         return ""
     return (
         '<span style="display:inline-block;margin:0 6px 6px 0;padding:3px 8px;'
-        'border:1px solid #cbd5e1;border-radius:9999px;background:#f1f5f9;'
+        "border:1px solid #cbd5e1;border-radius:9999px;background:#f1f5f9;"
         'font-size:11px;color:#1e293b;">'
         f"{_esc(label)}: <strong>{_esc(value)}</strong></span>"
     )
@@ -180,7 +176,7 @@ def _changes_cell(changes: dict | None) -> str:
     return (
         '<pre style="margin:0;padding:6px 8px;background:#f8fafc;'
         "border:1px solid #e2e8f0;border-radius:4px;font-size:11px;"
-        'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+        "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
         'white-space:pre-wrap;word-break:break-word;max-width:480px;">'
         f"{_esc(pretty)}</pre>"
     )
@@ -190,8 +186,7 @@ def _row_html(row: AuditRow) -> str:
     actor = row.actor_email or row.actor_id or "—"
     ip = row.actor_ip or "—"
     resource = (
-        f"{_esc(row.resource)}<br/><span style=\"color:#64748b;font-size:11px;\">"
-        f"{_esc(row.resource_id)}</span>"
+        f'{_esc(row.resource)}<br/><span style="color:#64748b;font-size:11px;">{_esc(row.resource_id)}</span>'
         if row.resource and row.resource_id
         else _esc(row.resource or row.resource_id or "—")
     )
@@ -215,9 +210,10 @@ def render_audit_html(rows: list[AuditRow], context: ExportContext) -> str:
     the file remains portable when downloaded — no external stylesheets,
     no JavaScript, browser print-to-PDF works out of the box.
     """
-    filters_html = "".join(
-        _filter_chip(label, value) for label, value in context.filters.items()
-    ) or '<span style="color:#94a3b8;font-size:12px;">No filters applied — full audit trail.</span>'
+    filters_html = (
+        "".join(_filter_chip(label, value) for label, value in context.filters.items())
+        or '<span style="color:#94a3b8;font-size:12px;">No filters applied — full audit trail.</span>'
+    )
 
     rows_html = (
         "".join(_row_html(row) for row in rows)

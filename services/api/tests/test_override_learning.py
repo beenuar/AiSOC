@@ -153,10 +153,7 @@ class TestFindRedispositionCandidates:
             connector_type="crowdstrike",
             primary_technique="T1059",
         )
-        rows = [
-            _alert(category="malware", connector_type="crowdstrike", techniques=["T1059"])
-            for _ in range(20)
-        ]
+        rows = [_alert(category="malware", connector_type="crowdstrike", techniques=["T1059"]) for _ in range(20)]
         scalars_result = MagicMock()
         scalars_result.all = MagicMock(return_value=rows)
         db = MagicMock()

@@ -55,6 +55,7 @@ def _safe_redirect(url: str) -> str:
         return safe_path
     return "/"
 
+
 router = APIRouter(prefix="/auth/saml", tags=["auth-saml"])
 
 # ─── JWT helpers ──────────────────────────────────────────────────────────────

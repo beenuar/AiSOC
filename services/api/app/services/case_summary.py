@@ -41,7 +41,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 # ---------------------------------------------------------------------------
 # Output schemas (Pydantic) — what the endpoint actually returns.
 # ---------------------------------------------------------------------------
@@ -301,11 +300,7 @@ def _summarise_tasks(rows: list[SummaryTaskRow], *, now: datetime) -> TaskBreakd
     overdue = 0
     for row in rows:
         counts[row.status] += 1
-        if (
-            row.status != "done"
-            and row.due_at is not None
-            and row.due_at < now
-        ):
+        if row.status != "done" and row.due_at is not None and row.due_at < now:
             overdue += 1
     return TaskBreakdown(
         total=len(rows),
@@ -349,21 +344,13 @@ def _build_timeline(
     """
     events: list[TimelineHighlight] = []
 
-    events.append(
-        TimelineHighlight(ts=case.opened_at, kind="case", label="Case opened")
-    )
+    events.append(TimelineHighlight(ts=case.opened_at, kind="case", label="Case opened"))
     if case.triaged_at:
-        events.append(
-            TimelineHighlight(ts=case.triaged_at, kind="case", label="Triaged")
-        )
+        events.append(TimelineHighlight(ts=case.triaged_at, kind="case", label="Triaged"))
     if case.resolved_at:
-        events.append(
-            TimelineHighlight(ts=case.resolved_at, kind="case", label="Resolved")
-        )
+        events.append(TimelineHighlight(ts=case.resolved_at, kind="case", label="Resolved"))
     if case.closed_at:
-        events.append(
-            TimelineHighlight(ts=case.closed_at, kind="case", label="Closed")
-        )
+        events.append(TimelineHighlight(ts=case.closed_at, kind="case", label="Closed"))
 
     for c in comments:
         body_excerpt = (c.body or "").strip().replace("\n", " ")
@@ -373,9 +360,7 @@ def _build_timeline(
             TimelineHighlight(
                 ts=c.created_at,
                 kind="comment",
-                label=("System note" if c.is_system else "Analyst note") + (
-                    f" — {c.author}" if c.author and not c.is_system else ""
-                ),
+                label=("System note" if c.is_system else "Analyst note") + (f" — {c.author}" if c.author and not c.is_system else ""),
                 detail=body_excerpt or None,
             )
         )
@@ -386,8 +371,7 @@ def _build_timeline(
                 ts=t.created_at,
                 kind="task",
                 label=f"Task created — {t.title}",
-                detail=f"status={t.status}"
-                + (f" · assignee={t.assignee}" if t.assignee else ""),
+                detail=f"status={t.status}" + (f" · assignee={t.assignee}" if t.assignee else ""),
             )
         )
 
@@ -455,17 +439,11 @@ def _build_recommendations(
             CaseRecommendation(
                 severity="warning",
                 title=f"{tasks.overdue} overdue task{'s' if tasks.overdue != 1 else ''}",
-                body=(
-                    "Tasks past their due date are still open. Close them out or "
-                    "reassign before archiving the case."
-                ),
+                body=("Tasks past their due date are still open. Close them out or reassign before archiving the case."),
             )
         )
 
-    if (
-        case.severity in {"high", "critical"}
-        and comments.analyst == 0
-    ):
+    if case.severity in {"high", "critical"} and comments.analyst == 0:
         recs.append(
             CaseRecommendation(
                 severity="warning",
@@ -491,10 +469,7 @@ def _build_recommendations(
             )
         )
 
-    if (
-        lifecycle.time_to_resolve_hours is not None
-        and lifecycle.time_to_resolve_hours > 24
-    ):
+    if lifecycle.time_to_resolve_hours is not None and lifecycle.time_to_resolve_hours > 24:
         recs.append(
             CaseRecommendation(
                 severity="info",
@@ -512,10 +487,7 @@ def _build_recommendations(
             CaseRecommendation(
                 severity="info",
                 title="Case closed cleanly",
-                body=(
-                    "All headline metrics look healthy. Archive this case and "
-                    "fold any new IOCs into your detection content."
-                ),
+                body=("All headline metrics look healthy. Archive this case and fold any new IOCs into your detection content."),
             )
         )
 
@@ -545,10 +517,7 @@ def build_summary_from_rows(
         time_to_triage_hours=_hours_between(case.triaged_at, case.opened_at),
         time_to_resolve_hours=_hours_between(case.resolved_at, case.opened_at),
         time_to_close_hours=_hours_between(case.closed_at, case.opened_at),
-        sla_breached=bool(
-            case.sla_due_at
-            and (case.resolved_at or case.closed_at or moment) > case.sla_due_at
-        ),
+        sla_breached=bool(case.sla_due_at and (case.resolved_at or case.closed_at or moment) > case.sla_due_at),
     )
 
     coverage = CoverageSummary(
@@ -627,12 +596,8 @@ def _row_to_summary_case(row: Any) -> SummaryCaseRow:
         tags=dict(row.tags or {}) if isinstance(row.tags, dict) else {},
         mitre_techniques=techniques,
         alert_ids=[str(a) for a in (row.alert_ids or [])],
-        observable_graph=dict(row.observable_graph or {})
-        if isinstance(row.observable_graph, dict)
-        else {},
-        evidence_chain=list(row.evidence_chain or [])
-        if isinstance(row.evidence_chain, list)
-        else [],
+        observable_graph=dict(row.observable_graph or {}) if isinstance(row.observable_graph, dict) else {},
+        evidence_chain=list(row.evidence_chain or []) if isinstance(row.evidence_chain, list) else [],
         compliance_frameworks=list(row.compliance_frameworks or []),
         opened_at=row.opened_at,
         triaged_at=row.triaged_at,
@@ -645,21 +610,16 @@ def _row_to_summary_case(row: Any) -> SummaryCaseRow:
 
 
 async def _fetch_case_for_summary(db: AsyncSession, case_id: uuid.UUID) -> SummaryCaseRow | None:
-    row = (
-        await db.execute(
-            text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=case_id)
-        )
-    ).fetchone()
+    row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
     return _row_to_summary_case(row) if row else None
 
 
 async def _fetch_comments(db: AsyncSession, case_id: uuid.UUID) -> list[SummaryCommentRow]:
     rows = (
         await db.execute(
-            text(
-                "SELECT author, body, is_system, created_at "
-                "FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at"
-            ).bindparams(id=case_id)
+            text("SELECT author, body, is_system, created_at FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at").bindparams(
+                id=case_id
+            )
         )
     ).fetchall()
     return [

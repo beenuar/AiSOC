@@ -47,11 +47,7 @@ def _ext(language: str) -> str:
 
 
 def _is_configured(settings: Settings) -> bool:
-    return bool(
-        settings.AISOC_GITHUB_TOKEN
-        and settings.AISOC_GITHUB_REPO
-        and settings.AISOC_GITHUB_DETECTIONS_PATH
-    )
+    return bool(settings.AISOC_GITHUB_TOKEN and settings.AISOC_GITHUB_REPO and settings.AISOC_GITHUB_DETECTIONS_PATH)
 
 
 async def create_detection_pr(
@@ -154,6 +150,7 @@ async def create_detection_pr(
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_default_branch_and_sha(
     client: httpx.AsyncClient,
     headers: dict[str, str],
@@ -165,9 +162,7 @@ async def _get_default_branch_and_sha(
         data: dict[str, Any] = resp.json()
         default_branch: str = data.get("default_branch", "main")
 
-        ref_resp = await client.get(
-            f"/repos/{repo}/git/ref/heads/{default_branch}", headers=headers
-        )
+        ref_resp = await client.get(f"/repos/{repo}/git/ref/heads/{default_branch}", headers=headers)
         ref_resp.raise_for_status()
         sha: str = ref_resp.json()["object"]["sha"]
         return default_branch, sha

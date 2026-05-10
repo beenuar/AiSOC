@@ -69,6 +69,7 @@ class BuildTimelineRequest(BaseModel):
 # Helpers
 # ────────────────────────────────────────────────────────────────────────────
 
+
 def _risk_score(events: list[TimelineEvent]) -> float:
     """Simple heuristic: sum severity weights, cap at 100."""
     weights = {"critical": 40, "high": 20, "medium": 10, "low": 3, "info": 1}
@@ -77,11 +78,7 @@ def _risk_score(events: list[TimelineEvent]) -> float:
 
 
 def _mitre_from_alert(raw: dict[str, Any]) -> str | None:
-    return (
-        raw.get("mitre_technique")
-        or raw.get("mitre_attack_id")
-        or raw.get("tags", {}).get("mitre")
-    )
+    return raw.get("mitre_technique") or raw.get("mitre_attack_id") or raw.get("tags", {}).get("mitre")
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -137,8 +134,7 @@ async def build_timeline(
                     source="aisoc_alerts",
                     description=row.title or "Alert",
                     severity=row.severity,
-                    mitre_technique=row.mitre_technique
-                    or _mitre_from_alert(row.evidence or {}),
+                    mitre_technique=row.mitre_technique or _mitre_from_alert(row.evidence or {}),
                     raw=row.evidence,
                 )
             )

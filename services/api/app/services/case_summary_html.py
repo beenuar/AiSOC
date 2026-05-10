@@ -33,7 +33,6 @@ from .case_summary import (
     TimelineHighlight,
 )
 
-
 _SEVERITY_COLOURS: dict[str, str] = {
     "critical": "#b91c1c",
     "high": "#c2410c",
@@ -71,17 +70,13 @@ def _severity_chip(severity: str) -> str:
     colour = _SEVERITY_COLOURS.get(severity, "#475569")
     return (
         f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
-        f'background:{colour};color:#fff;font-size:11px;text-transform:uppercase;'
+        f"background:{colour};color:#fff;font-size:11px;text-transform:uppercase;"
         f'letter-spacing:0.04em;">{_esc(severity)}</span>'
     )
 
 
 def _kpi(label: str, value: str, *, hint: str | None = None) -> str:
-    hint_html = (
-        f'<div style="font-size:11px;color:#64748b;margin-top:2px;">{_esc(hint)}</div>'
-        if hint
-        else ""
-    )
+    hint_html = f'<div style="font-size:11px;color:#64748b;margin-top:2px;">{_esc(hint)}</div>' if hint else ""
     return (
         '<div style="flex:1 1 140px;background:#f8fafc;border:1px solid #e2e8f0;'
         'border-radius:8px;padding:12px 14px;min-width:140px;">'
@@ -96,20 +91,20 @@ def _kpi(label: str, value: str, *, hint: str | None = None) -> str:
 def _header_block(case: CaseSummaryHeader, lifecycle: CaseLifecycleTimings, headline: str) -> str:
     label = case.case_number or str(case.case_id)[:8]
     return (
-        '<header>'
+        "<header>"
         '<div style="font-size:11px;color:#64748b;text-transform:uppercase;'
         'letter-spacing:0.08em;">AiSOC case auto-summary</div>'
-        f'<h1>{_esc(label)} — {_esc(case.title)}</h1>'
+        f"<h1>{_esc(label)} — {_esc(case.title)}</h1>"
         f'<div style="margin-top:6px;">{_severity_chip(case.severity)} '
         f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
         f'background:#e2e8f0;color:#0f172a;font-size:11px;margin-left:6px;">'
-        f'{_esc(case.status)}</span></div>'
+        f"{_esc(case.status)}</span></div>"
         f'<div style="color:#334155;font-size:14px;margin-top:8px;">{_esc(headline)}</div>'
         f'<div style="color:#94a3b8;font-size:11px;margin-top:6px;">'
-        f'Case {_esc(case.case_id)} · '
-        f'opened {_fmt_datetime(lifecycle.opened_at)} · '
-        f'generated {_fmt_datetime(datetime.now(UTC))}</div>'
-        '</header>'
+        f"Case {_esc(case.case_id)} · "
+        f"opened {_fmt_datetime(lifecycle.opened_at)} · "
+        f"generated {_fmt_datetime(datetime.now(UTC))}</div>"
+        "</header>"
     )
 
 
@@ -118,7 +113,7 @@ def _description_block(case: CaseSummaryHeader) -> str:
         return ""
     return (
         '<div style="background:#f8fafc;border:1px solid #e2e8f0;'
-        'border-radius:8px;padding:12px 14px;margin-top:14px;color:#0f172a;'
+        "border-radius:8px;padding:12px 14px;margin-top:14px;color:#0f172a;"
         f'font-size:13px;line-height:1.55;">{_esc(case.description)}</div>'
     )
 
@@ -168,8 +163,7 @@ def _coverage_block(coverage: CoverageSummary) -> str:
     technique_chips = (
         '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">'
         + "".join(
-            f'<span style="padding:2px 8px;border-radius:9999px;background:#eef2ff;'
-            f'color:#3730a3;font-size:11px;">{_esc(t)}</span>'
+            f'<span style="padding:2px 8px;border-radius:9999px;background:#eef2ff;color:#3730a3;font-size:11px;">{_esc(t)}</span>'
             for t in techniques
         )
         + "</div>"
@@ -180,8 +174,7 @@ def _coverage_block(coverage: CoverageSummary) -> str:
     frameworks = (
         '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">'
         + "".join(
-            f'<span style="padding:2px 8px;border-radius:9999px;background:#ecfdf5;'
-            f'color:#047857;font-size:11px;">{_esc(f)}</span>'
+            f'<span style="padding:2px 8px;border-radius:9999px;background:#ecfdf5;color:#047857;font-size:11px;">{_esc(f)}</span>'
             for f in coverage.compliance_frameworks
         )
         + "</div>"
@@ -189,13 +182,7 @@ def _coverage_block(coverage: CoverageSummary) -> str:
         else '<p style="color:#64748b;font-size:13px;">No compliance frameworks tagged.</p>'
     )
 
-    return (
-        '<h2>MITRE ATT&amp;CK techniques</h2>'
-        + technique_chips
-        + tactic_rows
-        + '<h2>Compliance frameworks</h2>'
-        + frameworks
-    )
+    return "<h2>MITRE ATT&amp;CK techniques</h2>" + technique_chips + tactic_rows + "<h2>Compliance frameworks</h2>" + frameworks
 
 
 def _evidence_block(
@@ -204,7 +191,7 @@ def _evidence_block(
     alerts: dict[str, object],
 ) -> str:
     return (
-        '<h2>Evidence &amp; observables</h2>'
+        "<h2>Evidence &amp; observables</h2>"
         '<div style="display:flex;flex-wrap:wrap;gap:12px;">'
         + _kpi("Linked alerts", str(alerts.get("count", 0)))
         + _kpi(
@@ -225,7 +212,7 @@ def _activity_block(tasks: TaskBreakdown, comments: CommentBreakdown) -> str:
     overdue_hint = f"{tasks.overdue} overdue" if tasks.overdue else None
     authors_hint = ", ".join(comments.distinct_authors[:3]) if comments.distinct_authors else None
     return (
-        '<h2>Activity</h2>'
+        "<h2>Activity</h2>"
         '<div style="display:flex;flex-wrap:wrap;gap:12px;">'
         + _kpi("Tasks (total)", str(tasks.total))
         + _kpi("Tasks done", str(tasks.done), hint=overdue_hint)
@@ -244,19 +231,19 @@ def _timeline_block(events: list[TimelineHighlight]) -> str:
     if not events:
         return ""
     rows = "".join(
-        '<tr>'
+        "<tr>"
         f'<td style="padding:6px 8px;color:#64748b;font-size:11px;'
         f'white-space:nowrap;">{_fmt_datetime(e.ts)}</td>'
         f'<td style="padding:6px 8px;color:#475569;font-size:11px;text-transform:uppercase;'
         f'letter-spacing:0.06em;">{_esc(e.kind)}</td>'
         f'<td style="padding:6px 8px;color:#0f172a;">{_esc(e.label)}</td>'
         f'<td style="padding:6px 8px;color:#475569;font-size:12px;">'
-        f'{_esc(e.detail) if e.detail else "—"}</td>'
-        '</tr>'
+        f"{_esc(e.detail) if e.detail else '—'}</td>"
+        "</tr>"
         for e in events
     )
     return (
-        '<h2>Timeline</h2>'
+        "<h2>Timeline</h2>"
         '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
         '<thead><tr style="text-align:left;color:#64748b;font-size:11px;'
         'text-transform:uppercase;letter-spacing:0.06em;">'
@@ -280,7 +267,7 @@ def _recommendation_block(recs: list[CaseRecommendation]) -> str:
         "</div>".format(colour=_REC_COLOURS.get(r.severity, "#475569"))
         for r in recs
     )
-    return '<h2>Post-mortem</h2>' + cards
+    return "<h2>Post-mortem</h2>" + cards
 
 
 def render_case_summary_html(summary: CaseAutoSummary) -> str:
@@ -302,7 +289,8 @@ def render_case_summary_html(summary: CaseAutoSummary) -> str:
   }}
   h1, h2, h3 {{ color: #0f172a; margin-top: 0; }}
   h1 {{ font-size: 22px; margin-bottom: 4px; }}
-  h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
+  h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
+       color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
   table th, table td {{ border-bottom: 1px solid #f1f5f9; }}
   @media print {{
     body {{ padding: 0; }}

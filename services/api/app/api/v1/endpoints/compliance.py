@@ -165,7 +165,9 @@ def _compute_hash(prev_hash: str | None, summary: str, payload: dict[str, Any]) 
 async def _latest_hash(db: DBSession, framework: str) -> str | None:
     row = (
         await db.execute(
-            text("SELECT payload_hash FROM aisoc_compliance_evidence WHERE framework = :f ORDER BY created_at DESC LIMIT 1").bindparams(f=framework)
+            text("SELECT payload_hash FROM aisoc_compliance_evidence WHERE framework = :f ORDER BY created_at DESC LIMIT 1").bindparams(
+                f=framework
+            )
         )
     ).fetchone()
     return row.payload_hash if row else None
@@ -287,15 +289,21 @@ async def list_evidence(
     wheres = ["1=1"]
     params: dict[str, Any] = {"limit": limit, "offset": offset}
     if framework:
-        wheres.append("framework = :fw"); params["fw"] = framework
+        wheres.append("framework = :fw")
+        params["fw"] = framework
     if control_id:
-        wheres.append("control_id = :ctrl"); params["ctrl"] = control_id
+        wheres.append("control_id = :ctrl")
+        params["ctrl"] = control_id
     if case_id:
-        wheres.append("case_id = :case_id"); params["case_id"] = case_id
+        wheres.append("case_id = :case_id")
+        params["case_id"] = case_id
     if ev_status:
-        wheres.append("status = :ev_status"); params["ev_status"] = ev_status
+        wheres.append("status = :ev_status")
+        params["ev_status"] = ev_status
 
-    q = text(f"SELECT * FROM aisoc_compliance_evidence WHERE {' AND '.join(wheres)} ORDER BY collected_at DESC LIMIT :limit OFFSET :offset").bindparams(**params)
+    q = text(
+        f"SELECT * FROM aisoc_compliance_evidence WHERE {' AND '.join(wheres)} ORDER BY collected_at DESC LIMIT :limit OFFSET :offset"
+    ).bindparams(**params)
     try:
         rows = (await db.execute(q)).fetchall()
         return [_row_to_evidence(r) for r in rows]
@@ -341,7 +349,8 @@ async def compliance_report(
     wheres = ["1=1"]
     params: dict[str, Any] = {}
     if framework:
-        wheres.append("framework = :fw"); params["fw"] = framework
+        wheres.append("framework = :fw")
+        params["fw"] = framework
 
     q = text(f"""
         SELECT framework, control_id,
@@ -350,7 +359,7 @@ async def compliance_report(
                COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
                COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
         FROM aisoc_compliance_evidence
-        WHERE {' AND '.join(wheres)}
+        WHERE {" AND ".join(wheres)}
         GROUP BY framework, control_id
         ORDER BY framework, control_id
     """).bindparams(**params)

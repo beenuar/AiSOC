@@ -144,11 +144,7 @@ async def patch_me_preferences(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     merged = {**(user.preferences or {}), **body.preferences}
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.user_id)
-        .values(preferences=merged)
-    )
+    await db.execute(update(User).where(User.id == current_user.user_id).values(preferences=merged))
     await db.commit()
 
     # Re-fetch to return fresh state

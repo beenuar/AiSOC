@@ -26,7 +26,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-
 # ─── Class / Category UIDs (mirrors packages/ocsf/src/types.ts) ──────────────
 
 

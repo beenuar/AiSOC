@@ -44,7 +44,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 # ---------------------------------------------------------------------------
 # Public list pricing for BYOK imputation.
 #
@@ -83,8 +82,7 @@ def _impute_public_cost(
         _DEFAULT_PUBLIC_PRICING,
     )
     return round(
-        (max(prompt_tokens, 0) / 1000) * in_price
-        + (max(completion_tokens, 0) / 1000) * out_price,
+        (max(prompt_tokens, 0) / 1000) * in_price + (max(completion_tokens, 0) / 1000) * out_price,
         6,
     )
 
@@ -227,9 +225,7 @@ class DashboardInputs:
     period_end: datetime
     cost_rows: list[CostRow] = field(default_factory=list)
     audit_rows: list[AuditRow] = field(default_factory=list)
-    llm: LlmContext = field(
-        default_factory=lambda: LlmContext(provider="none", is_local=False)
-    )
+    llm: LlmContext = field(default_factory=lambda: LlmContext(provider="none", is_local=False))
 
 
 # ---------------------------------------------------------------------------
@@ -250,9 +246,7 @@ def _format_period_label(start: datetime, end: datetime) -> str:
 
 def _bucket_by_day(rows: list[CostRow]) -> list[CostBucket]:
     """Group cost rows by UTC calendar date, ascending."""
-    buckets: dict[date, dict[str, float]] = defaultdict(
-        lambda: {"cost": 0.0, "tokens": 0, "calls": 0}
-    )
+    buckets: dict[date, dict[str, float]] = defaultdict(lambda: {"cost": 0.0, "tokens": 0, "calls": 0})
     for r in rows:
         d = r.started_at.astimezone(UTC).date()
         b = buckets[d]
@@ -291,9 +285,7 @@ def _model_breakdown(rows: list[CostRow]) -> list[ModelBreakdown]:
         agg["prompt"] += r.prompt_tokens
         agg["completion"] += r.completion_tokens
         agg["cost"] += r.cost_usd
-        agg["imputed"] += _impute_public_cost(
-            m, r.prompt_tokens, r.completion_tokens
-        )
+        agg["imputed"] += _impute_public_cost(m, r.prompt_tokens, r.completion_tokens)
         agg["latency_ms"] += r.latency_ms
 
     breakdowns = [
@@ -305,11 +297,7 @@ def _model_breakdown(rows: list[CostRow]) -> list[ModelBreakdown]:
             total_completion_tokens=int(agg["completion"]),
             total_cost_usd=round(agg["cost"], 4),
             imputed_public_cost_usd=round(agg["imputed"], 4),
-            avg_latency_ms=(
-                round(agg["latency_ms"] / agg["calls"], 2)
-                if agg["calls"]
-                else None
-            ),
+            avg_latency_ms=(round(agg["latency_ms"] / agg["calls"], 2) if agg["calls"] else None),
         )
         for m, agg in by_model.items()
     ]
@@ -319,9 +307,7 @@ def _model_breakdown(rows: list[CostRow]) -> list[ModelBreakdown]:
 
 def _top_cases(rows: list[CostRow], *, limit: int = 10) -> list[TopCostCase]:
     """The most expensive cases in the window."""
-    by_case: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"runs": set(), "cost": 0.0, "tokens": 0}
-    )
+    by_case: dict[str, dict[str, Any]] = defaultdict(lambda: {"runs": set(), "cost": 0.0, "tokens": 0})
     for r in rows:
         if not r.case_id:
             continue
@@ -346,10 +332,7 @@ def _top_cases(rows: list[CostRow], *, limit: int = 10) -> list[TopCostCase]:
 def _action_counts(rows: list[AuditRow], *, limit: int = 20) -> list[ActionCount]:
     """How many of each action were recorded over the window."""
     counter: Counter[str] = Counter(r.action for r in rows if r.action)
-    return [
-        ActionCount(action=a, count=c)
-        for a, c in counter.most_common(limit)
-    ]
+    return [ActionCount(action=a, count=c) for a, c in counter.most_common(limit)]
 
 
 def _byok_savings(rows: list[CostRow], llm: LlmContext) -> ByokSavings:
@@ -368,10 +351,7 @@ def _byok_savings(rows: list[CostRow], llm: LlmContext) -> ByokSavings:
     UI can still surface a "you'd save X if you self-hosted" hint.
     """
     recorded = sum(r.cost_usd for r in rows)
-    imputed = sum(
-        _impute_public_cost(r.model, r.prompt_tokens, r.completion_tokens)
-        for r in rows
-    )
+    imputed = sum(_impute_public_cost(r.model, r.prompt_tokens, r.completion_tokens) for r in rows)
     if llm.is_local:
         savings = imputed
     else:
@@ -395,9 +375,7 @@ def _headline(rows: list[CostRow]) -> CostHeadline:
         total_tokens=int(total_tokens),
         total_calls=int(total_calls),
         total_runs=total_runs,
-        avg_cost_per_run_usd=(
-            round(total_cost / total_runs, 4) if total_runs else None
-        ),
+        avg_cost_per_run_usd=(round(total_cost / total_runs, 4) if total_runs else None),
     )
 
 

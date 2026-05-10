@@ -81,10 +81,7 @@ class AgentToolDescriptor(BaseModel):
     )
     category: str = Field(description="Catalog category, e.g. 'edr', 'siem', 'iam'.")
     capability: str = Field(
-        description=(
-            "The capability verb (one of the values from the Capability enum, "
-            "e.g. 'pull_alerts', 'query_logs', 'isolate_host')."
-        ),
+        description=("The capability verb (one of the values from the Capability enum, e.g. 'pull_alerts', 'query_logs', 'isolate_host')."),
     )
     capability_group: str = Field(
         description=(
@@ -266,9 +263,7 @@ async def list_agent_tools(
     #    questions without N round-trips to the connectors service.
     catalog = await _fetch_catalog()
     catalog_by_type: dict[str, dict[str, Any]] = {
-        entry["connector_id"]: entry
-        for entry in catalog
-        if isinstance(entry, dict) and isinstance(entry.get("connector_id"), str)
+        entry["connector_id"]: entry for entry in catalog if isinstance(entry, dict) and isinstance(entry.get("connector_id"), str)
     }
 
     tools: list[AgentToolDescriptor] = []

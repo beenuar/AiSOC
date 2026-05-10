@@ -309,12 +309,7 @@ def _validate_return_to(return_to: str | None) -> str:
 
     parsed = urlsplit(return_to)
     # Path-only (relative) navigation inside the console.
-    if (
-        not parsed.scheme
-        and not parsed.netloc
-        and parsed.path.startswith("/")
-        and not parsed.path.startswith("//")
-    ):
+    if not parsed.scheme and not parsed.netloc and parsed.path.startswith("/") and not parsed.path.startswith("//"):
         # ``safe`` keeps URL-meaningful chars; everything else gets
         # percent-encoded, which both hardens the value and gives
         # CodeQL a sanitizer it tracks.
@@ -333,13 +328,7 @@ def _validate_return_to(return_to: str | None) -> str:
         if (
             parsed.scheme == base_parsed.scheme
             and parsed.netloc == base_parsed.netloc
-            and (
-                parsed.path == ""
-                or (
-                    parsed.path.startswith("/")
-                    and not parsed.path.startswith("//")
-                )
-            )
+            and (parsed.path == "" or (parsed.path.startswith("/") and not parsed.path.startswith("//")))
         ):
             safe_path = quote(parsed.path or "/", safe="/-._~")
             safe_query = quote(parsed.query, safe="=&-._~")
@@ -441,10 +430,7 @@ def _resolve_token_url(
     if not url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Connector schema does not advertise a token_url and "
-                "tenant did not override it."
-            ),
+            detail=("Connector schema does not advertise a token_url and tenant did not override it."),
         )
     return _validated_provider_url(url, kind="token")
 
@@ -812,9 +798,7 @@ async def oauth_callback(
             detail="Missing OAuth state parameter",
         )
 
-    state_res = await db.execute(
-        select(OAuthState).where(OAuthState.state == state)
-    )
+    state_res = await db.execute(select(OAuthState).where(OAuthState.state == state))
     state_row: OAuthState | None = state_res.scalar_one_or_none()
     if state_row is None:
         raise HTTPException(
@@ -1011,9 +995,7 @@ async def oauth_callback(
     # (Workstream 5) doesn't have to track when we received the token.
     expires_in = token_payload.get("expires_in")
     if isinstance(expires_in, (int, float)) and expires_in > 0:
-        auth_payload["expires_at"] = (
-            datetime.now(UTC) + timedelta(seconds=int(expires_in))
-        ).isoformat()
+        auth_payload["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(expires_in))).isoformat()
 
     try:
         encrypted_auth = get_vault().encrypt_dict(auth_payload)
@@ -1064,8 +1046,8 @@ async def oauth_callback(
                 Connector.tenant_id == state_row.tenant_id,
             )
         )
-        connector = existing_res.scalar_one_or_none()
-        if connector is None:
+        existing_connector = existing_res.scalar_one_or_none()
+        if existing_connector is None:
             await db.execute(delete(OAuthState).where(OAuthState.state == state))
             await db.commit()
             return _callback_error_redirect(
@@ -1073,6 +1055,7 @@ async def oauth_callback(
                 "connector_disappeared",
                 "Connector instance disappeared mid-flow.",
             )
+        connector = existing_connector
         connector.auth_config = encrypted_auth
         merged_config = dict(connector.connector_config or {})
         merged_config.update(connector_config)

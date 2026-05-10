@@ -1,18 +1,22 @@
 """
 External Attack Surface Management (EASM) models (Tier 3.6).
 """
+
 from datetime import datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     DateTime,
-    Enum as SQLAEnum,
     ForeignKey,
     Index,
     String,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy import (
+    Enum as SQLAEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from . import Base
@@ -37,19 +41,11 @@ class ExternalAsset(Base):
     __tablename__ = "external_assets"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
-    asset_type: Mapped[ExternalAssetType] = mapped_column(
-        SQLAEnum(ExternalAssetType, name="external_asset_type"), nullable=False
-    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    asset_type: Mapped[ExternalAssetType] = mapped_column(SQLAEnum(ExternalAssetType, name="external_asset_type"), nullable=False)
     value: Mapped[str] = mapped_column(String(512), nullable=False)  # domain, IP, cert CN, etc.
-    first_seen: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
-    )
-    last_seen: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
-    )
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default={})
     # e.g. {"ports": [443, 22], "certs": [...], "asn": "...", "org": "..."}
 
@@ -70,17 +66,13 @@ class ExternalAssetDrift(Base):
     __tablename__ = "external_asset_drift"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     external_asset_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("external_assets.id", ondelete="CASCADE"), nullable=False
     )
     drift_type: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g. "new_port", "new_cert"
     details: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    detected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
-    )
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="external_asset_drift", lazy="selectin")

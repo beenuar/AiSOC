@@ -153,10 +153,7 @@ class RunEvalRequest(BaseModel):
         default=1.0,
         ge=0.0,
         le=100.0,
-        description=(
-            "Allowed MITRE accuracy regression vs the active baseline, in "
-            "percentage points. Forwarded to run_evals.py."
-        ),
+        description=("Allowed MITRE accuracy regression vs the active baseline, in percentage points. Forwarded to run_evals.py."),
     )
     timeout_seconds: int = Field(
         default=180,
@@ -479,8 +476,10 @@ def _run_eval_subprocess(
         cmd.extend(["--baseline", str(baseline_path)])
 
     env = os.environ.copy()
-    # The runner imports modules from services/agents — make sure that path is available.
-    env.setdefault("PYTHONPATH", str(_REPO_ROOT / "services" / "agents"))
+    # The runner imports modules from services/agents — ensure that path is always present.
+    agents_path = str(_REPO_ROOT / "services" / "agents")
+    existing_pp = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = agents_path if not existing_pp else f"{agents_path}:{existing_pp}"
 
     proc = subprocess.run(  # noqa: S603 — fixed argv, no shell=True
         cmd,
@@ -516,10 +515,7 @@ async def run_eval_harness(
     if not _EVAL_SCRIPT.exists():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=(
-                f"Eval runner missing at {_EVAL_SCRIPT}. Set AISOC_REPO_ROOT or "
-                "verify the deployment includes scripts/run_evals.py."
-            ),
+            detail=(f"Eval runner missing at {_EVAL_SCRIPT}. Set AISOC_REPO_ROOT or verify the deployment includes scripts/run_evals.py."),
         )
 
     baseline_path: Path | None = None
@@ -571,10 +567,7 @@ async def run_eval_harness(
         if exit_code not in (0, 1, 2):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=(
-                    f"Eval harness failed with exit code {exit_code}. "
-                    f"stderr={stderr[-2000:].strip()}"
-                ),
+                detail=(f"Eval harness failed with exit code {exit_code}. stderr={stderr[-2000:].strip()}"),
             )
 
         # Prefer reading the on-disk JSON over parsing stdout — stdout is also
@@ -585,10 +578,7 @@ async def run_eval_harness(
         except json.JSONDecodeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=(
-                    "Eval harness produced unparseable JSON. "
-                    f"stderr={stderr[-2000:].strip()}"
-                ),
+                detail=(f"Eval harness produced unparseable JSON. stderr={stderr[-2000:].strip()}"),
             ) from exc
 
         finished_at = datetime.now(UTC)
@@ -790,6 +780,7 @@ async def promote_proposal(
             proposal.github_pr_url = pr_url
     except Exception as exc:  # noqa: BLE001 — log and continue, never block promotion
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "WS-B4: GitHub PR creation failed for proposal %s — %s",
             proposal_id,

@@ -384,9 +384,7 @@ async def _fetch_token_and_connector(
         # carries the fingerprint for ops debugging.
         logger.info(
             "inbox_itsm.token_not_found",
-            extra={
-                "token_fingerprint": safe_log_value(f"...{tenant_token[-8:]}")
-            },
+            extra={"token_fingerprint": safe_log_value(f"...{tenant_token[-8:]}")},
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -399,10 +397,7 @@ async def _fetch_token_and_connector(
         # We refuse to act on it — let the wizard mint a fresh ITSM token.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Inbox token is not valid for ITSM webhooks. "
-                "Mint a token with template_id='itsm-inbound'."
-            ),
+            detail=("Inbox token is not valid for ITSM webhooks. Mint a token with template_id='itsm-inbound'."),
         )
 
     # 2. Resolve the connector. tenant_id check below prevents using a
@@ -497,20 +492,10 @@ async def _apply_status_to_case(
     # anyway, but defending in depth is cheap). COALESCE keeps the first
     # transition's timestamp.
     triaged_at_set = (
-        ", triaged_at = COALESCE(triaged_at, :now)"
-        if new_status in {"triaged", "investigating", "contained", "resolved", "closed"}
-        else ""
+        ", triaged_at = COALESCE(triaged_at, :now)" if new_status in {"triaged", "investigating", "contained", "resolved", "closed"} else ""
     )
-    resolved_at_set = (
-        ", resolved_at = COALESCE(resolved_at, :now)"
-        if new_status == "resolved"
-        else ""
-    )
-    closed_at_set = (
-        ", closed_at = COALESCE(closed_at, :now)"
-        if new_status == "closed"
-        else ""
-    )
+    resolved_at_set = ", resolved_at = COALESCE(resolved_at, :now)" if new_status == "resolved" else ""
+    closed_at_set = ", closed_at = COALESCE(closed_at, :now)" if new_status == "closed" else ""
 
     await db.execute(
         text(
@@ -543,10 +528,7 @@ async def _apply_status_to_case(
         )
     )
 
-    note_body = (
-        f"{vendor.title()} ticket {external_id} transitioned. "
-        f"AiSOC case marked '{new_status}' via inbound webhook."
-    )
+    note_body = f"{vendor.title()} ticket {external_id} transitioned. AiSOC case marked '{new_status}' via inbound webhook."
     await db.execute(
         text(
             """
@@ -709,21 +691,14 @@ async def inbound_itsm_webhook(
             old_status=None,
             new_status=None,
             status_changed=False,
-            note=(
-                f"No AiSOC case linked to {vendor} {external_id}. "
-                "The ticket may pre-date the integration."
-            ),
+            note=(f"No AiSOC case linked to {vendor} {external_id}. The ticket may pre-date the integration."),
         )
 
     # Update last_used_at on the inbox token regardless of whether the
     # status changed, so operators can see "this token is alive". Done
     # on every successful auth+resolve, not just on writes.
     now = datetime.now(UTC)
-    await db.execute(
-        text(
-            "UPDATE tenant_inbox_tokens SET last_used_at = :now WHERE token = :tok"
-        ).bindparams(now=now, tok=tenant_token)
-    )
+    await db.execute(text("UPDATE tenant_inbox_tokens SET last_used_at = :now WHERE token = :tok").bindparams(now=now, tok=tenant_token))
 
     new_status = _map_inbound_status(vendor, raw_status)
     if new_status is None:
@@ -747,10 +722,7 @@ async def inbound_itsm_webhook(
             old_status=ref_row.status,
             new_status=ref_row.status,
             status_changed=False,
-            note=(
-                f"{vendor} status '{raw_status}' has no AiSOC equivalent; "
-                "last_synced_at bumped."
-            ),
+            note=(f"{vendor} status '{raw_status}' has no AiSOC equivalent; last_synced_at bumped."),
         )
 
     if new_status == ref_row.status:

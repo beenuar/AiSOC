@@ -92,9 +92,7 @@ class _CatalogResolver:
         return {}
 
 
-def _resolve_token_url(
-    app_credential: OAuthAppCredential, hints: Mapping[str, Any]
-) -> str | None:
+def _resolve_token_url(app_credential: OAuthAppCredential, hints: Mapping[str, Any]) -> str | None:
     """Mirror of :func:`oauth._resolve_token_url` for non-HTTP context.
 
     Returns ``None`` instead of raising — the worker logs and skips so
@@ -126,9 +124,7 @@ def _parse_expires_at(value: Any) -> datetime | None:
     return parsed
 
 
-async def _select_due_connectors(
-    db: AsyncSession, *, lead_time_s: int
-) -> list[Connector]:
+async def _select_due_connectors(db: AsyncSession, *, lead_time_s: int) -> list[Connector]:
     """Find every OAuth-provisioned connector that needs a refresh.
 
     "Due" means one of:
@@ -147,11 +143,7 @@ async def _select_due_connectors(
     # can't push expires_at filtering into the DB. We pull all
     # OAuth-provisioned rows and filter in Python — the working set is
     # tiny (one row per tenant connector instance).
-    stmt = (
-        select(Connector)
-        .where(Connector.oauth_provisioned.is_(True))
-        .where(Connector.is_enabled.is_(True))
-    )
+    stmt = select(Connector).where(Connector.oauth_provisioned.is_(True)).where(Connector.is_enabled.is_(True))
     result = await db.execute(stmt)
     candidates: list[Connector] = list(result.scalars().all())
 
@@ -236,9 +228,7 @@ async def _refresh_one(
         OAuthAppCredential.tenant_id == tenant_id,
         OAuthAppCredential.connector_type == connector_type,
     )
-    app_credential: OAuthAppCredential | None = (
-        await db.execute(app_stmt)
-    ).scalar_one_or_none()
+    app_credential: OAuthAppCredential | None = (await db.execute(app_stmt)).scalar_one_or_none()
     if app_credential is None:
         logger.warning(
             "oauth_refresh.app_credential_missing connector_id=%s tenant=%s connector_type=%s",
@@ -387,9 +377,7 @@ async def _refresh_one(
 
     expires_in = token_payload.get("expires_in")
     if isinstance(expires_in, (int, float)) and expires_in > 0:
-        auth_payload["expires_at"] = (
-            datetime.now(UTC) + timedelta(seconds=int(expires_in))
-        ).isoformat()
+        auth_payload["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(expires_in))).isoformat()
     else:
         # Provider didn't tell us — drop the stale value so we refresh
         # again on the very next tick rather than running on a token of
@@ -403,11 +391,7 @@ async def _refresh_one(
     # if we were the ones who flipped it to ``unhealthy`` — leave other
     # health states (e.g. "degraded" from the connectors scheduler)
     # alone. The connectors poll will reconcile on the next tick.
-    new_status = (
-        "healthy"
-        if connector.health_status == _HEALTH_UNHEALTHY
-        else connector.health_status
-    )
+    new_status = "healthy" if connector.health_status == _HEALTH_UNHEALTHY else connector.health_status
     await db.execute(
         update(Connector)
         .where(Connector.id == connector.id)
@@ -452,8 +436,7 @@ async def _record_failure(
     if new_count >= alarm_threshold:
         values["health_status"] = _HEALTH_UNHEALTHY
         logger.error(
-            "oauth_refresh.alarm connector_id=%s tenant=%s connector_type=%s "
-            "failures=%d reason=%s — flipping health_status=unhealthy",
+            "oauth_refresh.alarm connector_id=%s tenant=%s connector_type=%s failures=%d reason=%s — flipping health_status=unhealthy",
             connector.id,
             connector.tenant_id,
             connector.connector_type,
@@ -461,9 +444,7 @@ async def _record_failure(
             reason,
         )
 
-    await db.execute(
-        update(Connector).where(Connector.id == connector.id).values(**values)
-    )
+    await db.execute(update(Connector).where(Connector.id == connector.id).values(**values))
     await db.commit()
 
 
@@ -475,9 +456,7 @@ async def run_once() -> dict[str, int]:
     """
     stats = {"checked": 0, "refreshed": 0, "failed": 0}
     async with AsyncSessionLocal() as db:
-        due = await _select_due_connectors(
-            db, lead_time_s=settings.OAUTH_REFRESH_LEAD_TIME_SECONDS
-        )
+        due = await _select_due_connectors(db, lead_time_s=settings.OAUTH_REFRESH_LEAD_TIME_SECONDS)
         stats["checked"] = len(due)
         for conn in due:
             ok = await _refresh_one(
@@ -525,15 +504,13 @@ async def run_forever(*, stop_event: asyncio.Event | None = None) -> None:
                 # Never let a transient failure kill the loop — the
                 # whole point of this worker is durability. The next
                 # tick gets a fresh DB session.
-                logger.exception(
-                    "oauth_refresh.tick_failed err=%s", type(exc).__name__
-                )
+                logger.exception("oauth_refresh.tick_failed err=%s", type(exc).__name__)
             try:
                 if stop_event is not None:
                     await asyncio.wait_for(stop_event.wait(), timeout=interval)
                 else:
                     await asyncio.sleep(interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
     except asyncio.CancelledError:
         logger.info("oauth_refresh.cancelled — shutting down cleanly")

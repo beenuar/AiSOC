@@ -45,9 +45,7 @@ class SavedView(Base):
 
     __tablename__ = "saved_views"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -71,23 +69,17 @@ class SavedView(Base):
 
     # Opaque JSON matching the list page's filter shape. The backend
     # never inspects the contents.
-    filters: Mapped[dict] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
-    )
+    filters: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb"))
 
     # Optional ordered list of column ids/widths. NULL means "use the
     # page default column set" — saves a row from carrying redundant
     # default state.
-    columns: Mapped[list | dict | None] = mapped_column(
-        JSONB, nullable=True, default=None
-    )
+    columns: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True, default=None)
 
     # Exactly one default per (tenant, user, view_type) — the partial
     # unique index in the migration enforces this at the DB layer so
     # we don't have to do a transactional toggle in the API.
-    is_default: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=text("false")
-    )
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

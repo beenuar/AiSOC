@@ -43,11 +43,7 @@ router = APIRouter(prefix="/fusion", tags=["fusion"])
 # When set, requests are forwarded to the live fusion service. When unset,
 # the gateway returns deterministic, empty fallbacks so the UI degrades
 # gracefully instead of bubbling 5xx into the analyst console.
-_FUSION_URL = (
-    os.getenv("FUSION_SERVICE_URL")
-    or os.getenv("FUSION_URL")
-    or ""
-).rstrip("/")
+_FUSION_URL = (os.getenv("FUSION_SERVICE_URL") or os.getenv("FUSION_URL") or "").rstrip("/")
 
 # Tight allowlist for proxied request paths. We only ever proxy to a fixed
 # upstream (`_FUSION_URL`) on a known set of routes, so the path must be a
@@ -60,10 +56,7 @@ _SAFE_PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./%]*$")
 def _validate_proxy_path(path: str) -> str:
     """Reject any proxied path that isn't a tightly constrained relative path."""
     if (
-        not isinstance(path, str)
-        or not _SAFE_PATH_RE.match(path)
-        or ".." in path
-        or path.startswith("//")  # protocol-relative URL
+        not isinstance(path, str) or not _SAFE_PATH_RE.match(path) or ".." in path or path.startswith("//")  # protocol-relative URL
     ):
         raise HTTPException(status_code=400, detail="invalid_request_path")
     return path

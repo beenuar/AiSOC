@@ -213,7 +213,7 @@ def _fallback_templates(req: TranslateRequest) -> dict[str, Any]:
         elif fmt == "esql":
             rule = f"FROM logs-*\n| WHERE {rule}"
         elif fmt == "yara_l2":
-            rule = f"rule translated_rule {{\n  meta:\n    author = \"AiSOC\"\n  condition:\n    {rule}\n}}"
+            rule = f'rule translated_rule {{\n  meta:\n    author = "AiSOC"\n  condition:\n    {rule}\n}}'
         elif fmt == "udm":
             rule = f"// Chronicle UDM Search\n{rule}"
 

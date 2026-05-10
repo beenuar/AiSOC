@@ -60,10 +60,7 @@ async def get_cost_dashboard(
         default=_DEFAULT_WINDOW_DAYS,
         ge=_MIN_WINDOW_DAYS,
         le=_MAX_WINDOW_DAYS,
-        description=(
-            "Rolling window in days. Counts back from now() (UTC). "
-            "Defaults to the last 30 days; capped at 365."
-        ),
+        description=("Rolling window in days. Counts back from now() (UTC). Defaults to the last 30 days; capped at 365."),
     ),
 ) -> CostDashboard:
     """Return a deterministic snapshot of cost, activity, and BYOK savings.
@@ -96,10 +93,7 @@ async def get_cost_dashboard(
         # caller cannot bypass the clamp.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"window_days must be between {_MIN_WINDOW_DAYS} and "
-                f"{_MAX_WINDOW_DAYS}"
-            ),
+            detail=(f"window_days must be between {_MIN_WINDOW_DAYS} and {_MAX_WINDOW_DAYS}"),
         )
 
     # Pull the live LLM provider snapshot from the same code path the

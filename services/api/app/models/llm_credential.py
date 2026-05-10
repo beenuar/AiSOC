@@ -83,9 +83,7 @@ class TenantLlmCredential(Base):
     # Provider-specific settings escape hatch (e.g. Azure deployment name,
     # OpenAI organization id, max_tokens override). Empty in v1.0; v1.1
     # features can populate this without a migration.
-    settings: Mapped[dict] = mapped_column(
-        JSONB, default=dict, nullable=False
-    )
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     # Soft-disable without deleting. Lets an operator pause LLM for a
     # tenant during a key rotation without losing the saved configuration.
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -103,6 +101,4 @@ class TenantLlmCredential(Base):
     # Bumped only when api_key_vault changes (the API endpoint manages
     # this). Drives the "rotated 3 days ago" hint in the Settings UI so
     # operators have a key-hygiene signal at a glance.
-    last_rotated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

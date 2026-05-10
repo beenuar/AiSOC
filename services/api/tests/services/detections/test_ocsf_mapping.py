@@ -81,17 +81,13 @@ class TestPrecedence:
     def test_product_category_wins_over_service(self) -> None:
         # product+category=PROCESS_ACTIVITY; product+service=AUTHENTICATION
         # The (product, category) lookup should win.
-        ref = map_logsource_to_ocsf(
-            {"product": "windows", "category": "process_creation", "service": "security"}
-        )
+        ref = map_logsource_to_ocsf({"product": "windows", "category": "process_creation", "service": "security"})
         assert ref.class_uid == OcsfClassUid.PROCESS_ACTIVITY
 
 
 class TestFallback:
     @pytest.mark.parametrize("logsource", [None, {}, {"product": "weirdvendor"}])
-    def test_unknown_logsource_falls_back_to_detection_finding(
-        self, logsource: dict | None
-    ) -> None:
+    def test_unknown_logsource_falls_back_to_detection_finding(self, logsource: dict | None) -> None:
         ref = map_logsource_to_ocsf(logsource)
         assert ref.class_uid == OcsfClassUid.DETECTION_FINDING
         assert ref.class_name == "Detection Finding"

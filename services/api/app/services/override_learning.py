@@ -45,7 +45,7 @@ class AlertSignature:
     primary_technique: str
 
     @classmethod
-    def from_alert(cls, alert: Alert) -> "AlertSignature":
+    def from_alert(cls, alert: Alert) -> AlertSignature:
         techniques = list(alert.mitre_techniques or [])
         primary = str(techniques[0]) if techniques else ""
         return cls(
@@ -187,12 +187,7 @@ async def find_redisposition_candidates(
     if signature.connector_type:
         conditions.append(Alert.connector_type == signature.connector_type)
 
-    query = (
-        select(Alert)
-        .where(and_(*conditions))
-        .order_by(Alert.event_time.desc())
-        .limit(limit * 4)
-    )
+    query = select(Alert).where(and_(*conditions)).order_by(Alert.event_time.desc()).limit(limit * 4)
     rows = list((await db.scalars(query)).all())
 
     candidates: list[RedispositionCandidate] = []
@@ -230,9 +225,7 @@ async def apply_redisposition(
         return 0
     now = datetime.now(UTC)
     result = await db.execute(
-        update(Alert)
-        .where(Alert.tenant_id == tenant_id, Alert.id.in_(alert_ids))
-        .values(disposition=new_disposition, updated_at=now)
+        update(Alert).where(Alert.tenant_id == tenant_id, Alert.id.in_(alert_ids)).values(disposition=new_disposition, updated_at=now)
     )
     await db.commit()
     rowcount = result.rowcount or 0

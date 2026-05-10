@@ -16,10 +16,9 @@ from __future__ import annotations
 import os
 from typing import Literal
 
+import structlog
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-
-import structlog
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 

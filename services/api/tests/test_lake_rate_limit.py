@@ -43,7 +43,6 @@ from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
-
 from app.services.lake_rate_limit import (
     DEFAULT_CAPACITY,
     DEFAULT_REFILL_PER_SECOND,

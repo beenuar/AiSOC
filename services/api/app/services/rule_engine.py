@@ -88,7 +88,7 @@ def _run_sigma(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict]
         # pySigma not available – use simple YAML condition evaluator
         return _sigma_fallback(rule_body, events), None
     except Exception as exc:
-        logger.warning("Sigma parse error", error=str(exc))
+        logger.warning("Sigma parse error: %s", exc)
         return _sigma_fallback(rule_body, events), str(exc)
 
 
@@ -110,7 +110,7 @@ def _sigma_fallback(rule_body: str, events: list[dict[str, Any]]) -> list[dict[s
                 matched.append(event)
         return matched
     except Exception as exc:
-        logger.debug("Sigma fallback evaluator error", error=str(exc))
+        logger.debug("Sigma fallback evaluator error: %s", exc)
         return []
 
 
@@ -185,7 +185,7 @@ def _run_yara(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict],
     except ImportError:
         return [], "yara-python not installed"
     except Exception as exc:
-        logger.warning("YARA execution error", error=str(exc))
+        logger.warning("YARA execution error: %s", exc)
         return [], str(exc)
 
 

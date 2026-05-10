@@ -45,7 +45,6 @@ from typing import Final
 import sqlglot
 from sqlglot import exp
 
-
 # ----------------------------------------------------------- public surface
 
 
@@ -169,20 +168,14 @@ def rewrite_for_tenant(
     # attack — a caller sending ``SELECT 1; DROP TABLE x;`` is rejected
     # even though the first statement on its own would have been fine.
     try:
-        statements = [
-            stmt
-            for stmt in sqlglot.parse(sql, read="clickhouse")
-            if stmt is not None
-        ]
+        statements = [stmt for stmt in sqlglot.parse(sql, read="clickhouse") if stmt is not None]
     except sqlglot.errors.ParseError as exc:
         raise LakeSqlSyntaxError(f"unable to parse SQL: {exc}") from exc
 
     if not statements:
         raise LakeSqlSyntaxError("empty SQL statement")
     if len(statements) > 1:
-        raise LakeSqlForbiddenError(
-            "only a single statement is allowed per request"
-        )
+        raise LakeSqlForbiddenError("only a single statement is allowed per request")
 
     tree = statements[0]
 
@@ -194,15 +187,10 @@ def rewrite_for_tenant(
     # Forbidden DML/DDL → 403. Parser-level garbage (NOT, IS, expressions,
     # bare identifiers) → 400. Selects, Unions, and CTEs → continue.
     if isinstance(root, _FORBIDDEN_ROOTS):
-        raise LakeSqlForbiddenError(
-            f"only SELECT statements are allowed (got {type(root).__name__.upper()})"
-        )
+        raise LakeSqlForbiddenError(f"only SELECT statements are allowed (got {type(root).__name__.upper()})")
 
     if not isinstance(root, (exp.Select, exp.Union, exp.With)):
-        raise LakeSqlSyntaxError(
-            "expected a SELECT / WITH / UNION statement; got "
-            f"{type(root).__name__}"
-        )
+        raise LakeSqlSyntaxError(f"expected a SELECT / WITH / UNION statement; got {type(root).__name__}")
 
     # ── Step 3: collect CTE aliases ──────────────────────────────────
     # CTE names are *aliases*, not real tables, so a reference like
@@ -226,14 +214,10 @@ def rewrite_for_tenant(
     # expression.
     for select in selects:
         if not select.expressions:
-            raise LakeSqlSyntaxError(
-                "SELECT clause has no projection expressions"
-            )
+            raise LakeSqlSyntaxError("SELECT clause has no projection expressions")
 
     for select in selects:
-        _validate_and_rewrite_select(
-            select, tenant_id, cte_aliases, referenced
-        )
+        _validate_and_rewrite_select(select, tenant_id, cte_aliases, referenced)
 
     # ── Step 5: clamp the outer LIMIT ────────────────────────────────
     _clamp_outer_limit(root, effective_cap)
@@ -288,16 +272,12 @@ def _validate_and_rewrite_select(
         # subtree) or as Tables whose backing ``this`` is an Anonymous
         # function call.
         if _is_table_function(table):
-            raise LakeSqlForbiddenError(
-                "ClickHouse table functions are not allowed in lake queries"
-            )
+            raise LakeSqlForbiddenError("ClickHouse table functions are not allowed in lake queries")
 
         bare_name = table.name
         if not bare_name:
             # Non-function table without a name — degenerate; reject.
-            raise LakeSqlForbiddenError(
-                "unrecognised table reference in FROM/JOIN"
-            )
+            raise LakeSqlForbiddenError("unrecognised table reference in FROM/JOIN")
 
         # CTE references: allowed, but skipped (no allowlist check, no
         # predicate injection — the CTE body already has its own SELECT
@@ -307,9 +287,7 @@ def _validate_and_rewrite_select(
 
         full = _qualified_name(table)
         if full not in ALLOWED_TABLES:
-            raise LakeSqlForbiddenError(
-                f"table '{full}' is not in the lake allowlist"
-            )
+            raise LakeSqlForbiddenError(f"table '{full}' is not in the lake allowlist")
 
         # Backfill the schema on unqualified references so the rewritten
         # SQL is unambiguous regardless of the ClickHouse session

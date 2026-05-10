@@ -351,15 +351,30 @@ _REALISTIC_INCIDENTS: list[dict] = [
                 "trigger": "ransomware-encryption-pattern",
             },
             "steps": [
-                ("isolate-host", "Isolate host via CrowdStrike RTR", "completed",
-                 {"action": "endpoint.isolate", "target": "WIN-FIN-DB01", "result": "contained", "duration_ms": 4_120}),
-                ("snapshot-disk", "Capture forensic disk image to S3", "completed",
-                 {"action": "endpoint.snapshot", "target": "WIN-FIN-DB01",
-                  "snapshot_id": "snap-0c7f1aa9", "duration_ms": 96_350}),
-                ("block-c2", "Block known LockBit C2 ranges on perimeter", "completed",
-                 {"action": "network.block_ip", "targets": ["203.0.113.42", "198.51.100.71"], "duration_ms": 2_980}),
-                ("kill-encryption-process", "Kill encryption process on host", "running",
-                 {"action": "endpoint.kill_process", "process_name": "lockbit.exe", "started_at_offset_s": 240}),
+                (
+                    "isolate-host",
+                    "Isolate host via CrowdStrike RTR",
+                    "completed",
+                    {"action": "endpoint.isolate", "target": "WIN-FIN-DB01", "result": "contained", "duration_ms": 4_120},
+                ),
+                (
+                    "snapshot-disk",
+                    "Capture forensic disk image to S3",
+                    "completed",
+                    {"action": "endpoint.snapshot", "target": "WIN-FIN-DB01", "snapshot_id": "snap-0c7f1aa9", "duration_ms": 96_350},
+                ),
+                (
+                    "block-c2",
+                    "Block known LockBit C2 ranges on perimeter",
+                    "completed",
+                    {"action": "network.block_ip", "targets": ["203.0.113.42", "198.51.100.71"], "duration_ms": 2_980},
+                ),
+                (
+                    "kill-encryption-process",
+                    "Kill encryption process on host",
+                    "running",
+                    {"action": "endpoint.kill_process", "process_name": "lockbit.exe", "started_at_offset_s": 240},
+                ),
                 ("rotate-credentials", "Rotate svc-backup credentials in AD + secrets vault", "pending", {}),
                 ("notify-stakeholders", "Open ticket, page incident commander, notify legal", "pending", {}),
             ],
@@ -431,14 +446,30 @@ _REALISTIC_INCIDENTS: list[dict] = [
                 "wire_status": "recalled",
             },
             "steps": [
-                ("revoke-oauth-grant", "Revoke malicious OAuth grant", "completed",
-                 {"action": "saas.revoke_oauth", "app": "Acme Calendar Sync", "duration_ms": 3_400}),
-                ("delete-inbox-rule", "Delete malicious inbox rule", "completed",
-                 {"action": "saas.delete_inbox_rule", "duration_ms": 2_100}),
-                ("force-mfa-reset", "Force MFA + password reset for bob@example.com", "completed",
-                 {"action": "identity.force_mfa", "duration_ms": 5_780}),
-                ("notify-treasury", "Notify treasury to recall wire", "completed",
-                 {"action": "ticket.create", "system": "ServiceNow", "ticket": "INC0019823"}),
+                (
+                    "revoke-oauth-grant",
+                    "Revoke malicious OAuth grant",
+                    "completed",
+                    {"action": "saas.revoke_oauth", "app": "Acme Calendar Sync", "duration_ms": 3_400},
+                ),
+                (
+                    "delete-inbox-rule",
+                    "Delete malicious inbox rule",
+                    "completed",
+                    {"action": "saas.delete_inbox_rule", "duration_ms": 2_100},
+                ),
+                (
+                    "force-mfa-reset",
+                    "Force MFA + password reset for bob@example.com",
+                    "completed",
+                    {"action": "identity.force_mfa", "duration_ms": 5_780},
+                ),
+                (
+                    "notify-treasury",
+                    "Notify treasury to recall wire",
+                    "completed",
+                    {"action": "ticket.create", "system": "ServiceNow", "ticket": "INC0019823"},
+                ),
                 ("ioc-share", "Share sender IPs with TIP", "completed", {"action": "tip.share"}),
             ],
         },
@@ -500,10 +531,13 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "status": "running",
             "context": {"target_user": "alice@example.com"},
             "steps": [
-                ("suspend-session", "Suspend Okta session for user", "completed",
-                 {"action": "identity.suspend_session", "duration_ms": 1_900}),
-                ("force-mfa", "Force step-up MFA on next login", "completed",
-                 {"action": "identity.force_mfa", "duration_ms": 1_200}),
+                (
+                    "suspend-session",
+                    "Suspend Okta session for user",
+                    "completed",
+                    {"action": "identity.suspend_session", "duration_ms": 1_900},
+                ),
+                ("force-mfa", "Force step-up MFA on next login", "completed", {"action": "identity.force_mfa", "duration_ms": 1_200}),
                 ("rotate-app-tokens", "Revoke OAuth refresh tokens", "running", {}),
                 ("alert-user", "Page user for verification", "pending", {}),
             ],
@@ -566,12 +600,9 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "status": "running",
             "context": {"iam_user": "build-runner"},
             "steps": [
-                ("disable-key", "Deactivate IAM access key", "completed",
-                 {"action": "aws.iam.deactivate_key", "duration_ms": 2_900}),
-                ("rotate-key", "Issue replacement key for service", "completed",
-                 {"action": "aws.iam.create_key", "duration_ms": 3_400}),
-                ("block-ip", "Add NACL block for malicious IP", "completed",
-                 {"action": "aws.nacl.deny", "ip": "104.244.42.193"}),
+                ("disable-key", "Deactivate IAM access key", "completed", {"action": "aws.iam.deactivate_key", "duration_ms": 2_900}),
+                ("rotate-key", "Issue replacement key for service", "completed", {"action": "aws.iam.create_key", "duration_ms": 3_400}),
+                ("block-ip", "Add NACL block for malicious IP", "completed", {"action": "aws.nacl.deny", "ip": "104.244.42.193"}),
                 ("audit-bucket-access", "Audit corp-hr-backups access", "running", {}),
             ],
         },
@@ -769,8 +800,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "status": "running",
             "context": {"host": "WIN-DEVOPS-LT", "framework": "cobalt-strike"},
             "steps": [
-                ("isolate-host", "Isolate host via Defender", "completed",
-                 {"action": "endpoint.isolate", "duration_ms": 3_900}),
+                ("isolate-host", "Isolate host via Defender", "completed", {"action": "endpoint.isolate", "duration_ms": 3_900}),
                 ("block-c2-ip", "Block 23.106.222.74", "completed", {"duration_ms": 1_700}),
                 ("dns-sinkhole", "Sinkhole azonly-cdn.io", "running", {}),
                 ("memory-capture", "Capture memory image for analysis", "pending", {}),
@@ -1062,7 +1092,9 @@ _REALISTIC_INCIDENTS: list[dict] = [
                     "userIdentity": {"type": "IAMUser", "userName": "devops-admin"},
                     "requestParameters": {
                         "bucketName": "corp-hr-backups",
-                        "AccessControlPolicy": {"Grants": [{"Permission": "READ", "Grantee": {"URI": "http://acs.amazonaws.com/groups/global/AllUsers"}}]},
+                        "AccessControlPolicy": {
+                            "Grants": [{"Permission": "READ", "Grantee": {"URI": "http://acs.amazonaws.com/groups/global/AllUsers"}}]
+                        },
                     },
                     "sourceIPAddress": "10.0.2.4",
                 },
@@ -1529,14 +1561,8 @@ def _make_realistic_alert(
 ) -> Alert:
     severity = alert_spec["severity"]
     priority = {"critical": 92, "high": 78, "medium": 55, "low": 28}[severity]
-    techniques = [
-        {"id": tid, "name": _TECHNIQUE_NAMES.get(tid, tid)}
-        for tid in incident["technique_ids"]
-    ]
-    tactics = [
-        {"id": tid, "name": _TACTIC_NAMES.get(tid, tid)}
-        for tid in incident["tactic_ids"]
-    ]
+    techniques = [{"id": tid, "name": _TECHNIQUE_NAMES.get(tid, tid)} for tid in incident["technique_ids"]]
+    tactics = [{"id": tid, "name": _TACTIC_NAMES.get(tid, tid)} for tid in incident["tactic_ids"]]
 
     raw_event = _bots_raw_event(
         when,
@@ -1552,10 +1578,7 @@ def _make_realistic_alert(
     return Alert(
         tenant_id=tenant_id,
         title=alert_spec["title"],
-        description=(
-            f"{alert_spec['source']} detection. "
-            f"{incident['description']}"
-        ),
+        description=(f"{alert_spec['source']} detection. {incident['description']}"),
         severity=severity,
         status=_alert_status_for_case(case_status),
         priority=priority,
@@ -1595,14 +1618,8 @@ def _make_realistic_case(
     when: datetime,
     alert_ids: list[uuid.UUID],
 ) -> Case:
-    techniques = [
-        {"id": tid, "name": _TECHNIQUE_NAMES.get(tid, tid)}
-        for tid in incident["technique_ids"]
-    ]
-    tactics = [
-        {"id": tid, "name": _TACTIC_NAMES.get(tid, tid)}
-        for tid in incident["tactic_ids"]
-    ]
+    techniques = [{"id": tid, "name": _TECHNIQUE_NAMES.get(tid, tid)} for tid in incident["technique_ids"]]
+    tactics = [{"id": tid, "name": _TACTIC_NAMES.get(tid, tid)} for tid in incident["tactic_ids"]]
     closed_at = when + timedelta(hours=4) if incident["status"] in ("resolved", "closed") else None
 
     return Case(
@@ -1653,15 +1670,17 @@ def _serialize_playbook_run(
     for step_id, name, status, output in spec["steps"]:
         cursor = cursor + timedelta(seconds=_rng.randint(15, 120))
         finished = cursor + timedelta(milliseconds=output.get("duration_ms", 4_000)) if status == "completed" else None
-        step_results.append({
-            "step_id": step_id,
-            "name": name,
-            "status": status,
-            "started_at": cursor.isoformat() if status != "pending" else None,
-            "completed_at": finished.isoformat() if finished else None,
-            "output": output,
-            "attempts": 1 if status != "pending" else 0,
-        })
+        step_results.append(
+            {
+                "step_id": step_id,
+                "name": name,
+                "status": status,
+                "started_at": cursor.isoformat() if status != "pending" else None,
+                "completed_at": finished.isoformat() if finished else None,
+                "output": output,
+                "attempts": 1 if status != "pending" else 0,
+            }
+        )
         if status == "completed" and finished:
             cursor = finished
 
@@ -1691,12 +1710,7 @@ async def _seed_realistic_incidents(session, tenant: Tenant) -> tuple[int, int, 
     Returns ``(alerts, cases, playbook_runs)``. Idempotent: short-circuits if
     any case with an ``INC-RT-`` prefix is already present.
     """
-    existing = await session.execute(
-        select(Case)
-        .where(Case.tenant_id == tenant.id)
-        .where(Case.case_number.like("INC-RT-%"))
-        .limit(1)
-    )
+    existing = await session.execute(select(Case).where(Case.tenant_id == tenant.id).where(Case.case_number.like("INC-RT-%")).limit(1))
     if existing.scalar_one_or_none() is not None:
         return 0, 0, 0
 
@@ -1708,7 +1722,7 @@ async def _seed_realistic_incidents(session, tenant: Tenant) -> tuple[int, int, 
 
     # Spread incidents across the last 14 days, keeping the in-flight one
     # very recent so it shows up at the top of the queue.
-    for index, incident in enumerate(_REALISTIC_INCIDENTS):
+    for _index, incident in enumerate(_REALISTIC_INCIDENTS):
         is_in_flight = bool(incident.get("in_flight_investigation"))
         offset_minutes = 8 if is_in_flight else _rng.randint(60, 60 * 24 * 13)
         case_when = now - timedelta(minutes=offset_minutes)
@@ -1787,7 +1801,7 @@ async def _seed_realistic_incidents(session, tenant: Tenant) -> tuple[int, int, 
 
     session.add_all(timeline_rows)
     await session.flush()
-    _ = index  # silence unused-loop-var lint
+
     return len(new_alerts), len(new_cases), playbook_run_count
 
 
@@ -1806,10 +1820,7 @@ async def _seed_in_flight_investigation(session, tenant: Tenant) -> int:
         return 0
 
     existing = await session.execute(
-        select(InvestigationRun)
-        .where(InvestigationRun.tenant_id == tenant.id)
-        .where(InvestigationRun.case_id == incident["key"])
-        .limit(1)
+        select(InvestigationRun).where(InvestigationRun.tenant_id == tenant.id).where(InvestigationRun.case_id == incident["key"]).limit(1)
     )
     if existing.scalar_one_or_none() is not None:
         return 0
@@ -2066,11 +2077,7 @@ async def _mirror_cases_to_aisoc(session, tenant: Tenant) -> int:
 
     Idempotent: ``ON CONFLICT (id) DO NOTHING`` so re-runs are no-ops.
     """
-    rows = (
-        await session.execute(
-            select(Case).where(Case.tenant_id == tenant.id)
-        )
-    ).scalars().all()
+    rows = (await session.execute(select(Case).where(Case.tenant_id == tenant.id))).scalars().all()
     if not rows:
         return 0
 
@@ -2144,9 +2151,7 @@ async def main() -> None:
             user = await _ensure_user(session, tenant)
             new_connectors = await _seed_connectors(session, tenant)
             new_alerts, new_cases = await _seed_alerts_and_cases(session, tenant)
-            realistic_alerts, realistic_cases, playbook_runs = await _seed_realistic_incidents(
-                session, tenant
-            )
+            realistic_alerts, realistic_cases, playbook_runs = await _seed_realistic_incidents(session, tenant)
             in_flight_runs = await _seed_in_flight_investigation(session, tenant)
             mirrored = await _mirror_cases_to_aisoc(session, tenant)
             await session.commit()

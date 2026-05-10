@@ -143,12 +143,7 @@ def _env_baseline() -> tuple[str, str, bool]:
     overrides on top by name.
     """
     base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or ""
-    model = (
-        os.getenv("LLM_MODEL")
-        or os.getenv("OPENAI_MODEL")
-        or os.getenv("AISOC_LLM_MODEL")
-        or ""
-    )
+    model = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv("AISOC_LLM_MODEL") or ""
     key_set = bool(os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY"))
     return base_url, model, key_set
 
@@ -196,9 +191,7 @@ def _compute_status(
         # which is never compliant under air-gap.
         airgap_compliant = False
     else:
-        airgap_compliant = is_host_allowed_for_airgap(
-            host, settings.AISOC_AIRGAP_ALLOWLIST
-        )
+        airgap_compliant = is_host_allowed_for_airgap(host, settings.AISOC_AIRGAP_ALLOWLIST)
 
     is_local = _is_loopback_or_private_host(host)
 
@@ -230,19 +223,12 @@ def _compute_status(
     elif effective_path == "fallback":
         # key_set is False but base_url may be set — uncommon but possible.
         policy_note = (
-            "OPENAI_API_KEY (or LLM_API_KEY) is unset, so LLM calls are "
-            "disabled and Explain falls back to deterministic summaries."
+            "OPENAI_API_KEY (or LLM_API_KEY) is unset, so LLM calls are disabled and Explain falls back to deterministic summaries."
         )
     elif is_local:
-        policy_note = (
-            f"LLM calls are routed to a local provider ({provider}). No "
-            "external network egress is required for the Explain path."
-        )
+        policy_note = f"LLM calls are routed to a local provider ({provider}). No external network egress is required for the Explain path."
     else:
-        policy_note = (
-            f"LLM calls are routed to {provider} at {host}. Outbound HTTP "
-            "is required."
-        )
+        policy_note = f"LLM calls are routed to {provider} at {host}. Outbound HTTP is required."
 
     return {
         "provider": provider,
@@ -326,11 +312,7 @@ async def tenant_llm_status(
     """
     env_base_url, env_model, env_key_set = _env_baseline()
 
-    row = await db.execute(
-        select(TenantLlmCredential).where(
-            TenantLlmCredential.tenant_id == tenant_id
-        )
-    )
+    row = await db.execute(select(TenantLlmCredential).where(TenantLlmCredential.tenant_id == tenant_id))
     cred = row.scalar_one_or_none()
 
     if cred is None or not cred.enabled:

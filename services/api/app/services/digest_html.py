@@ -30,7 +30,6 @@ from .executive_digest import (
     TopSourceHighlight,
 )
 
-
 _SEVERITY_COLOURS: dict[str, str] = {
     "critical": "#b91c1c",
     "high": "#c2410c",
@@ -67,17 +66,13 @@ def _severity_chip(severity: str) -> str:
     colour = _SEVERITY_COLOURS.get(severity, "#475569")
     return (
         f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
-        f'background:{colour};color:#fff;font-size:11px;text-transform:uppercase;'
+        f"background:{colour};color:#fff;font-size:11px;text-transform:uppercase;"
         f'letter-spacing:0.04em;">{_esc(severity)}</span>'
     )
 
 
 def _kpi(label: str, value: str, *, hint: str | None = None) -> str:
-    hint_html = (
-        f'<div style="font-size:11px;color:#64748b;margin-top:2px;">{_esc(hint)}</div>'
-        if hint
-        else ""
-    )
+    hint_html = f'<div style="font-size:11px;color:#64748b;margin-top:2px;">{_esc(hint)}</div>' if hint else ""
     return (
         '<div style="flex:1 1 140px;background:#f8fafc;border:1px solid #e2e8f0;'
         'border-radius:8px;padding:12px 14px;min-width:140px;">'
@@ -103,17 +98,12 @@ def _severity_table(split: SeveritySplit) -> str:
         f'<td style="padding:4px 8px;text-align:right;font-weight:600;">{count}</td></tr>'
         for label, count in rows
     )
-    return (
-        '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        f"<tbody>{cells}</tbody></table>"
-    )
+    return f'<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>{cells}</tbody></table>'
 
 
 def _tactic_rows(tactics: list[TacticHighlight]) -> str:
     if not tactics:
-        return (
-            '<p style="color:#64748b;font-size:13px;">No MITRE-tagged alerts in this period.</p>'
-        )
+        return '<p style="color:#64748b;font-size:13px;">No MITRE-tagged alerts in this period.</p>'
     body = "".join(
         f'<tr><td style="padding:6px 8px;">{_esc(t.tactic)}</td>'
         f'<td style="padding:6px 8px;text-align:right;font-weight:600;">{t.count}</td>'
@@ -135,25 +125,18 @@ def _tactic_rows(tactics: list[TacticHighlight]) -> str:
 
 def _source_rows(sources: list[TopSourceHighlight]) -> str:
     if not sources:
-        return (
-            '<p style="color:#64748b;font-size:13px;">No connector activity in this period.</p>'
-        )
+        return '<p style="color:#64748b;font-size:13px;">No connector activity in this period.</p>'
     body = "".join(
         f'<tr><td style="padding:6px 8px;">{_esc(s.connector_type)}</td>'
         f'<td style="padding:6px 8px;text-align:right;font-weight:600;">{s.count}</td></tr>'
         for s in sources
     )
-    return (
-        '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        f"<tbody>{body}</tbody></table>"
-    )
+    return f'<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>{body}</tbody></table>'
 
 
 def _high_risk_table(items: list[HighRiskAlertHighlight]) -> str:
     if not items:
-        return (
-            '<p style="color:#64748b;font-size:13px;">No high-risk alerts surfaced this period.</p>'
-        )
+        return '<p style="color:#64748b;font-size:13px;">No high-risk alerts surfaced this period.</p>'
     body = "".join(
         "<tr>"
         f'<td style="padding:6px 8px;">{_severity_chip(a.severity)}</td>'
@@ -198,7 +181,7 @@ def _recommendation_cards(recs: list[DigestRecommendation]) -> str:
         return ""
     cards = "".join(
         '<div style="border-left:4px solid {colour};background:{bg};'
-        "padding:12px 14px;border-radius:6px;margin-bottom:10px;\">"
+        'padding:12px 14px;border-radius:6px;margin-bottom:10px;">'
         '<div style="font-weight:600;color:#0f172a;font-size:14px;'
         f'margin-bottom:4px;">{_esc(r.title)}</div>'
         f'<div style="color:#334155;font-size:13px;line-height:1.45;">{_esc(r.body)}</div>'
@@ -230,7 +213,8 @@ def render_digest_html(digest: ExecutiveDigest) -> str:
   }}
   h1, h2, h3 {{ color: #0f172a; margin-top: 0; }}
   h1 {{ font-size: 22px; margin-bottom: 4px; }}
-  h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
+  h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
+       color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
   table th, table td {{ border-bottom: 1px solid #f1f5f9; }}
   @media print {{
     body {{ padding: 0; }}

@@ -40,17 +40,13 @@ def test_sslmode_disable_translated_to_false():
 
 
 def test_other_query_params_preserved():
-    url, args = _normalize_async_pg_url(
-        "postgresql://u:p@h/db?application_name=aisoc&sslmode=verify-full"
-    )
+    url, args = _normalize_async_pg_url("postgresql://u:p@h/db?application_name=aisoc&sslmode=verify-full")
     assert "application_name=aisoc" in url
     assert "sslmode" not in url
     assert args == {"ssl": "verify-full"}
 
 
 def test_channel_binding_stripped():
-    url, args = _normalize_async_pg_url(
-        "postgresql://u:p@h/db?sslmode=require&channel_binding=require"
-    )
+    url, args = _normalize_async_pg_url("postgresql://u:p@h/db?sslmode=require&channel_binding=require")
     assert "channel_binding" not in url
     assert args == {"ssl": "require"}

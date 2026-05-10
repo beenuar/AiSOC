@@ -41,9 +41,7 @@ router = APIRouter(prefix="/detection-loop", tags=["detection_rules", "detection
 
 class SuggestRequest(BaseModel):
     alert_id: uuid.UUID = Field(..., description="ID of the FP-flagged alert.")
-    analyst_note: str | None = Field(
-        None, description="Free-text note explaining why this is a FP."
-    )
+    analyst_note: str | None = Field(None, description="Free-text note explaining why this is a FP.")
 
 
 class SuggestionResponse(BaseModel):
@@ -98,9 +96,7 @@ async def _llm_draft_sigma(
     analyst_note: str,
 ) -> dict[str, Any]:
     """Call LLM to draft a Sigma improvement. Returns parsed JSON or template."""
-    api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(
-        settings, "LLM_API_KEY", None
-    )
+    api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(settings, "LLM_API_KEY", None)
     if not api_key:
         return _template_fallback(current_sigma, alert_fields, analyst_note)
 
@@ -133,9 +129,7 @@ async def _llm_draft_sigma(
         return _template_fallback(current_sigma, alert_fields, analyst_note)
 
 
-def _template_fallback(
-    current_sigma: str, alert_fields: dict[str, Any], analyst_note: str
-) -> dict[str, Any]:
+def _template_fallback(current_sigma: str, alert_fields: dict[str, Any], analyst_note: str) -> dict[str, Any]:
     """Return a structured template when no LLM key is configured."""
     proc = alert_fields.get("process_name") or alert_fields.get("Image") or "UNKNOWN"
     user = alert_fields.get("user") or alert_fields.get("User") or "UNKNOWN"
@@ -185,11 +179,7 @@ async def suggest_fp_fix(
 ) -> SuggestionResponse:
     """Retrieve the triggering rule + alert evidence, then draft a Sigma improvement."""
     # 1. Load alert
-    row = await db.execute(
-        text(
-            "SELECT rule_id, evidence, tenant_id FROM aisoc_alerts WHERE id = :aid"
-        ).bindparams(aid=body.alert_id)
-    )
+    row = await db.execute(text("SELECT rule_id, evidence, tenant_id FROM aisoc_alerts WHERE id = :aid").bindparams(aid=body.alert_id))
     alert_row = row.fetchone()
     if not alert_row:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -201,11 +191,7 @@ async def suggest_fp_fix(
     # 2. Load rule body if available
     current_sigma = "# Rule body not found\n"
     if rule_id:
-        rule_row = await db.execute(
-            text(
-                "SELECT rule_body FROM aisoc_detection_rules WHERE id = :rid"
-            ).bindparams(rid=rule_id)
-        )
+        rule_row = await db.execute(text("SELECT rule_body FROM aisoc_detection_rules WHERE id = :rid").bindparams(rid=rule_id))
         rule_data = rule_row.fetchone()
         if rule_data:
             current_sigma = rule_data.rule_body

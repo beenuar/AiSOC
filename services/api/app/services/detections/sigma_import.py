@@ -301,14 +301,16 @@ _CATEGORY_ALIASES: dict[str, str] = {
     "exfiltration": "data-exfil",
 }
 
-_NATIVE_CATEGORIES = frozenset({
-    "cloud",
-    "identity",
-    "endpoint",
-    "network",
-    "application",
-    "data-exfil",
-})
+_NATIVE_CATEGORIES = frozenset(
+    {
+        "cloud",
+        "identity",
+        "endpoint",
+        "network",
+        "application",
+        "data-exfil",
+    }
+)
 
 
 def _category_for(logsource: dict[str, Any] | None) -> str:
@@ -634,9 +636,7 @@ async def import_sigma_rules(
         upstream_id = str(raw.get("id") or "").strip()
         title = str(raw.get("title") or "").strip()
         if not upstream_id:
-            report.failures.append(
-                {"index": index, "reason": "missing rule id", "title": title or None}
-            )
+            report.failures.append({"index": index, "reason": "missing rule id", "title": title or None})
             continue
 
         upstream_path = upstream_paths.get(upstream_id)

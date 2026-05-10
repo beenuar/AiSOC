@@ -153,12 +153,12 @@ class Settings(BaseSettings):
     WEEKLY_DIGEST_POLL_INTERVAL_SECONDS: int = 3600
 
     # Database
-    DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"
+    DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"  # type: ignore[assignment]
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
 
     # Redis
-    REDIS_URL: RedisDsn = "redis://localhost:6379/0"
+    REDIS_URL: RedisDsn = "redis://localhost:6379/0"  # type: ignore[assignment]
     REDIS_POOL_SIZE: int = 20
 
     # ClickHouse
@@ -424,8 +424,9 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     if s.AISOC_AIRGAPPED:
         # Lazy import to avoid a circular reference (airgap.py imports settings).
         try:
-            from app.core.airgap import is_host_allowed_for_airgap
             import os as _os
+
+            from app.core.airgap import is_host_allowed_for_airgap
 
             llm_base = _os.getenv("LLM_BASE_URL") or _os.getenv("OPENAI_BASE_URL") or ""
             if llm_base:

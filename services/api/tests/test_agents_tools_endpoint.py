@@ -17,7 +17,6 @@ from app.api.v1.endpoints.agents import (
     _default_description,
 )
 
-
 # ----------------------------------------------------------- group lookup
 
 

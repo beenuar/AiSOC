@@ -20,6 +20,11 @@ class Tenant(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     limits: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # MSSP hierarchy fields
+    parent_tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True, index=True
+    )
+    mssp_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -28,13 +33,9 @@ class Tenant(Base):
     )
 
     users: Mapped[list["User"]] = relationship("User", back_populates="tenant", lazy="noload")
-    connectors: Mapped[list["Connector"]] = relationship("Connector", back_populates="tenant", lazy="noload")
-    external_assets: Mapped[list["ExternalAsset"]] = relationship(
-        "ExternalAsset", back_populates="tenant", lazy="noload"
-    )
-    external_asset_drift: Mapped[list["ExternalAssetDrift"]] = relationship(
-        "ExternalAssetDrift", back_populates="tenant", lazy="noload"
-    )
+    connectors: Mapped[list["Connector"]] = relationship("Connector", back_populates="tenant", lazy="noload")  # type: ignore[name-defined]
+    external_assets: Mapped[list["ExternalAsset"]] = relationship("ExternalAsset", back_populates="tenant", lazy="noload")  # type: ignore[name-defined]
+    external_asset_drift: Mapped[list["ExternalAssetDrift"]] = relationship("ExternalAssetDrift", back_populates="tenant", lazy="noload")  # type: ignore[name-defined]
 
 
 class User(Base):

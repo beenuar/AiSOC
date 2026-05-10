@@ -18,6 +18,7 @@ Why this exists:
 
 This wrapper is the production CMD for the API container.
 """
+
 from __future__ import annotations
 
 import os

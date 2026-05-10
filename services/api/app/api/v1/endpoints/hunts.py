@@ -207,11 +207,15 @@ async def list_hunts(
     wheres = ["1=1"]
     params: dict[str, Any] = {"limit": limit, "offset": offset}
     if hunt_status:
-        wheres.append("status = :status"); params["status"] = hunt_status
+        wheres.append("status = :status")
+        params["status"] = hunt_status
     if priority:
-        wheres.append("priority = :priority"); params["priority"] = priority
+        wheres.append("priority = :priority")
+        params["priority"] = priority
 
-    q = text(f"SELECT * FROM aisoc_hunts WHERE {' AND '.join(wheres)} ORDER BY created_at DESC LIMIT :limit OFFSET :offset").bindparams(**params)
+    q = text(f"SELECT * FROM aisoc_hunts WHERE {' AND '.join(wheres)} ORDER BY created_at DESC LIMIT :limit OFFSET :offset").bindparams(
+        **params
+    )
     try:
         rows = (await db.execute(q)).fetchall()
         return [_row_to_hunt(r) for r in rows]
@@ -273,29 +277,40 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
     params: dict[str, Any] = {"id": hunt_id, "now": datetime.now(UTC)}
 
     if body.title is not None:
-        sets.append("title = :title"); params["title"] = body.title
+        sets.append("title = :title")
+        params["title"] = body.title
     if body.hypothesis is not None:
-        sets.append("hypothesis = :hypothesis"); params["hypothesis"] = body.hypothesis
+        sets.append("hypothesis = :hypothesis")
+        params["hypothesis"] = body.hypothesis
     if body.mitre_tactic is not None:
-        sets.append("mitre_tactic = :tactic"); params["tactic"] = body.mitre_tactic
+        sets.append("mitre_tactic = :tactic")
+        params["tactic"] = body.mitre_tactic
     if body.mitre_technique is not None:
-        sets.append("mitre_technique = :technique"); params["technique"] = body.mitre_technique
+        sets.append("mitre_technique = :technique")
+        params["technique"] = body.mitre_technique
     if body.status is not None:
-        sets.append("status = :status"); params["status"] = body.status
+        sets.append("status = :status")
+        params["status"] = body.status
         if body.status == "completed":
             sets.append("completed_at = :now")
     if body.priority is not None:
-        sets.append("priority = :priority"); params["priority"] = body.priority
+        sets.append("priority = :priority")
+        params["priority"] = body.priority
     if body.assigned_to is not None:
-        sets.append("assigned_to = :assigned"); params["assigned"] = body.assigned_to
+        sets.append("assigned_to = :assigned")
+        params["assigned"] = body.assigned_to
     if body.query_esql is not None:
-        sets.append("query_esql = :esql"); params["esql"] = body.query_esql
+        sets.append("query_esql = :esql")
+        params["esql"] = body.query_esql
     if body.query_spl is not None:
-        sets.append("query_spl = :spl"); params["spl"] = body.query_spl
+        sets.append("query_spl = :spl")
+        params["spl"] = body.query_spl
     if body.query_kql is not None:
-        sets.append("query_kql = :kql"); params["kql"] = body.query_kql
+        sets.append("query_kql = :kql")
+        params["kql"] = body.query_kql
     if body.tags is not None:
-        sets.append("tags = :tags::text[]"); params["tags"] = body.tags
+        sets.append("tags = :tags::text[]")
+        params["tags"] = body.tags
 
     q = text(f"UPDATE aisoc_hunts SET {', '.join(sets)} WHERE id = :id RETURNING *").bindparams(**params)
     try:
@@ -371,10 +386,15 @@ async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user
         row = (await db.execute(q)).fetchone()
         await db.commit()
         return HuntRunResponse(
-            id=row.id, hunt_id=row.hunt_id, run_at=row.run_at,
-            platform=row.platform, query_used=row.query_used,
-            hit_count=row.hit_count, result_sample=list(row.result_sample or []),
-            duration_ms=row.duration_ms, error=row.error,
+            id=row.id,
+            hunt_id=row.hunt_id,
+            run_at=row.run_at,
+            platform=row.platform,
+            query_used=row.query_used,
+            hit_count=row.hit_count,
+            result_sample=list(row.result_sample or []),
+            duration_ms=row.duration_ms,
+            error=row.error,
         )
     except Exception as exc:
         await db.rollback()
@@ -383,13 +403,20 @@ async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user
 
 @router.get("/{hunt_id}/runs", response_model=list[HuntRunResponse], summary="List hunt runs")
 async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[HuntRunResponse]:
-    rows = (await db.execute(text("SELECT * FROM aisoc_hunt_runs WHERE hunt_id = :id ORDER BY run_at DESC LIMIT 100").bindparams(id=hunt_id))).fetchall()
+    rows = (
+        await db.execute(text("SELECT * FROM aisoc_hunt_runs WHERE hunt_id = :id ORDER BY run_at DESC LIMIT 100").bindparams(id=hunt_id))
+    ).fetchall()
     return [
         HuntRunResponse(
-            id=r.id, hunt_id=r.hunt_id, run_at=r.run_at,
-            platform=r.platform, query_used=r.query_used,
-            hit_count=r.hit_count, result_sample=list(r.result_sample or []),
-            duration_ms=r.duration_ms, error=r.error,
+            id=r.id,
+            hunt_id=r.hunt_id,
+            run_at=r.run_at,
+            platform=r.platform,
+            query_used=r.query_used,
+            hit_count=r.hit_count,
+            result_sample=list(r.result_sample or []),
+            duration_ms=r.duration_ms,
+            error=r.error,
         )
         for r in rows
     ]
@@ -412,7 +439,9 @@ async def add_findings(hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSessi
         extra_set = ", false_positive_rate = :fpr"
         params["fpr"] = body.false_positive_rate
 
-    q = text(f"UPDATE aisoc_hunts SET findings = :findings::jsonb, updated_at = :now{extra_set} WHERE id = :id RETURNING *").bindparams(**params)
+    q = text(f"UPDATE aisoc_hunts SET findings = :findings::jsonb, updated_at = :now{extra_set} WHERE id = :id RETURNING *").bindparams(
+        **params
+    )
     try:
         row = (await db.execute(q)).fetchone()
         await db.commit()

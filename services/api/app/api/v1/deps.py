@@ -214,7 +214,7 @@ async def get_current_user(
     # --- JWT path ---
     try:
         payload = decode_token(token)
-        user_id: str = payload.get("sub")
+        user_id: str = payload.get("sub")  # type: ignore[assignment]
         token_type: str = payload.get("type", "access")
         if user_id is None or token_type != "access":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -265,4 +265,4 @@ AuthUser = Annotated[CurrentUser, Depends(get_current_user)]
 def _get_tenant_db_session() -> "Annotated[AsyncSession, ...]":  # pragma: no cover
     from app.db.rls import TenantDBSession as _T  # noqa: PLC0415
 
-    return _T
+    return _T  # type: ignore[return-value]

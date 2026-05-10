@@ -28,7 +28,6 @@ from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
 from app.services.executive_digest import (
     AlertRow,
@@ -263,8 +262,8 @@ class TestWeeklyDigestRunOnce:
 
         async def fake_generate(tenant_id, period_start, period_end):
             """Thin inline re-implementation that captures the artefact without DB."""
-            from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
             from app.services.digest_html import render_digest_html
+            from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
 
             output_format = "pdf"
             try:

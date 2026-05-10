@@ -167,16 +167,12 @@ async def get_clickhouse_client() -> Any:
             from clickhouse_driver import Client  # noqa: PLC0415
         except ImportError as exc:  # pragma: no cover — env-specific
             raise LakeQueryNotConfiguredError(
-                "clickhouse-driver is not installed; install it via "
-                "`pip install clickhouse-driver` to enable the lake API"
+                "clickhouse-driver is not installed; install it via `pip install clickhouse-driver` to enable the lake API"
             ) from exc
 
         host = (settings.CLICKHOUSE_HOST or "").strip()
         if not host:
-            raise LakeQueryNotConfiguredError(
-                "CLICKHOUSE_HOST is not configured; set it in the API "
-                "environment to enable the lake API"
-            )
+            raise LakeQueryNotConfiguredError("CLICKHOUSE_HOST is not configured; set it in the API environment to enable the lake API")
 
         # ``settings_dict`` is forwarded to ClickHouse on every query;
         # we override per-call too, but having sane process-wide
@@ -196,9 +192,7 @@ async def get_clickhouse_client() -> Any:
                 settings=DEFAULT_QUERY_SETTINGS,
             )
         except Exception as exc:  # pragma: no cover — driver-specific
-            raise LakeQueryNotConfiguredError(
-                f"failed to construct ClickHouse client: {exc}"
-            ) from exc
+            raise LakeQueryNotConfiguredError(f"failed to construct ClickHouse client: {exc}") from exc
 
         logger.info(
             "clickhouse client initialised",
@@ -312,13 +306,9 @@ async def execute_lake_query(
         )
 
     try:
-        rows, column_meta = await asyncio.wait_for(
-            asyncio.to_thread(_run), timeout=asyncio_cap
-        )
+        rows, column_meta = await asyncio.wait_for(asyncio.to_thread(_run), timeout=asyncio_cap)
     except TimeoutError as exc:
-        raise LakeQueryTimeoutError(
-            f"lake query exceeded {effective_cap:.0f}s wall-clock timeout"
-        ) from exc
+        raise LakeQueryTimeoutError(f"lake query exceeded {effective_cap:.0f}s wall-clock timeout") from exc
     except LakeQueryError:
         raise
     except Exception as exc:
@@ -407,12 +397,7 @@ async def fetch_lake_schema(
         where_clauses.append(f"(database = %(db{idx})s AND table = %(tbl{idx})s)")
 
     where = " OR ".join(where_clauses)
-    sql = (
-        "SELECT database, table, name, type, comment "
-        "FROM system.columns "
-        f"WHERE {where} "
-        "ORDER BY database, table, position"
-    )
+    sql = f"SELECT database, table, name, type, comment FROM system.columns WHERE {where} ORDER BY database, table, position"
 
     client = await get_clickhouse_client()
 

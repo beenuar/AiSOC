@@ -63,9 +63,7 @@ class TestNoConfiguration:
 class TestKeyHandling:
     """The key itself must never leave the process."""
 
-    def test_key_set_true_when_openai_api_key_present(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_key_set_true_when_openai_api_key_present(self, monkeypatch: pytest.MonkeyPatch):
         # NB: the value is intentionally fake; the assertion is that
         # we report the *presence* of a key, not the value.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
@@ -74,9 +72,7 @@ class TestKeyHandling:
         # And the value never appears anywhere in the snapshot.
         assert "sk-test-not-a-real-key" not in str(snap)
 
-    def test_key_set_true_when_llm_api_key_alias_present(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_key_set_true_when_llm_api_key_alias_present(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("LLM_API_KEY", "anything")
         snap = llm_status()
         assert snap["key_set"] is True
@@ -85,9 +81,7 @@ class TestKeyHandling:
 class TestProviderClassification:
     """``provider`` should match what the operator set, not OpenAI by default."""
 
-    def test_openai_default_when_key_set_no_base_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_openai_default_when_key_set_no_base_url(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OPENAI_API_KEY", "x")
         snap = llm_status()
         assert snap["provider"] == "openai"
@@ -106,9 +100,7 @@ class TestProviderClassification:
 
     def test_azure_openai(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OPENAI_API_KEY", "x")
-        monkeypatch.setenv(
-            "OPENAI_BASE_URL", "https://my-resource.openai.azure.com/openai"
-        )
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://my-resource.openai.azure.com/openai")
         snap = llm_status()
         assert snap["provider"] == "azure-openai"
 
@@ -130,18 +122,14 @@ class TestProviderClassification:
         assert snap["provider"] in {"custom", "local-vllm"}
         assert snap["is_local"] is True
 
-    def test_local_vllm_with_explicit_hostname(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_local_vllm_with_explicit_hostname(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OPENAI_API_KEY", "x")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://vllm-gateway.local:8000/v1")
         snap = llm_status()
         assert snap["provider"] == "local-vllm"
         assert snap["is_local"] is True
 
-    def test_lm_alias_takes_precedence_over_openai_alias(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_lm_alias_takes_precedence_over_openai_alias(self, monkeypatch: pytest.MonkeyPatch):
         # If both are set, LLM_BASE_URL wins to match the precedence in
         # ``services/api/app/core/config.py``.
         monkeypatch.setenv("LLM_BASE_URL", "http://ollama:11434/v1")
@@ -182,9 +170,7 @@ class TestAirgapCompliance:
         assert snap["effective_path"] == "live"
         assert snap["is_local"] is True
 
-    def test_airgap_on_allows_allowlisted_external_mirror(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_airgap_on_allows_allowlisted_external_mirror(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(airgap_module.settings, "AISOC_AIRGAPPED", True)
         monkeypatch.setattr(
             airgap_module.settings,
@@ -192,9 +178,7 @@ class TestAirgapCompliance:
             ["llm-mirror.acme-internal.example.com"],
         )
         monkeypatch.setenv("OPENAI_API_KEY", "x")
-        monkeypatch.setenv(
-            "OPENAI_BASE_URL", "https://llm-mirror.acme-internal.example.com/v1"
-        )
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://llm-mirror.acme-internal.example.com/v1")
         snap = llm_status()
         assert snap["airgap_compliant"] is True
         assert snap["effective_path"] == "live"
@@ -224,9 +208,7 @@ class TestEffectivePath:
         snap = llm_status()
         assert snap["effective_path"] == "fallback"
 
-    def test_fallback_when_key_set_but_airgap_blocks(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_fallback_when_key_set_but_airgap_blocks(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(airgap_module.settings, "AISOC_AIRGAPPED", True)
         monkeypatch.setenv("OPENAI_API_KEY", "x")
         # No base_url + airgap on → would default to api.openai.com → blocked.

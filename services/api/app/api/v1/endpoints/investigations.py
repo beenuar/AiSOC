@@ -29,16 +29,16 @@ from __future__ import annotations
 
 import hashlib
 import io
-import json
 import textwrap
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
+from sqlalchemy.engine import RowMapping
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.db.rls import TenantDBSession
@@ -223,7 +223,7 @@ async def _fetch_run(
     return run
 
 
-def _aggregate_row(row: dict) -> CostAggregateRow:
+def _aggregate_row(row: RowMapping) -> CostAggregateRow:
     """Convert a single ``aisoc_run_costs`` aggregate row into the API model.
 
     Centralises the SUM-COALESCE-cast dance and the divide-by-zero guards
@@ -348,9 +348,10 @@ async def aggregate_costs(
     models would double-count runs that touched more than one model).
     """
     rows = (
-        await db.execute(
-            text(
-                """
+        (
+            await db.execute(
+                text(
+                    """
                 SELECT GROUPING(c.model)              AS is_total,
                        COALESCE(c.model, '__total__') AS model,
                        COUNT(DISTINCT c.run_id)       AS runs,
@@ -366,13 +367,16 @@ async def aggregate_costs(
                 GROUP BY GROUPING SETS ((c.model), ())
                 ORDER BY GROUPING(c.model), SUM(c.total_cost_usd) DESC
                 """
-            ),
-            {
-                "tenant_id": current_user.tenant_id,
-                "window_days": window_days,
-            },
+                ),
+                {
+                    "tenant_id": current_user.tenant_id,
+                    "window_days": window_days,
+                },
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     by_model: list[CostAggregateRow] = []
     totals: CostAggregateRow | None = None
@@ -769,21 +773,14 @@ async def get_timeline(
     """
     run = await _fetch_run(db, run_id, current_user.tenant_id)
 
-    events_q = (
-        select(InvestigationEvent)
-        .where(InvestigationEvent.run_id == run_id)
-        .order_by(InvestigationEvent.seq.asc())
-        .limit(10000)
-    )
+    events_q = select(InvestigationEvent).where(InvestigationEvent.run_id == run_id).order_by(InvestigationEvent.seq.asc()).limit(10000)
     events: list[InvestigationEvent] = list((await db.execute(events_q)).scalars().all())
 
     artifact_event_ids_q = select(InvestigationArtifact.event_id).where(
         InvestigationArtifact.run_id == run_id,
         InvestigationArtifact.event_id.isnot(None),
     )
-    artifact_event_ids: set[uuid.UUID] = set(
-        (await db.execute(artifact_event_ids_q)).scalars().all()
-    )
+    artifact_event_ids: set[uuid.UUID] = {eid for eid in (await db.execute(artifact_event_ids_q)).scalars().all() if eid is not None}
 
     nodes: list[TimelineNode] = []
     for idx, ev in enumerate(events):
@@ -833,7 +830,7 @@ def _build_summary_markdown(
     WS-H3 (Audit export) will ingest.
     """
     started = run.started_at.strftime("%Y-%m-%d %H:%M:%S UTC") if run.started_at else "—"
-    closed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    closed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # Tally event kinds
     kind_counts: dict[str, int] = {}
@@ -846,25 +843,21 @@ def _build_summary_markdown(
         timeline_lines.append(f"| {ts} | `{ev.kind}` | {ev.agent} | {ev.summary[:120]} |")
 
     timeline_md = (
-        "| Time | Kind | Agent | Summary |\n"
-        "|------|------|-------|---------|  \n"
-        + "\n".join(timeline_lines)
-    ) if timeline_lines else "_No events recorded._"
-
-    note_section = (
-        f"\n## Analyst Note\n\n{analyst_note}\n"
-        if analyst_note
-        else ""
+        ("| Time | Kind | Agent | Summary |\n|------|------|-------|---------|  \n" + "\n".join(timeline_lines))
+        if timeline_lines
+        else "_No events recorded._"
     )
+
+    note_section = f"\n## Analyst Note\n\n{analyst_note}\n" if analyst_note else ""
 
     return textwrap.dedent(f"""\
         # Investigation Summary — {run.case_id}
 
-        **Run ID:** `{run.id}`  
-        **Status:** {run.status}  
-        **Model:** {run.model_used or "unknown"}  
-        **Started:** {started}  
-        **Closed:** {closed_at}  
+        **Run ID:** `{run.id}`
+        **Status:** {run.status}
+        **Model:** {run.model_used or "unknown"}
+        **Started:** {started}
+        **Closed:** {closed_at}
 
         ## Metrics
 
@@ -877,7 +870,7 @@ def _build_summary_markdown(
 
         ## Event Kind Breakdown
 
-        {chr(10).join(f'- **{k}**: {v}' for k, v in sorted(kind_counts.items()))}
+        {chr(10).join(f"- **{k}**: {v}" for k, v in sorted(kind_counts.items()))}
 
         ## Timeline (last {min(20, len(events))} steps)
 
@@ -906,9 +899,7 @@ async def close_investigation(
 
     # Load all events for summary generation
     events_result = await db.execute(
-        select(InvestigationEvent)
-        .where(InvestigationEvent.run_id == run_id)
-        .order_by(InvestigationEvent.seq.asc())
+        select(InvestigationEvent).where(InvestigationEvent.run_id == run_id).order_by(InvestigationEvent.seq.asc())
     )
     events = list(events_result.scalars().all())
 
@@ -928,7 +919,7 @@ async def close_investigation(
 
     # Transition status to closed
     run.status = "closed"
-    run.completed_at = run.completed_at or datetime.now(timezone.utc)
+    run.completed_at = run.completed_at or datetime.now(UTC)
 
     await db.commit()
     await db.refresh(artifact)

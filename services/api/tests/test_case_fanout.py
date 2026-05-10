@@ -33,8 +33,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from app.services.case_fanout import (
-    FanoutResult,
     ITSM_PUSH_CAPABLE_TYPES,
+    FanoutResult,
     _post_to_connector_service,
     _push_case_url,
     _push_status_url,
@@ -42,7 +42,6 @@ from app.services.case_fanout import (
     fanout_create_case,
     fanout_status_change,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -135,9 +134,7 @@ def _build_db_with_connectors(
     select_result.scalars.return_value.all.return_value = list(connectors)
 
     refs_result = MagicMock()
-    refs_result.fetchall.return_value = [
-        SimpleNamespace(_mapping=ref) for ref in (refs or [])
-    ]
+    refs_result.fetchall.return_value = [SimpleNamespace(_mapping=ref) for ref in (refs or [])]
 
     side_effects: list[Any] = []
     if refs is not None:
@@ -214,9 +211,7 @@ def test_serialize_case_for_push_drops_internal_fields() -> None:
 
 def test_serialize_case_for_push_handles_dict_input() -> None:
     case_id = uuid.uuid4()
-    payload = _serialize_case_for_push(
-        {"id": case_id, "title": "T", "status": "open", "severity": "low"}
-    )
+    payload = _serialize_case_for_push({"id": case_id, "title": "T", "status": "open", "severity": "low"})
     assert payload["id"] == str(case_id)
     assert payload["title"] == "T"
     # Defaults for unset list/dict columns.
@@ -247,12 +242,8 @@ async def test_post_returns_ok_on_2xx() -> None:
         json_body={"external_id": "AIS-1", "vendor": "jira"},
     )
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
-        status, body, err = await _post_to_connector_service(
-            url="http://x/y", payload={}, timeout_seconds=5.0
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
     assert status == "ok"
     assert body == {"external_id": "AIS-1", "vendor": "jira"}
     assert err is None
@@ -262,12 +253,8 @@ async def test_post_returns_ok_on_2xx() -> None:
 async def test_post_returns_unsupported_on_501() -> None:
     fake_resp = _build_post_response(status_code=501, text_body="capability missing")
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
-        status, body, err = await _post_to_connector_service(
-            url="http://x/y", payload={}, timeout_seconds=5.0
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
     assert status == "unsupported"
     assert body is None
     assert err == "capability missing"
@@ -280,12 +267,8 @@ async def test_post_returns_error_on_4xx_with_detail() -> None:
         json_body={"detail": "missing project_key"},
     )
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
-        status, body, err = await _post_to_connector_service(
-            url="http://x/y", payload={}, timeout_seconds=5.0
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
     assert status == "error"
     assert body is None
     assert "missing project_key" in (err or "")
@@ -298,12 +281,8 @@ async def test_post_returns_error_on_transport_failure() -> None:
     Fan-out is best-effort; a flaky Jira tenant must not 503 the case
     create endpoint."""
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            side_effect=httpx.ConnectError("dns failed")
-        )
-        status, body, err = await _post_to_connector_service(
-            url="http://x/y", payload={}, timeout_seconds=5.0
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(side_effect=httpx.ConnectError("dns failed"))
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
     assert status == "error"
     assert body is None
     assert "connectors service unreachable" in (err or "")
@@ -315,12 +294,8 @@ async def test_post_returns_error_on_non_dict_body() -> None:
     that as an error rather than crashing further down with KeyError."""
     fake_resp = _build_post_response(status_code=200, json_body=[1, 2, 3])  # type: ignore[arg-type]
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
-        status, body, err = await _post_to_connector_service(
-            url="http://x/y", payload={}, timeout_seconds=5.0
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
     assert status == "error"
     assert "unexpected payload shape" in (err or "")
 
@@ -372,9 +347,7 @@ async def test_fanout_create_case_happy_path_persists_external_ref() -> None:
         patch("app.services.case_fanout.httpx.AsyncClient") as mock_client,
     ):
         mock_vault.return_value.decrypt_dict.return_value = {"api_token": "plain"}
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
         results = await fanout_create_case(
             db,
             case_row=case,
@@ -409,9 +382,7 @@ async def test_fanout_create_case_credential_vault_failure_short_circuits() -> N
         patch("app.services.case_fanout.get_vault") as mock_vault,
         patch("app.services.case_fanout.httpx.AsyncClient") as mock_client,
     ):
-        mock_vault.return_value.decrypt_dict.side_effect = CredentialVaultError(
-            "key rotated"
-        )
+        mock_vault.return_value.decrypt_dict.side_effect = CredentialVaultError("key rotated")
         post_mock = AsyncMock()
         mock_client.return_value.__aenter__.return_value.post = post_mock
         results = await fanout_create_case(
@@ -443,9 +414,7 @@ async def test_fanout_create_case_unsupported_capability_is_recorded() -> None:
         patch("app.services.case_fanout.httpx.AsyncClient") as mock_client,
     ):
         mock_vault.return_value.decrypt_dict.return_value = {"api_token": "plain"}
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
         results = await fanout_create_case(
             db,
             case_row=case,
@@ -477,9 +446,7 @@ async def test_fanout_create_case_missing_external_id_is_error() -> None:
         patch("app.services.case_fanout.httpx.AsyncClient") as mock_client,
     ):
         mock_vault.return_value.decrypt_dict.return_value = {"api_token": "plain"}
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
         results = await fanout_create_case(
             db,
             case_row=case,
@@ -592,9 +559,7 @@ async def test_fanout_status_change_happy_path_updates_external_status() -> None
         patch("app.services.case_fanout.httpx.AsyncClient") as mock_client,
     ):
         mock_vault.return_value.decrypt_dict.return_value = {"api_token": "plain"}
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=fake_resp
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
         results = await fanout_status_change(
             db,
             case_row=case,
@@ -636,9 +601,7 @@ async def test_fanout_status_change_transport_error_records_failure() -> None:
         patch("app.services.case_fanout.httpx.AsyncClient") as mock_client,
     ):
         mock_vault.return_value.decrypt_dict.return_value = {"api_token": "plain"}
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            side_effect=httpx.ReadTimeout("read timed out")
-        )
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(side_effect=httpx.ReadTimeout("read timed out"))
         results = await fanout_status_change(
             db,
             case_row=case,
@@ -675,4 +638,4 @@ def test_fanout_result_serializable_for_api_response() -> None:
     payload = r.model_dump_json()
     assert str(cid) in payload
     assert "AIS-1" in payload
-    assert "\"status\":\"ok\"" in payload
+    assert '"status":"ok"' in payload

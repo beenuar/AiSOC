@@ -106,9 +106,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     oauth_refresh_task: asyncio.Task | None = None
     if settings.OAUTH_REFRESH_WORKER_ENABLED:
         try:
-            oauth_refresh_task = asyncio.create_task(
-                run_oauth_refresh(), name="oauth_refresh_worker"
-            )
+            oauth_refresh_task = asyncio.create_task(run_oauth_refresh(), name="oauth_refresh_worker")
             logger.info("oauth_refresh worker started")
         except Exception as exc:
             logger.warning("oauth_refresh worker failed to start", error=str(exc))
@@ -120,9 +118,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     weekly_digest_task: asyncio.Task | None = None
     if settings.WEEKLY_DIGEST_WORKER_ENABLED:
         try:
-            weekly_digest_task = asyncio.create_task(
-                run_weekly_digest(), name="weekly_digest_worker"
-            )
+            weekly_digest_task = asyncio.create_task(run_weekly_digest(), name="weekly_digest_worker")
             logger.info("weekly_digest worker started")
         except Exception as exc:
             logger.warning("weekly_digest worker failed to start", error=str(exc))

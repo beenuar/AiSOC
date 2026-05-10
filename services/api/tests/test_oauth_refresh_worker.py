@@ -29,8 +29,8 @@ from app.security.credential_vault import CredentialVault
 from app.workers import oauth_refresh as worker
 from cryptography.fernet import Fernet
 
-
 # --------------------------------------------------------------- helpers
+
 
 class _FakeConnector:
     """Minimal stand-in for the SQLAlchemy ``Connector`` model.
@@ -75,9 +75,7 @@ def _build_vault() -> CredentialVault:
     return CredentialVault(Fernet.generate_key())
 
 
-def _mock_db(
-    *, app_credential: Any = None, scalars_seq: list[Any] | None = None
-) -> AsyncMock:
+def _mock_db(*, app_credential: Any = None, scalars_seq: list[Any] | None = None) -> AsyncMock:
     """Build an ``AsyncSession``-shaped mock.
 
     ``execute`` is an ``AsyncMock`` whose awaited return is a *plain*
@@ -134,19 +132,13 @@ def test_resolve_token_url_prefers_tenant_override() -> None:
     """Per-tenant ``token_url`` wins over catalog hints."""
     cred = _FakeAppCredential(token_url="https://override.example.com/token")
     hints = {"token_url": "https://catalog.example.com/token"}
-    assert (
-        worker._resolve_token_url(cred, hints)
-        == "https://override.example.com/token"
-    )
+    assert worker._resolve_token_url(cred, hints) == "https://override.example.com/token"
 
 
 def test_resolve_token_url_falls_back_to_hints() -> None:
     cred = _FakeAppCredential(token_url=None)
     hints = {"token_url": "https://catalog.example.com/token"}
-    assert (
-        worker._resolve_token_url(cred, hints)
-        == "https://catalog.example.com/token"
-    )
+    assert worker._resolve_token_url(cred, hints) == "https://catalog.example.com/token"
 
 
 def test_resolve_token_url_returns_none_when_unresolved() -> None:
@@ -169,9 +161,7 @@ async def test_record_failure_increments_below_threshold() -> None:
     conn = _FakeConnector(oauth_refresh_failures=0, health_status="healthy")
     db = _mock_db()
 
-    await worker._record_failure(
-        db, connector=conn, alarm_threshold=3, reason="http_500"
-    )
+    await worker._record_failure(db, connector=conn, alarm_threshold=3, reason="http_500")
 
     db.execute.assert_awaited_once()
     db.commit.assert_awaited_once()
@@ -190,9 +180,7 @@ async def test_record_failure_trips_alarm_at_threshold() -> None:
     conn = _FakeConnector(oauth_refresh_failures=2, health_status="healthy")
     db = _mock_db()
 
-    await worker._record_failure(
-        db, connector=conn, alarm_threshold=3, reason="invalid_grant"
-    )
+    await worker._record_failure(db, connector=conn, alarm_threshold=3, reason="invalid_grant")
 
     update_call = db.execute.call_args.args[0]
     compiled = update_call.compile().params
@@ -212,9 +200,7 @@ def patched_vault(monkeypatch: pytest.MonkeyPatch) -> CredentialVault:
 
 
 @pytest.mark.asyncio
-async def test_refresh_one_happy_path(
-    patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_refresh_one_happy_path(patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch) -> None:
     """Successful refresh rotates tokens, zeros counter, restores health."""
     # Build a connector with an encrypted refresh_token + expires_at.
     auth_payload = {
@@ -255,9 +241,7 @@ async def test_refresh_one_happy_path(
     with patch("httpx.AsyncClient") as client_cls:
         client_cls.return_value.__aenter__.return_value.post = mock_post
 
-        ok = await worker._refresh_one(
-            db, connector=conn, timeout_s=5.0, alarm_threshold=3
-        )
+        ok = await worker._refresh_one(db, connector=conn, timeout_s=5.0, alarm_threshold=3)
 
     assert ok is True
     mock_post.assert_awaited_once()
@@ -274,9 +258,7 @@ async def test_refresh_one_happy_path(
 
 
 @pytest.mark.asyncio
-async def test_refresh_one_4xx_records_failure(
-    patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_refresh_one_4xx_records_failure(patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch) -> None:
     """A 4xx (e.g. invalid_grant) trips the failure path with the status code."""
     auth_payload = {
         "refresh_token": "revoked-refresh",
@@ -301,19 +283,13 @@ async def test_refresh_one_4xx_records_failure(
     bad_response = MagicMock()
     bad_response.status_code = 400
     bad_response.text = '{"error":"invalid_grant"}'
-    bad_response.raise_for_status = MagicMock(
-        side_effect=httpx.HTTPStatusError(
-            "400", request=MagicMock(), response=bad_response
-        )
-    )
+    bad_response.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError("400", request=MagicMock(), response=bad_response))
     mock_post = AsyncMock(return_value=bad_response)
 
     with patch("httpx.AsyncClient") as client_cls:
         client_cls.return_value.__aenter__.return_value.post = mock_post
 
-        ok = await worker._refresh_one(
-            db, connector=conn, timeout_s=5.0, alarm_threshold=3
-        )
+        ok = await worker._refresh_one(db, connector=conn, timeout_s=5.0, alarm_threshold=3)
 
     assert ok is False
     # Last UPDATE should set health_status=unhealthy because we crossed 3.
@@ -324,9 +300,7 @@ async def test_refresh_one_4xx_records_failure(
 
 
 @pytest.mark.asyncio
-async def test_refresh_one_network_error_no_alarm_yet(
-    patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_refresh_one_network_error_no_alarm_yet(patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch) -> None:
     """A transient ``ConnectError`` increments the counter without alarming."""
     auth_payload = {"refresh_token": "ok"}
     conn = _FakeConnector(
@@ -348,9 +322,7 @@ async def test_refresh_one_network_error_no_alarm_yet(
     with patch("httpx.AsyncClient") as client_cls:
         client_cls.return_value.__aenter__.return_value.post = mock_post
 
-        ok = await worker._refresh_one(
-            db, connector=conn, timeout_s=5.0, alarm_threshold=3
-        )
+        ok = await worker._refresh_one(db, connector=conn, timeout_s=5.0, alarm_threshold=3)
 
     assert ok is False
     last_update = db.execute.call_args_list[-1].args[0]
@@ -360,9 +332,7 @@ async def test_refresh_one_network_error_no_alarm_yet(
 
 
 @pytest.mark.asyncio
-async def test_refresh_one_missing_app_credential(
-    patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_refresh_one_missing_app_credential(patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch) -> None:
     """No OAuthAppCredential row → record failure with that reason, no POST."""
     auth_payload = {"refresh_token": "ok"}
     conn = _FakeConnector(
@@ -378,9 +348,7 @@ async def test_refresh_one_missing_app_credential(
     )
 
     with patch("httpx.AsyncClient") as client_cls:
-        ok = await worker._refresh_one(
-            db, connector=conn, timeout_s=5.0, alarm_threshold=3
-        )
+        ok = await worker._refresh_one(db, connector=conn, timeout_s=5.0, alarm_threshold=3)
 
     assert ok is False
     # We never reached the POST step.
@@ -391,9 +359,7 @@ async def test_refresh_one_missing_app_credential(
 
 
 @pytest.mark.asyncio
-async def test_refresh_one_missing_token_url(
-    patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_refresh_one_missing_token_url(patched_vault: CredentialVault, monkeypatch: pytest.MonkeyPatch) -> None:
     """Token URL unresolvable → failure recorded, no POST."""
     auth_payload = {"refresh_token": "ok"}
     conn = _FakeConnector(
@@ -412,9 +378,7 @@ async def test_refresh_one_missing_token_url(
     )
 
     with patch("httpx.AsyncClient") as client_cls:
-        ok = await worker._refresh_one(
-            db, connector=conn, timeout_s=5.0, alarm_threshold=3
-        )
+        ok = await worker._refresh_one(db, connector=conn, timeout_s=5.0, alarm_threshold=3)
 
     assert ok is False
     client_cls.assert_not_called()
@@ -455,9 +419,7 @@ async def test_refresh_one_keeps_existing_refresh_token_when_provider_omits(
 
     with patch("httpx.AsyncClient") as client_cls:
         client_cls.return_value.__aenter__.return_value.post = mock_post
-        ok = await worker._refresh_one(
-            db, connector=conn, timeout_s=5.0, alarm_threshold=3
-        )
+        ok = await worker._refresh_one(db, connector=conn, timeout_s=5.0, alarm_threshold=3)
     assert ok is True
 
     # Decrypt the auth_config we wrote and verify refresh_token survived.
@@ -479,9 +441,7 @@ async def test_run_forever_exits_on_stop_event(
     import asyncio
 
     monkeypatch.setattr(worker.settings, "OAUTH_REFRESH_INTERVAL_SECONDS", 5)
-    monkeypatch.setattr(
-        worker, "run_once", AsyncMock(return_value={"checked": 0, "refreshed": 0, "failed": 0})
-    )
+    monkeypatch.setattr(worker, "run_once", AsyncMock(return_value={"checked": 0, "refreshed": 0, "failed": 0}))
 
     stop = asyncio.Event()
     stop.set()

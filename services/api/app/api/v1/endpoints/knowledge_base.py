@@ -86,7 +86,7 @@ class QueryResponse(BaseModel):
 
 
 def _chunk(content: str, chunk_size: int = _CHUNK_SIZE) -> list[str]:
-    return [content[i: i + chunk_size] for i in range(0, len(content), chunk_size)] or [content]
+    return [content[i : i + chunk_size] for i in range(0, len(content), chunk_size)] or [content]
 
 
 def _row_to_doc(row: Any) -> KBDocResponse:
@@ -142,7 +142,9 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
 # ────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/ingest", response_model=list[KBDocResponse], status_code=status.HTTP_201_CREATED, summary="Ingest document into knowledge base")
+@router.post(
+    "/ingest", response_model=list[KBDocResponse], status_code=status.HTTP_201_CREATED, summary="Ingest document into knowledge base"
+)
 async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBDocResponse]:
     chunks = _chunk(body.content)
     now = datetime.now(UTC)
@@ -182,7 +184,9 @@ async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBD
 @router.get("/documents", response_model=list[KBDocResponse], summary="List KB documents")
 async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
     try:
-        rows = (await db.execute(text("SELECT * FROM aisoc_kb_documents WHERE chunk_index = 0 ORDER BY created_at DESC LIMIT 200"))).fetchall()
+        rows = (
+            await db.execute(text("SELECT * FROM aisoc_kb_documents WHERE chunk_index = 0 ORDER BY created_at DESC LIMIT 200"))
+        ).fetchall()
         return [_row_to_doc(r) for r in rows]
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
@@ -217,7 +221,7 @@ async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryRe
     sql = text(f"""
         SELECT *, ts_rank(to_tsvector('english', content), plainto_tsquery('english', :q)) AS rank
         FROM aisoc_kb_documents
-        WHERE {' AND '.join(wheres)}
+        WHERE {" AND ".join(wheres)}
         ORDER BY rank DESC
         LIMIT :limit
     """).bindparams(**params)

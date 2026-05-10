@@ -206,10 +206,7 @@ class LakeRateLimiter:
             # condition. Surfacing it as a denial would loop forever
             # because no amount of waiting could refill enough; it's
             # better to fail loudly here.
-            raise ValueError(
-                f"cost {cost} exceeds bucket capacity {self._capacity}; "
-                "this would never succeed"
-            )
+            raise ValueError(f"cost {cost} exceeds bucket capacity {self._capacity}; this would never succeed")
 
         key = str(tenant_id)
         bucket = await self._get_bucket(key)

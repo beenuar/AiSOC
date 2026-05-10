@@ -580,9 +580,7 @@ def _build_coverage(rules: list[DetectionRule], *, now: datetime | None = None) 
     active_rules = sum(1 for r in rules if r.status == "active")
 
     # technique_id -> {"tactic": str|None, "active": int, "inactive": int}
-    by_technique: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"tactic": None, "active": 0, "inactive": 0}
-    )
+    by_technique: dict[str, dict[str, Any]] = defaultdict(lambda: {"tactic": None, "active": 0, "inactive": 0})
     tactics_set: set[str] = set()
 
     for rule in rules:
@@ -658,7 +656,7 @@ def _build_drift(
     stale_cutoff = now - timedelta(days=stale_days)
 
     entries: list[DriftEntry] = []
-    counts = Counter()
+    counts: Counter[str] = Counter()
 
     for rule in rules:
         issues: list[str] = []
@@ -686,9 +684,7 @@ def _build_drift(
         # Stale only applies to active rules — a disabled rule with no
         # triggers is *expected* to be quiet.
         if is_active:
-            if last_trig is None or last_trig.replace(
-                tzinfo=last_trig.tzinfo or UTC
-            ) < stale_cutoff:
+            if last_trig is None or last_trig.replace(tzinfo=last_trig.tzinfo or UTC) < stale_cutoff:
                 issues.append("stale")
                 counts["stale"] += 1
 
@@ -769,10 +765,7 @@ def _build_confidence(
 
     total = len(rules)
     if total == 0:
-        empty_buckets = [
-            ConfidenceBucket(label=lbl, floor=lo, ceil=hi, count=0, activeCount=0)
-            for lbl, lo, hi in _CONFIDENCE_BUCKETS
-        ]
+        empty_buckets = [ConfidenceBucket(label=lbl, floor=lo, ceil=hi, count=0, activeCount=0) for lbl, lo, hi in _CONFIDENCE_BUCKETS]
         return ConfidenceResponse(
             summary=ConfidenceSummary(
                 totalRules=0,
@@ -794,9 +787,7 @@ def _build_confidence(
     active_confidences = [int(r.confidence or 0) for r in active_rules]
 
     avg_conf = sum(confidences) / total
-    avg_active = (
-        sum(active_confidences) / len(active_confidences) if active_confidences else 0.0
-    )
+    avg_active = sum(active_confidences) / len(active_confidences) if active_confidences else 0.0
 
     sorted_conf = sorted(confidences)
     mid = len(sorted_conf) // 2
@@ -811,11 +802,7 @@ def _build_confidence(
     buckets: list[ConfidenceBucket] = []
     for label, floor, ceil in _CONFIDENCE_BUCKETS:
         count = sum(1 for c in confidences if floor <= c <= ceil)
-        active = sum(
-            1
-            for r in rules
-            if r.status == "active" and floor <= int(r.confidence or 0) <= ceil
-        )
+        active = sum(1 for r in rules if r.status == "active" and floor <= int(r.confidence or 0) <= ceil)
         buckets.append(
             ConfidenceBucket(
                 label=label,
@@ -827,10 +814,8 @@ def _build_confidence(
         )
 
     # Per-tactic average confidence.
-    by_tactic: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"sum": 0, "count": 0, "active_sum": 0, "active_count": 0}
-    )
-    for rule, conf in zip(rules, confidences):
+    by_tactic: dict[str, dict[str, Any]] = defaultdict(lambda: {"sum": 0, "count": 0, "active_sum": 0, "active_count": 0})
+    for rule, conf in zip(rules, confidences, strict=False):
         tactic = _primary_tactic(rule)
         if not tactic:
             continue
@@ -979,11 +964,7 @@ async def bulk_toggle_rules(
         return BulkToggleResponse(updated=0, skipped=skipped)
 
     now = datetime.now(UTC)
-    await db.execute(
-        update(DetectionRule)
-        .where(DetectionRule.id.in_(owned_ids))
-        .values(status=target_status, updated_at=now)
-    )
+    await db.execute(update(DetectionRule).where(DetectionRule.id.in_(owned_ids)).values(status=target_status, updated_at=now))
     await db.commit()
 
     return BulkToggleResponse(updated=len(owned_ids), skipped=skipped)

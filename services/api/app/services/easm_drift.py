@@ -13,8 +13,9 @@ snapshot for a tenant and emits ``ExternalAssetDrift`` records for:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -99,7 +100,7 @@ async def detect_drift(
     Upsert discovered assets and emit drift records for changes.
     Returns the list of newly created ``ExternalAssetDrift`` rows.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     drift_records: list[ExternalAssetDrift] = []
 
     for asset in discovered:
@@ -143,6 +144,8 @@ async def detect_drift(
     await db.flush()
     logger.info(
         "EASM drift: %d new drift records for tenant %s from %d discovered assets",
-        len(drift_records), tenant_id, len(discovered),
+        len(drift_records),
+        tenant_id,
+        len(discovered),
     )
     return drift_records

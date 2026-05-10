@@ -27,7 +27,6 @@ from app.services.connector_freshness import (
     expected_cadence_seconds,
 )
 
-
 # ---------------------------------------------------------- expected_cadence_seconds
 
 
@@ -233,9 +232,7 @@ def test_compute_freshness_per_instance_override_overrides_status() -> None:
     # With override of 1 h: 70 min is still inside 2× = 2 h, so yellow,
     # not red. The point is "the override demotes the verdict," not
     # that it's automatically green.
-    override_verdict = compute_freshness(
-        category="saas", last_event_at=last, now=now, override_seconds=3600
-    )
+    override_verdict = compute_freshness(category="saas", last_event_at=last, now=now, override_seconds=3600)
     assert override_verdict.status == "yellow"
     assert override_verdict.expected_cadence_seconds == 3600
     # A shorter event-age (50 min) under the same override is green.

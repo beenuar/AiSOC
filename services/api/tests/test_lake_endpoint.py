@@ -46,7 +46,6 @@ from app.api.v1.endpoints.lake import (
 from app.services.lake_rate_limit import RateLimitDecision
 from fastapi import HTTPException, Response
 
-
 # --------------------------------------------------------- _scrub_sql_for_log
 
 

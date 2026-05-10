@@ -63,9 +63,7 @@ class OAuthAppCredential(Base):
     # Optional scope downscoping. NULL means use the default scopes
     # from the connector's OAuthHints. Stored as JSON array of strings.
     scopes: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -120,12 +118,6 @@ class OAuthState(Base):
     extras: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     # Where to redirect the operator after the callback. Defaults to
     # /onboarding so the verify-data-flowing screen lights up.
-    return_to: Mapped[str] = mapped_column(
-        Text, default="/onboarding", nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
-    )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    return_to: Mapped[str] = mapped_column(Text, default="/onboarding", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

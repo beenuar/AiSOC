@@ -40,7 +40,6 @@ from app.services.lake_sql import (
     rewrite_for_tenant,
 )
 
-
 # A stable tenant UUID we can grep for in the rewritten SQL. Picked once
 # at import time so every test in the module gets the same value, which
 # makes assertion failures easier to read.
@@ -161,9 +160,7 @@ def test_select_with_no_from_passes_through_unchanged() -> None:
 
 
 def test_qualified_allowlisted_table_accepted() -> None:
-    result = rewrite_for_tenant(
-        "SELECT * FROM aisoc.raw_events", TENANT_ID
-    )
+    result = rewrite_for_tenant("SELECT * FROM aisoc.raw_events", TENANT_ID)
     assert "aisoc.raw_events" in result.referenced_tables
     assert _count_predicates(result.sql, TENANT_ID) == 1
 
@@ -231,9 +228,7 @@ def test_table_functions_rejected(sql: str) -> None:
 
 
 def test_predicate_injected_on_simple_select() -> None:
-    result = rewrite_for_tenant(
-        "SELECT id FROM aisoc.raw_events", TENANT_ID
-    )
+    result = rewrite_for_tenant("SELECT id FROM aisoc.raw_events", TENANT_ID)
     assert _count_predicates(result.sql, TENANT_ID) == 1
 
 
@@ -340,9 +335,7 @@ def test_union_branches_each_get_predicate() -> None:
 
 
 def test_default_row_cap_applied_when_no_limit() -> None:
-    result = rewrite_for_tenant(
-        "SELECT * FROM aisoc.raw_events", TENANT_ID
-    )
+    result = rewrite_for_tenant("SELECT * FROM aisoc.raw_events", TENANT_ID)
     assert result.row_cap == DEFAULT_ROW_CAP
     assert f"limit {DEFAULT_ROW_CAP}" in result.sql.lower()
 
@@ -352,9 +345,7 @@ def test_caller_smaller_limit_preserved() -> None:
 
     The cap exists to prevent runaway queries, not to expand them.
     """
-    result = rewrite_for_tenant(
-        "SELECT * FROM aisoc.raw_events LIMIT 5", TENANT_ID
-    )
+    result = rewrite_for_tenant("SELECT * FROM aisoc.raw_events LIMIT 5", TENANT_ID)
     # The clamp leaves the LIMIT alone.
     assert "limit 5" in result.sql.lower()
     # ``row_cap`` reflects the configured cap (the LIMIT is below it).
@@ -370,9 +361,7 @@ def test_caller_larger_limit_clamped_to_default() -> None:
 
 
 def test_explicit_row_cap_respected() -> None:
-    result = rewrite_for_tenant(
-        "SELECT * FROM aisoc.raw_events", TENANT_ID, row_cap=50
-    )
+    result = rewrite_for_tenant("SELECT * FROM aisoc.raw_events", TENANT_ID, row_cap=50)
     assert result.row_cap == 50
     assert "limit 50" in result.sql.lower()
 

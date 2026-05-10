@@ -148,13 +148,12 @@ class InboxTokenCreate(BaseModel):
     template_id: str = Field(
         ...,
         description=(
-            "Vendor template stem from ``services/ingest/internal/normalizer/"
-            "templates/*.yaml`` (e.g. ``pagerduty``, ``generic-json``)."
+            "Vendor template stem from ``services/ingest/internal/normalizer/templates/*.yaml`` (e.g. ``pagerduty``, ``generic-json``)."
         ),
     )
     label: str | None = Field(
         default=None,
-        description="Operator-facing label (\"PagerDuty on-call\").",
+        description='Operator-facing label ("PagerDuty on-call").',
     )
     hmac_secret: str | None = Field(
         default=None,
@@ -214,10 +213,7 @@ class InboxTemplateInfo(BaseModel):
 _TEMPLATE_CATALOG: dict[str, dict[str, str]] = {
     "generic-json": {
         "label": "Generic JSON",
-        "description": (
-            "Forward arbitrary JSON. Best effort field mapping; use a "
-            "specific template below if your vendor is listed."
-        ),
+        "description": ("Forward arbitrary JSON. Best effort field mapping; use a specific template below if your vendor is listed."),
         "category": "generic",
     },
     "pagerduty": {
@@ -263,17 +259,13 @@ _TEMPLATE_CATALOG: dict[str, dict[str, str]] = {
     "splunk-hec": {
         "label": "Splunk HEC-compatible",
         "description": (
-            "Drop-in replacement for Splunk HTTP Event Collector. Re-target "
-            "any tool already pointed at Splunk HEC by changing the URL."
+            "Drop-in replacement for Splunk HTTP Event Collector. Re-target any tool already pointed at Splunk HEC by changing the URL."
         ),
         "category": "siem",
     },
     "email-forwarded": {
         "label": "Forwarded email",
-        "description": (
-            "Inbound webhook from Mailgun / SES routing rules. Useful for "
-            "vendors that only deliver alerts via email."
-        ),
+        "description": ("Inbound webhook from Mailgun / SES routing rules. Useful for vendors that only deliver alerts via email."),
         "category": "email",
     },
     "itsm-inbound": {
@@ -356,9 +348,7 @@ async def list_tokens(
     look at expired tokens, and showing them by default makes the
     "rotate token" flow noisy.
     """
-    stmt = select(TenantInboxToken).where(
-        TenantInboxToken.tenant_id == current_user.tenant_id
-    )
+    stmt = select(TenantInboxToken).where(TenantInboxToken.tenant_id == current_user.tenant_id)
     if not include_revoked:
         stmt = stmt.where(TenantInboxToken.revoked_at.is_(None))
     stmt = stmt.order_by(TenantInboxToken.created_at.desc())
@@ -475,11 +465,7 @@ async def rotate_token(
     )
     db.add(new_row)
 
-    await db.execute(
-        update(TenantInboxToken)
-        .where(TenantInboxToken.token == old.token)
-        .values(revoked_at=datetime.now(UTC))
-    )
+    await db.execute(update(TenantInboxToken).where(TenantInboxToken.token == old.token).values(revoked_at=datetime.now(UTC)))
     await db.commit()
     await db.refresh(new_row)
 
@@ -530,11 +516,7 @@ async def revoke_token(
         )
     target = matches[0]
 
-    await db.execute(
-        update(TenantInboxToken)
-        .where(TenantInboxToken.token == target.token)
-        .values(revoked_at=datetime.now(UTC))
-    )
+    await db.execute(update(TenantInboxToken).where(TenantInboxToken.token == target.token).values(revoked_at=datetime.now(UTC)))
     await db.commit()
 
     logger.info(

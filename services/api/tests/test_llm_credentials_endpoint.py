@@ -66,7 +66,6 @@ from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Test fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -257,9 +256,7 @@ def test_project_normalises_settings_none_to_empty_dict() -> None:
         (None, None),
     ],
 )
-def test_base_url_validator_accepts_valid_inputs(
-    value: str | None, expected: str | None
-) -> None:
+def test_base_url_validator_accepts_valid_inputs(value: str | None, expected: str | None) -> None:
     """The validator strips whitespace and collapses empties to ``None``."""
     payload = LlmCredentialUpsert(provider="custom", base_url=value, api_key="k")
     assert payload.base_url == expected
@@ -314,9 +311,7 @@ def test_provider_enum_rejects_unknown_value() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "provider", ["local-ollama", "local-vllm", "local-litellm", "custom"]
-)
+@pytest.mark.parametrize("provider", ["local-ollama", "local-vllm", "local-litellm", "custom"])
 def test_enforce_invariants_requires_base_url_for_local_and_custom(
     provider: str,
 ) -> None:
@@ -476,9 +471,7 @@ async def test_put_creates_new_row_encrypts_and_emits_audit() -> None:
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(return_value=None),
     ) as mock_emit:
-        result = await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        result = await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     db.add.assert_called_once()
     added_row = db.add.call_args.args[0]
@@ -538,16 +531,14 @@ async def test_put_rotation_only_keeps_existing_ciphertext_and_does_not_bump_rot
     payload = LlmCredentialUpsert(
         provider="openai",
         model="gpt-4o-mini",  # changed
-        api_key=None,         # keep existing
+        api_key=None,  # keep existing
     )
 
     with patch(
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(return_value=None),
     ) as mock_emit:
-        result = await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        result = await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     # The mutated row is the same object; assert the in-place mutations.
     assert existing.api_key_vault == original_ciphertext
@@ -589,9 +580,7 @@ async def test_put_with_new_key_bumps_last_rotated_at_on_existing() -> None:
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(return_value=None),
     ) as mock_emit:
-        await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     # Ciphertext changed; the new value is a real vault token (not the
     # plaintext) and is not the original.
@@ -623,17 +612,13 @@ async def test_put_records_provider_transition_in_audit_changes() -> None:
     db = _mock_db_with_existing(existing)
     request = _build_request()
 
-    payload = LlmCredentialUpsert(
-        provider="azure-openai", api_key="sk-azure"
-    )
+    payload = LlmCredentialUpsert(provider="azure-openai", api_key="sk-azure")
 
     with patch(
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(return_value=None),
     ) as mock_emit:
-        await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     changes = mock_emit.call_args.kwargs["changes"]
     assert changes["provider"] == "azure-openai"
@@ -669,9 +654,7 @@ async def test_put_vault_failure_surfaces_500_and_does_not_commit() -> None:
         return_value=bad_vault,
     ):
         with pytest.raises(HTTPException) as exc:
-            await upsert_llm_credential(
-                payload=payload, request=request, current_user=user, db=db
-            )
+            await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     assert exc.value.status_code == 500
     assert "Failed to encrypt" in exc.value.detail
@@ -693,9 +676,7 @@ async def test_put_validation_blocks_local_provider_without_base_url() -> None:
     payload = LlmCredentialUpsert(provider="local-ollama", base_url=None)
 
     with pytest.raises(HTTPException) as exc:
-        await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     assert exc.value.status_code == 422
     assert "requires base_url" in exc.value.detail
@@ -712,9 +693,7 @@ async def test_put_validation_blocks_first_openai_write_without_api_key() -> Non
     payload = LlmCredentialUpsert(provider="openai", api_key=None)
 
     with pytest.raises(HTTPException) as exc:
-        await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     assert exc.value.status_code == 422
     assert "requires api_key" in exc.value.detail
@@ -740,9 +719,7 @@ async def test_put_audit_failure_does_not_500_the_call() -> None:
         new=AsyncMock(side_effect=RuntimeError("audit table is gone")),
     ):
         # Should NOT raise — the endpoint catches and logs.
-        result = await upsert_llm_credential(
-            payload=payload, request=request, current_user=user, db=db
-        )
+        result = await upsert_llm_credential(payload=payload, request=request, current_user=user, db=db)
 
     assert result.provider == "openai"
     assert result.has_api_key is True
@@ -775,9 +752,7 @@ async def test_delete_existing_row_emits_audit_with_provider() -> None:
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(return_value=None),
     ) as mock_emit:
-        result = await delete_llm_credential(
-            request=request, current_user=user, db=db
-        )
+        result = await delete_llm_credential(request=request, current_user=user, db=db)
 
     assert result is None  # 204 response
     # Two execute calls: SELECT existing, then DELETE.
@@ -808,9 +783,7 @@ async def test_delete_idempotent_when_no_row_exists() -> None:
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(return_value=None),
     ) as mock_emit:
-        result = await delete_llm_credential(
-            request=request, current_user=user, db=db
-        )
+        result = await delete_llm_credential(request=request, current_user=user, db=db)
 
     assert result is None
     db.commit.assert_awaited_once()
@@ -830,9 +803,7 @@ async def test_delete_audit_failure_does_not_500_the_call() -> None:
         "app.api.v1.endpoints.llm_credentials.emit_audit",
         new=AsyncMock(side_effect=RuntimeError("audit table is gone")),
     ):
-        result = await delete_llm_credential(
-            request=request, current_user=user, db=db
-        )
+        result = await delete_llm_credential(request=request, current_user=user, db=db)
 
     assert result is None
     db.commit.assert_awaited_once()

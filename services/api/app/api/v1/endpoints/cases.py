@@ -51,11 +51,7 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 # We keep the route surface on `/cases/{id}/investigate` and
 # `/cases/{id}/investigations/{run_id}` for the web console and proxy through
 # to the agents service so the front end has a single, stable API origin.
-_AGENTS_URL = (
-    os.getenv("AGENTS_SERVICE_URL")
-    or os.getenv("AGENTS_API_URL")
-    or "http://agents:8084"
-).rstrip("/")
+_AGENTS_URL = (os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL") or "http://agents:8084").rstrip("/")
 
 # Tight allowlist for proxied request paths. We only ever proxy to a fixed
 # upstream (`_AGENTS_URL`) on a known set of investigation routes, so the
@@ -69,13 +65,11 @@ _SAFE_PROXY_PATH_RE = re.compile(r"^/[A-Za-z0-9_\-./%]*$")
 def _validate_agents_path(path: str) -> str:
     """Reject any proxied path that isn't a tightly constrained relative path."""
     if (
-        not isinstance(path, str)
-        or not _SAFE_PROXY_PATH_RE.match(path)
-        or ".." in path
-        or path.startswith("//")  # protocol-relative URL
+        not isinstance(path, str) or not _SAFE_PROXY_PATH_RE.match(path) or ".." in path or path.startswith("//")  # protocol-relative URL
     ):
         raise HTTPException(status_code=400, detail="invalid_request_path")
     return path
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic schemas
@@ -350,10 +344,9 @@ async def _resolve_case_id(case_id: str, db: Any) -> uuid.UUID:
     # interpolate the raw string into SQL.
     row = (
         await db.execute(
-            text(
-                "SELECT id FROM aisoc_cases WHERE case_number = :case_number "
-                "ORDER BY created_at DESC LIMIT 1"
-            ).bindparams(case_number=case_id)
+            text("SELECT id FROM aisoc_cases WHERE case_number = :case_number ORDER BY created_at DESC LIMIT 1").bindparams(
+                case_number=case_id
+            )
         )
     ).fetchone()
     if not row:
@@ -390,7 +383,7 @@ async def list_cases(
 
     q = f"""
         SELECT * FROM aisoc_cases
-        WHERE {' AND '.join(where_clauses)}
+        WHERE {" AND ".join(where_clauses)}
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """
@@ -433,6 +426,8 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
     )
     try:
         row = (await db.execute(q)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=503, detail="Database error: INSERT returned no row")
         await db.commit()
     except Exception as exc:
         await db.rollback()
@@ -497,24 +492,33 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
     params: dict[str, Any] = {"id": cid, "now": now}
 
     if body.title is not None:
-        sets.append("title = :title"); params["title"] = body.title
+        sets.append("title = :title")
+        params["title"] = body.title
     if body.description is not None:
-        sets.append("description = :description"); params["description"] = body.description
+        sets.append("description = :description")
+        params["description"] = body.description
     if body.severity is not None:
-        sets.append("severity = :severity"); params["severity"] = body.severity
+        sets.append("severity = :severity")
+        params["severity"] = body.severity
     if body.assignee is not None:
-        sets.append("assignee = :assignee"); params["assignee"] = body.assignee
+        sets.append("assignee = :assignee")
+        params["assignee"] = body.assignee
     if body.sla_due_at is not None:
-        sets.append("sla_due_at = :sla"); params["sla"] = body.sla_due_at
+        sets.append("sla_due_at = :sla")
+        params["sla"] = body.sla_due_at
     if body.mitre_techniques is not None:
-        sets.append("mitre_techniques = :mitre::jsonb"); params["mitre"] = _json.dumps(body.mitre_techniques)
+        sets.append("mitre_techniques = :mitre::jsonb")
+        params["mitre"] = _json.dumps(body.mitre_techniques)
     if body.compliance_frameworks is not None:
-        sets.append("compliance_frameworks = :frameworks::text[]"); params["frameworks"] = body.compliance_frameworks
+        sets.append("compliance_frameworks = :frameworks::text[]")
+        params["frameworks"] = body.compliance_frameworks
     if body.tags is not None:
-        sets.append("tags = :tags::jsonb"); params["tags"] = _json.dumps(body.tags)
+        sets.append("tags = :tags::jsonb")
+        params["tags"] = _json.dumps(body.tags)
 
     if body.status:
-        sets.append("status = :status"); params["status"] = body.status
+        sets.append("status = :status")
+        params["status"] = body.status
         ts_col = {"triaged": "triaged_at", "resolved": "resolved_at", "closed": "closed_at"}.get(body.status)
         if ts_col:
             sets.append(f"{ts_col} = :now")
@@ -522,6 +526,8 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
     q = text(f"UPDATE aisoc_cases SET {', '.join(sets)} WHERE id = :id RETURNING *").bindparams(**params)
     try:
         row = (await db.execute(q)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Case not found.")
         await db.commit()
     except Exception as exc:
         await db.rollback()
@@ -560,9 +566,7 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
             try:
                 await _emit_summary_breadcrumb(db, case_id=row.id, status=body.status)
             except Exception:  # pragma: no cover — defensive: never block status change.
-                logger.exception(
-                    "cases.update.summary_breadcrumb_failed case=%s", row.id
-                )
+                logger.exception("cases.update.summary_breadcrumb_failed case=%s", row.id)
                 await db.rollback()
 
     return response
@@ -645,10 +649,16 @@ async def add_comment(case_id: str, body: AddCommentRequest, db: DBSession, user
     """).bindparams(id=comment_id, case_id=cid, author=str(user) if user else "system", body=body.body, sys=body.is_system, now=now)
     try:
         row = (await db.execute(q)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=503, detail="Database error: INSERT returned no row")
         await db.commit()
         return CommentResponse(
-            id=row.id, case_id=row.case_id, author=row.author,
-            body=row.body, is_system=row.is_system, created_at=row.created_at,
+            id=row.id,
+            case_id=row.case_id,
+            author=row.author,
+            body=row.body,
+            is_system=row.is_system,
+            created_at=row.created_at,
         )
     except Exception as exc:
         await db.rollback()
@@ -658,8 +668,13 @@ async def add_comment(case_id: str, body: AddCommentRequest, db: DBSession, user
 @router.get("/{case_id}/comments", response_model=list[CommentResponse], summary="List case comments")
 async def list_comments(case_id: str, db: DBSession, user: AuthUser) -> list[CommentResponse]:
     cid = await _resolve_case_id(case_id, db)
-    rows = (await db.execute(text("SELECT * FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at").bindparams(id=cid))).fetchall()
-    return [CommentResponse(id=r.id, case_id=r.case_id, author=r.author, body=r.body, is_system=r.is_system, created_at=r.created_at) for r in rows]
+    rows = (
+        await db.execute(text("SELECT * FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at").bindparams(id=cid))
+    ).fetchall()
+    return [
+        CommentResponse(id=r.id, case_id=r.case_id, author=r.author, body=r.body, is_system=r.is_system, created_at=r.created_at)
+        for r in rows
+    ]
 
 
 # Alias `/notes` → `/comments` so the web console (which calls `/notes` for the
@@ -708,9 +723,7 @@ async def evidence_report(case_id: str, db: DBSession, user: AuthUser) -> Eviden
 @router.get("/{case_id}/timeline", response_model=TimelineResponse, summary="Case activity timeline")
 async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> TimelineResponse:
     cid = await _resolve_case_id(case_id, db)
-    case_row = (
-        await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=cid))
-    ).fetchone()
+    case_row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
     if not case_row:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -746,8 +759,7 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
     comment_rows = (
         await db.execute(
             text(
-                "SELECT id, author, body, is_system, created_at "
-                "FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at"
+                "SELECT id, author, body, is_system, created_at FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at"
             ).bindparams(id=cid)
         )
     ).fetchall()
@@ -767,11 +779,7 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
     for alert_id in list(case_row.alert_ids or [])[:25]:
         try:
             a = (
-                await db.execute(
-                    text(
-                        "SELECT id, title, severity, created_at FROM aisoc_alerts WHERE id = :id"
-                    ).bindparams(id=alert_id)
-                )
+                await db.execute(text("SELECT id, title, severity, created_at FROM aisoc_alerts WHERE id = :id").bindparams(id=alert_id))
             ).fetchone()
             if a:
                 events.append(
@@ -792,8 +800,7 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
         task_rows = (
             await db.execute(
                 text(
-                    "SELECT id, title, status, assignee, created_at "
-                    "FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
+                    "SELECT id, title, status, assignee, created_at FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
                 ).bindparams(id=cid)
             )
         ).fetchall()
@@ -823,16 +830,13 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
 @router.get("/{case_id}/tasks", response_model=list[TaskResponse], summary="List case tasks")
 async def list_tasks(case_id: str, db: DBSession, user: AuthUser) -> list[TaskResponse]:
     cid = await _resolve_case_id(case_id, db)
-    exists = (
-        await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))
-    ).fetchone()
+    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
     rows = (
         await db.execute(
             text(
-                "SELECT id, title, status, assignee, due_at, created_at "
-                "FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
+                "SELECT id, title, status, assignee, due_at, created_at FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
             ).bindparams(id=cid)
         )
     ).fetchall()
@@ -847,9 +851,7 @@ async def create_task(
     user: AuthUser,
 ) -> TaskResponse:
     cid = await _resolve_case_id(case_id, db)
-    exists = (
-        await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))
-    ).fetchone()
+    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -974,9 +976,7 @@ async def case_investigate(
     user: AuthUser,
 ) -> dict[str, Any]:
     cid = await _resolve_case_id(case_id, db)
-    exists = (
-        await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))
-    ).fetchone()
+    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -1053,9 +1053,7 @@ _SUMMARY_BREADCRUMB_BODY = (
 )
 
 
-async def _emit_summary_breadcrumb(
-    db: Any, *, case_id: uuid.UUID, status: str
-) -> None:
+async def _emit_summary_breadcrumb(db: Any, *, case_id: uuid.UUID, status: str) -> None:
     """Drop a system comment pointing to the on-demand summary endpoint.
 
     Idempotent on repeated status changes — we re-emit only when transitioning
@@ -1157,13 +1155,7 @@ async def list_related_cases(
     thing the case detail page needs to stop 404'ing.
     """
     cid = await _resolve_case_id(case_id, db)
-    row = (
-        await db.execute(
-            text(
-                "SELECT alert_ids, observable_graph FROM aisoc_cases WHERE id = :id"
-            ).bindparams(id=cid)
-        )
-    ).fetchone()
+    row = (await db.execute(text("SELECT alert_ids, observable_graph FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Case not found.")
 

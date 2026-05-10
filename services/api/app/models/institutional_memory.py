@@ -25,9 +25,7 @@ from app.db.database import Base
 class InstitutionalMemory(Base):
     __tablename__ = "aisoc_institutional_memory"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Stored as TEXT in the agents-service migration so we keep the same type
     # here; tenants are addressed by their string id from auth context, which
     # the API service already coerces to/from UUID at the boundary.
@@ -37,9 +35,7 @@ class InstitutionalMemory(Base):
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     analyst_override: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "key", name="aisoc_institutional_memory_tenant_id_key_key"),

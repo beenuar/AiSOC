@@ -48,12 +48,10 @@ def _validate_es_url(url: str) -> str:
     if candidate.scheme not in ("http", "https"):
         raise ValueError(f"Unsupported URL scheme: {candidate.scheme!r}")
     if candidate.netloc != allowed.netloc:
-        raise ValueError(
-            f"ES URL host {candidate.netloc!r} is not the configured host "
-            f"{allowed.netloc!r}"
-        )
+        raise ValueError(f"ES URL host {candidate.netloc!r} is not the configured host {allowed.netloc!r}")
     # Reconstruct from validated components only — no user-supplied path/query.
     return f"{candidate.scheme}://{candidate.netloc}"
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic schemas
@@ -139,12 +137,8 @@ _SYS_PROMPT = textwrap.dedent(
 ).strip()
 
 
-async def _translate(
-    question: str, index_pattern: str, time_range_hours: int
-) -> dict[str, str]:
-    api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(
-        settings, "LLM_API_KEY", None
-    )
+async def _translate(question: str, index_pattern: str, time_range_hours: int) -> dict[str, str]:
+    api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(settings, "LLM_API_KEY", None)
     if not api_key:
         return _template_fallback(question, index_pattern, time_range_hours)
 
@@ -180,24 +174,11 @@ async def _translate(
         return _template_fallback(question, index_pattern, time_range_hours)
 
 
-def _template_fallback(
-    question: str, index_pattern: str, time_range_hours: int
-) -> dict[str, str]:
+def _template_fallback(question: str, index_pattern: str, time_range_hours: int) -> dict[str, str]:
     return {
-        "esql": (
-            f"FROM {index_pattern}\n"
-            f"| WHERE @timestamp > NOW() - {time_range_hours}h\n"
-            f"// TODO: translate → {question}\n"
-            "| LIMIT 500"
-        ),
-        "spl": (
-            f"index=* earliest=-{time_range_hours}h\n"
-            f"// TODO: translate → {question}"
-        ),
-        "kql": (
-            f"// TODO: translate → {question}\n"
-            f"| where TimeGenerated > ago({time_range_hours}h)"
-        ),
+        "esql": (f"FROM {index_pattern}\n| WHERE @timestamp > NOW() - {time_range_hours}h\n// TODO: translate → {question}\n| LIMIT 500"),
+        "spl": (f"index=* earliest=-{time_range_hours}h\n// TODO: translate → {question}"),
+        "kql": (f"// TODO: translate → {question}\n| where TimeGenerated > ago({time_range_hours}h)"),
         "explanation": f"Template placeholder for: {question}",
     }
 
@@ -207,9 +188,7 @@ def _template_fallback(
 # ────────────────────────────────────────────────────────────────────────────
 
 
-async def _execute_esql(
-    esql: str, es_url: str, es_api_key: str, max_rows: int
-) -> QueryResult:
+async def _execute_esql(esql: str, es_url: str, es_api_key: str, max_rows: int) -> QueryResult:
     """Run an ES|QL query against Elasticsearch and return structured results."""
     # Validate URL against configured host before making any outbound request.
     try:
@@ -258,9 +237,7 @@ async def translate_query(
     body: NLQueryTranslateRequest,
     user: AuthUser,
 ) -> NLQueryTranslateResponse:
-    translated = await _translate(
-        body.question, body.index_pattern, body.time_range_hours
-    )
+    translated = await _translate(body.question, body.index_pattern, body.time_range_hours)
     return NLQueryTranslateResponse(
         request_id=uuid.uuid4(),
         question=body.question,
@@ -282,15 +259,11 @@ async def execute_query(
     body: NLQueryExecuteRequest,
     user: AuthUser,
 ) -> NLQueryExecuteResponse:
-    translated = await _translate(
-        body.question, body.index_pattern, body.time_range_hours
-    )
+    translated = await _translate(body.question, body.index_pattern, body.time_range_hours)
 
     # Always read the ES URL from server-side settings — never from user-supplied
     # body fields — to prevent partial-SSRF attacks (CodeQL py/partial-ssrf).
-    es_url = getattr(settings, "ES_URL", None) or getattr(
-        settings, "ELASTICSEARCH_URL", None
-    )
+    es_url = getattr(settings, "ES_URL", None) or getattr(settings, "ELASTICSEARCH_URL", None)
     es_api_key = body.es_api_key or getattr(settings, "ES_API_KEY", None)
 
     base = NLQueryExecuteResponse(
@@ -304,10 +277,7 @@ async def execute_query(
     )
 
     if not es_url or not es_api_key:
-        base.execution_error = (
-            "ES_URL or ES_API_KEY not configured. "
-            "Set them in environment variables or pass in the request body."
-        )
+        base.execution_error = "ES_URL or ES_API_KEY not configured. Set them in environment variables or pass in the request body."
         return base
 
     try:

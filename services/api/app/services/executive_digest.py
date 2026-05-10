@@ -40,7 +40,6 @@ from app.models.alert import Alert
 from app.models.case import Case
 from app.models.remediation import RemediationGateLog
 
-
 # ---------------------------------------------------------------------------
 # Output schemas (Pydantic) — what the endpoint actually returns.
 # ---------------------------------------------------------------------------
@@ -273,10 +272,7 @@ def _top_sources(rows: list[AlertRow], *, limit: int = 5) -> list[TopSourceHighl
     for r in rows:
         if r.connector_type:
             counter[r.connector_type] += 1
-    return [
-        TopSourceHighlight(connector_type=ct, count=cnt)
-        for ct, cnt in counter.most_common(limit)
-    ]
+    return [TopSourceHighlight(connector_type=ct, count=cnt) for ct, cnt in counter.most_common(limit)]
 
 
 def _high_risk_alerts(rows: list[AlertRow], *, limit: int = 5) -> list[HighRiskAlertHighlight]:
@@ -286,7 +282,7 @@ def _high_risk_alerts(rows: list[AlertRow], *, limit: int = 5) -> list[HighRiskA
     """
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 
-    def sort_key(r: AlertRow) -> tuple[int, float, datetime]:
+    def sort_key(r: AlertRow) -> tuple[int, float, float]:
         sev = severity_rank.get(r.severity, 5)
         # Higher AI score = more interesting; flip the sign so it sorts ascending.
         score = -1.0 * (r.ai_score if r.ai_score is not None else 0.0)
@@ -320,11 +316,7 @@ def _automation_summary(gate_log: list[GateLogRow]) -> AutomationSummary:
 
 def _case_summary(rows: list[CaseRow], open_at_end: int, period_start: datetime, period_end: datetime) -> CaseSummary:
     opened = sum(1 for r in rows if period_start <= r.created_at < period_end)
-    closed = sum(
-        1
-        for r in rows
-        if r.closed_at is not None and period_start <= r.closed_at < period_end
-    )
+    closed = sum(1 for r in rows if r.closed_at is not None and period_start <= r.closed_at < period_end)
     breached = sum(1 for r in rows if r.sla_breached)
     return CaseSummary(
         opened=opened,
@@ -341,11 +333,7 @@ def _alert_summary(
     period_end: datetime,
 ) -> AlertSummary:
     new = sum(1 for r in rows if period_start <= r.created_at < period_end)
-    resolved = sum(
-        1
-        for r in rows
-        if r.resolved_at is not None and period_start <= r.resolved_at < period_end
-    )
+    resolved = sum(1 for r in rows if r.resolved_at is not None and period_start <= r.resolved_at < period_end)
     return AlertSummary(
         total=len(rows),
         new=new,
@@ -400,10 +388,7 @@ def _build_recommendations(
             DigestRecommendation(
                 severity="warning",
                 title=f"{cases.sla_breached} SLA breach{'es' if cases.sla_breached != 1 else ''}",
-                body=(
-                    "One or more cases breached their SLA. Check assignment, escalation "
-                    "paths, and on-call coverage."
-                ),
+                body=("One or more cases breached their SLA. Check assignment, escalation paths, and on-call coverage."),
             )
         )
 

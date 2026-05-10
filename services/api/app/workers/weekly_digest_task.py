@@ -144,8 +144,7 @@ async def _generate_for_tenant(
             # (e.g. dev containers without Pango/Cairo).  The artefact is
             # still persisted so the digest is not silently lost.
             logger.warning(
-                "weekly_digest.weasyprint_unavailable — storing HTML fallback "
-                "tenant_id=%s",
+                "weekly_digest.weasyprint_unavailable — storing HTML fallback tenant_id=%s",
                 tenant_id,
             )
             from app.services.digest_html import render_digest_html  # lazy import
@@ -154,15 +153,8 @@ async def _generate_for_tenant(
             output_format = "html"
 
         body_b64 = base64.b64encode(raw_bytes).decode("ascii")
-        storage_key = (
-            f"weekly_digest/{tenant_id}/"
-            f"{period_start.strftime('%Y-%m-%d')}_{period_end.strftime('%Y-%m-%d')}"
-            f".{output_format}"
-        )
-        title = (
-            f"AiSOC Weekly Executive Digest "
-            f"{period_start.strftime('%d %b')}–{period_end.strftime('%d %b %Y')}"
-        )
+        storage_key = f"weekly_digest/{tenant_id}/{period_start.strftime('%Y-%m-%d')}_{period_end.strftime('%Y-%m-%d')}.{output_format}"
+        title = f"AiSOC Weekly Executive Digest {period_start.strftime('%d %b')}–{period_end.strftime('%d %b %Y')}"
 
         artefact = ReportArtefact(
             id=uuid.uuid4(),
@@ -267,9 +259,7 @@ async def run_forever(*, stop_event: asyncio.Event | None = None) -> None:
                         stats["failed"],
                     )
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception(
-                        "weekly_digest.tick_failed err=%s", type(exc).__name__
-                    )
+                    logger.exception("weekly_digest.tick_failed err=%s", type(exc).__name__)
             else:
                 logger.debug(
                     "weekly_digest.idle weekday=%d hour=%d — not Monday 00:xx UTC",
@@ -282,7 +272,7 @@ async def run_forever(*, stop_event: asyncio.Event | None = None) -> None:
                     await asyncio.wait_for(stop_event.wait(), timeout=interval)
                 else:
                     await asyncio.sleep(interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     except asyncio.CancelledError:

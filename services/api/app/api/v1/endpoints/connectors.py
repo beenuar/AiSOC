@@ -64,16 +64,17 @@ def _safe_connector_type(value: str) -> str:
     """Reconstruct connector_type keeping only allowed chars; breaks taint trace."""
     return _CONNECTOR_TYPE_UNSAFE_CHARS_RE.sub("", value)[:100]
 
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from sqlalchemy import select, update
 
-from app.api.v1.deps import AuthUser, DBSession, require_permission
-from app.core.config import settings
-from app.models.connector import Connector
-from app.security.credential_vault import CredentialVaultError, get_vault
-from app.services.connector_freshness import compute_freshness
+import httpx  # noqa: E402
+from fastapi import APIRouter, Depends, HTTPException, status  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+from sqlalchemy import select, update  # noqa: E402
+
+from app.api.v1.deps import AuthUser, DBSession, require_permission  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.models.connector import Connector  # noqa: E402
+from app.security.credential_vault import CredentialVaultError, get_vault  # noqa: E402
+from app.services.connector_freshness import compute_freshness  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -327,9 +328,7 @@ def _connectors_service_url(path: str) -> str:
 #     from app.connectors import list_connector_schemas as l; \\
 #     print(json.dumps(l(), indent=2))" \\
 #     > ../api/app/data/connector_catalog_fallback.json
-_FALLBACK_CATALOG_PATH = (
-    Path(__file__).resolve().parents[3] / "data" / "connector_catalog_fallback.json"
-)
+_FALLBACK_CATALOG_PATH = Path(__file__).resolve().parents[3] / "data" / "connector_catalog_fallback.json"
 
 
 def _load_fallback_catalog() -> list[dict[str, Any]]:
@@ -515,9 +514,7 @@ async def connector_health_summary(
     compared to the round-trip, and the resulting Python is a lot easier
     to read than five COUNT(*) FILTER clauses.
     """
-    result = await db.execute(
-        select(Connector).where(Connector.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Connector).where(Connector.tenant_id == current_user.tenant_id))
     connectors = list(result.scalars().all())
 
     now = datetime.now(UTC)
@@ -798,7 +795,7 @@ async def update_connector_capabilities(
             "tenant_id": current_user.tenant_id,
             "connector_id": str(connector_id),
             "connector_type": _safe_connector_type(connector.connector_type),
-            "allowed_count": len(request.allowed_capabilities),
+            "allowed_count": len(request.allowed_capabilities or []),
         },
     )
 
@@ -1178,11 +1175,7 @@ async def refresh_ingest_token(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
 
     new_token = _generate_ingest_token()
-    await db.execute(
-        update(Connector)
-        .where(Connector.id == connector_id)
-        .values(ingest_token=new_token, updated_at=datetime.now(UTC))
-    )
+    await db.execute(update(Connector).where(Connector.id == connector_id).values(ingest_token=new_token, updated_at=datetime.now(UTC)))
     await db.commit()
 
     base = (getattr(settings, "INGEST_PUBLIC_URL", "") or "").rstrip("/")

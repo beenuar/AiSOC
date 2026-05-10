@@ -15,8 +15,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 import httpx
 
@@ -64,17 +65,21 @@ async def _shodan_search(query: str, api_key: str) -> list[DiscoveredAsset]:
         }
         if ports:
             meta["ports"] = [ports]
-        results.append(DiscoveredAsset(
-            asset_type=ExternalAssetType.IP,
-            value=ip,
-            metadata=meta,
-        ))
+        results.append(
+            DiscoveredAsset(
+                asset_type=ExternalAssetType.IP,
+                value=ip,
+                metadata=meta,
+            )
+        )
         for hostname in match.get("hostnames", []):
-            results.append(DiscoveredAsset(
-                asset_type=ExternalAssetType.SUBDOMAIN,
-                value=hostname,
-                metadata={"source": "shodan", "resolved_ip": ip},
-            ))
+            results.append(
+                DiscoveredAsset(
+                    asset_type=ExternalAssetType.SUBDOMAIN,
+                    value=hostname,
+                    metadata={"source": "shodan", "resolved_ip": ip},
+                )
+            )
 
     logger.info("Shodan returned %d assets for query=%s", len(results), query)
     return results
@@ -108,17 +113,21 @@ async def _censys_search(query: str, api_id: str, api_secret: str) -> list[Disco
             "ports": ports,
             "services_count": len(services),
         }
-        results.append(DiscoveredAsset(
-            asset_type=ExternalAssetType.IP,
-            value=ip,
-            metadata=meta,
-        ))
+        results.append(
+            DiscoveredAsset(
+                asset_type=ExternalAssetType.IP,
+                value=ip,
+                metadata=meta,
+            )
+        )
         for name in hit.get("dns", {}).get("names", []):
-            results.append(DiscoveredAsset(
-                asset_type=ExternalAssetType.SUBDOMAIN,
-                value=name,
-                metadata={"source": "censys", "resolved_ip": ip},
-            ))
+            results.append(
+                DiscoveredAsset(
+                    asset_type=ExternalAssetType.SUBDOMAIN,
+                    value=name,
+                    metadata={"source": "censys", "resolved_ip": ip},
+                )
+            )
 
     logger.info("Censys returned %d assets for query=%s", len(results), query)
     return results
@@ -135,7 +144,7 @@ async def _probe_port(host: str, port: int, timeout: float = 3.0) -> bool:
             timeout=timeout,
         )
         return True
-    except (OSError, asyncio.TimeoutError):
+    except (TimeoutError, OSError):
         return False
     finally:
         sock.close()
@@ -151,16 +160,18 @@ async def _active_scan(targets: Sequence[str], ports: Sequence[int]) -> list[Dis
 
     outcomes = await asyncio.gather(*(t[2] for t in tasks), return_exceptions=True)
     host_ports: dict[str, list[int]] = {}
-    for (target, port, _), outcome in zip(tasks, outcomes):
+    for (target, port, _), outcome in zip(tasks, outcomes, strict=False):
         if outcome is True:
             host_ports.setdefault(target, []).append(port)
 
     for host, open_ports in host_ports.items():
-        results.append(DiscoveredAsset(
-            asset_type=ExternalAssetType.IP,
-            value=host,
-            metadata={"source": "active_scan", "ports": sorted(open_ports)},
-        ))
+        results.append(
+            DiscoveredAsset(
+                asset_type=ExternalAssetType.IP,
+                value=host,
+                metadata={"source": "active_scan", "ports": sorted(open_ports)},
+            )
+        )
     logger.info("Active scan found %d hosts with open ports", len(results))
     return results
 

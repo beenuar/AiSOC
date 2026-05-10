@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit import AuditLog
 from app.models.compliance import ComplianceControl, ComplianceEvidence
 
+
 async def auto_collect_evidence(
     db: AsyncSession,
     tenant_id: uuid.UUID,

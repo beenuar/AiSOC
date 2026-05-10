@@ -107,9 +107,7 @@ async def get_dashboard_metrics(
 
     # MTTR for the dashboard tile: average resolved-alert duration over last 7d
     mttr_dashboard_q = await db.scalar(
-        select(
-            func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)
-        ).where(
+        select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.resolved_at.isnot(None),
@@ -292,9 +290,7 @@ async def get_soc_metrics(
     # ── MTTD ──────────────────────────────────────────────────────────────────
     # Mean time from alert creation to first analyst view (first_seen_at).
     mttd_q = await db.scalar(
-        select(
-            func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)
-        ).where(
+        select(func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.first_seen_at.isnot(None),
@@ -307,9 +303,7 @@ async def get_soc_metrics(
     # ── MTTR ──────────────────────────────────────────────────────────────────
     # Mean time from alert creation to resolved_at, for any resolved alert.
     mttr_q = await db.scalar(
-        select(
-            func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)
-        ).where(
+        select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.resolved_at.isnot(None),
@@ -323,9 +317,7 @@ async def get_soc_metrics(
     # For confirmed true-positive alerts only — proxy for "incident contained".
     # Uses resolved_at since we don't track a separate contained_at.
     mttc_q = await db.scalar(
-        select(
-            func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)
-        ).where(
+        select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.resolved_at.isnot(None),
@@ -338,82 +330,90 @@ async def get_soc_metrics(
 
     # ── FPR ───────────────────────────────────────────────────────────────────
     # False-positive dispositions / total resolved-and-dispositioned alerts.
-    total_resolved = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.disposition.isnot(None),
-                Alert.created_at >= week_start,
+    total_resolved = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.disposition.isnot(None),
+                    Alert.created_at >= week_start,
+                )
             )
         )
-    ) or 0
-    fp_count = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.disposition == "false_positive",
-                Alert.created_at >= week_start,
+        or 0
+    )
+    fp_count = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.disposition == "false_positive",
+                    Alert.created_at >= week_start,
+                )
             )
         )
-    ) or 0
+        or 0
+    )
     fpr = (fp_count / total_resolved) if total_resolved > 0 else 0.0
 
     # ── Escalation rate ───────────────────────────────────────────────────────
     # Fraction of remediation gate decisions that escaped autonomous handling.
     escalation_decisions = {"escalate", "review"}
-    total_decisions = await db.scalar(
-        select(func.count()).where(
-            and_(
-                RemediationGateLog.tenant_id == tenant_id,
-                RemediationGateLog.created_at >= week_start,
+    total_decisions = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    RemediationGateLog.tenant_id == tenant_id,
+                    RemediationGateLog.created_at >= week_start,
+                )
             )
         )
-    ) or 0
-    escalated_count = await db.scalar(
-        select(func.count()).where(
-            and_(
-                RemediationGateLog.tenant_id == tenant_id,
-                RemediationGateLog.created_at >= week_start,
-                RemediationGateLog.decision.in_(escalation_decisions),
-            )
-        )
-    ) or 0
-    escalation_rate = (
-        escalated_count / total_decisions if total_decisions > 0 else 0.0
+        or 0
     )
+    escalated_count = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    RemediationGateLog.tenant_id == tenant_id,
+                    RemediationGateLog.created_at >= week_start,
+                    RemediationGateLog.decision.in_(escalation_decisions),
+                )
+            )
+        )
+        or 0
+    )
+    escalation_rate = escalated_count / total_decisions if total_decisions > 0 else 0.0
 
     # ── Volume / case counts ──────────────────────────────────────────────────
-    alert_vol = await db.scalar(
-        select(func.count()).where(
-            and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start)
-        )
-    ) or 0
-    cases_opened = await db.scalar(
-        select(func.count()).where(
-            and_(Case.tenant_id == tenant_id, Case.created_at >= week_start)
-        )
-    ) or 0
-    cases_closed = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Case.tenant_id == tenant_id,
-                Case.status == "resolved",
-                Case.updated_at >= week_start,
+    alert_vol = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start))) or 0
+    cases_opened = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.created_at >= week_start))) or 0
+    cases_closed = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Case.tenant_id == tenant_id,
+                    Case.status == "resolved",
+                    Case.updated_at >= week_start,
+                )
             )
         )
-    ) or 0
+        or 0
+    )
 
     # ── Analyst overrides (7d) ────────────────────────────────────────────────
     # Any alert with a disposition set in the last 7 days = analyst weighed in.
-    overrides_q = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.disposition.isnot(None),
-                Alert.updated_at >= week_start,
+    overrides_q = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.disposition.isnot(None),
+                    Alert.updated_at >= week_start,
+                )
             )
         )
-    ) or 0
+        or 0
+    )
 
     kpis = SOCKpis(
         mttd_hours=round(mttd_hours, 2),
@@ -442,10 +442,7 @@ async def get_soc_metrics(
         )
     ).all()
 
-    heatmap = [
-        AttackHeatmapCell(tactic=r.tactic, technique=r.technique, count=r.cnt)
-        for r in heatmap_rows
-    ]
+    heatmap = [AttackHeatmapCell(tactic=r.tactic, technique=r.technique, count=r.cnt) for r in heatmap_rows]
 
     # ── Confidence calibration curve ──────────────────────────────────────────
     # 5 buckets across [0, 1]. For each bucket, count alerts with ai_score in

@@ -85,9 +85,7 @@ LlmProvider = Literal[
 # Providers that *require* a non-NULL ``base_url``. Hosted SaaS providers
 # default to a canonical endpoint and reject base-URL spoofing; local +
 # custom providers must tell us where to point.
-_PROVIDERS_REQUIRING_BASE_URL: frozenset[str] = frozenset(
-    {"local-ollama", "local-vllm", "local-litellm", "custom"}
-)
+_PROVIDERS_REQUIRING_BASE_URL: frozenset[str] = frozenset({"local-ollama", "local-vllm", "local-litellm", "custom"})
 
 # Providers that require a non-NULL API key. Local providers without
 # auth (Ollama default install, vLLM behind an internal LB) legitimately

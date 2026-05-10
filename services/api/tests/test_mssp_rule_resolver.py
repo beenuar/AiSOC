@@ -14,16 +14,15 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.services.mssp_rule_resolver import (
     ResolvedRule,
     resolve_effective_rules,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers — tiny fakes for ORM rows
 # ---------------------------------------------------------------------------
+
 
 def _rule(
     *,
@@ -159,9 +158,11 @@ class TestResolveEffectiveRules:
     async def test_tenant_rules_only(self):
         tid = uuid.uuid4()
         r1 = _rule(tenant_id=tid, name="r1")
-        db = _mock_session([
-            [r1],  # direct rules query
-        ])
+        db = _mock_session(
+            [
+                [r1],  # direct rules query
+            ]
+        )
         resolved = await resolve_effective_rules(db, tid, include_packs=False)
         assert len(resolved) == 1
         assert resolved[0].name == "r1"
@@ -172,9 +173,11 @@ class TestResolveEffectiveRules:
         tid = uuid.uuid4()
         r1 = _rule(tenant_id=tid, name="tenant-rule")
         b1 = _rule(tenant_id=None, name="builtin-rule", is_builtin=True)
-        db = _mock_session([
-            [r1, b1],  # direct rules query
-        ])
+        db = _mock_session(
+            [
+                [r1, b1],  # direct rules query
+            ]
+        )
         resolved = await resolve_effective_rules(db, tid, include_packs=False)
         assert len(resolved) == 2
         sources = {r.source for r in resolved}
@@ -184,9 +187,11 @@ class TestResolveEffectiveRules:
     async def test_builtin_excluded(self):
         tid = uuid.uuid4()
         r1 = _rule(tenant_id=tid, name="tenant-rule")
-        db = _mock_session([
-            [r1],  # direct rules query (no builtins)
-        ])
+        db = _mock_session(
+            [
+                [r1],  # direct rules query (no builtins)
+            ]
+        )
         resolved = await resolve_effective_rules(db, tid, include_builtin=False, include_packs=False)
         assert len(resolved) == 1
         assert resolved[0].source == "tenant"
@@ -200,12 +205,14 @@ class TestResolveEffectiveRules:
 
         assignment = _assignment(pack_id, tid)
 
-        db = _mock_session([
-            [r1],             # direct rules
-            [assignment],     # pack assignments
-            [(pack_id, pr1)], # pack rule join results
-            [],               # overrides
-        ])
+        db = _mock_session(
+            [
+                [r1],  # direct rules
+                [assignment],  # pack assignments
+                [(pack_id, pr1)],  # pack rule join results
+                [],  # overrides
+            ]
+        )
         resolved = await resolve_effective_rules(db, tid)
         assert len(resolved) == 2
         pack_rules = [r for r in resolved if r.source == "pack"]
@@ -220,10 +227,12 @@ class TestResolveEffectiveRules:
 
         override = _override(tid, r2.id, action="exclude")
 
-        db = _mock_session([
-            [r1, r2],   # direct rules
-            [],          # overrides
-        ])
+        db = _mock_session(
+            [
+                [r1, r2],  # direct rules
+                [],  # overrides
+            ]
+        )
         # Manually wire override into the third call
         call_counter = {"n": 0}
         original_execute = db.execute
@@ -249,7 +258,8 @@ class TestResolveEffectiveRules:
         r1 = _rule(tenant_id=tid, name="adjustable", severity="medium")
 
         override = _override(
-            tid, r1.id,
+            tid,
+            r1.id,
             action="customize",
             severity_override="critical",
             note="escalated per SOC policy",
@@ -284,8 +294,10 @@ class TestResolveEffectiveRules:
     @pytest.mark.asyncio
     async def test_empty_tenant(self):
         tid = uuid.uuid4()
-        db = _mock_session([
-            [],  # no direct rules
-        ])
+        db = _mock_session(
+            [
+                [],  # no direct rules
+            ]
+        )
         resolved = await resolve_effective_rules(db, tid, include_packs=False)
         assert resolved == []

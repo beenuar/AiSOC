@@ -7,6 +7,7 @@ from app.models.case import Case, CaseTask, CaseTimeline
 from app.models.connector import Connector
 from app.models.detection_proposal import DetectionEvalBaseline, DetectionRuleProposal
 from app.models.detection_rule import DetectionRule
+from app.models.easm import ExternalAsset, ExternalAssetDrift
 from app.models.identity_graph import AlertIdentityLink, IdentityEdge, IdentityNode
 from app.models.inbox import TenantInboxToken
 from app.models.insider_threat import InsiderIndicator, InsiderPeerGroup, UserRiskProfile
@@ -17,7 +18,6 @@ from app.models.investigation import (
     InvestigationRun,
 )
 from app.models.llm_credential import TenantLlmCredential
-from app.models.oauth import OAuthAppCredential, OAuthState
 from app.models.mssp import (
     MSSPDelegation,
     MSSPRuleOverride,
@@ -27,6 +27,7 @@ from app.models.mssp import (
     MSSPTenantMetrics,
     MSSPTenantNote,
 )
+from app.models.oauth import OAuthAppCredential, OAuthState
 from app.models.posture import PostureDriftEvent, PostureFinding, PostureScanRun
 from app.models.remediation import RemediationGateLog, RemediationMaturity, RemediationWhitelist
 from app.models.report import ReportArtefact, ReportTemplate
@@ -38,7 +39,6 @@ from app.models.responder import (
 )
 from app.models.saved_view import SavedView
 from app.models.tenant import ApiKey, Tenant, User
-from app.models.easm import ExternalAsset, ExternalAssetDrift
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
 
 __all__ = [

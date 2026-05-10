@@ -64,12 +64,8 @@ class TenantInboxToken(Base):
     )
     # Non-NULL means the token has been rotated and the ingest service
     # rejects requests for it.
-    revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index("tenant_inbox_tokens_tenant_idx", "tenant_id"),

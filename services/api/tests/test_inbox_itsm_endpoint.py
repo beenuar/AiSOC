@@ -54,7 +54,6 @@ from app.api.v1.endpoints.inbox_itsm import (
 )
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # _verify_hmac — auth glue. The biggest single attack surface for the
 # whole module: a bug here is "anyone can set any case status", so the
@@ -358,9 +357,7 @@ async def test_fetch_token_and_connector_happy_path() -> None:
         enabled=True,
     )
     db = _mock_db(token_row, connector_row)
-    tok, conn = await _fetch_token_and_connector(
-        db, tenant_token="tok-xyz", connector_instance_id=connector_id
-    )
+    tok, conn = await _fetch_token_and_connector(db, tenant_token="tok-xyz", connector_instance_id=connector_id)
     assert tok is token_row
     assert conn is connector_row
 
@@ -370,9 +367,7 @@ async def test_fetch_token_and_connector_missing_token_raises_401() -> None:
     """Revoked / never-existed tokens are auth failures."""
     db = _mock_db(token_row=None, connector_row=None)
     with pytest.raises(HTTPException) as exc:
-        await _fetch_token_and_connector(
-            db, tenant_token="tok-revoked", connector_instance_id=uuid.uuid4()
-        )
+        await _fetch_token_and_connector(db, tenant_token="tok-revoked", connector_instance_id=uuid.uuid4())
     assert exc.value.status_code == 401
     # Don't echo the full token in the error — leakage minimisation.
     assert "tok-revoked" not in str(exc.value.detail)
@@ -395,9 +390,7 @@ async def test_fetch_token_and_connector_wrong_template_raises_403() -> None:
     )
     db = _mock_db(token_row, None)
     with pytest.raises(HTTPException) as exc:
-        await _fetch_token_and_connector(
-            db, tenant_token="tok-pagerduty", connector_instance_id=uuid.uuid4()
-        )
+        await _fetch_token_and_connector(db, tenant_token="tok-pagerduty", connector_instance_id=uuid.uuid4())
     assert exc.value.status_code == 403
     assert "itsm-inbound" in exc.value.detail
 
@@ -415,9 +408,7 @@ async def test_fetch_token_and_connector_missing_connector_raises_404() -> None:
     )
     db = _mock_db(token_row, connector_row=None)
     with pytest.raises(HTTPException) as exc:
-        await _fetch_token_and_connector(
-            db, tenant_token="tok-xyz", connector_instance_id=uuid.uuid4()
-        )
+        await _fetch_token_and_connector(db, tenant_token="tok-xyz", connector_instance_id=uuid.uuid4())
     assert exc.value.status_code == 404
 
 
@@ -444,9 +435,7 @@ async def test_fetch_token_and_connector_cross_tenant_raises_403() -> None:
     )
     db = _mock_db(token_row, connector_row)
     with pytest.raises(HTTPException) as exc:
-        await _fetch_token_and_connector(
-            db, tenant_token="tok-xyz", connector_instance_id=connector_row.id
-        )
+        await _fetch_token_and_connector(db, tenant_token="tok-xyz", connector_instance_id=connector_row.id)
     assert exc.value.status_code == 403
     assert "different tenants" in exc.value.detail
 
@@ -475,9 +464,7 @@ async def test_fetch_token_and_connector_disabled_connector_raises_409() -> None
     )
     db = _mock_db(token_row, connector_row)
     with pytest.raises(HTTPException) as exc:
-        await _fetch_token_and_connector(
-            db, tenant_token="tok-xyz", connector_instance_id=connector_row.id
-        )
+        await _fetch_token_and_connector(db, tenant_token="tok-xyz", connector_instance_id=connector_row.id)
     assert exc.value.status_code == 409
 
 
@@ -500,9 +487,7 @@ async def test_fetch_token_and_connector_unsupported_vendor_raises_422() -> None
     )
     db = _mock_db(token_row, connector_row)
     with pytest.raises(HTTPException) as exc:
-        await _fetch_token_and_connector(
-            db, tenant_token="tok-xyz", connector_instance_id=connector_row.id
-        )
+        await _fetch_token_and_connector(db, tenant_token="tok-xyz", connector_instance_id=connector_row.id)
     assert exc.value.status_code == 422
     assert "splunk" in exc.value.detail
 
@@ -846,9 +831,7 @@ async def test_endpoint_unlinked_external_id_returns_200_with_note() -> None:
         enabled=True,
     )
     # ref_row=None means the JOIN found no AiSOC link.
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=None
-    )
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
     body = json.dumps(
         {
             "issue": {
@@ -909,12 +892,8 @@ async def test_endpoint_idempotent_when_case_already_in_target_status() -> None:
         case_number="CASE-1",
         status="resolved",  # already in the target state
     )
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=ref_row
-    )
-    body = json.dumps(
-        {"issue": {"key": "AIS-1", "fields": {"status": {"name": "Done"}}}}
-    ).encode()
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=ref_row)
+    body = json.dumps({"issue": {"key": "AIS-1", "fields": {"status": {"name": "Done"}}}}).encode()
     request = _build_request(body)
 
     result = await inbound_itsm_webhook(
@@ -964,9 +943,7 @@ async def test_endpoint_unmapped_status_bumps_last_synced_only() -> None:
         case_number="CASE-2",
         status="investigating",
     )
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=ref_row
-    )
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=ref_row)
     body = json.dumps(
         {
             "issue": {
@@ -1018,12 +995,8 @@ async def test_endpoint_real_status_change_writes_and_returns_changed() -> None:
         case_number="CASE-7",
         status="investigating",
     )
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=ref_row
-    )
-    body = json.dumps(
-        {"issue": {"key": "AIS-7", "fields": {"status": {"name": "Done"}}}}
-    ).encode()
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=ref_row)
+    body = json.dumps({"issue": {"key": "AIS-7", "fields": {"status": {"name": "Done"}}}}).encode()
     request = _build_request(body)
 
     result = await inbound_itsm_webhook(
@@ -1073,9 +1046,7 @@ async def test_endpoint_servicenow_dispatches_to_servicenow_parser() -> None:
         case_number="CASE-9",
         status="investigating",
     )
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=ref_row
-    )
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=ref_row)
     body = json.dumps({"sys_id": "abc-1", "state": 6}).encode()
     request = _build_request(body)
 
@@ -1116,9 +1087,7 @@ async def test_endpoint_hmac_required_but_missing_returns_401() -> None:
         connector_type="jira",
         enabled=True,
     )
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=None
-    )
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
     request = _build_request(b"{}")
 
     with pytest.raises(HTTPException) as exc:
@@ -1159,12 +1128,8 @@ async def test_endpoint_hmac_valid_passes_through() -> None:
         case_number="CASE-5",
         status="investigating",
     )
-    db = _build_db_for_endpoint(
-        token_row=token_row, connector_row=connector_row, ref_row=ref_row
-    )
-    body = json.dumps(
-        {"issue": {"key": "AIS-5", "fields": {"status": {"name": "Done"}}}}
-    ).encode()
+    db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=ref_row)
+    body = json.dumps({"issue": {"key": "AIS-5", "fields": {"status": {"name": "Done"}}}}).encode()
     sig = f"sha256={_expected_sig('seekret', body)}"
     request = _build_request(body)
 

@@ -69,10 +69,7 @@ def _validate_view_type(view_type: str) -> str:
     if view_type not in _VALID_VIEW_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"view_type must be one of: "
-                f"{', '.join(sorted(_VALID_VIEW_TYPES))}"
-            ),
+            detail=(f"view_type must be one of: {', '.join(sorted(_VALID_VIEW_TYPES))}"),
         )
     return view_type
 
@@ -175,10 +172,7 @@ async def list_saved_views(
     db: TenantDBSession,
     view_type: str = Query(
         ...,
-        description=(
-            "Which list page to return presets for. One of: "
-            f"{', '.join(sorted(_VALID_VIEW_TYPES))}."
-        ),
+        description=(f"Which list page to return presets for. One of: {', '.join(sorted(_VALID_VIEW_TYPES))}."),
     ),
 ) -> list[SavedViewModel]:
     """Return the caller's saved views for one list page.
@@ -190,16 +184,20 @@ async def list_saved_views(
     _validate_view_type(view_type)
 
     rows = (
-        await db.execute(
-            select(SavedView)
-            .where(
-                SavedView.tenant_id == user.tenant_id,
-                SavedView.user_id == user.user_id,
-                SavedView.view_type == view_type,
+        (
+            await db.execute(
+                select(SavedView)
+                .where(
+                    SavedView.tenant_id == user.tenant_id,
+                    SavedView.user_id == user.user_id,
+                    SavedView.view_type == view_type,
+                )
+                .order_by(SavedView.is_default.desc(), SavedView.updated_at.desc())
             )
-            .order_by(SavedView.is_default.desc(), SavedView.updated_at.desc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [SavedViewModel.from_orm(r) for r in rows]
 
@@ -266,10 +264,7 @@ async def create_saved_view(
         # above, so a hit here is almost certainly the name.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"A saved view named '{name}' already exists for "
-                f"this user and view type"
-            ),
+            detail=(f"A saved view named '{name}' already exists for this user and view type"),
         ) from exc
 
     await db.refresh(row)
@@ -306,15 +301,11 @@ async def update_saved_view(
         return SavedViewModel.from_orm(row)
 
     if "filters" in fields_set:
-        _validate_payload_size(
-            payload.filters, field="filters", limit=_MAX_FILTERS_BYTES
-        )
+        _validate_payload_size(payload.filters, field="filters", limit=_MAX_FILTERS_BYTES)
         row.filters = dict(payload.filters or {})
 
     if "columns" in fields_set:
-        _validate_payload_size(
-            payload.columns, field="columns", limit=_MAX_COLUMNS_BYTES
-        )
+        _validate_payload_size(payload.columns, field="columns", limit=_MAX_COLUMNS_BYTES)
         row.columns = payload.columns  # may be explicit None — clears it.
 
     if "name" in fields_set and payload.name is not None:
@@ -346,10 +337,7 @@ async def update_saved_view(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "A saved view with this name already exists for "
-                "this user and view type"
-            ),
+            detail=("A saved view with this name already exists for this user and view type"),
         ) from exc
 
     await db.refresh(row)
@@ -459,8 +447,4 @@ async def _demote_existing_default(
     if except_id is not None:
         conditions.append(SavedView.id != except_id)
 
-    await db.execute(
-        update(SavedView)
-        .where(and_(*conditions))
-        .values(is_default=False, updated_at=datetime.now(UTC))
-    )
+    await db.execute(update(SavedView).where(and_(*conditions)).values(is_default=False, updated_at=datetime.now(UTC)))

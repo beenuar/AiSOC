@@ -147,7 +147,7 @@ async def publish_plugin(
 
     # Signature verification — allow submission without registered key (marks as unverified)
     verified = False
-    registered_pub_key = _get_registered_pub_key(current_user.id)
+    registered_pub_key = _get_registered_pub_key(str(current_user.user_id))
     if registered_pub_key:
         try:
             verify_ed25519_signature(registered_pub_key, tarball, signature)
@@ -172,7 +172,7 @@ async def publish_plugin(
         "rating": 0.0,
         "rating_count": 0,
         "verified": verified,
-        "submitted_by": current_user.id,
+        "submitted_by": current_user.user_id,
         "submitted_at": datetime.now(UTC).isoformat(),
         "approved_at": None,
         "tarball_sha256": hashlib.sha256(tarball).hexdigest(),

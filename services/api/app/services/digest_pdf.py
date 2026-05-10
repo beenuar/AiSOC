@@ -61,14 +61,14 @@ def render_digest_pdf(digest: ExecutiveDigest) -> bytes:
 
     html_content = render_digest_html(digest)
     logger.info(
-        "rendering executive digest PDF",
-        tenant_id=digest.tenant_id,
-        period_start=str(digest.period.start),
+        "rendering executive digest PDF tenant_id=%s period_start=%s",
+        digest.tenant_id,
+        str(digest.period.start),
     )
     pdf_bytes: bytes = HTML(string=html_content).write_pdf()
     logger.info(
-        "executive digest PDF rendered",
-        tenant_id=digest.tenant_id,
-        size_bytes=len(pdf_bytes),
+        "executive digest PDF rendered tenant_id=%s size_bytes=%d",
+        digest.tenant_id,
+        len(pdf_bytes),
     )
     return pdf_bytes

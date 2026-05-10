@@ -54,9 +54,7 @@ class Connector(Base):
     # ``oauth_last_refresh_at`` is the timestamp of the most recent
     # successful refresh, so the UI can display "rotated 3 min ago".
     oauth_refresh_failures: Mapped[int] = mapped_column(default=0, nullable=False)
-    oauth_last_refresh_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    oauth_last_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Workstream 5 (self-healing) — backfill-on-outage state.
     # ``last_outage_at`` is set when the connector first flips to
     # ``unhealthy`` and is cleared on recovery. The backfill worker
@@ -65,12 +63,8 @@ class Connector(Base):
     # ``last_backfill_at`` is the wall clock of the most recent backfill
     # run — the worker uses it to avoid re-firing during a recovery
     # flap and the UI surfaces it as "backfilled to <ts>".
-    last_outage_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_backfill_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_outage_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_backfill_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Workstream 4: per-instance capability downscoping. ``NULL`` means
     # "no downscoping — agent may use every capability the connector class
     # declares". A non-NULL JSON array is the canonical allow-list (e.g.
@@ -86,4 +80,4 @@ class Connector(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="connectors")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="connectors")  # type: ignore[name-defined]

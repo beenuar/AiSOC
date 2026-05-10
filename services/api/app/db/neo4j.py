@@ -37,7 +37,7 @@ async def init_neo4j() -> None:
     for attempt in range(5):
         try:
             await _driver.verify_connectivity()
-            logger.info("Neo4j connection established", uri=settings.NEO4J_URI)
+            logger.info("Neo4j connection established uri=%s", settings.NEO4J_URI)
 
             # Create schema constraints and indexes
             await _create_schema()
@@ -45,7 +45,7 @@ async def init_neo4j() -> None:
         except ServiceUnavailable:
             if attempt < 4:
                 wait = 2**attempt
-                logger.warning("Neo4j not ready, retrying", attempt=attempt + 1, wait=wait)
+                logger.warning("Neo4j not ready, retrying attempt=%s wait=%s", attempt + 1, wait)
                 await asyncio.sleep(wait)
             else:
                 logger.error("Neo4j connection failed after retries")
@@ -104,6 +104,6 @@ async def _create_schema() -> None:
             try:
                 await session.run(cypher)
             except Exception as exc:
-                logger.debug("Schema statement skipped", cypher=cypher[:60], error=str(exc))
+                logger.debug("Schema statement skipped cypher=%s error=%s", cypher[:60], exc)
 
     logger.info("Neo4j schema constraints and indexes ensured")

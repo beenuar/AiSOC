@@ -36,7 +36,6 @@ from app.models.mssp import (
     MSSPRulePackRule,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public dataclass
 # ---------------------------------------------------------------------------
@@ -167,9 +166,7 @@ async def resolve_effective_rules(
         assignments = (await db.execute(assignments_q)).scalars().all()
 
         if assignments:
-            pack_id_to_overrides: dict[uuid.UUID, dict[str, Any]] = {
-                a.pack_id: dict(a.parameter_overrides or {}) for a in assignments
-            }
+            pack_id_to_overrides: dict[uuid.UUID, dict[str, Any]] = {a.pack_id: dict(a.parameter_overrides or {}) for a in assignments}
 
             pack_rule_filters: list[Any] = [
                 MSSPRulePackRule.pack_id.in_(list(pack_id_to_overrides.keys())),

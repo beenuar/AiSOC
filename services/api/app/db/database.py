@@ -9,7 +9,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-
 # libpq sslmode values -> what asyncpg's `ssl` kwarg expects.
 # asyncpg accepts: "disable" | "allow" | "prefer" | "require" | "verify-ca" | "verify-full"
 # but NOT under the libpq query-string name `sslmode=`. We pop it from the URL
@@ -63,9 +62,7 @@ def _normalize_async_pg_url(url: str) -> tuple[str, dict[str, Any]]:
             continue
         remaining.append((key, value))
 
-    new_url = urlunsplit(
-        (parts.scheme, parts.netloc, parts.path, urlencode(remaining), parts.fragment)
-    )
+    new_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(remaining), parts.fragment))
     return new_url, connect_args
 
 

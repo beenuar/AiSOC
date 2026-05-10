@@ -143,7 +143,13 @@ def _heuristic_triage(content: str | None, urls: list[str]) -> TriageResult:
             indicators.append({"kind": "url", "value": url, "note": "URL shortener"})
     score = min(score, 1.0)
     verdict: Verdict = "phishing" if score > 0.4 else "benign" if score < 0.1 else "unknown"
-    return TriageResult(verdict=verdict, confidence=round(score, 2), indicators=indicators, mitre_technique=None, summary="Heuristic triage — LLM not configured.")
+    return TriageResult(
+        verdict=verdict,
+        confidence=round(score, 2),
+        indicators=indicators,
+        mitre_technique=None,
+        summary="Heuristic triage — LLM not configured.",
+    )
 
 
 def _row_to_submission(row: Any) -> SubmissionResponse:
@@ -168,7 +174,9 @@ def _row_to_submission(row: Any) -> SubmissionResponse:
 # ────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/submit", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED, summary="Submit artifact for phishing triage")
+@router.post(
+    "/submit", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED, summary="Submit artifact for phishing triage"
+)
 async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> SubmissionResponse:
     try:
         result = await _triage(body.artifact_kind, body.raw_content or "", body.urls)
@@ -227,8 +235,11 @@ async def list_submissions(
     wheres = ["1=1"]
     params: dict[str, Any] = {"limit": limit, "offset": offset}
     if verdict:
-        wheres.append("verdict = :verdict"); params["verdict"] = verdict
-    q = text(f"SELECT * FROM aisoc_phishing_submissions WHERE {' AND '.join(wheres)} ORDER BY submitted_at DESC LIMIT :limit OFFSET :offset").bindparams(**params)
+        wheres.append("verdict = :verdict")
+        params["verdict"] = verdict
+    q = text(
+        f"SELECT * FROM aisoc_phishing_submissions WHERE {' AND '.join(wheres)} ORDER BY submitted_at DESC LIMIT :limit OFFSET :offset"
+    ).bindparams(**params)
     try:
         rows = (await db.execute(q)).fetchall()
         return [_row_to_submission(r) for r in rows]
