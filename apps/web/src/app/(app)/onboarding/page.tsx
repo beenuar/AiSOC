@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { OnboardingView } from '@/components/onboarding/OnboardingView';
 
 export const metadata = {
@@ -12,5 +13,9 @@ export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export default function OnboardingPage() {
-  return <OnboardingView />;
+  return (
+    <Suspense fallback={null}>
+      <OnboardingView />
+    </Suspense>
+  );
 }

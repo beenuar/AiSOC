@@ -14,7 +14,7 @@
  * Author: Beenu <beenu@cyble.com>
  */
 
-import React, { Component, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useCallback } from 'react';
+import React, { Component, Suspense, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useCallback } from 'react';
 import useSWR from 'swr';
 import { metricsApi, type DashboardMetrics } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -398,7 +398,7 @@ export function DashboardView() {
 
   /** Map each widget ID to its rendered section. */
   const widgetContent: Record<WidgetId, ReactNode> = {
-    welcome: <DashboardWelcome />,
+    welcome: <Suspense fallback={null}><DashboardWelcome /></Suspense>,
 
     'top-metrics': (
       <div>

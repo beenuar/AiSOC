@@ -339,40 +339,45 @@ def _direct_tables(select: exp.Select) -> list[exp.Table]:
     We deliberately skip tables that live inside nested ``Select`` nodes
     (subqueries) — those have their own enclosing Select that the caller
     visits separately, and we don't want to double-inject predicates.
+
+    Uses an explicit tree walk that stops at ``exp.Select`` boundaries
+    rather than relying on parent-chain traversal, which is more robust
+    across sqlglot versions that may vary in how they set parent attributes.
     """
     out: list[exp.Table] = []
 
-    # sqlglot stores the FROM clause under args["from"]. The Python
-    # attribute access form is ``select.from_`` (with trailing
-    # underscore because ``from`` is a Python keyword), but the args
-    # dict key is the bare SQL keyword. Using the wrong key here used
-    # to silently skip every FROM clause and produce queries with
-    # neither tenant predicates nor any ``referenced_tables`` audit
-    # entry — a tenant-isolation bug.
+    # sqlglot stores the FROM clause under args["from"]. Using the args
+    # dict key is the canonical way to access it regardless of version.
     from_expr = select.args.get("from")
     if from_expr is not None:
-        for table in from_expr.find_all(exp.Table):
-            if _is_inside_subquery(table, select):
-                continue
-            out.append(table)
+        _collect_direct_tables(from_expr, out)
 
     for join in select.args.get("joins") or []:
-        for table in join.find_all(exp.Table):
-            if _is_inside_subquery(table, select):
-                continue
-            out.append(table)
+        _collect_direct_tables(join, out)
 
     return out
 
 
-def _is_inside_subquery(node: exp.Expression, owning_select: exp.Select) -> bool:
-    """True if ``node`` lives inside a Select that isn't ``owning_select``."""
-    parent = node.parent
-    while parent is not None:
-        if isinstance(parent, exp.Select):
-            return parent is not owning_select
-        parent = parent.parent
-    return False
+def _collect_direct_tables(node: exp.Expression, out: list[exp.Table]) -> None:
+    """Walk ``node`` collecting Table references, stopping at nested SELECTs.
+
+    This avoids double-visiting tables that belong to subqueries — each
+    subquery's enclosing Select is visited separately by the outer loop
+    in :func:`rewrite_for_tenant`.
+    """
+    if isinstance(node, exp.Table):
+        out.append(node)
+        return
+    if isinstance(node, exp.Select):
+        # Do not descend into nested selects (subqueries).
+        return
+    for child in node.args.values():
+        if isinstance(child, exp.Expression):
+            _collect_direct_tables(child, out)
+        elif isinstance(child, list):
+            for item in child:
+                if isinstance(item, exp.Expression):
+                    _collect_direct_tables(item, out)
 
 
 def _is_table_function(table: exp.Table) -> bool:
