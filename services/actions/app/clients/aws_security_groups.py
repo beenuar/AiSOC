@@ -74,6 +74,7 @@ class AWSSGClient:
     async def _boto3_available(self) -> bool:
         try:
             import boto3  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -115,8 +116,14 @@ class AWSSGClient:
             return await self._httpx_authorize(key_id, secret, token, ip, protocol, from_port, to_port, action="unblock")
 
     async def _boto3_authorize_egress_block(
-        self, key_id: str, secret: str, token: str | None,
-        ip: str, protocol: str, from_port: int, to_port: int,
+        self,
+        key_id: str,
+        secret: str,
+        token: str | None,
+        ip: str,
+        protocol: str,
+        from_port: int,
+        to_port: int,
     ) -> dict[str, Any]:
         import boto3
 
@@ -131,12 +138,14 @@ class AWSSGClient:
         try:
             ec2.authorize_security_group_ingress(
                 GroupId=self._sg_id,
-                IpPermissions=[{
-                    "IpProtocol": protocol,
-                    "FromPort": from_port,
-                    "ToPort": to_port,
-                    "IpRanges": [{"CidrIp": cidr, "Description": "AiSOC block"}],
-                }],
+                IpPermissions=[
+                    {
+                        "IpProtocol": protocol,
+                        "FromPort": from_port,
+                        "ToPort": to_port,
+                        "IpRanges": [{"CidrIp": cidr, "Description": "AiSOC block"}],
+                    }
+                ],
             )
             logger.info("aws_sg.block_ip.success", sg=self._sg_id, cidr=cidr)
             return {"success": True, "action": "block_ip", "ip": ip, "sg_id": self._sg_id, "cidr": cidr}
@@ -147,8 +156,14 @@ class AWSSGClient:
             raise
 
     async def _boto3_revoke_block(
-        self, key_id: str, secret: str, token: str | None,
-        ip: str, protocol: str, from_port: int, to_port: int,
+        self,
+        key_id: str,
+        secret: str,
+        token: str | None,
+        ip: str,
+        protocol: str,
+        from_port: int,
+        to_port: int,
     ) -> dict[str, Any]:
         import boto3
 
@@ -163,12 +178,14 @@ class AWSSGClient:
         try:
             ec2.revoke_security_group_ingress(
                 GroupId=self._sg_id,
-                IpPermissions=[{
-                    "IpProtocol": protocol,
-                    "FromPort": from_port,
-                    "ToPort": to_port,
-                    "IpRanges": [{"CidrIp": cidr}],
-                }],
+                IpPermissions=[
+                    {
+                        "IpProtocol": protocol,
+                        "FromPort": from_port,
+                        "ToPort": to_port,
+                        "IpRanges": [{"CidrIp": cidr}],
+                    }
+                ],
             )
             logger.info("aws_sg.unblock_ip.success", sg=self._sg_id, cidr=cidr)
             return {"success": True, "action": "unblock_ip", "ip": ip, "sg_id": self._sg_id}
@@ -179,8 +196,15 @@ class AWSSGClient:
             raise
 
     async def _httpx_authorize(
-        self, key_id: str, secret: str, token: str | None,
-        ip: str, protocol: str, from_port: int, to_port: int, action: str,
+        self,
+        key_id: str,
+        secret: str,
+        token: str | None,
+        ip: str,
+        protocol: str,
+        from_port: int,
+        to_port: int,
+        action: str,
     ) -> dict[str, Any]:
         """Fallback: direct AWS EC2 API call without boto3.
         This is a placeholder; production use should install boto3."""

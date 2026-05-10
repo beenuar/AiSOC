@@ -40,10 +40,7 @@ class DatadogCloudSIEMConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Datadog Cloud SIEM. Pulls Security Signals and supports log "
-                "search across the Datadog logs platform."
-            ),
+            description=("Datadog Cloud SIEM. Pulls Security Signals and supports log search across the Datadog logs platform."),
             docs_url="/docs/connectors/datadog-cloud-siem",
             fields=[
                 Field(
@@ -113,9 +110,7 @@ class DatadogCloudSIEMConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since = (
-            datetime.now(UTC) - timedelta(seconds=since_seconds)
-        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(

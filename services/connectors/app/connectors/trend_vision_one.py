@@ -72,10 +72,7 @@ class TrendVisionOneConnector(BaseConnector):
                     "api_token",
                     "secret",
                     "API Token",
-                    help_text=(
-                        "Bearer token issued from Vision One console: "
-                        "Administration → API Keys."
-                    ),
+                    help_text=("Bearer token issued from Vision One console: Administration → API Keys."),
                 ),
             ],
         )

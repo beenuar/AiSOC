@@ -43,10 +43,7 @@ class Rapid7InsightIDRConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Rapid7 InsightIDR cloud SIEM/XDR. Pulls investigations and "
-                "supports log search across collected sources."
-            ),
+            description=("Rapid7 InsightIDR cloud SIEM/XDR. Pulls investigations and supports log search across collected sources."),
             docs_url="/docs/connectors/rapid7-insightidr",
             fields=[
                 Field(
@@ -109,9 +106,7 @@ class Rapid7InsightIDRConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since_iso = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since_iso = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(

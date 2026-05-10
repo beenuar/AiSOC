@@ -1,4 +1,5 @@
 """Async SQLAlchemy session factory for the osquery-tls service."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator

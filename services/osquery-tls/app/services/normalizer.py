@@ -5,6 +5,7 @@ Mirrors the severity heuristics used by the osctrl and FleetDM connectors
 
 Schema reference: services/connectors/app/connectors/osctrl.py
 """
+
 from __future__ import annotations
 
 import re

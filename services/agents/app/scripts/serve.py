@@ -6,6 +6,7 @@ breaks Fly.io health checks (IPv4) when we bind to ``::``. Pre-binding a
 dual-stack socket and handing the fd to uvicorn fixes both 6PN (IPv6)
 and the fly-proxy edge (IPv4) at once.
 """
+
 from __future__ import annotations
 
 import os

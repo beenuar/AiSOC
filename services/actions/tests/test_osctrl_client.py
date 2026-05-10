@@ -45,9 +45,7 @@ class TestSuccessPath:
         results_url = RESULTS_URL_TMPL.format(query_id)
 
         with respx.mock:
-            respx.post(SUBMIT_URL).mock(
-                return_value=httpx.Response(201, json={"id": query_id})
-            )
+            respx.post(SUBMIT_URL).mock(return_value=httpx.Response(201, json={"id": query_id}))
             respx.get(results_url).mock(
                 return_value=httpx.Response(
                     200,
@@ -56,9 +54,7 @@ class TestSuccessPath:
             )
 
             client = _make_client()
-            result = await client.live_query(
-                ["host1"], template="running_processes", timeout_seconds=5
-            )
+            result = await client.live_query(["host1"], template="running_processes", timeout_seconds=5)
 
         assert result["partial"] is False
         assert "host1" in result["results"]
@@ -78,9 +74,7 @@ class TestSuccessPath:
 
         with respx.mock:
             respx.post(SUBMIT_URL).mock(side_effect=capture_submit)
-            respx.get(results_url).mock(
-                return_value=httpx.Response(200, json=[{"node": "host1", "rows": []}])
-            )
+            respx.get(results_url).mock(return_value=httpx.Response(200, json=[{"node": "host1", "rows": []}]))
 
             client = _make_client()
             await client.live_query(["host1"], template="active_connections")
@@ -95,9 +89,7 @@ class TestPollingTimeout:
         results_url = RESULTS_URL_TMPL.format(query_id)
 
         with respx.mock:
-            respx.post(SUBMIT_URL).mock(
-                return_value=httpx.Response(200, json={"id": query_id})
-            )
+            respx.post(SUBMIT_URL).mock(return_value=httpx.Response(200, json={"id": query_id}))
             # Only host1 responds; host2 never appears.
             respx.get(results_url).mock(
                 return_value=httpx.Response(
@@ -132,9 +124,7 @@ class TestErrorHandling:
         results_url = RESULTS_URL_TMPL.format(query_id)
 
         with respx.mock:
-            respx.post(SUBMIT_URL).mock(
-                return_value=httpx.Response(200, json={"id": query_id})
-            )
+            respx.post(SUBMIT_URL).mock(return_value=httpx.Response(200, json={"id": query_id}))
             respx.get(results_url).mock(return_value=httpx.Response(503, text="unavailable"))
 
             client = _make_client()
@@ -161,14 +151,13 @@ class TestTemplateParams:
 
         def capture(request: httpx.Request) -> httpx.Response:
             import json
+
             captured_body.update(json.loads(request.content))
             return httpx.Response(201, json={"id": query_id})
 
         with respx.mock:
             respx.post(SUBMIT_URL).mock(side_effect=capture)
-            respx.get(results_url).mock(
-                return_value=httpx.Response(200, json=[{"node": "h1", "rows": []}])
-            )
+            respx.get(results_url).mock(return_value=httpx.Response(200, json=[{"node": "h1", "rows": []}]))
 
             client = _make_client()
             await client.live_query(

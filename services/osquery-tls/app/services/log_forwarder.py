@@ -1,4 +1,5 @@
 """Forward normalised osquery events to services/ingest /v1/ingest/batch."""
+
 from __future__ import annotations
 
 import logging

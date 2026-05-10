@@ -48,8 +48,7 @@ class SumoLogicConnector(BaseConnector):
             connector_name=cls.connector_name,
             category=cls.connector_category,
             description=(
-                "Sumo Logic Cloud SIEM Enterprise (CSE). Pulls insights and "
-                "signals, and supports log search jobs across the platform."
+                "Sumo Logic Cloud SIEM Enterprise (CSE). Pulls insights and signals, and supports log search jobs across the platform."
             ),
             docs_url="/docs/connectors/sumo-logic",
             fields=[
@@ -122,9 +121,7 @@ class SumoLogicConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since_iso = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S"
-        )
+        since_iso = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(

@@ -34,10 +34,7 @@ class LaceworkConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Lacework cloud security platform. Pulls alerts (events) and "
-                "supports compliance / configuration query."
-            ),
+            description=("Lacework cloud security platform. Pulls alerts (events) and supports compliance / configuration query."),
             docs_url="/docs/connectors/lacework",
             fields=[
                 Field(
@@ -45,10 +42,7 @@ class LaceworkConnector(BaseConnector):
                     "string",
                     "Account subdomain",
                     placeholder="yourcorp",
-                    help_text=(
-                        "First label of your Lacework console URL: "
-                        "https://<account>.lacework.net"
-                    ),
+                    help_text=("First label of your Lacework console URL: https://<account>.lacework.net"),
                 ),
                 Field(
                     "subaccount",
@@ -174,9 +168,7 @@ class LaceworkConnector(BaseConnector):
             "category": "cloud",
             "severity": sev,
             "title": raw.get("alertName") or raw.get("name") or "Lacework alert",
-            "description": raw.get("alertInfo", {}).get("description")
-            if isinstance(raw.get("alertInfo"), dict)
-            else None,
+            "description": raw.get("alertInfo", {}).get("description") if isinstance(raw.get("alertInfo"), dict) else None,
             "alert_id": raw.get("alertId") or raw.get("id"),
             "host": None,
             "raw": raw,

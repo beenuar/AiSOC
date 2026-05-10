@@ -7,6 +7,7 @@ a distributed query targeted at a specific host by its host_identifier.
 Authentication uses the same bearer-token mechanism as the rest of the
 internal service APIs (Authorization: Bearer <AISOC_OSQUERY_TLS_API_TOKEN>).
 """
+
 from __future__ import annotations
 
 from typing import Annotated

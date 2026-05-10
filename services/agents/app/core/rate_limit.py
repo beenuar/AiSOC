@@ -53,9 +53,7 @@ class _TokenBucket:
     def _refill(self, now: float) -> None:
         elapsed = max(0.0, now - self.last_refill)
         if elapsed > 0.0:
-            self.tokens = min(
-                self.capacity, self.tokens + elapsed * self.refill_per_second
-            )
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_per_second)
             self.last_refill = now
 
 
@@ -82,9 +80,7 @@ class RateLimitDecision:
             # RFC 7231 §7.1.3 — non-negative integer seconds. Round up
             # so a client that retries exactly at Retry-After doesn't
             # bounce off the bucket again.
-            headers["Retry-After"] = (
-                f"{max(1, int(self.retry_after_seconds + 0.999))}"
-            )
+            headers["Retry-After"] = f"{max(1, int(self.retry_after_seconds + 0.999))}"
         return headers
 
 
@@ -116,10 +112,7 @@ class TokenBucketLimiter:
         if cost <= 0:
             raise ValueError("cost must be positive")
         if cost > self._capacity:
-            raise ValueError(
-                f"cost {cost} exceeds bucket capacity {self._capacity}; "
-                "this would never succeed"
-            )
+            raise ValueError(f"cost {cost} exceeds bucket capacity {self._capacity}; this would never succeed")
 
         bucket = await self._get_bucket(key)
         async with bucket.lock:

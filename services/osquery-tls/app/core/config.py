@@ -3,6 +3,7 @@
 All settings are read from environment variables prefixed with
 ``AISOC_OSQUERY_TLS_``, with sane defaults for local dev.
 """
+
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

@@ -102,10 +102,7 @@ class EmailInboxConnector(BaseConnector):
                     "password",
                     "secret",
                     "Password / App Password",
-                    help_text=(
-                        "Use an app-specific password for Gmail / Outlook. "
-                        "Never your primary account password."
-                    ),
+                    help_text=("Use an app-specific password for Gmail / Outlook. Never your primary account password."),
                 ),
                 Field(
                     "mailbox",
@@ -173,9 +170,7 @@ class EmailInboxConnector(BaseConnector):
     def _open(self) -> imaplib.IMAP4 | imaplib.IMAP4_SSL:
         if self._use_ssl:
             ctx = ssl.create_default_context()
-            client: imaplib.IMAP4 | imaplib.IMAP4_SSL = imaplib.IMAP4_SSL(
-                self._host, self._port, ssl_context=ctx
-            )
+            client: imaplib.IMAP4 | imaplib.IMAP4_SSL = imaplib.IMAP4_SSL(self._host, self._port, ssl_context=ctx)
         else:
             client = imaplib.IMAP4(self._host, self._port)
         client.login(self._username, self._password)

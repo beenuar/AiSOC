@@ -25,6 +25,7 @@ Metric:
     * override_accuracy — fraction of test assertions that pass.
       Floor: 1.0 (every assertion must hold).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -146,9 +147,7 @@ async def test_multi_override_no_collision():
         await mgr.ingest_override(fb)
 
     for i, fb in enumerate(overrides):
-        result = await mgr.recall(
-            f"analyst_override:{fb.alert_id}", tiers=("institutional",)
-        )
+        result = await mgr.recall(f"analyst_override:{fb.alert_id}", tiers=("institutional",))
         assert result is not None
         assert result["analyst_id"] == f"analyst-{i}"
         expected = "true_positive" if i % 2 == 0 else "false_positive"
@@ -179,9 +178,7 @@ async def test_override_upsert_idempotent():
     )
     await mgr.ingest_override(fb_v2)
 
-    result = await mgr.recall(
-        "analyst_override:ALT-UPSERT", tiers=("institutional",)
-    )
+    result = await mgr.recall("analyst_override:ALT-UPSERT", tiers=("institutional",))
     assert result is not None
     assert result["corrected_verdict"] == "false_positive"
     assert result["reason"] == "Revised after deeper analysis"
@@ -199,14 +196,10 @@ async def test_override_cross_tenant_isolation():
     fb = _make_feedback(tenant_id="t-iso-A", alert_id="ALT-ISO")
     await mgr_a.ingest_override(fb)
 
-    result_b = await mgr_b.recall(
-        "analyst_override:ALT-ISO", tiers=("institutional",)
-    )
+    result_b = await mgr_b.recall("analyst_override:ALT-ISO", tiers=("institutional",))
     assert result_b is None
 
-    result_a = await mgr_a.recall(
-        "analyst_override:ALT-ISO", tiers=("institutional",)
-    )
+    result_a = await mgr_a.recall("analyst_override:ALT-ISO", tiers=("institutional",))
     assert result_a is not None
 
 
@@ -236,9 +229,7 @@ async def test_override_verdict_patterns():
         await mgr.ingest_override(fb)
 
     for alert_id, orig, corrected, reason in patterns:
-        result = await mgr.recall(
-            f"analyst_override:{alert_id}", tiers=("institutional",)
-        )
+        result = await mgr.recall(f"analyst_override:{alert_id}", tiers=("institutional",))
         assert result is not None
         assert result["original_verdict"] == orig
         assert result["corrected_verdict"] == corrected

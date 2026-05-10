@@ -76,9 +76,7 @@ class TestTokenAuth:
             )
 
             client = _make_client_token()
-            result = await client.live_query(
-                ["host1"], template="running_processes", timeout_seconds=5
-            )
+            result = await client.live_query(["host1"], template="running_processes", timeout_seconds=5)
 
         assert captured.get("authorization") == f"Bearer {TOKEN}"
         assert result["partial"] is False
@@ -92,12 +90,8 @@ class TestPasswordAuth:
         session_token = "session-tok-001"
 
         with respx.mock:
-            respx.post(LOGIN_URL).mock(
-                return_value=httpx.Response(200, json={"token": session_token})
-            )
-            respx.post(CAMPAIGN_URL).mock(
-                return_value=httpx.Response(200, json={"campaign": {"id": campaign_id}})
-            )
+            respx.post(LOGIN_URL).mock(return_value=httpx.Response(200, json={"token": session_token}))
+            respx.post(CAMPAIGN_URL).mock(return_value=httpx.Response(200, json={"campaign": {"id": campaign_id}}))
             respx.get(CAMPAIGN_STATUS_TMPL.format(campaign_id)).mock(
                 return_value=httpx.Response(
                     200,
@@ -124,9 +118,7 @@ class TestPollingTimeout:
     async def test_partial_when_results_incomplete(self) -> None:
         campaign_id = 7
         with respx.mock:
-            respx.post(CAMPAIGN_URL).mock(
-                return_value=httpx.Response(200, json={"campaign": {"id": campaign_id}})
-            )
+            respx.post(CAMPAIGN_URL).mock(return_value=httpx.Response(200, json={"campaign": {"id": campaign_id}}))
             # Returns only 0/2 results
             respx.get(CAMPAIGN_STATUS_TMPL.format(campaign_id)).mock(
                 return_value=httpx.Response(
@@ -170,9 +162,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_missing_campaign_id_raises(self) -> None:
         with respx.mock:
-            respx.post(CAMPAIGN_URL).mock(
-                return_value=httpx.Response(200, json={"campaign": {}})
-            )
+            respx.post(CAMPAIGN_URL).mock(return_value=httpx.Response(200, json={"campaign": {}}))
 
             client = _make_client_token()
             with pytest.raises(FleetDMError, match="no campaign ID"):
@@ -185,18 +175,14 @@ class TestPartialResponse:
         campaign_id = 55
 
         with respx.mock:
-            respx.post(CAMPAIGN_URL).mock(
-                return_value=httpx.Response(200, json={"campaign": {"id": campaign_id}})
-            )
+            respx.post(CAMPAIGN_URL).mock(return_value=httpx.Response(200, json={"campaign": {"id": campaign_id}}))
             # host1 responds, host2 never does; we poll until timeout.
             respx.get(CAMPAIGN_STATUS_TMPL.format(campaign_id)).mock(
                 return_value=httpx.Response(
                     200,
                     json={
                         "status": {"total_results_count": 1},
-                        "results": [
-                            {"rows": [{"pid": "42"}], "host": {"hostname": "host1"}}
-                        ],
+                        "results": [{"rows": [{"pid": "42"}], "host": {"hostname": "host1"}}],
                     },
                 )
             )

@@ -319,9 +319,7 @@ class FleetDMConnector(BaseConnector):
                 "severity": _table_severity(table),
                 "title": f"FleetDM query: {query.get('name') or query.get('id')}",
                 "description": (query.get("query") or "")[:400],
-                "alert_id": (
-                    f"fleetdm-q{query.get('id')}-h{row.get('host_id') or row.get('host_hostname')}"
-                ),
+                "alert_id": (f"fleetdm-q{query.get('id')}-h{row.get('host_id') or row.get('host_hostname')}"),
                 "hostname": host_name,
                 "host": host_name,
                 "external_id": str(query.get("id")) if query.get("id") is not None else None,

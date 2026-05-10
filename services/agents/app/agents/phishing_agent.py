@@ -95,11 +95,25 @@ def _build_phishing_context(state: InvestigationState) -> str:
     if raw.get("body_snippet"):
         parts.append(f"Body snippet: {raw['body_snippet'][:500]}")
 
-    extra_keys = {k for k in raw if k not in {
-        "severity", "risk_score", *email_fields, "urls", "url", "domain",
-        "attachment_hashes", "file_hash", "spf_result", "dkim_result",
-        "dmarc_result", "body_snippet",
-    }}
+    extra_keys = {
+        k
+        for k in raw
+        if k
+        not in {
+            "severity",
+            "risk_score",
+            *email_fields,
+            "urls",
+            "url",
+            "domain",
+            "attachment_hashes",
+            "file_hash",
+            "spf_result",
+            "dkim_result",
+            "dmarc_result",
+            "body_snippet",
+        }
+    }
     if extra_keys:
         extras = {k: raw[k] for k in sorted(extra_keys)[:8]}
         parts.append(f"Additional fields: {json.dumps(extras, default=str)}")
@@ -155,10 +169,12 @@ async def run_phishing(state: InvestigationState) -> InvestigationState:
 
     t0 = time.monotonic()
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=context),
-        ])
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=_SYSTEM_PROMPT),
+                HumanMessage(content=context),
+            ]
+        )
         result = _parse_response(response.content)
     except Exception as exc:
         logger.error("Phishing agent LLM call failed", error=str(exc))
@@ -182,8 +198,7 @@ async def run_phishing(state: InvestigationState) -> InvestigationState:
     ]
 
     state.add_finding(
-        f"Phishing analysis: verdict={verdict}, confidence={confidence:.2f}, "
-        f"indicators={len(indicators)}, latency={elapsed_ms}ms"
+        f"Phishing analysis: verdict={verdict}, confidence={confidence:.2f}, indicators={len(indicators)}, latency={elapsed_ms}ms"
     )
     if indicators:
         state.add_finding(f"Phishing indicators: {', '.join(indicators)}")

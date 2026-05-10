@@ -111,7 +111,7 @@ _MAX_POLL_INTERVAL_S = 86400  # 24 hours
 # regardless of outage length, to prevent a 3-day outage from triggering
 # a 3-day query that the source rate-limits or rejects.
 _BACKFILL_OUTAGE_THRESHOLD_S = 30 * 60  # 30 minutes
-_BACKFILL_FLAP_WINDOW_S = 10 * 60       # 10 minutes
+_BACKFILL_FLAP_WINDOW_S = 10 * 60  # 10 minutes
 _MAX_BACKFILL_LOOKBACK_S = 24 * 60 * 60  # 24 hours
 # Small buffer added to the computed backfill window to cover the gap
 # between the last successful poll and ``last_outage_at`` (which is set

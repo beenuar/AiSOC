@@ -210,9 +210,7 @@ class JiraConnector(BaseConnector):
     async def push_case(self, case: dict[str, Any]) -> dict[str, Any]:
         """Mint a Jira issue from an AiSOC case."""
         if not self._project_key:
-            raise ValueError(
-                "jira.push_case: project_key not configured on connector instance"
-            )
+            raise ValueError("jira.push_case: project_key not configured on connector instance")
 
         severity = (case.get("severity") or "medium").lower()
         title = case.get("title") or f"AiSOC case {case.get('case_number') or case.get('id')}"

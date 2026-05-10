@@ -1,4 +1,5 @@
 """Node registry: enroll, look up, and refresh osquery nodes."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -12,15 +13,11 @@ from app.models.node import OsqueryNode
 
 async def get_node_by_key(db: AsyncSession, node_key: str) -> OsqueryNode | None:
     """Return the node with the given node_key, or None if not found."""
-    result = await db.execute(
-        select(OsqueryNode).where(OsqueryNode.node_key == node_key)
-    )
+    result = await db.execute(select(OsqueryNode).where(OsqueryNode.node_key == node_key))
     return result.scalar_one_or_none()
 
 
-async def get_node_by_host(
-    db: AsyncSession, host_identifier: str, tenant_id: str
-) -> OsqueryNode | None:
+async def get_node_by_host(db: AsyncSession, host_identifier: str, tenant_id: str) -> OsqueryNode | None:
     """Return a node by host_identifier + tenant, or None."""
     result = await db.execute(
         select(OsqueryNode).where(
@@ -62,9 +59,5 @@ async def enroll_node(
 
 async def mark_seen(db: AsyncSession, node: OsqueryNode) -> None:
     """Update last_seen timestamp for the given node."""
-    await db.execute(
-        update(OsqueryNode)
-        .where(OsqueryNode.id == node.id)
-        .values(last_seen=datetime.now(UTC))
-    )
+    await db.execute(update(OsqueryNode).where(OsqueryNode.id == node.id).values(last_seen=datetime.now(UTC)))
     await db.commit()

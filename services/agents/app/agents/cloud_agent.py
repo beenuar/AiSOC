@@ -104,11 +104,24 @@ def _build_cloud_context(state: InvestigationState) -> str:
     if raw.get("finding_type"):
         parts.append(f"Finding type: {raw['finding_type']}")
 
-    extra_keys = {k for k in raw if k not in {
-        "severity", "risk_score", *cloud_fields, "bucket_acl", "bucket_policy",
-        "security_group_rules", "iam_policy", "permissions", "api_calls",
-        "is_public", "finding_type",
-    }}
+    extra_keys = {
+        k
+        for k in raw
+        if k
+        not in {
+            "severity",
+            "risk_score",
+            *cloud_fields,
+            "bucket_acl",
+            "bucket_policy",
+            "security_group_rules",
+            "iam_policy",
+            "permissions",
+            "api_calls",
+            "is_public",
+            "finding_type",
+        }
+    }
     if extra_keys:
         extras = {k: raw[k] for k in sorted(extra_keys)[:8]}
         parts.append(f"Additional fields: {json.dumps(extras, default=str)}")
@@ -168,10 +181,12 @@ async def run_cloud(state: InvestigationState) -> InvestigationState:
 
     t0 = time.monotonic()
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=context),
-        ])
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=_SYSTEM_PROMPT),
+                HumanMessage(content=context),
+            ]
+        )
         result = _parse_response(response.content)
     except Exception as exc:
         logger.error("Cloud agent LLM call failed", error=str(exc))

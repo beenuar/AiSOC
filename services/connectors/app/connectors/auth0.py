@@ -39,10 +39,7 @@ class Auth0Connector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Auth0 tenant logs. Pulls login events, MFA events, and admin "
-                "actions via the Management API."
-            ),
+            description=("Auth0 tenant logs. Pulls login events, MFA events, and admin actions via the Management API."),
             docs_url="/docs/connectors/auth0",
             fields=[
                 Field(
@@ -115,9 +112,7 @@ class Auth0Connector(BaseConnector):
         token = await self._bearer()
         if not token:
             return []
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.000Z"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(

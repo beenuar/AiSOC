@@ -4,6 +4,7 @@ Unit tests for the osquery_live_query playbook step handler.
 Tests exercise ``_handle_osquery_live_query`` directly with patched client
 classes injected via sys.modules, so no real network calls are made.
 """
+
 from __future__ import annotations
 
 import sys

@@ -114,9 +114,7 @@ class ServiceNowConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%d %H:%M:%S")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
@@ -263,9 +261,7 @@ class ServiceNowConnector(BaseConnector):
         # actually applies.
         if target_state in {"6", "7"}:
             payload["close_code"] = "Closed/Resolved by Caller"
-            payload["close_notes"] = (
-                f"Closed by AiSOC (case {case.get('case_number') or case.get('id')})"
-            )
+            payload["close_notes"] = f"Closed by AiSOC (case {case.get('case_number') or case.get('id')})"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.patch(

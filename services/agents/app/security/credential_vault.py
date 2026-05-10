@@ -70,15 +70,11 @@ class CredentialVault:
         historical_keys: list[bytes] | None = None,
     ) -> None:
         if not primary_key:
-            raise CredentialVaultError(
-                "CredentialVault requires a non-empty primary key"
-            )
+            raise CredentialVaultError("CredentialVault requires a non-empty primary key")
         try:
             primary = Fernet(primary_key)
         except (TypeError, ValueError) as exc:
-            raise CredentialVaultError(
-                f"AISOC_CREDENTIAL_KEY is not a valid Fernet key: {exc}"
-            ) from exc
+            raise CredentialVaultError(f"AISOC_CREDENTIAL_KEY is not a valid Fernet key: {exc}") from exc
 
         keyring: list[Fernet] = [primary]
         for k in historical_keys or []:
@@ -91,9 +87,7 @@ class CredentialVault:
 
     def encrypt(self, value: str) -> str:
         if not isinstance(value, str):
-            raise CredentialVaultError(
-                f"vault.encrypt expects str, got {type(value).__name__}"
-            )
+            raise CredentialVaultError(f"vault.encrypt expects str, got {type(value).__name__}")
         if value.startswith(_CIPHER_PREFIX):
             return value
         token = self._fernet.encrypt(value.encode("utf-8")).decode("ascii")
@@ -101,9 +95,7 @@ class CredentialVault:
 
     def decrypt(self, value: str) -> str:
         if not isinstance(value, str):
-            raise CredentialVaultError(
-                f"vault.decrypt expects str, got {type(value).__name__}"
-            )
+            raise CredentialVaultError(f"vault.decrypt expects str, got {type(value).__name__}")
         if not value.startswith(_CIPHER_PREFIX):
             return value
         token = value[len(_CIPHER_PREFIX) :].encode("ascii")
@@ -111,8 +103,7 @@ class CredentialVault:
             return self._fernet.decrypt(token).decode("utf-8")
         except InvalidToken as exc:
             raise CredentialVaultError(
-                "ciphertext failed integrity check — likely "
-                "AISOC_CREDENTIAL_KEY mismatch between API and agents services"
+                "ciphertext failed integrity check — likely AISOC_CREDENTIAL_KEY mismatch between API and agents services"
             ) from exc
 
     def encrypt_dict(
@@ -143,22 +134,13 @@ class CredentialVault:
         if isinstance(payload, Mapping):
             out: dict[str, Any] = {}
             for k, v in payload.items():
-                if (
-                    secret_keys is not None
-                    and k not in secret_keys
-                    and not isinstance(v, (Mapping, list))
-                ):
+                if secret_keys is not None and k not in secret_keys and not isinstance(v, (Mapping, list)):
                     out[k] = v
                 else:
-                    out[k] = self._walk(
-                        v, encrypt=encrypt, secret_keys=secret_keys, _key=k
-                    )
+                    out[k] = self._walk(v, encrypt=encrypt, secret_keys=secret_keys, _key=k)
             return out
         if isinstance(payload, list):
-            return [
-                self._walk(item, encrypt=encrypt, secret_keys=secret_keys, _key=_key)
-                for item in payload
-            ]
+            return [self._walk(item, encrypt=encrypt, secret_keys=secret_keys, _key=_key) for item in payload]
         if isinstance(payload, str):
             return op(payload)
         return payload

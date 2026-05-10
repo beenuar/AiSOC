@@ -3,6 +3,7 @@
 Populated by the log forwarder when osquery file_events rows arrive via the
 TLS log endpoint.  The ``/v1/fim/*`` API queries this table.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -41,9 +42,5 @@ class FimEvent(Base):
     username: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # Timing
-    event_time: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    ingested_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

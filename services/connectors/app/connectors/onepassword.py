@@ -63,9 +63,7 @@ class OnePasswordConnector(BaseConnector):
 
     async def test_connection(self) -> dict[str, Any]:
         try:
-            since = (datetime.now(UTC) - timedelta(minutes=1)).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            since = (datetime.now(UTC) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
                     f"{self._base_url}/api/v1/signinattempts",
@@ -79,9 +77,7 @@ class OnePasswordConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         events: list[dict[str, Any]] = []
         cursor: str | None = None

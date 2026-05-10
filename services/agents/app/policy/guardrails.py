@@ -99,26 +99,26 @@ def _make_thresholds(
 # ---------------------------------------------------------------------------
 _DEFAULT_THRESHOLDS: dict[str, ActionThresholds] = {
     # Read / enrichment — autonomous by default
-    "lookup_ip":           _make_thresholds(0.0, 0.0, 0.0),
-    "lookup_domain":       _make_thresholds(0.0, 0.0, 0.0),
-    "search_logs":         _make_thresholds(0.0, 0.0, 0.0),
-    "enrich_alert":        _make_thresholds(0.0, 0.0, 0.0),
-    "mitre_lookup":        _make_thresholds(0.0, 0.0, 0.0),
-    "get_alert_context":   _make_thresholds(0.0, 0.0, 0.0),
+    "lookup_ip": _make_thresholds(0.0, 0.0, 0.0),
+    "lookup_domain": _make_thresholds(0.0, 0.0, 0.0),
+    "search_logs": _make_thresholds(0.0, 0.0, 0.0),
+    "enrich_alert": _make_thresholds(0.0, 0.0, 0.0),
+    "mitre_lookup": _make_thresholds(0.0, 0.0, 0.0),
+    "get_alert_context": _make_thresholds(0.0, 0.0, 0.0),
     # Case workflow — moderate autonomy, easy to roll back
-    "add_alert_tag":       _make_thresholds(0.50, 0.30, 0.10),
-    "close_alert":         _make_thresholds(0.60, 0.40, 0.20),
-    "create_case":         _make_thresholds(0.50, 0.30, 0.10),
-    "add_case_comment":    _make_thresholds(0.40, 0.20, 0.05),
-    "assign_case":         _make_thresholds(0.60, 0.40, 0.20),
+    "add_alert_tag": _make_thresholds(0.50, 0.30, 0.10),
+    "close_alert": _make_thresholds(0.60, 0.40, 0.20),
+    "create_case": _make_thresholds(0.50, 0.30, 0.10),
+    "add_case_comment": _make_thresholds(0.40, 0.20, 0.05),
+    "assign_case": _make_thresholds(0.60, 0.40, 0.20),
     # Containment — high blast radius
-    "quarantine_file":     _make_thresholds(0.85, 0.65, 0.40),
-    "block_ip":            _make_thresholds(0.90, 0.70, 0.40),
-    "isolate_host":        _make_thresholds(0.92, 0.72, 0.45),
+    "quarantine_file": _make_thresholds(0.85, 0.65, 0.40),
+    "block_ip": _make_thresholds(0.90, 0.70, 0.40),
+    "isolate_host": _make_thresholds(0.92, 0.72, 0.45),
     "disable_user_account": _make_thresholds(0.90, 0.70, 0.40),
-    "revoke_session":      _make_thresholds(0.80, 0.60, 0.30),
-    "delete_object":       _make_thresholds(0.95, 0.80, 0.50),
-    "firewall_rule_add":   _make_thresholds(0.88, 0.68, 0.40),
+    "revoke_session": _make_thresholds(0.80, 0.60, 0.30),
+    "delete_object": _make_thresholds(0.95, 0.80, 0.50),
+    "firewall_rule_add": _make_thresholds(0.88, 0.68, 0.40),
     "firewall_rule_remove": _make_thresholds(0.90, 0.70, 0.40),
 }
 
@@ -169,9 +169,7 @@ def _coerce_threshold_value(action: str, value: Any) -> ActionThresholds | None:
             r = float(review) if review is not None else None
             e = float(escalation) if escalation is not None else None
         except (TypeError, ValueError):
-            logger.warning(
-                "policy.guardrails.yaml_bad_tier", action=action, review=review, escalation=escalation
-            )
+            logger.warning("policy.guardrails.yaml_bad_tier", action=action, review=review, escalation=escalation)
             return None
         thresholds = _make_thresholds(auto, r, e)
         if thresholds.review > thresholds.auto or thresholds.escalation > thresholds.review:
@@ -296,9 +294,7 @@ async def _load_overrides(tenant_id: str) -> dict[str, ActionThresholds]:
 
         if _POOL is None:
             _POOL = await asyncpg.create_pool(
-                dsn.replace("postgresql+asyncpg://", "postgresql://").replace(
-                    "postgres+asyncpg://", "postgresql://"
-                ),
+                dsn.replace("postgresql+asyncpg://", "postgresql://").replace("postgres+asyncpg://", "postgresql://"),
                 min_size=1,
                 max_size=2,
             )
@@ -334,9 +330,7 @@ async def _load_overrides(tenant_id: str) -> dict[str, ActionThresholds]:
             for r in rows:
                 auto = float(r["min_confidence"])
                 review_raw = r["review_confidence"] if "review_confidence" in r.keys() else None
-                escalation_raw = (
-                    r["escalation_confidence"] if "escalation_confidence" in r.keys() else None
-                )
+                escalation_raw = r["escalation_confidence"] if "escalation_confidence" in r.keys() else None
                 review = float(review_raw) if review_raw is not None else None
                 escalation = float(escalation_raw) if escalation_raw is not None else None
                 overrides[r["action_name"]] = _make_thresholds(auto, review, escalation)
@@ -415,20 +409,13 @@ class GuardrailPolicy:
         decision = thresholds.decide(confidence)
         reason = ""
         if decision is AutonomyDecision.REVIEW:
-            reason = (
-                f"Confidence {confidence:.2f} below auto threshold "
-                f"{thresholds.auto:.2f} for '{action}' — analyst review required."
-            )
+            reason = f"Confidence {confidence:.2f} below auto threshold {thresholds.auto:.2f} for '{action}' — analyst review required."
         elif decision is AutonomyDecision.ESCALATE:
             reason = (
-                f"Confidence {confidence:.2f} below review threshold "
-                f"{thresholds.review:.2f} for '{action}' — escalating to senior on-call."
+                f"Confidence {confidence:.2f} below review threshold {thresholds.review:.2f} for '{action}' — escalating to senior on-call."
             )
         elif decision is AutonomyDecision.REJECT:
-            reason = (
-                f"Confidence {confidence:.2f} below escalation floor "
-                f"{thresholds.escalation:.2f} for '{action}' — refusing to act."
-            )
+            reason = f"Confidence {confidence:.2f} below escalation floor {thresholds.escalation:.2f} for '{action}' — refusing to act."
         if decision is not AutonomyDecision.AUTO:
             logger.info(
                 "policy.guardrails.decision",

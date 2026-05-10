@@ -52,10 +52,7 @@ async def run_attack_path(state: InvestigationState) -> InvestigationState:
 
     path = await get_attack_path(case_id=case_id, api_token=_SERVICE_TOKEN)
     if path.get("error") or not path.get("nodes"):
-        state.add_finding(
-            f"Attack-path graph empty for case {case_id} "
-            f"(node_count={path.get('node_count', 0)})."
-        )
+        state.add_finding(f"Attack-path graph empty for case {case_id} (node_count={path.get('node_count', 0)}).")
         return state
 
     # ---- Summarise the path ----
@@ -72,9 +69,7 @@ async def run_attack_path(state: InvestigationState) -> InvestigationState:
     # how far through the kill chain the attacker has progressed.
     tactic_chain = _extract_tactic_chain(nodes)
     if tactic_chain:
-        state.add_finding(
-            f"Kill-chain stages reached: {' → '.join(tactic_chain)}."
-        )
+        state.add_finding(f"Kill-chain stages reached: {' → '.join(tactic_chain)}.")
 
     # ---- Pick high-value entities to compute blast radius for ----
     pivot_targets = _select_blast_targets(nodes)
@@ -115,17 +110,11 @@ async def run_attack_path(state: InvestigationState) -> InvestigationState:
             state.proposed_actions.append(
                 ProposedAction(
                     action_type=("isolate_host" if top["label"] == "Host" else "disable_user"),
-                    description=(
-                        f"Isolate {top['label'].lower()} '{top['name']}' — "
-                        f"{top['total_affected']} downstream entities at risk."
-                    ),
+                    description=(f"Isolate {top['label'].lower()} '{top['name']}' — {top['total_affected']} downstream entities at risk."),
                     risk_level=ActionRisk.HIGH,
                     target=top["name"],
                     requires_approval=True,
-                    rationale=(
-                        f"Graph blast radius {top['blast_radius_score']:.2f} "
-                        f"with {top['total_affected']} reachable entities."
-                    ),
+                    rationale=(f"Graph blast radius {top['blast_radius_score']:.2f} with {top['total_affected']} reachable entities."),
                     parameters={
                         "entity_type": top["entity_type"],
                         "entity_id": top["entity_id"],
@@ -175,11 +164,7 @@ async def run_attack_path(state: InvestigationState) -> InvestigationState:
 def _resolve_case_id(state: InvestigationState) -> str | None:
     """Find the case id on the state, tolerant of where the orchestrator put it."""
     raw = state.raw_alert or {}
-    return (
-        raw.get("case_id")
-        or raw.get("caseId")
-        or (state.threat_intel or {}).get("case_id")
-    )
+    return raw.get("case_id") or raw.get("caseId") or (state.threat_intel or {}).get("case_id")
 
 
 def _extract_tactic_chain(nodes: list[dict[str, Any]]) -> list[str]:

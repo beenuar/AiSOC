@@ -65,9 +65,7 @@ class ProofpointConnector(BaseConnector):
 
     async def test_connection(self) -> dict[str, Any]:
         try:
-            since = (datetime.now(UTC) - timedelta(minutes=5)).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            since = (datetime.now(UTC) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(
                     f"{_TAP_BASE}/v2/siem/messages/blocked",
@@ -81,9 +79,7 @@ class ProofpointConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(

@@ -304,10 +304,23 @@ def _map_to_ocsf(alert: dict[str, Any]) -> dict[str, Any]:
 
     raw = alert.get("rawEvent") or alert.get("raw_event") or {}
     fields: dict[str, Any] = {}
-    for key in ("user", "user_name", "username", "actor", "src_ip",
-                "source_ip", "dest_ip", "destination_ip", "host",
-                "hostname", "process", "process_name", "file_hash",
-                "domain", "url"):
+    for key in (
+        "user",
+        "user_name",
+        "username",
+        "actor",
+        "src_ip",
+        "source_ip",
+        "dest_ip",
+        "destination_ip",
+        "host",
+        "hostname",
+        "process",
+        "process_name",
+        "file_hash",
+        "domain",
+        "url",
+    ):
         if isinstance(raw, dict) and raw.get(key):
             fields[key] = raw[key]
 
@@ -346,12 +359,13 @@ def _extract_mitre_ids(alert: dict[str, Any]) -> list[str]:
                 seen.add(tid)
 
     # Regex sweep across tags + descriptive text
-    text_pool = " ".join(
-        str(v)
-        for v in (
-            alert.get("tags") or []
-        )
-    ) + " " + str(alert.get("description") or "") + " " + str(alert.get("title") or "")
+    text_pool = (
+        " ".join(str(v) for v in (alert.get("tags") or []))
+        + " "
+        + str(alert.get("description") or "")
+        + " "
+        + str(alert.get("title") or "")
+    )
 
     for tid in _MITRE_ID_RE.findall(text_pool):
         if tid not in seen:
@@ -445,9 +459,7 @@ def _extract_evidence(alert: dict[str, Any]) -> list[dict[str, str]]:
     return items[:8]
 
 
-def _build_next_steps(
-    alert: dict[str, Any], mitre_ids: list[str]
-) -> list[dict[str, Any]]:
+def _build_next_steps(alert: dict[str, Any], mitre_ids: list[str]) -> list[dict[str, Any]]:
     """Recommend concrete next moves grounded in alert tags / techniques.
 
     These are intentionally generic and link to the playbook engine so
@@ -525,15 +537,9 @@ def _build_summary(alert: dict[str, Any], mitre_ids: list[str]) -> str:
 
     technique_clause = ""
     if mitre_ids:
-        technique_clause = (
-            f" The detection maps to {', '.join(mitre_ids[:3])}, "
-            "which the technique cards below describe in full."
-        )
+        technique_clause = f" The detection maps to {', '.join(mitre_ids[:3])}, which the technique cards below describe in full."
 
-    base = (
-        f"{title} fired at {severity} severity from {source}."
-        f"{technique_clause}"
-    )
+    base = f"{title} fired at {severity} severity from {source}.{technique_clause}"
     if desc:
         # Trim to keep the drawer scannable.
         snippet = desc if len(desc) <= 240 else desc[:237] + "…"
@@ -574,10 +580,7 @@ async def _llm_summary(
         url = f"{base}/v1/chat/completions"
         model = llm_config.model
 
-        tech_lines = [
-            f"- {t['id']} {t['name']} ({', '.join(t.get('tactic_names') or []) or 'unknown tactic'})"
-            for t in mitre_techs
-        ]
+        tech_lines = [f"- {t['id']} {t['name']} ({', '.join(t.get('tactic_names') or []) or 'unknown tactic'})" for t in mitre_techs]
         prompt_alert = {
             "title": alert.get("title"),
             "severity": alert.get("severity"),
@@ -633,9 +636,7 @@ def _frame(obj: dict[str, Any]) -> bytes:
     return (json.dumps(obj) + "\n").encode()
 
 
-async def _stream_explanation(
-    req: ExplainRequest, llm_config: LlmConfig
-) -> AsyncIterator[bytes]:
+async def _stream_explanation(req: ExplainRequest, llm_config: LlmConfig) -> AsyncIterator[bytes]:
     alert = req.alert or {}
     alert_id = req.alert_id or alert.get("id") or "unknown"
 
@@ -647,9 +648,7 @@ async def _stream_explanation(
         fallback_summary = _build_summary(alert, mitre_ids)
         # Run the LLM call concurrently with the deterministic emissions
         # so the drawer paints fast even on a cold network.
-        summary_task = asyncio.create_task(
-            _llm_summary(alert, mitre_cards, fallback_summary, llm_config)
-        )
+        summary_task = asyncio.create_task(_llm_summary(alert, mitre_cards, fallback_summary, llm_config))
 
         yield _frame({"kind": "section", "id": "summary", "title": "What happened"})
         # Stream the summary word-by-word once it resolves.

@@ -78,13 +78,7 @@ def _is_private_address(host: str) -> bool:
         ip = None
 
     if ip is not None:
-        return (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_unspecified
-            or ip.is_reserved
-        )
+        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified or ip.is_reserved
 
     # DNS-style host: unqualified single label is internal-by-default.
     if "." not in candidate:
@@ -151,9 +145,7 @@ def enforce_airgap_for_url(url: str) -> None:
     parsed = urlparse(url)
     host = parsed.hostname or ""
     if not is_host_allowed_for_airgap(host):
-        raise AirgapViolation(
-            f"air-gap policy blocked outbound request to {host or url!r}"
-        )
+        raise AirgapViolation(f"air-gap policy blocked outbound request to {host or url!r}")
 
 
 def airgap_status() -> dict[str, object]:

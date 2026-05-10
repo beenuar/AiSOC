@@ -85,9 +85,7 @@ class SentinelOneConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%S.000000Z"
-        )
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
         params: dict[str, Any] = {
             "createdAt__gte": since,
             "limit": 100,
@@ -119,9 +117,7 @@ class SentinelOneConnector(BaseConnector):
                 f"{threat_info.get('threatName', 'unknown')} on "
                 f"{agent_info.get('agentComputerName', 'unknown')}"
             ),
-            "severity": _SEVERITY_MAP.get(
-                threat_info.get("confidenceLevel", "Medium"), "medium"
-            ),
+            "severity": _SEVERITY_MAP.get(threat_info.get("confidenceLevel", "Medium"), "medium"),
             "src_ip": agent_info.get("agentIpV4", agent_info.get("externalIp")),
             "hostname": agent_info.get("agentComputerName"),
             "actor": threat_info.get("processUser"),

@@ -124,9 +124,7 @@ class TestEnvBaseline:
         assert model == ""
         assert key is None
 
-    def test_openai_style_env_is_picked_up(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_openai_style_env_is_picked_up(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env-1")
         monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com")
         monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -137,9 +135,7 @@ class TestEnvBaseline:
         assert model == "gpt-4o-mini"
         assert key == "sk-env-1"
 
-    def test_llm_style_env_is_picked_up_when_openai_unset(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_llm_style_env_is_picked_up_when_openai_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_API_KEY", "private-llm-key")
         monkeypatch.setenv("LLM_BASE_URL", "http://llm.internal:4000/v1")
         monkeypatch.setenv("LLM_MODEL", "llama3.1-8b")
@@ -150,9 +146,7 @@ class TestEnvBaseline:
         assert model == "llama3.1-8b"
         assert key == "private-llm-key"
 
-    def test_openai_takes_precedence_over_llm_aliases(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_openai_takes_precedence_over_llm_aliases(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-from-openai")
         monkeypatch.setenv("LLM_API_KEY", "should-be-ignored")
         monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com")
@@ -166,9 +160,7 @@ class TestEnvBaseline:
         assert model == "gpt-4o-mini"
         assert key == "sk-from-openai"
 
-    def test_aisoc_llm_model_legacy_env_supported(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_aisoc_llm_model_legacy_env_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_LLM_MODEL", "claude-3.5-sonnet")
         resolver = _import_resolver()
         _, model, _ = resolver._env_baseline()
@@ -191,27 +183,21 @@ class TestAirgapBlocks:
             assert blocked is False, f"airgap=off blocked {url!r}"
 
     @pytest.mark.parametrize("flag", ["1", "true", "yes"])
-    def test_airgap_blocks_empty_base_url(
-        self, flag: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_airgap_blocks_empty_base_url(self, flag: str, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_AIRGAPPED", flag)
         resolver = _import_resolver()
         blocked, reason = resolver._airgap_blocks("")
         assert blocked is True
         assert "would default to api.openai.com" in reason
 
-    def test_airgap_blocks_openai_host(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_airgap_blocks_openai_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")
         resolver = _import_resolver()
         blocked, reason = resolver._airgap_blocks("https://api.openai.com/v1")
         assert blocked is True
         assert "api.openai.com" in reason
 
-    def test_airgap_allows_private_litellm_host(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_airgap_allows_private_litellm_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")
         resolver = _import_resolver()
         blocked, _ = resolver._airgap_blocks("http://litellm.internal:4000/v1")
@@ -285,9 +271,7 @@ class TestClassifySource:
 class TestDecryptVaultToken:
     """Decryption is best-effort and must never raise."""
 
-    def test_returns_none_when_vault_disabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_none_when_vault_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # No AISOC_CREDENTIAL_KEY set → vault.get_vault() returns None.
         monkeypatch.delenv("AISOC_CREDENTIAL_KEY", raising=False)
         _reset_vault()
@@ -296,9 +280,7 @@ class TestDecryptVaultToken:
         result = resolver._decrypt_vault_token("vault:v1:something", "tenant-a")
         assert result is None
 
-    def test_round_trip_with_configured_vault(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_round_trip_with_configured_vault(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _set_vault_key(monkeypatch)
         from app.security.credential_vault import get_vault  # noqa: PLC0415
 
@@ -311,18 +293,14 @@ class TestDecryptVaultToken:
         result = resolver._decrypt_vault_token(ciphertext, "tenant-a")
         assert result == "sk-tenant-secret"
 
-    def test_returns_none_on_corrupt_ciphertext(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_none_on_corrupt_ciphertext(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Configure a vault with one key, then hand it a token encrypted
         # under a completely different key — must degrade gracefully.
         _set_vault_key(monkeypatch)
 
         wrong_key_vault_key = Fernet.generate_key()
         wrong_fernet = Fernet(wrong_key_vault_key)
-        bogus_token = (
-            "vault:v1:" + wrong_fernet.encrypt(b"sk-other").decode("ascii")
-        )
+        bogus_token = "vault:v1:" + wrong_fernet.encrypt(b"sk-other").decode("ascii")
 
         resolver = _import_resolver()
         result = resolver._decrypt_vault_token(bogus_token, "tenant-a")
@@ -338,9 +316,7 @@ class TestResolveNoTenant:
     """Sanity-check the early-exit branches that skip the DB entirely."""
 
     @pytest.mark.asyncio
-    async def test_none_tenant_ref_uses_env_baseline_only(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_none_tenant_ref_uses_env_baseline_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000")
         monkeypatch.setenv("OPENAI_MODEL", "llama3.1-8b")
@@ -356,9 +332,7 @@ class TestResolveNoTenant:
         assert cfg.reason == ""
 
     @pytest.mark.asyncio
-    async def test_default_tenant_ref_skips_db(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_default_tenant_ref_skips_db(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000")
 
@@ -371,9 +345,7 @@ class TestResolveNoTenant:
         assert cfg.source == "environment"
 
     @pytest.mark.asyncio
-    async def test_no_key_anywhere_returns_disallowed_with_reason(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_no_key_anywhere_returns_disallowed_with_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # No env key, no tenant ref → allowed=False with deterministic
         # fallback base_url / model so callers can still log.
         resolver = _import_resolver()
@@ -386,9 +358,7 @@ class TestResolveNoTenant:
         assert "no api key" in cfg.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_airgap_blocks_default_openai_endpoint(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_airgap_blocks_default_openai_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
         monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com")
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")
@@ -399,9 +369,7 @@ class TestResolveNoTenant:
         assert "api.openai.com" in cfg.reason
 
     @pytest.mark.asyncio
-    async def test_airgap_allows_private_endpoint(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_airgap_allows_private_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000/v1")
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")
@@ -464,6 +432,7 @@ def _stub_ledger(monkeypatch: pytest.MonkeyPatch, pool: MagicMock | None) -> Non
 
     ledger = ModuleType(ledger_name)
     if pool is None:
+
         async def _raise():
             raise RuntimeError("DATABASE_URL not set")
 
@@ -475,9 +444,7 @@ def _stub_ledger(monkeypatch: pytest.MonkeyPatch, pool: MagicMock | None) -> Non
 
 class TestResolveWithTenant:
     @pytest.mark.asyncio
-    async def test_tenant_row_with_full_override_yields_source_tenant(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_tenant_row_with_full_override_yields_source_tenant(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _set_vault_key(monkeypatch)
         from app.security.credential_vault import get_vault  # noqa: PLC0415
 
@@ -507,9 +474,7 @@ class TestResolveWithTenant:
         assert cfg.reason == ""
 
     @pytest.mark.asyncio
-    async def test_tenant_supplies_only_key_layered_over_env_is_mixed(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_tenant_supplies_only_key_layered_over_env_is_mixed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Operator scenario: env sets base_url + model, tenant BYOKs
         # only the key. Source should be "mixed".
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000")
@@ -545,9 +510,7 @@ class TestResolveWithTenant:
         assert cfg.source == "mixed"
 
     @pytest.mark.asyncio
-    async def test_disabled_tenant_row_is_treated_as_no_override(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_disabled_tenant_row_is_treated_as_no_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # ``enabled=false`` lets operators pause BYOK without deletion.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env-fallback")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000")
@@ -578,9 +541,7 @@ class TestResolveWithTenant:
         assert cfg.source == "environment"
 
     @pytest.mark.asyncio
-    async def test_corrupt_ciphertext_falls_back_to_env_key(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_corrupt_ciphertext_falls_back_to_env_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # If the tenant's stored ciphertext can't be decrypted with the
         # current vault key (mid-rotation, mistyped secret, etc.), the
         # resolver must fall back to the env key — *not* fail open and
@@ -591,9 +552,7 @@ class TestResolveWithTenant:
         # Build a ciphertext under a *different* key, simulating drift.
         wrong_key = Fernet.generate_key()
         wrong_fernet = Fernet(wrong_key)
-        bogus_token = (
-            "vault:v1:" + wrong_fernet.encrypt(b"sk-tenant").decode("ascii")
-        )
+        bogus_token = "vault:v1:" + wrong_fernet.encrypt(b"sk-tenant").decode("ascii")
 
         row = {
             "provider": "openai_compatible",
@@ -618,9 +577,7 @@ class TestResolveWithTenant:
         assert cfg.source == "mixed"
 
     @pytest.mark.asyncio
-    async def test_vault_disabled_falls_back_to_env_key(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_vault_disabled_falls_back_to_env_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # AISOC_CREDENTIAL_KEY missing → vault.get_vault() returns None.
         # Resolver must still surface tenant base_url/model and use env key.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env-fallback")
@@ -649,9 +606,7 @@ class TestResolveWithTenant:
         assert cfg.source == "mixed"
 
     @pytest.mark.asyncio
-    async def test_no_tenant_row_uses_env_baseline(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_no_tenant_row_uses_env_baseline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
         monkeypatch.setenv("OPENAI_BASE_URL", "http://litellm.internal:4000")
 
@@ -665,9 +620,7 @@ class TestResolveWithTenant:
         assert cfg.source == "environment"
 
     @pytest.mark.asyncio
-    async def test_ledger_unavailable_falls_back_to_env_baseline(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_ledger_unavailable_falls_back_to_env_baseline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Simulate the "agents box can't reach the platform DB right now"
         # path. Resolver must never raise on this; it just degrades.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
@@ -680,9 +633,7 @@ class TestResolveWithTenant:
         assert cfg.source == "environment"
 
     @pytest.mark.asyncio
-    async def test_db_query_failure_falls_back_to_env_baseline(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_db_query_failure_falls_back_to_env_baseline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # ``conn.fetchrow`` blows up mid-query (e.g. transient outage,
         # connection cap exceeded). Must not propagate.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
@@ -712,9 +663,7 @@ class TestResolveWithTenant:
 
 class TestAirgapWithTenantOverride:
     @pytest.mark.asyncio
-    async def test_airgap_allows_tenant_private_gateway(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_airgap_allows_tenant_private_gateway(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # The whole point of BYOK in air-gapped deployments: tenant
         # points at their internal LLM, AISOC_AIRGAPPED=true does *not*
         # block them.
@@ -744,9 +693,7 @@ class TestAirgapWithTenantOverride:
         assert cfg.base_url == "http://tenant-llm.internal:4000/v1"
 
     @pytest.mark.asyncio
-    async def test_airgap_blocks_tenant_byok_to_openai(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_airgap_blocks_tenant_byok_to_openai(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Even with a valid tenant BYOK row, if it points at OpenAI and
         # AISOC_AIRGAPPED=true, we must refuse the live call.
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")

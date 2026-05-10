@@ -33,9 +33,7 @@ _POOL: Any = None  # asyncpg.Pool | None
 
 
 def _normalise_dsn(url: str) -> str:
-    return url.replace("postgresql+asyncpg://", "postgresql://").replace(
-        "postgres+asyncpg://", "postgresql://"
-    )
+    return url.replace("postgresql+asyncpg://", "postgresql://").replace("postgres+asyncpg://", "postgresql://")
 
 
 async def _get_pool() -> Any | None:

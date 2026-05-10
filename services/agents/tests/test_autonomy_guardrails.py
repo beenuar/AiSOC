@@ -153,9 +153,7 @@ class DefaultPolicyTest(unittest.TestCase):
             with self.subTest(action=action):
                 self.assertGreaterEqual(defaults[action].auto, 0.85)
                 self.assertLess(defaults[action].review, defaults[action].auto)
-                self.assertLess(
-                    defaults[action].escalation, defaults[action].review
-                )
+                self.assertLess(defaults[action].escalation, defaults[action].review)
 
     def test_unknown_action_rejects_by_default(self) -> None:
         policy = GuardrailPolicy.load_sync(tenant_id="t-test")
@@ -198,9 +196,7 @@ class YamlOverrideTest(unittest.TestCase):
         self.assertAlmostEqual(loaded["block_ip"].auto, 0.75, places=6)
         # review/escalation derived
         self.assertLess(loaded["block_ip"].review, loaded["block_ip"].auto)
-        self.assertLess(
-            loaded["block_ip"].escalation, loaded["block_ip"].review
-        )
+        self.assertLess(loaded["block_ip"].escalation, loaded["block_ip"].review)
 
     def test_explicit_three_tier_form(self) -> None:
         try:

@@ -1,4 +1,5 @@
 """Tests for distributed query read/write and internal enqueue/status endpoints."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch

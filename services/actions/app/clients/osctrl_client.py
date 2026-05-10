@@ -34,8 +34,8 @@ from app.clients.osquery_allowlist import AllowlistError, render_query
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_POLL_INTERVAL = 3.0   # seconds between result-polling retries
-_DEFAULT_TIMEOUT = 60          # seconds before we stop polling
+_DEFAULT_POLL_INTERVAL = 3.0  # seconds between result-polling retries
+_DEFAULT_TIMEOUT = 60  # seconds before we stop polling
 _MAX_REDIRECT = 5
 
 
@@ -130,9 +130,7 @@ class OsctrlClient:
                 extra={"query_id": query_id, "env": self._environment, "hosts": target_hosts},
             )
 
-            return await self._poll_results(
-                http, query_id, expected_hosts=set(target_hosts), timeout=timeout_seconds
-            )
+            return await self._poll_results(http, query_id, expected_hosts=set(target_hosts), timeout=timeout_seconds)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -161,14 +159,10 @@ class OsctrlClient:
 
         resp = await http.post(url, json=payload)
         if resp.status_code not in (200, 201):
-            raise OsctrlError(
-                f"osctrl query submission failed: HTTP {resp.status_code} — {resp.text[:300]}"
-            )
+            raise OsctrlError(f"osctrl query submission failed: HTTP {resp.status_code} — {resp.text[:300]}")
 
         data = resp.json()
-        query_id: str | None = (
-            data.get("id") or data.get("query_id") or data.get("uuid")
-        )
+        query_id: str | None = data.get("id") or data.get("query_id") or data.get("uuid")
         if not query_id:
             raise OsctrlError(f"osctrl returned no query ID in response: {data}")
         return str(query_id)
@@ -203,9 +197,7 @@ class OsctrlClient:
                 await asyncio.sleep(min(self._poll_interval, remaining))
                 continue
             if resp.status_code != 200:
-                raise OsctrlError(
-                    f"osctrl result poll failed: HTTP {resp.status_code} — {resp.text[:300]}"
-                )
+                raise OsctrlError(f"osctrl result poll failed: HTTP {resp.status_code} — {resp.text[:300]}")
 
             data = resp.json()
             # osctrl returns a list of result objects, each with "node" and "rows".

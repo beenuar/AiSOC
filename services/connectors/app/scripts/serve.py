@@ -2,6 +2,7 @@
 
 See ``services/api/app/scripts/serve.py`` for the full rationale.
 """
+
 from __future__ import annotations
 
 import os

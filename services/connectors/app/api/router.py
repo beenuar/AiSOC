@@ -161,10 +161,7 @@ def _require_capability(cls: type, capability: Capability, connector_id: str) ->
     if capability not in cls.capabilities():
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=(
-                f"connector '{connector_id}' does not declare capability "
-                f"'{capability.value}'"
-            ),
+            detail=(f"connector '{connector_id}' does not declare capability '{capability.value}'"),
         )
 
 

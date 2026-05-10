@@ -125,8 +125,7 @@ class IsolateHostExecutor(BaseExecutor):
                 "isolation_id": f"SIM-ISO-{hostname}",
                 "note": (
                     "Simulation mode — provide cs_client_id/cs_client_secret or "
-                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"hostname": hostname},
@@ -191,10 +190,7 @@ class QuarantineFileExecutor(BaseExecutor):
                 "path": file_path,
                 "hash": file_hash,
                 "quarantine_id": f"SIM-QRN-{file_hash[:8] if file_hash else 'NOHASH'}",
-                "note": (
-                    "Simulation mode — provide cs_client_id/cs_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
-                ),
+                "note": ("Simulation mode — provide cs_client_id/cs_client_secret to enable live execution." + _SIM_FUNNEL_CTA),
             },
             rollback_data={"file_path": file_path, "file_hash": file_hash},
             completed_at=datetime.utcnow(),
@@ -250,10 +246,7 @@ class KillProcessExecutor(BaseExecutor):
                 "action": "kill_process",
                 "process": process_name,
                 "pid": pid,
-                "note": (
-                    "Simulation mode — provide cs_client_id/cs_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
-                ),
+                "note": ("Simulation mode — provide cs_client_id/cs_client_secret to enable live execution." + _SIM_FUNNEL_CTA),
             },
             rollback_data={},
             completed_at=datetime.utcnow(),
@@ -311,10 +304,7 @@ class RunScriptExecutor(BaseExecutor):
                 "action": "run_script",
                 "hostname": hostname,
                 "script_name": script_name,
-                "note": (
-                    "Simulation mode — provide cs_client_id/cs_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
-                ),
+                "note": ("Simulation mode — provide cs_client_id/cs_client_secret to enable live execution." + _SIM_FUNNEL_CTA),
             },
             rollback_data={},
             completed_at=datetime.utcnow(),
@@ -371,8 +361,7 @@ class RunAVScanExecutor(BaseExecutor):
                 "hostname": hostname,
                 "scan_type": scan_type,
                 "note": (
-                    "Simulation mode — provide mde_tenant_id/mde_client_id/mde_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "Simulation mode — provide mde_tenant_id/mde_client_id/mde_client_secret to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={},

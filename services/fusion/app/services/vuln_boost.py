@@ -6,7 +6,6 @@ service. If any entry has `is_exploited: true`, we set `exploit_in_wild=True`
 on the FusedAlert and append a positive ConfidenceFactor.
 """
 
-
 import structlog
 
 from app.models.alert import ConfidenceFactor, FusedAlert

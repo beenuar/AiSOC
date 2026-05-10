@@ -3,6 +3,7 @@
 Uses an in-memory SQLite database for speed.  SQLite doesn't support every
 Postgres feature but it is sufficient for the ORM-level tests here.
 """
+
 from __future__ import annotations
 
 import os

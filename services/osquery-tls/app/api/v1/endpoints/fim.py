@@ -11,6 +11,7 @@ Query params for /events:
   - limit       (default 100, max 1000)
   - offset      (default 0)
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -105,9 +106,7 @@ async def list_fim_events(
     total = (await db.execute(count_q)).scalar_one()
 
     # Page
-    rows_q = (
-        base_query.order_by(FimEvent.event_time.desc()).offset(offset).limit(limit)
-    )
+    rows_q = base_query.order_by(FimEvent.event_time.desc()).offset(offset).limit(limit)
     rows = (await db.execute(rows_q)).scalars().all()
 
     return FimEventPage(
@@ -125,11 +124,7 @@ async def fim_summary(
 ) -> FimSummary:
     """Return aggregate FIM statistics for a tenant."""
     # Total event count
-    total = (
-        await db.execute(
-            select(func.count()).where(FimEvent.tenant_id == tenant_id)
-        )
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).where(FimEvent.tenant_id == tenant_id))).scalar_one()
 
     # By-action breakdown
     action_rows = (

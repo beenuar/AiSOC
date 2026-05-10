@@ -34,10 +34,7 @@ class MimecastConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Mimecast Email Security 2.0 API. Pulls held messages, SIEM "
-                "events, and URL protect verdicts as alerts."
-            ),
+            description=("Mimecast Email Security 2.0 API. Pulls held messages, SIEM events, and URL protect verdicts as alerts."),
             docs_url="/docs/connectors/mimecast",
             fields=[
                 Field(

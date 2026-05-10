@@ -2,6 +2,7 @@
 
 Supports async migrations via asyncio run_sync().
 """
+
 from __future__ import annotations
 
 import asyncio

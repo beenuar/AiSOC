@@ -47,9 +47,7 @@ from typing import Any
 
 # Operator vocabulary mirrors federated/query.py to avoid teaching the
 # user two slightly different dialects of "this field equals that value".
-_VALID_OPS: frozenset[str] = frozenset(
-    {"eq", "ne", "contains", "starts_with", "ends_with", "in"}
-)
+_VALID_OPS: frozenset[str] = frozenset({"eq", "ne", "contains", "starts_with", "ends_with", "in"})
 _VALID_ACTIONS: frozenset[str] = frozenset({"drop", "keep"})
 
 

@@ -41,6 +41,7 @@ try:
             return None
 
 except ImportError:
+
     async def _get_redis():  # type: ignore[misc]
         return None
 

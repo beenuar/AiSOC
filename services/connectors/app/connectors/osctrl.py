@@ -281,14 +281,9 @@ class OsctrlConnector(BaseConnector):
                 "category": "endpoint",
                 "event_type": "osquery_query_row",
                 "severity": _osctrl_severity(table_name),
-                "title": (
-                    f"osctrl query: {query.get('name') or query.get('uuid') or 'distributed-query'}"
-                ),
+                "title": (f"osctrl query: {query.get('name') or query.get('uuid') or 'distributed-query'}"),
                 "description": (query.get("query") or "")[:400],
-                "alert_id": (
-                    f"{query.get('name') or 'q'}::"
-                    f"{row.get('uuid') or row.get('host_identifier') or ''}"
-                ),
+                "alert_id": (f"{query.get('name') or 'q'}::{row.get('uuid') or row.get('host_identifier') or ''}"),
                 "hostname": hostname,
                 "host": hostname,
                 "external_id": query.get("uuid"),

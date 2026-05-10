@@ -104,9 +104,7 @@ class CortexXSIAMConnector(BaseConnector):
                         "request_data": {
                             "search_from": 0,
                             "search_to": 100,
-                            "filters": [
-                                {"field": "creation_time", "operator": "gte", "value": since_ms}
-                            ],
+                            "filters": [{"field": "creation_time", "operator": "gte", "value": since_ms}],
                             "sort": {"field": "creation_time", "keyword": "desc"},
                         }
                     },

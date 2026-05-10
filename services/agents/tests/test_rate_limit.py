@@ -40,18 +40,14 @@ from app.core.rate_limit import (  # noqa: E402
 
 
 def test_to_headers_allowed_omits_retry_after() -> None:
-    decision = RateLimitDecision(
-        allowed=True, remaining=4.5, capacity=10.0, retry_after_seconds=0.0
-    )
+    decision = RateLimitDecision(allowed=True, remaining=4.5, capacity=10.0, retry_after_seconds=0.0)
     headers = decision.to_headers()
     assert headers == {"X-RateLimit-Limit": "10", "X-RateLimit-Remaining": "4"}
     assert "Retry-After" not in headers
 
 
 def test_to_headers_denied_rounds_retry_after_up() -> None:
-    decision = RateLimitDecision(
-        allowed=False, remaining=0.0, capacity=20.0, retry_after_seconds=0.001
-    )
+    decision = RateLimitDecision(allowed=False, remaining=0.0, capacity=20.0, retry_after_seconds=0.001)
     headers = decision.to_headers()
     # 0.001s rounds up to 1 second so a client that retries at Retry-After
     # doesn't bounce off the bucket again.
@@ -61,9 +57,7 @@ def test_to_headers_denied_rounds_retry_after_up() -> None:
 
 
 def test_to_headers_denied_retry_after_handles_partial_seconds() -> None:
-    decision = RateLimitDecision(
-        allowed=False, remaining=0.3, capacity=5.0, retry_after_seconds=2.4
-    )
+    decision = RateLimitDecision(allowed=False, remaining=0.3, capacity=5.0, retry_after_seconds=2.4)
     headers = decision.to_headers()
     # 2.4 + 0.999 -> int -> 3
     assert headers["Retry-After"] == "3"
@@ -232,16 +226,12 @@ async def test_concurrent_acquires_never_overdraw() -> None:
     """Per-key lock must prevent two coroutines double-spending a token."""
     limiter = TokenBucketLimiter(capacity=5.0, refill_per_second=0.5)
     # Fire 20 concurrent acquires against the same key.
-    decisions = await asyncio.gather(
-        *(limiter.acquire("tenant:a") for _ in range(20))
-    )
+    decisions = await asyncio.gather(*(limiter.acquire("tenant:a") for _ in range(20)))
     # Bucket starts at 5; refill at 0.5/s for sub-millisecond spread is
     # ~negligible, so we expect exactly 5 successes (with at most a
     # tiny epsilon worth of refill).
     allowed_count = sum(1 for d in decisions if d.allowed)
-    assert 5 <= allowed_count <= 6, (
-        f"expected 5–6 allowed under high concurrency, got {allowed_count}"
-    )
+    assert 5 <= allowed_count <= 6, f"expected 5–6 allowed under high concurrency, got {allowed_count}"
     denied = [d for d in decisions if not d.allowed]
     assert all(d.retry_after_seconds > 0 for d in denied)
 

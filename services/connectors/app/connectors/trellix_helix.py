@@ -61,10 +61,7 @@ class TrellixHelixConnector(BaseConnector):
                     "string",
                     "Customer ID",
                     placeholder="abcd1234",
-                    help_text=(
-                        "The slug between '/helix/id/' and '/' in your Helix "
-                        "console URL. Lowercase alphanumeric."
-                    ),
+                    help_text=("The slug between '/helix/id/' and '/' in your Helix console URL. Lowercase alphanumeric."),
                 ),
                 Field(
                     "api_key",

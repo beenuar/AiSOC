@@ -8,6 +8,7 @@ Authentication uses a bearer token passed in the ``Authorization`` header.
 The token is typically an internal service-account secret managed the same
 way as any other AiSOC credential.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -95,23 +96,13 @@ class AiSOCDirectClient:
         params = template_params or {}
         sql = render_query(template, **params)
 
-        async with httpx.AsyncClient(
-            verify=self._verify_tls, timeout=30.0
-        ) as client:
-            query_ids = await self._enqueue_for_hosts(
-                client, target_hosts, sql
-            )
-            results = await self._poll_results(
-                client, query_ids, timeout_seconds
-            )
+        async with httpx.AsyncClient(verify=self._verify_tls, timeout=30.0) as client:
+            query_ids = await self._enqueue_for_hosts(client, target_hosts, sql)
+            results = await self._poll_results(client, query_ids, timeout_seconds)
 
         errors = [r for r in results.values() if "error" in r]
         return {
-            "results": {
-                host: results[qid].get("rows", [])
-                for host, qid in zip(target_hosts, query_ids, strict=False)
-                if qid in results
-            },
+            "results": {host: results[qid].get("rows", []) for host, qid in zip(target_hosts, query_ids, strict=False) if qid in results},
             "error": errors[0]["error"] if errors else None,
         }
 
@@ -135,9 +126,7 @@ class AiSOCDirectClient:
                 data = resp.json()
                 query_ids.append(data["query_id"])
             except httpx.HTTPError as exc:
-                raise AiSOCDirectError(
-                    f"Failed to enqueue query for host {host}: {exc}"
-                ) from exc
+                raise AiSOCDirectError(f"Failed to enqueue query for host {host}: {exc}") from exc
         return query_ids
 
     async def _poll_results(

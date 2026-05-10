@@ -26,6 +26,7 @@ Metrics:
     * isolation_score — fraction of cross-tenant probes that return None.
       Floor: 1.0 (perfect isolation required).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -199,9 +200,7 @@ async def test_override_ingestion():
         reason="Confirmed C2 callback after manual PCAP review",
     )
     await mgr.ingest_override(feedback)
-    result = await mgr.recall(
-        f"analyst_override:{feedback.alert_id}", tiers=("institutional",)
-    )
+    result = await mgr.recall(f"analyst_override:{feedback.alert_id}", tiers=("institutional",))
     assert result is not None
     assert result["corrected_verdict"] == "true_positive"
     assert result["analyst_id"] == "analyst-42"

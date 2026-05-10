@@ -73,9 +73,7 @@ def get_metrics() -> dict[str, Any]:
     """Return a copy of current auto-triage metrics."""
     m = _metrics.copy()
     total = m["total_processed"]
-    m["auto_resolution_rate"] = (
-        m["auto_resolved_count"] / total if total > 0 else 0.0
-    )
+    m["auto_resolution_rate"] = m["auto_resolved_count"] / total if total > 0 else 0.0
     m["fp_rate"] = m["fp_count"] / total if total > 0 else 0.0
     m["avg_confidence"] = m["confidence_sum"] / total if total > 0 else 0.0
     return m
@@ -180,10 +178,12 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
 
     t0 = time.monotonic()
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=alert_context),
-        ])
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=_SYSTEM_PROMPT),
+                HumanMessage(content=alert_context),
+            ]
+        )
         raw_text = response.content
         result = _parse_llm_response(raw_text)
     except Exception as exc:
@@ -216,24 +216,15 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         f"Rationale: {rationale}",
     ]
 
-    state.add_finding(
-        f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, "
-        f"latency={elapsed_ms}ms"
-    )
+    state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")
 
-    should_auto_close = (
-        verdict in ("false_positive", "benign")
-        and confidence >= AUTO_CLOSE_THRESHOLD
-    )
+    should_auto_close = verdict in ("false_positive", "benign") and confidence >= AUTO_CLOSE_THRESHOLD
 
     if should_auto_close:
         _metrics["auto_resolved_count"] += 1
         state.status = AgentStatus.COMPLETED
-        state.add_finding(
-            f"Auto-closed as {verdict} (confidence {confidence:.2f} >= "
-            f"threshold {AUTO_CLOSE_THRESHOLD:.2f})"
-        )
+        state.add_finding(f"Auto-closed as {verdict} (confidence {confidence:.2f} >= threshold {AUTO_CLOSE_THRESHOLD:.2f})")
         logger.info(
             "Auto-triage: auto-closed",
             verdict=verdict,

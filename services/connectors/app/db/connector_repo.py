@@ -211,11 +211,7 @@ async def record_poll_success(
         values["last_event_at"] = last_event_at
     if last_event_kind is not None:
         values["last_event_kind"] = last_event_kind
-    stmt = (
-        update(connectors_table)
-        .where(connectors_table.c.id == connector_id)
-        .values(**values)
-    )
+    stmt = update(connectors_table).where(connectors_table.c.id == connector_id).values(**values)
     await connection.execute(stmt)
 
 
@@ -260,11 +256,7 @@ async def record_backfill_run(
     a recovery flap.
     """
     now = datetime.now(UTC)
-    stmt = (
-        update(connectors_table)
-        .where(connectors_table.c.id == connector_id)
-        .values(last_backfill_at=now, updated_at=now)
-    )
+    stmt = update(connectors_table).where(connectors_table.c.id == connector_id).values(last_backfill_at=now, updated_at=now)
     await connection.execute(stmt)
 
 

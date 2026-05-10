@@ -51,10 +51,7 @@ class SlackAuditConnector(BaseConnector):
                     "access_token",
                     "secret",
                     "Org-level access token",
-                    help_text=(
-                        "OrgLevel OAuth bot token with the auditlogs:read scope, "
-                        "issued from a Slack Enterprise Grid app."
-                    ),
+                    help_text=("OrgLevel OAuth bot token with the auditlogs:read scope, issued from a Slack Enterprise Grid app."),
                 ),
             ],
             oauth=OAuthHints(

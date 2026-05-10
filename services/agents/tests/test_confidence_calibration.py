@@ -104,8 +104,7 @@ with _DATASET_PATH.open() as _f:
     _POSITIVE_INCIDENTS: list[dict[str, Any]] = json.load(_f)
 
 assert len(_POSITIVE_INCIDENTS) >= 100, (
-    f"synthetic_incidents.json must contain at least 100 cases for stable "
-    f"calibration (got {len(_POSITIVE_INCIDENTS)})"
+    f"synthetic_incidents.json must contain at least 100 cases for stable calibration (got {len(_POSITIVE_INCIDENTS)})"
 )
 
 
@@ -211,9 +210,7 @@ def _build_positive_state(incident: dict[str, Any]) -> InvestigationState:
         "medium": 0.55,
         "low": 0.30,
     }
-    raw_alert["risk_score"] = severity_to_risk.get(
-        incident.get("severity", "medium"), 0.5
-    )
+    raw_alert["risk_score"] = severity_to_risk.get(incident.get("severity", "medium"), 0.5)
 
     # Walk telemetry events and lift the first IP / hostname / hash / url
     # we find. The scorer doesn't care which event they came from — it
@@ -271,10 +268,7 @@ def _enrich_for_investigation(
     if incident is None:
         # Benign branch — enrich with benign IOC verdicts so the scorer's
         # "enrichment ran but classified all IOCs benign" signal fires.
-        state.ioc_enrichments = {
-            f"benign-anchor-{i}": {"threat_classification": "benign"}
-            for i in range(2)
-        }
+        state.ioc_enrichments = {f"benign-anchor-{i}": {"threat_classification": "benign"} for i in range(2)}
         return state
 
     severity = incident.get("severity", "medium")
@@ -411,9 +405,7 @@ class TestConfidenceBoundsAndSeparation(unittest.TestCase):
         self.assertGreater(
             gap,
             SEPARATION_THRESHOLD,
-            f"triage scorer fails to separate positives from benign "
-            f"(gap={gap:.3f} ≤ {SEPARATION_THRESHOLD}); calibration is "
-            f"degenerate",
+            f"triage scorer fails to separate positives from benign (gap={gap:.3f} ≤ {SEPARATION_THRESHOLD}); calibration is degenerate",
         )
 
     def test_positive_mean_exceeds_benign_mean_investigation(self) -> None:
@@ -424,8 +416,7 @@ class TestConfidenceBoundsAndSeparation(unittest.TestCase):
         self.assertGreater(
             gap,
             SEPARATION_THRESHOLD,
-            f"investigation scorer fails to separate positives from "
-            f"benign (gap={gap:.3f} ≤ {SEPARATION_THRESHOLD})",
+            f"investigation scorer fails to separate positives from benign (gap={gap:.3f} ≤ {SEPARATION_THRESHOLD})",
         )
 
     def test_basis_is_always_populated(self) -> None:
@@ -454,8 +445,7 @@ class TestBrierGate(unittest.TestCase):
         self.assertLessEqual(
             score,
             BRIER_THRESHOLD_TRIAGE,
-            f"triage Brier {score:.4f} > threshold "
-            f"{BRIER_THRESHOLD_TRIAGE} — confidence is miscalibrated",
+            f"triage Brier {score:.4f} > threshold {BRIER_THRESHOLD_TRIAGE} — confidence is miscalibrated",
         )
 
     def test_investigation_brier_score_below_threshold(self) -> None:
@@ -464,8 +454,7 @@ class TestBrierGate(unittest.TestCase):
         self.assertLessEqual(
             score,
             BRIER_THRESHOLD_INVESTIGATION,
-            f"investigation Brier {score:.4f} > threshold "
-            f"{BRIER_THRESHOLD_INVESTIGATION} — confidence is miscalibrated",
+            f"investigation Brier {score:.4f} > threshold {BRIER_THRESHOLD_INVESTIGATION} — confidence is miscalibrated",
         )
 
     def test_triage_ece_below_threshold(self) -> None:
@@ -474,8 +463,7 @@ class TestBrierGate(unittest.TestCase):
         self.assertLessEqual(
             ece,
             ECE_THRESHOLD_TRIAGE,
-            f"triage ECE {ece:.4f} > threshold {ECE_THRESHOLD_TRIAGE} — "
-            f"reliability diagram has too much sag",
+            f"triage ECE {ece:.4f} > threshold {ECE_THRESHOLD_TRIAGE} — reliability diagram has too much sag",
         )
 
     def test_investigation_ece_below_threshold(self) -> None:
@@ -484,8 +472,7 @@ class TestBrierGate(unittest.TestCase):
         self.assertLessEqual(
             ece,
             ECE_THRESHOLD_INVESTIGATION,
-            f"investigation ECE {ece:.4f} > threshold "
-            f"{ECE_THRESHOLD_INVESTIGATION}",
+            f"investigation ECE {ece:.4f} > threshold {ECE_THRESHOLD_INVESTIGATION}",
         )
 
 
@@ -511,12 +498,10 @@ def run_evaluation() -> dict[str, Any]:
     inv_ece = expected_calibration_error(inv_preds, outcomes, n_buckets=10)
 
     triage_curve = [
-        {"mean_predicted": mp, "empirical_rate": er, "count": c}
-        for mp, er, c in reliability_curve(triage_preds, outcomes, n_buckets=10)
+        {"mean_predicted": mp, "empirical_rate": er, "count": c} for mp, er, c in reliability_curve(triage_preds, outcomes, n_buckets=10)
     ]
     inv_curve = [
-        {"mean_predicted": mp, "empirical_rate": er, "count": c}
-        for mp, er, c in reliability_curve(inv_preds, outcomes, n_buckets=10)
+        {"mean_predicted": mp, "empirical_rate": er, "count": c} for mp, er, c in reliability_curve(inv_preds, outcomes, n_buckets=10)
     ]
 
     pos_t = [p for p, y in zip(triage_preds, outcomes, strict=True) if y == 1]
@@ -543,28 +528,18 @@ def run_evaluation() -> dict[str, Any]:
             "ece": round(triage_ece, 4),
             "mean_confidence_positive": round(sum(pos_t) / len(pos_t), 4),
             "mean_confidence_benign": round(sum(neg_t) / len(neg_t), 4),
-            "separation": round(
-                sum(pos_t) / len(pos_t) - sum(neg_t) / len(neg_t), 4
-            ),
+            "separation": round(sum(pos_t) / len(pos_t) - sum(neg_t) / len(neg_t), 4),
             "reliability_curve": triage_curve,
-            "passed": (
-                triage_brier <= BRIER_THRESHOLD_TRIAGE
-                and triage_ece <= ECE_THRESHOLD_TRIAGE
-            ),
+            "passed": (triage_brier <= BRIER_THRESHOLD_TRIAGE and triage_ece <= ECE_THRESHOLD_TRIAGE),
         },
         "investigation": {
             "brier": round(inv_brier, 4),
             "ece": round(inv_ece, 4),
             "mean_confidence_positive": round(sum(pos_i) / len(pos_i), 4),
             "mean_confidence_benign": round(sum(neg_i) / len(neg_i), 4),
-            "separation": round(
-                sum(pos_i) / len(pos_i) - sum(neg_i) / len(neg_i), 4
-            ),
+            "separation": round(sum(pos_i) / len(pos_i) - sum(neg_i) / len(neg_i), 4),
             "reliability_curve": inv_curve,
-            "passed": (
-                inv_brier <= BRIER_THRESHOLD_INVESTIGATION
-                and inv_ece <= ECE_THRESHOLD_INVESTIGATION
-            ),
+            "passed": (inv_brier <= BRIER_THRESHOLD_INVESTIGATION and inv_ece <= ECE_THRESHOLD_INVESTIGATION),
         },
         "passed": (
             triage_brier <= BRIER_THRESHOLD_TRIAGE

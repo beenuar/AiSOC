@@ -7,6 +7,7 @@ POST /api/v1/osquery/tenants/{tenant_id}/packs     – assign a pack to a tenant
 GET  /api/v1/osquery/tenants/{tenant_id}/packs     – list tenant pack assignments
 DELETE /api/v1/osquery/tenants/{tenant_id}/packs/{pack_id} – remove assignment
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
@@ -139,9 +140,7 @@ async def assign_pack(
 ) -> PackAssignmentOut:
     """Assign (or update) an osquery pack for a tenant."""
     if get_pack(body.pack_id) is None:
-        raise HTTPException(
-            status_code=404, detail=f"Pack '{body.pack_id}' not found in catalog"
-        )
+        raise HTTPException(status_code=404, detail=f"Pack '{body.pack_id}' not found in catalog")
 
     # Upsert: update enabled flag if assignment already exists
     result = await db.execute(
@@ -180,11 +179,7 @@ async def list_tenant_packs(
     db: AsyncSession = Depends(get_db),
 ) -> list[PackAssignmentOut]:
     """List all pack assignments for a tenant."""
-    result = await db.execute(
-        select(OsqueryPackAssignment).where(
-            OsqueryPackAssignment.tenant_id == tenant_id
-        )
-    )
+    result = await db.execute(select(OsqueryPackAssignment).where(OsqueryPackAssignment.tenant_id == tenant_id))
     rows = result.scalars().all()
     return [
         PackAssignmentOut(

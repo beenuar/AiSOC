@@ -154,19 +154,9 @@ def _env_baseline() -> tuple[str, str, str | None]:
     ``OPENAI_*`` / ``AISOC_LLM_MODEL`` names — every deployment in the
     field today uses some mix of the two.
     """
-    base_url = (
-        os.getenv("OPENAI_BASE_URL", "").strip()
-        or os.getenv("LLM_BASE_URL", "").strip()
-    )
-    model = (
-        os.getenv("OPENAI_MODEL", "").strip()
-        or os.getenv("LLM_MODEL", "").strip()
-        or os.getenv("AISOC_LLM_MODEL", "").strip()
-    )
-    api_key = (
-        os.getenv("OPENAI_API_KEY", "").strip()
-        or os.getenv("LLM_API_KEY", "").strip()
-    )
+    base_url = os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip()
+    model = os.getenv("OPENAI_MODEL", "").strip() or os.getenv("LLM_MODEL", "").strip() or os.getenv("AISOC_LLM_MODEL", "").strip()
+    api_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("LLM_API_KEY", "").strip()
     return base_url, model, (api_key or None)
 
 
@@ -199,8 +189,7 @@ def _airgap_blocks(base_url: str) -> tuple[bool, str]:
     if not base:
         return (
             True,
-            "AISOC_AIRGAPPED is on and no base_url is configured (would "
-            "default to api.openai.com).",
+            "AISOC_AIRGAPPED is on and no base_url is configured (would default to api.openai.com).",
         )
     if "api.openai.com" in base:
         return True, "AISOC_AIRGAPPED is on and base_url points at api.openai.com."
@@ -212,9 +201,7 @@ def _airgap_blocks(base_url: str) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 
-async def _resolve_tenant_uuid(
-    conn: asyncpg.Connection, tenant_ref: str
-) -> uuid.UUID | None:
+async def _resolve_tenant_uuid(conn: asyncpg.Connection, tenant_ref: str) -> uuid.UUID | None:
     """Resolve a tenant reference (UUID, slug, or name) to a UUID.
 
     Inlined rather than imported from
@@ -239,18 +226,12 @@ async def _resolve_tenant_uuid(
     return row["id"] if row else None
 
 
-async def _set_rls_context(
-    conn: asyncpg.Connection, tenant_id: uuid.UUID
-) -> None:
+async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
     """Set the RLS GUC so policies on ``tenant_llm_credentials`` admit us."""
-    await conn.execute(
-        "SELECT set_config('app.tenant_id', $1, true)", str(tenant_id)
-    )
+    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(tenant_id))
 
 
-async def _fetch_tenant_credential(
-    pool: asyncpg.Pool, tenant_ref: str
-) -> dict[str, Any] | None:
+async def _fetch_tenant_credential(pool: asyncpg.Pool, tenant_ref: str) -> dict[str, Any] | None:
     """Resolve ``tenant_ref`` and fetch the ``tenant_llm_credentials`` row.
 
     Returns ``None`` when:
@@ -332,9 +313,7 @@ async def resolve_llm_config(tenant_ref: str | None) -> LlmConfig:
     tenant_contributed_model = False
     tenant_contributed_key = False
 
-    skip_db_lookup = (
-        tenant_ref is None or not tenant_ref.strip() or tenant_ref == "default"
-    )
+    skip_db_lookup = tenant_ref is None or not tenant_ref.strip() or tenant_ref == "default"
     if not skip_db_lookup:
         # Lazy import: see module-level NOTE. We only reach this branch
         # when the request carries a real tenant ref. Importing the
@@ -438,10 +417,7 @@ def _decrypt_vault_token(vault_token: str, tenant_ref: str) -> str | None:
         logger.warning(
             "explain.llm_resolve_vault_disabled",
             tenant=tenant_ref,
-            reason=(
-                "AISOC_CREDENTIAL_KEY not set; tenant BYOK key cannot be "
-                "decrypted, falling back to environment baseline"
-            ),
+            reason=("AISOC_CREDENTIAL_KEY not set; tenant BYOK key cannot be decrypted, falling back to environment baseline"),
         )
         return None
     try:
@@ -472,11 +448,7 @@ def _classify_source(
     the final config, the merge is "mixed" — exactly what the API-side
     status endpoint reports.
     """
-    tenant_contributed = (
-        tenant_contributed_base_url
-        or tenant_contributed_model
-        or tenant_contributed_key
-    )
+    tenant_contributed = tenant_contributed_base_url or tenant_contributed_model or tenant_contributed_key
     env_contributed = (
         (not tenant_contributed_base_url and bool(env_base_url))
         or (not tenant_contributed_model and bool(env_model))

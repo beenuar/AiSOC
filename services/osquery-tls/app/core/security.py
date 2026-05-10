@@ -14,6 +14,7 @@ The FastAPI dependency ``require_valid_node_key`` is used by all post-enroll
 endpoints.  It returns the resolved ``OsqueryNode`` so handlers don't need
 a separate DB lookup.
 """
+
 from __future__ import annotations
 
 import secrets

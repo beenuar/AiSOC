@@ -111,9 +111,7 @@ async def run_triage(state: InvestigationState) -> InvestigationState:
     state.confidence = confidence
     state.confidence_basis = basis
     state.verdict = verdict
-    state.add_finding(
-        f"Triage verdict: {verdict} (confidence={confidence:.2f})"
-    )
+    state.add_finding(f"Triage verdict: {verdict} (confidence={confidence:.2f})")
 
     state.add_finding("Triage phase complete — proceeding to enrichment")
     logger.info(

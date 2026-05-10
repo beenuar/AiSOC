@@ -35,10 +35,7 @@ class CiscoUmbrellaConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Cisco Umbrella DNS + secure web gateway activity. Surfaces "
-                "blocked domains, malware verdicts, and proxy events."
-            ),
+            description=("Cisco Umbrella DNS + secure web gateway activity. Surfaces blocked domains, malware verdicts, and proxy events."),
             docs_url="/docs/connectors/cisco_umbrella",
             fields=[
                 Field("api_key", "secret", "Umbrella Management API Key"),
@@ -113,9 +110,7 @@ class CiscoUmbrellaConnector(BaseConnector):
         token = await self._bearer()
         if not token:
             return []
-        from_ts = int(
-            (datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp() * 1000
-        )
+        from_ts = int((datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp() * 1000)
         to_ts = int(datetime.now(UTC).timestamp() * 1000)
         params: dict[str, Any] = {
             "from": from_ts,

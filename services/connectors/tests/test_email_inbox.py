@@ -268,16 +268,11 @@ def test_fetch_alerts_truncates_oversized_body(monkeypatch: pytest.MonkeyPatch):
 def test_fetch_alerts_respects_max_messages_cap(monkeypatch: pytest.MonkeyPatch):
     """If the mailbox has more unread than ``max_messages``, we only
     pull the cap and leave the rest for the next poll."""
-    msgs = {
-        f"{i}".encode(): _build_plaintext_message(subject=f"Alert {i}")
-        for i in range(10)
-    }
+    msgs = {f"{i}".encode(): _build_plaintext_message(subject=f"Alert {i}") for i in range(10)}
     fake = _FakeIMAP(messages=msgs)
     _patch_imap(monkeypatch, fake)
 
-    c = EmailInboxConnector(
-        host="imap.test", username="u", password="p", max_messages=3
-    )
+    c = EmailInboxConnector(host="imap.test", username="u", password="p", max_messages=3)
     events = _run(c.fetch_alerts())
 
     assert len(events) == 3
@@ -303,11 +298,7 @@ def test_fetch_alerts_returns_empty_on_imap_failure(
 def test_use_ssl_string_form_is_truthy(monkeypatch: pytest.MonkeyPatch):
     """The wizard form may serialize booleans as strings — make sure
     "true"/"false" round-trip correctly."""
-    c1 = EmailInboxConnector(
-        host="imap.test", username="u", password="p", use_ssl="true"
-    )
+    c1 = EmailInboxConnector(host="imap.test", username="u", password="p", use_ssl="true")
     assert c1._use_ssl is True
-    c2 = EmailInboxConnector(
-        host="imap.test", username="u", password="p", use_ssl="false"
-    )
+    c2 = EmailInboxConnector(host="imap.test", username="u", password="p", use_ssl="false")
     assert c2._use_ssl is False

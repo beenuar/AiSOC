@@ -88,8 +88,7 @@ class CarbonBlackConnector(BaseConnector):
                         {"value": "apac", "label": "APAC (defense-apjp)"},
                     ],
                     help_text=(
-                        "CBC region your tenant is hosted in. The wrong region "
-                        "returns 401 rather than 404, so this can't be auto-detected."
+                        "CBC region your tenant is hosted in. The wrong region returns 401 rather than 404, so this can't be auto-detected."
                     ),
                 ),
                 Field(
@@ -97,10 +96,7 @@ class CarbonBlackConnector(BaseConnector):
                     "string",
                     "Org Key",
                     placeholder="ABCD1234",
-                    help_text=(
-                        "Found in CBC console under Settings → API Access → "
-                        "API Keys (the column labeled 'Org Key')."
-                    ),
+                    help_text=("Found in CBC console under Settings → API Access → API Keys (the column labeled 'Org Key')."),
                 ),
                 Field(
                     "api_id",

@@ -49,12 +49,7 @@ TEMPLATES: dict[str, str] = {
         "AND remote_port != 0 "
         "LIMIT {limit};"
     ),
-    "logged_in_users": (
-        "SELECT type, user, host, tty, time "
-        "FROM logged_in_users "
-        "ORDER BY time DESC "
-        "LIMIT {limit};"
-    ),
+    "logged_in_users": ("SELECT type, user, host, tty, time FROM logged_in_users ORDER BY time DESC LIMIT {limit};"),
     "recent_files": (
         "SELECT path, directory, filename, size, type, "
         "atime, mtime, ctime, uid, gid "
@@ -148,10 +143,7 @@ def render_query(template_id: str, **params: Any) -> str:
         is supplied, or if a required parameter has no default.
     """
     if template_id not in TEMPLATES:
-        raise AllowlistError(
-            f"Unknown template '{template_id}'. "
-            f"Available: {', '.join(list_templates())}"
-        )
+        raise AllowlistError(f"Unknown template '{template_id}'. Available: {', '.join(list_templates())}")
 
     allowed_keys = PARAM_SPECS[template_id]
     unknown = set(params) - allowed_keys
@@ -169,10 +161,7 @@ def render_query(template_id: str, **params: Any) -> str:
     required = {m.group(1) for m in _PLACEHOLDER_RE.finditer(TEMPLATES[template_id])}
     missing = required - set(merged)
     if missing:
-        raise AllowlistError(
-            f"Template '{template_id}' requires "
-            f"parameter(s) with no default: {', '.join(sorted(missing))}"
-        )
+        raise AllowlistError(f"Template '{template_id}' requires parameter(s) with no default: {', '.join(sorted(missing))}")
 
     # Basic sanitisation: reject values that contain SQL comment sequences or
     # statement terminators other than the trailing semicolon already in the
@@ -181,9 +170,7 @@ def render_query(template_id: str, **params: Any) -> str:
     for key, value in merged.items():
         val_str = str(value)
         if "--" in val_str or "/*" in val_str or ";" in val_str:
-            raise AllowlistError(
-                f"Parameter '{key}' contains disallowed characters."
-            )
+            raise AllowlistError(f"Parameter '{key}' contains disallowed characters.")
 
     return TEMPLATES[template_id].format_map(merged)
 
@@ -207,7 +194,4 @@ def validate_raw_sql(sql: str) -> None:
             continue
         if normalised == " ".join(rendered.split()):
             return
-    raise AllowlistError(
-        "SQL does not match any approved template. "
-        "Use render_query() with an approved template ID."
-    )
+    raise AllowlistError("SQL does not match any approved template. Use render_query() with an approved template ID.")

@@ -6,6 +6,7 @@ forward the batch to services/ingest.
 Reference:
   https://osquery.readthedocs.io/en/stable/deployment/remote/#log-string
 """
+
 from __future__ import annotations
 
 import json

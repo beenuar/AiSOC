@@ -141,9 +141,7 @@ class SalesforceConnector(BaseConnector):
         token = await self._bearer()
         if not token:
             return []
-        since_iso = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since_iso = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         soql = (
             "SELECT Id, Action, Section, CreatedDate, CreatedBy.Name, Display "
             f"FROM SetupAuditTrail WHERE CreatedDate >= {since_iso} "

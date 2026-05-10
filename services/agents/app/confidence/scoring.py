@@ -197,19 +197,11 @@ def score_investigation(state: InvestigationState) -> tuple[float, list[str], st
 
 
 def _count_malicious_iocs(enrichments: dict[str, Any]) -> int:
-    return sum(
-        1
-        for v in enrichments.values()
-        if isinstance(v, dict) and v.get("threat_classification") == "malicious"
-    )
+    return sum(1 for v in enrichments.values() if isinstance(v, dict) and v.get("threat_classification") == "malicious")
 
 
 def _count_suspicious_iocs(enrichments: dict[str, Any]) -> int:
-    return sum(
-        1
-        for v in enrichments.values()
-        if isinstance(v, dict) and v.get("threat_classification") == "suspicious"
-    )
+    return sum(1 for v in enrichments.values() if isinstance(v, dict) and v.get("threat_classification") == "suspicious")
 
 
 def _distinct_tactic_count(state: InvestigationState) -> int:
@@ -225,10 +217,7 @@ def _distinct_tactic_count(state: InvestigationState) -> int:
     try:
         from app.tools.mitre import lookup_technique  # noqa: PLC0415
 
-        tactics = {
-            lookup_technique(tid).get("tactic_name", "Unknown")
-            for tid in state.mitre_mappings
-        }
+        tactics = {lookup_technique(tid).get("tactic_name", "Unknown") for tid in state.mitre_mappings}
         return len(tactics)
     except Exception:  # pragma: no cover - defensive fallback
         return min(len(state.mitre_mappings), 4)

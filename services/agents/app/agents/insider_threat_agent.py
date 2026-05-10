@@ -120,12 +120,27 @@ def _build_insider_context(state: InvestigationState) -> str:
     if raw.get("baseline_deviation"):
         parts.append(f"Baseline deviation: {raw['baseline_deviation']}")
 
-    extra_keys = {k for k in raw if k not in {
-        "severity", "risk_score", *user_fields, *activity_fields,
-        "access_time", "timestamp", "normal_hours", "data_volume_mb",
-        "bytes_transferred", "destination_type", "destination_domain",
-        "usb_events", "recent_activity", "baseline_deviation",
-    }}
+    extra_keys = {
+        k
+        for k in raw
+        if k
+        not in {
+            "severity",
+            "risk_score",
+            *user_fields,
+            *activity_fields,
+            "access_time",
+            "timestamp",
+            "normal_hours",
+            "data_volume_mb",
+            "bytes_transferred",
+            "destination_type",
+            "destination_domain",
+            "usb_events",
+            "recent_activity",
+            "baseline_deviation",
+        }
+    }
     if extra_keys:
         extras = {k: raw[k] for k in sorted(extra_keys)[:8]}
         parts.append(f"Additional fields: {json.dumps(extras, default=str)}")
@@ -187,10 +202,12 @@ async def run_insider_threat(state: InvestigationState) -> InvestigationState:
 
     t0 = time.monotonic()
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=context),
-        ])
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=_SYSTEM_PROMPT),
+                HumanMessage(content=context),
+            ]
+        )
         result = _parse_response(response.content)
     except Exception as exc:
         logger.error("Insider threat agent LLM call failed", error=str(exc))

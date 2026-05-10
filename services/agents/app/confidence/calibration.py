@@ -28,10 +28,7 @@ def brier_score(predictions: Sequence[float], outcomes: Sequence[int]) -> float:
     """
 
     if len(predictions) != len(outcomes):
-        raise ValueError(
-            f"predictions/outcomes length mismatch: "
-            f"{len(predictions)} vs {len(outcomes)}"
-        )
+        raise ValueError(f"predictions/outcomes length mismatch: {len(predictions)} vs {len(outcomes)}")
     if not predictions:
         raise ValueError("brier_score requires at least one sample")
 
@@ -95,6 +92,4 @@ def expected_calibration_error(
     total_count = sum(count for _, _, count in curve)
     if total_count == 0:
         return 0.0
-    return sum(
-        abs(mean_pred - empirical) * count for mean_pred, empirical, count in curve
-    ) / total_count
+    return sum(abs(mean_pred - empirical) * count for mean_pred, empirical, count in curve) / total_count

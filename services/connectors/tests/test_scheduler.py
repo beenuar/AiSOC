@@ -235,9 +235,7 @@ async def test_poll_one_detects_schema_drift(monkeypatch):
     inst.schema_fingerprint = stale_fp
 
     fake_connector = MagicMock()
-    fake_connector.fetch_alerts = AsyncMock(
-        return_value=[{"severity": "high", "host": "h1", "new_field": "x"}]
-    )
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"severity": "high", "host": "h1", "new_field": "x"}])
     fake_connector.normalize = MagicMock(side_effect=lambda e: e)
 
     monkeypatch.setattr(
@@ -746,9 +744,7 @@ async def test_poll_one_backfill_window_capped_at_max(monkeypatch):
 
     # Two fetches: recovery + one-shot backfill.
     assert fake_connector.fetch_alerts.await_count == 2
-    backfill_seconds = fake_connector.fetch_alerts.await_args_list[1].kwargs[
-        "since_seconds"
-    ]
+    backfill_seconds = fake_connector.fetch_alerts.await_args_list[1].kwargs["since_seconds"]
     # The cap kicks in BEFORE the buffer is added inside _poll_one
     # (see ``backfill_window_seconds = min(...)``), so the value passed
     # to the recursive call equals the cap exactly.
@@ -918,9 +914,7 @@ def _patch_repo_calls(monkeypatch):
         fingerprint: str,
         details: dict[str, Any],
     ) -> None:
-        getattr(conn.engine, "drift_calls", []).append(
-            {"connector_id": connector_id, "fingerprint": fingerprint, "details": details}
-        )
+        getattr(conn.engine, "drift_calls", []).append({"connector_id": connector_id, "fingerprint": fingerprint, "details": details})
 
     async def fake_record_backfill_run(
         conn: Any,

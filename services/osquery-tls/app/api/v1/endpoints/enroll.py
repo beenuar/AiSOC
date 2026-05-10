@@ -6,6 +6,7 @@ register the node (or rotate its node_key) and return a fresh node_key.
 Reference:
   https://osquery.readthedocs.io/en/stable/deployment/remote/#enroll
 """
+
 from __future__ import annotations
 
 from typing import Annotated

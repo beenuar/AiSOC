@@ -175,9 +175,7 @@ async def test_invalid_json_raises_client_error():
     settings = _settings()
     with respx.mock() as router:
         router.get(f"{API_BASE}/api/v1/cases/abc").mock(
-            return_value=httpx.Response(
-                200, text="not json", headers={"content-type": "text/plain"}
-            )
+            return_value=httpx.Response(200, text="not json", headers={"content-type": "text/plain"})
         )
         client = AisocApiClient.from_settings(settings, transport=httpx.MockTransport(router.handler))
         try:

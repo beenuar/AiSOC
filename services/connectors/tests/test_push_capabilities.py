@@ -142,10 +142,7 @@ async def test_jira_push_case_builds_correct_payload_and_url() -> None:
     assert payload["fields"]["priority"] == {"name": "High"}
     # ADF doc shape — connector wraps the plain string under content[0].text.
     assert payload["fields"]["description"]["type"] == "doc"
-    assert (
-        payload["fields"]["description"]["content"][0]["content"][0]["text"]
-        == case["description"]
-    )
+    assert payload["fields"]["description"]["content"][0]["content"][0]["text"] == case["description"]
     # Label round-trips the AiSOC case identifier so the inbound webhook
     # can link the issue back to us without a custom field.
     assert f"aisoc-case-{case['id']}" in payload["fields"]["labels"]
@@ -185,9 +182,7 @@ async def test_jira_push_case_severity_collapses_to_default() -> None:
         api_token="t",
         project_key="SEC",
     )
-    response = _build_response(
-        status_code=201, json_body={"key": "SEC-1", "id": "1"}
-    )
+    response = _build_response(status_code=201, json_body={"key": "SEC-1", "id": "1"})
 
     with patch("app.connectors.jira_connector.httpx.AsyncClient") as mock_client:
         post_mock = AsyncMock(return_value=response)
@@ -208,9 +203,7 @@ async def test_jira_push_case_summary_truncates_at_255() -> None:
         project_key="SEC",
     )
     long_title = "x" * 400
-    response = _build_response(
-        status_code=201, json_body={"key": "SEC-1", "id": "1"}
-    )
+    response = _build_response(status_code=201, json_body={"key": "SEC-1", "id": "1"})
 
     with patch("app.connectors.jira_connector.httpx.AsyncClient") as mock_client:
         post_mock = AsyncMock(return_value=response)
@@ -254,9 +247,7 @@ async def test_jira_push_status_change_falls_through_to_push_case_when_no_ref() 
         api_token="t",
         project_key="SEC",
     )
-    response = _build_response(
-        status_code=201, json_body={"key": "SEC-7", "id": "7"}
-    )
+    response = _build_response(status_code=201, json_body={"key": "SEC-7", "id": "7"})
 
     with patch("app.connectors.jira_connector.httpx.AsyncClient") as mock_client:
         post_mock = AsyncMock(return_value=response)
@@ -412,12 +403,8 @@ async def test_jira_push_status_change_raises_on_transition_4xx() -> None:
     transition_post = _build_response(status_code=403, text="forbidden")
 
     with patch("app.connectors.jira_connector.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-            return_value=transitions_response
-        )
-        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=transition_post
-        )
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=transitions_response)
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=transition_post)
 
         with pytest.raises(httpx.HTTPStatusError, match="jira.push_status_change failed"):
             await connector.push_status_change(
@@ -491,9 +478,7 @@ async def test_snow_push_case_short_description_truncates_at_160() -> None:
         username="u",
         password="p",
     )
-    response = _build_response(
-        status_code=201, json_body={"result": {"sys_id": "x" * 32, "state": "1"}}
-    )
+    response = _build_response(status_code=201, json_body={"result": {"sys_id": "x" * 32, "state": "1"}})
 
     with patch("app.connectors.servicenow.httpx.AsyncClient") as mock_client:
         post_mock = AsyncMock(return_value=response)
@@ -535,9 +520,7 @@ async def test_snow_push_status_change_falls_through_to_push_case_when_no_ref() 
         username="u",
         password="p",
     )
-    response = _build_response(
-        status_code=201, json_body={"result": {"sys_id": "x" * 32, "state": "1"}}
-    )
+    response = _build_response(status_code=201, json_body={"result": {"sys_id": "x" * 32, "state": "1"}})
 
     with patch("app.connectors.servicenow.httpx.AsyncClient") as mock_client:
         post_mock = AsyncMock(return_value=response)
@@ -600,9 +583,7 @@ async def test_snow_push_status_change_in_progress_patches_state_only() -> None:
         username="u",
         password="p",
     )
-    response = _build_response(
-        status_code=200, json_body={"result": {"sys_id": "abc", "state": "2"}}
-    )
+    response = _build_response(status_code=200, json_body={"result": {"sys_id": "abc", "state": "2"}})
 
     with patch("app.connectors.servicenow.httpx.AsyncClient") as mock_client:
         patch_mock = AsyncMock(return_value=response)
@@ -633,9 +614,7 @@ async def test_snow_push_status_change_resolved_includes_close_metadata() -> Non
         username="u",
         password="p",
     )
-    response = _build_response(
-        status_code=200, json_body={"result": {"sys_id": "abc", "state": "6"}}
-    )
+    response = _build_response(status_code=200, json_body={"result": {"sys_id": "abc", "state": "6"}})
 
     with patch("app.connectors.servicenow.httpx.AsyncClient") as mock_client:
         patch_mock = AsyncMock(return_value=response)
@@ -662,9 +641,7 @@ async def test_snow_push_status_change_closed_includes_close_metadata() -> None:
         username="u",
         password="p",
     )
-    response = _build_response(
-        status_code=200, json_body={"result": {"sys_id": "abc", "state": "7"}}
-    )
+    response = _build_response(status_code=200, json_body={"result": {"sys_id": "abc", "state": "7"}})
 
     with patch("app.connectors.servicenow.httpx.AsyncClient") as mock_client:
         patch_mock = AsyncMock(return_value=response)
@@ -693,9 +670,7 @@ async def test_snow_push_status_change_raises_on_4xx() -> None:
     response = _build_response(status_code=403, text="ACL denied on incident")
 
     with patch("app.connectors.servicenow.httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.patch = AsyncMock(
-            return_value=response
-        )
+        mock_client.return_value.__aenter__.return_value.patch = AsyncMock(return_value=response)
         with pytest.raises(httpx.HTTPStatusError, match="servicenow.push_status_change failed"):
             await connector.push_status_change(
                 case={"id": "1"},

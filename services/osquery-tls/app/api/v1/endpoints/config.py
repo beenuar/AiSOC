@@ -5,6 +5,7 @@ osqueryd polls this to receive its schedule, packs, and options.
 Reference:
   https://osquery.readthedocs.io/en/stable/deployment/remote/#config-retrieval
 """
+
 from __future__ import annotations
 
 from typing import Annotated

@@ -53,6 +53,7 @@ What this does **not** prove:
 Run:
     pytest services/agents/tests/test_playbook_completion_rate.py -v
 """
+
 from __future__ import annotations
 
 import json
@@ -267,8 +268,7 @@ _RESPONSE_ACTION_SIGNALS: dict[str, dict[str, set[str]]] = {
 def _load_dataset() -> list[dict[str, Any]]:
     if not _DATASET_PATH.exists():
         raise FileNotFoundError(
-            f"Synthetic incidents dataset missing at {_DATASET_PATH}. "
-            "Run `python3 scripts/generate_eval_incidents.py` to regenerate."
+            f"Synthetic incidents dataset missing at {_DATASET_PATH}. Run `python3 scripts/generate_eval_incidents.py` to regenerate."
         )
     with _DATASET_PATH.open() as f:
         return json.load(f)
@@ -283,10 +283,7 @@ def _load_playbooks() -> tuple[list[dict[str, Any]], list[str]]:
     ``__path`` field for diagnostics.
     """
     if not _PACK_ROOT.exists():
-        raise FileNotFoundError(
-            f"Playbook pack missing at {_PACK_ROOT}. "
-            "Verify `playbooks/packs/v1/` is checked in."
-        )
+        raise FileNotFoundError(f"Playbook pack missing at {_PACK_ROOT}. Verify `playbooks/packs/v1/` is checked in.")
     playbooks: list[dict[str, Any]] = []
     categories: set[str] = set()
     for category_dir in sorted(p for p in _PACK_ROOT.iterdir() if p.is_dir()):
@@ -340,9 +337,7 @@ def _step_signals(playbook: dict[str, Any]) -> tuple[set[str], str]:
     return types, " | ".join(name_blob_parts)
 
 
-def _action_aligned(
-    playbook: dict[str, Any], response_class: str
-) -> bool:
+def _action_aligned(playbook: dict[str, Any], response_class: str) -> bool:
     sig = _RESPONSE_ACTION_SIGNALS.get(response_class)
     if sig is None:
         # Unknown response class -> any playbook with at least one step
@@ -464,9 +459,7 @@ def _empty_severity_bucket() -> dict[str, int]:
     return {"incidents": 0, "covered": 0, "aligned": 0}
 
 
-def _evaluate_one(
-    incident: dict[str, Any], playbooks: list[dict[str, Any]]
-) -> IncidentEvaluation:
+def _evaluate_one(incident: dict[str, Any], playbooks: list[dict[str, Any]]) -> IncidentEvaluation:
     template_id = str(incident.get("template_id", ""))
     severity = str(incident.get("severity", "")).lower()
     response_class = str(incident.get("response_class", "")).lower()
@@ -513,9 +506,7 @@ def evaluate_playbook_completion(
     data = dataset if dataset is not None else SYNTHETIC_INCIDENTS_DATA
     pb_pack = playbooks if playbooks is not None else PLAYBOOK_PACK
 
-    result = PlaybookCompletionResult(
-        per_incident=[] if keep_per_incident else None
-    )
+    result = PlaybookCompletionResult(per_incident=[] if keep_per_incident else None)
 
     # Per-category presence: which categories actually fired against any
     # incident? Initialised from the pack so an empty bucket surfaces.
@@ -553,9 +544,7 @@ def evaluate_playbook_completion(
             tpl_bucket["covered"] += 1
             for m in ev.matches:
                 if m.is_partial_match:
-                    cat_bucket = result.per_category.setdefault(
-                        m.category, {"incidents": 0, "covered": 0, "aligned": 0}
-                    )
+                    cat_bucket = result.per_category.setdefault(m.category, {"incidents": 0, "covered": 0, "aligned": 0})
                     cat_bucket["covered"] += 1
                     pb_firing[m.playbook_id]["covers"] += 1
 
@@ -565,9 +554,7 @@ def evaluate_playbook_completion(
             tpl_bucket["aligned"] += 1
             for m in ev.matches:
                 if m.is_full_match:
-                    cat_bucket = result.per_category.setdefault(
-                        m.category, {"incidents": 0, "covered": 0, "aligned": 0}
-                    )
+                    cat_bucket = result.per_category.setdefault(m.category, {"incidents": 0, "covered": 0, "aligned": 0})
                     cat_bucket["aligned"] += 1
                     pb_firing[m.playbook_id]["aligned_covers"] += 1
 
@@ -575,9 +562,7 @@ def evaluate_playbook_completion(
         # firing side, so a category with mapped templates but no firing
         # playbooks shows up as "incidents>0, covered=0").
         for cat in ev.mapped_categories:
-            cat_bucket = result.per_category.setdefault(
-                cat, {"incidents": 0, "covered": 0, "aligned": 0}
-            )
+            cat_bucket = result.per_category.setdefault(cat, {"incidents": 0, "covered": 0, "aligned": 0})
             cat_bucket["incidents"] += 1
 
         if keep_per_incident and result.per_incident is not None:
@@ -642,8 +627,7 @@ class TestPlaybookCompletionRate(unittest.TestCase):
         unclassified = sorted(seen - classified)
         self.assertFalse(
             unclassified,
-            f"Unclassified templates (add to _TEMPLATE_CATEGORIES or "
-            f"_TEMPLATES_WITHOUT_PACK_COVERAGE): {unclassified}",
+            f"Unclassified templates (add to _TEMPLATE_CATEGORIES or _TEMPLATES_WITHOUT_PACK_COVERAGE): {unclassified}",
         )
 
     def test_overall_completion_rate_floor(self) -> None:
@@ -676,14 +660,9 @@ class TestPlaybookCompletionRate(unittest.TestCase):
         *claims* to cover, how many actually have a matching playbook?
         """
         per_incident = self.result.per_incident or []
-        rate, covered, total = self.result.severity_completion_rate_mapped(
-            ("high", "critical"), per_incident
-        )
+        rate, covered, total = self.result.severity_completion_rate_mapped(("high", "critical"), per_incident)
         raw_rate = self.result.severity_completion_rate(("high", "critical"))
-        print(
-            "\n[eval] playbook_completion_rate high+critical "
-            f"mapped: {rate:.3f} ({covered}/{total}) | raw: {raw_rate:.3f}"
-        )
+        print(f"\n[eval] playbook_completion_rate high+critical mapped: {rate:.3f} ({covered}/{total}) | raw: {raw_rate:.3f}")
         self.assertGreaterEqual(
             rate,
             HIGH_CRIT_MAPPED_FLOOR,
@@ -706,11 +685,7 @@ class TestPlaybookCompletionRate(unittest.TestCase):
     def test_every_pack_category_fires(self) -> None:
         """Every category folder under packs/v1 must match at least one
         incident in the dataset. Dead-weight categories are a regression."""
-        dead = [
-            cat
-            for cat, bucket in self.result.per_category.items()
-            if cat in PACK_CATEGORIES and bucket["covered"] == 0
-        ]
+        dead = [cat for cat, bucket in self.result.per_category.items() if cat in PACK_CATEGORIES and bucket["covered"] == 0]
         self.assertFalse(
             dead,
             f"Pack categories with zero matched incidents: {dead}",
@@ -721,11 +696,7 @@ class TestPlaybookCompletionRate(unittest.TestCase):
         self.assertFalse(
             self.result.orphan_playbooks,
             "Orphan playbooks (no matching incident in the dataset):\n"
-            + "\n".join(
-                f"  - [{p['category']}] {p['playbook_id']} "
-                f"({p['path']})"
-                for p in self.result.orphan_playbooks
-            ),
+            + "\n".join(f"  - [{p['category']}] {p['playbook_id']} ({p['path']})" for p in self.result.orphan_playbooks),
         )
 
     def test_no_unexpected_template_regressions(self) -> None:
@@ -734,8 +705,7 @@ class TestPlaybookCompletionRate(unittest.TestCase):
         broken playbook trigger. Distinct from documented gaps."""
         self.assertFalse(
             self.result.orphan_templates,
-            f"Mapped templates with zero playbook matches (regression): "
-            f"{self.result.orphan_templates}",
+            f"Mapped templates with zero playbook matches (regression): {self.result.orphan_templates}",
         )
 
 

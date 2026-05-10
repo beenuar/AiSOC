@@ -1,4 +1,5 @@
 """Tests for POST /api/v1/osquery/log."""
+
 from __future__ import annotations
 
 import json

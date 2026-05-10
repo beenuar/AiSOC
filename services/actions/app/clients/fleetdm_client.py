@@ -76,9 +76,7 @@ class FleetDMClient:
         poll_interval: float = _DEFAULT_POLL_INTERVAL,
     ) -> None:
         if not api_token and not (username and password):
-            raise ValueError(
-                "FleetDMClient requires either api_token or (username, password)."
-            )
+            raise ValueError("FleetDMClient requires either api_token or (username, password).")
         self._base_url = base_url.rstrip("/")
         self._api_token = api_token
         self._username = username
@@ -176,9 +174,7 @@ class FleetDMClient:
             json={"email": self._username, "password": self._password},
         )
         if resp.status_code != 200:
-            raise FleetDMError(
-                f"FleetDM login failed: HTTP {resp.status_code} — {resp.text[:300]}"
-            )
+            raise FleetDMError(f"FleetDM login failed: HTTP {resp.status_code} — {resp.text[:300]}")
         data = resp.json()
         token = data.get("token") or (data.get("user") or {}).get("token")
         if not token:
@@ -199,17 +195,10 @@ class FleetDMClient:
         }
         resp = await http.post(url, json=payload, headers=self._auth_headers())
         if resp.status_code not in (200, 201):
-            raise FleetDMError(
-                f"FleetDM campaign creation failed: HTTP {resp.status_code} — {resp.text[:300]}"
-            )
+            raise FleetDMError(f"FleetDM campaign creation failed: HTTP {resp.status_code} — {resp.text[:300]}")
         data = resp.json()
         campaign = data.get("campaign") or data
-        campaign_id = str(
-            campaign.get("id")
-            or campaign.get("campaign_id")
-            or campaign.get("uuid")
-            or ""
-        )
+        campaign_id = str(campaign.get("id") or campaign.get("campaign_id") or campaign.get("uuid") or "")
         if not campaign_id:
             raise FleetDMError(f"FleetDM returned no campaign ID: {data}")
         return campaign_id
@@ -243,20 +232,13 @@ class FleetDMClient:
                 await asyncio.sleep(min(self._poll_interval, remaining))
                 continue
             if resp.status_code != 200:
-                raise FleetDMError(
-                    f"FleetDM campaign poll failed: HTTP {resp.status_code} — {resp.text[:300]}"
-                )
+                raise FleetDMError(f"FleetDM campaign poll failed: HTTP {resp.status_code} — {resp.text[:300]}")
 
             data = resp.json()
             # FleetDM returns {results: [{host: {...}, rows: [...]}, ...]}
             for item in data.get("results") or (data if isinstance(data, list) else []):
                 host_info = item.get("host") or {}
-                node = (
-                    host_info.get("hostname")
-                    or host_info.get("uuid")
-                    or item.get("hostname")
-                    or "unknown"
-                )
+                node = host_info.get("hostname") or host_info.get("uuid") or item.get("hostname") or "unknown"
                 rows = item.get("rows") or []
                 if node not in results:
                     results[node] = []

@@ -210,9 +210,7 @@ async def _handle_close_case(step: PlaybookStep, context: dict[str, Any], http: 
     return {"case_id": case_id, "status": "closed"}
 
 
-async def _handle_osquery_live_query(
-    step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient
-) -> dict:
+async def _handle_osquery_live_query(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
     """Dispatch a distributed osquery live query via osctrl, FleetDM, or aisoc-direct.
 
     Expected ``step.params`` keys
@@ -237,9 +235,7 @@ async def _handle_osquery_live_query(
     from app.clients.osquery_allowlist import AllowlistError  # noqa: PLC0415
 
     backend: str = step.params.get("backend", "osctrl")
-    target_hosts: list[str] = step.params.get("target_hosts") or [
-        context.get("host_id") or context.get("host", "")
-    ]
+    target_hosts: list[str] = step.params.get("target_hosts") or [context.get("host_id") or context.get("host", "")]
     template: str = step.params.get("template", "")
     template_params: dict[str, Any] = step.params.get("template_params") or {}
     timeout_seconds: int = step.params.get("timeout_seconds", 60)

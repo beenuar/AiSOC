@@ -40,8 +40,7 @@ SAMPLE_ALERT: dict[str, Any] = {
     "severity": "high",
     "source": "okta",
     "description": (
-        "User authenticated successfully from two geographically impossible "
-        "locations within an 8-minute window. Likely account takeover."
+        "User authenticated successfully from two geographically impossible locations within an 8-minute window. Likely account takeover."
     ),
     "tags": ["account-takeover", "ato", "identity"],
     "mitreAttack": [{"techniqueId": "T1078"}],
@@ -119,9 +118,7 @@ async def _run() -> int:
     section_ids = [f["id"] for f in frames if f["kind"] == "section"]
     expected_sections = ["summary", "ocsf", "mitre", "evidence", "next"]
     if section_ids != expected_sections:
-        print(
-            f"FAIL: section order is {section_ids!r}, expected {expected_sections!r}"
-        )
+        print(f"FAIL: section order is {section_ids!r}, expected {expected_sections!r}")
         return 1
 
     # 4. We got a real OCSF mapping for an Okta-sourced alert.
@@ -130,10 +127,7 @@ async def _run() -> int:
         print("FAIL: no ocsf frame")
         return 1
     if ocsf_frame["class_uid"] != 3002:
-        print(
-            f"FAIL: Okta alert should map to OCSF class_uid=3002 (Authentication), "
-            f"got {ocsf_frame['class_uid']}"
-        )
+        print(f"FAIL: Okta alert should map to OCSF class_uid=3002 (Authentication), got {ocsf_frame['class_uid']}")
         return 1
 
     # 5. T1078 came through. The corpus may or may not be loaded in this
@@ -150,9 +144,7 @@ async def _run() -> int:
 
     # 6. ATO tags should produce the ATO containment playbook recommendation.
     next_frames = [f for f in frames if f["kind"] == "next_step"]
-    if not any(
-        f["playbook_id"] == "ato-impossible-travel-block-v1" for f in next_frames
-    ):
+    if not any(f["playbook_id"] == "ato-impossible-travel-block-v1" for f in next_frames):
         print(
             "FAIL: ATO-tagged alert should recommend "
             "'ato-impossible-travel-block-v1' playbook; got "
@@ -163,16 +155,15 @@ async def _run() -> int:
     # 7. Evidence must contain the user from rawEvent.
     evidence = [f for f in frames if f["kind"] == "evidence"]
     if not any("alice.tan" in f["value"] for f in evidence):
-        print(
-            "FAIL: evidence missing the user from rawEvent: "
-            f"{[(f['label'], f['value']) for f in evidence]}"
-        )
+        print(f"FAIL: evidence missing the user from rawEvent: {[(f['label'], f['value']) for f in evidence]}")
         return 1
 
     print()
-    print(f"PASS: {len(frames)} frames, sections={section_ids}, "
-          f"mitre={[m['id'] for m in mitre_frames]}, "
-          f"playbooks={[n['playbook_id'] for n in next_frames]}")
+    print(
+        f"PASS: {len(frames)} frames, sections={section_ids}, "
+        f"mitre={[m['id'] for m in mitre_frames]}, "
+        f"playbooks={[n['playbook_id'] for n in next_frames]}"
+    )
     return 0
 
 

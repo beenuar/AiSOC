@@ -74,10 +74,7 @@ class CreateTicketExecutor(BaseExecutor):
             output={
                 "ticket_system": system,
                 "ticket_id": f"SIM-TICKET-{str(request.incident_id)[:8].upper()}",
-                "note": (
-                    "Simulation mode — integrate with Jira, ServiceNow, or PagerDuty API to enable live execution."
-                    + _SIM_FUNNEL_CTA
-                ),
+                "note": ("Simulation mode — integrate with Jira, ServiceNow, or PagerDuty API to enable live execution." + _SIM_FUNNEL_CTA),
             },
             completed_at=datetime.utcnow(),
         )

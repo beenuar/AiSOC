@@ -2,6 +2,7 @@
 
 Used by ``aisoc_direct_client`` to poll for distributed query results.
 """
+
 from __future__ import annotations
 
 from typing import Annotated

@@ -50,8 +50,7 @@ SAMPLE_ALERT: dict[str, Any] = {
     "severity": "high",
     "source": "okta",
     "description": (
-        "User authenticated successfully from two geographically impossible "
-        "locations within an 8-minute window. Likely account takeover."
+        "User authenticated successfully from two geographically impossible locations within an 8-minute window. Likely account takeover."
     ),
     "tags": ["account-takeover", "ato", "identity"],
     "mitreAttack": [{"techniqueId": "T1078"}],
@@ -146,9 +145,7 @@ def test_explain_streams_grounded_ndjson(monkeypatch: pytest.MonkeyPatch) -> Non
 
     # Section ordering — explicit and stable so the frontend can rely on it.
     section_ids = [f["id"] for f in frames if f["kind"] == "section"]
-    assert section_ids == ["summary", "ocsf", "mitre", "evidence", "next"], (
-        f"unexpected section order: {section_ids}"
-    )
+    assert section_ids == ["summary", "ocsf", "mitre", "evidence", "next"], f"unexpected section order: {section_ids}"
 
     # OCSF mapping: Okta source → Authentication (class_uid 3002).
     ocsf = next((f for f in frames if f["kind"] == "ocsf"), None)
@@ -157,9 +154,7 @@ def test_explain_streams_grounded_ndjson(monkeypatch: pytest.MonkeyPatch) -> Non
 
     # MITRE: T1078 with valid attack.mitre.org URL.
     mitre = [f for f in frames if f["kind"] == "mitre"]
-    assert any(m["id"] == "T1078" for m in mitre), (
-        f"expected T1078, got {[m['id'] for m in mitre]}"
-    )
+    assert any(m["id"] == "T1078" for m in mitre), f"expected T1078, got {[m['id'] for m in mitre]}"
     for m in mitre:
         assert m["url"].startswith("https://attack.mitre.org/techniques/")
 
@@ -170,8 +165,7 @@ def test_explain_streams_grounded_ndjson(monkeypatch: pytest.MonkeyPatch) -> Non
     # Evidence surfaces the offending user from rawEvent.
     evidence = [f for f in frames if f["kind"] == "evidence"]
     assert any("alice.tan" in e["value"] for e in evidence), (
-        f"evidence missing user from rawEvent: "
-        f"{[(e['label'], e['value']) for e in evidence]}"
+        f"evidence missing user from rawEvent: {[(e['label'], e['value']) for e in evidence]}"
     )
 
 
@@ -239,9 +233,7 @@ def test_explain_throttles_with_429_and_ndjson_error_frame(
     assert retry >= 1
 
     frames = _parse_ndjson(second.text)
-    assert len(frames) == 1, (
-        f"429 body must be a single NDJSON error frame, got {len(frames)}"
-    )
+    assert len(frames) == 1, f"429 body must be a single NDJSON error frame, got {len(frames)}"
     assert frames[0]["kind"] == "error"
     assert "rate_limited" in frames[0]["error"]
 

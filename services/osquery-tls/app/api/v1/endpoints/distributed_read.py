@@ -3,6 +3,7 @@
 Reference:
   https://osquery.readthedocs.io/en/stable/deployment/remote/#distributed-queries
 """
+
 from __future__ import annotations
 
 from typing import Annotated

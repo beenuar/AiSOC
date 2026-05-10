@@ -1,4 +1,5 @@
 """AiSOC osquery TLS service — FastAPI application entry point."""
+
 from __future__ import annotations
 
 import logging
@@ -14,8 +15,7 @@ logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.I
 app = FastAPI(
     title="AiSOC osquery TLS",
     description=(
-        "Implements the osquery TLS plugin spec so osqueryd agents can be "
-        "pointed at AiSOC directly, without a separate fleet manager."
+        "Implements the osquery TLS plugin spec so osqueryd agents can be pointed at AiSOC directly, without a separate fleet manager."
     ),
     version="0.1.0",
     docs_url="/docs",

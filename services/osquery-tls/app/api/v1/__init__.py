@@ -1,4 +1,5 @@
 """API v1 router for the osquery TLS service."""
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
