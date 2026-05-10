@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +51,7 @@ async def complete_query(
         .where(OsqueryDistributedQuery.query_id == query_id)
         .values(
             status="completed",
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(UTC),
             results_json=results,
         )
     )

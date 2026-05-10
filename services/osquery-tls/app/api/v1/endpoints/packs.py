@@ -48,7 +48,7 @@ class PackOut(BaseModel):
     queries: list[PackQueryOut]
 
     @classmethod
-    def from_pack(cls, pack: OsqueryPack) -> "PackOut":
+    def from_pack(cls, pack: OsqueryPack) -> PackOut:
         return cls(
             id=pack.id,
             name=pack.name,

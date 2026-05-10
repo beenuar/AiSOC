@@ -49,14 +49,13 @@ async def require_valid_node_key(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     x_aisoc_tenant: Annotated[str | None, Header()] = None,
-) -> "app.models.node.OsqueryNode":  # type: ignore[name-defined]  # noqa: F821
+) -> app.models.node.OsqueryNode:  # type: ignore[name-defined]  # noqa: F821
     """FastAPI dependency: parse node_key from JSON body and resolve the node.
 
     Raises ``HTTP 401`` if the key is missing or unknown.
 
     Returns the resolved ``OsqueryNode`` ORM instance.
     """
-    from app.models.node import OsqueryNode  # noqa: PLC0415
     from app.services.node_registry import get_node_by_key  # noqa: PLC0415
 
     body = await request.json()

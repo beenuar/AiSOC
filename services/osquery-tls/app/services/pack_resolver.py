@@ -16,9 +16,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.pack_assignment import OsqueryPackAssignment
-from app.services.pack_loader import get_all_packs, get_pack
+from app.services.pack_loader import get_pack
 
 # ---------------------------------------------------------------------------
 # Default pack set (applied when a tenant has no assignments)

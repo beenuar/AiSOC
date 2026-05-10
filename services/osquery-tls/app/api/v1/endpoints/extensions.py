@@ -26,7 +26,7 @@ GET /v1/osquery/extensions/persistence-baseline
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
@@ -47,7 +47,7 @@ router = APIRouter(prefix="/extensions", tags=["extensions"])
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _pending_actions_stub(host: str) -> list[dict[str, Any]]:

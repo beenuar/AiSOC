@@ -10,11 +10,9 @@ The loader is imported by:
 """
 from __future__ import annotations
 
-import json
 import os
 import time
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 

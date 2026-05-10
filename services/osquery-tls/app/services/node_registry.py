@@ -1,7 +1,7 @@
 """Node registry: enroll, look up, and refresh osquery nodes."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +42,7 @@ async def enroll_node(
     if existing is not None:
         existing.node_key = generate_node_key()
         existing.host_details = host_details
-        existing.last_seen = datetime.now(timezone.utc)
+        existing.last_seen = datetime.now(UTC)
         await db.commit()
         await db.refresh(existing)
         return existing
@@ -52,7 +52,7 @@ async def enroll_node(
         node_key=generate_node_key(),
         tenant_id=tenant_id,
         host_details=host_details,
-        last_seen=datetime.now(timezone.utc),
+        last_seen=datetime.now(UTC),
     )
     db.add(node)
     await db.commit()
@@ -65,6 +65,6 @@ async def mark_seen(db: AsyncSession, node: OsqueryNode) -> None:
     await db.execute(
         update(OsqueryNode)
         .where(OsqueryNode.id == node.id)
-        .values(last_seen=datetime.now(timezone.utc))
+        .values(last_seen=datetime.now(UTC))
     )
     await db.commit()
