@@ -95,31 +95,31 @@ ACTION_ALIGNMENT_FLOOR: float = 0.85
 # ---------------------------------------------------------------------------
 
 _TEMPLATE_CATEGORIES: dict[str, list[str]] = {
-    # account-takeover
-    "azure-ad-impossible-travel": ["account-takeover"],
-    "credential-spray": ["account-takeover"],
+    # account-takeover / suspicious-signin (overlapping — both packs respond)
+    "azure-ad-impossible-travel": ["account-takeover", "suspicious-signin"],
+    "credential-spray": ["account-takeover", "brute-force"],
     "github-pat-leak": ["account-takeover", "supply-chain"],
-    "helpdesk-password-reset-abuse": ["account-takeover"],
-    "oauth-refresh-token-theft": ["account-takeover"],
-    "saml-golden-ticket": ["account-takeover", "lateral-movement"],
-    "vpn-new-geography": ["account-takeover"],
-    # bec
+    "helpdesk-password-reset-abuse": ["account-takeover", "suspicious-signin", "brute-force"],
+    "oauth-refresh-token-theft": ["account-takeover", "cloud-account-takeover"],
+    "saml-golden-ticket": ["account-takeover", "lateral-movement", "cloud-account-takeover"],
+    "vpn-new-geography": ["account-takeover", "suspicious-signin"],
+    # bec / phishing (email-based attack chains share playbooks)
     "bec-wire-fraud": ["bec"],
-    "oauth-consent-phish": ["bec", "account-takeover"],
+    "oauth-consent-phish": ["bec", "account-takeover", "phishing"],
     "outlook-auto-forward-rule": ["bec"],
-    "phishing-macro-email": ["bec"],
-    # cloud-misconfig
-    "ec2-imds-credential-theft": ["cloud-misconfig"],
+    "phishing-macro-email": ["bec", "phishing"],
+    # cloud-misconfig / cloud-account-takeover
+    "ec2-imds-credential-theft": ["cloud-misconfig", "cloud-account-takeover"],
     "malicious-container-image": ["cloud-misconfig", "supply-chain"],
     "public-s3-bucket-pii": ["cloud-misconfig", "data-exfil"],
-    # data-exfil
-    "bulk-pii-download": ["data-exfil", "insider-risk"],
-    "dns-tunnel-exfil": ["data-exfil"],
+    # data-exfil / anomalous-data (exfil triggers anomalous-data playbooks too)
+    "bulk-pii-download": ["data-exfil", "insider-risk", "anomalous-data"],
+    "dns-tunnel-exfil": ["data-exfil", "anomalous-data"],
     "insider-mailbox-export": ["data-exfil", "insider-risk"],
     "personal-drive-exfil": ["data-exfil", "insider-risk"],
-    "s3-exfil-cloud-storage": ["data-exfil"],
-    # ddos
-    "ddos-syn-flood": ["ddos"],
+    "s3-exfil-cloud-storage": ["data-exfil", "anomalous-data"],
+    # ddos / network-containment (DDoS requires active network containment)
+    "ddos-syn-flood": ["ddos", "network-containment"],
     # insider-risk
     "service-account-privileged-command": ["insider-risk"],
     # lateral-movement
@@ -133,37 +133,44 @@ _TEMPLATE_CATEGORIES: dict[str, list[str]] = {
     # supply-chain
     "compromised-ci-runner": ["supply-chain"],
     "npm-supply-chain": ["supply-chain"],
+    # container-escape (moved from _TEMPLATES_WITHOUT_PACK_COVERAGE — v1 pack now covers)
+    "docker-runtime-abuse": ["container-escape"],
+    "k8s-privileged-pod-escape": ["container-escape", "privilege-escalation"],
+    # endpoint-isolation (moved from _TEMPLATES_WITHOUT_PACK_COVERAGE — v1 pack now covers)
+    "disable-edr-tooling": ["endpoint-isolation"],
+    "lsass-memory-dump": ["endpoint-isolation"],
+    # ids-critical (moved from _TEMPLATES_WITHOUT_PACK_COVERAGE — IDS/IPS pack now covers)
+    "dga-c2": ["ids-critical"],
+    "https-c2-beacon": ["ids-critical"],
+    # malware / endpoint-isolation (malware execution triggers both response tracks)
+    "powershell-obfuscated-dropper": ["malware", "endpoint-isolation"],
+    "process-hollowing-svchost": ["malware"],
+    # privilege-escalation (moved from _TEMPLATES_WITHOUT_PACK_COVERAGE — v1 pack now covers)
+    "linux-suid-abuse": ["privilege-escalation"],
+    "uac-bypass-fodhelper": ["privilege-escalation"],
+    # web-compromise (moved from _TEMPLATES_WITHOUT_PACK_COVERAGE — v1 pack now covers)
+    "confluence-watering-hole": ["web-compromise", "phishing"],
+    "webapp-sqli-ssrf-exploit": ["web-compromise"],
 }
 
 # Templates the v1 pack legitimately does not cover. Listed explicitly so
 # adding a new template without either a pack mapping or an explicit
 # no-coverage entry will trip ``test_every_template_is_classified``.
 _TEMPLATES_WITHOUT_PACK_COVERAGE: set[str] = {
-    # Endpoint compromise / persistence / defense-evasion (the v1 pack focuses
-    # on identity, network, cloud, exfil, and ransomware response — endpoint-
-    # native containment playbooks are slated for the v1.1 pack).
+    # Endpoint persistence / defense-evasion templates not yet covered by a
+    # v1 playbook. These remain endpoint-native signals where the pack's
+    # identity/network/cloud playbooks cannot meaningfully respond. Slated
+    # for v1.1 endpoint containment packs.
     "certutil-download-cradle",
     "clipboard-keylogger",
-    "confluence-watering-hole",
     "cron-backdoor",
-    "dga-c2",
-    "disable-edr-tooling",
-    "docker-runtime-abuse",
     "event-log-cleared",
-    "https-c2-beacon",
-    "k8s-privileged-pod-escape",
     "linux-journald-tampering",
-    "linux-suid-abuse",
-    "lsass-memory-dump",
     "office-vsto-addin",
-    "powershell-obfuscated-dropper",
-    "process-hollowing-svchost",
     "registry-run-persistence",
     "scheduled-task-persistence",
-    "uac-bypass-fodhelper",
     "uefi-firmware-implant",
     "usb-autorun-airgap",
-    "webapp-sqli-ssrf-exploit",
     "wmi-event-subscription",
     # Medium-severity reconnaissance / early-stage templates. The dataset
     # generator emits these at medium severity (pre-exploitation signals),

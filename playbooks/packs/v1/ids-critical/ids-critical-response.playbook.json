@@ -1,0 +1,172 @@
+{
+  "id": "ids-critical-response-v1",
+  "name": "IDS/IPS Critical Alert: Network Intrusion Response",
+  "description": "Triggered by an IDS/IPS signature at critical severity indicating active exploitation, C2 communication, or lateral movement detected at the network layer. Enriches source IP, blocks traffic, and escalates.",
+  "version": "1.0.0",
+  "author": "Beenu - beenu@cyble.com",
+  "tags": [
+    "ids-critical",
+    "ids",
+    "ips",
+    "network",
+    "intrusion",
+    "mitre.t1046",
+    "mitre.t1190",
+    "mitre.t1071"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["ids", "ips", "network-intrusion", "exploitation", "c2", "dga", "c2-beacon"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-05-10T08:00:00+00:00",
+  "updated_at": "2026-05-10T08:00:00+00:00",
+  "inputs": {
+    "source_ip": {
+      "description": "External attacker or suspect source IP",
+      "field": "alert.source_ip",
+      "required": true
+    },
+    "destination_ip": {
+      "description": "Internal host targeted by the IDS/IPS alert",
+      "field": "alert.destination_ip",
+      "required": false
+    },
+    "signature": {
+      "description": "IDS/IPS rule or signature name that fired",
+      "field": "alert.ids_signature",
+      "required": false
+    },
+    "protocol": {
+      "description": "Network protocol (TCP/UDP/etc)",
+      "field": "alert.protocol",
+      "required": false
+    },
+    "dest_port": {
+      "description": "Destination port",
+      "field": "alert.destination_port",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich source IP reputation",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.source_ip",
+        "indicator_type": "ip"
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "siem_search",
+      "name": "Search SIEM for prior activity from source IP",
+      "type": "search_siem",
+      "params": {
+        "query": "source_ip={{inputs.source_ip}}",
+        "time_window": "-48h",
+        "max_results": 200
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 45
+    },
+    {
+      "id": "block_source_ip",
+      "name": "Block source IP at perimeter",
+      "type": "block_ip",
+      "params": {
+        "ip_field": "alert.source_ip",
+        "duration": "24h",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "approval_contain_dest",
+      "name": "Approval gate — isolate targeted internal host",
+      "type": "approval",
+      "params": {
+        "message": "Isolate internal host '{{inputs.destination_ip}}' targeted by IDS/IPS critical alert (sig: {{inputs.signature}})?",
+        "approvers": ["soc-lead", "network-lead"],
+        "timeout_seconds": 300,
+        "auto_approve_severity": ["critical"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 320
+    },
+    {
+      "id": "isolate_dest_host",
+      "name": "Network-isolate targeted host",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.destination_ip",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_contain_dest.outcome == 'approved' && inputs.destination_ip != null",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "create_siem_notable",
+      "name": "Create SIEM notable event for IDS critical",
+      "type": "create_notable_event",
+      "params": {
+        "title": "IDS Critical: {{inputs.signature}} from {{inputs.source_ip}}",
+        "severity": "critical",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "IDS/IPS critical investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "network-intrusion"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify SOC and network team",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "IDS Critical: {{inputs.signature}} from {{inputs.source_ip}} targeting {{inputs.destination_ip}}. Source IP blocked: {{context.block_success}}.",
+        "service_key_env": "PD_SOC_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open IDS critical ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "IDS/IPS Critical: {{inputs.signature}} from {{inputs.source_ip}}",
+        "queue": "soc",
+        "labels": ["ids", "ips", "network-intrusion"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}
