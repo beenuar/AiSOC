@@ -62,6 +62,7 @@ const sidebars: SidebarsConfig = {
         "operations/security",
         "operations/credentials",
         "operations/airgap",
+        "operations/air-gapped",
         "operations/theming",
         "operations/upgrades",
         "operations/troubleshooting",

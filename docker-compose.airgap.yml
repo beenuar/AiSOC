@@ -1,0 +1,87 @@
+###############################################################################
+# AiSOC — Air-gapped / Local-LLM overlay
+#
+# Extends docker-compose.demo.yml to run entirely without external LLM calls.
+# Adds an Ollama service with a pinned model and sets AISOC_AIRGAPPED=true on
+# every service that calls an LLM.
+#
+# Pinned model: llama3.2:3b-instruct-q4_K_M
+#   — ~2 GB on disk, fits in 6 GB VRAM (or CPU-only with 8 GB RAM).
+#   — Swap for a larger model by setting AIRGAP_LLM_MODEL= in your env.
+#
+# Usage (air-gapped demo):
+#   docker compose \
+#     -f docker-compose.demo.yml \
+#     -f docker-compose.airgap.yml \
+#     up -d
+#
+# The init container below will pull the model automatically on first boot.
+# Subsequent starts use the cached layer in the `ollama_data` volume.
+###############################################################################
+
+networks:
+  aisoc-demo:
+    driver: bridge
+
+volumes:
+  ollama_data: {}
+
+services:
+
+  # ─── Local LLM (Ollama) ─────────────────────────────────────────────────────
+
+  ollama:
+    image: ollama/ollama:0.6.7
+    container_name: aisoc-airgap-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    networks:
+      - aisoc-demo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Pull the pinned model once (no-op on cache hit)
+  ollama-pull:
+    image: ollama/ollama:0.6.7
+    container_name: aisoc-airgap-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["ollama", "pull", "${AIRGAP_LLM_MODEL:-llama3.2:3b-instruct-q4_K_M}"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - aisoc-demo
+    restart: "no"
+
+  # ─── Override: agents ────────────────────────────────────────────────────────
+  #
+  # Switches the agents service to local-only mode.  External LLM calls are
+  # blocked by the AISOC_AIRGAPPED guard in llm_resolver.py; the investigation
+  # orchestrator falls back to its deterministic synthesizer when no outbound
+  # call is allowed, which means the demo seed completes without touching the
+  # internet.
+
+  agents:
+    depends_on:
+      ollama:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+    environment:
+      AISOC_AIRGAPPED: "true"
+      LLM_BASE_URL: "http://ollama:11434/v1"
+      LLM_API_KEY: "ollama"          # Ollama ignores the key; the client requires it
+      LLM_MODEL: "${AIRGAP_LLM_MODEL:-llama3.2:3b-instruct-q4_K_M}"
+      # Clear external keys so no stray outbound calls can be made
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
