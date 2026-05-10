@@ -16,6 +16,11 @@
  *     user-submitted playbook that happens to set author="AiSOC".
  *   - Categories are recovered from the first matching tag — packs all
  *     prefix their tags with the category name (see playbooks/packs/v1).
+ *   - MITRE tactics are inferred from `mitre.tXXXX` tags using the ATT&CK
+ *     technique→tactic mapping. Techniques map to their primary tactic.
+ *   - Severity is taken from trigger.severity (array of strings).
+ *   - Integration filters are derived from step.type values, grouped into
+ *     logical buckets (EDR, IAM, Ticketing, SIEM, Notify, AI, Firewall).
  */
 
 import type { Playbook } from './types';
@@ -96,10 +101,171 @@ export function categoryBadgeClass(cat: PackCategory): string {
 /** Source classification used by the gallery filter pills. */
 export type PlaybookSource = 'all' | 'pack' | 'custom';
 
-/** Apply gallery filters (source + category + search) to a playbook list. */
+/* ─────────────────────────── MITRE Tactics ─────────────────────────── */
+
+/**
+ * The 12 MITRE ATT&CK tactics represented in the shipped packs.
+ * Mapped from technique IDs found in `mitre.tXXXX` tags.
+ */
+export const MITRE_TACTICS = [
+  'Initial Access',
+  'Execution',
+  'Persistence',
+  'Privilege Escalation',
+  'Defense Evasion',
+  'Credential Access',
+  'Discovery',
+  'Lateral Movement',
+  'Collection',
+  'Command and Control',
+  'Exfiltration',
+  'Impact',
+] as const;
+
+export type MitreTactic = (typeof MITRE_TACTICS)[number];
+
+/**
+ * Maps ATT&CK technique numeric prefix to its primary tactic.
+ * Covers all techniques present in playbooks/packs/v1.
+ */
+const TECHNIQUE_TACTIC_MAP: Record<number, MitreTactic> = {
+  1021:  'Lateral Movement',       // Remote Services
+  1041:  'Exfiltration',           // Exfiltration Over C2
+  1046:  'Discovery',              // Network Service Discovery
+  1048:  'Exfiltration',           // Exfiltration Over Alt Protocol
+  1052:  'Exfiltration',           // Exfiltration Over Physical Medium
+  1059:  'Execution',              // Command & Scripting Interpreter
+  1068:  'Privilege Escalation',   // Exploitation for Priv Esc
+  1071:  'Command and Control',    // App Layer Protocol
+  1078:  'Initial Access',         // Valid Accounts
+  1110:  'Credential Access',      // Brute Force
+  1134:  'Privilege Escalation',   // Access Token Manipulation
+  1190:  'Initial Access',         // Exploit Public-Facing App
+  1195:  'Initial Access',         // Supply Chain Compromise
+  1199:  'Initial Access',         // Trusted Relationship
+  1204:  'Execution',              // User Execution
+  1486:  'Impact',                 // Data Encrypted for Impact
+  1490:  'Impact',                 // Inhibit System Recovery
+  1498:  'Impact',                 // Network Denial of Service
+  1505:  'Persistence',            // Server Software Component
+  1528:  'Credential Access',      // Steal Application Access Token
+  1530:  'Collection',             // Data from Cloud Storage
+  1535:  'Defense Evasion',        // Unused/Unsupported Cloud Regions
+  1539:  'Credential Access',      // Steal Web Session Cookie
+  1548:  'Privilege Escalation',   // Abuse Elevation Control
+  1550:  'Defense Evasion',        // Use Alt Auth Material
+  1552:  'Credential Access',      // Unsecured Credentials
+  1621:  'Credential Access',      // MFA Request Generation
+};
+
+/**
+ * Extracts the MITRE tactics for a playbook by parsing `mitre.tXXXX` tags
+ * and looking them up in the technique→tactic map.
+ */
+export function mitreTacticsOf(pb: Playbook): MitreTactic[] {
+  const tactics = new Set<MitreTactic>();
+  for (const tag of pb.tags ?? []) {
+    const m = tag.match(/^mitre\.t(\d+)/i);
+    if (!m) continue;
+    const num = parseInt(m[1], 10);
+    const tactic = TECHNIQUE_TACTIC_MAP[num];
+    if (tactic) tactics.add(tactic);
+  }
+  return Array.from(tactics);
+}
+
+/* ─────────────────────────── Severity ─────────────────────────── */
+
+export const SEVERITY_LEVELS = ['info', 'low', 'medium', 'high', 'critical'] as const;
+export type SeverityLevel = (typeof SEVERITY_LEVELS)[number];
+
+const SEVERITY_COLORS: Record<SeverityLevel, string> = {
+  info:     'bg-blue-900/40 text-blue-300 border-blue-800',
+  low:      'bg-gray-800/60 text-gray-400 border-gray-700',
+  medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-800',
+  high:     'bg-orange-900/40 text-orange-300 border-orange-800',
+  critical: 'bg-red-900/40 text-red-300 border-red-800',
+};
+
+export function severityBadgeClass(sev: SeverityLevel): string {
+  return SEVERITY_COLORS[sev];
+}
+
+/**
+ * Returns the severity levels a playbook is triggered by.
+ */
+export function severitiesOf(pb: Playbook): SeverityLevel[] {
+  const raw = pb.trigger?.severity ?? [];
+  return raw.filter((s): s is SeverityLevel =>
+    (SEVERITY_LEVELS as readonly string[]).includes(s),
+  );
+}
+
+/* ─────────────────────────── Integrations ─────────────────────────── */
+
+/**
+ * Integration buckets — derived from step `type` values.
+ * Each bucket maps to one or more raw step types.
+ */
+export const INTEGRATION_TYPES = [
+  'AI Analysis',
+  'EDR / Endpoint',
+  'Identity / IAM',
+  'Ticketing',
+  'SIEM',
+  'Notification',
+  'Firewall / Network',
+  'HTTP / Custom',
+] as const;
+
+export type IntegrationType = (typeof INTEGRATION_TYPES)[number];
+
+const STEP_TYPE_TO_INTEGRATION: Record<string, IntegrationType> = {
+  investigate:         'AI Analysis',
+  enrich:              'AI Analysis',
+  isolate_host:        'EDR / Endpoint',
+  quarantine_file:     'EDR / Endpoint',
+  kill_process:        'EDR / Endpoint',
+  run_av_scan:         'EDR / Endpoint',
+  run_script:          'EDR / Endpoint',
+  disable_user:        'Identity / IAM',
+  reset_password:      'Identity / IAM',
+  revoke_session:      'Identity / IAM',
+  force_mfa:           'Identity / IAM',
+  create_ticket:       'Ticketing',
+  search_siem:         'SIEM',
+  create_notable_event:'SIEM',
+  notify:              'Notification',
+  block_ip:            'Firewall / Network',
+  block_ioc:           'Firewall / Network',
+  http:                'HTTP / Custom',
+};
+
+/**
+ * Returns the set of integration types used by a playbook's steps.
+ */
+export function integrationsOf(pb: Playbook): IntegrationType[] {
+  const types = new Set<IntegrationType>();
+  for (const step of pb.steps ?? []) {
+    const bucket = STEP_TYPE_TO_INTEGRATION[step.type];
+    if (bucket) types.add(bucket);
+  }
+  return Array.from(types);
+}
+
+/* ─────────────────────────── Filter ─────────────────────────── */
+
+/** Apply gallery filters (source + category + MITRE + severity + integration + search). */
 export function filterPlaybooks(
   playbooks: Playbook[],
-  filters: { source: PlaybookSource; category: PackCategory | 'all'; search: string },
+  filters: {
+    source: PlaybookSource;
+    category: PackCategory | 'all';
+    mitreTactic: MitreTactic | 'all';
+    severity: SeverityLevel | 'all';
+    integration: IntegrationType | 'all';
+    search: string;
+  },
 ): Playbook[] {
   const q = filters.search.trim().toLowerCase();
   return playbooks.filter((pb) => {
@@ -109,6 +275,18 @@ export function filterPlaybooks(
     if (filters.category !== 'all') {
       const cat = categoryOf(pb);
       if (cat !== filters.category) return false;
+    }
+    if (filters.mitreTactic !== 'all') {
+      const tactics = mitreTacticsOf(pb);
+      if (!tactics.includes(filters.mitreTactic)) return false;
+    }
+    if (filters.severity !== 'all') {
+      const sevs = severitiesOf(pb);
+      if (!sevs.includes(filters.severity)) return false;
+    }
+    if (filters.integration !== 'all') {
+      const integrations = integrationsOf(pb);
+      if (!integrations.includes(filters.integration)) return false;
     }
     if (q) {
       const haystack = [pb.name, pb.description, ...(pb.tags ?? [])]

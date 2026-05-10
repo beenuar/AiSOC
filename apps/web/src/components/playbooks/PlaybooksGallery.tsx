@@ -8,6 +8,9 @@
  *
  *   • Source filter pills      ("All" / "Shipped Packs" / "Custom")
  *   • Category facet chips     (account-takeover, ransomware, …)
+ *   • MITRE tactic filter      (Initial Access, Lateral Movement, …)
+ *   • Severity filter          (info / low / medium / high / critical)
+ *   • Integration filter       (EDR, IAM, Ticketing, SIEM, …)
  *   • Free-text search         (matches name, description, tags)
  *   • Per-row PACK badge       (purple) + colored category badge
  *   • One-click "Preview"      (read-only DAG drawer)
@@ -16,7 +19,7 @@
  *
  * The gallery is driven entirely from the existing `GET /api/v1/playbooks`
  * payload — no new backend endpoints required. See packHelpers.ts for the
- * pack-detection heuristic and forking logic.
+ * pack-detection heuristic, MITRE/severity/integration helpers, and forking.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -28,12 +31,21 @@ import clsx from 'clsx';
 import type { Playbook } from './types';
 import {
   PACK_CATEGORIES,
+  MITRE_TACTICS,
+  SEVERITY_LEVELS,
+  INTEGRATION_TYPES,
   type PackCategory,
   type PlaybookSource,
+  type MitreTactic,
+  type SeverityLevel,
+  type IntegrationType,
   isShippedPack,
   categoryOf,
   categoryLabel,
   categoryBadgeClass,
+  mitreTacticsOf,
+  severitiesOf,
+  integrationsOf,
   filterPlaybooks,
   countBySource,
   countByCategory,
@@ -57,6 +69,9 @@ export function PlaybooksGallery({ playbooks }: PlaybooksGalleryProps) {
   const router = useRouter();
   const [source, setSource] = useState<PlaybookSource>('all');
   const [category, setCategory] = useState<PackCategory | 'all'>('all');
+  const [mitreTactic, setMitreTactic] = useState<MitreTactic | 'all'>('all');
+  const [severity, setSeverity] = useState<SeverityLevel | 'all'>('all');
+  const [integration, setIntegration] = useState<IntegrationType | 'all'>('all');
   const [search, setSearch] = useState('');
   const [previewing, setPreviewing] = useState<Playbook | null>(null);
   const [forkingId, setForkingId] = useState<string | null>(null);
@@ -64,13 +79,92 @@ export function PlaybooksGallery({ playbooks }: PlaybooksGalleryProps) {
 
   const sourceCounts = useMemo(() => countBySource(playbooks), [playbooks]);
   const categoryCounts = useMemo(() => countByCategory(playbooks), [playbooks]);
+
+  // Counts for MITRE tactics across current source+category selection (before tactic filter)
+  const mitreCounts = useMemo(() => {
+    const pre = playbooks.filter((pb) => {
+      const isPack = isShippedPack(pb);
+      if (source === 'pack' && !isPack) return false;
+      if (source === 'custom' && isPack) return false;
+      if (category !== 'all' && categoryOf(pb) !== category) return false;
+      return true;
+    });
+    const counts: Record<MitreTactic, number> = {} as Record<MitreTactic, number>;
+    for (const t of MITRE_TACTICS) counts[t] = 0;
+    for (const pb of pre) {
+      for (const t of mitreTacticsOf(pb)) counts[t]++;
+    }
+    return counts;
+  }, [playbooks, source, category]);
+
+  // Counts for severity levels
+  const severityCounts = useMemo(() => {
+    const pre = playbooks.filter((pb) => {
+      const isPack = isShippedPack(pb);
+      if (source === 'pack' && !isPack) return false;
+      if (source === 'custom' && isPack) return false;
+      if (category !== 'all' && categoryOf(pb) !== category) return false;
+      if (mitreTactic !== 'all' && !mitreTacticsOf(pb).includes(mitreTactic)) return false;
+      return true;
+    });
+    const counts: Record<SeverityLevel, number> = {} as Record<SeverityLevel, number>;
+    for (const s of SEVERITY_LEVELS) counts[s] = 0;
+    for (const pb of pre) {
+      for (const s of severitiesOf(pb)) counts[s]++;
+    }
+    return counts;
+  }, [playbooks, source, category, mitreTactic]);
+
+  // Counts for integration types
+  const integrationCounts = useMemo(() => {
+    const pre = playbooks.filter((pb) => {
+      const isPack = isShippedPack(pb);
+      if (source === 'pack' && !isPack) return false;
+      if (source === 'custom' && isPack) return false;
+      if (category !== 'all' && categoryOf(pb) !== category) return false;
+      if (mitreTactic !== 'all' && !mitreTacticsOf(pb).includes(mitreTactic)) return false;
+      if (severity !== 'all' && !severitiesOf(pb).includes(severity)) return false;
+      return true;
+    });
+    const counts: Record<IntegrationType, number> = {} as Record<IntegrationType, number>;
+    for (const i of INTEGRATION_TYPES) counts[i] = 0;
+    for (const pb of pre) {
+      for (const i of integrationsOf(pb)) counts[i]++;
+    }
+    return counts;
+  }, [playbooks, source, category, mitreTactic, severity]);
+
   const filtered = useMemo(
-    () => filterPlaybooks(playbooks, { source, category, search }),
-    [playbooks, source, category, search],
+    () => filterPlaybooks(playbooks, { source, category, mitreTactic, severity, integration, search }),
+    [playbooks, source, category, mitreTactic, severity, integration, search],
   );
 
   // The category facet only meaningfully applies to packs.
   const showCategoryRow = source !== 'custom';
+
+  // Reset downstream filters when source changes.
+  function handleSetSource(s: PlaybookSource) {
+    setSource(s);
+    setCategory('all');
+    setMitreTactic('all');
+    setSeverity('all');
+    setIntegration('all');
+  }
+
+  const hasActiveFilters =
+    category !== 'all' ||
+    mitreTactic !== 'all' ||
+    severity !== 'all' ||
+    integration !== 'all' ||
+    search !== '';
+
+  function clearAllFilters() {
+    setCategory('all');
+    setMitreTactic('all');
+    setSeverity('all');
+    setIntegration('all');
+    setSearch('');
+  }
 
   async function handleFork(pb: Playbook) {
     setForkError(null);
@@ -113,29 +207,39 @@ export function PlaybooksGallery({ playbooks }: PlaybooksGalleryProps) {
             label="All"
             count={sourceCounts.all}
             active={source === 'all'}
-            onClick={() => setSource('all')}
+            onClick={() => handleSetSource('all')}
           />
           <SourcePill
             label="Shipped Packs"
             count={sourceCounts.pack}
             active={source === 'pack'}
-            onClick={() => setSource('pack')}
+            onClick={() => handleSetSource('pack')}
             tone="pack"
           />
           <SourcePill
             label="Custom"
             count={sourceCounts.custom}
             active={source === 'custom'}
-            onClick={() => setSource('custom')}
+            onClick={() => handleSetSource('custom')}
           />
         </div>
+
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded border border-gray-800 hover:border-red-900"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Category facet (only when a category is meaningful) */}
       {showCategoryRow && (
         <div className="flex flex-wrap items-center gap-2" aria-label="Filter by category">
+          <span className="text-xs text-gray-600 w-16 shrink-0">Category</span>
           <CategoryPill
-            label="All categories"
+            label="All"
             active={category === 'all'}
             onClick={() => setCategory('all')}
           />
@@ -154,6 +258,82 @@ export function PlaybooksGallery({ playbooks }: PlaybooksGalleryProps) {
           })}
         </div>
       )}
+
+      {/* MITRE Tactic filter */}
+      <div className="flex flex-wrap items-center gap-2" aria-label="Filter by MITRE tactic">
+        <span className="text-xs text-gray-600 w-16 shrink-0">MITRE</span>
+        <FacetPill
+          label="All"
+          active={mitreTactic === 'all'}
+          onClick={() => setMitreTactic('all')}
+        />
+        {MITRE_TACTICS.map((tactic) => {
+          const n = mitreCounts[tactic];
+          if (n === 0) return null;
+          return (
+            <FacetPill
+              key={tactic}
+              label={`${tactic} (${n})`}
+              active={mitreTactic === tactic}
+              onClick={() => setMitreTactic(tactic)}
+              activeClass="bg-red-900/40 text-red-300 border-red-800"
+            />
+          );
+        })}
+      </div>
+
+      {/* Severity filter */}
+      <div className="flex flex-wrap items-center gap-2" aria-label="Filter by severity">
+        <span className="text-xs text-gray-600 w-16 shrink-0">Severity</span>
+        <FacetPill
+          label="All"
+          active={severity === 'all'}
+          onClick={() => setSeverity('all')}
+        />
+        {SEVERITY_LEVELS.map((sev) => {
+          const n = severityCounts[sev];
+          if (n === 0) return null;
+          const COLOR_MAP: Record<SeverityLevel, string> = {
+            info:     'bg-blue-900/40 text-blue-300 border-blue-800',
+            low:      'bg-gray-800/60 text-gray-300 border-gray-600',
+            medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-800',
+            high:     'bg-orange-900/40 text-orange-300 border-orange-800',
+            critical: 'bg-red-900/60 text-red-200 border-red-700',
+          };
+          return (
+            <FacetPill
+              key={sev}
+              label={`${sev} (${n})`}
+              active={severity === sev}
+              onClick={() => setSeverity(sev)}
+              activeClass={COLOR_MAP[sev]}
+            />
+          );
+        })}
+      </div>
+
+      {/* Integration filter */}
+      <div className="flex flex-wrap items-center gap-2" aria-label="Filter by integration">
+        <span className="text-xs text-gray-600 w-16 shrink-0">Uses</span>
+        <FacetPill
+          label="All"
+          active={integration === 'all'}
+          onClick={() => setIntegration('all')}
+        />
+        {INTEGRATION_TYPES.map((intType) => {
+          const n = integrationCounts[intType];
+          if (n === 0) return null;
+          return (
+            <FacetPill
+              key={intType}
+              label={`${intType} (${n})`}
+              active={integration === intType}
+              onClick={() => setIntegration(intType)}
+              activeClass="bg-teal-900/40 text-teal-300 border-teal-800"
+            />
+          );
+        })}
+      </div>
 
       {forkError && (
         <div
@@ -202,6 +382,34 @@ export function PlaybooksGallery({ playbooks }: PlaybooksGalleryProps) {
         forking={forkingId !== null}
       />
     </div>
+  );
+}
+
+/* ─────────────────────────── Generic facet pill ─────────────────────────── */
+
+function FacetPill({
+  label,
+  active,
+  onClick,
+  activeClass,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  activeClass?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'rounded-full px-3 py-0.5 text-xs font-medium border transition-colors',
+        active
+          ? activeClass ?? 'bg-blue-900/40 text-blue-200 border-blue-700'
+          : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-700',
+      )}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -280,6 +488,17 @@ function PlaybookRow({
   const isPack = isShippedPack(playbook);
   const cat = categoryOf(playbook);
   const triggerOn = playbook.trigger?.on ?? 'manual';
+  const tactics = mitreTacticsOf(playbook);
+  const sevs = severitiesOf(playbook);
+  const integrations = integrationsOf(playbook);
+
+  const SEVERITY_MINI: Record<SeverityLevel, string> = {
+    info:     'bg-blue-900/40 text-blue-400 border-blue-800',
+    low:      'bg-gray-800/60 text-gray-400 border-gray-700',
+    medium:   'bg-yellow-900/40 text-yellow-400 border-yellow-800',
+    high:     'bg-orange-900/40 text-orange-400 border-orange-800',
+    critical: 'bg-red-900/50 text-red-300 border-red-800',
+  };
 
   return (
     <div
@@ -334,6 +553,44 @@ function PlaybookRow({
           <span>v{playbook.version}</span>
           {playbook.author && <span>by {playbook.author}</span>}
         </div>
+        {/* MITRE tactics + severity chips */}
+        {(tactics.length > 0 || sevs.length > 0 || integrations.length > 0) && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            {tactics.slice(0, 3).map((t) => (
+              <span
+                key={t}
+                className="text-[9px] px-1.5 py-0.5 rounded border border-red-900/60 bg-red-950/40 text-red-400"
+                title={`MITRE tactic: ${t}`}
+              >
+                {t}
+              </span>
+            ))}
+            {tactics.length > 3 && (
+              <span className="text-[9px] text-gray-600">+{tactics.length - 3} more</span>
+            )}
+            {sevs.map((s) => (
+              <span
+                key={s}
+                className={`text-[9px] px-1.5 py-0.5 rounded border ${SEVERITY_MINI[s]}`}
+                title={`Trigger severity: ${s}`}
+              >
+                {s}
+              </span>
+            ))}
+            {integrations.slice(0, 2).map((i) => (
+              <span
+                key={i}
+                className="text-[9px] px-1.5 py-0.5 rounded border border-teal-900/60 bg-teal-950/40 text-teal-400"
+                title={`Integration: ${i}`}
+              >
+                {i}
+              </span>
+            ))}
+            {integrations.length > 2 && (
+              <span className="text-[9px] text-gray-600">+{integrations.length - 2} integrations</span>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <RunButton playbook={playbook} />

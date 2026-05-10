@@ -1,0 +1,180 @@
+{
+  "id": "web-compromise-response-v1",
+  "name": "Web Compromise: Defacement / Webshell Response",
+  "description": "Triggered by WAF alert, IDS signature, or file-integrity alert indicating a compromised web server (webshell upload, defacement, or unauthorized content modification). Isolates the server, captures forensics, and initiates recovery workflow.",
+  "version": "1.0.0",
+  "author": "Beenu - beenu@cyble.com",
+  "tags": [
+    "web-compromise",
+    "web",
+    "endpoint",
+    "mitre.t1505.003",
+    "mitre.t1190"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["web-compromise", "webshell", "defacement"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-05-10T08:00:00+00:00",
+  "updated_at": "2026-05-10T08:00:00+00:00",
+  "inputs": {
+    "host": {
+      "description": "Compromised web server hostname or IP",
+      "field": "alert.host",
+      "required": true
+    },
+    "webshell_path": {
+      "description": "Path of the detected webshell or modified file",
+      "field": "alert.file_path",
+      "required": false
+    },
+    "attacker_ip": {
+      "description": "Source IP of the attacker (from WAF / access logs)",
+      "field": "alert.source_ip",
+      "required": false
+    },
+    "file_hash": {
+      "description": "Hash of the suspicious file",
+      "field": "alert.file_hash",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich attacker IP reputation",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.source_ip",
+        "indicator_type": "ip",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "e2",
+      "name": "Enrich file hash (webshell signature lookup)",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.file_hash",
+        "indicator_type": "hash",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "block_attacker_ip",
+      "name": "Block attacker IP at WAF/firewall",
+      "type": "block_ip",
+      "params": {
+        "ip_field": "alert.source_ip",
+        "duration": "72h",
+        "skip_if_empty": true,
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "inputs.attacker_ip != null",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "av_scan",
+      "name": "Trigger AV / malware scan on web server",
+      "type": "run_av_scan",
+      "params": {
+        "host_field": "alert.host",
+        "scan_path": "{{inputs.webshell_path}}",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 120
+    },
+    {
+      "id": "approval_isolate",
+      "name": "Approval gate — isolate web server",
+      "type": "approval",
+      "params": {
+        "message": "Isolate web server '{{inputs.host}}' from network? This will take the site offline.",
+        "approvers": ["soc-lead", "infra-lead"],
+        "timeout_seconds": 300,
+        "auto_approve_severity": ["critical"]
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 320
+    },
+    {
+      "id": "isolate_host",
+      "name": "Isolate web server (EDR)",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.host",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_isolate.outcome == 'approved'",
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "forensic_snapshot",
+      "name": "Snapshot disk for forensics",
+      "type": "http",
+      "params": {
+        "url": "${EDR_URL}/hosts/{{inputs.host}}/snapshot",
+        "method": "POST",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "inv",
+      "name": "Web compromise investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "web-compromise"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Alert web / infra team",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Web compromise on {{inputs.host}}. Attacker IP: {{inputs.attacker_ip}}. Host isolated: {{context.isolate_success}}.",
+        "service_key_env": "PD_INFRA_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open web compromise ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Web Compromise: {{inputs.host}}",
+        "queue": "soc",
+        "labels": ["web-compromise", "webshell"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

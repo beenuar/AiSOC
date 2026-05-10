@@ -231,6 +231,21 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
+    # ------------------------------------------------------------------
+    # WS-B4: Detection-as-Code git PR path
+    # Author: Beenu - beenu@cyble.com
+    #
+    # When AISOC_GITHUB_TOKEN is set the promote-proposal endpoint opens a
+    # Pull Request in AISOC_GITHUB_REPO, committing the Sigma/YARA rule file
+    # under AISOC_GITHUB_DETECTIONS_PATH and stores the PR URL on the proposal
+    # record. All three settings must be non-empty for PR creation to be
+    # attempted; any missing setting silently skips PR creation (github_pr_url
+    # remains NULL).
+    # ------------------------------------------------------------------
+    AISOC_GITHUB_TOKEN: str = ""
+    AISOC_GITHUB_REPO: str = ""  # format: "org/repo"
+    AISOC_GITHUB_DETECTIONS_PATH: str = "detections"  # path inside repo root
+
     # Demo mode (hosted at tryaisoc.com)
     # When AISOC_DEMO_MODE=true the API rejects mutating requests outside the
     # demo tenant with 403, surfaces a banner, and pre-seeds canonical data.

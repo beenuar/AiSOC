@@ -1,7 +1,8 @@
-"""Authentication endpoints: login, refresh, logout."""
+"""Authentication endpoints: login, refresh, logout, user preferences."""
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -45,8 +46,15 @@ class UserMeResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    preferences: dict[str, Any] = {}
 
     model_config = {"from_attributes": True}
+
+
+class PreferencesPatch(BaseModel):
+    """Partial update payload for user preferences (merged server-side)."""
+
+    preferences: dict[str, Any]
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -115,4 +123,35 @@ async def get_me(current_user: AuthUser, db: DBSession) -> UserMeResponse:
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return UserMeResponse.model_validate(user)
+
+
+@router.patch("/me/preferences", response_model=UserMeResponse)
+async def patch_me_preferences(
+    body: PreferencesPatch,
+    current_user: AuthUser,
+    db: DBSession,
+) -> UserMeResponse:
+    """Merge user preferences (e.g. theme) into the stored JSONB column.
+
+    Only the keys supplied in the request body are updated; all other
+    existing keys are preserved.  This lets the frontend evolve independent
+    preference namespaces without overwriting each other.
+    """
+    result = await db.execute(select(User).where(User.id == current_user.user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    merged = {**(user.preferences or {}), **body.preferences}
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.user_id)
+        .values(preferences=merged)
+    )
+    await db.commit()
+
+    # Re-fetch to return fresh state
+    result = await db.execute(select(User).where(User.id == current_user.user_id))
+    user = result.scalar_one_or_none()
     return UserMeResponse.model_validate(user)

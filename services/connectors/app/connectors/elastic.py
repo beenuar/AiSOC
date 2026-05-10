@@ -75,7 +75,15 @@ class ElasticConnector(BaseConnector):
     def capabilities(cls) -> tuple[Capability, ...]:
         # Elastic SIEM exposes detection alerts plus an ES|QL search surface
         # we federate against — the latter maps cleanly to QUERY_LOGS.
-        return (Capability.PULL_ALERTS, Capability.QUERY_LOGS)
+        # WS-E6: Live Elastic Security / Elasticsearch response actions now wired
+        # via services/actions/app/clients/elastic_client.py
+        return (
+            Capability.PULL_ALERTS,
+            Capability.QUERY_LOGS,
+            Capability.SEARCH_SIEM,
+            Capability.SYNC_DETECTION_RULE,
+            Capability.UPDATE_WATCHER,
+        )
 
     def __init__(
         self,

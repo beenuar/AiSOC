@@ -152,6 +152,8 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
     maxRegressionPp?: number;
     durationSeconds?: number;
     ranAt?: string;
+    /** WS-B4: GitHub PR URL created when the proposal is promoted (may be absent). */
+    githubPrUrl?: string;
   } | null>(null);
 
   // Hydrate form when data arrives
@@ -570,6 +572,22 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
                   </span>
                 </div>
               )}
+            </div>
+          )}
+          {/* WS-B4: git PR path — Author: Beenu - beenu@cyble.com
+              When promotion creates a GitHub PR, surface the direct link here
+              so the analyst can jump to the PR without leaving the editor. */}
+          {evalVerdict.githubPrUrl && (
+            <div className="mt-2 flex items-center gap-1.5 text-xs">
+              <span className="text-gray-400">GitHub PR</span>
+              <a
+                href={evalVerdict.githubPrUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-sky-400 underline-offset-2 hover:underline"
+              >
+                {evalVerdict.githubPrUrl.replace('https://github.com/', 'github.com/')}
+              </a>
             </div>
           )}
         </div>

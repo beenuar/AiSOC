@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { authApi } from '@/lib/api';
 import { THEME_STORAGE_KEY } from './themeScript';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -60,14 +61,33 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [resolved, setResolved] = useState<ResolvedTheme>('dark');
 
   // Mount: pick up whatever the bootstrap script already wrote so the React
-  // tree agrees with the DOM. We deliberately do NOT call `applyTheme()` here
-  // — the bootstrap script already did that, and re-applying would be a
-  // no-op write that just churns React.
+  // tree agrees with the DOM. Then try to reconcile with the server-stored
+  // preference (so users get their setting on new devices/browsers).
   useEffect(() => {
     const stored = readStoredPreference();
     const next = resolvePreference(stored);
     setPreferenceState(stored);
     setResolved(next);
+
+    // Reconcile with the server-stored preference (cached from last /me call)
+    // so users get their theme preference on new devices/browsers after login.
+    const user = authApi.currentUser();
+    const serverTheme = user?.preferences?.theme as ThemePreference | undefined;
+    if (
+      serverTheme &&
+      (serverTheme === 'light' || serverTheme === 'dark' || serverTheme === 'system')
+    ) {
+      const local = readStoredPreference();
+      if (local !== serverTheme) {
+        const serverResolved = resolvePreference(serverTheme);
+        setPreferenceState(serverTheme);
+        setResolved(serverResolved);
+        applyTheme(serverTheme, serverResolved);
+        try {
+          window.localStorage.setItem(THEME_STORAGE_KEY, serverTheme);
+        } catch { /* ignore */ }
+      }
+    }
   }, []);
 
   // Track OS-level preference changes while the user is on `system`.
@@ -95,6 +115,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // private mode / quota — accept that the choice doesn't persist.
     }
+    // Fire-and-forget: persist to user profile so the preference roams across
+    // devices. Errors are silently swallowed — the local value is the source
+    // of truth and we don't want a failed network call to break the toggle.
+    authApi.updateUserPreferences({ theme: next }).catch(() => { /* ignore */ });
   }, []);
 
   const toggle = useCallback(() => {

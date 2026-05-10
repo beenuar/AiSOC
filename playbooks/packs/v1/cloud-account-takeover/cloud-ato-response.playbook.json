@@ -1,0 +1,172 @@
+{
+  "id": "cloud-ato-response-v1",
+  "name": "Cloud ATO: Compromised Cloud Account Response",
+  "description": "Triggered by anomalous API activity, impossible travel, or cloud CSPM alert indicating a compromised cloud account. Revokes active sessions, rotates credentials, preserves audit trail, and notifies cloud security team.",
+  "version": "1.0.0",
+  "author": "Beenu - beenu@cyble.com",
+  "tags": [
+    "cloud-account-takeover",
+    "cloud",
+    "iam",
+    "identity",
+    "mitre.t1078.004",
+    "mitre.t1535"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["cloud-account-takeover", "cloud-ato", "impossible-travel"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-05-10T08:00:00+00:00",
+  "updated_at": "2026-05-10T08:00:00+00:00",
+  "inputs": {
+    "cloud_user": {
+      "description": "Cloud account identity (IAM user, service account, or federated identity)",
+      "field": "alert.cloud_user",
+      "required": true
+    },
+    "cloud_provider": {
+      "description": "Cloud provider: aws | gcp | azure",
+      "field": "alert.cloud_provider",
+      "required": true
+    },
+    "source_ip": {
+      "description": "Anomalous source IP from cloud trail",
+      "field": "alert.source_ip",
+      "required": false
+    },
+    "access_key_id": {
+      "description": "AWS access key ID (if applicable)",
+      "field": "alert.access_key_id",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich source IP reputation",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.source_ip",
+        "indicator_type": "ip",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "cloudtrail_search",
+      "name": "Search cloud audit trail for recent actions",
+      "type": "search_siem",
+      "params": {
+        "query": "cloud_user={{inputs.cloud_user}} AND source_ip={{inputs.source_ip}}",
+        "time_window": "-4h",
+        "max_results": 200,
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 45
+    },
+    {
+      "id": "approval_revoke",
+      "name": "Approval gate — revoke cloud sessions and keys",
+      "type": "approval",
+      "params": {
+        "message": "Revoke all active sessions and access keys for cloud user '{{inputs.cloud_user}}' ({{inputs.cloud_provider}})?",
+        "approvers": ["cloud-security-lead", "soc-lead"],
+        "timeout_seconds": 600,
+        "auto_approve_severity": ["critical"]
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 620
+    },
+    {
+      "id": "revoke_sessions",
+      "name": "Revoke all active cloud sessions",
+      "type": "revoke_session",
+      "params": {
+        "user_field": "inputs.cloud_user",
+        "provider": "{{inputs.cloud_provider}}",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_revoke.outcome == 'approved'",
+      "on_failure": "abort",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "disable_keys",
+      "name": "Disable / deactivate access keys",
+      "type": "http",
+      "params": {
+        "url": "${CLOUD_MGMT_URL}/v1/iam/keys/disable",
+        "method": "POST",
+        "body_template": "{\"user\": \"{{inputs.cloud_user}}\", \"provider\": \"{{inputs.cloud_provider}}\", \"access_key_id\": \"{{inputs.access_key_id}}\"}",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_revoke.outcome == 'approved'",
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "block_src_ip",
+      "name": "Block anomalous source IP (if present)",
+      "type": "block_ip",
+      "params": {
+        "ip_field": "alert.source_ip",
+        "duration": "24h",
+        "skip_if_empty": true,
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "inputs.source_ip != null",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Cloud ATO investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "cloud-ato"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page cloud security team (SEV1)",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Cloud ATO: {{inputs.cloud_user}} on {{inputs.cloud_provider}}. Sessions revoked: {{context.revoke_success}}. Source IP blocked: {{inputs.source_ip}}.",
+        "service_key_env": "PD_CLOUD_SECURITY_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open cloud ATO ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Cloud ATO: {{inputs.cloud_user}} ({{inputs.cloud_provider}})",
+        "queue": "cloud-security",
+        "labels": ["cloud-ato", "iam", "{{inputs.cloud_provider}}"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

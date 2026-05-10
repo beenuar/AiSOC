@@ -62,7 +62,14 @@ class SplunkConnector(BaseConnector):
     def capabilities(cls) -> tuple[Capability, ...]:
         # Splunk surfaces notable events (alerts) and supports federated SPL
         # search over indexes — the latter maps to QUERY_LOGS.
-        return (Capability.PULL_ALERTS, Capability.QUERY_LOGS)
+        # WS-E5: Live Splunk REST API response actions now wired
+        # via services/actions/app/clients/splunk_client.py
+        return (
+            Capability.PULL_ALERTS,
+            Capability.QUERY_LOGS,
+            Capability.SEARCH_SIEM,
+            Capability.CREATE_NOTABLE_EVENT,
+        )
 
     def __init__(
         self,

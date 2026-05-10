@@ -1,0 +1,184 @@
+{
+  "id": "suspicious-signin-response-v1",
+  "name": "Suspicious Sign-In: Anomalous Authentication Response",
+  "description": "Triggered by identity provider or SIEM alert for a suspicious sign-in event (impossible travel, new device, unknown location, off-hours, anomalous behavior score). Verifies legitimacy, enforces MFA step-up, and disables if confirmed malicious.",
+  "version": "1.0.0",
+  "author": "Beenu - beenu@cyble.com",
+  "tags": [
+    "suspicious-signin",
+    "identity",
+    "authentication",
+    "mitre.t1078",
+    "mitre.t1110",
+    "mitre.t1556"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["medium", "high", "critical"],
+    "tags": ["suspicious-signin", "anomalous-login", "impossible-travel", "new-device"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-05-10T08:00:00+00:00",
+  "updated_at": "2026-05-10T08:00:00+00:00",
+  "inputs": {
+    "user": {
+      "description": "User account that performed the suspicious sign-in",
+      "field": "alert.user",
+      "required": true
+    },
+    "source_ip": {
+      "description": "Source IP of the suspicious login",
+      "field": "alert.source_ip",
+      "required": false
+    },
+    "user_agent": {
+      "description": "Browser/device user-agent string",
+      "field": "alert.user_agent",
+      "required": false
+    },
+    "country": {
+      "description": "Country where the login originated",
+      "field": "alert.geo_country",
+      "required": false
+    },
+    "risk_score": {
+      "description": "Risk score from IdP (0-100)",
+      "field": "alert.risk_score",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich source IP geo and threat intel",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.source_ip",
+        "indicator_type": "ip",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "siem_search",
+      "name": "Search SIEM for recent sign-in history for this user",
+      "type": "search_siem",
+      "params": {
+        "query": "user={{inputs.user}} AND event_type=authentication",
+        "time_window": "-7d",
+        "max_results": 100
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 45
+    },
+    {
+      "id": "force_mfa",
+      "name": "Force step-up MFA challenge for user",
+      "type": "force_mfa",
+      "params": {
+        "user_field": "inputs.user",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "revoke_sessions",
+      "name": "Revoke current active sessions (force re-auth)",
+      "type": "revoke_session",
+      "params": {
+        "user_field": "inputs.user",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "inputs.risk_score >= 70 or inputs.country == 'high_risk'",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "approval_disable_user",
+      "name": "Approval gate — disable user account (if confirmed compromise)",
+      "type": "approval",
+      "params": {
+        "message": "Disable account for '{{inputs.user}}'? Sign-in from {{inputs.country}} (IP: {{inputs.source_ip}}, risk: {{inputs.risk_score}}). Only if confirmed malicious.",
+        "approvers": ["soc-lead", "identity-admin"],
+        "timeout_seconds": 600,
+        "auto_approve_severity": ["critical"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 620
+    },
+    {
+      "id": "disable_user",
+      "name": "Disable user account in IdP",
+      "type": "disable_user",
+      "params": {
+        "user_field": "inputs.user",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_disable_user.outcome == 'approved'",
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "block_source_ip",
+      "name": "Block source IP if confirmed malicious",
+      "type": "block_ip",
+      "params": {
+        "ip_field": "alert.source_ip",
+        "duration": "24h",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_disable_user.outcome == 'approved' && inputs.source_ip != null",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Suspicious sign-in investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "suspicious-signin"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify identity security team",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Suspicious sign-in for {{inputs.user}} from {{inputs.country}} (IP: {{inputs.source_ip}}, risk: {{inputs.risk_score}}). MFA forced: {{context.mfa_success}}. Sessions revoked: {{context.revoke_success}}.",
+        "webhook_env": "SLACK_SOC_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open suspicious sign-in ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "Suspicious Sign-In: {{inputs.user}} from {{inputs.country}}",
+        "queue": "soc",
+        "labels": ["suspicious-signin", "identity", "authentication"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

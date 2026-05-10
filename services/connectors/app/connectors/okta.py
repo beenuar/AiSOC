@@ -59,7 +59,16 @@ class OktaConnector(BaseConnector):
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
         # Okta System Log streams identity audit events (logins, MFA, admin actions).
-        return (Capability.PULL_AUDIT,)
+        # WS-E3: Live Okta Management API response actions now wired
+        # via services/actions/app/clients/okta_client.py
+        return (
+            Capability.PULL_AUDIT,
+            Capability.DISABLE_USER,
+            Capability.RESET_PASSWORD,
+            Capability.SUSPEND_SESSION,
+            Capability.FORCE_MFA,
+            Capability.REVOKE_SESSION,
+        )
 
     def __init__(self, domain: str, api_token: str):
         self._domain = domain.rstrip("/")

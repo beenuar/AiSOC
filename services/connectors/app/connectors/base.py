@@ -101,6 +101,24 @@ class Capability(str, Enum):
     RESET_PASSWORD = "reset_password"
     REVOKE_TOKEN = "revoke_token"
 
+    # WS-E: additional live vendor action verbs
+    # CrowdStrike Falcon RTR
+    RUN_SCRIPT = "run_script"
+    # AWS / Network
+    BLOCK_IP = "block_ip"
+    ALLOW_IP = "allow_ip"
+    # Microsoft Defender for Endpoint
+    BLOCK_IOC = "block_ioc"
+    RUN_AV_SCAN = "run_av_scan"
+    # Okta identity response
+    SUSPEND_SESSION = "suspend_session"
+    FORCE_MFA = "force_mfa"
+    # SIEM response (Splunk + Elastic)
+    SEARCH_SIEM = "search_siem"
+    CREATE_NOTABLE_EVENT = "create_notable_event"
+    SYNC_DETECTION_RULE = "sync_detection_rule"
+    UPDATE_WATCHER = "update_watcher"
+
     # TICKET — bidirectional ITSM (Jira / ServiceNow / etc.).
     PUSH_CASE = "push_case"
     PUSH_STATUS = "push_status"

@@ -25,10 +25,26 @@ class ActionType(str, Enum):
     NOTIFY_SLACK = "notify_slack"
     CREATE_TICKET = "create_ticket"
     RUN_PLAYBOOK = "run_playbook"
-    # Wave 1 — ChatOps user verification: outbound interactive Slack/Teams prompt
+    # ChatOps user verification: outbound interactive Slack/Teams prompt
     # asking the affected user to confirm or deny an event ("Was this you?").
     # The response is HMAC-validated and routed back into the case timeline.
     CHATOPS_VERIFY = "chatops_verify"
+    # WS-E: Live vendor integration action types
+    # CrowdStrike Falcon RTR
+    RUN_SCRIPT = "run_script"
+    # AWS Security Groups / Network
+    ALLOW_IP = "allow_ip"
+    # Microsoft Defender for Endpoint
+    BLOCK_IOC = "block_ioc"
+    RUN_AV_SCAN = "run_av_scan"
+    # Okta identity response
+    SUSPEND_SESSION = "suspend_session"
+    FORCE_MFA = "force_mfa"
+    # SIEM actions (Splunk + Elastic)
+    SEARCH_SIEM = "search_siem"
+    CREATE_NOTABLE_EVENT = "create_notable_event"
+    SYNC_DETECTION_RULE = "sync_detection_rule"
+    UPDATE_WATCHER = "update_watcher"
 
 
 class ActionStatus(str, Enum):
@@ -64,8 +80,18 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     ActionType.NOTIFY_SLACK: BlastRadius.MINIMAL,
     ActionType.CREATE_TICKET: BlastRadius.MINIMAL,
     ActionType.RUN_PLAYBOOK: BlastRadius.MEDIUM,
-    # ChatOps verification asks a user a yes/no question — no infra changes.
     ActionType.CHATOPS_VERIFY: BlastRadius.MINIMAL,
+    # WS-E live vendor action blast radii
+    ActionType.RUN_SCRIPT: BlastRadius.HIGH,
+    ActionType.ALLOW_IP: BlastRadius.MEDIUM,
+    ActionType.BLOCK_IOC: BlastRadius.MEDIUM,
+    ActionType.RUN_AV_SCAN: BlastRadius.LOW,
+    ActionType.SUSPEND_SESSION: BlastRadius.HIGH,
+    ActionType.FORCE_MFA: BlastRadius.MEDIUM,
+    ActionType.SEARCH_SIEM: BlastRadius.MINIMAL,
+    ActionType.CREATE_NOTABLE_EVENT: BlastRadius.LOW,
+    ActionType.SYNC_DETECTION_RULE: BlastRadius.MEDIUM,
+    ActionType.UPDATE_WATCHER: BlastRadius.MEDIUM,
 }
 
 # Actions that require explicit human approval
@@ -74,6 +100,10 @@ APPROVAL_REQUIRED_ACTIONS = {
     ActionType.DISABLE_USER,
     ActionType.RESET_PASSWORD,
     ActionType.KILL_PROCESS,
+    ActionType.RUN_SCRIPT,
+    ActionType.SUSPEND_SESSION,
+    ActionType.BLOCK_IOC,
+    ActionType.SYNC_DETECTION_RULE,
 }
 
 

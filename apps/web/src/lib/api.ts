@@ -190,6 +190,7 @@ export interface AuthUser {
   role: string;
   tenant_id: string;
   is_active?: boolean;
+  preferences?: Record<string, unknown>;
 }
 
 export interface TokenResponse {
@@ -274,6 +275,27 @@ export const authApi = {
     } catch {
       return false;
     }
+  },
+
+  /** Merge user preferences on the server (theme, layout, etc.). */
+  async updateUserPreferences(preferences: Record<string, unknown>): Promise<AuthUser> {
+    const token = typeof window !== 'undefined'
+      ? window.localStorage.getItem(AUTH_TOKEN_KEY)
+      : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(`${API_BASE}/api/v1/auth/me/preferences`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ preferences }),
+    });
+    if (!response.ok) throw new Error('Failed to update preferences');
+    const user = (await response.json()) as AuthUser;
+    // Keep locally-cached user in sync
+    try {
+      window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    } catch { /* ignore */ }
+    return user;
   },
 };
 
@@ -2456,6 +2478,8 @@ export interface DetectionProposal {
   decided_by_id: string | null;
   decision_comment: string | null;
   decided_at: string | null;
+  /** WS-B4: git PR path — URL of the GitHub PR created on promotion. Author: Beenu - beenu@cyble.com */
+  github_pr_url: string | null;
   created_at: string;
   updated_at: string;
 }

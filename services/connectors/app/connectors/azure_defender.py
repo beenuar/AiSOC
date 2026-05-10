@@ -67,7 +67,15 @@ class AzureDefenderConnector(BaseConnector):
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
         # Microsoft 365 Defender unified alerts feed.
-        return (Capability.PULL_ALERTS,)
+        # WS-E4: Live Microsoft Defender for Endpoint response actions now wired
+        # via services/actions/app/clients/defender_client.py
+        return (
+            Capability.PULL_ALERTS,
+            Capability.ISOLATE_HOST,
+            Capability.UNISOLATE_HOST,
+            Capability.BLOCK_IOC,
+            Capability.RUN_AV_SCAN,
+        )
 
     def __init__(self, tenant_id: str, client_id: str, client_secret: str):
         self._tenant_id = tenant_id

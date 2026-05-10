@@ -44,6 +44,7 @@ from app.models.detection_proposal import (
     DetectionRuleProposal,
 )
 from app.models.detection_rule import DetectionRule
+from app.services.github import create_detection_pr
 
 router = APIRouter(prefix="/detection-proposals", tags=["detection_rules", "dac"])
 
@@ -84,6 +85,8 @@ class ProposalResponse(BaseModel):
     decided_by_id: uuid.UUID | None
     decision_comment: str | None
     decided_at: datetime | None
+    # WS-B4: git PR path — URL of the GitHub PR created on promotion (may be None).
+    github_pr_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -769,6 +772,30 @@ async def promote_proposal(
     if proposal.decided_at is None:
         proposal.decided_at = datetime.now(UTC)
         proposal.decided_by_id = current_user.user_id
+
+    # WS-B4: git PR path — Author: Beenu - beenu@cyble.com
+    # Attempt to create a GitHub Pull Request carrying the Sigma/YARA rule file.
+    # create_detection_pr() is a no-op (returns None) when AISOC_GITHUB_TOKEN is
+    # not configured, so this never blocks promotion for unconfigured deployments.
+    try:
+        pr_url = await create_detection_pr(
+            settings=settings,
+            proposal_id=str(proposal_id),
+            rule_name=proposal.name,
+            rule_language=proposal.rule_language,
+            rule_body=proposal.rule_body,
+            category=proposal.category or "general",
+        )
+        if pr_url:
+            proposal.github_pr_url = pr_url
+    except Exception as exc:  # noqa: BLE001 — log and continue, never block promotion
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "WS-B4: GitHub PR creation failed for proposal %s — %s",
+            proposal_id,
+            exc,
+        )
+
     await db.commit()
     await db.refresh(proposal)
     return ProposalResponse.model_validate(proposal)

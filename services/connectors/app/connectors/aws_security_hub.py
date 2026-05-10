@@ -51,7 +51,13 @@ class AWSSecurityHubConnector(BaseConnector):
     def capabilities(cls) -> tuple[Capability, ...]:
         # Security Hub aggregates findings from GuardDuty/Inspector/Macie/3p partners,
         # which we surface to the agent layer as alerts.
-        return (Capability.PULL_ALERTS,)
+        # WS-E2: Live AWS Security Groups network blocking actions now wired
+        # via services/actions/app/clients/aws_security_groups.py
+        return (
+            Capability.PULL_ALERTS,
+            Capability.BLOCK_IP,
+            Capability.ALLOW_IP,
+        )
 
     def __init__(self, region: str = "us-east-1", access_key: str = "", secret_key: str = ""):
         self._region = region
