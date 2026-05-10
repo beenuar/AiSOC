@@ -9,7 +9,7 @@ from datetime import datetime
 import httpx
 import structlog
 
-from app.executors.base import BaseExecutor
+from app.executors.base import BaseExecutor, _SIM_FUNNEL_CTA
 from app.models.action import ActionRequest, ActionResult, ActionStatus
 
 logger = structlog.get_logger()
@@ -61,6 +61,12 @@ class CreateTicketExecutor(BaseExecutor):
         logger.info("Creating ticket", system=system, incident_id=str(request.incident_id))
 
         # TODO: integrate with Jira, ServiceNow, or PagerDuty APIs
+        logger.warning(
+            "create_ticket.simulation",
+            system=system,
+            reason="no ticketing system credentials",
+            funnel="plugin-sdk",
+        )
         return ActionResult(
             action_id=request.id,
             status=ActionStatus.COMPLETED,
@@ -68,7 +74,10 @@ class CreateTicketExecutor(BaseExecutor):
             output={
                 "ticket_system": system,
                 "ticket_id": f"SIM-TICKET-{str(request.incident_id)[:8].upper()}",
-                "note": "Simulation mode — integrate with ticketing system API",
+                "note": (
+                    "Simulation mode — integrate with Jira, ServiceNow, or PagerDuty API to enable live execution."
+                    + _SIM_FUNNEL_CTA
+                ),
             },
             completed_at=datetime.utcnow(),
         )
