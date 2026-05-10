@@ -1,4 +1,4 @@
-id: det-endpoint-282
+id: det-endpoint-298
 name: Executable Dropped in World-Writable Directory (FIM)
 description: >
   An osquery file_events CREATED event was recorded for a file with a common

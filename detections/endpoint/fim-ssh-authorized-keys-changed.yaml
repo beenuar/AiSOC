@@ -1,4 +1,4 @@
-id: det-endpoint-284
+id: det-endpoint-300
 name: SSH authorized_keys File Modified (FIM)
 description: >
   An osquery file_events event recorded a change (CREATED, UPDATED, or

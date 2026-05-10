@@ -1,4 +1,4 @@
-id: det-endpoint-281
+id: det-endpoint-297
 name: Sensitive System File Modified (FIM)
 description: >
   A file in a sensitive system path (/etc/passwd, /etc/shadow, /etc/sudoers,
