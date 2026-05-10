@@ -8,6 +8,9 @@
  *   - Onboarding `StartHero` (the three WS-A2 CTAs)
  *   - `ThemeToggle` (the WS-F1 chrome control)
  *   - `TopBar` (console chrome around every authenticated page)
+ *   - `Sidebar` (primary navigation landmark — ARIA labels + hidden icons)
+ *   - `EmptyState` (data-absent placeholder with role="status")
+ *   - `CopilotDock` (collapsed state of the AI chat panel)
  *
  * Together these cover the marketing → onboarding → console journey. This
  * test runs inside the existing `web-test` CI job so any regression that
@@ -60,6 +63,7 @@ vi.mock('framer-motion', () => {
       } & Record<string, unknown>;
       delete (rest as Record<string, unknown>).initial;
       delete (rest as Record<string, unknown>).animate;
+      delete (rest as Record<string, unknown>).exit;
       delete (rest as Record<string, unknown>).transition;
       delete (rest as Record<string, unknown>).whileHover;
       delete (rest as Record<string, unknown>).whileTap;
@@ -67,6 +71,7 @@ vi.mock('framer-motion', () => {
     };
   return {
     motion: new Proxy({}, { get: (_t, key: string) => factory(key as React.ElementType) }),
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
 
@@ -78,7 +83,19 @@ vi.mock('@/lib/api', () => ({
   authApi: {
     isAuthenticated: () => false,
     login: vi.fn(),
+    currentUser: vi.fn(() => null),
+    updateUserPreferences: vi.fn(),
   },
+  copilotApi: {
+    sendMessage: vi.fn(),
+    getHistory: vi.fn(() => Promise.resolve([])),
+  },
+}));
+
+// Sidebar reads version from package.json — mock it so the import doesn't
+// fail when running outside the actual apps/web working directory.
+vi.mock('../../../package.json', () => ({
+  default: { version: '0.0.0-test' },
 }));
 
 // Component imports go after the mocks so the mocks are resolved first.
@@ -87,6 +104,9 @@ import { StartHero } from '../components/onboarding/StartHero';
 import { ThemeToggle } from '../components/theme/ThemeToggle';
 import { ThemeProvider } from '../components/theme/ThemeProvider';
 import { TopBar } from '../components/layout/TopBar';
+import { Sidebar } from '../components/layout/Sidebar';
+import { EmptyState } from '../components/ui/EmptyState';
+import { CopilotDock } from '../components/copilot/CopilotDock';
 
 afterEach(() => {
   cleanup();
@@ -129,6 +149,41 @@ describe('WCAG 2.1 AA — high-traffic surfaces', () => {
     const { container } = render(
       <ThemeProvider>
         <TopBar />
+      </ThemeProvider>,
+    );
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('Sidebar has no accessibility violations', async () => {
+    pathnameMock.mockReturnValue('/alerts');
+    const { container } = render(
+      <ThemeProvider>
+        <Sidebar />
+      </ThemeProvider>,
+    );
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('EmptyState has no accessibility violations', async () => {
+    const { container } = render(
+          <EmptyState
+                icon={<svg aria-hidden="true" />}
+                title="No alerts found"
+                description="There are no alerts matching your filters."
+                action={<button type="button">Clear filters</button>}
+              />,
+    );
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('CopilotDock (collapsed) has no accessibility violations', async () => {
+    pathnameMock.mockReturnValue('/dashboard');
+    const { container } = render(
+      <ThemeProvider>
+        <CopilotDock />
       </ThemeProvider>,
     );
     const results = await axe(container, axeOptions);

@@ -261,12 +261,17 @@ export function filterPlaybooks(
   filters: {
     source: PlaybookSource;
     category: PackCategory | 'all';
-    mitreTactic: MitreTactic | 'all';
-    severity: SeverityLevel | 'all';
-    integration: IntegrationType | 'all';
+    mitreTactic?: MitreTactic | 'all';
+    severity?: SeverityLevel | 'all';
+    integration?: IntegrationType | 'all';
     search: string;
   },
 ): Playbook[] {
+  const {
+    mitreTactic = 'all',
+    severity = 'all',
+    integration = 'all',
+  } = filters;
   const q = filters.search.trim().toLowerCase();
   return playbooks.filter((pb) => {
     const isPack = isShippedPack(pb);
@@ -276,17 +281,17 @@ export function filterPlaybooks(
       const cat = categoryOf(pb);
       if (cat !== filters.category) return false;
     }
-    if (filters.mitreTactic !== 'all') {
+    if (mitreTactic !== 'all') {
       const tactics = mitreTacticsOf(pb);
-      if (!tactics.includes(filters.mitreTactic)) return false;
+      if (!tactics.includes(mitreTactic)) return false;
     }
-    if (filters.severity !== 'all') {
+    if (severity !== 'all') {
       const sevs = severitiesOf(pb);
-      if (!sevs.includes(filters.severity)) return false;
+      if (!sevs.includes(severity)) return false;
     }
-    if (filters.integration !== 'all') {
+    if (integration !== 'all') {
       const integrations = integrationsOf(pb);
-      if (!integrations.includes(filters.integration)) return false;
+      if (!integrations.includes(integration)) return false;
     }
     if (q) {
       const haystack = [pb.name, pb.description, ...(pb.tags ?? [])]
