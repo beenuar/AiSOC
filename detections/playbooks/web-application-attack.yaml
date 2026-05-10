@@ -1,0 +1,123 @@
+id: web-application-attack-v1
+name: Web Application Attack Response
+description: >
+  Responds to web application attacks including SQL injection, XSS, RCE,
+  and directory traversal. Blocks attacking IPs, captures forensic evidence,
+  checks for data exfiltration, and notifies the AppSec team.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - web
+  - appsec
+  - waf
+  - sqli
+  - xss
+  - rce
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - web-attack
+
+steps:
+  - id: enrich-request
+    name: Enrich Attack Request
+    type: enrich
+    params:
+      source: waf
+      fields:
+        - source_ip
+        - user_agent
+        - target_url
+        - method
+        - payload
+        - attack_type
+        - response_code
+        - bytes_transferred
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-ip
+    name: Investigate Source IP History
+    type: investigate
+    params:
+      query: "ip_activity ip={{ alert.source_ip }} last_hours=24"
+      context_fields:
+        - alert.source_ip
+        - alert.attack_type
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-exfil
+    name: Check for Data Exfiltration
+    type: condition
+    condition:
+      field: alert.bytes_transferred
+      operator: gt
+      value: 10000
+    next_true: notify-critical
+    next_false: block-ip
+
+  - id: notify-critical
+    name: Notify Security — Possible Exfiltration
+    type: notify
+    params:
+      channel: "#ir-critical"
+      message: |
+        ⚠️ *Web Attack with Possible Data Exfiltration*
+        Attack Type: `{{ alert.attack_type }}`
+        Source IP: `{{ alert.source_ip }}`
+        Target: `{{ alert.target_url }}`
+        Data transferred: {{ alert.bytes_transferred }} bytes
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: block-ip
+    name: Block Attacking IP at WAF/Firewall
+    type: block_ip
+    params:
+      ip_field: alert.source_ip
+      direction: inbound
+      duration_hours: 48
+      comment: "Web attack — {{ alert.attack_type }} — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+    retry_max: 2
+
+  - id: notify-appsec
+    name: Notify AppSec Team
+    type: notify
+    params:
+      channel: "#appsec-alerts"
+      message: |
+        🌐 *Web Application Attack Detected*
+        Type: `{{ alert.attack_type }}`
+        Source: `{{ alert.source_ip }}`
+        Target: `{{ alert.target_url }}`
+        IP Blocked: {{ steps.block-ip.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Web Attack Ticket
+    type: create_ticket
+    params:
+      title: "WEB-ATTACK: {{ alert.attack_type }} from {{ alert.source_ip }}"
+      severity: P2
+      assignee_group: appsec
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Web Attack Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Attacking IP blocked; AppSec notified; evidence captured."
+    timeout_seconds: 15
+    on_failure: continue

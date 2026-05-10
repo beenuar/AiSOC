@@ -1,0 +1,118 @@
+id: phishing-response-v1
+name: Phishing Email Response
+description: >
+  Responds to confirmed or suspected phishing emails. Quarantines the message
+  across the tenant, extracts and blocks malicious URLs and sender domains,
+  identifies other recipients, and triggers user awareness notifications.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - phishing
+  - email
+  - identity
+  - containment
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - phishing
+
+steps:
+  - id: enrich-email
+    name: Enrich Email Metadata
+    type: enrich
+    params:
+      source: email_gateway
+      fields:
+        - sender
+        - sender_domain
+        - subject
+        - recipients
+        - urls
+        - attachments
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-sender
+    name: Investigate Sender Reputation
+    type: investigate
+    params:
+      query: "ip_reputation sender={{ alert.sender_domain }}"
+      context_fields:
+        - alert.sender
+        - alert.sender_domain
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: block-sender
+    name: Block Malicious Sender Domain
+    type: block_ip
+    params:
+      ip_field: alert.sender_domain
+      block_type: domain
+      direction: inbound
+      duration_hours: 168
+      comment: "Phishing sender block — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: check-urls
+    name: Check URL Count
+    type: condition
+    condition:
+      field: alert.url_count
+      operator: gt
+      value: 0
+    next_true: block-urls
+    next_false: notify-team
+
+  - id: block-urls
+    name: Block Malicious URLs at Proxy
+    type: http
+    params:
+      method: POST
+      url: "{{ env.PROXY_API_URL }}/block"
+      body:
+        urls: "{{ alert.urls }}"
+        category: phishing
+        duration_hours: 168
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-team
+    name: Notify Security Team
+    type: notify
+    params:
+      channel: "#security-alerts"
+      message: |
+        🎣 *Phishing Alert*
+        Sender: `{{ alert.sender }}`
+        Subject: `{{ alert.subject }}`
+        Recipients: {{ alert.recipient_count }}
+        URLs blocked: {{ alert.url_count }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Phishing Ticket
+    type: create_ticket
+    params:
+      title: "PHISHING: {{ alert.sender }} — {{ alert.subject }}"
+      severity: P2
+      assignee_group: security-ops
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Phishing Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Sender blocked; URLs blocked; recipients notified."
+    timeout_seconds: 15
+    on_failure: continue

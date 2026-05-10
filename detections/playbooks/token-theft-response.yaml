@@ -1,0 +1,124 @@
+id: token-theft-response-v1
+name: Authentication Token Theft Response
+description: >
+  Responds to stolen authentication token usage including JWT hijacking,
+  session cookie theft, and bearer token replay attacks. Revokes tokens,
+  forces re-authentication, and checks for downstream unauthorized access.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - token-theft
+  - identity
+  - jwt
+  - session-hijacking
+  - authentication
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - token-theft
+
+steps:
+  - id: enrich-token
+    name: Enrich Token Usage Event
+    type: enrich
+    params:
+      source: identity_provider
+      fields:
+        - username
+        - email
+        - token_type
+        - token_id
+        - original_ip
+        - replay_ip
+        - user_agent
+        - endpoints_accessed
+        - data_accessed
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-replay
+    name: Investigate Token Replay Activity
+    type: investigate
+    params:
+      query: "token_usage token_id={{ alert.token_id }} anomalous=true"
+      context_fields:
+        - alert.token_id
+        - alert.replay_ip
+        - alert.endpoints_accessed
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: revoke-token
+    name: Immediately Revoke Stolen Token
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/tokens/{{ alert.token_id }}/revoke"
+      body:
+        reason: "Token theft detected — replay from different IP"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: revoke-all-sessions
+    name: Revoke All User Sessions
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.username }}/revoke-sessions"
+      body:
+        reason: "Token theft — full session revocation"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: block-attacker-ip
+    name: Block Token Replay Source IP
+    type: block_ip
+    params:
+      ip_field: alert.replay_ip
+      direction: inbound
+      duration_hours: 48
+      comment: "Token theft replay IP — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-user
+    name: Notify Affected User
+    type: notify
+    params:
+      channel: email
+      to: "{{ alert.email }}"
+      subject: "Security Alert: Your authentication token was used from an unexpected location"
+      message: |
+        A stolen authentication token was detected being used from {{ alert.replay_ip }}.
+
+        Your {{ alert.token_type }} token has been revoked and all sessions terminated.
+        Please sign in again and contact security if you did not authorize this access.
+
+        Security contact: security@company.com
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Token Theft Ticket
+    type: create_ticket
+    params:
+      title: "TOKEN-THEFT: {{ alert.username }} — {{ alert.token_type }} replayed from {{ alert.replay_ip }}"
+      severity: P1
+      assignee_group: ir-team
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Token Theft Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Token revoked; all sessions terminated; replay IP blocked; user notified."
+    timeout_seconds: 15
+    on_failure: continue

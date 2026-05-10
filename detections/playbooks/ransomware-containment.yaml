@@ -1,0 +1,106 @@
+id: ransomware-containment-v1
+name: Ransomware Containment & Eradication
+description: >
+  Automated containment and eradication playbook for ransomware incidents.
+  Isolates affected hosts, blocks C2 IPs, snapshots disk state for forensics,
+  and notifies the security team with remediation steps.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - ransomware
+  - malware
+  - containment
+  - endpoint
+  - high-severity
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - ransomware
+
+steps:
+  - id: enrich-host
+    name: Enrich Affected Host
+    type: enrich
+    params:
+      source: endpoint
+      fields:
+        - hostname
+        - os
+        - last_user
+        - network_connections
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: check-severity
+    name: Check Alert Severity
+    type: condition
+    condition:
+      field: alert.severity
+      operator: eq
+      value: critical
+    next_true: isolate-immediately
+    next_false: notify-analyst
+
+  - id: isolate-immediately
+    name: Isolate Host from Network
+    type: isolate_host
+    params:
+      reason: "Ransomware detected — automated isolation"
+      notify_user: true
+    timeout_seconds: 60
+    on_failure: abort
+    retry_max: 2
+
+  - id: block-c2
+    name: Block C2 IPs at Perimeter
+    type: block_ip
+    params:
+      ip_field: alert.external_ips
+      direction: both
+      duration_hours: 72
+      comment: "Ransomware C2 block — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Incident Ticket
+    type: create_ticket
+    params:
+      title: "RANSOMWARE: {{ alert.hostname }} — {{ alert.created_at }}"
+      severity: P1
+      assignee_group: ir-team
+      description: |
+        Ransomware alert triggered on {{ alert.hostname }}.
+        Alert ID: {{ alert.id }}
+        User: {{ alert.last_user }}
+        Isolation status: {{ steps.isolate-immediately.status }}
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-analyst
+    name: Notify IR Team via Slack
+    type: notify
+    params:
+      channel: "#ir-critical"
+      message: |
+        🚨 *Ransomware Detected*
+        Host: `{{ alert.hostname }}`
+        Severity: `{{ alert.severity }}`
+        Ticket: {{ steps.create-ticket.ticket_url }}
+        Isolation: {{ steps.isolate-immediately.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: close-case
+    name: Mark Case Contained
+    type: close_case
+    params:
+      status: contained
+      resolution: "Host isolated; C2 blocked; IR ticket created."
+    timeout_seconds: 15
+    on_failure: continue

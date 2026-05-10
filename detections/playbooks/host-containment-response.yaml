@@ -1,0 +1,125 @@
+id: host-containment-response-v1
+name: Host Containment Response
+description: >
+  General-purpose host containment playbook for any threat requiring immediate
+  endpoint isolation. Performs pre-isolation forensic collection, isolates the
+  host, notifies the IR team, and starts the investigation workflow.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - containment
+  - endpoint
+  - isolation
+  - edr
+  - incident-response
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - contain
+
+steps:
+  - id: enrich-host
+    name: Enrich Target Host
+    type: enrich
+    params:
+      source: endpoint
+      fields:
+        - hostname
+        - ip_address
+        - os
+        - owner
+        - department
+        - criticality
+        - running_processes
+        - network_connections
+        - last_user
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-threat
+    name: Collect Pre-Isolation Forensic Data
+    type: investigate
+    params:
+      query: >
+        host_forensics hostname={{ alert.hostname }}
+        collect=processes,network,files last_minutes=60
+      context_fields:
+        - alert.hostname
+        - alert.running_processes
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: check-criticality
+    name: Check Host Business Criticality
+    type: condition
+    condition:
+      field: alert.criticality
+      operator: eq
+      value: critical
+    next_true: notify-change-management
+    next_false: isolate-host
+
+  - id: notify-change-management
+    name: Notify Change Management Before Critical Host Isolation
+    type: notify
+    params:
+      channel: "#change-management"
+      message: |
+        ⚠️ *Emergency Isolation — Critical Asset*
+        Host: `{{ alert.hostname }}`
+        IP: `{{ alert.ip_address }}`
+        Owner: `{{ alert.owner }}` ({{ alert.department }})
+        Criticality: `{{ alert.criticality }}`
+        Proceeding with emergency isolation in 60 seconds.
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: isolate-host
+    name: Isolate Host from Network
+    type: isolate_host
+    params:
+      reason: "Threat containment — playbook {{ id }}"
+      notify_user: true
+    timeout_seconds: 60
+    on_failure: abort
+    retry_max: 2
+
+  - id: notify-ir-team
+    name: Notify IR Team
+    type: notify
+    params:
+      channel: "#ir-critical"
+      message: |
+        🔒 *Host Isolated — Containment Active*
+        Host: `{{ alert.hostname }}`
+        IP: `{{ alert.ip_address }}`
+        Owner: `{{ alert.owner }}`
+        Criticality: `{{ alert.criticality }}`
+        Alert: `{{ alert.id }}`
+        Isolation: {{ steps.isolate-host.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Containment Incident Ticket
+    type: create_ticket
+    params:
+      title: "CONTAIN: {{ alert.hostname }} isolated — {{ alert.id }}"
+      severity: P1
+      assignee_group: ir-team
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Mark Case as Contained
+    type: close_case
+    params:
+      status: contained
+      resolution: "Host isolated; forensic data collected; IR team engaged."
+    timeout_seconds: 15
+    on_failure: continue

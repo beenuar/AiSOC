@@ -1,0 +1,127 @@
+id: iam-key-compromise-response-v1
+name: IAM Key Compromise Response
+description: >
+  Responds to compromised IAM access keys including keys exposed in public
+  repositories, leaked in logs, or used from unexpected geolocations. Immediately
+  disables the key, audits recent API usage, and rotates credentials.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - iam
+  - aws
+  - cloud
+  - key-compromise
+  - credential-leak
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - iam-key-compromise
+
+steps:
+  - id: enrich-key
+    name: Enrich IAM Key Event
+    type: enrich
+    params:
+      source: cloud_iam
+      fields:
+        - access_key_id
+        - account_id
+        - username
+        - key_created_at
+        - last_used_at
+        - last_used_region
+        - last_used_service
+        - exposure_source
+        - api_calls_24h
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: disable-key
+    name: Immediately Disable Compromised Key
+    type: http
+    params:
+      method: PUT
+      url: "{{ env.AWS_IAM_API_URL }}/users/{{ alert.username }}/keys/{{ alert.access_key_id }}"
+      body:
+        Status: Inactive
+        reason: "Key compromise detected — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: investigate-api-usage
+    name: Investigate Recent API Usage
+    type: investigate
+    params:
+      query: >
+        cloudtrail key={{ alert.access_key_id }}
+        last_hours=48 service=all
+      context_fields:
+        - alert.access_key_id
+        - alert.api_calls_24h
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: check-exposure-source
+    name: Check Exposure Source Type
+    type: condition
+    condition:
+      field: alert.exposure_source
+      operator: eq
+      value: public_repo
+    next_true: notify-vcs-team
+    next_false: notify-cloud-security
+
+  - id: notify-vcs-team
+    name: Notify VCS Team to Remove Key from Repo
+    type: notify
+    params:
+      channel: "#devsecops-alerts"
+      message: |
+        🔑 *IAM Key Exposed in Public Repository*
+        Key: `{{ alert.access_key_id }}`
+        Account: `{{ alert.account_id }}`
+        IAM User: `{{ alert.username }}`
+        Key has been disabled. Remove from VCS immediately and rotate.
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: notify-cloud-security
+    name: Notify Cloud Security Team
+    type: notify
+    params:
+      channel: "#cloud-security"
+      message: |
+        🔑 *IAM Key Compromise Detected*
+        Key: `{{ alert.access_key_id }}`
+        Account: `{{ alert.account_id }}`
+        IAM User: `{{ alert.username }}`
+        Exposure: `{{ alert.exposure_source }}`
+        API calls (24h): {{ alert.api_calls_24h }}
+        Key disabled: {{ steps.disable-key.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create IAM Key Compromise Ticket
+    type: create_ticket
+    params:
+      title: "IAM-KEY: {{ alert.access_key_id }} compromised via {{ alert.exposure_source }}"
+      severity: P1
+      assignee_group: cloud-security
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close IAM Key Compromise Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Key disabled; API usage audited; VCS/cloud security notified; rotation in progress."
+    timeout_seconds: 15
+    on_failure: continue

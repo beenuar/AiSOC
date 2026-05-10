@@ -1,0 +1,118 @@
+id: anomalous-behavior-response-v1
+name: Anomalous User Behavior Response
+description: >
+  Responds to anomalous user behavior flagged by UEBA systems including
+  unusual access patterns, after-hours activity, mass data access, or
+  deviation from behavioral baselines. Escalates based on risk score and
+  enables adaptive authentication controls.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - anomalous
+  - ueba
+  - behavioral-analytics
+  - identity
+  - insider
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - anomalous-behavior
+
+steps:
+  - id: enrich-behavior
+    name: Enrich Anomalous Behavior Event
+    type: enrich
+    params:
+      source: ueba
+      fields:
+        - username
+        - email
+        - department
+        - risk_score
+        - risk_delta
+        - anomaly_categories
+        - baseline_score
+        - affected_assets
+        - activity_summary
+        - peer_group_comparison
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-history
+    name: Investigate Behavioral History
+    type: investigate
+    params:
+      query: >
+        ueba_timeline user={{ alert.username }}
+        anomaly_only=true last_days=30
+      context_fields:
+        - alert.username
+        - alert.risk_score
+        - alert.anomaly_categories
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: check-high-risk
+    name: Check If Risk Score Is Critical
+    type: condition
+    condition:
+      field: alert.risk_score
+      operator: gt
+      value: 85
+    next_true: enforce-adaptive-auth
+    next_false: notify-analyst
+
+  - id: enforce-adaptive-auth
+    name: Enforce Step-Up Authentication
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.username }}/adaptive-auth"
+      body:
+        level: enhanced
+        require_mfa: true
+        reason: "UEBA high-risk score — anomalous behavior detected"
+        duration_hours: 48
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-analyst
+    name: Notify Security Analyst for Review
+    type: notify
+    params:
+      channel: "#ueba-alerts"
+      message: |
+        📊 *Anomalous Behavior Alert*
+        User: `{{ alert.username }}` ({{ alert.department }})
+        Risk Score: `{{ alert.risk_score }}` (baseline: {{ alert.baseline_score }})
+        Delta: +{{ alert.risk_delta }}
+        Anomalies: {{ alert.anomaly_categories }}
+        Assets Affected: {{ alert.affected_assets }}
+        Step-up auth enforced: {{ steps.enforce-adaptive-auth.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Anomalous Behavior Ticket
+    type: create_ticket
+    params:
+      title: "UEBA: {{ alert.username }} — risk score {{ alert.risk_score }} ({{ alert.anomaly_categories }})"
+      severity: P2
+      assignee_group: security-ops
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Anomalous Behavior Case
+    type: close_case
+    params:
+      status: under-investigation
+      resolution: "Step-up auth enforced; analyst notified; behavioral evidence preserved."
+    timeout_seconds: 15
+    on_failure: continue

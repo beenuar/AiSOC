@@ -1,0 +1,128 @@
+id: iso-27001-violation-response-v1
+name: ISO 27001 Control Violation Response
+description: >
+  Responds to ISO 27001 information security control violations including
+  unauthorized access to sensitive information, policy breaches, and audit
+  findings. Creates compliance records, notifies the CISO, and initiates
+  corrective action procedures.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - iso27001
+  - compliance
+  - governance
+  - policy-violation
+  - audit
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - iso-violation
+
+steps:
+  - id: enrich-violation
+    name: Enrich ISO Violation Event
+    type: enrich
+    params:
+      source: compliance_engine
+      fields:
+        - username
+        - email
+        - department
+        - manager
+        - control_id
+        - control_name
+        - violation_type
+        - asset_affected
+        - data_classification
+        - timestamp
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-history
+    name: Investigate Compliance Violation History
+    type: investigate
+    params:
+      query: >
+        compliance_violations user={{ alert.username }}
+        control={{ alert.control_id }} last_days=90
+      context_fields:
+        - alert.username
+        - alert.control_id
+        - alert.violation_type
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-severity-level
+    name: Check Severity Requires CISO Notification
+    type: condition
+    condition:
+      field: alert.data_classification
+      operator: eq
+      value: confidential
+    next_true: notify-ciso
+    next_false: notify-compliance-team
+
+  - id: notify-ciso
+    name: Notify CISO of Critical Compliance Violation
+    type: notify
+    params:
+      channel: email
+      to: "{{ env.CISO_EMAIL }}"
+      subject: "ISO 27001 Violation: {{ alert.control_id }} — {{ alert.data_classification }} data"
+      message: |
+        A significant ISO 27001 control violation has been detected.
+
+        Control: {{ alert.control_id }} — {{ alert.control_name }}
+        User: {{ alert.username }} ({{ alert.department }})
+        Asset: {{ alert.asset_affected }}
+        Data Classification: {{ alert.data_classification }}
+        Violation: {{ alert.violation_type }}
+        Time: {{ alert.timestamp }}
+
+        Compliance team has been notified. Corrective action required within 24 hours.
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: notify-compliance-team
+    name: Notify Compliance Team
+    type: notify
+    params:
+      channel: "#compliance-alerts"
+      message: |
+        📋 *ISO 27001 Control Violation*
+        Control: `{{ alert.control_id }}` — {{ alert.control_name }}
+        User: `{{ alert.username }}` ({{ alert.department }})
+        Asset: `{{ alert.asset_affected }}`
+        Violation: `{{ alert.violation_type }}`
+        CISO notified: {{ steps.notify-ciso.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create ISO Violation Compliance Ticket
+    type: create_ticket
+    params:
+      title: "ISO-27001: {{ alert.control_id }} violation by {{ alert.username }}"
+      severity: P2
+      assignee_group: compliance
+      tags:
+        - iso27001
+        - compliance
+        - corrective-action
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close ISO Violation Case
+    type: close_case
+    params:
+      status: under-investigation
+      resolution: "CISO/compliance notified; corrective action ticket created; audit evidence preserved."
+    timeout_seconds: 15
+    on_failure: continue

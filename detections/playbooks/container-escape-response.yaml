@@ -1,0 +1,126 @@
+id: container-escape-response-v1
+name: Container Escape Response
+description: >
+  Responds to detected container escape attempts or privileged container
+  misuse. Terminates the offending container, cordons the node, captures
+  runtime forensics, and alerts the platform security team.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - container
+  - kubernetes
+  - docker
+  - escape
+  - runtime-security
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - container-escape
+
+steps:
+  - id: enrich-container
+    name: Enrich Container Context
+    type: enrich
+    params:
+      source: container_runtime
+      fields:
+        - container_id
+        - container_name
+        - image
+        - namespace
+        - node_name
+        - pod_name
+        - privileged
+        - capabilities
+        - process_tree
+        - syscalls
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-process
+    name: Investigate Suspicious Process Activity
+    type: investigate
+    params:
+      query: >
+        container_process container={{ alert.container_id }}
+        anomalous=true last_minutes=30
+      context_fields:
+        - alert.container_id
+        - alert.process_tree
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-privileged
+    name: Check Privileged Container
+    type: condition
+    condition:
+      field: alert.privileged
+      operator: eq
+      value: true
+    next_true: immediate-terminate
+    next_false: notify-platform
+
+  - id: immediate-terminate
+    name: Terminate Offending Container Immediately
+    type: http
+    params:
+      method: DELETE
+      url: "{{ env.K8S_API_URL }}/namespaces/{{ alert.namespace }}/pods/{{ alert.pod_name }}"
+      headers:
+        Authorization: "Bearer {{ env.K8S_TOKEN }}"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: cordon-node
+    name: Cordon Compromised Node
+    type: http
+    params:
+      method: PATCH
+      url: "{{ env.K8S_API_URL }}/nodes/{{ alert.node_name }}"
+      body:
+        spec:
+          unschedulable: true
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-platform
+    name: Notify Platform Security Team
+    type: notify
+    params:
+      channel: "#platform-security"
+      message: |
+        🐳 *Container Escape Detected*
+        Container: `{{ alert.container_name }}`
+        Image: `{{ alert.image }}`
+        Node: `{{ alert.node_name }}`
+        Namespace: `{{ alert.namespace }}`
+        Privileged: {{ alert.privileged }}
+        Container terminated: {{ steps.immediate-terminate.status }}
+        Node cordoned: {{ steps.cordon-node.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Container Escape Ticket
+    type: create_ticket
+    params:
+      title: "CONTAINER-ESCAPE: {{ alert.container_name }} on {{ alert.node_name }}"
+      severity: P1
+      assignee_group: platform-security
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Container Escape Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Container terminated; node cordoned; forensics captured."
+    timeout_seconds: 15
+    on_failure: continue

@@ -1,0 +1,126 @@
+id: mfa-fatigue-response-v1
+name: MFA Fatigue Attack Response
+description: >
+  Responds to MFA push fatigue attacks where attackers spam authentication
+  requests hoping the user accidentally approves. Detects rapid successive MFA
+  prompts, temporarily blocks push notifications, and forces re-enrollment.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - mfa-fatigue
+  - identity
+  - authentication
+  - push-bombing
+  - account-takeover
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - mfa-fatigue
+
+steps:
+  - id: enrich-mfa
+    name: Enrich MFA Fatigue Event
+    type: enrich
+    params:
+      source: identity_provider
+      fields:
+        - username
+        - email
+        - phone_number
+        - push_count
+        - push_window_minutes
+        - source_ips
+        - device_enrolled
+        - last_successful_mfa
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-source
+    name: Investigate Attack Source IPs
+    type: investigate
+    params:
+      query: "mfa_attempts user={{ alert.username }} last_hours=1"
+      context_fields:
+        - alert.username
+        - alert.push_count
+        - alert.source_ips
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-push-rate
+    name: Check Push Frequency
+    type: condition
+    condition:
+      field: alert.push_count
+      operator: gt
+      value: 10
+    next_true: disable-push-mfa
+    next_false: notify-user-warning
+
+  - id: disable-push-mfa
+    name: Temporarily Disable Push MFA
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.username }}/mfa/push/disable"
+      body:
+        reason: "MFA fatigue attack — push bombing detected"
+        duration_hours: 24
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: block-attacker-ips
+    name: Block Attacking IPs at Perimeter
+    type: block_ip
+    params:
+      ip_field: alert.source_ips
+      direction: inbound
+      duration_hours: 48
+      comment: "MFA fatigue attack IPs — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-user-warning
+    name: Notify User of MFA Fatigue Attack
+    type: notify
+    params:
+      channel: email
+      to: "{{ alert.email }}"
+      subject: "SECURITY ALERT: Do not approve unexpected MFA requests"
+      message: |
+        IMPORTANT: Someone is attempting to access your account.
+
+        We have detected {{ alert.push_count }} MFA push requests in the last
+        {{ alert.push_window_minutes }} minutes directed at your account.
+
+        DO NOT approve any MFA requests you did not initiate.
+
+        Push MFA has been temporarily disabled as a precaution.
+        Contact security immediately: security@company.com
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create MFA Fatigue Ticket
+    type: create_ticket
+    params:
+      title: "MFA-FATIGUE: {{ alert.username }} — {{ alert.push_count }} pushes in {{ alert.push_window_minutes }}min"
+      severity: P1
+      assignee_group: ir-team
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close MFA Fatigue Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Push MFA disabled; attacker IPs blocked; user notified; IR investigating."
+    timeout_seconds: 15
+    on_failure: continue

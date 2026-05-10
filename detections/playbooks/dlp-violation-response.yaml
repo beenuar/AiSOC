@@ -1,0 +1,133 @@
+id: dlp-violation-response-v1
+name: DLP Policy Violation Response
+description: >
+  Responds to data loss prevention (DLP) policy violations including
+  unauthorized data transfers, sensitive document uploads to personal storage,
+  or PII/PHI exfiltration attempts. Blocks the transfer, notifies compliance,
+  and preserves audit evidence.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - dlp
+  - data-loss-prevention
+  - compliance
+  - pii
+  - phi
+  - exfiltration
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - dlp-violation
+
+steps:
+  - id: enrich-dlp
+    name: Enrich DLP Violation Event
+    type: enrich
+    params:
+      source: dlp_engine
+      fields:
+        - username
+        - email
+        - department
+        - manager
+        - data_classification
+        - file_name
+        - destination
+        - destination_type
+        - bytes_transferred
+        - policy_violated
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-user-history
+    name: Investigate User DLP History
+    type: investigate
+    params:
+      query: "dlp_events user={{ alert.username }} last_days=30"
+      context_fields:
+        - alert.username
+        - alert.data_classification
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-classification
+    name: Check Data Classification Level
+    type: condition
+    condition:
+      field: alert.data_classification
+      operator: eq
+      value: restricted
+    next_true: block-and-escalate
+    next_false: notify-manager
+
+  - id: block-and-escalate
+    name: Block Transfer and Escalate
+    type: http
+    params:
+      method: POST
+      url: "{{ env.DLP_API_URL }}/violations/{{ alert.id }}/block"
+      body:
+        action: block
+        reason: "Restricted data DLP violation — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-compliance
+    name: Notify Compliance and Legal
+    type: notify
+    params:
+      channel: email
+      to: "{{ env.COMPLIANCE_EMAIL }}"
+      subject: "DLP Violation: Restricted Data Transfer — {{ alert.username }}"
+      message: |
+        A DLP violation has been detected and blocked.
+
+        User: {{ alert.username }} ({{ alert.email }})
+        Department: {{ alert.department }}
+        Data Classification: {{ alert.data_classification }}
+        File: {{ alert.file_name }}
+        Destination: {{ alert.destination }} ({{ alert.destination_type }})
+        Bytes: {{ alert.bytes_transferred }}
+        Policy: {{ alert.policy_violated }}
+
+        Transfer has been blocked. IR is investigating.
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: notify-manager
+    name: Notify User's Manager
+    type: notify
+    params:
+      channel: email
+      to: "{{ alert.manager_email }}"
+      subject: "Security Alert: DLP Policy Violation by {{ alert.username }}"
+      message: |
+        A DLP policy violation was detected on {{ alert.username }}'s account.
+        Security team is reviewing. Please contact security for details.
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create DLP Violation Ticket
+    type: create_ticket
+    params:
+      title: "DLP: {{ alert.data_classification }} data — {{ alert.username }} to {{ alert.destination_type }}"
+      severity: P2
+      assignee_group: security-compliance
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close DLP Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Transfer blocked; compliance notified; manager informed; audit evidence preserved."
+    timeout_seconds: 15
+    on_failure: continue

@@ -1,0 +1,129 @@
+id: suspicious-signin-response-v1
+name: Suspicious Sign-In Response
+description: >
+  Responds to suspicious sign-in events including impossible travel, new country
+  logins, known bad IP addresses, or sign-ins outside business hours. Triggers
+  step-up authentication or session termination based on risk score.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - sign-in
+  - identity
+  - authentication
+  - impossible-travel
+  - conditional-access
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - suspicious-signin
+
+steps:
+  - id: enrich-signin
+    name: Enrich Sign-In Event
+    type: enrich
+    params:
+      source: identity_provider
+      fields:
+        - username
+        - email
+        - source_ip
+        - country
+        - city
+        - previous_country
+        - previous_login_time
+        - device_id
+        - device_trust
+        - risk_score
+        - login_time
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-ip
+    name: Investigate Source IP Reputation
+    type: investigate
+    params:
+      query: "ip_reputation ip={{ alert.source_ip }} threat_categories=true"
+      context_fields:
+        - alert.source_ip
+        - alert.country
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-risk-score
+    name: Check Risk Score Threshold
+    type: condition
+    condition:
+      field: alert.risk_score
+      operator: gt
+      value: 70
+    next_true: revoke-session
+    next_false: require-mfa
+
+  - id: revoke-session
+    name: Revoke High-Risk Sign-In Session
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.username }}/revoke-sessions"
+      body:
+        session_id: "{{ alert.session_id }}"
+        reason: "Suspicious sign-in — high risk score"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: require-mfa
+    name: Require Step-Up MFA Challenge
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.username }}/require-mfa"
+      body:
+        session_id: "{{ alert.session_id }}"
+        challenge_type: totp
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-user
+    name: Notify User of Suspicious Sign-In
+    type: notify
+    params:
+      channel: email
+      to: "{{ alert.email }}"
+      subject: "Security Alert: Suspicious sign-in to your account"
+      message: |
+        We detected a suspicious sign-in to your account.
+
+        Location: {{ alert.city }}, {{ alert.country }}
+        IP: {{ alert.source_ip }}
+        Time: {{ alert.login_time }}
+
+        If this was you, no action is needed.
+        If not, contact security immediately: security@company.com
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Suspicious Sign-In Ticket
+    type: create_ticket
+    params:
+      title: "SUSPICIOUS-LOGIN: {{ alert.username }} from {{ alert.country }} ({{ alert.source_ip }})"
+      severity: P2
+      assignee_group: security-ops
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Suspicious Sign-In Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Session revoked or MFA required; user notified; ticket created."
+    timeout_seconds: 15
+    on_failure: continue

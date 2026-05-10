@@ -1,0 +1,119 @@
+id: lateral-movement-response-v1
+name: Lateral Movement Response
+description: >
+  Responds to detected lateral movement activity including pass-the-hash,
+  pass-the-ticket, remote service abuse, and admin share enumeration.
+  Isolates affected hosts, revokes lateral credentials, and maps the blast radius.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - lateral-movement
+  - endpoint
+  - network
+  - credential-abuse
+  - active-directory
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - lateral-movement
+
+steps:
+  - id: enrich-lateral
+    name: Enrich Lateral Movement Event
+    type: enrich
+    params:
+      source: endpoint
+      fields:
+        - source_host
+        - destination_host
+        - technique
+        - account_used
+        - protocol
+        - destination_port
+        - network_path
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-spread
+    name: Map Lateral Movement Blast Radius
+    type: investigate
+    params:
+      query: >
+        lateral_connections source={{ alert.source_host }}
+        last_hours=6
+      context_fields:
+        - alert.source_host
+        - alert.destination_host
+        - alert.technique
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: isolate-source
+    name: Isolate Source Host
+    type: isolate_host
+    params:
+      hostname: "{{ alert.source_host }}"
+      reason: "Lateral movement detected — playbook {{ id }}"
+      notify_user: true
+    timeout_seconds: 60
+    on_failure: continue
+    retry_max: 2
+
+  - id: check-destination-sensitive
+    name: Check If Destination Is Sensitive
+    type: condition
+    condition:
+      field: alert.destination_host
+      operator: contains
+      value: "dc"
+    next_true: isolate-destination
+    next_false: notify-security
+
+  - id: isolate-destination
+    name: Isolate Sensitive Destination Host
+    type: isolate_host
+    params:
+      hostname: "{{ alert.destination_host }}"
+      reason: "Lateral movement target — possible DC compromise — playbook {{ id }}"
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: notify-security
+    name: Notify Security Operations
+    type: notify
+    params:
+      channel: "#ir-critical"
+      message: |
+        ↔️ *Lateral Movement Detected*
+        Technique: `{{ alert.technique }}`
+        Source: `{{ alert.source_host }}`
+        Destination: `{{ alert.destination_host }}`
+        Account: `{{ alert.account_used }}`
+        Protocol: `{{ alert.protocol }}`
+        Source isolated: {{ steps.isolate-source.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Lateral Movement Ticket
+    type: create_ticket
+    params:
+      title: "LATERAL: {{ alert.technique }} from {{ alert.source_host }} to {{ alert.destination_host }}"
+      severity: P1
+      assignee_group: ir-team
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Lateral Movement Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Source isolated; blast radius mapped; IR ticket created."
+    timeout_seconds: 15
+    on_failure: continue
