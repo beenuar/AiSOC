@@ -145,6 +145,27 @@ class OpenSearchStore:
         )
         return [hit["_source"] for hit in resp["hits"]["hits"]]
 
+    async def match_ioc_values(self, values: list[str]) -> list[str]:
+        """Return the subset of ``values`` that exist in the IOC index.
+
+        Public read-path consumed by callers that need to verify an arbitrary
+        bag of indicator values (e.g. the threat actor attribution engine)
+        against collected threat intel. Returns a deterministically sorted
+        list of matched values; non-string and empty inputs are filtered.
+        """
+        cleaned = sorted({str(v) for v in values if v})
+        if not cleaned:
+            return []
+        resp = await self._os.search(
+            index=_IOC_INDEX,
+            body={
+                "query": {"terms": {"value": cleaned}},
+                "size": min(len(cleaned), 100),
+                "_source": ["value"],
+            },
+        )
+        return sorted({hit["_source"]["value"] for hit in resp["hits"]["hits"]})
+
 
 def _stable_id(type_: str, value: str, source: str) -> str:
     key = f"{type_}:{value}:{source}"

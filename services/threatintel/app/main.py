@@ -23,7 +23,9 @@ from opensearchpy import AsyncOpenSearch
 from prometheus_client import Counter, make_asgi_app
 from qdrant_client import AsyncQdrantClient
 
+from app.actors.attribution import ThreatActorAttributionEngine
 from app.airgap import airgap_status, is_host_allowed_for_airgap
+from app.api.actor_attribution import router as actor_attribution_router
 from app.clients.cisa_kev import CisaKevClient
 from app.clients.misp import MispClient
 from app.clients.otx import OtxClient
@@ -243,6 +245,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.scheduler = scheduler
     app.state.pipeline = pipeline
     app.state.redis = redis
+    app.state.os_store = os_store
+
+    # Threat actor attribution engine — shares the os_store so the IOC
+    # component of the score can match against collected threat intel.
+    app.state.attribution_engine = ThreatActorAttributionEngine(os_store=os_store)
 
     yield
 
@@ -267,6 +274,9 @@ app = FastAPI(
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
+
+# Threat actor attribution router (v0)
+app.include_router(actor_attribution_router)
 
 
 @app.get("/health")

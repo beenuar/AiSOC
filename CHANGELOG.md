@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Threat Actor Attribution Engine (v0)
+
+- **`services/threatintel/app/actors/attribution.py`** — New
+  `ThreatActorAttributionEngine` scores observed IOCs, MITRE ATT&CK
+  techniques, tools, and target sectors against an in-memory catalog of
+  three seed actor profiles (APT28, APT29, Lazarus). Scoring is the
+  weighted sum of TTP (0.4) / Tool (0.3) / Target (0.2) / IOC (0.1)
+  components, multiplied by the actor profile's baseline confidence,
+  then thresholded.
+- **`services/threatintel/app/api/actor_attribution.py`** — New router
+  mounted at `/api/v1/actors` with `POST /attribute`, `GET /profiles`,
+  and `GET /profiles/{actor_id}`. Constructs the engine once via
+  FastAPI lifespan and passes it through `Depends(get_attribution_engine)`.
+- **`services/agents/app/agents/investigation_agent.py`** — Investigation
+  agent now calls the attribution API after triage/enrichment and
+  records the result on `state.threat_intel["attribution"]`. Failure is
+  soft and surfaces a `[medium]` finding rather than aborting the
+  investigation.
+- **`docs/threat-actor-attribution.md`** — Full operator-facing docs,
+  including scoring model, API surface, observability, env vars, v0
+  caveats, and instructions for adding custom profiles.
+
+### Configuration
+
+- `AISOC_ATTRIBUTION_THRESHOLD` — Override the default confidence
+  threshold (`0.30`). Clamped to `[0.0, 1.0]`; invalid values fall back
+  to the default and emit a warning.
+- `AISOC_THREATINTEL_URL` — Base URL the agent uses to reach the
+  `threatintel` service. Default: `http://threatintel:8083`.
+- `AISOC_ATTRIBUTION_TIMEOUT_SECONDS` — HTTP timeout the agent uses for
+  attribution calls. Default: `10`.
+
+### Observability
+
+- New Prometheus series exported by `threatintel`:
+  - `threatintel_attribution_requests_total{result="matched|unknown|error"}`
+  - `threatintel_attribution_score{actor_id}` (histogram)
+
+### Engine internals
+
+- Tool matching uses an alphanumeric-only boundary regex
+  (`(?<![a-zA-Z0-9])tool(?![a-zA-Z0-9])`) instead of Python's `\b`.
+  Python's `\b` treats `_` as a word character, which broke common
+  malware-filename patterns like `miniduke_v3.dll`. The new boundary
+  treats `_`, `-`, `.`, and `/` as delimiters while still rejecting
+  alphanumeric neighbours (so `x-agent` does not match `x-agentic`).
+- Tool matching now also scans the IOC's `description` and `tags`
+  fields, not just `value`.
+- IOC lookups go through a new public method `OpenSearchStore.match_ioc_values()`
+  rather than reaching into `os_store._os.search()` directly.
+- The attribution engine accepts a `catalog` constructor argument so
+  tests and downstream services can inject custom profiles without
+  monkey-patching module-level state.
+- An empty catalog now resolves to `actor_id="unknown"` with explicit
+  reasoning (`"Actor catalog is empty"`), instead of confusingly
+  falling through to the no-match-above-threshold branch.
+
+### Security caveat
+
+The `/api/v1/actors/*` endpoints are reachable on the `threatintel`
+service without RBAC enforcement in v0 — they assume cluster-internal
+network reachability only. Do **not** expose them through public
+ingress until a `Depends(require_permission(...))` guard is added.
+Tracked as a known limitation in the docs.
+
 ## [6.1.0] — 2026-05-07
 
 ### Added — v1.5 market-driven feature expansion
