@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 
 class StepType(str, Enum):
@@ -16,20 +16,55 @@ class StepType(str, Enum):
     INVESTIGATE = "investigate"  # Trigger AI investigator
     NOTIFY = "notify"  # Send notification (Slack, email, webhook)
     BLOCK_IP = "block_ip"  # Call firewall/EDR action
+    BLOCK_IOC = "block_ioc"  # Block an IOC (hash, domain, IP)
     ISOLATE_HOST = "isolate_host"
     CREATE_TICKET = "create_ticket"
     CLOSE_CASE = "close_case"
     HTTP = "http"  # Generic outbound HTTP call
     CONDITION = "condition"  # Branching / gate
     OSQUERY_LIVE_QUERY = "osquery_live_query"  # Distributed osquery via osctrl/FleetDM/aisoc-direct
+    # Human-in-the-loop
+    APPROVAL = "approval"  # Require analyst approval before proceeding
+    # Identity response
+    DISABLE_USER = "disable_user"
+    RESET_PASSWORD = "reset_password"
+    REVOKE_SESSION = "revoke_session"
+    FORCE_MFA = "force_mfa"
+    # Endpoint response
+    KILL_PROCESS = "kill_process"
+    QUARANTINE_FILE = "quarantine_file"
+    RUN_AV_SCAN = "run_av_scan"
+    RUN_SCRIPT = "run_script"
+    # SIEM / investigation
+    SEARCH_SIEM = "search_siem"
+    CREATE_NOTABLE_EVENT = "create_notable_event"
 
 
 class StepCondition(BaseModel):
-    """Optional condition guard that must be true before this step runs."""
+    """Optional condition guard that must be true before this step runs.
 
-    field: str = Field(..., description="JSONPath into run context, e.g. 'verdict'")
+    Accepts either a structured dict (field/operator/value) or a plain
+    expression string such as ``"inputs.source_ip != null"``.  The string
+    form is evaluated at runtime by the playbook engine; the structured form
+    is kept for backwards compatibility and IDE tooling.
+    """
+
+    field: str = Field("", description="JSONPath into run context, e.g. 'verdict'")
     operator: Literal["eq", "ne", "gt", "lt", "contains", "exists"] = "eq"
     value: Any = None
+    # Expression-string form (mutually exclusive with field/operator/value)
+    expression: str | None = None
+
+
+def _coerce_condition(v: Any) -> Any:
+    """Allow StepCondition to be specified as a plain expression string."""
+    if isinstance(v, str):
+        return {"expression": v}
+    return v
+
+
+# Annotated type that coerces string conditions to dict before Pydantic parses them
+StepConditionField = Annotated[StepCondition | None, BeforeValidator(_coerce_condition)]
 
 
 class PlaybookStep(BaseModel):
@@ -39,7 +74,7 @@ class PlaybookStep(BaseModel):
     name: str
     type: StepType
     params: dict[str, Any] = Field(default_factory=dict)
-    condition: StepCondition | None = None
+    condition: StepConditionField = None
     on_failure: Literal["abort", "continue", "retry"] = "abort"
     retry_max: int = 0
     timeout_seconds: int = 30
