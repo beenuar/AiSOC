@@ -243,6 +243,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.scheduler = scheduler
     app.state.pipeline = pipeline
     app.state.redis = redis
+    app.state.os_store = os_store
+
+    # Threat actor attribution engine — shares the os_store so the IOC
+    # component of the score can match against collected threat intel.
+    from app.actors.attribution import ThreatActorAttributionEngine
+
+    app.state.attribution_engine = ThreatActorAttributionEngine(os_store=os_store)
 
     yield
 
@@ -267,6 +274,11 @@ app = FastAPI(
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
+
+# Include API routers
+from app.api.actor_attribution import router as actor_attribution_router
+
+app.include_router(actor_attribution_router)
 
 
 @app.get("/health")
