@@ -14,6 +14,7 @@ from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
 from app.api.playbooks import router as playbook_router
 from app.api.router import router
+from app.api.attack_reasoning import router as attack_reasoning_router
 from app.core.telemetry import instrument_app
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
@@ -127,6 +128,7 @@ app.include_router(hunts_router)  # prefix: /api/v1/hunts
 app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)
 app.include_router(copilot_router)  # prefix: /api/v1/copilot
 app.include_router(explain_router)  # prefix: /api/v1  (POST /explain — NDJSON stream)
+app.include_router(attack_reasoning_router)  # prefix: /api/v1/attack-reasoning
 
 
 @app.get("/health")

@@ -134,6 +134,7 @@ AiSOC bundles the components a SOC normally pieces together from separate vendor
 - **Verify ChatOps actions** — HMAC-signed approval prompts are sent to Slack or Teams before high-impact SOAR actions execute, with a time-limited verification token. Implementation in [`services/actions/app/executors/chatops.py`](services/actions/app/executors/chatops.py).
 - **Benchmark against adversary LLMs** — a deterministic attacker-LLM mutator generates adversary incidents to test detection resilience. Script: [`scripts/generate_adversary_incidents.py`](scripts/generate_adversary_incidents.py); eval: [`services/agents/tests/test_adversary_eval.py`](services/agents/tests/test_adversary_eval.py).
 - **Enrich** every signal with threat intelligence from TAXII 2.1, MISP, OTX, and CISA KEV.
+- **Attribute** incidents to specific threat actors using multi-factor analysis of IOCs, TTPs, and target patterns.
 - **Reason** about attacks via a LangGraph multi-agent system grounded in MITRE ATT&CK.
 - **Detect deviations** with UEBA — per-user behavioural baselines and Z-score anomaly scoring.
 - **Trap adversaries** with HMAC-signed honeytokens (URLs, files, AWS credentials, emails).
