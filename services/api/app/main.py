@@ -29,6 +29,7 @@ from app.middleware.demo_mode import DemoModeMiddleware
 from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
 _DEV_ENVIRONMENTS = {"development", "dev", "local", "demo", "test"}
 _metrics_bearer = HTTPBearer(auto_error=False)
@@ -112,6 +113,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.warning("oauth_refresh worker failed to start", error=str(exc))
 
+    # WS-G2: Weekly executive digest auto-generation worker. Generates a
+    # PDF (or HTML fallback) digest for every active tenant every Monday at
+    # 00:xx UTC and persists a ReportArtefact row.
+    # Author: Beenu <beenu@cyble.com>
+    weekly_digest_task: asyncio.Task | None = None
+    if settings.WEEKLY_DIGEST_WORKER_ENABLED:
+        try:
+            weekly_digest_task = asyncio.create_task(
+                run_weekly_digest(), name="weekly_digest_worker"
+            )
+            logger.info("weekly_digest worker started")
+        except Exception as exc:
+            logger.warning("weekly_digest worker failed to start", error=str(exc))
+
     yield
 
     logger.info("AiSOC API shutting down")
@@ -123,6 +138,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             pass
         except Exception as exc:
             logger.warning("oauth_refresh worker shutdown error", error=str(exc))
+
+    if weekly_digest_task is not None and not weekly_digest_task.done():
+        weekly_digest_task.cancel()
+        try:
+            await weekly_digest_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.warning("weekly_digest worker shutdown error", error=str(exc))
     await engine.dispose()
     await close_neo4j()
     # Close the ClickHouse warm-tier client. We don't pre-init it on

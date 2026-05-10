@@ -132,6 +132,26 @@ class Settings(BaseSettings):
     # loop; a hung provider should not stall the cadence.
     OAUTH_REFRESH_HTTP_TIMEOUT_SECONDS: float = 15.0
 
+    # ------------------------------------------------------------------
+    # WS-G2: Weekly Executive Digest auto-generation worker.
+    # Author: Beenu <beenu@cyble.com>
+    #
+    # The worker runs as a single ``asyncio.Task`` inside the API process
+    # (``lifespan`` hook in main.py). Every Monday at 00:xx UTC it generates
+    # a PDF (or HTML fallback) executive digest for every active tenant and
+    # persists a ``ReportArtefact`` row.
+    #
+    # ``WEEKLY_DIGEST_WORKER_ENABLED``      – Set false to disable (e.g. in
+    #                                         unit-test environments or when
+    #                                         digests are triggered externally).
+    # ``WEEKLY_DIGEST_POLL_INTERVAL_SECONDS`` – How often (seconds) the loop
+    #                                         checks whether it is Monday 00:xx.
+    #                                         Defaults to 3600 (1 hour). Must
+    #                                         be ≥ 60 to avoid a busy loop.
+    # ------------------------------------------------------------------
+    WEEKLY_DIGEST_WORKER_ENABLED: bool = True
+    WEEKLY_DIGEST_POLL_INTERVAL_SECONDS: int = 3600
+
     # Database
     DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"
     DATABASE_POOL_SIZE: int = 20

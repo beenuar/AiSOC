@@ -1,4 +1,7 @@
-"""Auto-generated board / executive report endpoints."""
+"""Auto-generated board / executive report endpoints.
+
+Author: Beenu <beenu@cyble.com>
+"""
 
 from __future__ import annotations
 
@@ -7,7 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +20,7 @@ from app.db.database import get_db
 from app.models.report import ReportArtefact, ReportTemplate
 from app.models.tenant import User
 from app.services.digest_html import render_digest_html
+from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
 from app.services.executive_digest import ExecutiveDigest, build_weekly_digest
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -204,25 +208,28 @@ async def get_artefact(
 
 @router.get(
     "/digest/weekly",
-    summary="Executive weekly digest (JSON or print-ready HTML)",
-    # The endpoint returns either an ExecutiveDigest (JSON) or an HTMLResponse
-    # depending on the ?format= query param. FastAPI cannot synthesise a
-    # response_model from that union, so we opt out and let each branch
-    # serialise itself (Pydantic for JSON, HTMLResponse for HTML).
+    summary="Executive weekly digest (JSON, print-ready HTML, or PDF)",
+    # The endpoint returns ExecutiveDigest (JSON), HTMLResponse, or a raw PDF
+    # Response depending on the ?format= query param.  FastAPI cannot synthesise
+    # a response_model from that union so we opt out and let each branch
+    # serialise itself.
     response_model=None,
 )
 async def weekly_digest(
-    fmt: str = Query("json", alias="format", pattern="^(json|html)$"),
+    fmt: str = Query("json", alias="format", pattern="^(json|html|pdf)$"),
     period_start: datetime | None = Query(None, description="ISO timestamp; defaults to now-7d"),
     period_end: datetime | None = Query(None, description="ISO timestamp; defaults to now"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> ExecutiveDigest | HTMLResponse:
+) -> ExecutiveDigest | HTMLResponse | Response:
     """Build a deterministic weekly digest for the caller's tenant.
 
-    The default window is the most recent seven days. Pass ``format=html`` to
-    receive a self-contained, print-ready document (use the browser's
-    "Save as PDF" to export).
+    Supported formats (``?format=``):
+
+    * ``json``  — Pydantic model serialised as JSON *(default)*
+    * ``html``  — Self-contained print-ready HTML page
+    * ``pdf``   — Server-side PDF generated via WeasyPrint (requires the
+                  WeasyPrint native library stack; returns 503 when unavailable)
     """
     if period_start and period_end and period_start >= period_end:
         raise HTTPException(
@@ -239,4 +246,20 @@ async def weekly_digest(
 
     if fmt == "html":
         return HTMLResponse(content=render_digest_html(digest))
+
+    if fmt == "pdf":
+        try:
+            pdf_bytes = render_digest_pdf(digest)
+        except WeasyPrintUnavailableError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+        filename = f"aisoc-digest-{digest.period.start.date()}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     return digest
