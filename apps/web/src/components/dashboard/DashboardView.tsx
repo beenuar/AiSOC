@@ -1,6 +1,20 @@
 'use client';
 
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+/**
+ * DashboardView
+ * =============
+ * Main SOC dashboard with live metrics, charts, and source activity.
+ *
+ * WS-F3: Drag-and-drop widget reordering.
+ * Each major section (DashboardWelcome, Top Metrics, Charts row, Bottom row,
+ * SOC Performance) is a draggable "widget". The user can grab the ⠿ handle in
+ * the widget's header and drop it anywhere in the layout. Order is persisted to
+ * localStorage so it survives page refreshes.
+ *
+ * Author: Beenu <beenu@cyble.com>
+ */
+
+import React, { Component, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useCallback } from 'react';
 import useSWR from 'swr';
 import { metricsApi, type DashboardMetrics } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -204,6 +218,151 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
+// ─── Drag-and-Drop Widget Layout (WS-F3) ──────────────────────────────────────
+
+const WIDGET_ORDER_KEY = 'aisoc:dashboard:widget-order';
+
+type WidgetId =
+  | 'welcome'
+  | 'top-metrics'
+  | 'charts-row'
+  | 'bottom-row'
+  | 'soc-performance';
+
+const DEFAULT_WIDGET_ORDER: WidgetId[] = [
+  'welcome',
+  'top-metrics',
+  'charts-row',
+  'bottom-row',
+  'soc-performance',
+];
+
+function loadWidgetOrder(): WidgetId[] {
+  if (typeof window === 'undefined') return DEFAULT_WIDGET_ORDER;
+  try {
+    const raw = localStorage.getItem(WIDGET_ORDER_KEY);
+    if (!raw) return DEFAULT_WIDGET_ORDER;
+    const parsed = JSON.parse(raw) as WidgetId[];
+    // Guard against stale storage with missing or extra IDs
+    if (
+      Array.isArray(parsed) &&
+      parsed.length === DEFAULT_WIDGET_ORDER.length &&
+      DEFAULT_WIDGET_ORDER.every((id) => parsed.includes(id))
+    ) {
+      return parsed;
+    }
+  } catch {}
+  return DEFAULT_WIDGET_ORDER;
+}
+
+/** Drag state kept in a ref so re-renders stay minimal during the drag gesture. */
+interface DragState {
+  dragId: WidgetId | null;
+  overId: WidgetId | null;
+}
+
+interface DraggableWidgetProps {
+  id: WidgetId;
+  dragState: DragState;
+  onDragStart: (id: WidgetId) => void;
+  onDragOver: (id: WidgetId) => void;
+  onDrop: () => void;
+  children: ReactNode;
+}
+
+/**
+ * Thin drag-and-drop shell around each dashboard section.
+ * The ⠿ handle (aria-label "Drag to reorder") is the only interactive target;
+ * clicking anywhere else in the widget works normally.
+ */
+function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, children }: DraggableWidgetProps) {
+  const isDragging = dragState.dragId === id;
+  const isOver = dragState.overId === id && dragState.dragId !== id;
+
+  return (
+    <div
+      draggable
+      onDragStart={() => onDragStart(id)}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(id); }}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      onDragEnd={onDrop}
+      className={clsx(
+        'relative group transition-opacity',
+        isDragging && 'opacity-40',
+        isOver && 'ring-2 ring-blue-500/60 ring-offset-2 ring-offset-gray-950 rounded-xl',
+      )}
+      aria-label={`Dashboard widget: ${id}`}
+    >
+      {/* Drag handle — visible on hover */}
+      <button
+        aria-label="Drag to reorder"
+        title="Drag to reorder"
+        className={clsx(
+          'absolute top-2 right-2 z-10 cursor-grab active:cursor-grabbing',
+          'px-1.5 py-0.5 rounded text-gray-600 hover:text-gray-400',
+          'opacity-0 group-hover:opacity-100 transition-opacity',
+          'select-none text-base leading-none',
+        )}
+        // Pointer-down on the handle initiates the native drag
+        onPointerDown={(e) => {
+          // We rely on the parent div's draggable; just prevent focus loss
+          e.currentTarget.closest('[draggable]')?.dispatchEvent(
+            new DragEvent('dragstart', { bubbles: true })
+          );
+        }}
+        tabIndex={-1}
+      >
+        ⠿
+      </button>
+      {children}
+    </div>
+  );
+}
+
+/** Persist + manage the ordered list of widget IDs. */
+function useDashboardLayout() {
+  const [order, setOrder] = useState<WidgetId[]>(DEFAULT_WIDGET_ORDER);
+  const dragState = useRef<DragState>({ dragId: null, overId: null });
+  // Trigger a render when drag state changes so highlights update
+  const [, forceRender] = useState(0);
+
+  // Hydrate from localStorage on mount (client-only)
+  useEffect(() => { setOrder(loadWidgetOrder()); }, []);
+
+  const handleDragStart = useCallback((id: WidgetId) => {
+    dragState.current = { dragId: id, overId: null };
+    forceRender((n) => n + 1);
+  }, []);
+
+  const handleDragOver = useCallback((id: WidgetId) => {
+    if (dragState.current.overId !== id) {
+      dragState.current = { ...dragState.current, overId: id };
+      forceRender((n) => n + 1);
+    }
+  }, []);
+
+  const handleDrop = useCallback(() => {
+    const { dragId, overId } = dragState.current;
+    dragState.current = { dragId: null, overId: null };
+    forceRender((n) => n + 1);
+
+    if (!dragId || !overId || dragId === overId) return;
+
+    setOrder((prev) => {
+      const next = [...prev];
+      const from = next.indexOf(dragId);
+      const to = next.indexOf(overId);
+      if (from === -1 || to === -1) return prev;
+      next.splice(from, 1);
+      next.splice(to, 0, dragId);
+      try { localStorage.setItem(WIDGET_ORDER_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  return { order, dragState: dragState.current, handleDragStart, handleDragOver, handleDrop };
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
@@ -234,12 +393,17 @@ export function DashboardView() {
     { name: 'Low', value: metrics.alerts.low, color: '#3b82f6' },
   ];
 
-  return (
-    <DashboardErrorBoundary>
-      <div className="space-y-5">
-        <DashboardWelcome />
-        {/* Header */}
-        <div className="flex items-center justify-between">
+  // WS-F3: drag-and-drop widget reordering
+  const { order, dragState, handleDragStart, handleDragOver, handleDrop } = useDashboardLayout();
+
+  /** Map each widget ID to its rendered section. */
+  const widgetContent: Record<WidgetId, ReactNode> = {
+    welcome: <DashboardWelcome />,
+
+    'top-metrics': (
+      <div>
+        {/* Section header */}
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -247,8 +411,6 @@ export function DashboardView() {
             </p>
           </div>
         </div>
-
-        {/* Top Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <MetricCard
             label="Active Alerts"
@@ -284,83 +446,102 @@ export function DashboardView() {
             color="purple"
           />
         </div>
+      </div>
+    ),
 
-        {/* Charts row */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="col-span-2 bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
-              <span className="text-xs text-gray-500">Last 24 hours</span>
-            </div>
-            <RechartsArea data={trendData} />
+    'charts-row': (
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-2 bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
+            <span className="text-xs text-gray-500">Last 24 hours</span>
           </div>
-
-          <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
-            <RechartsPie data={SEVERITY_CHART_DATA} />
-            <div className="space-y-1.5 mt-2">
-              {SEVERITY_CHART_DATA.map((d) => (
-                <div key={d.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                    <span className="text-gray-400">{d.name}</span>
-                  </div>
-                  <span className="text-gray-300 font-medium">{d.value}</span>
+          <RechartsArea data={trendData} />
+        </div>
+        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
+          <RechartsPie data={SEVERITY_CHART_DATA} />
+          <div className="space-y-1.5 mt-2">
+            {SEVERITY_CHART_DATA.map((d) => (
+              <div key={d.name} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                  <span className="text-gray-400">{d.name}</span>
                 </div>
-              ))}
-            </div>
+                <span className="text-gray-300 font-medium">{d.value}</span>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
+    ),
 
-        {/* Bottom row */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
-            <RechartsBar data={metrics.topMitre} />
-          </div>
-
-          <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
-            <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
-            <div className="space-y-3">
-              {metrics.sources.map((src) => {
-                const maxCount = Math.max(...metrics.sources.map(s => s.count));
-                const pct = Math.round((src.count / maxCount) * 100);
-                return (
-                  <div key={src.name}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className={clsx(
-                          'w-1.5 h-1.5 rounded-full',
-                          src.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
-                        )} />
-                        <span className="text-xs text-gray-300">{src.name}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">{src.count}</span>
+    'bottom-row': (
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
+          <RechartsBar data={metrics.topMitre} />
+        </div>
+        <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
+          <div className="space-y-3">
+            {metrics.sources.map((src) => {
+              const maxCount = Math.max(...metrics.sources.map(s => s.count));
+              const pct = Math.round((src.count / maxCount) * 100);
+              return (
+                <div key={src.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className={clsx(
+                        'w-1.5 h-1.5 rounded-full',
+                        src.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
+                      )} />
+                      <span className="text-xs text-gray-300">{src.name}</span>
                     </div>
-                    <div className="h-1 bg-gray-800 rounded-full">
-                      <div className="h-1 bg-blue-500/60 rounded-full" style={{ width: `${pct}%` }} />
-                    </div>
+                    <span className="text-xs text-gray-500">{src.count}</span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="h-1 bg-gray-800 rounded-full">
+                    <div className="h-1 bg-blue-500/60 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          <LiveFeedPanel />
         </div>
+        <LiveFeedPanel />
+      </div>
+    ),
 
-        {/* SOC Performance */}
-        <div className="pt-2">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-base font-semibold text-gray-100">SOC Performance</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Outcome metrics, agent calibration, and technique coverage. Auto-computed every 30s.
-              </p>
-            </div>
+    'soc-performance': (
+      <div className="pt-2">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-100">SOC Performance</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Outcome metrics, agent calibration, and technique coverage. Auto-computed every 30s.
+            </p>
           </div>
-          <SOCMetricsDashboard />
         </div>
+        <SOCMetricsDashboard />
+      </div>
+    ),
+  };
+
+  return (
+    <DashboardErrorBoundary>
+      <div className="space-y-5">
+        {order.map((id) => (
+          <DraggableWidget
+            key={id}
+            id={id}
+            dragState={dragState}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {widgetContent[id]}
+          </DraggableWidget>
+        ))}
       </div>
     </DashboardErrorBoundary>
   );

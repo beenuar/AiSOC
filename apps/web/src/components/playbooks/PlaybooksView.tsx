@@ -5,6 +5,12 @@
  * =============
  * /playbooks page — lists all playbooks with quick-run/edit/delete,
  * a Run History tab, and a Community tab for browsing/installing community playbooks.
+ *
+ * WS-F3: SavedViewsBar wired to the Playbooks tab so analysts can save and
+ * recall filter presets (source, category, MITRE tactic, severity, integration,
+ * and search query).
+ *
+ * Author: Beenu <beenu@cyble.com>
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -12,8 +18,21 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import clsx from 'clsx';
 import type { Playbook, PlaybookRun } from './types';
-import { PlaybooksGallery } from './PlaybooksGallery';
+import { PlaybooksGallery, type PlaybookGalleryFilters } from './PlaybooksGallery';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
+
+/** Filter snapshot stored by the backend as a saved-view preset. */
+type PlaybookFilterSnapshot = PlaybookGalleryFilters;
+
+const DEFAULT_PLAYBOOK_FILTERS: PlaybookFilterSnapshot = {
+  source: 'all',
+  category: 'all',
+  mitreTactic: 'all',
+  severity: 'all',
+  integration: 'all',
+  search: '',
+};
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -398,6 +417,17 @@ export function PlaybooksView() {
     fallbackData: MOCK_PLAYBOOKS,
   });
 
+  // WS-F3: track the active filter snapshot so SavedViewsBar can capture it,
+  // and force-remount PlaybooksGallery when a preset is applied so the gallery
+  // picks up the new initial state without requiring full controlled-prop surgery.
+  const [galleryFilters, setGalleryFilters] = useState<PlaybookFilterSnapshot>(DEFAULT_PLAYBOOK_FILTERS);
+  const [galleryKey, setGalleryKey] = useState(0);
+
+  function handleApplyView(filters: PlaybookFilterSnapshot) {
+    setGalleryFilters(filters);
+    setGalleryKey((k) => k + 1);
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -447,6 +477,13 @@ export function PlaybooksView() {
       {/* Playbooks list */}
       {tab === 'playbooks' && (
         <>
+          {/* WS-F3: saved-view presets for the playbooks list */}
+          <SavedViewsBar<PlaybookFilterSnapshot>
+            viewType="playbooks"
+            filters={galleryFilters}
+            onApply={handleApplyView}
+          />
+
           {isLoading && <div className="text-gray-600 text-sm">Loading playbooks…</div>}
 
           {error && (
@@ -483,7 +520,15 @@ export function PlaybooksView() {
             />
           )}
 
-          {data && data.length > 0 && <PlaybooksGallery playbooks={data} />}
+          {/* key forces remount when a saved preset is applied, seeding gallery
+              state from the preset's filter snapshot without full prop-drilling. */}
+          {data && data.length > 0 && (
+            <PlaybooksGallery
+              key={galleryKey}
+              playbooks={data}
+              initialFilters={galleryFilters}
+            />
+          )}
         </>
       )}
     </div>

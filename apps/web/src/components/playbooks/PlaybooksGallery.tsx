@@ -61,18 +61,30 @@ const TRIGGER_COLORS: Record<string, string> = {
   schedule: 'bg-purple-900/40 text-purple-300 border-purple-800',
 };
 
-interface PlaybooksGalleryProps {
-  playbooks: Playbook[];
+/** Filter snapshot that can be saved as a named preset via SavedViewsBar. */
+export interface PlaybookGalleryFilters {
+  source: PlaybookSource;
+  category: PackCategory | 'all';
+  mitreTactic: MitreTactic | 'all';
+  severity: SeverityLevel | 'all';
+  integration: IntegrationType | 'all';
+  search: string;
 }
 
-export function PlaybooksGallery({ playbooks }: PlaybooksGalleryProps) {
+interface PlaybooksGalleryProps {
+  playbooks: Playbook[];
+  /** Pre-seed local filter state from a saved view preset. */
+  initialFilters?: Partial<PlaybookGalleryFilters>;
+}
+
+export function PlaybooksGallery({ playbooks, initialFilters }: PlaybooksGalleryProps) {
   const router = useRouter();
-  const [source, setSource] = useState<PlaybookSource>('all');
-  const [category, setCategory] = useState<PackCategory | 'all'>('all');
-  const [mitreTactic, setMitreTactic] = useState<MitreTactic | 'all'>('all');
-  const [severity, setSeverity] = useState<SeverityLevel | 'all'>('all');
-  const [integration, setIntegration] = useState<IntegrationType | 'all'>('all');
-  const [search, setSearch] = useState('');
+  const [source, setSource] = useState<PlaybookSource>(initialFilters?.source ?? 'all');
+  const [category, setCategory] = useState<PackCategory | 'all'>(initialFilters?.category ?? 'all');
+  const [mitreTactic, setMitreTactic] = useState<MitreTactic | 'all'>(initialFilters?.mitreTactic ?? 'all');
+  const [severity, setSeverity] = useState<SeverityLevel | 'all'>(initialFilters?.severity ?? 'all');
+  const [integration, setIntegration] = useState<IntegrationType | 'all'>(initialFilters?.integration ?? 'all');
+  const [search, setSearch] = useState(initialFilters?.search ?? '');
   const [previewing, setPreviewing] = useState<Playbook | null>(null);
   const [forkingId, setForkingId] = useState<string | null>(null);
   const [forkError, setForkError] = useState<string | null>(null);
