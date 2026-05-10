@@ -439,7 +439,9 @@ async def _record_failure(
         # log injection and avoid leaking sensitive OAuth error payloads.
         safe_reason = reason[:80].replace("\n", " ").replace("\r", " ")
         logger.error(
-            "oauth_refresh.alarm connector_id=%s tenant=<redacted> connector_type=%s failures=%d reason=%s — flipping health_status=unhealthy",
+            "oauth_refresh.alarm connector_id=%s tenant=<redacted>"
+            " connector_type=%s failures=%d reason=%s"
+            " — flipping health_status=unhealthy",
             connector.id,
             connector.connector_type,
             new_count,

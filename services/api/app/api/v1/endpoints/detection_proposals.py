@@ -595,7 +595,7 @@ async def run_eval_harness(
                 try:
                     Path(tmp.name).unlink(missing_ok=True)
                 except OSError as exc:
-                    logger.debug("cleanup: failed to remove tmp file: %s", type(exc).__name__)
+                    _ = exc  # best-effort cleanup; ignore unlink failures
 
 
 @router.post("/{proposal_id}/eval", response_model=ProposalResponse)
