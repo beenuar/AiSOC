@@ -9,7 +9,7 @@ straightforward.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -43,23 +43,17 @@ class AttributionRequest(BaseModel):
     of the score is skipped.
     """
 
-    iocs: List[Dict[str, Any]] = Field(
+    iocs: list[dict[str, Any]] = Field(
         default_factory=list,
-        description=(
-            "Indicators of compromise. Each item should include 'value' and "
-            "ideally 'type' (e.g. 'ipv4', 'domain', 'sha256')."
-        ),
+        description=("Indicators of compromise. Each item should include 'value' and ideally 'type' (e.g. 'ipv4', 'domain', 'sha256')."),
     )
-    mitre_techniques: List[str] = Field(
+    mitre_techniques: list[str] = Field(
         default_factory=list,
         description="Observed MITRE ATT&CK technique IDs (e.g. ['T1566', 'T1059']).",
     )
-    case_metadata: Optional[Dict[str, Any]] = Field(
+    case_metadata: dict[str, Any] | None = Field(
         default=None,
-        description=(
-            "Free-form case metadata. 'targets' (list of sector strings) is "
-            "the only field consulted today."
-        ),
+        description=("Free-form case metadata. 'targets' (list of sector strings) is the only field consulted today."),
     )
 
 
@@ -87,13 +81,13 @@ async def attribute_incident(
         return result
     except Exception as exc:
         logger.error("Incident attribution failed", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Attribution failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Attribution failed: {exc}") from exc
 
 
-@router.get("/profiles", response_model=List[ThreatActorProfile])
+@router.get("/profiles", response_model=list[ThreatActorProfile])
 async def list_actor_profiles(
     engine: ThreatActorAttributionEngine = Depends(get_attribution_engine),
-) -> List[ThreatActorProfile]:
+) -> list[ThreatActorProfile]:
     """List all known threat actor profiles in the catalog."""
     try:
         profiles = await engine.list_actor_profiles()
@@ -101,9 +95,7 @@ async def list_actor_profiles(
         return profiles
     except Exception as exc:
         logger.error("Failed to retrieve actor profiles", error=str(exc))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve profiles: {exc}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve profiles: {exc}") from exc
 
 
 @router.get("/profiles/{actor_id}", response_model=ThreatActorProfile)

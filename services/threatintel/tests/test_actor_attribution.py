@@ -9,7 +9,6 @@ what the production engine does when the dependency is missing.
 from __future__ import annotations
 
 import pytest
-
 from app.actors.attribution import (
     AttributionResult,
     ThreatActorAttributionEngine,
@@ -154,9 +153,7 @@ async def test_update_actor_profile(attribution_engine):
 
 
 @pytest.mark.asyncio
-async def test_ioc_component_skipped_without_os_store(
-    attribution_engine, sample_iocs, sample_mitre_techniques, sample_case_metadata
-):
+async def test_ioc_component_skipped_without_os_store(attribution_engine, sample_iocs, sample_mitre_techniques, sample_case_metadata):
     """Without an os_store, reasoning explicitly notes IOC scoring is unavailable."""
     result = await attribution_engine.attribute_incident(
         iocs=sample_iocs,

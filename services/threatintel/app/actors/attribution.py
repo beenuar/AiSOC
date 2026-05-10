@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from prometheus_client import Counter, Histogram
@@ -82,16 +82,16 @@ class ThreatActorProfile(BaseModel):
 
     id: str
     name: str
-    aliases: List[str] = Field(default_factory=list)
+    aliases: list[str] = Field(default_factory=list)
     description: str = ""
     sophistication_level: str = "unknown"  # novice | intermediate | advanced | expert
     primary_motivation: str = ""
-    secondary_motivations: List[str] = Field(default_factory=list)
-    ttps: List[str] = Field(default_factory=list)
-    tools: List[str] = Field(default_factory=list)
-    targets: List[str] = Field(default_factory=list)
-    first_seen: Optional[datetime] = None
-    last_seen: Optional[datetime] = None
+    secondary_motivations: list[str] = Field(default_factory=list)
+    ttps: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
+    targets: list[str] = Field(default_factory=list)
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
     confidence_score: float = 0.5
 
 
@@ -101,12 +101,12 @@ class AttributionResult(BaseModel):
     actor_id: str
     actor_name: str
     confidence_score: float
-    matched_indicators: List[str] = Field(default_factory=list)
-    reasoning: List[str] = Field(default_factory=list)
+    matched_indicators: list[str] = Field(default_factory=list)
+    reasoning: list[str] = Field(default_factory=list)
     timestamp: datetime
 
 
-def _seed_actor_catalog() -> Dict[str, ThreatActorProfile]:
+def _seed_actor_catalog() -> dict[str, ThreatActorProfile]:
     """Return the v0 hardcoded actor catalog.
 
     Public-domain profiles based on MITRE ATT&CK Groups documentation.
@@ -172,23 +172,19 @@ class ThreatActorAttributionEngine:
 
     def __init__(
         self,
-        catalog: Optional[Dict[str, ThreatActorProfile]] = None,
+        catalog: dict[str, ThreatActorProfile] | None = None,
         os_store: Any = None,
-        confidence_threshold: Optional[float] = None,
+        confidence_threshold: float | None = None,
     ) -> None:
-        self._actor_profiles: Dict[str, ThreatActorProfile] = (
-            catalog if catalog is not None else _seed_actor_catalog()
-        )
+        self._actor_profiles: dict[str, ThreatActorProfile] = catalog if catalog is not None else _seed_actor_catalog()
         self._os_store = os_store
-        self._confidence_threshold = (
-            confidence_threshold if confidence_threshold is not None else _env_threshold()
-        )
+        self._confidence_threshold = confidence_threshold if confidence_threshold is not None else _env_threshold()
 
     async def attribute_incident(
         self,
-        iocs: List[Dict[str, Any]],
-        mitre_techniques: List[str],
-        case_metadata: Dict[str, Any],
+        iocs: list[dict[str, Any]],
+        mitre_techniques: list[str],
+        case_metadata: dict[str, Any],
     ) -> AttributionResult:
         """Attribute an incident to the highest-scoring known actor.
 
@@ -220,22 +216,18 @@ class ThreatActorAttributionEngine:
                 confidence_score=0.0,
                 matched_indicators=[],
                 reasoning=["Actor catalog is empty"],
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         try:
-            actor_scores: Dict[str, Dict[str, Any]] = {}
+            actor_scores: dict[str, dict[str, Any]] = {}
             for actor_id, profile in self._actor_profiles.items():
-                actor_scores[actor_id] = await self._score_actor_match(
-                    profile, iocs, mitre_techniques, case_metadata
-                )
+                actor_scores[actor_id] = await self._score_actor_match(profile, iocs, mitre_techniques, case_metadata)
         except Exception:
             attribution_requests.labels(result="error").inc()
             raise
 
-        best_actor_id = max(
-            actor_scores.keys(), key=lambda k: actor_scores[k]["total_score"]
-        )
+        best_actor_id = max(actor_scores.keys(), key=lambda k: actor_scores[k]["total_score"])
         best = actor_scores[best_actor_id]
         best_score = round(best["total_score"], 4)
 
@@ -247,10 +239,8 @@ class ThreatActorAttributionEngine:
                 actor_name="Unknown Actor",
                 confidence_score=0.0,
                 matched_indicators=[],
-                reasoning=[
-                    f"No actor exceeded confidence threshold of {self._confidence_threshold}"
-                ],
-                timestamp=datetime.now(timezone.utc),
+                reasoning=[f"No actor exceeded confidence threshold of {self._confidence_threshold}"],
+                timestamp=datetime.now(UTC),
             )
 
         attribution_requests.labels(result="matched").inc()
@@ -261,19 +251,19 @@ class ThreatActorAttributionEngine:
             confidence_score=best_score,
             matched_indicators=best["matched_indicators"],
             reasoning=best["reasoning"],
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     async def _score_actor_match(
         self,
         profile: ThreatActorProfile,
-        iocs: List[Dict[str, Any]],
-        mitre_techniques: List[str],
-        case_metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        iocs: list[dict[str, Any]],
+        mitre_techniques: list[str],
+        case_metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         """Score one actor profile against the observed indicators."""
-        matched_indicators: List[str] = []
-        reasoning: List[str] = []
+        matched_indicators: list[str] = []
+        reasoning: list[str] = []
         components = {"ttp": 0.0, "tool": 0.0, "target": 0.0, "ioc": 0.0}
 
         if profile.ttps:
@@ -282,10 +272,7 @@ class ThreatActorAttributionEngine:
                 ratio = len(matched_techniques) / len(profile.ttps)
                 components["ttp"] = ratio * WEIGHT_TTP
                 matched_indicators.extend(matched_techniques)
-                reasoning.append(
-                    f"Matched {len(matched_techniques)}/{len(profile.ttps)} TTPs: "
-                    + ", ".join(matched_techniques)
-                )
+                reasoning.append(f"Matched {len(matched_techniques)}/{len(profile.ttps)} TTPs: " + ", ".join(matched_techniques))
 
         if profile.tools:
             # Match tool names with an alphanumeric-only boundary instead of
@@ -304,7 +291,7 @@ class ThreatActorAttributionEngine:
                 )
                 for tool in actor_tools_lower
             }
-            matched_tools: List[str] = []
+            matched_tools: list[str] = []
             for ioc in iocs:
                 haystack_parts = [
                     str(ioc.get("value", "")),
@@ -328,10 +315,7 @@ class ThreatActorAttributionEngine:
 
         case_targets = case_metadata.get("targets", []) if case_metadata else []
         if profile.targets and case_targets:
-            matched_targets = sorted(
-                {t.lower() for t in profile.targets}
-                & {t.lower() for t in case_targets}
-            )
+            matched_targets = sorted({t.lower() for t in profile.targets} & {t.lower() for t in case_targets})
             if matched_targets:
                 ratio = len(matched_targets) / len(profile.targets)
                 components["target"] = ratio * WEIGHT_TARGET
@@ -345,15 +329,11 @@ class ThreatActorAttributionEngine:
                     matched_indicators.extend(hits)
                     ratio = min(len(hits) / max(len(iocs), 1), 1.0)
                     components["ioc"] = ratio * WEIGHT_IOC
-                    reasoning.append(
-                        f"Matched {len(hits)}/{len(iocs)} IOCs against collected threat intel"
-                    )
+                    reasoning.append(f"Matched {len(hits)}/{len(iocs)} IOCs against collected threat intel")
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("IOC lookup failed; ignoring IOC component", error=str(exc))
         elif iocs:
-            reasoning.append(
-                "IOC component unavailable: no os_store wired (TTP/tool/target only)"
-            )
+            reasoning.append("IOC component unavailable: no os_store wired (TTP/tool/target only)")
 
         total_score = sum(components.values()) * profile.confidence_score
         return {
@@ -363,7 +343,7 @@ class ThreatActorAttributionEngine:
             "reasoning": reasoning,
         }
 
-    async def _lookup_iocs(self, iocs: List[Dict[str, Any]]) -> List[str]:
+    async def _lookup_iocs(self, iocs: list[dict[str, Any]]) -> list[str]:
         """Return IOC values that exist in the ``threatintel-iocs`` index.
 
         Delegates to ``OpenSearchStore.match_ioc_values`` so callers don't
@@ -374,11 +354,11 @@ class ThreatActorAttributionEngine:
             return []
         return await self._os_store.match_ioc_values(values)
 
-    async def get_actor_profile(self, actor_id: str) -> Optional[ThreatActorProfile]:
+    async def get_actor_profile(self, actor_id: str) -> ThreatActorProfile | None:
         """Retrieve a threat actor profile by ID."""
         return self._actor_profiles.get(actor_id)
 
-    async def list_actor_profiles(self) -> List[ThreatActorProfile]:
+    async def list_actor_profiles(self) -> list[ThreatActorProfile]:
         """List all known threat actor profiles."""
         return list(self._actor_profiles.values())
 

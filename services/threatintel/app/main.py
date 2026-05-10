@@ -192,11 +192,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Register TAXII feeds (skipped entirely if the configured TAXII server
     # is on the public Internet and AISOC_AIRGAPPED=1 — this prevents even
     # a single boot-time DNS lookup from leaking the deployment).
-    if (
-        settings.TAXII_URL
-        and settings.TAXII_COLLECTION_IDS
-        and _airgap_check_feed_url("taxii", settings.TAXII_URL)
-    ):
+    if settings.TAXII_URL and settings.TAXII_COLLECTION_IDS and _airgap_check_feed_url("taxii", settings.TAXII_URL):
         for col_id in settings.TAXII_COLLECTION_IDS.split(","):
             col_id = col_id.strip()
             if col_id:

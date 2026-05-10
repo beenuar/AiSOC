@@ -20,12 +20,8 @@ logger = structlog.get_logger()
 # Address of the threat intel service that hosts the attribution endpoint.
 # Defaults to the in-cluster Docker Compose hostname; override via env in
 # Kubernetes / Fly / standalone deployments.
-THREAT_INTEL_SERVICE_URL = os.getenv(
-    "AISOC_THREATINTEL_URL", "http://threatintel:8083"
-).rstrip("/")
-ATTRIBUTION_TIMEOUT_SECONDS = float(
-    os.getenv("AISOC_ATTRIBUTION_TIMEOUT_SECONDS", "30.0")
-)
+THREAT_INTEL_SERVICE_URL = os.getenv("AISOC_THREATINTEL_URL", "http://threatintel:8083").rstrip("/")
+ATTRIBUTION_TIMEOUT_SECONDS = float(os.getenv("AISOC_ATTRIBUTION_TIMEOUT_SECONDS", "30.0"))
 
 
 async def run_investigation(state: InvestigationState) -> InvestigationState:
@@ -106,9 +102,7 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
     state.confidence = confidence
     state.confidence_basis = basis
     state.verdict = verdict
-    state.add_finding(
-        f"Investigation verdict: {verdict} (confidence={confidence:.2f})"
-    )
+    state.add_finding(f"Investigation verdict: {verdict} (confidence={confidence:.2f})")
 
     state.status = AgentStatus.COMPLETED
     state.add_finding(f"Investigation complete. Total proposed actions: {len(state.proposed_actions)}")
@@ -131,9 +125,7 @@ def _classify_attack_complexity(stages: set[str]) -> str:
     return "single-stage"
 
 
-async def _perform_threat_actor_attribution(
-    state: InvestigationState, malicious_iocs: dict[str, dict[str, Any]]
-) -> None:
+async def _perform_threat_actor_attribution(state: InvestigationState, malicious_iocs: dict[str, dict[str, Any]]) -> None:
     """Attribute the incident to a known threat actor.
 
     Posts only the IOCs already classified as ``malicious``/``suspicious``
@@ -152,14 +144,9 @@ async def _perform_threat_actor_attribution(
         # attribution model. Fall back to all enrichments if triage didn't
         # mark anything (so MITRE-only attribution still works).
         ioc_source = malicious_iocs if malicious_iocs else state.ioc_enrichments
-        iocs_payload = [
-            {"value": ioc, "type": data.get("ioc_type", "unknown")}
-            for ioc, data in ioc_source.items()
-        ]
+        iocs_payload = [{"value": ioc, "type": data.get("ioc_type", "unknown")} for ioc, data in ioc_source.items()]
         if not iocs_payload and not state.mitre_mappings:
-            state.add_finding(
-                "Threat actor attribution skipped: no IOCs or MITRE techniques available"
-            )
+            state.add_finding("Threat actor attribution skipped: no IOCs or MITRE techniques available")
             return
 
         mitre_techniques: list[str] = list(state.mitre_mappings)
@@ -187,10 +174,7 @@ async def _perform_threat_actor_attribution(
             actor_name = attribution_result.get("actor_name", "Unknown")
             confidence = float(attribution_result.get("confidence_score", 0.0))
             severity = "high" if confidence > 0.7 else "medium"
-            state.add_finding(
-                f"[{severity}] Attributed incident to {actor_name} "
-                f"(confidence={confidence:.2f})"
-            )
+            state.add_finding(f"[{severity}] Attributed incident to {actor_name} (confidence={confidence:.2f})")
             for reason in attribution_result.get("reasoning", []):
                 state.add_finding(f"Attribution factor: {reason}")
             logger.info(
@@ -199,9 +183,7 @@ async def _perform_threat_actor_attribution(
                 confidence=confidence,
             )
         else:
-            state.add_finding(
-                "No strong threat actor attribution possible with current intelligence"
-            )
+            state.add_finding("No strong threat actor attribution possible with current intelligence")
             logger.info("No strong threat actor attribution possible")
 
     except Exception as exc:
