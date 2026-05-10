@@ -1,0 +1,90 @@
+{
+  "id": "defense-tool-impairment-v1",
+  "name": "Defense: Tool Impairment",
+  "description": "Triggered when security tools are disabled or impaired. Restores security controls and investigates the incident.",
+  "version": "1.0.0",
+  "tags": [
+    "defense-evasion",
+    "endpoint",
+    "windows",
+    "mitre.T1562.001"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "defense-evasion"
+    ]
+  },
+  "author": "Sonakshi Arora",
+  "enabled": true,
+  "created_at": "2026-05-10T00:00:00+00:00",
+  "updated_at": "2026-05-10T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "isolate",
+      "name": "Isolate affected system",
+      "type": "http",
+      "params": {
+        "url": "${NETWORK_CONTROLLER_URL}/isolate/{{alert.host}}",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "restore",
+      "name": "Restore security controls",
+      "type": "http",
+      "params": {
+        "url": "${ENDPOINT_MANAGER_URL}/restore-controls/{{alert.host}}",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 2,
+      "timeout_seconds": 60
+    },
+    {
+      "id": "investigate",
+      "name": "Investigate impairment methods",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "defense-evasion"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 300
+    },
+    {
+      "id": "notify",
+      "name": "Notify security team",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Security tool impairment detected on {{alert.host}}. Controls restored.",
+        "webhook_env": "SLACK_SECURITY_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "ticket",
+      "name": "Create investigation ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Defense tool impairment: {{alert.host}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

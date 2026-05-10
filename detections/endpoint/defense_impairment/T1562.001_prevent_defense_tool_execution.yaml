@@ -1,0 +1,25 @@
+id: det-endpoint-500
+name: Prevent Defense Tool Execution
+description: Adversaries may prevent the execution of security tools to avoid detection. This detection monitors for common techniques used to disable or impair security tools.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.T1562.001
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    parent_image IN ["cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe"]
+    AND image IN ["taskkill.exe", "net.exe", "net1.exe", "sc.exe", "wevtutil.exe", "fsutil.exe"]
+    AND command_line CONTAINS_ANY ["Stop-Service", "Stop-Process", "taskkill", "net stop", "sc stop", "wevtutil cl", "fsutil behavior set DisableDeleteNotify 0"]
+false_positives:
+- Legitimate administrative activities
+- Automated maintenance scripts
+playbook: tpl-defense-evasion
+enabled: true
+author: Sonakshi Arora
+created: '2026-05-10'
+modified: '2026-05-10'

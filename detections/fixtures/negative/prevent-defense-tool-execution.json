@@ -1,0 +1,6 @@
+{
+  "host": "workstation-01",
+  "parent_image": "cmd.exe",
+  "image": "notepad.exe",
+  "command_line": "notepad.exe readme.txt"
+}

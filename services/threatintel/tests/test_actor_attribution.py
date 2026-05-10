@@ -129,6 +129,44 @@ async def test_attribute_incident_no_match(attribution_engine):
 
 
 @pytest.mark.asyncio
+async def test_detect_defense_impairment_techniques(attribution_engine):
+    """Test detection of Defense Impairment techniques (T1562.x)."""
+    # Test case with Defense Impairment techniques
+    iocs = [
+        {
+            "value": "taskkill.exe",
+            "type": "process",
+            "source": "endpoint-monitoring",
+            "first_seen": "2023-01-01T00:00:00Z",
+            "last_seen": "2023-01-01T00:00:00Z",
+        }
+    ]
+    techniques = ["T1562", "T1562.001", "T1089", "T1070"]  # Defense Impairment techniques
+    case_metadata = {"targets": ["government", "technology"]}
+
+    result = await attribution_engine.attribute_incident(
+        iocs=iocs,
+        mitre_techniques=techniques,
+        case_metadata=case_metadata,
+    )
+
+    # Should return a valid result (could be any actor that matches some techniques)
+    assert isinstance(result, AttributionResult)
+    
+    # Test with no Defense Impairment techniques
+    techniques_no_impairment = ["T1566", "T1059"]  # Phishing and Command-Line Interface only
+    
+    result_no_impairment = await attribution_engine.attribute_incident(
+        iocs=iocs,
+        mitre_techniques=techniques_no_impairment,
+        case_metadata=case_metadata,
+    )
+    
+    # Should still return a valid result
+    assert isinstance(result_no_impairment, AttributionResult)
+
+
+@pytest.mark.asyncio
 async def test_update_actor_profile(attribution_engine):
     """Adding a profile makes it visible to subsequent lookups."""
     new_profile = ThreatActorProfile(

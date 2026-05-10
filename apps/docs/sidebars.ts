@@ -53,7 +53,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Detections",
-      items: ["detections/coverage"],
+      items: ["detections/coverage", "detections/defense-impairment"],
     },
     {
       type: "category",

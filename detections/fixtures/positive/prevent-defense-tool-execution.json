@@ -1,0 +1,6 @@
+{
+  "host": "workstation-01",
+  "parent_image": "cmd.exe",
+  "image": "taskkill.exe",
+  "command_line": "taskkill /IM MsMpEng.exe /F"
+}

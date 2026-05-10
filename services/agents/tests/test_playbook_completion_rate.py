@@ -120,6 +120,8 @@ _TEMPLATE_CATEGORIES: dict[str, list[str]] = {
     "s3-exfil-cloud-storage": ["data-exfil"],
     # ddos
     "ddos-syn-flood": ["ddos"],
+    # defense-evasion
+    "disable-edr-tooling": ["defense-evasion"],
     # insider-risk
     "service-account-privileged-command": ["insider-risk"],
     # lateral-movement
@@ -147,7 +149,6 @@ _TEMPLATES_WITHOUT_PACK_COVERAGE: set[str] = {
     "confluence-watering-hole",
     "cron-backdoor",
     "dga-c2",
-    "disable-edr-tooling",
     "docker-runtime-abuse",
     "event-log-cleared",
     "https-c2-beacon",
