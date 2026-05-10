@@ -33,6 +33,7 @@ os.environ.pop("OPENAI_API_KEY", None)
 os.environ["AISOC_AIRGAPPED"] = "true"
 
 from app.api.explain import ExplainRequest, _stream_explanation  # noqa: E402
+from app.security.llm_resolver import LlmConfig
 
 SAMPLE_ALERT: dict[str, Any] = {
     "id": "ALERT-SMOKE-0001",
@@ -70,9 +71,17 @@ REQUIRED_KEYS = {
 
 async def _run() -> int:
     req = ExplainRequest(alert=SAMPLE_ALERT, alert_id=SAMPLE_ALERT["id"])
+    llm_config = LlmConfig(
+        allowed=False,
+        base_url="http://localhost",
+        model="none",
+        api_key=None,
+        source="none",
+        reason="air-gapped smoke test",
+    )
 
     frames: list[dict[str, Any]] = []
-    async for chunk in _stream_explanation(req):
+    async for chunk in _stream_explanation(req, llm_config):
         line = chunk.decode().strip()
         if not line:
             continue

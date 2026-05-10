@@ -12,7 +12,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
-import app.models  # noqa: F401 — register all ORM models
+import app.models as _models  # noqa: F401 — side-effect: register ORM models with metadata
 from app.core.config import settings
 from app.db.base import Base
 
