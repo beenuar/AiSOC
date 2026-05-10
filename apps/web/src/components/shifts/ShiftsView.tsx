@@ -157,7 +157,7 @@ export function ShiftsView() {
                 <tr>
                   <td colSpan={5} className="py-0">
                     <EmptyState
-                      icon={<EmptyStateIcons.search />}
+                      icon={EmptyStateIcons.search}
                       title="No items match this priority"
                       description="Try selecting a different priority level or view all open handoff items."
                       action={

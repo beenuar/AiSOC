@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-10T14:50:51Z",
+  "generated": "2026-05-10T18:54:21Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,22 +20,22 @@
     }
   ],
   "stats": {
-    "total": 7077,
+    "total": 7098,
     "playbooks": 62,
-    "detections": 6973,
-    "plugins": 42,
-    "verified": 962,
+    "detections": 6993,
+    "plugins": 43,
+    "verified": 982,
     "community": 0,
     "by_tier": {
-      "beta": 2,
+      "beta": 3,
       "imported": 6113,
-      "stable": 962
+      "stable": 982
     },
     "detections_by_tier": {
       "imported": 6113,
-      "stable": 860
+      "stable": 880
     },
-    "quarantined": 5937
+    "quarantined": 5921
   },
   "mitre_coverage": {
     "techniques": {
@@ -47,7 +47,7 @@
       "T1003.004": 13,
       "T1003.005": 9,
       "T1003.006": 13,
-      "T1003.008": 4,
+      "T1003.008": 5,
       "T1005": 18,
       "T1006": 1,
       "T1007": 11,
@@ -55,7 +55,7 @@
       "T1010": 2,
       "T1011": 1,
       "T1012": 24,
-      "T1014": 6,
+      "T1014": 7,
       "T1016": 20,
       "T1016.001": 1,
       "T1018": 42,
@@ -70,7 +70,7 @@
       "T1021.006": 22,
       "T1021.007": 5,
       "T1025": 3,
-      "T1027": 102,
+      "T1027": 103,
       "T1027.001": 3,
       "T1027.002": 1,
       "T1027.003": 5,
@@ -81,20 +81,20 @@
       "T1027.011": 3,
       "T1027.013": 1,
       "T1029": 1,
-      "T1030": 5,
+      "T1030": 6,
       "T1033": 45,
       "T1036": 50,
       "T1036.002": 5,
       "T1036.003": 36,
       "T1036.004": 2,
-      "T1036.005": 20,
+      "T1036.005": 21,
       "T1036.006": 1,
       "T1036.007": 3,
       "T1036.008": 3,
       "T1036.009": 2,
-      "T1037": 2,
+      "T1037": 3,
       "T1037.001": 5,
-      "T1037.002": 1,
+      "T1037.002": 2,
       "T1037.004": 3,
       "T1037.005": 1,
       "T1039": 4,
@@ -111,7 +111,7 @@
       "T1053": 22,
       "T1053.001": 1,
       "T1053.002": 12,
-      "T1053.003": 20,
+      "T1053.003": 21,
       "T1053.005": 58,
       "T1053.006": 5,
       "T1053.007": 2,
@@ -125,26 +125,26 @@
       "T1055.012": 6,
       "T1055.013": 1,
       "T1056": 2,
-      "T1056.001": 3,
+      "T1056.001": 4,
       "T1056.002": 4,
       "T1057": 8,
-      "T1059": 120,
+      "T1059": 121,
       "T1059.001": 243,
-      "T1059.002": 10,
+      "T1059.002": 11,
       "T1059.003": 41,
-      "T1059.004": 28,
+      "T1059.004": 29,
       "T1059.005": 31,
       "T1059.006": 4,
       "T1059.007": 25,
       "T1059.009": 4,
       "T1059.012": 9,
       "T1059.013": 1,
-      "T1068": 37,
+      "T1068": 38,
       "T1069": 8,
       "T1069.001": 29,
       "T1069.002": 35,
       "T1069.003": 4,
-      "T1070": 34,
+      "T1070": 35,
       "T1070.001": 8,
       "T1070.002": 1,
       "T1070.003": 13,
@@ -160,7 +160,7 @@
       "T1072": 9,
       "T1074": 3,
       "T1074.001": 6,
-      "T1078": 127,
+      "T1078": 128,
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 11,
@@ -181,7 +181,7 @@
       "T1098.001": 26,
       "T1098.002": 6,
       "T1098.003": 34,
-      "T1098.004": 10,
+      "T1098.004": 11,
       "T1098.005": 7,
       "T1098.007": 1,
       "T1102": 17,
@@ -218,9 +218,9 @@
       "T1134.003": 3,
       "T1134.004": 3,
       "T1134.005": 5,
-      "T1135": 14,
-      "T1136": 10,
-      "T1136.001": 31,
+      "T1135": 15,
+      "T1136": 11,
+      "T1136.001": 32,
       "T1136.002": 7,
       "T1136.003": 24,
       "T1137": 11,
@@ -288,7 +288,7 @@
       "T1485": 83,
       "T1485.001": 2,
       "T1486": 27,
-      "T1489": 37,
+      "T1489": 38,
       "T1490": 48,
       "T1491": 2,
       "T1491.001": 4,
@@ -326,8 +326,8 @@
       "T1542.001": 4,
       "T1542.003": 2,
       "T1542.005": 1,
-      "T1543": 24,
-      "T1543.001": 7,
+      "T1543": 25,
+      "T1543.001": 8,
       "T1543.002": 4,
       "T1543.003": 60,
       "T1543.004": 4,
@@ -359,7 +359,7 @@
       "T1547.014": 3,
       "T1547.015": 3,
       "T1548": 34,
-      "T1548.001": 10,
+      "T1548.001": 12,
       "T1548.002": 76,
       "T1548.003": 38,
       "T1548.004": 1,
@@ -377,14 +377,14 @@
       "T1552.006": 7,
       "T1552.007": 9,
       "T1553": 4,
-      "T1553.001": 6,
+      "T1553.001": 7,
       "T1553.002": 2,
       "T1553.003": 4,
       "T1553.004": 13,
       "T1553.005": 11,
       "T1554": 10,
       "T1555": 13,
-      "T1555.001": 6,
+      "T1555.001": 7,
       "T1555.003": 15,
       "T1555.004": 6,
       "T1555.005": 5,
@@ -422,7 +422,7 @@
       "T1562.012": 5,
       "T1563.002": 4,
       "T1564": 14,
-      "T1564.001": 9,
+      "T1564.001": 10,
       "T1564.002": 4,
       "T1564.003": 11,
       "T1564.004": 25,
@@ -444,7 +444,7 @@
       "T1569": 5,
       "T1569.001": 1,
       "T1569.002": 50,
-      "T1570": 9,
+      "T1570": 10,
       "T1571": 9,
       "T1572": 38,
       "T1573": 7,
@@ -453,7 +453,7 @@
       "T1574.001": 95,
       "T1574.002": 4,
       "T1574.005": 2,
-      "T1574.006": 9,
+      "T1574.006": 10,
       "T1574.007": 2,
       "T1574.008": 1,
       "T1574.009": 1,
@@ -514,7 +514,7 @@
       "T1620": 6,
       "T1621": 25,
       "T1622": 1,
-      "T1647": 1,
+      "T1647": 2,
       "T1649": 22,
       "T1653": 1,
       "T1654": 1,
@@ -534,7 +534,7 @@
       "T1690": 1
     },
     "unique_techniques": 493,
-    "total_with_mitre": 5757,
+    "total_with_mitre": 5777,
     "by_tier": {
       "stable": {
         "T1003": 2,
@@ -542,8 +542,9 @@
         "T1003.002": 1,
         "T1003.003": 2,
         "T1003.006": 3,
-        "T1003.008": 1,
+        "T1003.008": 2,
         "T1011": 1,
+        "T1014": 1,
         "T1018": 5,
         "T1020": 2,
         "T1021": 1,
@@ -551,9 +552,12 @@
         "T1021.002": 7,
         "T1021.004": 1,
         "T1021.006": 3,
-        "T1027": 4,
-        "T1037": 1,
+        "T1027": 5,
+        "T1030": 1,
+        "T1036.005": 1,
+        "T1037": 2,
         "T1037.001": 1,
+        "T1037.002": 1,
         "T1037.004": 2,
         "T1040": 2,
         "T1041": 8,
@@ -564,20 +568,21 @@
         "T1052": 2,
         "T1052.001": 1,
         "T1053.001": 1,
-        "T1053.003": 4,
+        "T1053.003": 5,
         "T1053.005": 4,
         "T1053.006": 1,
         "T1055": 2,
         "T1055.001": 1,
         "T1055.012": 1,
-        "T1059": 7,
+        "T1056.001": 1,
+        "T1059": 8,
         "T1059.001": 5,
-        "T1059.002": 2,
-        "T1059.004": 7,
+        "T1059.002": 3,
+        "T1059.004": 8,
         "T1059.005": 1,
-        "T1068": 2,
+        "T1068": 3,
         "T1069.003": 1,
-        "T1070": 2,
+        "T1070": 3,
         "T1070.001": 3,
         "T1070.002": 1,
         "T1070.003": 2,
@@ -585,7 +590,7 @@
         "T1071.001": 10,
         "T1071.004": 5,
         "T1074.001": 1,
-        "T1078": 36,
+        "T1078": 37,
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 1,
@@ -600,7 +605,7 @@
         "T1098": 28,
         "T1098.001": 21,
         "T1098.003": 8,
-        "T1098.004": 6,
+        "T1098.004": 7,
         "T1098.007": 1,
         "T1105": 3,
         "T1110": 9,
@@ -614,9 +619,9 @@
         "T1127.001": 1,
         "T1133": 13,
         "T1134": 1,
-        "T1135": 2,
-        "T1136": 2,
-        "T1136.001": 4,
+        "T1135": 3,
+        "T1136": 3,
+        "T1136.001": 5,
         "T1136.003": 2,
         "T1140": 1,
         "T1176": 1,
@@ -647,7 +652,7 @@
         "T1484.002": 2,
         "T1485": 28,
         "T1486": 8,
-        "T1489": 1,
+        "T1489": 2,
         "T1490": 7,
         "T1496": 2,
         "T1498": 4,
@@ -663,7 +668,8 @@
         "T1537": 10,
         "T1539": 4,
         "T1542.001": 1,
-        "T1543.001": 3,
+        "T1543": 1,
+        "T1543.001": 4,
         "T1543.002": 2,
         "T1543.003": 3,
         "T1543.004": 2,
@@ -683,7 +689,7 @@
         "T1547.010": 1,
         "T1547.015": 2,
         "T1548": 1,
-        "T1548.001": 4,
+        "T1548.001": 6,
         "T1548.002": 4,
         "T1548.003": 2,
         "T1548.004": 1,
@@ -697,12 +703,12 @@
         "T1552.005": 2,
         "T1552.007": 1,
         "T1553": 1,
-        "T1553.001": 4,
+        "T1553.001": 5,
         "T1553.002": 1,
         "T1553.004": 2,
         "T1554": 1,
         "T1555": 1,
-        "T1555.001": 4,
+        "T1555.001": 5,
         "T1555.003": 3,
         "T1555.004": 1,
         "T1555.005": 1,
@@ -728,6 +734,7 @@
         "T1562.007": 1,
         "T1562.008": 13,
         "T1562.012": 2,
+        "T1564.001": 1,
         "T1564.008": 1,
         "T1565.001": 4,
         "T1565.002": 1,
@@ -739,13 +746,13 @@
         "T1567.002": 7,
         "T1568.001": 2,
         "T1568.002": 2,
-        "T1570": 2,
+        "T1570": 3,
         "T1572": 9,
         "T1573": 1,
         "T1573.002": 7,
         "T1574": 1,
         "T1574.002": 4,
-        "T1574.006": 2,
+        "T1574.006": 3,
         "T1578.002": 1,
         "T1583.001": 4,
         "T1592": 2,
@@ -759,6 +766,7 @@
         "T1612": 1,
         "T1620": 2,
         "T1621": 5,
+        "T1647": 1,
         "T1656": 1,
         "T1659": 1
       },
@@ -34639,30 +34647,6 @@
       "path": "detections/cloud/m365-exchange-transport-rule-external-redirect.yaml"
     },
     {
-      "id": "det-cloud-192",
-      "type": "detection",
-      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
-      "description": "A transport rule was created or modified to redirect or BCC mail to an external domain. Attackers use this for persistent email exfiltration that survives password resets.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.003",
-        "T1020"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-exchange-transport-rule-redirect-external.yaml"
-    },
-    {
       "id": "det-cloud-193",
       "type": "detection",
       "name": "M365 Exchange Mailbox Audit Bypass Enabled",
@@ -34684,30 +34668,6 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/cloud/m365-exchange-audit-bypass-enabled.yaml"
-    },
-    {
-      "id": "det-cloud-193",
-      "type": "detection",
-      "name": "M365 eDiscovery Compliance Search Created",
-      "description": "Detects creation of an eDiscovery compliance search in Microsoft Purview. Insider threats and compromised admin accounts abuse eDiscovery to search and export mailbox contents at scale.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1213"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-exchange-ediscovery-search-created.yaml"
     },
     {
       "id": "det-cloud-194",
@@ -34734,29 +34694,6 @@
       "path": "detections/cloud/m365-exchange-ediscovery-search-all-mailboxes.yaml"
     },
     {
-      "id": "det-cloud-194",
-      "type": "detection",
-      "name": "M365 Unified Audit Log Disabled",
-      "description": "Detects disabling of the Microsoft 365 unified audit log. Attackers disable auditing early in a compromise to erase their trail across Exchange, SharePoint, Teams, and Entra ID.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "critical",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.008"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-unified-audit-log-disabled.yaml"
-    },
-    {
       "id": "det-cloud-195",
       "type": "detection",
       "name": "M365 eDiscovery Search Results Exported",
@@ -34779,29 +34716,6 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/cloud/m365-exchange-ediscovery-export.yaml"
-    },
-    {
-      "id": "det-cloud-195",
-      "type": "detection",
-      "name": "M365 Exchange Inbound Connector From Untrusted Domain",
-      "description": "Detects creation of an Exchange Online inbound connector that accepts mail from a specific external sender domain. Adversaries create connectors to bypass spam filters for phishing infrastructure.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1566"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-initial-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-exchange-mail-connector-external-domain.yaml"
     },
     {
       "id": "det-cloud-196",
@@ -34828,30 +34742,6 @@
       "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-org.yaml"
     },
     {
-      "id": "det-cloud-196",
-      "type": "detection",
-      "name": "M365 SharePoint External Sharing Enabled Tenant-Wide",
-      "description": "Detects tenant-level SharePoint sharing policy changed to allow external or anonymous sharing. Widens the data-loss attack surface across all sites.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1567",
-        "T1537"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-exfiltration",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml"
-    },
-    {
       "id": "det-cloud-197",
       "type": "detection",
       "name": "M365 SharePoint Site Collection Admin Granted to External User",
@@ -34875,29 +34765,6 @@
       "path": "detections/cloud/m365-sharepoint-site-admin-external-user.yaml"
     },
     {
-      "id": "det-cloud-197",
-      "type": "detection",
-      "name": "M365 SharePoint Site Collection Admin Added",
-      "description": "A new site collection administrator was added. Site collection admins bypass item-level permissions and can access all content including OneDrive for Business sites.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1098.003"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-sharepoint-site-collection-admin-added.yaml"
-    },
-    {
       "id": "det-cloud-198",
       "type": "detection",
       "name": "M365 Teams External Access Domain Allow-Listed",
@@ -34919,29 +34786,6 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/cloud/m365-teams-external-access-domain-added.yaml"
-    },
-    {
-      "id": "det-cloud-198",
-      "type": "detection",
-      "name": "M365 Teams External Access Policy Enabled",
-      "description": "Teams external access was changed to allow federation with all external domains or specific unblocked domains. Attackers leverage external access to phish internal users via Teams chat.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1566.003"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-initial-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/cloud/m365-teams-external-access-enabled.yaml"
     },
     {
       "id": "det-cloud-199",
@@ -35414,6 +35258,170 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/cloud/gcp-audit-log-sink-deleted.yaml"
+    },
+    {
+      "id": "det-cloud-219",
+      "type": "detection",
+      "name": "M365 eDiscovery Compliance Search Created",
+      "description": "Detects creation of an eDiscovery compliance search in Microsoft Purview. Insider threats and compromised admin accounts abuse eDiscovery to search and export mailbox contents at scale.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1114.002",
+        "T1213"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-collection",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-exchange-ediscovery-search-created.yaml"
+    },
+    {
+      "id": "det-cloud-220",
+      "type": "detection",
+      "name": "M365 Exchange Inbound Connector From Untrusted Domain",
+      "description": "Detects creation of an Exchange Online inbound connector that accepts mail from a specific external sender domain. Adversaries create connectors to bypass spam filters for phishing infrastructure.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1566"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-initial-access",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-exchange-mail-connector-external-domain.yaml"
+    },
+    {
+      "id": "det-cloud-221",
+      "type": "detection",
+      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
+      "description": "A transport rule was created or modified to redirect or BCC mail to an external domain. Attackers use this for persistent email exfiltration that survives password resets.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1114.003",
+        "T1020"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-collection",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-exchange-transport-rule-redirect-external.yaml"
+    },
+    {
+      "id": "det-cloud-222",
+      "type": "detection",
+      "name": "M365 SharePoint External Sharing Enabled Tenant-Wide",
+      "description": "Detects tenant-level SharePoint sharing policy changed to allow external or anonymous sharing. Widens the data-loss attack surface across all sites.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1567",
+        "T1537"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml"
+    },
+    {
+      "id": "det-cloud-223",
+      "type": "detection",
+      "name": "M365 SharePoint Site Collection Admin Added",
+      "description": "A new site collection administrator was added. Site collection admins bypass item-level permissions and can access all content including OneDrive for Business sites.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-sharepoint-site-collection-admin-added.yaml"
+    },
+    {
+      "id": "det-cloud-224",
+      "type": "detection",
+      "name": "M365 Teams External Access Policy Enabled",
+      "description": "Teams external access was changed to allow federation with all external domains or specific unblocked domains. Attackers leverage external access to phish internal users via Teams chat.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1566.003"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-initial-access",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-teams-external-access-enabled.yaml"
+    },
+    {
+      "id": "det-cloud-225",
+      "type": "detection",
+      "name": "M365 Unified Audit Log Disabled",
+      "description": "Detects disabling of the Microsoft 365 unified audit log. Attackers disable auditing early in a compromise to erase their trail across Exchange, SharePoint, Teams, and Entra ID.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1562.008"
+      ],
+      "log_source": "m365",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/m365-unified-audit-log-disabled.yaml"
     },
     {
       "id": "det-data-exfil-001",
@@ -42325,6 +42333,484 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/endpoint/host-sccm-client-untrusted.yaml"
+    },
+    {
+      "id": "det-endpoint-281",
+      "type": "detection",
+      "name": "AMoS Stealer Virtual Machine Detection via osquery",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'AMoS Stealer Virtual Machine Detection via osquery'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1059.002"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-malware-execution",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-amos-stealer-vm-check.yaml"
+    },
+    {
+      "id": "det-endpoint-282",
+      "type": "detection",
+      "name": "macOS Data Chunking via dd or split",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Data Chunking via dd or split'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1030"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-data-exfil",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-data-chunking.yaml"
+    },
+    {
+      "id": "det-endpoint-283",
+      "type": "detection",
+      "name": "macOS Gatekeeper Bypass Attempt",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Gatekeeper Bypass Attempt'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1553.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-gatekeeper-bypass.yaml"
+    },
+    {
+      "id": "det-endpoint-284",
+      "type": "detection",
+      "name": "Suspicious PlistBuddy LaunchAgent Modification",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Suspicious PlistBuddy LaunchAgent Modification'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1543.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-suspicious-plistbuddy.yaml"
+    },
+    {
+      "id": "det-endpoint-285",
+      "type": "detection",
+      "name": "Baron Samedit CVE-2021-3156 Exploit Attempt",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Baron Samedit CVE-2021-3156 Exploit Attempt'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1068"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-linux-baron-samedit-cve-2021-3156.yaml"
+    },
+    {
+      "id": "det-endpoint-286",
+      "type": "detection",
+      "name": "Linux osqueryd Service Stop Detected via auditd",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Linux osqueryd Service Stop Detected via auditd'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "log_source": "linux",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-linux-auditd-service-stop.yaml"
+    },
+    {
+      "id": "det-endpoint-287",
+      "type": "detection",
+      "name": "macOS Local User Account Created",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Local User Account Created'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1136.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-account-anomaly",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-account-created.yaml"
+    },
+    {
+      "id": "det-endpoint-288",
+      "type": "detection",
+      "name": "macOS Hidden File or Directory Created",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Hidden File or Directory Created'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1564.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-hidden-file-directory.yaml"
+    },
+    {
+      "id": "det-endpoint-289",
+      "type": "detection",
+      "name": "macOS Kernel Extension Loaded via kextload",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Kernel Extension Loaded via kextload'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1543"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-kextload.yaml"
+    },
+    {
+      "id": "det-endpoint-290",
+      "type": "detection",
+      "name": "macOS Keychain Dumping Attempt",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Keychain Dumping Attempt'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1555.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-credential-theft",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-keychain-dump.yaml"
+    },
+    {
+      "id": "det-endpoint-291",
+      "type": "detection",
+      "name": "macOS System Log Removed or Manually Rotated",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS System Log Removed or Manually Rotated'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1070"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-log-removal.yaml"
+    },
+    {
+      "id": "det-endpoint-292",
+      "type": "detection",
+      "name": "macOS LoginHook Persistence via defaults write",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS LoginHook Persistence via defaults write'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1037.002"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-loginhook-persistence.yaml"
+    },
+    {
+      "id": "det-endpoint-293",
+      "type": "detection",
+      "name": "macOS Suspicious Living-Off-The-Land Binary Execution",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Suspicious Living-Off-The-Land Binary Execution'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1059.004"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-execution",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-lolbin-execution.yaml"
+    },
+    {
+      "id": "det-endpoint-294",
+      "type": "detection",
+      "name": "macOS Network Share Discovery via showmount or smbutil",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Network Share Discovery via showmount or smbutil'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1135"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-discovery",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-network-share-discovery.yaml"
+    },
+    {
+      "id": "det-endpoint-295",
+      "type": "detection",
+      "name": "macOS Plist Modification via plutil",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Plist Modification via plutil'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1647"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-plutil-plist-modification.yaml"
+    },
+    {
+      "id": "det-endpoint-296",
+      "type": "detection",
+      "name": "Process Tapping macOS Keyboard Events",
+      "description": "AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Process Tapping macOS Keyboard Events'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1056.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-collection",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/osquery-macos-keyboard-event-tap.yaml"
+    },
+    {
+      "id": "det-endpoint-297",
+      "type": "detection",
+      "name": "Sensitive System File Modified (FIM)",
+      "description": "A file in a sensitive system path (/etc/passwd, /etc/shadow, /etc/sudoers, /etc/crontab, /etc/hosts, /etc/ssh/sshd_config, /etc/ld.so.*)  was created, deleted, or modified as reported by osquery file_events via the AiSOC FIM pipeline.  Adversaries commonly target these files for credential theft (T1003.008), persistence (T1037, T1053.003), lateral movement, and privilege escalation (T1548.001).",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white",
+        "data_source.osquery",
+        "data_source.fim"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1003.008",
+        "T1037",
+        "T1053.003",
+        "T1548.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-credential-access",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/fim-sensitive-file-modified.yaml"
+    },
+    {
+      "id": "det-endpoint-298",
+      "type": "detection",
+      "name": "Executable Dropped in World-Writable Directory (FIM)",
+      "description": "An osquery file_events CREATED event was recorded for a file with a common executable extension (.sh, .py, .pl, .rb, .elf, .bin, no extension + executable path) under a world-writable path (/tmp, /var/tmp, /dev/shm, /run/shm). This is a classic indicator of malware staging, web shell deployment, or attacker tool transfer (T1027, T1059, T1036.005).",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white",
+        "data_source.osquery",
+        "data_source.fim"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1027",
+        "T1059",
+        "T1036.005",
+        "T1570"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/fim-binary-dropped-writable-dir.yaml"
+    },
+    {
+      "id": "det-endpoint-299",
+      "type": "detection",
+      "name": "LD_PRELOAD / ld.so.preload Tampered (FIM)",
+      "description": "The dynamic linker preload file /etc/ld.so.preload or any shared library under /etc/ld.so.conf.d/ was created or modified, as detected by osquery file_events via the AiSOC FIM pipeline.  Attackers use ld.so.preload to inject arbitrary shared libraries into every process at startup, achieving rootkit-level stealth, credential capture, or privilege escalation (T1574.006 \u2013 Dynamic Linker Hijacking).",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white",
+        "data_source.osquery",
+        "data_source.fim"
+      ],
+      "severity": "critical",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1574.006",
+        "T1014",
+        "T1548.001"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/fim-ld-preload-modified.yaml"
+    },
+    {
+      "id": "det-endpoint-300",
+      "type": "detection",
+      "name": "SSH authorized_keys File Modified (FIM)",
+      "description": "An osquery file_events event recorded a change (CREATED, UPDATED, or ATTRIBUTES_MODIFIED) to any ~/.ssh/authorized_keys file across the fleet. Adversaries add their own public keys to authorized_keys files to establish persistent SSH backdoors that survive password resets and remain invisible to normal login monitoring (T1098.004 \u2013 Account Manipulation: SSH Authorized Keys).",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white",
+        "data_source.osquery",
+        "data_source.fim"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1098.004",
+        "T1078",
+        "T1136"
+      ],
+      "log_source": "osquery",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/fim-ssh-authorized-keys-changed.yaml"
     },
     {
       "id": "det-identity-001",
@@ -158003,7 +158489,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1489"
       ],
@@ -158013,8 +158499,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/linux-auditd-osquery-service-stop.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/linux-auditd-osquery-service-stop.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "0c320fea-6e87-4b99-a884-74d09d4b655d",
@@ -163150,7 +163635,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1068"
       ],
@@ -163160,8 +163645,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/detect-baron-samedit-cve-2021-3156-via-osquery.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/detect-baron-samedit-cve-2021-3156-via-osquery.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "1de31d5d-8fa6-4ee0-af89-17069134118a",
@@ -163985,7 +164469,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1543.001"
       ],
@@ -163995,8 +164479,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/suspicious-plistbuddy-usage-via-osquery.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/suspicious-plistbuddy-usage-via-osquery.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "20ba6c32-c733-4a32-b64e-2688cf231399",
@@ -166285,7 +166768,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [],
       "log_source": null,
       "playbook": null,
@@ -166293,8 +166776,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/processes-tapping-keyboard-events.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/processes-tapping-keyboard-events.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "2a371608-331d-4034-ae2c-21dda8f1d0ec",
@@ -166942,7 +167424,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1553.001"
       ],
@@ -166952,8 +167434,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-gatekeeper-bypass.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-gatekeeper-bypass.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "2c9346f3-bbeb-48ce-8411-fc13d09d83a5",
@@ -173571,7 +174052,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1136"
       ],
@@ -173581,8 +174062,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-account-created.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-account-created.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "491004ae-694f-453e-b1e0-fc1e65daeea1",
@@ -174936,7 +175416,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1059.002"
       ],
@@ -174946,8 +175426,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-amos-stealer-virtual-machine-check-activity.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-amos-stealer-virtual-machine-check-activity.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "4e41ad21-9761-426d-8aa1-083712ff9f30",
@@ -175700,7 +176179,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1564.001"
       ],
@@ -175710,8 +176189,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-hidden-files-and-directories.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-hidden-files-and-directories.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "51c43b7b-e406-45d2-9bad-5c67f07e6528",
@@ -177528,7 +178006,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1059.004"
       ],
@@ -177538,8 +178016,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-lolbin.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-lolbin.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "58d270fb-5b39-418e-a855-4b8ac046805e",
@@ -186656,7 +187133,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1030"
       ],
@@ -186666,8 +187143,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-data-chunking.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-data-chunking.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "7f1c8bed-9bd4-40b0-a1df-c262cbade0fc",
@@ -195025,7 +195501,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1543"
       ],
@@ -195035,8 +195511,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-kextload-usage.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-kextload-usage.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "9d680775-84a6-4625-a8ea-8182b9427ce4",
@@ -195760,7 +196235,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1037.002"
       ],
@@ -195770,8 +196245,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-loginhook-persistence.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-loginhook-persistence.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "a04832e7-9d1d-49b1-a684-e31bcd775c77",
@@ -197590,7 +198064,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1135"
       ],
@@ -197600,8 +198074,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-network-share-discovery.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-network-share-discovery.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "a5f5fe52-8e50-4fb0-ad1b-780be6c0d857",
@@ -197956,7 +198429,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1070"
       ],
@@ -197966,8 +198439,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-log-removal.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-log-removal.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "a7f2e891-3c4d-4a1b-9e6f-2b8d0c5a1f3e",
@@ -204859,7 +205331,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1647"
       ],
@@ -204869,8 +205341,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-plutil.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-plutil.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "c11f2b57-92c1-4cd2-b46c-064eafb833ac",
@@ -212577,7 +213048,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_quarantine",
+      "category": "_migrated",
       "mitre_techniques": [
         "T1555.001"
       ],
@@ -212587,8 +213058,7 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_quarantine/macos-keychains-dumped.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
+      "path": "detections/splunk-imports/_migrated/macos-keychains-dumped.yaml",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "dcb45a09-5e6f-441e-b2f8-cbbf923e36d9",
@@ -223375,6 +223845,25 @@
       "tier": "stable",
       "enabled": true,
       "path": "playbooks/packs/v1/web-compromise/web-compromise-response.playbook.json"
+    },
+    {
+      "id": "aisoc-direct",
+      "type": "plugin",
+      "name": "AiSOC Direct (osquery TLS)",
+      "description": "Virtual connector that receives osquery telemetry from agents enrolled directly against AiSOC's built-in TLS endpoint (services/osquery-tls). No external fleet manager is required.",
+      "version": "0.1.0",
+      "author": "AiSOC Community",
+      "tags": [],
+      "plugin_type": null,
+      "license": "MIT",
+      "homepage": null,
+      "min_aisoc_version": null,
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": false,
+      "source": "core",
+      "tier": "beta",
+      "path": "plugins/aisoc-direct/plugin.yaml"
     },
     {
       "id": "auth0",

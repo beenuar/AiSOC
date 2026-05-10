@@ -143,6 +143,7 @@ jobs:
         "opentelemetry-instrumentation-fastapi"
         "strawberry-graphql[fastapi]"
         neo4j redis celery httpx aiofiles email-validator PyJWT
+        sqlglot
         pytest pytest-asyncio
     steps:
       - uses: actions/checkout@v4

@@ -167,7 +167,7 @@ export function TeamAnalyticsView() {
 
         {sorted.length === 0 ? (
           <EmptyState
-            icon={<EmptyStateIcons.search />}
+            icon={EmptyStateIcons.search}
             title="No analysts match your search"
             description="Try a different name or clear the search to see all analysts."
             action={

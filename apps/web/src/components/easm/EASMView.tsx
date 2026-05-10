@@ -152,7 +152,7 @@ export function EASMView() {
                 <tr>
                   <td colSpan={5} className="py-0">
                     <EmptyState
-                      icon={<EmptyStateIcons.shield />}
+                      icon={EmptyStateIcons.shield}
                       title="No assets match this filter"
                       description="Try selecting a different status filter or view all assets."
                       action={

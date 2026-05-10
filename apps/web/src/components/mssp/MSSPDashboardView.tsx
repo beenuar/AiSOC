@@ -105,7 +105,7 @@ export default function MSSPDashboardView() {
         </div>
         {filteredTenants.length === 0 ? (
           <EmptyState
-            icon={<EmptyStateIcons.shield />}
+            icon={EmptyStateIcons.shield}
             title="No tenants match this SLA filter"
             description="Try a different status filter to view tenants."
             action={

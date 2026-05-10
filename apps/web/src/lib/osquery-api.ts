@@ -91,5 +91,5 @@ export function getFimEvents(params: FimEventsParams): Promise<FimEventsPage> {
 }
 
 export function getFimSummary(params: FimSummaryParams): Promise<FimSummary> {
-  return get<FimSummary>('/fim/summary', params as Record<string, string>);
+  return get<FimSummary>('/fim/summary', { ...params });
 }

@@ -130,7 +130,7 @@ export default function NoiseTuningView() {
                 <tr>
                   <td colSpan={7} className="py-0">
                     <EmptyState
-                      icon={<EmptyStateIcons.search />}
+                      icon={EmptyStateIcons.search}
                       title="No rules match your search"
                       description="Try a different rule name or clear the search field."
                       action={

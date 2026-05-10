@@ -125,7 +125,7 @@ export default function CoverageAdvisorView() {
                 <tr>
                   <td colSpan={7} className="py-0">
                     <EmptyState
-                      icon={<EmptyStateIcons.shield />}
+                      icon={EmptyStateIcons.shield}
                       title="No techniques match this filter"
                       description="Try selecting a different coverage status or view all techniques."
                       action={

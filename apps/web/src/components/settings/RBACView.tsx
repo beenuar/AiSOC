@@ -299,7 +299,7 @@ export function RBACView() {
 
       {roles && roles.length === 0 && (
         <EmptyState
-          icon={<EmptyStateIcons.shield />}
+          icon={EmptyStateIcons.shield}
           title="No roles defined yet"
           description="Create your first role to start managing access control for your organization."
           action={
