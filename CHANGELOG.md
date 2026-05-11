@@ -5,6 +5,106 @@ All notable changes to AiSOC will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.0] — 2026-05-11
+
+### Changed — `docker compose up -d` is now pull-by-default
+
+Track 1 + Track 2 of the docker-compose hardening work that began in
+[7.1.1](#711--2026-05-10). 7.1.1 fixed the boot-path bugs that surfaced on
+a clean clone; this release attacks the *time* dimension. The previous
+behaviour — `docker compose up -d` on a fresh checkout building all 15
+services from source — took 10–20 minutes on a typical laptop and was the
+single largest source of "I tried AiSOC and gave up" reports. With this
+release, the same command pulls 12 prebuilt images from GHCR and is
+healthy in roughly 90 seconds.
+
+No service code, no API surface, no database schema changed. Every change
+in this release is in the boot path, the image-publish path, or the CI
+gate that proves both still work.
+
+#### Track 1 — Pull-by-default boot path
+
+- **`docker-compose.yml`**: Every service that previously had a `build:`
+  directive now also has an `image:` and `pull_policy: missing`. Compose
+  will pull the prebuilt image from `ghcr.io/aisoc-platform/aisoc-<svc>`
+  if it exists locally or in the registry; only if the pull fails does it
+  fall back to building from source. The 12 backend services that publish
+  images (api, agents, realtime, web, ingest, enrichment, fusion, actions,
+  connectors, threatintel, ueba, slack-bot) are tagged via the
+  `${AISOC_VERSION:-latest}` interpolation so the same compose file works
+  for `latest`, `main`, a release tag (`v7.2.0`), or a local override.
+  The three deferred services (osquery-tls, honeytokens, purple-team) are
+  marked with a `# TODO(publish)` comment and continue to build locally.
+- **`.env.example`**: Added a new top-of-file `AISOC_VERSION=latest`
+  block that documents how to pin the entire backend to a release tag for
+  reproducible deploys (`AISOC_VERSION=v7.2.0`), or track the bleeding
+  edge (`AISOC_VERSION=main`).
+- **`.github/workflows/publish-images.yml`**: Extended the build matrix
+  from 4 services to 12 by adding ingest, enrichment, fusion, actions,
+  connectors, threatintel, ueba, and slack-bot. These are the backend
+  services that every full-stack `docker compose up -d` boots; without
+  them in the publish matrix, `pull_policy: missing` would resolve to
+  "build from source" for two-thirds of the stack and the change would be
+  cosmetic.
+- **`.github/workflows/release.yml`**: Mirrored the same 12-service
+  matrix on tagged-release builds so that `AISOC_VERSION=v7.2.0` resolves
+  to a real published image for every service in the compose file, not
+  just the demo subset.
+
+#### Track 2 — Build & CI hardening
+
+The pull-by-default path only matters if the underlying images actually
+build. Track 2 attacks the two largest historical sources of build-path
+flakes — Poetry resolution failures during image build, and Dockerfile
+regressions that nobody catches until release day.
+
+- **All seven Python service Dockerfiles**
+  (`services/{api,fusion,threatintel,slack-bot,actions,connectors,osquery-tls}/Dockerfile`):
+  Added a `poetry install` → `pip install` fallback. The previous pattern
+  failed the build on any transient PyPI hiccup, lock-file drift, or
+  proxy timeout during `poetry install`. The new pattern wraps the
+  install in `set -eux; if poetry install ...; then ...; else
+  pip install <pinned list>; fi`, logs which path was taken, and pins
+  every runtime dependency explicitly in the fallback list. The pinned
+  list is documented as needing to track `pyproject.toml` and is
+  exercised by the new nightly cold-cache CI run.
+- **`.github/workflows/compose-smoke.yml`** (new): On every PR that
+  touches `docker-compose.yml`, `docker-compose.demo.yml`, any service
+  Dockerfile, `.env.example`, or the workflow itself, GitHub Actions now
+  boots the full stack from a clean checkout and asserts `aisoc-postgres`
+  is healthy, `api` returns 200 on `/health`, and `web` returns 200 on
+  `/` — all within a 10-minute budget. Pull-by-default by design (so the
+  CI run mirrors what the user sees), with automatic detection of
+  Dockerfile changes that flips the workflow into rebuild-from-source
+  mode so we don't smoke-test against a stale published image. Captures
+  `docker compose ps`, `docker compose logs`, disk, and memory on
+  failure.
+- **`.github/workflows/compose-smoke-nightly.yml`** (new): At 09:00 UTC
+  every day, GitHub Actions does a full cold-cache rebuild of every
+  service (`docker compose build --no-cache --pull`) and re-runs the
+  same smoke gates with a wider 20-minute budget. This is the gate that
+  catches the regressions PR smoke physically cannot — upstream
+  `python:3.11-slim` breakage, transitive dependency drift,
+  `pyproject.toml` ↔ pip-fallback drift in the seven Python services.
+  Failures upload a forensics artifact and open a `ci`-labelled tracking
+  issue automatically so a nightly break is visible by standup.
+
+### Changed
+
+- **`apps/web/package.json`**: Bumped to `7.2.0`.
+
+### Migration notes
+
+None for users on 7.1.1. The compose file is backwards-compatible —
+`pull_policy: missing` only changes behaviour the first time you boot
+(it tries the registry before building); existing local images are
+honoured. If you want the new fast path explicitly, run `docker compose
+pull` once after upgrading. To pin a deploy to this release rather than
+tracking `latest`, set `AISOC_VERSION=v7.2.0` in `.env`.
+
+If you skipped 7.1.1, also read its [migration note](#711--2026-05-10)
+about the `osquery-tls` host-port change (`8007` → `8091`).
+
 ## [7.1.1] — 2026-05-10
 
 ### Fixed — `docker compose up -d` first-touch experience
