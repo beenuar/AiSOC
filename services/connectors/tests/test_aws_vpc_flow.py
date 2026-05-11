@@ -22,7 +22,6 @@ Coverage:
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,7 +31,6 @@ from app.connectors.aws_vpc_flow import (
     _record_severity,
 )
 from app.connectors.base import Capability
-
 
 # ===========================================================================
 # Schema

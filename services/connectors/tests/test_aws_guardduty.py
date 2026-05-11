@@ -17,7 +17,6 @@ import pytest
 from app.connectors.aws_guardduty import AWSGuardDutyConnector, _severity_label
 from app.connectors.base import Capability
 
-
 # ===========================================================================
 # Schema
 # ===========================================================================

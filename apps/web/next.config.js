@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 
+const path = require('path');
+
 // ─── Server-side rewrite targets ────────────────────────────────────────────
 //
 // These are the *origin* URLs the Next.js server uses when proxying
@@ -28,8 +30,12 @@ const OSQUERY_TLS_HOST = process.env.OSQUERY_TLS_URL || 'http://localhost:8090';
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@aisoc/ui', '@aisoc/types'],
+  // pnpm monorepo: anchor Turbopack at the repository root so it can resolve
+  // the hoisted `next` package via apps/web/node_modules/next (symlink into
+  // the root .pnpm store). Setting this to __dirname caused Turbopack to
+  // fail in CI with "We couldn't find the Next.js package (next/package.json)".
   turbopack: {
-    root: __dirname,
+    root: path.resolve(__dirname, '..', '..'),
   },
   // Mock data in views uses shapes that diverge from the strict typed API
   // contracts. We rely on per-package type-checks (pnpm --filter <pkg> tsc)

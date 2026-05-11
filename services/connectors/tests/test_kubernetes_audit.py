@@ -22,14 +22,12 @@ import os
 from pathlib import Path
 
 import pytest
-
 from app.connectors.base import Capability
 from app.connectors.kubernetes_audit import (
     _MAX_TAIL_BYTES_PER_POLL,
     KubernetesAuditConnector,
     _classify_severity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Schema / capabilities contract
@@ -204,11 +202,11 @@ def test_severity_missing_response_status_does_not_crash():
 
 
 def _make_connector(**overrides):
-    defaults = dict(
-        mode="webhook",
-        cluster_name="prod-eks-us-east-1",
-        inbox_token="tok-abcdef-1234567890",
-    )
+    defaults = {
+        "mode": "webhook",
+        "cluster_name": "prod-eks-us-east-1",
+        "inbox_token": "tok-abcdef-1234567890",
+    }
     defaults.update(overrides)
     return KubernetesAuditConnector(**defaults)
 

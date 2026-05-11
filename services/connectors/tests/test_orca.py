@@ -5,7 +5,6 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
-
 from app.connectors.orca import OrcaConnector
 
 

@@ -28,7 +28,6 @@ from app.connectors.aws_cloudtrail import (
 )
 from app.connectors.base import Capability
 
-
 # ===========================================================================
 # Schema
 # ===========================================================================
