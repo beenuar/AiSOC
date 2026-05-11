@@ -141,7 +141,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: ^4.2.1
-        version: 4.7.0(vite@7.3.2)
+        version: 4.7.0(vite@7.3.3)
       autoprefixer:
         specifier: ^10.4.17
         version: 10.5.0(postcss@8.5.14)
@@ -182,8 +182,8 @@ importers:
   packages/sdk-ts:
     dependencies:
       openapi-fetch:
-        specifier: ^0.12.0
-        version: 0.12.5
+        specifier: ^0.17.0
+        version: 0.17.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -6466,7 +6466,7 @@ packages:
     dev: true
     optional: true
 
-  /@vitejs/plugin-react@4.7.0(vite@7.3.2):
+  /@vitejs/plugin-react@4.7.0(vite@7.3.3):
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
     engines: {node: ^14.18.0 || >=16.0.0}
     peerDependencies:
@@ -6478,7 +6478,7 @@ packages:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 7.3.2(@types/node@20.19.39)(tsx@4.21.0)
+      vite: 7.3.3(@types/node@20.19.39)(tsx@4.21.0)
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -12356,14 +12356,14 @@ packages:
       is-wsl: 2.2.0
     dev: false
 
-  /openapi-fetch@0.12.5:
-    resolution: {integrity: sha512-FnAMWLt0MNL6ComcL4q/YbB1tUgyz5YnYtwA1+zlJ5xcucmK5RlWsgH1ynxmEeu8fGJkYjm8armU/HVpORc9lw==}
+  /openapi-fetch@0.17.0:
+    resolution: {integrity: sha512-PsbZR1wAPcG91eEthKhN+Zn92FMHxv+/faECIwjXdxfTODGSGegYv0sc1Olz+HYPvKOuoXfp+0pA2XVt2cI0Ig==}
     dependencies:
-      openapi-typescript-helpers: 0.0.15
+      openapi-typescript-helpers: 0.1.0
     dev: false
 
-  /openapi-typescript-helpers@0.0.15:
-    resolution: {integrity: sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw==}
+  /openapi-typescript-helpers@0.1.0:
+    resolution: {integrity: sha512-OKTGPthhivLw/fHz6c3OPtg72vi86qaMlqbJuVJ23qOvQ+53uw1n7HdmkJFibloF7QEjDrDkzJiOJuockM/ljw==}
     dev: false
 
   /openapi-typescript@7.13.0(typescript@6.0.3):
@@ -15848,8 +15848,8 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vite@7.3.2(@types/node@20.19.39)(tsx@4.21.0):
-    resolution: {integrity: sha512-Bby3NOsna2jsjfLVOHKes8sGwgl4TT0E6vvpYgnAYDIF/tie7MRaFthmKuHx1NSXjiTueXH3do80FMQgvEktRg==}
+  /vite@7.3.3(@types/node@20.19.39)(tsx@4.21.0):
+    resolution: {integrity: sha512-/4XH147Ui7OGTjg3HbdWe5arnZQSbfuRzdr9Ec7TQi5I7R+ir0Rlc9GIvD4v0XZurELqA035KVXJXpR61xhiTA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
