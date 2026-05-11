@@ -1,21 +1,23 @@
 """
-AWS Security Groups client for IP blocking/unblocking.
+AWS Security Groups client for IP block / unblock actions.
 
-Uses boto3 (installed via the connectors service layer or injected via
-httpx-compatible shim where boto3 is available). Falls back to direct
-AWS EC2 API calls via httpx + SigV4 signing when boto3 is absent so
-the actions service stays dependency-light.
+Used by ``app.executors.network`` to enforce containment via a dedicated AWS
+Security Group. boto3 is the supported transport; when boto3 is unavailable the
+client returns a structured stub so the actions service still boots and the
+executor can fall back to simulation mode.
 
-Credentials expected in ActionRequest.parameters:
-    aws_access_key_id: str
-    aws_secret_access_key: str
-    aws_region: str                 (e.g. "us-east-1")
-    aws_security_group_id: str      (sg-xxxxxxxx)
-    aws_assume_role_arn: str        (optional, for cross-account assume-role)
-    aws_session_token: str          (optional, pre-assumed)
-    aws_protocol: str               (optional, default "tcp")
-    aws_from_port: int              (optional, default 0)
-    aws_to_port: int                (optional, default 65535)
+Credential resolution (all optional — when omitted, boto3 falls back to its
+default chain: env vars, ``~/.aws/credentials``, IAM instance profile, IRSA):
+    region (str)                  — AWS region, default ``us-east-1``
+    access_key_id (str | None)
+    secret_access_key (str | None)
+    session_token (str | None)
+    security_group_id (str | None) — may be supplied per-call instead
+    role_arn (str | None)          — optional cross-account assume-role
+    session_name (str)             — STS session name when assuming a role
+
+Both ``AWSSecurityGroupsClient`` and the legacy ``AWSSGClient`` alias are
+exported, so existing callers using either name keep working.
 """
 
 from __future__ import annotations
@@ -27,51 +29,67 @@ import structlog
 logger = structlog.get_logger()
 
 
-class AWSSGClient:
-    """Async AWS Security Group IP block/unblock using boto3 (if available)
-    or the raw EC2 REST API via SigV4-signed httpx calls."""
+class AWSSecurityGroupsClient:
+    """Async wrapper around EC2 ``authorize`` / ``revoke`` security-group ingress.
+
+    The class is intentionally tolerant of how callers supply parameters:
+
+    * ``security_group_id`` may be provided at construction *or* passed per-call
+      as ``sg_id=`` (the latter is what ``app.executors.network`` does).
+    * Credentials are optional. If absent, boto3's default credential chain is
+      used (env vars / shared config / IAM role / IRSA), which is the right
+      behaviour for in-cluster deployments.
+    * ``port`` follows AWS conventions: ``-1`` (or ``None``) means "all ports"
+      and is paired with ``IpProtocol="-1"`` for "all protocols".
+    """
 
     def __init__(
         self,
-        access_key_id: str,
-        secret_access_key: str,
-        region: str,
-        security_group_id: str,
+        *,
+        region: str = "us-east-1",
+        access_key_id: str | None = None,
+        secret_access_key: str | None = None,
         session_token: str | None = None,
+        security_group_id: str | None = None,
+        role_arn: str | None = None,
+        session_name: str = "aisoc-actions",
+        # Legacy aliases retained for backward compatibility.
         assume_role_arn: str | None = None,
+        sg_id: str | None = None,
     ) -> None:
+        self._region = region
         self._access_key_id = access_key_id
         self._secret_access_key = secret_access_key
-        self._region = region
-        self._sg_id = security_group_id
         self._session_token = session_token
-        self._assume_role_arn = assume_role_arn
+        self._sg_id = security_group_id or sg_id
+        self._role_arn = role_arn or assume_role_arn
+        self._session_name = session_name
 
-    async def _get_credentials(self) -> tuple[str, str, str | None]:
-        """Return (key_id, secret, session_token), assuming a role if configured."""
-        if not self._assume_role_arn:
-            return self._access_key_id, self._secret_access_key, self._session_token
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
-        # Assume-role via STS
-        try:
-            import boto3
+    @staticmethod
+    def _port_range(port: int | None) -> tuple[int, int]:
+        """Translate executor port semantics into AWS ``(FromPort, ToPort)``.
 
-            sts = boto3.client(
-                "sts",
-                aws_access_key_id=self._access_key_id,
-                aws_secret_access_key=self._secret_access_key,
-                region_name=self._region,
+        ``-1`` and ``None`` mean "all ports", anything else is treated as a
+        single port (FromPort == ToPort == port).
+        """
+        if port is None or port == -1:
+            return -1, -1
+        return port, port
+
+    def _resolve_sg_id(self, sg_id: str | None) -> str:
+        resolved = sg_id or self._sg_id
+        if not resolved:
+            raise ValueError(
+                "security_group_id is required (set at construct time or pass sg_id=)"
             )
-            creds = sts.assume_role(
-                RoleArn=self._assume_role_arn,
-                RoleSessionName="aisoc-actions",
-            )["Credentials"]
-            return creds["AccessKeyId"], creds["SecretAccessKey"], creds["SessionToken"]
-        except ImportError:
-            logger.warning("aws_sg.boto3_not_available — cannot assume role, using base creds")
-            return self._access_key_id, self._secret_access_key, self._session_token
+        return resolved
 
-    async def _boto3_available(self) -> bool:
+    @staticmethod
+    def _boto3_available() -> bool:
         try:
             import boto3  # noqa: F401
 
@@ -79,65 +97,88 @@ class AWSSGClient:
         except ImportError:
             return False
 
-    async def block_ip(
-        self,
-        ip: str,
-        protocol: str = "tcp",
-        from_port: int = 0,
-        to_port: int = 65535,
-    ) -> dict[str, Any]:
-        """Add an ingress deny rule for the IP (via revoke on a permissive SG or by adding egress deny).
+    async def _get_credentials(self) -> tuple[str | None, str | None, str | None]:
+        """Return ``(key_id, secret, token)``, assuming a role if configured.
 
-        NOTE: AWS Security Groups are allow-only and don't support explicit deny rules.
-        The idiomatic pattern is to add the IP as an *ingress allow* in a block-list SG
-        that has no route to protected resources, or to remove existing allows.
-        We implement the explicit revoke-authorization pattern for a dedicated block-SG here.
+        Falls through to the configured static credentials (or ``None`` to let
+        boto3 use its default chain) when assume-role is not requested or when
+        boto3 is unavailable.
         """
-        key_id, secret, token = await self._get_credentials()
+        if not self._role_arn or not self._boto3_available():
+            return self._access_key_id, self._secret_access_key, self._session_token
 
-        if await self._boto3_available():
-            return await self._boto3_authorize_egress_block(key_id, secret, token, ip, protocol, from_port, to_port)
-        else:
-            return await self._httpx_authorize(key_id, secret, token, ip, protocol, from_port, to_port, action="block")
-
-    async def unblock_ip(
-        self,
-        ip: str,
-        protocol: str = "tcp",
-        from_port: int = 0,
-        to_port: int = 65535,
-    ) -> dict[str, Any]:
-        """Remove the ingress deny rule for the IP."""
-        key_id, secret, token = await self._get_credentials()
-
-        if await self._boto3_available():
-            return await self._boto3_revoke_block(key_id, secret, token, ip, protocol, from_port, to_port)
-        else:
-            return await self._httpx_authorize(key_id, secret, token, ip, protocol, from_port, to_port, action="unblock")
-
-    async def _boto3_authorize_egress_block(
-        self,
-        key_id: str,
-        secret: str,
-        token: str | None,
-        ip: str,
-        protocol: str,
-        from_port: int,
-        to_port: int,
-    ) -> dict[str, Any]:
         import boto3
 
-        ec2 = boto3.client(
+        sts = boto3.client(
+            "sts",
+            aws_access_key_id=self._access_key_id,
+            aws_secret_access_key=self._secret_access_key,
+            region_name=self._region,
+        )
+        creds = sts.assume_role(
+            RoleArn=self._role_arn,
+            RoleSessionName=self._session_name,
+        )["Credentials"]
+        return creds["AccessKeyId"], creds["SecretAccessKey"], creds["SessionToken"]
+
+    def _ec2(
+        self,
+        key_id: str | None,
+        secret: str | None,
+        token: str | None,
+    ):
+        import boto3
+
+        return boto3.client(
             "ec2",
             region_name=self._region,
             aws_access_key_id=key_id,
             aws_secret_access_key=secret,
             aws_session_token=token,
         )
+
+    @staticmethod
+    def _unavailable(action: str, ip: str) -> dict[str, Any]:
+        logger.warning("aws_sg.boto3_unavailable", action=action, ip=ip)
+        return {
+            "success": False,
+            "action": action,
+            "ip": ip,
+            "note": (
+                "boto3 not installed in actions service — install boto3 to "
+                "enable live AWS Security Group execution."
+            ),
+        }
+
+    # ------------------------------------------------------------------
+    # Public API used by app.executors.network
+    # ------------------------------------------------------------------
+
+    async def block_ip(
+        self,
+        ip: str,
+        *,
+        sg_id: str | None = None,
+        protocol: str = "-1",
+        port: int | None = None,
+        from_port: int | None = None,
+        to_port: int | None = None,
+    ) -> dict[str, Any]:
+        """Authorize an ingress rule for ``ip`` on the dedicated block-list SG."""
+        sg = self._resolve_sg_id(sg_id)
+        if from_port is None or to_port is None:
+            from_port, to_port = self._port_range(port)
+
+        if not self._boto3_available():
+            return self._unavailable("block_ip", ip)
+
+        key_id, secret, token = await self._get_credentials()
+        ec2 = self._ec2(key_id, secret, token)
         cidr = f"{ip}/32"
+
         try:
             ec2.authorize_security_group_ingress(
-                GroupId=self._sg_id,
+                GroupId=sg,
                 IpPermissions=[
                     {
                         "IpProtocol": protocol,
@@ -147,37 +188,51 @@ class AWSSGClient:
                     }
                 ],
             )
-            logger.info("aws_sg.block_ip.success", sg=self._sg_id, cidr=cidr)
-            return {"success": True, "action": "block_ip", "ip": ip, "sg_id": self._sg_id, "cidr": cidr}
+            logger.info("aws_sg.block_ip.success", sg=sg, cidr=cidr)
+            return {
+                "success": True,
+                "action": "block_ip",
+                "ip": ip,
+                "sg_id": sg,
+                "cidr": cidr,
+            }
         except ec2.exceptions.ClientError as exc:
             code = exc.response["Error"]["Code"]
             if code == "InvalidPermission.Duplicate":
-                return {"success": True, "action": "block_ip", "ip": ip, "note": "Rule already exists"}
+                return {
+                    "success": True,
+                    "action": "block_ip",
+                    "ip": ip,
+                    "sg_id": sg,
+                    "note": "Rule already exists",
+                }
             raise
 
-    async def _boto3_revoke_block(
+    async def unblock_ip(
         self,
-        key_id: str,
-        secret: str,
-        token: str | None,
         ip: str,
-        protocol: str,
-        from_port: int,
-        to_port: int,
+        *,
+        sg_id: str | None = None,
+        protocol: str = "-1",
+        port: int | None = None,
+        from_port: int | None = None,
+        to_port: int | None = None,
     ) -> dict[str, Any]:
-        import boto3
+        """Revoke a previously authorized ingress rule for ``ip``."""
+        sg = self._resolve_sg_id(sg_id)
+        if from_port is None or to_port is None:
+            from_port, to_port = self._port_range(port)
 
-        ec2 = boto3.client(
-            "ec2",
-            region_name=self._region,
-            aws_access_key_id=key_id,
-            aws_secret_access_key=secret,
-            aws_session_token=token,
-        )
+        if not self._boto3_available():
+            return self._unavailable("unblock_ip", ip)
+
+        key_id, secret, token = await self._get_credentials()
+        ec2 = self._ec2(key_id, secret, token)
         cidr = f"{ip}/32"
+
         try:
             ec2.revoke_security_group_ingress(
-                GroupId=self._sg_id,
+                GroupId=sg,
                 IpPermissions=[
                     {
                         "IpProtocol": protocol,
@@ -187,49 +242,41 @@ class AWSSGClient:
                     }
                 ],
             )
-            logger.info("aws_sg.unblock_ip.success", sg=self._sg_id, cidr=cidr)
-            return {"success": True, "action": "unblock_ip", "ip": ip, "sg_id": self._sg_id}
+            logger.info("aws_sg.unblock_ip.success", sg=sg, cidr=cidr)
+            return {
+                "success": True,
+                "action": "unblock_ip",
+                "ip": ip,
+                "sg_id": sg,
+            }
         except ec2.exceptions.ClientError as exc:
             code = exc.response["Error"]["Code"]
             if code == "InvalidPermission.NotFound":
-                return {"success": True, "action": "unblock_ip", "ip": ip, "note": "Rule not found (already removed)"}
+                return {
+                    "success": True,
+                    "action": "unblock_ip",
+                    "ip": ip,
+                    "sg_id": sg,
+                    "note": "Rule not found (already removed)",
+                }
             raise
 
-    async def _httpx_authorize(
-        self,
-        key_id: str,
-        secret: str,
-        token: str | None,
-        ip: str,
-        protocol: str,
-        from_port: int,
-        to_port: int,
-        action: str,
-    ) -> dict[str, Any]:
-        """Fallback: direct AWS EC2 API call without boto3.
-        This is a placeholder; production use should install boto3."""
-        logger.warning("aws_sg.httpx_fallback — boto3 unavailable, cannot execute live")
-        return {
-            "success": False,
-            "action": action,
-            "ip": ip,
-            "note": "boto3 not installed in actions service — add boto3 to pyproject.toml",
-        }
-
-    async def describe_rules(self) -> list[dict[str, Any]]:
-        """List ingress rules on the target security group."""
-        key_id, secret, token = await self._get_credentials()
-        if not await self._boto3_available():
+    async def describe_rules(self, sg_id: str | None = None) -> list[dict[str, Any]]:
+        """List ingress rules on the target security group (empty when boto3 missing)."""
+        sg = self._resolve_sg_id(sg_id)
+        if not self._boto3_available():
             return []
 
-        import boto3
-
-        ec2 = boto3.client(
-            "ec2",
-            region_name=self._region,
-            aws_access_key_id=key_id,
-            aws_secret_access_key=secret,
-            aws_session_token=token,
+        key_id, secret, token = await self._get_credentials()
+        ec2 = self._ec2(key_id, secret, token)
+        resp = ec2.describe_security_group_rules(
+            Filters=[{"Name": "group-id", "Values": [sg]}]
         )
-        resp = ec2.describe_security_group_rules(Filters=[{"Name": "group-id", "Values": [self._sg_id]}])
         return resp.get("SecurityGroupRules", [])
+
+
+# Legacy alias: older code (and external plugins) may import the short name.
+AWSSGClient = AWSSecurityGroupsClient
+
+
+__all__ = ["AWSSecurityGroupsClient", "AWSSGClient"]

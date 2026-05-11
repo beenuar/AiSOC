@@ -49,18 +49,44 @@ from app.services.github import create_detection_pr
 router = APIRouter(prefix="/detection-proposals", tags=["detection_rules", "dac"])
 
 
-# Repository root: services/api/app/api/v1/endpoints/detection_proposals.py
-#                   ^      ^   ^   ^   ^  ^         ^
-# parents:           [0]    [1] [2] [3] [4][5]       [6] = repo root
+# Resolve the AiSOC repository root by walking up from this file until we
+# find the eval harness this module shells out to (``scripts/run_evals.py``).
+# Hard-coding ``Path(__file__).parents[6]`` only works on the host, where
+# this file sits six levels under the repo root. Inside the API Docker
+# image only the ``services/api/`` subtree is copied to ``/app``, so a
+# fixed parent index raises ``IndexError`` at import time and crashes the
+# entire API service before the first request — see GH #81 / #83.
 #
-# On the host we sit six levels deep under the repo root. Inside the API
-# Docker image only the services/api/ subtree is copied to /app, so
-# parents[6] would IndexError. Resolve the deepest available ancestor and
-# let AISOC_REPO_ROOT override at runtime when the eval script is actually
-# needed (only relevant in dev/CI where the full repo is mounted).
+# Every code path that *uses* the resolved root re-checks
+# ``_EVAL_SCRIPT.exists()`` before invoking it, so the worst case in a
+# stripped image is a clean 500 from ``/run-eval`` (with a helpful message)
+# rather than an import-time crash.
+_REPO_ROOT_MARKER = ("scripts", "run_evals.py")
+
+
+def _resolve_repo_root(start: Path) -> Path:
+    """Walk up from ``start`` looking for ``scripts/run_evals.py``.
+
+    Returns the first ancestor that contains the marker file. If the marker
+    is not present (typical inside the slimmed API container), falls back
+    to the closest sensible ancestor — never to the filesystem root, which
+    would silently produce nonsense paths for subsequent ``/`` joins.
+    """
+    candidates = (start, *start.parents)
+    for candidate in candidates:
+        if (candidate.joinpath(*_REPO_ROOT_MARKER)).is_file():
+            return candidate
+    # Fallback: ``services/api`` (or its in-container equivalent ``/app``).
+    # That's parents[3] from this file and is guaranteed to exist in any
+    # environment where the API service can import this module.
+    parents = start.parents
+    if len(parents) > 3:
+        return parents[3]
+    return parents[-1] if parents else start
+
+
 _ENDPOINT_FILE = Path(__file__).resolve()
-_ENDPOINT_PARENTS = list(_ENDPOINT_FILE.parents)
-_REPO_ROOT_DEFAULT = _ENDPOINT_PARENTS[6] if len(_ENDPOINT_PARENTS) > 6 else _ENDPOINT_PARENTS[-1]
+_REPO_ROOT_DEFAULT = _resolve_repo_root(_ENDPOINT_FILE)
 _REPO_ROOT = Path(os.environ.get("AISOC_REPO_ROOT", str(_REPO_ROOT_DEFAULT)))
 _EVAL_SCRIPT = _REPO_ROOT / "scripts" / "run_evals.py"
 
