@@ -26,6 +26,45 @@
 
 BEGIN;
 
+-- 0. Schema reconciliation: detection_rules.status -----------------------------
+-- The ORM (services/api/app/models/detection_rule.py) treats `status` as the
+-- source of truth for whether a rule participates in detection runs
+-- (testing | active | disabled | deprecated), but migration 001 only ships the
+-- legacy boolean `enabled` column. We need `status` to exist before the view
+-- below can reference it on a fresh Postgres init (cold-boot via
+-- /docker-entrypoint-initdb.d), otherwise CREATE VIEW fails with
+-- "column r.status does not exist" and the container exits with code 3.
+--
+-- Strategy:
+--   * Add the column idempotently (no-op on databases already migrated past
+--     this point or that have a future "introduce status" migration).
+--   * Backfill from `enabled` when both columns are present so historical rows
+--     keep their semantics: enabled=TRUE -> 'active', enabled=FALSE -> 'disabled'.
+--   * Default new rows to 'active' so existing seed data and the rest of this
+--     migration's view definition behave exactly as documented below.
+ALTER TABLE detection_rules
+    ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+
+-- Backfill from `enabled` only if the legacy column still exists. We use a
+-- DO block with information_schema so the migration is safe whether you're
+-- coming from the legacy 001 schema or a future schema where `enabled` was
+-- already dropped.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'detection_rules' AND column_name = 'enabled'
+    ) THEN
+        EXECUTE $sql$
+            UPDATE detection_rules
+               SET status = CASE WHEN enabled THEN 'active' ELSE 'disabled' END
+             WHERE status = 'active'  -- only touch rows still on the default
+        $sql$;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_detection_rules_status ON detection_rules(status);
+
 -- 1. Rule packs ----------------------------------------------------------------
 -- A pack is owned by a parent tenant and is the unit MSSPs assign to children.
 CREATE TABLE IF NOT EXISTS mssp_rule_packs (
