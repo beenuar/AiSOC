@@ -54,6 +54,7 @@ Severity bucketing:
 
 from __future__ import annotations
 
+import ipaddress
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -424,10 +425,16 @@ class AWSCloudTrailConnector(BaseConnector):
             event_time = event_time.astimezone(UTC).isoformat()
 
         src_ip = detail.get("sourceIPAddress") or raw.get("SourceIPAddress")
-        # AWS-internal callers come through as e.g. ``cloudtrail.amazonaws.com``
-        # in this field. Treat any non-IP-looking value as "no IP".
-        if isinstance(src_ip, str) and ("amazonaws.com" in src_ip or src_ip == "AWS Internal"):
-            src_ip = None
+        # AWS populates ``sourceIPAddress`` with either a real IP (v4/v6) or an
+        # AWS service principal hostname like ``cloudtrail.amazonaws.com`` for
+        # internal callers. Validate as a real IP and drop anything else —
+        # safer than substring-matching ``amazonaws.com``, which would also
+        # accept hostile lookalikes such as ``amazonaws.com.attacker.tld``.
+        if isinstance(src_ip, str):
+            try:
+                ipaddress.ip_address(src_ip.strip())
+            except ValueError:
+                src_ip = None
 
         return {
             "source": self.connector_id,

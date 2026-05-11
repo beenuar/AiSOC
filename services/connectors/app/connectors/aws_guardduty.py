@@ -67,10 +67,6 @@ def _severity_label(score: float | int | None) -> str:
     return "high"
 
 
-# Backwards-compatible alias — older callers used the bucket name.
-_bucket_severity = _severity_label
-
-
 class AWSGuardDutyConnector(BaseConnector):
     connector_id = "aws_guardduty"
     connector_name = "AWS GuardDuty"
