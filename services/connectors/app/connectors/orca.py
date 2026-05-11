@@ -168,12 +168,7 @@ class OrcaConnector(BaseConnector):
         if isinstance(payload, list):
             items = payload
         elif isinstance(payload, dict):
-            items = (
-                payload.get("data")
-                or payload.get("results")
-                or payload.get("alerts")
-                or []
-            )
+            items = payload.get("data") or payload.get("results") or payload.get("alerts") or []
         else:
             items = []
 
@@ -184,12 +179,7 @@ class OrcaConnector(BaseConnector):
         asset = raw.get("asset") or raw.get("source_asset") or {}
         cloud_account = raw.get("cloud_account") or {}
 
-        sev_raw = (
-            state.get("severity")
-            or raw.get("severity")
-            or raw.get("priority")
-            or "medium"
-        ).lower()
+        sev_raw = (state.get("severity") or raw.get("severity") or raw.get("priority") or "medium").lower()
         severity = _SEVERITY_MAP.get(sev_raw, "medium")
 
         return {
@@ -201,9 +191,7 @@ class OrcaConnector(BaseConnector):
             "severity": severity,
             "hostname": asset.get("name") or asset.get("asset_name"),
             "cloud_resource": asset.get("vendor_id") or asset.get("asset_unique_id"),
-            "cloud_platform": asset.get("vendor")
-            or cloud_account.get("vendor")
-            or raw.get("cloud_provider"),
+            "cloud_platform": asset.get("vendor") or cloud_account.get("vendor") or raw.get("cloud_provider"),
             "cloud_region": asset.get("region") or asset.get("cloud_region"),
             "rule_name": raw.get("rule_name") or raw.get("type"),
             "raw_event": raw,

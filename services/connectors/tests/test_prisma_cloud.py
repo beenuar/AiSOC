@@ -45,9 +45,7 @@ def test_prisma_cloud_schema_marks_secret_field():
 def test_prisma_cloud_compute_url_is_optional():
     schema = PrismaCloudConnector.schema()
     compute = next(f for f in schema.fields if f.name == "compute_url")
-    assert compute.required is False, (
-        "compute_url must be optional; v7.1.0 only consumes the unified /alert endpoint"
-    )
+    assert compute.required is False, "compute_url must be optional; v7.1.0 only consumes the unified /alert endpoint"
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +73,7 @@ def test_normalize_collapses_critical_into_high():
     out = connector.normalize(raw)
     assert out["source"] == "prisma_cloud"
     assert out["severity"] == "high", (
-        "Prisma Cloud 'critical' must collapse into AiSOC 'high'; "
-        "AiSOC does not expose a separate critical band"
+        "Prisma Cloud 'critical' must collapse into AiSOC 'high'; AiSOC does not expose a separate critical band"
     )
     assert out["external_id"] == "alert-1"
     assert out["title"] == "Public S3 bucket"
@@ -113,9 +110,7 @@ def test_normalize_falls_back_to_medium_for_unknown_severity():
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     raw = {"id": "alert-4", "policy": {"name": "Unknown band", "severity": "weird"}}
     out = connector.normalize(raw)
-    assert out["severity"] == "medium", (
-        "unrecognised severity must default to 'medium' — never silently drop"
-    )
+    assert out["severity"] == "medium", "unrecognised severity must default to 'medium' — never silently drop"
 
 
 # ---------------------------------------------------------------------------
@@ -126,9 +121,7 @@ def test_normalize_falls_back_to_medium_for_unknown_severity():
 @pytest.mark.asyncio
 @respx.mock
 async def test_test_connection_success():
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(200, json={"token": "jwt-abc"})
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(200, json={"token": "jwt-abc"}))
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     result = await connector.test_connection()
     assert result["success"] is True
@@ -138,9 +131,7 @@ async def test_test_connection_success():
 @pytest.mark.asyncio
 @respx.mock
 async def test_test_connection_returns_friendly_error_on_auth_failure():
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(401, text="invalid credentials")
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(401, text="invalid credentials"))
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     result = await connector.test_connection()
     assert result["success"] is False
@@ -152,9 +143,7 @@ async def test_test_connection_returns_friendly_error_on_auth_failure():
 async def test_test_connection_handles_login_returning_no_token():
     """Prisma Cloud has been observed to return 200 with no token field
     when the access key is disabled. We must surface that as a failure."""
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(200, json={"message": "key disabled"})
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(200, json={"message": "key disabled"}))
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     result = await connector.test_connection()
     assert result["success"] is False
@@ -163,9 +152,7 @@ async def test_test_connection_handles_login_returning_no_token():
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_alerts_returns_normalized_events_from_items_envelope():
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(200, json={"token": "jwt-abc"})
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(200, json={"token": "jwt-abc"}))
     respx.post(f"{_API}/alert/v1/alert").mock(
         return_value=httpx.Response(
             200,
@@ -203,9 +190,7 @@ async def test_fetch_alerts_returns_normalized_events_from_items_envelope():
 async def test_fetch_alerts_handles_bare_list_envelope():
     """Some Prisma Cloud regions return a bare list instead of the
     ``{"items": [...]}`` envelope; the connector must accept both."""
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(200, json={"token": "jwt-abc"})
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(200, json={"token": "jwt-abc"}))
     respx.post(f"{_API}/alert/v1/alert").mock(
         return_value=httpx.Response(
             200,
@@ -230,9 +215,7 @@ async def test_fetch_alerts_handles_bare_list_envelope():
 async def test_fetch_alerts_returns_empty_list_when_login_fails():
     """If auth fails on poll we degrade gracefully — no crash, no events,
     and the scheduler will retry on the next interval."""
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(500, text="internal server error")
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(500, text="internal server error"))
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     events = await connector.fetch_alerts(since_seconds=300)
     assert events == []
@@ -241,12 +224,8 @@ async def test_fetch_alerts_returns_empty_list_when_login_fails():
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_alerts_returns_empty_list_when_alert_endpoint_5xxs():
-    respx.post(f"{_API}/login").mock(
-        return_value=httpx.Response(200, json={"token": "jwt-abc"})
-    )
-    respx.post(f"{_API}/alert/v1/alert").mock(
-        return_value=httpx.Response(503, text="service unavailable")
-    )
+    respx.post(f"{_API}/login").mock(return_value=httpx.Response(200, json={"token": "jwt-abc"}))
+    respx.post(f"{_API}/alert/v1/alert").mock(return_value=httpx.Response(503, text="service unavailable"))
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     events = await connector.fetch_alerts(since_seconds=300)
     assert events == []

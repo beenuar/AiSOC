@@ -76,9 +76,7 @@ def test_parse_event_names_wildcard_disables_filter():
 
 
 def test_parse_event_names_explicit_list_overrides_default():
-    parsed = AWSCloudTrailConnector._parse_event_names(
-        " ConsoleLogin , CreateAccessKey , PutBucketPolicy "
-    )
+    parsed = AWSCloudTrailConnector._parse_event_names(" ConsoleLogin , CreateAccessKey , PutBucketPolicy ")
     # Whitespace tolerant + de-duplicated + sorted (deterministic
     # iteration order across runs makes test_fetch_alerts call_count
     # predictable).
@@ -86,9 +84,7 @@ def test_parse_event_names_explicit_list_overrides_default():
 
 
 def test_parse_event_names_strips_empty_segments():
-    parsed = AWSCloudTrailConnector._parse_event_names(
-        "ConsoleLogin,,CreateAccessKey,"
-    )
+    parsed = AWSCloudTrailConnector._parse_event_names("ConsoleLogin,,CreateAccessKey,")
     assert parsed == ("ConsoleLogin", "CreateAccessKey")
 
 
@@ -332,9 +328,7 @@ async def test_fetch_alerts_iterates_allow_list_one_call_per_event_name():
                     "EventId": "console-1",
                     "EventName": "ConsoleLogin",
                     "EventTime": datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC),
-                    "CloudTrailEvent": json.dumps(
-                        {"eventName": "ConsoleLogin"}
-                    ),
+                    "CloudTrailEvent": json.dumps({"eventName": "ConsoleLogin"}),
                 }
             ]
         ),
@@ -344,9 +338,7 @@ async def test_fetch_alerts_iterates_allow_list_one_call_per_event_name():
                     "EventId": "key-1",
                     "EventName": "CreateAccessKey",
                     "EventTime": datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC),
-                    "CloudTrailEvent": json.dumps(
-                        {"eventName": "CreateAccessKey"}
-                    ),
+                    "CloudTrailEvent": json.dumps({"eventName": "CreateAccessKey"}),
                 }
             ]
         ),
@@ -356,9 +348,7 @@ async def test_fetch_alerts_iterates_allow_list_one_call_per_event_name():
                     "EventId": "trail-1",
                     "EventName": "DeleteTrail",
                     "EventTime": datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC),
-                    "CloudTrailEvent": json.dumps(
-                        {"eventName": "DeleteTrail"}
-                    ),
+                    "CloudTrailEvent": json.dumps({"eventName": "DeleteTrail"}),
                 }
             ]
         ),
@@ -400,12 +390,8 @@ async def test_fetch_alerts_per_event_name_failure_does_not_break_others():
                     {
                         "EventId": "ok-1",
                         "EventName": "ConsoleLogin",
-                        "EventTime": datetime(
-                            2026, 5, 10, 12, 0, 0, tzinfo=UTC
-                        ),
-                        "CloudTrailEvent": json.dumps(
-                            {"eventName": "ConsoleLogin"}
-                        ),
+                        "EventTime": datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC),
+                        "CloudTrailEvent": json.dumps({"eventName": "ConsoleLogin"}),
                     }
                 ]
             }
@@ -436,12 +422,8 @@ async def test_fetch_alerts_firehose_mode_skips_event_name_filter():
                     {
                         "EventId": "any-1",
                         "EventName": "DescribeInstances",
-                        "EventTime": datetime(
-                            2026, 5, 10, 12, 0, 0, tzinfo=UTC
-                        ),
-                        "CloudTrailEvent": json.dumps(
-                            {"eventName": "DescribeInstances"}
-                        ),
+                        "EventTime": datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC),
+                        "CloudTrailEvent": json.dumps({"eventName": "DescribeInstances"}),
                     }
                 ]
             }

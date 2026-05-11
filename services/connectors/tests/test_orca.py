@@ -111,9 +111,7 @@ def test_normalize_falls_back_to_id():
 @respx.mock
 @pytest.mark.asyncio
 async def test_test_connection_success():
-    respx.get("https://api.orcasecurity.io/api/user/session").mock(
-        return_value=httpx.Response(200, json={"user": "ok"})
-    )
+    respx.get("https://api.orcasecurity.io/api/user/session").mock(return_value=httpx.Response(200, json={"user": "ok"}))
     conn = OrcaConnector(api_token="t")
     result = await conn.test_connection()
     assert result["success"] is True
@@ -123,9 +121,7 @@ async def test_test_connection_success():
 @respx.mock
 @pytest.mark.asyncio
 async def test_test_connection_unauthorized():
-    respx.get("https://api.orcasecurity.io/api/user/session").mock(
-        return_value=httpx.Response(401, json={"error": "unauthorized"})
-    )
+    respx.get("https://api.orcasecurity.io/api/user/session").mock(return_value=httpx.Response(401, json={"error": "unauthorized"}))
     conn = OrcaConnector(api_token="bad")
     result = await conn.test_connection()
     assert result["success"] is False
@@ -206,9 +202,7 @@ async def test_fetch_alerts_bare_list():
 @respx.mock
 @pytest.mark.asyncio
 async def test_fetch_alerts_handles_error():
-    respx.get("https://api.orcasecurity.io/api/alerts").mock(
-        return_value=httpx.Response(500, text="boom")
-    )
+    respx.get("https://api.orcasecurity.io/api/alerts").mock(return_value=httpx.Response(500, text="boom"))
     conn = OrcaConnector(api_token="t")
     alerts = await conn.fetch_alerts()
     assert alerts == []
@@ -218,9 +212,7 @@ async def test_fetch_alerts_handles_error():
 @pytest.mark.asyncio
 async def test_fetch_alerts_passes_status_open():
     """We only ever pull open alerts to keep volume sane."""
-    route = respx.get("https://api.orcasecurity.io/api/alerts").mock(
-        return_value=httpx.Response(200, json={"data": []})
-    )
+    route = respx.get("https://api.orcasecurity.io/api/alerts").mock(return_value=httpx.Response(200, json={"data": []}))
     conn = OrcaConnector(api_token="t")
     await conn.fetch_alerts()
     assert route.called
@@ -230,7 +222,5 @@ async def test_fetch_alerts_passes_status_open():
 
 
 def test_custom_api_url_strips_trailing_slash():
-    conn = OrcaConnector(
-        api_token="t", api_url="https://api.eu.orcasecurity.io/"
-    )
+    conn = OrcaConnector(api_token="t", api_url="https://api.eu.orcasecurity.io/")
     assert conn._api_url == "https://api.eu.orcasecurity.io"

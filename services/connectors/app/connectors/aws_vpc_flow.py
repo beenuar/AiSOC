@@ -268,10 +268,7 @@ class AWSVPCFlowLogsConnector(BaseConnector):
                 kwargs["aws_secret_access_key"] = self._secret_key
             return boto3.client("logs", **kwargs)
         except ImportError as exc:
-            raise RuntimeError(
-                "boto3 is required for AWS VPC Flow Logs connector. "
-                "Install it with: pip install boto3"
-            ) from exc
+            raise RuntimeError("boto3 is required for AWS VPC Flow Logs connector. Install it with: pip install boto3") from exc
 
     async def test_connection(self) -> dict[str, Any]:
         if not self._log_group_name:
@@ -287,13 +284,9 @@ class AWSVPCFlowLogsConnector(BaseConnector):
             # exists. We then check the result set rather than relying
             # on an exception, because the API returns 200 + empty list
             # for "no match".
-            resp = client.describe_log_groups(
-                logGroupNamePrefix=self._log_group_name, limit=5
-            )
+            resp = client.describe_log_groups(logGroupNamePrefix=self._log_group_name, limit=5)
             groups = resp.get("logGroups", []) or []
-            match = any(
-                g.get("logGroupName") == self._log_group_name for g in groups
-            )
+            match = any(g.get("logGroupName") == self._log_group_name for g in groups)
             if not match:
                 return {
                     "success": False,
@@ -350,9 +343,7 @@ class AWSVPCFlowLogsConnector(BaseConnector):
         events: list[dict[str, Any]] = []
         try:
             paginator = client.get_paginator("filter_log_events")
-            pages = paginator.paginate(
-                **kwargs, PaginationConfig={"MaxItems": 5000, "PageSize": 1000}
-            )
+            pages = paginator.paginate(**kwargs, PaginationConfig={"MaxItems": 5000, "PageSize": 1000})
             for page in pages:
                 events.extend(page.get("events", []))
         except Exception as exc:
@@ -424,9 +415,7 @@ class AWSVPCFlowLogsConnector(BaseConnector):
         ts_ms = raw.get("timestamp")
         created_at: str | None = None
         if isinstance(ts_ms, int | float):
-            created_at = (
-                datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC).isoformat()
-            )
+            created_at = datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC).isoformat()
 
         return {
             "source": self.connector_id,
@@ -439,9 +428,7 @@ class AWSVPCFlowLogsConnector(BaseConnector):
             "dst_ip": parsed.get("dst_ip") if parsed else None,
             "src_port": parsed.get("src_port") if parsed else None,
             "dst_port": parsed.get("dst_port") if parsed else None,
-            "protocol": parsed.get("protocol_name") or (
-                parsed.get("protocol") if parsed else None
-            ),
+            "protocol": parsed.get("protocol_name") or (parsed.get("protocol") if parsed else None),
             "action": action,
             "aws_account_id": parsed.get("account_id") if parsed else None,
             "aws_region": self._region,

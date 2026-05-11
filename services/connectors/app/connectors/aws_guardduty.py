@@ -132,10 +132,7 @@ class AWSGuardDutyConnector(BaseConnector):
                 kwargs["aws_secret_access_key"] = self._secret_key
             return boto3.client("guardduty", **kwargs)
         except ImportError as exc:
-            raise RuntimeError(
-                "boto3 is required for AWS GuardDuty connector. "
-                "Install it with: pip install boto3"
-            ) from exc
+            raise RuntimeError("boto3 is required for AWS GuardDuty connector. Install it with: pip install boto3") from exc
 
     async def test_connection(self) -> dict[str, Any]:
         try:
@@ -178,9 +175,7 @@ class AWSGuardDutyConnector(BaseConnector):
 
         # GuardDuty stores ``updatedAt`` as epoch milliseconds. Filter on
         # the cursor window so we only re-fetch changed findings.
-        cursor_ms = int(
-            (datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp() * 1000
-        )
+        cursor_ms = int((datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp() * 1000)
 
         all_findings: list[dict[str, Any]] = []
 
@@ -216,9 +211,7 @@ class AWSGuardDutyConnector(BaseConnector):
                 # ``get_findings`` accepts max 50 IDs per call.
                 for i in range(0, len(finding_ids), 50):
                     batch = finding_ids[i : i + 50]
-                    resp = client.get_findings(
-                        DetectorId=detector_id, FindingIds=batch
-                    )
+                    resp = client.get_findings(DetectorId=detector_id, FindingIds=batch)
                     all_findings.extend(resp.get("Findings", []))
             except Exception as exc:
                 logger.warning(
@@ -240,16 +233,9 @@ class AWSGuardDutyConnector(BaseConnector):
         # (PortProbe, Recon:EC2/Portscan, UnauthorizedAccess:*, etc).
         action = service.get("Action") or {}
         remote_ip = (
-            action.get("NetworkConnectionAction", {})
-            .get("RemoteIpDetails", {})
-            .get("IpAddressV4")
-            or action.get("AwsApiCallAction", {})
-            .get("RemoteIpDetails", {})
-            .get("IpAddressV4")
-            or action.get("PortProbeAction", {})
-            .get("PortProbeDetails", [{}])[0]
-            .get("RemoteIpDetails", {})
-            .get("IpAddressV4")
+            action.get("NetworkConnectionAction", {}).get("RemoteIpDetails", {}).get("IpAddressV4")
+            or action.get("AwsApiCallAction", {}).get("RemoteIpDetails", {}).get("IpAddressV4")
+            or action.get("PortProbeAction", {}).get("PortProbeDetails", [{}])[0].get("RemoteIpDetails", {}).get("IpAddressV4")
         )
 
         return {
@@ -263,9 +249,7 @@ class AWSGuardDutyConnector(BaseConnector):
             "aws_account_id": raw.get("AccountId"),
             "aws_region": raw.get("Region"),
             "cloud_platform": "aws",
-            "cloud_resource": (resource.get("InstanceDetails") or {}).get(
-                "InstanceId"
-            )
+            "cloud_resource": (resource.get("InstanceDetails") or {}).get("InstanceId")
             or (resource.get("AccessKeyDetails") or {}).get("AccessKeyId"),
             "rule_name": raw.get("Type"),
             "raw_event": raw,

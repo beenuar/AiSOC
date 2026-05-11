@@ -295,9 +295,7 @@ class AWSCloudTrailConnector(BaseConnector):
         stripped = raw.strip()
         if stripped == "*":
             return None
-        parsed = tuple(
-            sorted({e.strip() for e in stripped.split(",") if e.strip()})
-        )
+        parsed = tuple(sorted({e.strip() for e in stripped.split(",") if e.strip()}))
         return parsed or DEFAULT_EVENT_NAMES
 
     def _get_client(self):
@@ -310,10 +308,7 @@ class AWSCloudTrailConnector(BaseConnector):
                 kwargs["aws_secret_access_key"] = self._secret_key
             return boto3.client("cloudtrail", **kwargs)
         except ImportError as exc:
-            raise RuntimeError(
-                "boto3 is required for AWS CloudTrail connector. "
-                "Install it with: pip install boto3"
-            ) from exc
+            raise RuntimeError("boto3 is required for AWS CloudTrail connector. Install it with: pip install boto3") from exc
 
     async def test_connection(self) -> dict[str, Any]:
         try:
@@ -351,11 +346,7 @@ class AWSCloudTrailConnector(BaseConnector):
         if self._event_names is None:
             # Firehose mode — pull every event in the window. Operators
             # who set ``event_names=*`` explicitly opted in.
-            all_events.extend(
-                self._lookup_for_attribute(
-                    client, attribute=None, start=start_time, end=end_time
-                )
-            )
+            all_events.extend(self._lookup_for_attribute(client, attribute=None, start=start_time, end=end_time))
         else:
             for event_name in self._event_names:
                 try:
@@ -392,18 +383,14 @@ class AWSCloudTrailConnector(BaseConnector):
         }
         if attribute is not None:
             attr_key, attr_value = attribute
-            kwargs["LookupAttributes"] = [
-                {"AttributeKey": attr_key, "AttributeValue": attr_value}
-            ]
+            kwargs["LookupAttributes"] = [{"AttributeKey": attr_key, "AttributeValue": attr_value}]
 
         events: list[dict[str, Any]] = []
         paginator = client.get_paginator("lookup_events")
         # Cap each event-name at 100 hits per poll. If a single event
         # is firing more than 100 times in 5 minutes the operator
         # already has a different problem.
-        pages = paginator.paginate(
-            **kwargs, PaginationConfig={"MaxItems": 100, "PageSize": 50}
-        )
+        pages = paginator.paginate(**kwargs, PaginationConfig={"MaxItems": 100, "PageSize": 50})
         for page in pages:
             events.extend(page.get("Events", []))
         return events
@@ -439,9 +426,7 @@ class AWSCloudTrailConnector(BaseConnector):
         src_ip = detail.get("sourceIPAddress") or raw.get("SourceIPAddress")
         # AWS-internal callers come through as e.g. ``cloudtrail.amazonaws.com``
         # in this field. Treat any non-IP-looking value as "no IP".
-        if isinstance(src_ip, str) and (
-            "amazonaws.com" in src_ip or src_ip == "AWS Internal"
-        ):
+        if isinstance(src_ip, str) and ("amazonaws.com" in src_ip or src_ip == "AWS Internal"):
             src_ip = None
 
         return {
@@ -449,23 +434,14 @@ class AWSCloudTrailConnector(BaseConnector):
             "category": "cloud",
             "external_id": raw.get("EventId") or detail.get("eventID"),
             "title": event_name or "CloudTrail event",
-            "description": (
-                f"{event_name} on {detail.get('eventSource', 'aws')}"
-                if event_name
-                else "CloudTrail audit event"
-            ),
+            "description": (f"{event_name} on {detail.get('eventSource', 'aws')}" if event_name else "CloudTrail audit event"),
             "severity": severity,
             "event_name": event_name,
             "event_source": detail.get("eventSource") or raw.get("EventSource"),
-            "aws_account_id": detail.get("recipientAccountId")
-            or detail.get("userIdentity", {}).get("accountId"),
+            "aws_account_id": detail.get("recipientAccountId") or detail.get("userIdentity", {}).get("accountId"),
             "aws_region": detail.get("awsRegion") or self._region,
             "cloud_platform": "aws",
-            "user_name": (
-                raw.get("Username")
-                or user_identity.get("userName")
-                or user_identity.get("principalId")
-            ),
+            "user_name": (raw.get("Username") or user_identity.get("userName") or user_identity.get("principalId")),
             "user_arn": user_identity.get("arn"),
             "user_type": user_identity.get("type"),
             "src_ip": src_ip,

@@ -93,13 +93,7 @@ def test_normalize_extracts_src_ip_from_network_connection_action():
         "AccountId": "123456789012",
         "Region": "us-east-1",
         "CreatedAt": "2026-05-10T12:00:00Z",
-        "Service": {
-            "Action": {
-                "NetworkConnectionAction": {
-                    "RemoteIpDetails": {"IpAddressV4": "203.0.113.5"}
-                }
-            }
-        },
+        "Service": {"Action": {"NetworkConnectionAction": {"RemoteIpDetails": {"IpAddressV4": "203.0.113.5"}}}},
         "Resource": {
             "ResourceType": "Instance",
             "InstanceDetails": {"InstanceId": "i-0abc"},
@@ -127,13 +121,7 @@ def test_normalize_falls_back_to_aws_api_call_action_for_src_ip():
     raw = {
         "Id": "gd-2",
         "Severity": 7.5,
-        "Service": {
-            "Action": {
-                "AwsApiCallAction": {
-                    "RemoteIpDetails": {"IpAddressV4": "198.51.100.7"}
-                }
-            }
-        },
+        "Service": {"Action": {"AwsApiCallAction": {"RemoteIpDetails": {"IpAddressV4": "198.51.100.7"}}}},
         "Resource": {
             "AccessKeyDetails": {"AccessKeyId": "AKIAEXAMPLE"},
         },
@@ -151,15 +139,7 @@ def test_normalize_port_probe_action_yields_src_ip():
     raw = {
         "Id": "gd-pp",
         "Severity": 2.0,
-        "Service": {
-            "Action": {
-                "PortProbeAction": {
-                    "PortProbeDetails": [
-                        {"RemoteIpDetails": {"IpAddressV4": "10.0.0.99"}}
-                    ]
-                }
-            }
-        },
+        "Service": {"Action": {"PortProbeAction": {"PortProbeDetails": [{"RemoteIpDetails": {"IpAddressV4": "10.0.0.99"}}]}}},
         "Resource": {},
     }
     out = connector.normalize(raw)

@@ -591,13 +591,7 @@ async def test_file_tail_buffers_partial_trailing_line(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_file_tail_skips_malformed_json_line(tmp_path: Path):
     audit_log = tmp_path / "audit.log"
-    body = (
-        json.dumps({"auditID": "a", "verb": "get"})
-        + "\n"
-        + "this-is-not-json\n"
-        + json.dumps({"auditID": "b", "verb": "list"})
-        + "\n"
-    )
+    body = json.dumps({"auditID": "a", "verb": "get"}) + "\n" + "this-is-not-json\n" + json.dumps({"auditID": "b", "verb": "list"}) + "\n"
     audit_log.write_text(body)
     conn = KubernetesAuditConnector(
         mode="file_tail",
@@ -675,10 +669,7 @@ async def test_file_tail_caps_read_size_per_poll(tmp_path: Path, monkeypatch):
     audit_log = tmp_path / "audit.log"
     # Each line is ~80 bytes — 5 lines = ~400 bytes, well over the
     # patched 200 byte cap.
-    events = [
-        {"auditID": f"id-{i:03d}", "verb": "get", "objectRef": {"resource": "pods"}}
-        for i in range(5)
-    ]
+    events = [{"auditID": f"id-{i:03d}", "verb": "get", "objectRef": {"resource": "pods"}} for i in range(5)]
     _write_audit_events(audit_log, events)
 
     conn = KubernetesAuditConnector(
@@ -698,6 +689,4 @@ async def test_file_tail_caps_read_size_per_poll(tmp_path: Path, monkeypatch):
             break
         all_events.extend(batch)
     assert len(all_events) == 5
-    assert [e["external_id"] for e in all_events] == [
-        f"id-{i:03d}" for i in range(5)
-    ]
+    assert [e["external_id"] for e in all_events] == [f"id-{i:03d}" for i in range(5)]

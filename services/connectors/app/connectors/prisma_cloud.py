@@ -58,8 +58,7 @@ class PrismaCloudConnector(BaseConnector):
             connector_name=cls.connector_name,
             category=cls.connector_category,
             description=(
-                "Prisma Cloud cloud security platform. Pulls open alerts across "
-                "CSPM, CWPP, CIEM, and DSPM surfaces via the v1 REST API."
+                "Prisma Cloud cloud security platform. Pulls open alerts across CSPM, CWPP, CIEM, and DSPM surfaces via the v1 REST API."
             ),
             docs_url="/docs/connectors/prisma-cloud",
             fields=[
@@ -235,9 +234,7 @@ class PrismaCloudConnector(BaseConnector):
         # because some legacy payloads ship ISO already.
         created_at = raw.get("alertTime") or raw.get("firstSeen")
         if isinstance(created_at, int | float):
-            created_at = datetime.fromtimestamp(created_at / 1000, tz=UTC).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            created_at = datetime.fromtimestamp(created_at / 1000, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         return {
             "source": self.connector_id,

@@ -84,9 +84,7 @@ logger = structlog.get_logger()
 
 
 # Verbs that mutate cluster state. Used by the severity heuristic.
-_WRITE_VERBS: frozenset[str] = frozenset(
-    {"create", "update", "patch", "delete", "deletecollection"}
-)
+_WRITE_VERBS: frozenset[str] = frozenset({"create", "update", "patch", "delete", "deletecollection"})
 
 # Resources we always treat as sensitive (writes are high+).
 _SENSITIVE_RESOURCES: frozenset[str] = frozenset(
@@ -103,9 +101,7 @@ _SENSITIVE_RESOURCES: frozenset[str] = frozenset(
 
 # Pod subresources that imply interactive access. ``exec`` is the big
 # one — it's the kubernetes-native "shell on prod" verb.
-_INTERACTIVE_SUBRESOURCES: frozenset[str] = frozenset(
-    {"exec", "attach", "portforward", "proxy"}
-)
+_INTERACTIVE_SUBRESOURCES: frozenset[str] = frozenset({"exec", "attach", "portforward", "proxy"})
 
 # Workload resources whose writes deserve medium severity even
 # without a sensitive-resource match.
@@ -150,10 +146,7 @@ def _classify_severity(event: dict[str, Any]) -> str:
         return "high"
 
     # Writes against the RBAC graph itself.
-    if (
-        verb in _WRITE_VERBS
-        and resource in {"clusterrolebindings", "rolebindings"}
-    ):
+    if verb in _WRITE_VERBS and resource in {"clusterrolebindings", "rolebindings"}:
         return "high"
 
     # Writes against any other sensitive resource.
@@ -455,9 +448,7 @@ class KubernetesAuditConnector(BaseConnector):
                     "success": False,
                     "connector": self.connector_id,
                     "error": (
-                        "inbox_token is required in webhook mode. "
-                        "Create an inbox token bound to the "
-                        "k8s-audit template and paste it here."
+                        "inbox_token is required in webhook mode. Create an inbox token bound to the k8s-audit template and paste it here."
                     ),
                 }
             return {
@@ -465,10 +456,7 @@ class KubernetesAuditConnector(BaseConnector):
                 "connector": self.connector_id,
                 "mode": "webhook",
                 "cluster": self._cluster_name,
-                "hint": (
-                    f"Configure your apiserver AuditSink to POST to "
-                    f"/v1/inbox/{self._inbox_token[:6]}…"
-                ),
+                "hint": (f"Configure your apiserver AuditSink to POST to /v1/inbox/{self._inbox_token[:6]}…"),
             }
 
         if self._mode == "file_tail":
@@ -488,10 +476,7 @@ class KubernetesAuditConnector(BaseConnector):
                 return {
                     "success": False,
                     "connector": self.connector_id,
-                    "error": (
-                        f"audit log path {self._audit_log_path} is not "
-                        "readable by the connector pod."
-                    ),
+                    "error": (f"audit log path {self._audit_log_path} is not readable by the connector pod."),
                 }
             return {
                 "success": True,
@@ -505,10 +490,7 @@ class KubernetesAuditConnector(BaseConnector):
         return {
             "success": False,
             "connector": self.connector_id,
-            "error": (
-                f"unknown mode '{self._mode}'. Expected one of: "
-                "webhook, file_tail."
-            ),
+            "error": (f"unknown mode '{self._mode}'. Expected one of: webhook, file_tail."),
         }
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
@@ -537,9 +519,7 @@ class KubernetesAuditConnector(BaseConnector):
         user = (raw.get("user") or {}) if isinstance(raw.get("user"), dict) else {}
         username = user.get("username")
         impersonated = raw.get("impersonatedUser") or {}
-        impersonated_username = (
-            impersonated.get("username") if isinstance(impersonated, dict) else None
-        )
+        impersonated_username = impersonated.get("username") if isinstance(impersonated, dict) else None
 
         obj_ref = (raw.get("objectRef") or {}) if isinstance(raw.get("objectRef"), dict) else {}
         resource = obj_ref.get("resource")
@@ -547,17 +527,11 @@ class KubernetesAuditConnector(BaseConnector):
         namespace = obj_ref.get("namespace")
         name = obj_ref.get("name")
 
-        response_status = (
-            raw.get("responseStatus") or {}
-        ) if isinstance(raw.get("responseStatus"), dict) else {}
+        response_status = (raw.get("responseStatus") or {}) if isinstance(raw.get("responseStatus"), dict) else {}
         response_code = response_status.get("code")
 
         source_ips_raw = raw.get("sourceIPs") or []
-        source_ips: list[str] = (
-            [str(ip) for ip in source_ips_raw]
-            if isinstance(source_ips_raw, list)
-            else []
-        )
+        source_ips: list[str] = [str(ip) for ip in source_ips_raw] if isinstance(source_ips_raw, list) else []
         # The apiserver writes the immediate caller first; the
         # remaining entries are the X-Forwarded-For chain. Pick the
         # first one as the "principal" src_ip so detection content
@@ -582,10 +556,7 @@ class KubernetesAuditConnector(BaseConnector):
         if namespace:
             target = f"{namespace}/{target}"
         sub = f"/{subresource}" if subresource else ""
-        title = (
-            f"k8s audit: {username or 'unknown'} {verb or 'request'} "
-            f"{resource or 'resource'}{sub} {target}"
-        )
+        title = f"k8s audit: {username or 'unknown'} {verb or 'request'} {resource or 'resource'}{sub} {target}"
 
         return {
             "source": self.connector_id,

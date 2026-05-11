@@ -64,10 +64,7 @@ def test_vpc_flow_capabilities_includes_alerts_and_logs():
 # ===========================================================================
 
 
-_V2_SAMPLE_REJECT = (
-    "2 123456789012 eni-0abc 198.51.100.5 10.0.1.20 53124 22 "
-    "6 5 240 1731000000 1731000060 REJECT OK"
-)
+_V2_SAMPLE_REJECT = "2 123456789012 eni-0abc 198.51.100.5 10.0.1.20 53124 22 6 5 240 1731000000 1731000060 REJECT OK"
 
 
 def test_parse_v2_happy_path_populates_all_fields():
@@ -86,10 +83,7 @@ def test_parse_v2_happy_path_populates_all_fields():
 
 
 def test_parse_v2_unknown_protocol_passes_through_as_string():
-    line = (
-        "2 123456789012 eni-0abc 198.51.100.5 10.0.1.20 0 0 "
-        "99 1 100 1731000000 1731000060 REJECT OK"
-    )
+    line = "2 123456789012 eni-0abc 198.51.100.5 10.0.1.20 0 0 99 1 100 1731000000 1731000060 REJECT OK"
     parsed = _parse_v2_record(line)
     # 99 is not in the known protocol map; we should pass through
     # the raw number so detections can still match on it.
@@ -113,10 +107,7 @@ def test_parse_v2_translates_dash_to_none():
 def test_parse_v2_returns_empty_for_header_line():
     # The optional header line published as the first record in some
     # configurations has the field names rather than values.
-    header = (
-        "version account-id interface-id srcaddr dstaddr srcport "
-        "dstport protocol packets bytes start end action log-status"
-    )
+    header = "version account-id interface-id srcaddr dstaddr srcport dstport protocol packets bytes start end action log-status"
     # Wrong field count for the v2 fixed-column parser AND wouldn't be
     # a meaningful flow record anyway. Either an empty dict is fine.
     parsed = _parse_v2_record(header)
@@ -158,10 +149,7 @@ def test_severity_nodata_is_info():
 def test_severity_nodata_wins_over_action():
     # Defensive: AWS shouldn't send both, but if it does, log-status
     # wins because the action field on a NODATA record is meaningless.
-    assert (
-        _record_severity({"action": "REJECT", "log_status": "NODATA"})
-        == "info"
-    )
+    assert _record_severity({"action": "REJECT", "log_status": "NODATA"}) == "info"
 
 
 def test_severity_unknown_action_falls_to_low():
@@ -215,9 +203,7 @@ def test_normalize_v2_reject_populates_top_level_fields():
 
 
 def test_normalize_v5_json_falls_back_to_json_parse():
-    conn = AWSVPCFlowLogsConnector(
-        log_group_name="/aws/vpc/flowlogs", flow_log_version="v5"
-    )
+    conn = AWSVPCFlowLogsConnector(log_group_name="/aws/vpc/flowlogs", flow_log_version="v5")
     payload = {
         "src_ip": "203.0.113.7",
         "dst_ip": "10.0.5.12",
@@ -243,9 +229,7 @@ def test_normalize_unparseable_message_passes_through_safely():
     # Garbage that is neither v2 fixed-column nor JSON. We want a
     # safe default — no crash, severity falls to info, raw_event
     # preserves the original message so detections can pattern-match.
-    conn = AWSVPCFlowLogsConnector(
-        log_group_name="/aws/vpc/flowlogs", flow_log_version="v5"
-    )
+    conn = AWSVPCFlowLogsConnector(log_group_name="/aws/vpc/flowlogs", flow_log_version="v5")
     out = conn.normalize(_envelope("totally garbled flow record"))
 
     assert out["record_format"] == "unknown"
@@ -279,33 +263,23 @@ async def test_test_connection_rejects_blank_log_group():
 
 @pytest.mark.asyncio
 async def test_test_connection_happy_path():
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
-    fake_client.describe_log_groups.return_value = {
-        "logGroups": [
-            {"logGroupName": "/aws/vpc/flowlogs", "creationTime": 1700000000}
-        ]
-    }
+    fake_client.describe_log_groups.return_value = {"logGroups": [{"logGroupName": "/aws/vpc/flowlogs", "creationTime": 1700000000}]}
     with patch.object(conn, "_get_client", return_value=fake_client):
         result = await conn.test_connection()
 
     assert result["success"] is True
     assert result["log_group"] == "/aws/vpc/flowlogs"
     assert result["region"] == "us-east-1"
-    fake_client.describe_log_groups.assert_called_once_with(
-        logGroupNamePrefix="/aws/vpc/flowlogs", limit=5
-    )
+    fake_client.describe_log_groups.assert_called_once_with(logGroupNamePrefix="/aws/vpc/flowlogs", limit=5)
 
 
 @pytest.mark.asyncio
 async def test_test_connection_log_group_not_found():
     # The API returns 200 + empty list when the prefix doesn't match.
     # We must surface that as a failure and NOT a silent success.
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
     fake_client.describe_log_groups.return_value = {"logGroups": []}
     with patch.object(conn, "_get_client", return_value=fake_client):
@@ -320,9 +294,7 @@ async def test_test_connection_partial_prefix_match_is_rejected():
     # The API uses *prefix* matching — if our log group is "/aws/vpc/flowlogs"
     # and the account also has "/aws/vpc/flowlogs-old", we must still
     # only accept the exact match.
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
     fake_client.describe_log_groups.return_value = {
         "logGroups": [
@@ -338,13 +310,9 @@ async def test_test_connection_partial_prefix_match_is_rejected():
 
 @pytest.mark.asyncio
 async def test_test_connection_auth_error_returns_soft_failure():
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
-    fake_client.describe_log_groups.side_effect = RuntimeError(
-        "AccessDenied: not authorized"
-    )
+    fake_client.describe_log_groups.side_effect = RuntimeError("AccessDenied: not authorized")
     with patch.object(conn, "_get_client", return_value=fake_client):
         result = await conn.test_connection()
 
@@ -373,9 +341,7 @@ async def test_fetch_alerts_short_circuits_when_log_group_missing():
 
 @pytest.mark.asyncio
 async def test_fetch_alerts_round_trip_paginated():
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
     paginator = _fake_paginator(
         [
@@ -433,9 +399,7 @@ async def test_fetch_alerts_isolates_api_failures():
     # If filter_log_events raises (auth, throttling, deleted log group)
     # we should return an empty batch and let the scheduler retry on
     # the next poll, NOT re-raise and crash the scheduler thread.
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
     paginator = MagicMock()
     paginator.paginate.side_effect = RuntimeError("ThrottlingException")
@@ -452,9 +416,7 @@ async def test_fetch_alerts_propagates_time_window():
     # Time window is computed from since_seconds. Verify the kwargs
     # are roughly correct (we can't pin the exact epoch since now()
     # moves, but we can assert the delta).
-    conn = AWSVPCFlowLogsConnector(
-        region="us-east-1", log_group_name="/aws/vpc/flowlogs"
-    )
+    conn = AWSVPCFlowLogsConnector(region="us-east-1", log_group_name="/aws/vpc/flowlogs")
     fake_client = MagicMock()
     paginator = _fake_paginator([{"events": []}])
     fake_client.get_paginator.return_value = paginator
