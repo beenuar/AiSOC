@@ -60,9 +60,7 @@ router = APIRouter(prefix="/detection-proposals", tags=["detection_rules", "dac"
 # needed (only relevant in dev/CI where the full repo is mounted).
 _ENDPOINT_FILE = Path(__file__).resolve()
 _ENDPOINT_PARENTS = list(_ENDPOINT_FILE.parents)
-_REPO_ROOT_DEFAULT = (
-    _ENDPOINT_PARENTS[6] if len(_ENDPOINT_PARENTS) > 6 else _ENDPOINT_PARENTS[-1]
-)
+_REPO_ROOT_DEFAULT = _ENDPOINT_PARENTS[6] if len(_ENDPOINT_PARENTS) > 6 else _ENDPOINT_PARENTS[-1]
 _REPO_ROOT = Path(os.environ.get("AISOC_REPO_ROOT", str(_REPO_ROOT_DEFAULT)))
 _EVAL_SCRIPT = _REPO_ROOT / "scripts" / "run_evals.py"
 
