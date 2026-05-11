@@ -9,7 +9,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
-[![Version](https://img.shields.io/badge/version-7.0.3-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.1.0-f59e0b?style=flat-square)](CHANGELOG.md)
 
 [Live demo](https://tryaisoc.com) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deploy in 60 seconds](#deploy-in-60-seconds) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
@@ -878,11 +878,12 @@ terraform apply
 
 ## Roadmap
 
-The public roadmap lives in [ROADMAP.md](ROADMAP.md). All releases through **v7.0.3** have shipped, including:
+The public roadmap lives in [ROADMAP.md](ROADMAP.md). All releases through **v7.1.0** have shipped, including:
 
 - **v6.0 / v6.1** — Investigation Ledger, Ambient Copilot, Responder PWA, public eval harness, MCP server, one-shot demo, autonomous triage agents, investigation chat, coverage advisor, shifts, EASM, MSSP dashboard, STIX/TAXII publishing, automated compliance evidence, AI-generated incident reports.
 - **v7.0** — v1.0 buyer-value plan (16 workstreams): SBOM/SLSA supply chain, threat-intel attribution, executive digest PDF, BYOK per-tenant LLM credentials, air-gap appliance, WCAG 2.2 AA accessibility, ChatOps, telemetry/analytics opt-in, one-click Render deploy.
 - **v7.0.1 — v7.0.3** — Endpoint telemetry wave: `osctrl` and `FleetDM` connectors, `aisoc-osquery-tls` FastAPI service, `aisoc-direct` agent connector, 16 native osquery detections (`det-endpoint-281..296`), live-query playbook step, osquery packs + FIM pipeline, 5 custom osquery virtual tables; plus 42 CodeQL alert resolutions and the `ClientOnly`/font-preload hydration fixes.
+- **v7.1.0** — Cloud Security Coverage Wave: documentation backfill for Wiz, AWS Security Hub, and Lacework; two new CNAPP connectors (Prisma Cloud, Orca); three native AWS connectors (GuardDuty, CloudTrail, VPC Flow Logs); dual-mode Kubernetes audit log connector (apiserver webhook + file_tail) with a new `k8s-audit` ingest template.
 
 Next (**v8.0** — see [ROADMAP.md](ROADMAP.md)):
 

@@ -1,0 +1,45 @@
+id: aws-cloudtrail
+name: AWS CloudTrail
+version: 1.0.0
+category: cloud
+vendor: Amazon Web Services
+publisher: AiSOC Community
+description: >
+  Polls a curated allow-list of high-signal AWS CloudTrail management
+  events (IAM grants, trail tampering, public-S3 changes, KMS key
+  destruction, cross-account sharing) so detections fire reliably
+  without drowning in read-only describe/list noise. Allow-list is
+  derived directly from the detection content shipped with AiSOC and
+  is overridable via the ``event_names`` config field.
+homepage: https://aws.amazon.com/cloudtrail/
+docs_url: /docs/connectors/aws-cloudtrail
+license: MIT
+capabilities:
+  - pull_alerts
+config_schema:
+  - name: region
+    label: AWS Region
+    type: string
+    required: true
+    default: us-east-1
+    help_text: AWS region to poll CloudTrail events from.
+  - name: access_key
+    label: Access Key ID
+    type: string
+    required: false
+    help_text: >
+      Leave blank to use the runtime IAM role / instance profile
+      (recommended for production deployments).
+  - name: secret_key
+    label: Secret Access Key
+    type: secret
+    required: false
+    help_text: Required only when supplying a static access key above.
+  - name: event_names
+    label: Event allow-list (comma-separated)
+    type: string
+    required: false
+    help_text: >
+      Override the curated event list. Leave blank to use the default
+      (recommended), or set to '*' to pull every CloudTrail event in
+      the polling window (high volume — not recommended).

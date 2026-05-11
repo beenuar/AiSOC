@@ -1,0 +1,30 @@
+id: prisma-cloud
+name: Prisma Cloud Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Prisma Cloud cloud security platform. Pulls open alerts across CSPM,
+  CWPP, CIEM, and DSPM surfaces via the v1 REST API (/alert).
+author: AiSOC Core Team
+tags: [cloud, prisma-cloud, cnapp, cspm, cwpp, ciem, dspm, palo-alto]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/prisma_cloud.py
+license: MIT
+min_aisoc_version: "7.1.0"
+config_schema:
+  type: object
+  required: [api_url, access_key_id, secret_key]
+  properties:
+    api_url:
+      type: string
+      description: "Region-specific Prisma Cloud REST API URL (e.g. https://api.prismacloud.io)."
+    access_key_id:
+      type: string
+      description: Access Key ID minted under Settings → Access Control → Access Keys.
+    secret_key:
+      type: string
+      description: Secret Key for the access key (shown once at creation).
+      secret: true
+    compute_url:
+      type: string
+      description: Tenant-specific Compute (Twistlock) API base URL (optional, unused in v7.1.0).

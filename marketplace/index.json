@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-10T18:54:21Z",
+  "generated": "2026-05-11T03:16:23Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,16 +20,16 @@
     }
   ],
   "stats": {
-    "total": 7098,
+    "total": 7104,
     "playbooks": 62,
     "detections": 6993,
-    "plugins": 43,
-    "verified": 982,
+    "plugins": 49,
+    "verified": 985,
     "community": 0,
     "by_tier": {
-      "beta": 3,
+      "beta": 6,
       "imported": 6113,
-      "stable": 982
+      "stable": 985
     },
     "detections_by_tier": {
       "imported": 6113,
@@ -223890,6 +223890,69 @@
       "path": "plugins/auth0/plugin.yaml"
     },
     {
+      "id": "aws-cloudtrail",
+      "type": "plugin",
+      "name": "AWS CloudTrail",
+      "description": "Polls a curated allow-list of high-signal AWS CloudTrail management events (IAM grants, trail tampering, public-S3 changes, KMS key destruction, cross-account sharing) so detections fire reliably without drowning in read-only describe/list noise. Allow-list is derived directly from the detection content shipped with AiSOC and is overridable via the ``event_names`` config field.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [],
+      "plugin_type": null,
+      "license": "MIT",
+      "homepage": "https://aws.amazon.com/cloudtrail/",
+      "min_aisoc_version": null,
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": false,
+      "source": "core",
+      "tier": "beta",
+      "path": "plugins/aws-cloudtrail/plugin.yaml"
+    },
+    {
+      "id": "aws-guardduty",
+      "type": "plugin",
+      "name": "AWS GuardDuty Connector",
+      "description": "AWS GuardDuty threat detection. Pulls findings directly from the native GuardDuty API (not Security Hub) for richer per-finding context including network connection action, runtime details, EKS audit shape, and S3 access patterns. One connector per region.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "aws",
+        "guardduty",
+        "threat-detection",
+        "native"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/aws_guardduty.py",
+      "min_aisoc_version": "7.1.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/aws-guardduty/plugin.yaml"
+    },
+    {
+      "id": "aws-vpc-flow",
+      "type": "plugin",
+      "name": "AWS VPC Flow Logs",
+      "description": "Streams AWS VPC Flow Log records from CloudWatch Logs with a default REJECT-only filter pattern so detections see denied connections (port scans, brute-force attempts, exfiltration probes) without paying to ingest the steady-state ACCEPT firehose. Parses the default v2 fixed-column layout natively and passes v5 / JSON custom layouts through on raw_event for downstream rules.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [],
+      "plugin_type": null,
+      "license": "MIT",
+      "homepage": "https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html",
+      "min_aisoc_version": null,
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": false,
+      "source": "core",
+      "tier": "beta",
+      "path": "plugins/aws-vpc-flow/plugin.yaml"
+    },
+    {
       "id": "azure-activity",
       "type": "plugin",
       "name": "Azure Activity Logs Connector",
@@ -224408,6 +224471,25 @@
       "path": "plugins/jamf-mdm/plugin.yaml"
     },
     {
+      "id": "kubernetes-audit",
+      "type": "plugin",
+      "name": "Kubernetes Audit Logs",
+      "description": "Kubernetes apiserver audit logs in dual delivery mode: webhook (apiserver pushes audit events to AiSOC's inbox via an AuditSink) or file_tail (AiSOC reads a local audit log forward from a byte cursor). Powers cluster-level detections including kubectl exec abuse, ServiceAccount token theft, RBAC privilege escalation, and impersonation. Severity is bucketed by verb + resource + response code so the inbox surfaces high-signal events instead of routine apiserver chatter.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [],
+      "plugin_type": null,
+      "license": "MIT",
+      "homepage": "https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/",
+      "min_aisoc_version": null,
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": false,
+      "source": "core",
+      "tier": "beta",
+      "path": "plugins/kubernetes-audit/plugin.yaml"
+    },
+    {
       "id": "lacework",
       "type": "plugin",
       "name": "Lacework / Fortinet FortiCNAPP Connector",
@@ -224595,6 +224677,33 @@
       "path": "plugins/onepassword-events/plugin.yaml"
     },
     {
+      "id": "orca",
+      "type": "plugin",
+      "name": "Orca Security Connector",
+      "description": "Orca Security cloud-native application protection platform. Pulls open alerts across workload, container, cloud configuration, identity, and data-risk surfaces from the unified /api/alerts REST endpoint. One connector instance covers every Orca surface.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "cnapp",
+        "cspm",
+        "cwpp",
+        "ciem",
+        "dspm",
+        "orca"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/orca.py",
+      "min_aisoc_version": "7.1.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/orca/plugin.yaml"
+    },
+    {
       "id": "osctrl",
       "type": "plugin",
       "name": "osctrl Connector",
@@ -224646,6 +224755,34 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/pagerduty-paging/plugin.yaml"
+    },
+    {
+      "id": "prisma-cloud",
+      "type": "plugin",
+      "name": "Prisma Cloud Connector",
+      "description": "Prisma Cloud cloud security platform. Pulls open alerts across CSPM, CWPP, CIEM, and DSPM surfaces via the v1 REST API (/alert).",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "prisma-cloud",
+        "cnapp",
+        "cspm",
+        "cwpp",
+        "ciem",
+        "dspm",
+        "palo-alto"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/prisma_cloud.py",
+      "min_aisoc_version": "7.1.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/prisma-cloud/plugin.yaml"
     },
     {
       "id": "rapid7-insightidr",

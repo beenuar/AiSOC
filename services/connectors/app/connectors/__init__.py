@@ -17,7 +17,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.connectors.auth0 import Auth0Connector
+from app.connectors.aws_cloudtrail import AWSCloudTrailConnector
+from app.connectors.aws_guardduty import AWSGuardDutyConnector
 from app.connectors.aws_security_hub import AWSSecurityHubConnector
+from app.connectors.aws_vpc_flow import AWSVPCFlowLogsConnector
 from app.connectors.azure_activity import AzureActivityConnector
 from app.connectors.azure_defender import AzureDefenderConnector
 from app.connectors.azure_entra import AzureEntraConnector
@@ -39,13 +42,16 @@ from app.connectors.gcp_scc import GCPSCCConnector
 from app.connectors.github import GitHubConnector
 from app.connectors.google_workspace import GoogleWorkspaceConnector
 from app.connectors.jira_connector import JiraConnector
+from app.connectors.kubernetes_audit import KubernetesAuditConnector
 from app.connectors.lacework import LaceworkConnector
 from app.connectors.m365_audit import M365AuditConnector
 from app.connectors.microsoft_sentinel import MicrosoftSentinelConnector
 from app.connectors.mimecast import MimecastConnector
 from app.connectors.okta import OktaConnector
 from app.connectors.onepassword import OnePasswordConnector
+from app.connectors.orca import OrcaConnector
 from app.connectors.osctrl import OsctrlConnector
+from app.connectors.prisma_cloud import PrismaCloudConnector
 from app.connectors.proofpoint import ProofpointConnector
 from app.connectors.rapid7_insightidr import Rapid7InsightIDRConnector
 from app.connectors.salesforce import SalesforceConnector
@@ -69,7 +75,10 @@ if TYPE_CHECKING:
 # Source of truth for "which connectors does this build know about".
 # Keep alphabetised by connector_id for predictable diffs.
 _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
+    AWSCloudTrailConnector,
+    AWSGuardDutyConnector,
     AWSSecurityHubConnector,
+    AWSVPCFlowLogsConnector,
     Auth0Connector,
     AzureActivityConnector,
     AzureDefenderConnector,
@@ -91,13 +100,16 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     GitHubConnector,
     GoogleWorkspaceConnector,
     JiraConnector,
+    KubernetesAuditConnector,
     LaceworkConnector,
     M365AuditConnector,
     MicrosoftSentinelConnector,
     MimecastConnector,
     OktaConnector,
     OnePasswordConnector,
+    OrcaConnector,
     OsctrlConnector,
+    PrismaCloudConnector,
     ProofpointConnector,
     Rapid7InsightIDRConnector,
     SalesforceConnector,
@@ -157,7 +169,10 @@ def list_connector_schemas() -> list[dict]:
 
 
 __all__ = [
+    "AWSCloudTrailConnector",
+    "AWSGuardDutyConnector",
     "AWSSecurityHubConnector",
+    "AWSVPCFlowLogsConnector",
     "Auth0Connector",
     "AzureActivityConnector",
     "AzureDefenderConnector",
@@ -183,6 +198,7 @@ __all__ = [
     "GitHubConnector",
     "GoogleWorkspaceConnector",
     "JiraConnector",
+    "KubernetesAuditConnector",
     "LaceworkConnector",
     "M365AuditConnector",
     "MicrosoftSentinelConnector",
@@ -190,7 +206,9 @@ __all__ = [
     "OAuthHints",
     "OktaConnector",
     "OnePasswordConnector",
+    "OrcaConnector",
     "OsctrlConnector",
+    "PrismaCloudConnector",
     "ProofpointConnector",
     "Rapid7InsightIDRConnector",
     "SalesforceConnector",
