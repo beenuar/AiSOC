@@ -1,0 +1,225 @@
+name: Compose Smoke (nightly cold-cache)
+
+# Nightly cold-build of the full Docker Compose stack on `main`.
+#
+# Whereas `compose-smoke.yml` optimizes for fast PR feedback by pulling
+# published images, this workflow exists to catch the regressions that only
+# show up when you build everything from source on a fresh machine:
+#
+#   - Upstream base image (`python:3.11-slim` etc.) breakage
+#   - Poetry/pip resolution drift on a cold cache
+#   - `pyproject.toml` ↔ pip-fallback list drift in service Dockerfiles
+#   - Build-time toolchain regressions (apt mirrors, system deps)
+#
+# The runner is fresh per scheduled invocation, so the OS layer cache is
+# already cold. We additionally pass `--no-cache --pull` to compose build to
+# force every Dockerfile layer to rebuild and every base image to refetch.
+
+on:
+  schedule:
+    # 09:00 UTC ≈ 02:00 PT — runs after upstream base image rebuilds usually
+    # land but before the workday so a nightly break is visible at standup.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      open_issue_on_failure:
+        description: 'Open a tracking issue if the smoke run fails'
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cold-smoke:
+    name: docker compose build --no-cache && up
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      contents: read
+      issues: write
+
+    env:
+      AISOC_VERSION: nightly-cold
+      COMPOSE_PROJECT_NAME: aisoc-nightly
+      # Cold rebuilds of the Python services on a default runner are slower
+      # than the PR smoke; give them more headroom.
+      HEALTH_BUDGET_SECONDS: '1200'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show runner capacity
+        run: |
+          echo "## Runner snapshot" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          uname -a >> "$GITHUB_STEP_SUMMARY"
+          docker --version >> "$GITHUB_STEP_SUMMARY"
+          docker compose version >> "$GITHUB_STEP_SUMMARY"
+          free -h >> "$GITHUB_STEP_SUMMARY" || true
+          df -h / >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Seed environment file
+        run: |
+          cp .env.example .env
+          # AISOC_VERSION is overridden purely for clarity in `docker ps`
+          # output — every image is built locally so the tag is just a label.
+          if grep -q '^AISOC_VERSION=' .env; then
+            sed -i "s|^AISOC_VERSION=.*|AISOC_VERSION=${AISOC_VERSION}|" .env
+          else
+            printf '\nAISOC_VERSION=%s\n' "${AISOC_VERSION}" >> .env
+          fi
+
+      - name: Validate compose file
+        run: docker compose config --quiet
+
+      - name: Build every service from scratch
+        run: |
+          # --no-cache: force every Dockerfile layer to re-execute.
+          # --pull:    force base image (`python:3.11-slim`, etc.) refetch so
+          #            we surface upstream breakage instead of using a stale
+          #            cached layer.
+          docker compose build --no-cache --pull
+
+      - name: Boot stack
+        run: docker compose up -d
+
+      - name: Wait for stack to converge
+        id: converge
+        run: |
+          set -u
+          deadline=$(( $(date +%s) + HEALTH_BUDGET_SECONDS ))
+
+          probe_postgres() {
+            docker compose ps --format '{{.Name}} {{.Health}}' \
+              | awk '$1=="aisoc-postgres" && $2=="healthy" {found=1} END {exit !found}'
+          }
+
+          probe_http() {
+            local url="$1" expect="$2"
+            local code
+            code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --max-time 5 "$url" || echo "000")
+            [ "$code" = "$expect" ]
+          }
+
+          ok_postgres=0
+          ok_api=0
+          ok_web=0
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            if [ "$ok_postgres" -eq 0 ] && probe_postgres; then
+              ok_postgres=1
+              echo "✓ postgres healthy"
+            fi
+            if [ "$ok_api" -eq 0 ] && probe_http "http://localhost:8000/health" "200"; then
+              ok_api=1
+              echo "✓ api /health 200"
+            fi
+            if [ "$ok_web" -eq 0 ] && probe_http "http://localhost:3000" "200"; then
+              ok_web=1
+              echo "✓ web 200"
+            fi
+            if [ "$ok_postgres" -eq 1 ] && [ "$ok_api" -eq 1 ] && [ "$ok_web" -eq 1 ]; then
+              elapsed=$(( $(date +%s) - (deadline - HEALTH_BUDGET_SECONDS) ))
+              echo "elapsed_seconds=${elapsed}" >> "$GITHUB_OUTPUT"
+              echo "Stack converged in ${elapsed}s"
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "::error::Stack did not converge within ${HEALTH_BUDGET_SECONDS}s"
+          echo "  postgres healthy: ${ok_postgres}"
+          echo "  api /health 200:  ${ok_api}"
+          echo "  web 200:          ${ok_web}"
+          exit 1
+
+      - name: Record success summary
+        if: success()
+        run: |
+          {
+            echo "## Cold-cache smoke result"
+            echo ""
+            echo "Full rebuild + boot converged in **${{ steps.converge.outputs.elapsed_seconds }}s**"
+            echo "(budget ${HEALTH_BUDGET_SECONDS}s)."
+            echo ""
+            echo "| gate | status |"
+            echo "|------|--------|"
+            echo "| postgres healthy | ✓ |"
+            echo "| api /health 200  | ✓ |"
+            echo "| web 200          | ✓ |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Capture forensics on failure
+        if: failure()
+        id: forensics
+        run: |
+          {
+            echo "## Compose state"
+            echo '```'
+            docker compose ps || true
+            echo '```'
+            echo
+            echo "## Recent service logs"
+            echo '```'
+            docker compose logs --tail=300 --no-color || true
+            echo '```'
+            echo
+            echo "## Disk after boot"
+            echo '```'
+            df -h /
+            echo '```'
+            echo
+            echo "## Memory after boot"
+            echo '```'
+            free -h || true
+            echo '```'
+          } | tee forensics.md
+
+      - name: Upload forensics artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-smoke-forensics-${{ github.run_id }}
+          path: forensics.md
+          retention-days: 14
+
+      - name: Open tracking issue on failure
+        if: failure() && (github.event_name == 'schedule' || github.event.inputs.open_issue_on_failure == 'true')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly cold-cache compose smoke failed ($(date -u +%Y-%m-%d))"
+          body=$(cat <<EOF
+          The nightly cold-cache smoke run on \`main\` failed.
+
+          **Run:** ${RUN_URL}
+          **Commit:** \`${{ github.sha }}\`
+
+          This catches regressions that PR smoke (pull-by-default) cannot see:
+          upstream base image drift, Poetry/pip resolution drift, and
+          \`pyproject.toml\` ↔ pip-fallback drift in service Dockerfiles.
+
+          Forensics artifact: \`nightly-smoke-forensics-${{ github.run_id }}\`
+          (under the run's Artifacts tab).
+          EOF
+          )
+          # Use only the `ci` label — it exists in the standard repo label set.
+          # Adding `nightly-smoke` would cause gh to fail-and-swallow on repos
+          # that don't have it pre-created. The "nightly cold-cache" framing
+          # is already in the issue title.
+          gh issue create \
+            --title "${title}" \
+            --body "${body}" \
+            --label "ci" \
+            || echo "::warning::Failed to open tracking issue"
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v --remove-orphans
