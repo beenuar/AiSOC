@@ -35,7 +35,7 @@ clickhouse-driver = "^0.2.8"
 # subqueries) before the statement is forwarded to ClickHouse. Pinned with
 # a wide range because sqlglot ships frequent dialect tweaks and we don't
 # want lockstep upgrades; the rewriter is exercised by unit tests.
-sqlglot = ">=23.0.0,<27.0.0"
+sqlglot = ">=23.0.0,<31.0.0"
 boto3 = "^1.34.0"
 neo4j = ">=5.19,<7.0"
 pysigma = "^0.11.0"
