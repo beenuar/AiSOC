@@ -52,8 +52,17 @@ router = APIRouter(prefix="/detection-proposals", tags=["detection_rules", "dac"
 # Repository root: services/api/app/api/v1/endpoints/detection_proposals.py
 #                   ^      ^   ^   ^   ^  ^         ^
 # parents:           [0]    [1] [2] [3] [4][5]       [6] = repo root
+#
+# On the host we sit six levels deep under the repo root. Inside the API
+# Docker image only the services/api/ subtree is copied to /app, so
+# parents[6] would IndexError. Resolve the deepest available ancestor and
+# let AISOC_REPO_ROOT override at runtime when the eval script is actually
+# needed (only relevant in dev/CI where the full repo is mounted).
 _ENDPOINT_FILE = Path(__file__).resolve()
-_REPO_ROOT_DEFAULT = _ENDPOINT_FILE.parents[6]
+_ENDPOINT_PARENTS = list(_ENDPOINT_FILE.parents)
+_REPO_ROOT_DEFAULT = (
+    _ENDPOINT_PARENTS[6] if len(_ENDPOINT_PARENTS) > 6 else _ENDPOINT_PARENTS[-1]
+)
 _REPO_ROOT = Path(os.environ.get("AISOC_REPO_ROOT", str(_REPO_ROOT_DEFAULT)))
 _EVAL_SCRIPT = _REPO_ROOT / "scripts" / "run_evals.py"
 
