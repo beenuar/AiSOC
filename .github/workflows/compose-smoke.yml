@@ -20,12 +20,25 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
+      # Compose surface itself.
       - 'docker-compose.yml'
       - 'docker-compose.demo.yml'
-      - 'services/*/Dockerfile'
-      - 'apps/web/Dockerfile'
       - '.env.example'
       - '.github/workflows/compose-smoke.yml'
+      # Any source under a service build context — Dockerfile changes alone
+      # are not enough, because a stale GHCR image will silently mask source
+      # bugs introduced under services/<svc>/. The detect step below decides
+      # whether to rebuild or pull.
+      - 'services/**'
+      - 'apps/web/**'
+      # The web image's build context is the repo root; these are the things
+      # its Dockerfile actually copies into the build.
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+      - 'tsconfig.base.json'
+      - 'package.json'
   push:
     branches:
       - main
@@ -34,10 +47,16 @@ on:
     paths:
       - 'docker-compose.yml'
       - 'docker-compose.demo.yml'
-      - 'services/*/Dockerfile'
-      - 'apps/web/Dockerfile'
       - '.env.example'
       - '.github/workflows/compose-smoke.yml'
+      - 'services/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+      - 'tsconfig.base.json'
+      - 'package.json'
   workflow_dispatch:
     inputs:
       force_build:
@@ -96,12 +115,15 @@ jobs:
       - name: Validate compose file
         run: docker compose config --quiet
 
-      - name: Detect Dockerfile changes
+      - name: Detect build-context changes
         id: dockerfile_changes
         run: |
-          # If a PR touched any Dockerfile, the published image on GHCR is
-          # stale relative to the diff under review. We must rebuild from
-          # source or the smoke test silently runs against the old image.
+          # The published GHCR image becomes stale the moment ANY file inside
+          # a service's build context changes — not only the Dockerfile. A PR
+          # that fixes a Python bug under services/api/app/ but leaves the
+          # Dockerfile untouched would otherwise silently boot the previous
+          # image and mask the fix (or the bug). We diff the full build
+          # contexts derived from docker-compose.yml to decide.
           force_build="${{ github.event.inputs.force_build || 'false' }}"
           if [ "${force_build}" = "true" ]; then
             echo "Manual force_build=true requested."
@@ -124,14 +146,42 @@ jobs:
             exit 0
           fi
 
-          changed=$(git diff --name-only "${base_ref}"...HEAD -- \
-            'services/*/Dockerfile' 'apps/web/Dockerfile' || true)
+          # Build paths mirror docker-compose.yml `build.context` entries.
+          # Keep this list in sync when adding/removing built services. The
+          # web image's context is the repo root but only a subset of the
+          # tree is COPY'd in — listing those entries explicitly avoids
+          # false-positive rebuilds on every PR.
+          paths=(
+            'services/api/'
+            'services/ingest/'
+            'services/enrichment/'
+            'services/fusion/'
+            'services/agents/'
+            'services/osquery-tls/'
+            'services/actions/'
+            'services/connectors/'
+            'services/threatintel/'
+            'services/ueba/'
+            'services/honeytokens/'
+            'services/purple-team/'
+            'services/realtime/'
+            'services/slack-bot/'
+            'apps/web/'
+            'packages/'
+            'pnpm-lock.yaml'
+            'pnpm-workspace.yaml'
+            'turbo.json'
+            'tsconfig.base.json'
+            'package.json'
+          )
+
+          changed=$(git diff --name-only "${base_ref}"...HEAD -- "${paths[@]}" || true)
           if [ -n "${changed}" ]; then
-            echo "Dockerfile(s) changed since ${base_ref}:"
+            echo "Build-context file(s) changed since ${base_ref}:"
             printf '  %s\n' ${changed}
             echo "rebuild=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No Dockerfile changes vs ${base_ref}; pulling published images."
+            echo "No build-context changes vs ${base_ref}; pulling published images."
             echo "rebuild=false" >> "$GITHUB_OUTPUT"
           fi
 
