@@ -46,6 +46,11 @@ jobs:
   # special: its Dockerfile copies workspace packages and pnpm config from the
   # monorepo root, so its build context must be `.` (the repo root) with the
   # Dockerfile path explicitly set.
+  #
+  # The matrix here must stay aligned with publish-images.yml — every service
+  # whose `:main` / `:latest` tag is published on push-to-main also needs a
+  # pinned `:vX.Y.Z` tag on release, so users who set `AISOC_VERSION=vX.Y.Z`
+  # in their .env get a reproducible deploy across the full stack.
   docker-push:
     name: Docker — Build & Push (${{ matrix.service }})
     runs-on: ubuntu-latest
@@ -54,6 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Demo-stack images (pulled by `pnpm aisoc:demo`).
           - service: api
             context: services/api
             dockerfile: Dockerfile
@@ -62,14 +68,6 @@ jobs:
             context: services/agents
             dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-agents
-          - service: enrichment
-            context: services/enrichment
-            dockerfile: Dockerfile
-            image: ghcr.io/beenuar/aisoc-enrichment
-          - service: ingest
-            context: services/ingest
-            dockerfile: Dockerfile
-            image: ghcr.io/beenuar/aisoc-ingest
           - service: realtime
             context: services/realtime
             dockerfile: Dockerfile
@@ -78,6 +76,41 @@ jobs:
             context: .
             dockerfile: apps/web/Dockerfile
             image: ghcr.io/beenuar/aisoc-web
+
+          # Full-stack backend images (pulled by `docker compose up -d` with
+          # `pull_policy: missing` when AISOC_VERSION is pinned).
+          - service: ingest
+            context: services/ingest
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            context: services/enrichment
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            context: services/fusion
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            context: services/actions
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            context: services/connectors
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            context: services/threatintel
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            context: services/ueba
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            context: services/slack-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-slack-bot
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
@@ -86,6 +119,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Web image needs NEXT_PUBLIC_DEMO_* flags baked in at build time so the
+      # released ghcr.io/beenuar/aisoc-web:vX.Y.Z image (used by AISOC_VERSION
+      # pinning) ships a bundle that knows it's a demo. Mirrors the same step
+      # in publish-images.yml. Other images gate demo behavior at runtime via
+      # AISOC_DEMO_MODE so they don't need build args.
+      - id: web-build-args
+        if: matrix.service == 'web'
+        run: |
+          {
+            echo 'build_args<<EOF'
+            echo 'NEXT_PUBLIC_DEMO_MODE=true'
+            echo 'NEXT_PUBLIC_DEMO_DEEPLINK=/cases/INC-RT-001?tab=ledger'
+            echo 'NEXT_PUBLIC_DEMO_BANNER=Demo data resets daily at 00:00 UTC. All write actions are disabled.'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@aisoc.dev'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=aisoc-demo'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
@@ -94,5 +146,7 @@ jobs:
           tags: |
             ${{ matrix.image }}:${{ github.ref_name }}
             ${{ matrix.image }}:latest
+          build-args: ${{ steps.web-build-args.outputs.build_args }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          platforms: linux/amd64

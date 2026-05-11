@@ -216,6 +216,8 @@ services:
     build:
       context: ./services/api
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-api
     depends_on:
       postgres:
@@ -247,6 +249,8 @@ services:
     build:
       context: ./services/ingest
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-ingest:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-ingest
     depends_on:
       kafka:
@@ -271,6 +275,8 @@ services:
     build:
       context: ./services/enrichment
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-enrichment:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-enrichment
     depends_on:
       redis:
@@ -294,6 +300,8 @@ services:
     build:
       context: ./services/fusion
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-fusion:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-fusion
     depends_on:
       redis:
@@ -314,6 +322,8 @@ services:
     build:
       context: ./services/agents
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-agents:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-agents
     depends_on:
       postgres:
@@ -342,6 +352,9 @@ services:
     build:
       context: ./services/osquery-tls
       dockerfile: Dockerfile
+    # Not in publish-images.yml matrix yet — pull falls back to local build.
+    image: ghcr.io/beenuar/aisoc-osquery-tls:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-osquery-tls
     depends_on:
       postgres:
@@ -366,6 +379,8 @@ services:
     build:
       context: ./services/actions
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-actions:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-actions
     depends_on:
       redis:
@@ -387,6 +402,8 @@ services:
     build:
       context: ./services/connectors
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-connectors:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-connectors
     depends_on:
       kafka:
@@ -415,6 +432,8 @@ services:
     build:
       context: ./services/threatintel
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-threatintel:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-threatintel
     depends_on:
       redis:
@@ -445,6 +464,8 @@ services:
     build:
       context: ./services/ueba
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-ueba:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-ueba
     depends_on:
       postgres:
@@ -469,6 +490,9 @@ services:
     build:
       context: ./services/honeytokens
       dockerfile: Dockerfile
+    # Not in publish-images.yml matrix yet — pull falls back to local build.
+    image: ghcr.io/beenuar/aisoc-honeytokens:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-honeytokens
     depends_on:
       postgres:
@@ -492,6 +516,9 @@ services:
     build:
       context: ./services/purple-team
       dockerfile: Dockerfile
+    # Not in publish-images.yml matrix yet — pull falls back to local build.
+    image: ghcr.io/beenuar/aisoc-purple-team:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-purple-team
     depends_on:
       postgres:
@@ -513,6 +540,8 @@ services:
     build:
       context: ./services/realtime
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-realtime:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-realtime
     depends_on:
       redis:
@@ -538,6 +567,8 @@ services:
     build:
       context: ./services/slack-bot
       dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-slack-bot:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-slack-bot
     depends_on:
       - api
@@ -565,6 +596,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    image: ghcr.io/beenuar/aisoc-web:${AISOC_VERSION:-latest}
+    pull_policy: missing
     container_name: aisoc-web
     depends_on:
       - api

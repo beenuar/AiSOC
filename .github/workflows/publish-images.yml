@@ -36,6 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Demo-stack images (must always be fresh; pnpm aisoc:demo pulls these by tag).
           - service: api
             context: services/api
             dockerfile: Dockerfile
@@ -52,6 +53,42 @@ jobs:
             context: .
             dockerfile: apps/web/Dockerfile
             image: ghcr.io/beenuar/aisoc-web
+
+          # Full-stack backend images. Published so `docker compose up -d` can
+          # pull instead of build (with `pull_policy: missing`), shaving the
+          # cold-start time from ~15 min to ~90 s on a fresh clone.
+          - service: ingest
+            context: services/ingest
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            context: services/enrichment
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            context: services/fusion
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            context: services/actions
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            context: services/connectors
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            context: services/threatintel
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            context: services/ueba
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            context: services/slack-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-slack-bot
     steps:
       - uses: actions/checkout@v4
 
