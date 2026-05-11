@@ -19,7 +19,7 @@ redis = { version = ">=5.0.4,<8.0.0", extras = ["hiredis"] }
 httpx = ">=0.27,<0.29"
 python-jose = { version = "^3.3.0", extras = ["cryptography"] }
 PyJWT = "^2.8.0"  # Used by OIDC and SAML auth flows (separate from python-jose)
-cryptography = "^42.0.0"  # Direct dep for credential vault Fernet
+cryptography = ">=42,<49"  # Direct dep for credential vault Fernet
 bcrypt = ">=4.1.2,<6.0.0"  # Used directly by app.core.security (passlib is no longer compatible with bcrypt >= 4)
 python-multipart = "^0.0.9"
 tenacity = ">=8.3,<10.0"
