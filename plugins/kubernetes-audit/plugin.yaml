@@ -6,13 +6,13 @@ vendor: Kubernetes
 publisher: AiSOC Community
 description: >
   Kubernetes apiserver audit logs in dual delivery mode: webhook
-  (apiserver pushes audit events to AiSOC's inbox via an AuditSink)
-  or file_tail (AiSOC reads a local audit log forward from a byte
-  cursor). Powers cluster-level detections including kubectl exec
-  abuse, ServiceAccount token theft, RBAC privilege escalation,
-  and impersonation. Severity is bucketed by verb + resource +
-  response code so the inbox surfaces high-signal events instead
-  of routine apiserver chatter.
+  (apiserver pushes audit events to AiSOC's tenant-scoped ingest
+  endpoint with a shared-secret header) or file_tail (AiSOC reads
+  a local audit log forward from a byte cursor). Powers cluster-level
+  detections including kubectl exec abuse, ServiceAccount token theft,
+  RBAC privilege escalation, and impersonation. Severity is bucketed
+  by verb + resource + response code so the inbox surfaces high-signal
+  events instead of routine apiserver chatter.
 homepage: https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
 docs_url: /docs/connectors/kubernetes-audit
 license: MIT
@@ -44,14 +44,19 @@ config_schema:
       event so detection content and investigations can filter
       to a single cluster.
   - name: inbox_token
-    label: Inbox token (webhook mode only)
+    label: Inbox token (webhook mode, legacy path)
     type: secret
     required: false
     help_text: >
+      Optional. Use only if you cannot configure the apiserver to
+      send the ``X-AiSOC-K8s-Token`` header (some managed control
+      planes restrict custom headers in audit-webhook kubeconfig).
       Bound inbox token created with the ``k8s-audit`` template
       attached. Configure your apiserver AuditSink or
       ``--audit-webhook-config-file`` to POST audit events to
-      ``/v1/inbox/<this-token>``.
+      ``/v1/inbox/<this-token>``. Prefer the dedicated
+      ``/v1/ingest/k8s-audit/<tenant_id>`` endpoint described in
+      the connector docs whenever possible.
   - name: audit_log_path
     label: Audit log path (file_tail mode only)
     type: string

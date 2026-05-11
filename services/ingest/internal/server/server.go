@@ -40,7 +40,7 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler) *S
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Tenant-ID", "X-Inbox-Token", "X-Splunk-Token", "X-Signature", "X-Hub-Signature-256"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Tenant-ID", "X-Inbox-Token", "X-Splunk-Token", "X-Signature", "X-Hub-Signature-256", "X-AiSOC-K8s-Token"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
@@ -52,6 +52,15 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler) *S
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/ingest", h.IngestEvents)
 		r.Post("/ingest/batch", h.IngestEvents)
+
+		// Track D / v7.1.0 — Kubernetes apiserver audit-webhook target.
+		// Tenant binding lives in the URL path (the apiserver's
+		// audit-webhook kubeconfig is awkward to add custom headers
+		// to but trivial to point at a templated URL); the auth
+		// boundary is the X-AiSOC-K8s-Token shared secret enforced
+		// inside the handler. Disabled (returns 503) until an
+		// operator sets K8S_AUDIT_SHARED_SECRET on the ingest pod.
+		r.Post("/ingest/k8s-audit/{tenant_id}", h.K8sAuditEvents)
 
 		// Workstream 6 — universal capture push paths.
 		// /v1/inbox/{token}        → generic JSON or NDJSON webhook

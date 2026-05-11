@@ -163,6 +163,38 @@ var connectorProfiles = map[string]connectorProfile{
 			"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFORMATIONAL": 1,
 		},
 	},
+	// kubernetes_audit — Track D, v7.1.0.
+	//
+	// The apiserver POSTs a v1 EventList batch and we explode it into
+	// individual events upstream of Normalize, so by the time we get
+	// here `payload` is one audit.k8s.io/v1 Event JSON object. Class
+	// 6003 is the OCSF "API Activity" class which is the right shape
+	// for a request/response style event with verb + resource + actor.
+	// Severity is derived from the connector's heuristic and arrives
+	// as a lowercase string; the map below mirrors KubernetesAuditConnector
+	// so on-prem file_tail and webhook events end up with the same
+	// severity_id.
+	"kubernetes_audit": {
+		product:   OcsfProduct{Name: "Kubernetes Audit", VendorName: "Kubernetes"},
+		classUID:  6003,
+		className: "API Activity",
+		fieldMap: map[string]string{
+			"auditID":              "finding.uid",
+			"verb":                 "activity_name",
+			"user.username":        "actor.user.name",
+			"objectRef.resource":   "finding.title",
+			"objectRef.namespace":  "cloud.account.uid",
+			"objectRef.name":       "resource.name",
+			"sourceIPs.0":          "src_endpoint.ip",
+			"userAgent":            "http_request.user_agent",
+			"responseStatus.code":  "status_code",
+			"stage":                "status_detail",
+			"stageTimestamp":       "time",
+		},
+		severityMap: map[string]int{
+			"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
+		},
+	},
 }
 
 // New creates a new Normalizer instance and loads the ATT&CK corpus.

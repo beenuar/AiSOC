@@ -90,18 +90,35 @@ clusters.
 - **`services/connectors/app/connectors/kubernetes_audit.py`** —
   `KubernetesAuditConnector` shipping with two delivery modes selected via the
   `mode` config field:
-  - **`webhook`** — Kubernetes API server pushes audit events to AiSOC's
-    inbox endpoint via the apiserver's `AuditSink` resource or
-    `--audit-webhook-config-file`. Token-bound, template-bound (`k8s-audit`),
-    leverages the existing `/v1/inbox/{token}` ingest path so no new HTTP
-    route was needed.
+  - **`webhook` (recommended)** — Kubernetes API server pushes audit events
+    to AiSOC's new dedicated `POST /v1/ingest/k8s-audit/{tenant_id}` route,
+    authenticated with a shared secret in the `X-AiSOC-K8s-Token` header
+    (compared in constant time so partial-prefix matches still fail). The
+    legacy `/v1/inbox/{token}` path with the `k8s-audit` template is kept
+    around as a fallback for control planes that cannot inject custom
+    headers into the audit-webhook kubeconfig.
   - **`file_tail`** — AiSOC's connector pod tails a local `audit.log` file
     using a byte-position cursor (atomically written to a `.aisoc-cursor`
     sidecar), with rotation/truncation detection and a hard per-poll byte cap
     so a backlog can't blow up a single poll cycle.
+- **`services/ingest/internal/handler/k8s_audit.go`** — New Go handler for
+  the dedicated webhook route. Caps body size via `K8S_AUDIT_MAX_BODY_BYTES`
+  (default 16 MiB), rejects oversized batches with `413` so the apiserver
+  shrinks `--audit-webhook-batch-max-size` and retries, and publishes each
+  `EventList.items[]` entry through the existing normalizer + Kafka publisher
+  using `connector_type: kubernetes_audit`. The route is disabled (returns
+  `503`) until an operator sets `K8S_AUDIT_SHARED_SECRET`, so a fresh
+  install never accidentally accepts unauthenticated audit traffic.
+- **`services/ingest/internal/normalizer/normalizer.go`** — Added the
+  `kubernetes_audit` connector profile. Maps `auditID` to `external_id`,
+  `verb` to `activity_name`, `user.username` to `actor.user.name`,
+  `objectRef.{namespace,resource,name}` to a composite `target.resource.name`,
+  and translates the connector's string severity (`critical|high|medium|low|
+  info`) into OCSF integer severities (5/4/3/2/1).
 - **`services/ingest/internal/normalizer/templates/k8s-audit.yaml`** — New
-  inbox template that maps Kubernetes apiserver `Event` payloads
-  (`apiVersion: audit.k8s.io/v1`) onto AiSOC's normalised event shape:
+  inbox template (legacy path) that maps Kubernetes apiserver `Event`
+  payloads (`apiVersion: audit.k8s.io/v1`) onto AiSOC's normalised event
+  shape:
   - `external_id ← auditID`
   - `vendor ← "Kubernetes"`, `product ← "apiserver-audit"`,
     `category ← "k8s_audit"`

@@ -42,6 +42,21 @@ type Config struct {
 	// bigger gets a 413; vendors that page through alerts should batch
 	// at the source rather than push 50MB at once.
 	InboxMaxBodyBytes  int64
+
+	// Kubernetes audit webhook (Track D, v7.1.0).
+	//
+	// K8sAuditSharedSecret is the value the apiserver must present in the
+	// X-AiSOC-K8s-Token header on every POST /v1/ingest/k8s-audit/{tenant}
+	// request. The route returns 503 when this is empty and 401 when the
+	// header is missing or doesn't match. Empty by default so a fresh
+	// install doesn't accidentally accept anonymous K8s audit pushes.
+	K8sAuditSharedSecret string
+	// K8sAuditMaxBodyBytes caps a single apiserver audit batch. Mirrors
+	// InboxMaxBodyBytes but tracked separately so K8s tuning doesn't drag
+	// the broader inbox limit around. The apiserver's default audit batch
+	// max is ~10 MiB, so 16 MiB gives a little headroom without
+	// leaving the door open for a runaway producer.
+	K8sAuditMaxBodyBytes int64
 }
 
 // Load reads configuration from environment variables
@@ -77,6 +92,10 @@ func Load() (*Config, error) {
 		InboxEnabled:      getEnv("INBOX_ENABLED", "true") == "true",
 		InboxTemplatesDir: getEnv("INBOX_TEMPLATES_DIR", "/app/templates"),
 		InboxMaxBodyBytes: int64(mustGetEnvInt("INBOX_MAX_BODY_BYTES", 10*1024*1024)),
+
+		// Kubernetes audit webhook (Track D, v7.1.0).
+		K8sAuditSharedSecret: getEnv("K8S_AUDIT_SHARED_SECRET", ""),
+		K8sAuditMaxBodyBytes: int64(mustGetEnvInt("K8S_AUDIT_MAX_BODY_BYTES", 16*1024*1024)),
 	}
 
 	if cfg.JWTSecret == "" && os.Getenv("ENV") != "development" {
