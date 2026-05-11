@@ -352,7 +352,7 @@ async def update_saved_view(
     return SavedViewModel.from_orm(row)
 
 
-@router.delete("/{view_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{view_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_saved_view(
     view_id: str,
     user: AuthUser,
