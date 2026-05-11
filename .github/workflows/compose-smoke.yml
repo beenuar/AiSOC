@@ -88,6 +88,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so the rebuild-detection step below can resolve a
+          # merge base against `origin/${base_ref}`. With the default
+          # `fetch-depth: 1` shallow clone, `git diff base...HEAD` errors
+          # with `no merge base`, our `|| true` swallows it, the diff
+          # appears empty, and we silently pull a stale GHCR image even
+          # when the PR has source-code fixes. Full history is cheap on
+          # this runner and the only safe option.
+          fetch-depth: 0
 
       - name: Show runner capacity
         run: |
@@ -175,7 +184,20 @@ jobs:
             'package.json'
           )
 
-          changed=$(git diff --name-only "${base_ref}"...HEAD -- "${paths[@]}" || true)
+          # Fail-open: if `git diff` errors (shallow clone, missing merge
+          # base, etc.) we rebuild rather than risk pulling a stale image
+          # that masks the very fix this PR is shipping. The previous
+          # `|| true` form silently set `rebuild=false` and caused the
+          # IndexError in detection_proposals.py to keep landing in CI
+          # logs even after the source fix had been pushed.
+          diff_status=0
+          changed=$(git diff --name-only "${base_ref}"...HEAD -- "${paths[@]}") || diff_status=$?
+          if [ "${diff_status}" -ne 0 ]; then
+            echo "git diff vs ${base_ref} failed (exit ${diff_status}); rebuilding from source."
+            echo "rebuild=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if [ -n "${changed}" ]; then
             echo "Build-context file(s) changed since ${base_ref}:"
             printf '  %s\n' ${changed}
