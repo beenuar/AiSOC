@@ -318,8 +318,8 @@ def _extract_filters(question: str, intents: QueryIntents) -> None:
     )
     for prep in _IMPLICIT_PREPS:
         for field_name in _IMPLICIT_FIELDS:
-            canonical = _resolve_field(field_name)
-            if not canonical:
+            resolved = _resolve_field(field_name)
+            if not resolved:
                 continue
             pattern = rf"\b{prep}\s+{re.escape(field_name)}\s+([a-z0-9_\-\.@\*]+)\b"
             for m in re.finditer(pattern, text):
@@ -341,11 +341,11 @@ def _extract_filters(question: str, intents: QueryIntents) -> None:
                     continue
                 # Avoid double-adding a filter we already extracted via the
                 # explicit ``field is value`` path.
-                key = (canonical, value)
+                key = (resolved, value)
                 if key in seen_pairs:
                     continue
                 seen_pairs.add(key)
-                intents.filters.append((canonical, "==", value))
+                intents.filters.append((resolved, "==", value))
 
     # Bare ``from <hostname>`` — no explicit field word but the token looks
     # like a hostname (alphanumeric with at least one digit, or contains a

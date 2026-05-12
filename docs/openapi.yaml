@@ -1195,6 +1195,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/postmortem:
+    get:
+      tags:
+      - cases
+      summary: Download the per-case blameless post-mortem (JSON or HTML)
+      description: 'Generate a deterministic blameless post-mortem for one case.
+
+
+        Distinct from ``/summary``: the summary is a snapshot of *what the case
+
+        looks like right now*; the post-mortem is a retrospective oriented around
+
+        *what happened, when did we find out, what did we do, and what should we
+
+        change*. Both are deterministic — same case state in, same artefact out.'
+      operationId: case_auto_postmortem_api_v1_cases__case_id__postmortem_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      - name: format
+        in: query
+        required: false
+        schema:
+          enum:
+          - json
+          - html
+          type: string
+          description: Response format. ``json`` returns the structured CasePostmortem;
+            ``html`` returns a print-ready blameless retrospective (use the browser's
+            Save-as-PDF affordance for the runbook archive).
+          default: json
+          title: Format
+        description: Response format. ``json`` returns the structured CasePostmortem;
+          ``html`` returns a print-ready blameless retrospective (use the browser's
+          Save-as-PDF affordance for the runbook archive).
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/cases/{case_id}/investigations/{run_id}/report.pdf:
     get:
       tags:
@@ -10519,8 +10572,21 @@ paths:
       tags:
       - Threat Intelligence
       summary: Create Indicator
-      description: Publish a new STIX 2.1 indicator.
+      description: Publish a new STIX 2.1 indicator and optionally mirror it to MISP.
       operationId: create_indicator_api_v1_threatintel_stix_indicators_post
+      parameters:
+      - name: push_to_misp
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: Mirror this indicator to the configured MISP instance. Defaults
+            to the value of MISP_PUSH_AUTO.
+          title: Push To Misp
+        description: Mirror this indicator to the configured MISP instance. Defaults
+          to the value of MISP_PUSH_AUTO.
       requestBody:
         required: true
         content:
@@ -10533,7 +10599,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/STIXIndicator'
+                $ref: '#/components/schemas/STIXIndicatorWithPush'
         '422':
           description: Validation Error
           content:
@@ -10558,21 +10624,34 @@ paths:
       tags:
       - Threat Intelligence
       summary: Create Bundle
-      description: Create a new STIX 2.1 bundle from a list of STIX objects.
+      description: Create a new STIX 2.1 bundle and optionally mirror it to MISP.
       operationId: create_bundle_api_v1_threatintel_stix_bundles_post
+      parameters:
+      - name: push_to_misp
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: Mirror this bundle to the configured MISP instance as a single
+            MISP event (one attribute per translatable indicator). Defaults to MISP_PUSH_AUTO.
+          title: Push To Misp
+        description: Mirror this bundle to the configured MISP instance as a single
+          MISP event (one attribute per translatable indicator). Defaults to MISP_PUSH_AUTO.
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/STIXBundleCreate'
-        required: true
       responses:
         '201':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/STIXBundle'
+                $ref: '#/components/schemas/STIXBundleWithPush'
         '422':
           description: Validation Error
           content:
@@ -10593,6 +10672,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TAXIICollectionListResponse'
+  /api/v1/threatintel/stix/misp/health:
+    get:
+      tags:
+      - Threat Intelligence
+      - MISP push
+      summary: Misp Push Health
+      description: 'Check whether MISP push is configured and reachable.
+
+
+        Surfaces enough state for an operator to debug a misconfigured
+
+        deployment without leaking the API key. Calls ``/users/view/me``
+
+        against MISP only when the client is configured.'
+      operationId: misp_push_health_api_v1_threatintel_stix_misp_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MispPushHealth'
+  /api/v1/threatintel/stix/misp/dry-run:
+    post:
+      tags:
+      - Threat Intelligence
+      - MISP push
+      summary: Misp Push Dry Run
+      description: 'Show the MISP event payload that *would* be pushed, without sending
+        it.
+
+
+        Useful for operators tuning STIX → MISP mappings, and for proving
+
+        that an air-gapped deployment will refuse to send. The endpoint
+
+        runs the air-gap check against the configured MISP URL and reports
+
+        the result, but never opens an HTTP connection.'
+      operationId: misp_push_dry_run_api_v1_threatintel_stix_misp_dry_run_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MispDryRunRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MispDryRunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/shifts:
     get:
       tags:
@@ -18085,6 +18223,153 @@ components:
       - connector_count
       - health_score
       title: MetricsOut
+    MispDryRunRequest:
+      properties:
+        indicator:
+          anyOf:
+          - $ref: '#/components/schemas/STIXIndicatorCreate'
+          - type: 'null'
+        bundle:
+          anyOf:
+          - $ref: '#/components/schemas/STIXBundleCreate'
+          - type: 'null'
+        distribution:
+          anyOf:
+          - type: integer
+            maximum: 4.0
+            minimum: 0.0
+          - type: 'null'
+          title: Distribution
+        threat_level:
+          anyOf:
+          - type: integer
+            maximum: 4.0
+            minimum: 1.0
+          - type: 'null'
+          title: Threat Level
+        analysis:
+          anyOf:
+          - type: integer
+            maximum: 2.0
+            minimum: 0.0
+          - type: 'null'
+          title: Analysis
+      type: object
+      title: MispDryRunRequest
+      description: Either ``indicator`` or ``bundle`` must be provided.
+    MispDryRunResponse:
+      properties:
+        event:
+          additionalProperties: true
+          type: object
+          title: Event
+        attribute_count:
+          type: integer
+          title: Attribute Count
+        skipped_count:
+          type: integer
+          title: Skipped Count
+        would_push_to:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Would Push To
+        airgap_blocked:
+          type: boolean
+          title: Airgap Blocked
+          default: false
+        airgap_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Airgap Message
+      type: object
+      required:
+      - event
+      - attribute_count
+      - skipped_count
+      title: MispDryRunResponse
+    MispPushHealth:
+      properties:
+        configured:
+          type: boolean
+          title: Configured
+        airgapped:
+          type: boolean
+          title: Airgapped
+        auto_push:
+          type: boolean
+          title: Auto Push
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+        user:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: User
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        ok:
+          type: boolean
+          title: Ok
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - configured
+      - airgapped
+      - auto_push
+      - ok
+      title: MispPushHealth
+    MispPushResult:
+      properties:
+        pushed:
+          type: boolean
+          title: Pushed
+        misp_event_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Misp Event Id
+        misp_event_uuid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Misp Event Uuid
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+        pushed_attributes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pushed Attributes
+        skipped_attributes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Skipped Attributes
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - pushed
+      title: MispPushResult
+      description: Embedded in a STIX response when ``push_to_misp=true``.
     MitreCoverageCell:
       properties:
         techniqueId:
@@ -18394,6 +18679,16 @@ components:
           type: string
           format: date-time
           title: Created At
+        engine:
+          type: string
+          title: Engine
+          description: '`deterministic` or `llm`.'
+          default: deterministic
+        grammar_validated:
+          type: boolean
+          title: Grammar Validated
+          description: True if every emitted query passed grammar checks.
+          default: true
         result:
           anyOf:
           - $ref: '#/components/schemas/QueryResult'
@@ -18462,6 +18757,16 @@ components:
           type: string
           format: date-time
           title: Created At
+        engine:
+          type: string
+          title: Engine
+          description: '`deterministic` or `llm`.'
+          default: deterministic
+        grammar_validated:
+          type: boolean
+          title: Grammar Validated
+          description: True if every emitted query passed grammar checks.
+          default: true
       type: object
       required:
       - request_id
@@ -20296,6 +20601,38 @@ components:
       required:
       - objects
       title: STIXBundleCreate
+    STIXBundleWithPush:
+      properties:
+        type:
+          type: string
+          title: Type
+          default: bundle
+        id:
+          type: string
+          title: Id
+        spec_version:
+          type: string
+          title: Spec Version
+          default: '2.1'
+        created:
+          type: string
+          title: Created
+        objects:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Objects
+        misp:
+          anyOf:
+          - $ref: '#/components/schemas/MispPushResult'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - created
+      - objects
+      title: STIXBundleWithPush
     STIXIndicator:
       properties:
         type:
@@ -20417,6 +20754,80 @@ components:
       - name
       - pattern
       title: STIXIndicatorCreate
+    STIXIndicatorWithPush:
+      properties:
+        type:
+          type: string
+          title: Type
+          default: indicator
+        spec_version:
+          type: string
+          title: Spec Version
+          default: '2.1'
+        id:
+          type: string
+          title: Id
+        created:
+          type: string
+          title: Created
+        modified:
+          type: string
+          title: Modified
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        indicator_types:
+          items:
+            type: string
+          type: array
+          title: Indicator Types
+          default: []
+        pattern:
+          type: string
+          title: Pattern
+        pattern_type:
+          type: string
+          title: Pattern Type
+          default: stix
+        valid_from:
+          type: string
+          title: Valid From
+        valid_until:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Valid Until
+        confidence:
+          anyOf:
+          - type: integer
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+        labels:
+          items:
+            type: string
+          type: array
+          title: Labels
+          default: []
+        misp:
+          anyOf:
+          - $ref: '#/components/schemas/MispPushResult'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - created
+      - modified
+      - name
+      - pattern
+      - valid_from
+      title: STIXIndicatorWithPush
     SavedViewModel:
       properties:
         id:

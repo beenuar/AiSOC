@@ -26,7 +26,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
@@ -37,30 +37,73 @@ from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
 
+if TYPE_CHECKING:
+    # Static-only re-export so type checkers can see the dataclass fields and
+    # function signatures of the translator. At runtime we load the module
+    # dynamically (see ``_load_nl_query_module`` below) to avoid colliding
+    # with the API service's own ``app`` package.
+    from services.agents.app.nl_query import (  # noqa: F401
+        GrammarError,
+        NLQuery,
+        TranslatedQuery,
+        enhance_with_llm,
+    )
+    from services.agents.app.nl_query import translate as deterministic_translate  # noqa: F401
+
 # ---------------------------------------------------------------------------
 # Bootstrap import path for ``services/agents/app/nl_query``.
 #
 # The translator is owned by ``services/agents`` so that the eval harness, the
-# agents themselves, and the API can all share the same code path. Mirroring
-# the pattern in detection_proposals.py we add the agents service to
-# ``sys.path`` lazily — this keeps services decoupled at deploy time while
-# letting both the API process and the eval CLI import the same module.
+# agents themselves, and the API can all share the same code path. We load it
+# via ``importlib`` under a unique module name (``aisoc_agents_nl_query``) so
+# it does not collide with the API service's own ``app`` package — both
+# services define their own ``app/__init__.py`` regular package and Python's
+# importer will not merge them.
 # ---------------------------------------------------------------------------
 
-_REPO_ROOT = Path(__file__).resolve().parents[5]
-_AGENTS_PATH = str(_REPO_ROOT / "services" / "agents")
-if _AGENTS_PATH not in sys.path:
-    sys.path.insert(0, _AGENTS_PATH)
 
-from app.nl_query import (  # noqa: E402  -- requires the sys.path tweak above
-    GrammarError,
-    NLQuery,
-    TranslatedQuery,
-    enhance_with_llm,
-)
-from app.nl_query import (  # noqa: E402  -- requires the sys.path tweak above
-    translate as deterministic_translate,
-)
+def _load_nl_query_module():
+    """Load ``services/agents/app/nl_query`` under a collision-free name."""
+    import importlib.util
+
+    # Walk up until we find the ``services/agents/app/nl_query`` tree so we
+    # are robust to both the repo layout (parents[6]) and any deployment
+    # variant where the file lives under a slightly different prefix.
+    here = Path(__file__).resolve()
+    nl_query_dir: Path | None = None
+    for ancestor in here.parents:
+        candidate = ancestor / "services" / "agents" / "app" / "nl_query"
+        if candidate.joinpath("__init__.py").is_file():
+            nl_query_dir = candidate
+            break
+    if nl_query_dir is None:
+        raise ImportError("NL query module not found — expected services/agents/app/nl_query/")
+    init_file = nl_query_dir / "__init__.py"
+
+    package_name = "aisoc_agents_nl_query"
+    if package_name in sys.modules:
+        return sys.modules[package_name]
+
+    spec = importlib.util.spec_from_file_location(
+        package_name,
+        init_file,
+        submodule_search_locations=[str(nl_query_dir)],
+    )
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        raise ImportError(f"Could not build spec for {init_file}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_nl_query = _load_nl_query_module()
+if not TYPE_CHECKING:
+    GrammarError = _nl_query.GrammarError
+    NLQuery = _nl_query.NLQuery
+    TranslatedQuery = _nl_query.TranslatedQuery
+    enhance_with_llm = _nl_query.enhance_with_llm
+    deterministic_translate = _nl_query.translate
 
 router = APIRouter(prefix="/nl-query", tags=["nl_query"])
 
