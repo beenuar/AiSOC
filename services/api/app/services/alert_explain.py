@@ -868,7 +868,6 @@ async def _record_llm_cost(
 
 from sqlalchemy import text  # noqa: E402  (kept near use site for clarity)
 
-
 _UPSERT_RUN_COST = text(
     """
     INSERT INTO aisoc_run_costs (

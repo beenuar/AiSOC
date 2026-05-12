@@ -40,7 +40,6 @@ keeps these tests fast and deterministic.
 
 from __future__ import annotations
 
-import time
 import uuid
 from types import SimpleNamespace
 from typing import Any
@@ -73,7 +72,6 @@ from app.services.explain_rate_limit import (
 )
 from app.services.llm_resolver import LlmConfig
 from fastapi import HTTPException, Response
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -589,7 +587,6 @@ class TestBuildSuggestedActions:
     def test_critical_severity_promotes_to_case(self) -> None:
         alert = _alert(severity="critical")
         actions = _build_suggested_actions(alert, mitre_ids=[])
-        titles = [a.title for a in actions]
         # Critical severity always adds "Open a case" with priority=immediate.
         case_action = next(a for a in actions if "Open a case" in a.title)
         assert case_action.priority == "immediate"
