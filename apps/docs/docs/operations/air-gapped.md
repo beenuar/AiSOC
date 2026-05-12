@@ -215,5 +215,5 @@ enforcement.
 ## Related pages
 
 * [Credentials & Vault](credentials.md) — how tenant secrets are encrypted at rest
-* [API configuration](../getting-started/configuration.md) — all environment variables
+* [Environment variables](../deployment/env-vars.md) — full configuration reference
 * [Plugin SDK](../plugins/overview.md) — build connectors that work under air-gap

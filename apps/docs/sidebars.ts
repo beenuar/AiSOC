@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
         "concepts/cases",
         "concepts/playbooks",
         "concepts/detections",
+        "concepts/live-actions",
       ],
     },
     {
