@@ -83,9 +83,7 @@ class AWSSecurityGroupsClient:
     def _resolve_sg_id(self, sg_id: str | None) -> str:
         resolved = sg_id or self._sg_id
         if not resolved:
-            raise ValueError(
-                "security_group_id is required (set at construct time or pass sg_id=)"
-            )
+            raise ValueError("security_group_id is required (set at construct time or pass sg_id=)")
         return resolved
 
     @staticmethod
@@ -144,10 +142,7 @@ class AWSSecurityGroupsClient:
             "success": False,
             "action": action,
             "ip": ip,
-            "note": (
-                "boto3 not installed in actions service — install boto3 to "
-                "enable live AWS Security Group execution."
-            ),
+            "note": ("boto3 not installed in actions service — install boto3 to enable live AWS Security Group execution."),
         }
 
     # ------------------------------------------------------------------
@@ -269,9 +264,7 @@ class AWSSecurityGroupsClient:
 
         key_id, secret, token = await self._get_credentials()
         ec2 = self._ec2(key_id, secret, token)
-        resp = ec2.describe_security_group_rules(
-            Filters=[{"Name": "group-id", "Values": [sg]}]
-        )
+        resp = ec2.describe_security_group_rules(Filters=[{"Name": "group-id", "Values": [sg]}])
         return resp.get("SecurityGroupRules", [])
 
 

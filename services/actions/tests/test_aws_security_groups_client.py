@@ -185,7 +185,5 @@ def test_executor_registry_imports_cleanly():
     except (ImportError, ModuleNotFoundError) as exc:
         msg = str(exc)
         if "aws_security_groups" in msg or "AWSSecurityGroupsClient" in msg:
-            raise AssertionError(
-                f"GH #82 regression: registry import broken by AWS SG client: {exc}"
-            ) from exc
+            raise AssertionError(f"GH #82 regression: registry import broken by AWS SG client: {exc}") from exc
         pytest.skip(f"unrelated dependency not available in this env: {exc}")
