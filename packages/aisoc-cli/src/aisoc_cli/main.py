@@ -253,7 +253,6 @@ def plugin_publish(path: str, api_url: str, api_key: str, private_key: str) -> N
     """Sign and publish a plugin to the AiSOC community marketplace."""
     import io
     import tarfile
-    import tempfile
 
     plugin_dir = Path(path)
     manifest_file = plugin_dir / "plugin.yaml"

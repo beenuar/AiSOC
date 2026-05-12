@@ -130,9 +130,7 @@ def list_descriptors() -> list[LiveActionDescriptor]:
 
 def list_capabilities_for_vendor(vendor_id: str) -> list[str]:
     """Return all capabilities registered for ``vendor_id`` (sorted)."""
-    return sorted(
-        cap for (vid, cap) in _REGISTRY.keys() if vid == vendor_id
-    )
+    return sorted(cap for (vid, cap) in _REGISTRY.keys() if vid == vendor_id)
 
 
 def list_vendors_for_capability(capability: str) -> list[str]:
@@ -141,9 +139,7 @@ def list_vendors_for_capability(capability: str) -> list[str]:
     Useful for the agent planner: "I want to isolate a host — which
     vendors can do that right now?".
     """
-    return sorted(
-        vid for (vid, cap) in _REGISTRY.keys() if cap == capability
-    )
+    return sorted(vid for (vid, cap) in _REGISTRY.keys() if cap == capability)
 
 
 def reset_for_tests() -> None:

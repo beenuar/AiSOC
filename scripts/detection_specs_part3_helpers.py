@@ -20,7 +20,8 @@ Auto-fixture rules
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 # Operator suffixes - kept in sync with scripts/generate_detections.py.
 # We don't import OPERATORS to avoid bootstrapping yaml at module import time

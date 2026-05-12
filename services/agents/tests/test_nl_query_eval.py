@@ -19,8 +19,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from app.nl_query.grammar import GrammarError, validate_esql
 from app.nl_query.translator import NLQuery, QueryIntents, parse_intents, translate
 
@@ -63,9 +61,7 @@ def _semantic_score(expected: dict, actual: QueryIntents) -> tuple[float, list[s
         if list(expected["group_by"]) == list(actual.group_by):
             axes_passed += 1
         else:
-            notes.append(
-                f"group_by want={expected['group_by']} got={actual.group_by}"
-            )
+            notes.append(f"group_by want={expected['group_by']} got={actual.group_by}")
 
     if "aggregations" in expected:
         axes_checked += 1
@@ -74,10 +70,7 @@ def _semantic_score(expected: dict, actual: QueryIntents) -> tuple[float, list[s
         if want_aggs.issubset(got_aggs):
             axes_passed += 1
         else:
-            notes.append(
-                f"aggregations missing {sorted(want_aggs - got_aggs)} "
-                f"(got {sorted(got_aggs)})"
-            )
+            notes.append(f"aggregations missing {sorted(want_aggs - got_aggs)} (got {sorted(got_aggs)})")
 
     if "limit" in expected:
         axes_checked += 1
@@ -110,19 +103,13 @@ def test_nl_query_eval_syntactic_validity() -> None:
             failures.append(f"{case['id']}: {exc}")
 
     rate = valid / len(cases)
-    print(
-        f"\n[nl_query] syntactic validity: {valid}/{len(cases)} = {rate:.1%} "
-        f"(threshold {_SYNTACTIC_THRESHOLD:.0%})"
-    )
+    print(f"\n[nl_query] syntactic validity: {valid}/{len(cases)} = {rate:.1%} (threshold {_SYNTACTIC_THRESHOLD:.0%})")
     if failures:
         print("[nl_query] syntactic failures:")
         for f in failures:
             print(f"  - {f}")
 
-    assert rate >= _SYNTACTIC_THRESHOLD, (
-        f"syntactic validity {rate:.1%} below {_SYNTACTIC_THRESHOLD:.0%}; "
-        f"failures: {failures[:5]}"
-    )
+    assert rate >= _SYNTACTIC_THRESHOLD, f"syntactic validity {rate:.1%} below {_SYNTACTIC_THRESHOLD:.0%}; failures: {failures[:5]}"
 
 
 def test_nl_query_eval_semantic_match() -> None:
@@ -163,14 +150,8 @@ def test_nl_query_eval_semantic_match() -> None:
     perfect = sum(1 for _, s, _ in per_case_scores if s == 1.0)
     near = sum(1 for _, s, _ in per_case_scores if 0.5 <= s < 1.0)
 
-    print(
-        f"\n[nl_query] semantic mean: {mean_score:.1%} "
-        f"(threshold {_SEMANTIC_THRESHOLD:.0%})"
-    )
-    print(
-        f"[nl_query] perfect={perfect}/{len(per_case_scores)} "
-        f"partial={near}/{len(per_case_scores)}"
-    )
+    print(f"\n[nl_query] semantic mean: {mean_score:.1%} (threshold {_SEMANTIC_THRESHOLD:.0%})")
+    print(f"[nl_query] perfect={perfect}/{len(per_case_scores)} partial={near}/{len(per_case_scores)}")
     failing = [(cid, s, n) for cid, s, n in per_case_scores if s < 1.0]
     if failing:
         print(f"[nl_query] cases with imperfect score ({len(failing)}):")
@@ -179,17 +160,13 @@ def test_nl_query_eval_semantic_match() -> None:
             for note in notes:
                 print(f"      · {note}")
 
-    assert mean_score >= _SEMANTIC_THRESHOLD, (
-        f"semantic mean {mean_score:.1%} below {_SEMANTIC_THRESHOLD:.0%}"
-    )
+    assert mean_score >= _SEMANTIC_THRESHOLD, f"semantic mean {mean_score:.1%} below {_SEMANTIC_THRESHOLD:.0%}"
 
 
 def test_nl_query_eval_dataset_size() -> None:
     """Hard-fail if anyone shrinks the eval set below the contracted 50 pairs."""
 
     dataset = _load_dataset()
-    assert len(dataset["cases"]) >= 50, (
-        f"eval set only has {len(dataset['cases'])} cases; the plan requires 50"
-    )
+    assert len(dataset["cases"]) >= 50, f"eval set only has {len(dataset['cases'])} cases; the plan requires 50"
     seen_ids = {c["id"] for c in dataset["cases"]}
     assert len(seen_ids) == len(dataset["cases"]), "duplicate case ids in eval set"

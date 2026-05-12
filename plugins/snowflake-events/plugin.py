@@ -19,7 +19,7 @@ This plugin gracefully degrades if the dependency is missing.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 try:
@@ -57,7 +57,7 @@ class Plugin:
 
         action = payload.get("action", "fetch_logins")
         since = payload.get("since") or (
-            datetime.now(timezone.utc) - timedelta(minutes=15)
+            datetime.now(UTC) - timedelta(minutes=15)
         ).isoformat()
         limit = int(payload.get("limit", 500))
 

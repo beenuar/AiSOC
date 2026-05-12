@@ -25,7 +25,6 @@ from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
     S,
 )
 
-
 # ---------------------------------------------------------------------------
 # Authentication failures / brute force / credential stuffing (25)
 # ---------------------------------------------------------------------------

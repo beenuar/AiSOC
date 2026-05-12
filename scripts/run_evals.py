@@ -50,62 +50,91 @@ import argparse
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "services" / "agents"
 sys.path.insert(0, str(_AGENTS_ROOT))
 
-from tests.test_mitre_accuracy import evaluate_mitre_accuracy  # type: ignore
+from tests.test_adversary_eval import (
+    _HEAVY_BUCKET_CEILING as _ADVERSARY_HEAVY_CEILING,
+)
+from tests.test_adversary_eval import (
+    _LIGHT_BUCKET_FLOOR as _ADVERSARY_LIGHT_FLOOR,
+)
+from tests.test_adversary_eval import (
+    _OVERALL_FLOOR as _ADVERSARY_OVERALL_FLOOR,
+)
+from tests.test_adversary_eval import (  # type: ignore
+    evaluate_adversary_accuracy,
+)
 from tests.test_alert_reduction import (  # type: ignore
     compute_reduction,
     fuse_alerts,
     generate_noisy_alert_stream,
 )
+from tests.test_confidence_calibration import (  # type: ignore
+    BRIER_THRESHOLD_INVESTIGATION as _CALIB_BRIER_INV,
+)
+from tests.test_confidence_calibration import (
+    BRIER_THRESHOLD_TRIAGE as _CALIB_BRIER_TRIAGE,
+)
+from tests.test_confidence_calibration import (
+    ECE_THRESHOLD_INVESTIGATION as _CALIB_ECE_INV,
+)
+from tests.test_confidence_calibration import (
+    ECE_THRESHOLD_TRIAGE as _CALIB_ECE_TRIAGE,
+)
+from tests.test_confidence_calibration import (
+    run_evaluation as _run_calibration_eval,
+)
+from tests.test_detection_fp_rate import (  # type: ignore
+    MAX_PER_RULE_FPR as _DETECTION_FP_CEILING,
+)
+from tests.test_detection_fp_rate import (
+    evaluate_per_rule_fp,
+)
+from tests.test_hunt_corpus import (
+    _NEGATIVE_CEILING as _HUNT_NEGATIVE_CEILING,
+)
+from tests.test_hunt_corpus import (
+    _POSITIVE_FLOOR as _HUNT_POSITIVE_FLOOR,
+)
+from tests.test_hunt_corpus import (  # type: ignore
+    evaluate_hunt_corpus,
+)
 from tests.test_investigation_completeness import (  # type: ignore
     evaluate_completeness,
+)
+from tests.test_memory_recall import (  # type: ignore
+    RECALL_ACCURACY_FLOOR as _RECALL_FLOOR,
+)
+from tests.test_memory_recall import (
+    run_evaluation as _run_memory_recall_eval,
+)
+from tests.test_mitre_accuracy import evaluate_mitre_accuracy  # type: ignore
+from tests.test_override_accuracy import (  # type: ignore
+    OVERRIDE_ACCURACY_FLOOR as _OVERRIDE_FLOOR,
+)
+from tests.test_override_accuracy import (
+    run_evaluation as _run_override_accuracy_eval,
+)
+from tests.test_playbook_completion_rate import (
+    ACTION_ALIGNMENT_FLOOR as _PLAYBOOK_ALIGN_FLOOR,
+)
+from tests.test_playbook_completion_rate import (
+    HIGH_CRIT_MAPPED_FLOOR as _PLAYBOOK_HIGH_CRIT_FLOOR,
+)
+from tests.test_playbook_completion_rate import (  # type: ignore
+    OVERALL_COMPLETION_FLOOR as _PLAYBOOK_OVERALL_FLOOR,
+)
+from tests.test_playbook_completion_rate import (
+    evaluate_playbook_completion,
 )
 from tests.test_response_quality import (  # type: ignore
     evaluate_response_quality,
 )
-from tests.test_adversary_eval import (  # type: ignore
-    evaluate_adversary_accuracy,
-    _OVERALL_FLOOR as _ADVERSARY_OVERALL_FLOOR,
-    _LIGHT_BUCKET_FLOOR as _ADVERSARY_LIGHT_FLOOR,
-    _HEAVY_BUCKET_CEILING as _ADVERSARY_HEAVY_CEILING,
-)
-from tests.test_hunt_corpus import (  # type: ignore
-    evaluate_hunt_corpus,
-    _POSITIVE_FLOOR as _HUNT_POSITIVE_FLOOR,
-    _NEGATIVE_CEILING as _HUNT_NEGATIVE_CEILING,
-)
-from tests.test_confidence_calibration import (  # type: ignore
-    BRIER_THRESHOLD_INVESTIGATION as _CALIB_BRIER_INV,
-    BRIER_THRESHOLD_TRIAGE as _CALIB_BRIER_TRIAGE,
-    ECE_THRESHOLD_INVESTIGATION as _CALIB_ECE_INV,
-    ECE_THRESHOLD_TRIAGE as _CALIB_ECE_TRIAGE,
-    run_evaluation as _run_calibration_eval,
-)
-from tests.test_memory_recall import (  # type: ignore
-    RECALL_ACCURACY_FLOOR as _RECALL_FLOOR,
-    run_evaluation as _run_memory_recall_eval,
-)
-from tests.test_override_accuracy import (  # type: ignore
-    OVERRIDE_ACCURACY_FLOOR as _OVERRIDE_FLOOR,
-    run_evaluation as _run_override_accuracy_eval,
-)
-from tests.test_playbook_completion_rate import (  # type: ignore
-    OVERALL_COMPLETION_FLOOR as _PLAYBOOK_OVERALL_FLOOR,
-    HIGH_CRIT_MAPPED_FLOOR as _PLAYBOOK_HIGH_CRIT_FLOOR,
-    ACTION_ALIGNMENT_FLOOR as _PLAYBOOK_ALIGN_FLOOR,
-    evaluate_playbook_completion,
-)
-from tests.test_detection_fp_rate import (  # type: ignore
-    MAX_PER_RULE_FPR as _DETECTION_FP_CEILING,
-    evaluate_per_rule_fp,
-)
-
 
 # Per-suite floors (must match what tests assert)
 _TARGETS = {
@@ -642,7 +671,7 @@ def main() -> None:
     args = parser.parse_args()
 
     summary: dict = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "dataset": "synthetic_incidents.json (200 cases, deterministic)",
         "suites": {
             "mitre_accuracy": _run_mitre(),

@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import os
 import statistics
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 try:
@@ -75,7 +75,7 @@ class Plugin:
             headers["X-API-Key"] = api_key
 
         # Query closed cases in the lookback window
-        since = (datetime.now(timezone.utc) - timedelta(days=lookback)).isoformat()
+        since = (datetime.now(UTC) - timedelta(days=lookback)).isoformat()
         params: dict[str, Any] = {"status": "closed", "created_after": since, "limit": 1000}
         if severity_filter:
             params["severity"] = ",".join(severity_filter)

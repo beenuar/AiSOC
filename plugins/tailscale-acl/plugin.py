@@ -37,7 +37,7 @@ _API_BASE = "https://api.tailscale.com/api/v2"
 class Plugin:
     """Tailscale ACL action plugin."""
 
-    def _client(self, context: dict[str, Any]) -> "httpx.AsyncClient":
+    def _client(self, context: dict[str, Any]) -> httpx.AsyncClient:
         config = context.get("config") or {}
         if "tailnet" not in config or "api_key" not in config:
             raise ValueError("tailnet and api_key are required in plugin config")

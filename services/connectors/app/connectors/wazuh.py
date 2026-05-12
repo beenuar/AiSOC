@@ -135,19 +135,13 @@ class WazuhConnector(BaseConnector):
                     "string",
                     "Wazuh Indexer URL",
                     placeholder="https://wazuh.example.com:9200",
-                    help_text=(
-                        "Base URL of the Wazuh indexer (NOT the dashboard "
-                        "or manager). Default port is 9200."
-                    ),
+                    help_text=("Base URL of the Wazuh indexer (NOT the dashboard or manager). Default port is 9200."),
                 ),
                 Field(
                     "username",
                     "string",
                     "Indexer Username",
-                    help_text=(
-                        "Indexer user with read access to wazuh-alerts-*. "
-                        "Create a dedicated read-only role in production."
-                    ),
+                    help_text=("Indexer user with read access to wazuh-alerts-*. Create a dedicated read-only role in production."),
                 ),
                 Field(
                     "password",
@@ -160,10 +154,7 @@ class WazuhConnector(BaseConnector):
                     "Alert Index Pattern",
                     required=False,
                     default="wazuh-alerts-*",
-                    help_text=(
-                        "Override only if you have re-templated the "
-                        "default Wazuh index naming."
-                    ),
+                    help_text=("Override only if you have re-templated the default Wazuh index naming."),
                 ),
                 Field(
                     "min_rule_level",
@@ -183,10 +174,7 @@ class WazuhConnector(BaseConnector):
                     "Verify TLS Certificate",
                     required=False,
                     default=True,
-                    help_text=(
-                        "Disable only for self-signed lab clusters. "
-                        "Production deployments must install the CA chain."
-                    ),
+                    help_text=("Disable only for self-signed lab clusters. Production deployments must install the CA chain."),
                 ),
             ],
         )

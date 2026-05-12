@@ -31,7 +31,7 @@ from typing import Any
 
 import httpx
 
-from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.core.airgap import enforce_airgap_for_url
 from app.core.config import settings
 
 logger = logging.getLogger("aisoc.misp_push")
@@ -155,9 +155,7 @@ def stix_indicator_to_misp_attribute(
     parsed = parse_stix_pattern(indicator.get("pattern", ""))
     if parsed is None:
         return None
-    distribution_level = (
-        distribution if distribution is not None else settings.MISP_PUSH_DEFAULT_DISTRIBUTION
-    )
+    distribution_level = distribution if distribution is not None else settings.MISP_PUSH_DEFAULT_DISTRIBUTION
     attribute: dict[str, Any] = {
         "type": parsed.misp_type,
         "category": parsed.misp_category,
@@ -189,12 +187,8 @@ def stix_bundle_to_misp_event(
     patterns are silently skipped (and counted in the returned
     ``_skipped`` field for the dry-run endpoint to surface).
     """
-    distribution_level = (
-        distribution if distribution is not None else settings.MISP_PUSH_DEFAULT_DISTRIBUTION
-    )
-    threat_level_id = (
-        threat_level if threat_level is not None else settings.MISP_PUSH_DEFAULT_THREAT_LEVEL
-    )
+    distribution_level = distribution if distribution is not None else settings.MISP_PUSH_DEFAULT_DISTRIBUTION
+    threat_level_id = threat_level if threat_level is not None else settings.MISP_PUSH_DEFAULT_THREAT_LEVEL
     analysis_id = analysis if analysis is not None else settings.MISP_PUSH_DEFAULT_ANALYSIS
 
     attributes: list[dict[str, Any]] = []
@@ -211,9 +205,9 @@ def stix_bundle_to_misp_event(
         if obj.get("name"):
             indicator_names.append(str(obj["name"]))
 
-    event_info = info or (
-        "AiSOC bundle " + bundle.get("id", "") + (" — " + "; ".join(indicator_names[:3]) if indicator_names else "")
-    ).strip()
+    event_info = (
+        info or ("AiSOC bundle " + bundle.get("id", "") + (" — " + "; ".join(indicator_names[:3]) if indicator_names else "")).strip()
+    )
 
     return {
         "Event": {
@@ -239,14 +233,8 @@ def stix_indicator_to_misp_event(
     analysis: int | None = None,
 ) -> dict[str, Any] | None:
     """Wrap a single STIX indicator as a one-attribute MISP event."""
-    distribution_level = (
-        distribution if distribution is not None else settings.MISP_PUSH_DEFAULT_DISTRIBUTION
-    )
-    threat_level_id = (
-        threat_level
-        if threat_level is not None
-        else confidence_to_threat_level(indicator.get("confidence"))
-    )
+    distribution_level = distribution if distribution is not None else settings.MISP_PUSH_DEFAULT_DISTRIBUTION
+    threat_level_id = threat_level if threat_level is not None else confidence_to_threat_level(indicator.get("confidence"))
     analysis_id = analysis if analysis is not None else settings.MISP_PUSH_DEFAULT_ANALYSIS
 
     attr = stix_indicator_to_misp_attribute(indicator, distribution=distribution_level)
@@ -308,9 +296,7 @@ class MispPushClient:
 
     def _require_config(self) -> None:
         if not self.configured:
-            raise MispNotConfigured(
-                "MISP push is not configured. Set MISP_URL and MISP_API_KEY."
-            )
+            raise MispNotConfigured("MISP push is not configured. Set MISP_URL and MISP_API_KEY.")
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -324,9 +310,7 @@ class MispPushClient:
         self._require_config()
         target = f"{self._url}/users/view/me"
         enforce_airgap_for_url(target)
-        async with httpx.AsyncClient(
-            verify=self._verify_ssl, timeout=self._timeout, headers=self._headers()
-        ) as client:
+        async with httpx.AsyncClient(verify=self._verify_ssl, timeout=self._timeout, headers=self._headers()) as client:
             try:
                 resp = await client.get(target)
             except httpx.RequestError as exc:
@@ -352,9 +336,7 @@ class MispPushClient:
         target = f"{self._url}/events/add"
         enforce_airgap_for_url(target)
         clean_event = _strip_internal_fields(event)
-        async with httpx.AsyncClient(
-            verify=self._verify_ssl, timeout=self._timeout, headers=self._headers()
-        ) as client:
+        async with httpx.AsyncClient(verify=self._verify_ssl, timeout=self._timeout, headers=self._headers()) as client:
             try:
                 resp = await client.post(target, json=clean_event)
             except httpx.RequestError as exc:
@@ -362,9 +344,7 @@ class MispPushClient:
             if resp.status_code == 401:
                 raise MispPushError("MISP auth failed (401). Check MISP_API_KEY.")
             if resp.status_code >= 400:
-                raise MispPushError(
-                    f"MISP push returned {resp.status_code}: {resp.text[:300]}"
-                )
+                raise MispPushError(f"MISP push returned {resp.status_code}: {resp.text[:300]}")
             try:
                 body = resp.json()
             except Exception as exc:
@@ -394,9 +374,7 @@ class MispPushClient:
             analysis=analysis,
         )
         if event is None:
-            raise MispPushError(
-                f"Indicator pattern {indicator.get('pattern', '')!r} cannot be mapped to a MISP attribute."
-            )
+            raise MispPushError(f"Indicator pattern {indicator.get('pattern', '')!r} cannot be mapped to a MISP attribute.")
         return await self.push_event(event)
 
     async def push_bundle(
@@ -418,9 +396,7 @@ class MispPushClient:
         skipped = event.pop("_skipped", 0)
         attribute_count = event.pop("_attribute_count", 0)
         if attribute_count == 0:
-            raise MispPushError(
-                f"Bundle {bundle.get('id', '')!r} contained no MISP-translatable indicators."
-            )
+            raise MispPushError(f"Bundle {bundle.get('id', '')!r} contained no MISP-translatable indicators.")
         result = await self.push_event(event)
         result["pushed_attributes"] = attribute_count
         result["skipped_attributes"] = skipped

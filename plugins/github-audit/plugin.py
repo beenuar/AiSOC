@@ -32,7 +32,7 @@ except ImportError:
 class Plugin:
     """GitHub Audit Log connector plugin."""
 
-    def _client(self, context: dict[str, Any]) -> "httpx.AsyncClient":
+    def _client(self, context: dict[str, Any]) -> httpx.AsyncClient:
         config = context.get("config") or {}
         if "org" not in config or "token" not in config:
             raise ValueError("org and token are required in plugin config")

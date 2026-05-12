@@ -58,8 +58,8 @@ SCRIPTS_DIR = ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from generate_detections import matches  # noqa: E402
 from detection_specs_index import all_specs  # noqa: E402
+from generate_detections import matches  # noqa: E402
 
 VALID_SEVERITIES = {"low", "medium", "high", "critical"}
 VALID_CATEGORIES = {

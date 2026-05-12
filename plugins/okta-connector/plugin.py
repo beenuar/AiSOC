@@ -45,7 +45,7 @@ class Plugin:
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
-    def _client(self, context: dict) -> "httpx.AsyncClient":
+    def _client(self, context: dict) -> httpx.AsyncClient:
         cfg = context.get("config", {})
         domain = cfg.get("okta_domain") or os.getenv("OKTA_DOMAIN", "")
         token = cfg.get("api_token") or os.getenv("OKTA_API_TOKEN", "")
@@ -89,7 +89,7 @@ class Plugin:
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
-    async def _get_user(self, client: "httpx.AsyncClient", user_id: str) -> dict:
+    async def _get_user(self, client: httpx.AsyncClient, user_id: str) -> dict:
         r = await client.get(f"/users/{user_id}")
         r.raise_for_status()
         user = r.json()
@@ -102,28 +102,28 @@ class Plugin:
             "raw": user,
         }
 
-    async def _list_sessions(self, client: "httpx.AsyncClient", user_id: str) -> dict:
+    async def _list_sessions(self, client: httpx.AsyncClient, user_id: str) -> dict:
         r = await client.get(f"/users/{user_id}/sessions")
         r.raise_for_status()
         sessions = r.json()
         return {"session_count": len(sessions), "sessions": sessions}
 
-    async def _suspend_user(self, client: "httpx.AsyncClient", user_id: str) -> dict:
+    async def _suspend_user(self, client: httpx.AsyncClient, user_id: str) -> dict:
         r = await client.post(f"/users/{user_id}/lifecycle/suspend")
         r.raise_for_status()
         return {"action": "suspend_user", "user_id": user_id, "status": "suspended"}
 
-    async def _unsuspend_user(self, client: "httpx.AsyncClient", user_id: str) -> dict:
+    async def _unsuspend_user(self, client: httpx.AsyncClient, user_id: str) -> dict:
         r = await client.post(f"/users/{user_id}/lifecycle/unsuspend")
         r.raise_for_status()
         return {"action": "unsuspend_user", "user_id": user_id, "status": "active"}
 
-    async def _clear_sessions(self, client: "httpx.AsyncClient", user_id: str) -> dict:
+    async def _clear_sessions(self, client: httpx.AsyncClient, user_id: str) -> dict:
         r = await client.delete(f"/users/{user_id}/sessions")
         r.raise_for_status()
         return {"action": "clear_user_sessions", "user_id": user_id, "sessions_cleared": True}
 
-    async def _clear_mfa(self, client: "httpx.AsyncClient", user_id: str) -> dict:
+    async def _clear_mfa(self, client: httpx.AsyncClient, user_id: str) -> dict:
         # Enumerate enrolled factors and delete each
         r = await client.get(f"/users/{user_id}/factors")
         r.raise_for_status()

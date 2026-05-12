@@ -18,6 +18,12 @@ Design notes:
   and the API layer also re-validates before execution.
 """
 
+from .grammar import (
+    GrammarError,
+    validate_esql,
+    validate_kql,
+    validate_spl,
+)
 from .translator import (
     NLQuery,
     QueryIntents,
@@ -26,12 +32,6 @@ from .translator import (
     enhance_with_llm,
     parse_intents,
     translate,
-)
-from .grammar import (
-    GrammarError,
-    validate_esql,
-    validate_kql,
-    validate_spl,
 )
 
 __all__ = [

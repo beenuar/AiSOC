@@ -163,9 +163,7 @@ def test_normalize_handles_missing_mitre_block():
 @pytest.mark.asyncio
 @respx.mock(assert_all_called=True)
 async def test_test_connection_success(respx_mock):
-    respx_mock.get(f"{INDEXER}/_cluster/health").mock(
-        return_value=httpx.Response(200, json={"status": "green"})
-    )
+    respx_mock.get(f"{INDEXER}/_cluster/health").mock(return_value=httpx.Response(200, json={"status": "green"}))
     connector = WazuhConnector(INDEXER, USERNAME, PASSWORD, verify_tls=False)
     result = await connector.test_connection()
     assert result == {"success": True, "connector": "wazuh"}
@@ -207,9 +205,7 @@ async def test_fetch_alerts_returns_normalized_events(respx_mock):
             ]
         }
     }
-    route = respx_mock.post(f"{INDEXER}/{INDEX_PATTERN}/_search").mock(
-        return_value=httpx.Response(200, json=payload)
-    )
+    route = respx_mock.post(f"{INDEXER}/{INDEX_PATTERN}/_search").mock(return_value=httpx.Response(200, json=payload))
     connector = WazuhConnector(INDEXER, USERNAME, PASSWORD, verify_tls=False)
     events = await connector.fetch_alerts(since_seconds=300)
     assert len(events) == 2

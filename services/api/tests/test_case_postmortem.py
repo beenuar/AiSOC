@@ -471,9 +471,7 @@ def test_build_postmortem_minimal_inputs_returns_neutral_recommendation() -> Non
             created_at=OPENED + timedelta(minutes=2),
         ),
     ]
-    pm = build_postmortem_from_rows(
-        PostmortemInputs(case=case, comments=comments), now=NOW
-    )
+    pm = build_postmortem_from_rows(PostmortemInputs(case=case, comments=comments), now=NOW)
     assert pm.detection.sla_breached is False
     assert pm.detection_gaps == []
     assert pm.fell_short == []
@@ -557,6 +555,12 @@ def test_render_case_postmortem_html_omits_analyst_names(
         assert "alice" not in entry.label.lower()
         if entry.detail:
             assert "alice" not in entry.detail.lower()
+
+    # The rendered HTML must also be blameless — the assignee line is allowed
+    # in the header but narrative sections (timeline / action items) must not
+    # surface analyst handles.
+    body_html = html.split("</header>", 1)[-1].lower() if "</header>" in html else html.lower()
+    assert "alice" not in body_html
 
 
 def test_postmortem_round_trips_through_pydantic_json(

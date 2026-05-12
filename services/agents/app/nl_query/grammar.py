@@ -13,8 +13,8 @@ PyPI mirror sync just to validate that a query is well-formed.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 
 class GrammarError(ValueError):
@@ -218,8 +218,8 @@ def validate_kql(query: str) -> None:
         raise GrammarError("unbalanced parentheses")
 
     # Drop blank lines and comments (// to end-of-line).
-    lines = [re.sub(r"//.*$", "", l).rstrip() for l in query.splitlines()]
-    lines = [l for l in lines if l.strip()]
+    lines = [re.sub(r"//.*$", "", line).rstrip() for line in query.splitlines()]
+    lines = [line for line in lines if line.strip()]
     if not lines:
         raise GrammarError("query is only comments")
     if lines[-1].rstrip().endswith("|"):

@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 from .grammar import GrammarError, validate_esql, validate_kql, validate_spl
 
@@ -49,7 +48,7 @@ class TranslatedQuery:
     kql: str
     spl: str
     explanation: str
-    intents: "QueryIntents"
+    intents: QueryIntents
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -66,11 +65,11 @@ class QueryIntents:
 
     filters: list[tuple[str, str, str]] = field(default_factory=list)  # (field, op, value)
     group_by: list[str] = field(default_factory=list)
-    aggregations: list[tuple[str, Optional[str], str]] = field(default_factory=list)
+    aggregations: list[tuple[str, str | None, str]] = field(default_factory=list)
     # ^ (function, arg_field_or_None, alias)
-    sort_by: Optional[tuple[str, str]] = None  # (field, direction)
+    sort_by: tuple[str, str] | None = None  # (field, direction)
     limit: int = 500
-    distinct: Optional[str] = None
+    distinct: str | None = None
     time_field: str = "@timestamp"
 
 
@@ -232,7 +231,7 @@ def _normalise(question: str) -> str:
     return re.sub(r"\s+", " ", question.strip().lower())
 
 
-def _resolve_field(token: str) -> Optional[str]:
+def _resolve_field(token: str) -> str | None:
     token = token.strip().lower()
     if token in _FIELD_ALIASES:
         return _FIELD_ALIASES[token]
@@ -318,11 +317,11 @@ def _extract_filters(question: str, intents: QueryIntents) -> None:
         "domain",
     )
     for prep in _IMPLICIT_PREPS:
-        for field in _IMPLICIT_FIELDS:
-            canonical = _resolve_field(field)
+        for field_name in _IMPLICIT_FIELDS:
+            canonical = _resolve_field(field_name)
             if not canonical:
                 continue
-            pattern = rf"\b{prep}\s+{re.escape(field)}\s+([a-z0-9_\-\.@\*]+)\b"
+            pattern = rf"\b{prep}\s+{re.escape(field_name)}\s+([a-z0-9_\-\.@\*]+)\b"
             for m in re.finditer(pattern, text):
                 value = m.group(1).strip()
                 if value in {
@@ -449,9 +448,7 @@ def _extract_aggregations(question: str, intents: QueryIntents) -> None:
         candidate = m.group(1).strip().rstrip(",")
         canonical = _resolve_field(candidate)
         if canonical:
-            intents.aggregations.append(
-                ("DISTINCT_COUNT", canonical, f"unique_{canonical.replace('.', '_')}")
-            )
+            intents.aggregations.append(("DISTINCT_COUNT", canonical, f"unique_{canonical.replace('.', '_')}"))
             intents.distinct = canonical
 
     # "top 10 hosts" / "top hosts"
@@ -645,10 +642,7 @@ def _explain(intents: QueryIntents, query: NLQuery) -> str:
         rendered = ", ".join(f"{f}={v}" for f, _, v in intents.filters)
         fragments.append(f"filtering events where {rendered}")
     if intents.aggregations:
-        agg_text = ", ".join(
-            f"{func.lower()}({arg or '*'}) as {alias}"
-            for func, arg, alias in intents.aggregations
-        )
+        agg_text = ", ".join(f"{func.lower()}({arg or '*'}) as {alias}" for func, arg, alias in intents.aggregations)
         fragments.append(f"computing {agg_text}")
     if intents.group_by:
         fragments.append(f"grouped by {', '.join(intents.group_by)}")
@@ -709,9 +703,7 @@ def translate(
 ) -> TranslatedQuery:
     """Module-level convenience wrapper around :class:`Translator`."""
 
-    return _default_translator.translate(
-        NLQuery(question=question, index_pattern=index_pattern, time_range_hours=time_range_hours)
-    )
+    return _default_translator.translate(NLQuery(question=question, index_pattern=index_pattern, time_range_hours=time_range_hours))
 
 
 # ---------------------------------------------------------------------------
@@ -725,7 +717,7 @@ async def enhance_with_llm(
     api_key: str,
     model: str = "gpt-4o-mini",
     timeout: float = 30.0,
-    fallback: Optional[TranslatedQuery] = None,
+    fallback: TranslatedQuery | None = None,
 ) -> TranslatedQuery:
     """Try to obtain a richer translation from an LLM, falling back on errors.
 

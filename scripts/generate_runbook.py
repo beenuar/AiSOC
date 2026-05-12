@@ -27,7 +27,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -175,8 +175,8 @@ def fetch_traces(
         LOG.warning("'requests' package not installed; skipping live trace fetch.")
         return []
 
-    end_ns = int(datetime.now(timezone.utc).timestamp() * 1e9)
-    start_ns = int((datetime.now(timezone.utc) - timedelta(hours=lookback_hours)).timestamp() * 1e9)
+    end_ns = int(datetime.now(UTC).timestamp() * 1e9)
+    start_ns = int((datetime.now(UTC) - timedelta(hours=lookback_hours)).timestamp() * 1e9)
 
     # Tempo search API
     url = f"{endpoint.rstrip('/')}/api/search"
@@ -301,10 +301,10 @@ def _build_diagnosis(
         )
 
     lines.append("### General diagnosis checklist\n")
-    lines.append(f"1. Confirm the alert is genuine (not a monitoring flap).")
-    lines.append(f"2. Check `kubectl get events -n aisoc --sort-by=lastTimestamp | tail -20`.")
+    lines.append("1. Confirm the alert is genuine (not a monitoring flap).")
+    lines.append("2. Check `kubectl get events -n aisoc --sort-by=lastTimestamp | tail -20`.")
     lines.append(f"3. Inspect pod logs: `kubectl logs -n aisoc -l app={spec.service_filter} --tail=100 --previous`.")
-    lines.append(f"4. Review recent deploys: `helm history aisoc -n aisoc`.")
+    lines.append("4. Review recent deploys: `helm history aisoc -n aisoc`.")
 
     return "\n".join(lines)
 
@@ -326,7 +326,7 @@ def render_runbook(
     traces: list[dict[str, Any]],
     lookback_hours: int,
 ) -> str:
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     return _RUNBOOK_TEMPLATE.format(
         id=spec.id,
         title=spec.title,

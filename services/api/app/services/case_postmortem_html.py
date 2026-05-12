@@ -86,7 +86,7 @@ def _severity_chip(severity: str) -> str:
     colour = _SEVERITY_COLOURS.get(severity.lower(), "#475569")
     return (
         f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
-        f'background:{colour};color:#fff;font-size:11px;font-weight:600;'
+        f"background:{colour};color:#fff;font-size:11px;font-weight:600;"
         f'text-transform:uppercase;letter-spacing:0.04em;">{_esc(severity)}</span>'
     )
 
@@ -156,8 +156,24 @@ def _overview_block(overview: IncidentOverview) -> str:
         + _kpi("Identities touched", str(overview.blast_radius_identities))
         + _kpi("Linked alerts", str(overview.blast_radius_alerts))
         + "</div>"
-        + (f'<div style="margin-top:12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;">Observable kinds</div>{kinds_html}' if kinds_html else "")
-        + (f'<div style="margin-top:12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;">Affected domains</div>{domains_html}' if domains_html else "")
+        + (
+            (
+                '<div style="margin-top:12px;color:#64748b;font-size:11px;'
+                'text-transform:uppercase;letter-spacing:0.06em;">Observable kinds</div>'
+                f"{kinds_html}"
+            )
+            if kinds_html
+            else ""
+        )
+        + (
+            (
+                '<div style="margin-top:12px;color:#64748b;font-size:11px;'
+                'text-transform:uppercase;letter-spacing:0.06em;">Affected domains</div>'
+                f"{domains_html}"
+            )
+            if domains_html
+            else ""
+        )
     )
 
 
@@ -178,7 +194,7 @@ def _detection_block(detection: DetectionTiming, gaps: list[DetectionGap]) -> st
 
     timestamps_table = (
         '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;">'
-        '<tbody>'
+        "<tbody>"
         f'<tr><td style="padding:6px 8px;color:#64748b;">Opened</td>'
         f'<td style="padding:6px 8px;">{_fmt_datetime(detection.opened_at)}</td></tr>'
         f'<tr><td style="padding:6px 8px;color:#64748b;">First analyst engagement</td>'
@@ -189,7 +205,7 @@ def _detection_block(detection: DetectionTiming, gaps: list[DetectionGap]) -> st
         f'<td style="padding:6px 8px;">{_fmt_datetime(detection.resolved_at)}</td></tr>'
         f'<tr><td style="padding:6px 8px;color:#64748b;">Closed</td>'
         f'<td style="padding:6px 8px;">{_fmt_datetime(detection.closed_at)}</td></tr>'
-        '</tbody></table>'
+        "</tbody></table>"
     )
 
     gaps_html = ""
@@ -203,7 +219,10 @@ def _detection_block(detection: DetectionTiming, gaps: list[DetectionGap]) -> st
             "</div>".format(colour=_SEVERITY_COLOURS.get(g.severity, "#475569"))
             for g in gaps
         )
-        gaps_html = '<h3 style="margin-top:18px;font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">Detection gaps</h3>' + cards
+        gaps_html = (
+            '<h3 style="margin-top:18px;font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">Detection gaps</h3>'
+            + cards
+        )
     else:
         gaps_html = '<p style="color:#64748b;font-size:13px;">No detection gaps surfaced from the timeline.</p>'
 
@@ -225,7 +244,9 @@ def _response_block(response: ResponseEffectiveness) -> str:
     )
 
     if not response.actions_by_bucket:
-        return "<h2>Response actions</h2>" + overall + '<p style="color:#64748b;font-size:13px;">No tracked response actions on this case.</p>'
+        return (
+            "<h2>Response actions</h2>" + overall + '<p style="color:#64748b;font-size:13px;">No tracked response actions on this case.</p>'
+        )
 
     rows = "".join(
         "<tr>"
@@ -248,8 +269,8 @@ def _response_block(response: ResponseEffectiveness) -> str:
         '<th style="padding:6px 8px;text-align:right;">Open</th>'
         '<th style="padding:6px 8px;text-align:right;">Overdue</th>'
         '<th style="padding:6px 8px;">Examples</th>'
-        '</tr></thead>'
-        f'<tbody>{rows}</tbody></table>'
+        "</tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
     )
     return "<h2>Response actions</h2>" + overall + table
 
@@ -309,10 +330,7 @@ def _went_well_block(items: list[WentWellItem]) -> str:
 def _fell_short_block(items: list[FellShortItem]) -> str:
     if not items:
         return (
-            "<h2>Where we fell short</h2>"
-            '<p style="color:#64748b;font-size:13px;">'
-            "No structural shortfalls surfaced from the timeline."
-            "</p>"
+            '<h2>Where we fell short</h2><p style="color:#64748b;font-size:13px;">No structural shortfalls surfaced from the timeline.</p>'
         )
     cards = "".join(
         '<div style="border-left:4px solid #f59e0b;background:#fffbeb;'
@@ -333,14 +351,10 @@ def _action_items_block(items: list[ActionItem]) -> str:
         'padding:12px 14px;border-radius:6px;margin-bottom:10px;">'
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
         f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
-        f'background:#e2e8f0;color:#0f172a;font-size:11px;text-transform:uppercase;'
+        f"background:#e2e8f0;color:#0f172a;font-size:11px;text-transform:uppercase;"
         f'letter-spacing:0.04em;">{_esc(i.category)}</span>'
         f"{_severity_chip(i.severity)}"
-        + (
-            f'<span style="color:#64748b;font-size:11px;">owner: {_esc(i.owner_role)}</span>'
-            if i.owner_role
-            else ""
-        )
+        + (f'<span style="color:#64748b;font-size:11px;">owner: {_esc(i.owner_role)}</span>' if i.owner_role else "")
         + "</div>"
         f'<div style="font-weight:600;color:#0f172a;font-size:14px;margin-bottom:4px;">{_esc(i.title)}</div>'
         f'<div style="color:#334155;font-size:13px;line-height:1.45;">{_esc(i.body)}</div>'

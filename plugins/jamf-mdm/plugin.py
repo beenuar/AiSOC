@@ -36,7 +36,7 @@ _TOKEN_CACHE: dict[str, dict[str, Any]] = {}
 class Plugin:
     """Jamf Pro MDM connector plugin."""
 
-    async def _token(self, client: "httpx.AsyncClient", config: dict[str, Any]) -> str:
+    async def _token(self, client: httpx.AsyncClient, config: dict[str, Any]) -> str:
         cache_key = f"{config['jamf_url']}::{config['client_id']}"
         cached = _TOKEN_CACHE.get(cache_key)
         if cached and cached["expires_at"] > time.time() + 30:
@@ -60,7 +60,7 @@ class Plugin:
         }
         return str(token)
 
-    async def _client(self, context: dict[str, Any]) -> "httpx.AsyncClient":
+    async def _client(self, context: dict[str, Any]) -> httpx.AsyncClient:
         config = context.get("config") or {}
         if not all(k in config for k in ("jamf_url", "client_id", "client_secret")):
             raise ValueError("jamf_url, client_id, and client_secret are required")
@@ -105,7 +105,7 @@ class Plugin:
             if action == "wipe_device":
                 device_id = payload.get("device_id", "")
                 resp = await client.post(
-                    f"/api/v1/mobile-device-commands",
+                    "/api/v1/mobile-device-commands",
                     json={
                         "commandData": {"commandType": "ERASE_DEVICE"},
                         "clientData": [{"managementId": device_id}],

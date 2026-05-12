@@ -39,7 +39,7 @@ _API_BASE = "https://api.cloudflare.com/client/v4"
 class Plugin:
     """Cloudflare WAF action plugin."""
 
-    def _client(self, context: dict[str, Any]) -> "httpx.AsyncClient":
+    def _client(self, context: dict[str, Any]) -> httpx.AsyncClient:
         config = context.get("config") or {}
         if "api_token" not in config:
             raise ValueError("api_token is required in plugin config")

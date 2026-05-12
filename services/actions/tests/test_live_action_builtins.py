@@ -26,7 +26,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from app.live_actions import (
     LiveActionRequest,
     LiveActionStatus,
@@ -107,9 +106,7 @@ def test_builtin_descriptor_has_human_description() -> None:
     register_builtin_executors()
     descriptors = list_descriptors()
     for descriptor in descriptors:
-        assert descriptor.description, (
-            f"Adapter {descriptor.vendor_id}/{descriptor.capability} has no description"
-        )
+        assert descriptor.description, f"Adapter {descriptor.vendor_id}/{descriptor.capability} has no description"
 
 
 def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:

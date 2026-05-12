@@ -347,10 +347,7 @@ async def create_indicator(
     body: STIXIndicatorCreate,
     push_to_misp: bool | None = Query(
         default=None,
-        description=(
-            "Mirror this indicator to the configured MISP instance. "
-            "Defaults to the value of MISP_PUSH_AUTO."
-        ),
+        description=("Mirror this indicator to the configured MISP instance. Defaults to the value of MISP_PUSH_AUTO."),
     ),
 ) -> STIXIndicatorWithPush:
     """Publish a new STIX 2.1 indicator and optionally mirror it to MISP."""

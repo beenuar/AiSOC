@@ -25,8 +25,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.live_actions import (
     LiveActionExecutor,
     LiveActionRequest,
@@ -36,6 +34,7 @@ from app.live_actions import (
     reset_for_tests,
 )
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 class _StubIsolateHost(LiveActionExecutor):
@@ -47,9 +46,7 @@ class _StubIsolateHost(LiveActionExecutor):
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
         # Mirror what a real executor does: honour dry_run by returning
         # SIMULATED so the router can tag mode=dry_run consistently.
-        status = (
-            LiveActionStatus.SIMULATED if request.dry_run else LiveActionStatus.SUCCEEDED
-        )
+        status = LiveActionStatus.SIMULATED if request.dry_run else LiveActionStatus.SUCCEEDED
         return LiveActionResult(
             request_id=request.request_id,
             status=status,

@@ -36,7 +36,7 @@ def main() -> None:
         print(result.to_json())
     else:
         print(f"\n{'='*60}")
-        print(f"  AiSOC P1-Eval: MITRE ATT&CK Tactic Accuracy")
+        print("  AiSOC P1-Eval: MITRE ATT&CK Tactic Accuracy")
         print(f"{'='*60}")
         print(f"  Incidents evaluated : {result.total}")
         print(f"  Correctly predicted : {result.correct}")

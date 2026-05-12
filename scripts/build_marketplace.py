@@ -35,8 +35,9 @@ import datetime as dt
 import json
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
@@ -538,7 +539,7 @@ def build_index() -> dict[str, Any]:
     return {
         "$schema": "https://example.com/schemas/marketplace/v1.json",
         "version": "1.0.0",
-        "generated": dt.datetime.now(dt.timezone.utc)
+        "generated": dt.datetime.now(dt.UTC)
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z"),

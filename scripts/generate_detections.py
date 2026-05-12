@@ -59,7 +59,6 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from detection_specs_index import CATEGORIES  # noqa: E402  (after sys.path tweak)
 
-
 # -----------------------------------------------------------------------------
 # Operator table — single source of truth for matcher AND condition rendering.
 # -----------------------------------------------------------------------------

@@ -37,7 +37,6 @@ from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
 
-
 # ---------------------------------------------------------------------------
 # Bootstrap import path for ``services/agents/app/nl_query``.
 #
@@ -58,6 +57,8 @@ from app.nl_query import (  # noqa: E402  -- requires the sys.path tweak above
     NLQuery,
     TranslatedQuery,
     enhance_with_llm,
+)
+from app.nl_query import (  # noqa: E402  -- requires the sys.path tweak above
     translate as deterministic_translate,
 )
 

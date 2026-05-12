@@ -1,7 +1,7 @@
 """Datadog incidents/signals connector plugin for AiSOC."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -53,7 +53,7 @@ class Plugin:
 
             if action == "list_signals":
                 since = payload.get("since") or (
-                    datetime.now(timezone.utc) - timedelta(hours=1)
+                    datetime.now(UTC) - timedelta(hours=1)
                 ).isoformat()
                 params = {
                     "filter[from]": since,
@@ -78,7 +78,7 @@ class Plugin:
                         events.append(item)
                 if "security_signals" in feeds:
                     since = payload.get("since") or (
-                        datetime.now(timezone.utc) - timedelta(hours=1)
+                        datetime.now(UTC) - timedelta(hours=1)
                     ).isoformat()
                     sigs = await self._get(
                         f"{base}/api/v2/security_monitoring/signals",

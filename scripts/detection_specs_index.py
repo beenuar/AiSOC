@@ -18,7 +18,7 @@ Tier mapping:
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 # Local imports must be relative to scripts/ (that is the cwd when invoked).
 from detection_specs import CLOUD, IDENTITY  # type: ignore[import-not-found]
@@ -33,7 +33,6 @@ from detection_specs_part3_cloud import CLOUD_EXTRA  # type: ignore[import-not-f
 from detection_specs_part3_endpoint import ENDPOINT_EXTRA  # type: ignore[import-not-found]
 from detection_specs_part3_identity import IDENTITY_EXTRA  # type: ignore[import-not-found]
 from detection_specs_part3_network import NETWORK_EXTRA  # type: ignore[import-not-found]
-
 
 CATEGORIES: dict[str, list[dict]] = {
     "cloud": [*CLOUD, *CLOUD_EXTRA],

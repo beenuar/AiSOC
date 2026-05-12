@@ -573,11 +573,7 @@ def _build_went_well(
             )
         )
 
-    if (
-        detection.time_to_resolve_hours is not None
-        and detection.time_to_resolve_hours <= 4
-        and case.severity in {"high", "critical"}
-    ):
+    if detection.time_to_resolve_hours is not None and detection.time_to_resolve_hours <= 4 and case.severity in {"high", "critical"}:
         items.append(
             WentWellItem(
                 title="Fast resolution on a high-severity case",
@@ -656,10 +652,7 @@ def _build_fell_short(
             )
         )
 
-    if (
-        case.severity in {"high", "critical"}
-        and not any(not c.is_system for c in comments)
-    ):
+    if case.severity in {"high", "critical"} and not any(not c.is_system for c in comments):
         items.append(
             FellShortItem(
                 title="No analyst narrative on a high-severity case",
@@ -792,10 +785,7 @@ def _build_action_items(
                 category="detection",
                 severity="info",
                 title="Tag MITRE ATT&CK on this case",
-                body=(
-                    "Add at least one ATT&CK technique to the case so "
-                    "coverage reporting reflects this incident."
-                ),
+                body=("Add at least one ATT&CK technique to the case so coverage reporting reflects this incident."),
                 owner_role="case owner",
             )
         )
@@ -808,7 +798,9 @@ def _build_action_items(
                 category="process",
                 severity="info",
                 title="No structural follow-ups required",
-                body=("Detection, triage, and response all executed cleanly. Archive the case and roll any new IOCs into detection content."),
+                body=(
+                    "Detection, triage, and response all executed cleanly. Archive the case and roll any new IOCs into detection content."
+                ),
                 owner_role="case owner",
             )
         )

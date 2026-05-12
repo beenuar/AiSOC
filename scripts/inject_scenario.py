@@ -22,9 +22,9 @@ import argparse
 import json
 import sys
 import time
-import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+import urllib.request
+from datetime import UTC, datetime
 
 SCENARIO: list[dict] = [
     {
@@ -153,7 +153,7 @@ def main() -> None:
             "mitre_tactics": alert["mitre_tactics"],
             "mitre_techniques": alert["mitre_techniques"],
             "raw_data": alert["raw"],
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "tags": ["demo-lab", "conti-scenario", f"stage-{alert['stage']}"],
         }
         try:

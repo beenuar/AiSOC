@@ -44,7 +44,7 @@ keeps its current behaviour for backwards compatibility; the new
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
@@ -128,9 +128,7 @@ class LiveActionResult(BaseModel):
     summary: str
     details: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
-    completed_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class LiveActionDescriptor(BaseModel):

@@ -20,7 +20,7 @@ Payload shape:
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 try:
@@ -47,7 +47,7 @@ _FEED_PATHS = {
 class Plugin:
     """1Password Events connector plugin."""
 
-    def _client(self, context: dict[str, Any]) -> "httpx.AsyncClient":
+    def _client(self, context: dict[str, Any]) -> httpx.AsyncClient:
         config = context.get("config") or {}
         if "api_token" not in config:
             raise ValueError("api_token is required in plugin config")
@@ -75,7 +75,7 @@ class Plugin:
                     json={
                         "limit": 1,
                         "start_time": (
-                            datetime.now(timezone.utc) - timedelta(minutes=5)
+                            datetime.now(UTC) - timedelta(minutes=5)
                         ).isoformat(),
                     },
                 )
@@ -89,7 +89,7 @@ class Plugin:
                 if isinstance(feeds, str):
                     feeds = [feeds]
                 since = payload.get("since") or (
-                    datetime.now(timezone.utc) - timedelta(minutes=15)
+                    datetime.now(UTC) - timedelta(minutes=15)
                 ).isoformat()
                 limit = int(payload.get("limit", 200))
 

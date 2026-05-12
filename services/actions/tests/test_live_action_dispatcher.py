@@ -25,7 +25,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-
 from app.live_actions import (
     LiveActionExecutor,
     LiveActionRequest,
@@ -35,7 +34,6 @@ from app.live_actions import (
     register_executor,
     reset_for_tests,
 )
-
 
 # --- Test doubles ---------------------------------------------------------
 
@@ -73,9 +71,7 @@ class _SimulatingExecutor(LiveActionExecutor):
     requires_credentials = True
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        status = (
-            LiveActionStatus.SIMULATED if request.dry_run else LiveActionStatus.SUCCEEDED
-        )
+        status = LiveActionStatus.SIMULATED if request.dry_run else LiveActionStatus.SUCCEEDED
         return LiveActionResult(
             request_id=request.request_id,
             status=status,
@@ -137,9 +133,7 @@ def _isolate_registry():
 
 def test_dispatch_routes_to_registered_executor():
     register_executor(_OkExecutor())
-    request = LiveActionRequest(
-        capability="isolate_host", vendor_id="stubvendor", target="srv-12"
-    )
+    request = LiveActionRequest(capability="isolate_host", vendor_id="stubvendor", target="srv-12")
 
     result = asyncio.run(dispatch(request))
 
@@ -153,9 +147,7 @@ def test_dispatch_unknown_pair_returns_failed_not_exception():
     """The agent loop relies on a uniform shape for "no executor"."""
     register_executor(_OkExecutor())  # different vendor
 
-    result = asyncio.run(
-        dispatch(LiveActionRequest(capability="isolate_host", vendor_id="missing_vendor"))
-    )
+    result = asyncio.run(dispatch(LiveActionRequest(capability="isolate_host", vendor_id="missing_vendor")))
 
     assert result.status == LiveActionStatus.FAILED
     assert result.error == "executor_not_found"
@@ -164,9 +156,7 @@ def test_dispatch_unknown_pair_returns_failed_not_exception():
 
 
 def test_dispatch_unknown_pair_lists_no_alternatives_when_none_exist():
-    result = asyncio.run(
-        dispatch(LiveActionRequest(capability="never_registered_verb", vendor_id="ghost"))
-    )
+    result = asyncio.run(dispatch(LiveActionRequest(capability="never_registered_verb", vendor_id="ghost")))
 
     assert result.status == LiveActionStatus.FAILED
     assert result.details["available_vendors_for_capability"] == []
@@ -194,9 +184,7 @@ def test_dispatch_crashing_executor_is_caught():
     """A buggy plugin must not crash the actions service."""
     register_executor(_CrashingExecutor())
 
-    result = asyncio.run(
-        dispatch(LiveActionRequest(capability="kill_process", vendor_id="crashvendor"))
-    )
+    result = asyncio.run(dispatch(LiveActionRequest(capability="kill_process", vendor_id="crashvendor")))
 
     assert result.status == LiveActionStatus.FAILED
     assert result.error is not None
