@@ -1,16 +1,24 @@
-// WS-D1 — pin the ExplainDrawer streaming contract.
+// WS-D1 — pin the ExplainDrawer dual-backend contract.
 //
-// The drawer is a thin renderer over the `agentsApi.explainStream` NDJSON
-// pipe, but it owns three things that the rest of the app depends on and
-// that have already broken once before: (1) the abort lifecycle so a closed
-// drawer doesn't keep an LLM call alive, (2) per-frame routing so a re-emitted
-// MITRE card doesn't double-render, and (3) graceful fallback when the
-// backend trips a rate limit or runs into a transport error.
+// The drawer is a thin renderer over two API calls and owns four things
+// the rest of the app depends on:
 //
-// We test against a controllable `ReadableStream`: each test gets an
-// `enqueue(frame)` helper and chooses exactly when to close the body. That
-// keeps timing assertions deterministic without faking timers, which is the
-// only way React state batches behave consistently in jsdom.
+//   1. Backend preference — try the structured endpoint
+//      (`alertsApi.explain`) first, fall back to the streaming endpoint
+//      (`agentsApi.explainStream`) on 404/500/network errors but NOT on
+//      429 (which must surface directly).
+//   2. The abort lifecycle, so a closed drawer doesn't keep an LLM call
+//      alive on either backend.
+//   3. Per-frame routing on the streaming path so a re-emitted MITRE
+//      card doesn't double-render.
+//   4. Graceful fallback when the streaming backend trips a rate limit
+//      or runs into a transport error.
+//
+// We test against a controllable `ReadableStream`: each streaming test
+// gets an `enqueue(frame)` helper and chooses exactly when to close the
+// body. That keeps timing assertions deterministic without faking
+// timers, which is the only way React state batches behave consistently
+// in jsdom.
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -19,16 +27,32 @@ import userEvent from '@testing-library/user-event';
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 const explainStreamMock = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/api', () => ({
-  __esModule: true,
-  agentsApi: {
-    explainStream: explainStreamMock,
-  },
-}));
+const explainStructuredMock = vi.hoisted(() => vi.fn());
 
-// Import AFTER the mock so the component picks up our stub.
+// We mock both API surfaces but keep the real `ApiError` class so
+// `instanceof ApiError` checks inside the drawer continue to work.
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+  return {
+    ...actual,
+    agentsApi: {
+      explainStream: explainStreamMock,
+    },
+    alertsApi: {
+      ...actual.alertsApi,
+      explain: explainStructuredMock,
+    },
+  };
+});
+
+// Import AFTER the mock so the component picks up our stubs.
 import { ExplainDrawer } from './ExplainDrawer';
-import type { Alert, ExplainStreamFrame } from '@/lib/api';
+import {
+  ApiError,
+  type Alert,
+  type AlertExplanation,
+  type ExplainStreamFrame,
+} from '@/lib/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -115,15 +139,27 @@ const ALERT: Alert = {
 describe('ExplainDrawer', () => {
   beforeEach(() => {
     explainStreamMock.mockReset();
+    explainStructuredMock.mockReset();
+    // The drawer prefers the structured endpoint and only falls back to
+    // the stream on non-429 failures. The bulk of these tests pre-date
+    // that endpoint and want to exercise the streaming code path, so we
+    // default the structured mock to a 404 (i.e. backend doesn't have
+    // the route) which triggers the documented fallback. Tests that
+    // care about structured behavior override this in the test body.
+    explainStructuredMock.mockRejectedValue(
+      new ApiError('Not Found', 404, 'route not registered'),
+    );
   });
 
   it('returns null when closed', () => {
     const { container } = render(
       <ExplainDrawer open={false} onClose={vi.fn()} alert={ALERT} />,
     );
-    // When closed the component renders nothing — no overlay, no aside.
+    // When closed the component renders nothing — no overlay, no aside,
+    // and neither backend should be hit.
     expect(container.firstChild).toBeNull();
     expect(explainStreamMock).not.toHaveBeenCalled();
+    expect(explainStructuredMock).not.toHaveBeenCalled();
   });
 
   it('renders header + sections as frames arrive and closes on done', async () => {
@@ -570,5 +606,309 @@ describe('ExplainDrawer', () => {
     });
     expect(attempt).toBe(2);
     expect(signalRefs).toHaveLength(2);
+  });
+
+  // ─── Structured-endpoint behavior ───────────────────────────────────
+  //
+  // These tests pin the dual-backend contract: the drawer must prefer
+  // the structured endpoint when it works, fall back to the stream on
+  // 404/500/network, and surface 429 as a terminal error (no fallback,
+  // because both backends share the tenant LLM budget).
+
+  describe('structured endpoint (POST /alerts/{id}/explain)', () => {
+    /** Build a representative structured payload — small but lifelike. */
+    function buildPayload(
+      overrides: Partial<AlertExplanation> = {},
+    ): AlertExplanation {
+      return {
+        alert_id: ALERT.id,
+        summary:
+          'Two okta logins for alice from impossible geographic distance ' +
+          'within 4 minutes — likely account takeover.',
+        rule_lineage: {
+          rule_id: 'rule-okta-impossible-travel-v2',
+          rule_name: 'Okta impossible travel',
+          rule_description:
+            'Two successful logins from geographically distant locations ' +
+            'within a window shorter than physical travel time.',
+          rule_severity: 'high',
+          rule_status: 'enabled',
+          rule_language: 'sigma',
+          rule_confidence: 92,
+          is_builtin: true,
+          // raw_event is the strongest deterministic match — what we'd
+          // expect when the alert carries the rule's own raw_event hash.
+          match_method: 'raw_event',
+          confidence: 'high',
+        },
+        historical_fp_rate: {
+          fp_rate: 0.0714,
+          sample_size: 84,
+          false_positives: 6,
+          lookback_days: 30,
+          scope: 'rule',
+          notes: '6 of 84 alerts marked false-positive in the last 30 days.',
+        },
+        mitre_techniques: [
+          {
+            id: 'T1078',
+            name: 'Valid Accounts',
+            tactic_names: ['Defense Evasion', 'Initial Access'],
+            description: 'Adversaries may obtain credentials.',
+            url: 'https://attack.mitre.org/techniques/T1078/',
+          },
+        ],
+        contributing_events: [
+          {
+            label: 'src_ip',
+            value: '203.0.113.42',
+            annotation: 'Frankfurt',
+          },
+          {
+            label: 'distance_km',
+            value: '9100',
+            // Note: annotation deliberately omitted to confirm the
+            // adapter defaults it cleanly.
+          },
+        ],
+        suggested_actions: [
+          {
+            title: 'Force re-authentication',
+            rationale:
+              'Invalidate active sessions to block the suspicious actor.',
+            playbook_id: 'identity-compromise-v1',
+            priority: 'immediate',
+          },
+        ],
+        llm_used: true,
+        llm_source: 'tenant_byok:openai/gpt-4o-mini',
+        llm_reason: 'tenant has BYOK credentials, model available',
+        generated_at: '2026-05-12T18:30:00Z',
+        ...overrides,
+      };
+    }
+
+    it('renders the structured payload without ever calling the stream', async () => {
+      explainStructuredMock.mockResolvedValueOnce(buildPayload());
+
+      render(<ExplainDrawer open={true} onClose={vi.fn()} alert={ALERT} />);
+
+      // Structured endpoint is hit; stream is not.
+      await waitFor(() => {
+        expect(explainStructuredMock).toHaveBeenCalledTimes(1);
+        expect(explainStructuredMock).toHaveBeenCalledWith(
+          ALERT.id,
+          expect.any(AbortSignal),
+        );
+      });
+      expect(explainStreamMock).not.toHaveBeenCalled();
+
+      // Source badge surfaces "Structured" so QA can spot a fallback.
+      await waitFor(() => {
+        expect(screen.getByText('Structured')).toBeInTheDocument();
+      });
+
+      // Summary, rule lineage, FP rate, MITRE, evidence, and suggested
+      // actions all render together — this is the headline win of the
+      // structured endpoint over streaming.
+      expect(
+        screen.getByText(/likely account takeover/),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Okta impossible travel')).toBeInTheDocument();
+      expect(
+        screen.getByText('rule-okta-impossible-travel-v2'),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Valid Accounts/)).toBeInTheDocument();
+      expect(screen.getByText('203.0.113.42')).toBeInTheDocument();
+      expect(screen.getByText('Force re-authentication')).toBeInTheDocument();
+
+      // LLM disclosure footer is structured-only and must surface
+      // whether prose is LLM-generated, with the source. This is what
+      // the "audit my AI decisions" workflow consumes.
+      expect(
+        screen.getByText(/tenant_byok:openai\/gpt-4o-mini/),
+      ).toBeInTheDocument();
+
+      // Status flips straight to Done — there's no streaming phase.
+      expect(screen.getByText('Done')).toBeInTheDocument();
+    });
+
+    it('surfaces 429 directly without falling back to the stream', async () => {
+      // Both backends share the LLM cost ledger. Falling back on 429
+      // would silently double-bill the tenant for no benefit, so the
+      // drawer must show the rate-limit message and stop.
+      explainStructuredMock.mockRejectedValueOnce(
+        new ApiError('Too Many Requests', 429, 'retry_after=30'),
+      );
+
+      render(<ExplainDrawer open={true} onClose={vi.fn()} alert={ALERT} />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Rate limit reached for AI explanations/i),
+        ).toBeInTheDocument();
+      });
+
+      // The stream MUST NOT be tried as a back-channel.
+      expect(explainStreamMock).not.toHaveBeenCalled();
+      // Status reflects the failure and Retry is offered.
+      expect(screen.getByText('Error')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Retry' }),
+      ).toBeInTheDocument();
+      // Source badge tells QA the failure came from the structured
+      // backend (helps distinguish from a stream-side rate limit).
+      expect(screen.getByText('Structured')).toBeInTheDocument();
+    });
+
+    it('falls back to the stream on 404 (older backend without the route)', async () => {
+      // 404 is the "this version of the API doesn't have the new
+      // endpoint" case — common during canary rollouts. We must not
+      // surface the 404 to the analyst; just transparently downgrade
+      // to the streaming UX.
+      explainStructuredMock.mockRejectedValueOnce(
+        new ApiError('Not Found', 404, 'route not registered'),
+      );
+
+      const signalRef: { current: AbortSignal | undefined } = {
+        current: undefined,
+      };
+      const { response, handle } = buildMockStream({ signalCapture: signalRef });
+      explainStreamMock.mockImplementation(
+        async (_payload: unknown, signal?: AbortSignal) => {
+          signalRef.current = signal;
+          return response;
+        },
+      );
+
+      render(<ExplainDrawer open={true} onClose={vi.fn()} alert={ALERT} />);
+
+      // Structured tried first, then stream — in that order.
+      await waitFor(() => {
+        expect(explainStructuredMock).toHaveBeenCalledTimes(1);
+        expect(explainStreamMock).toHaveBeenCalledTimes(1);
+      });
+
+      await handle.enqueue({
+        kind: 'delta',
+        section: 'summary',
+        text: 'Streaming fallback worked.',
+      });
+      await handle.enqueue({ kind: 'done', alert_id: ALERT.id });
+      await handle.close();
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Streaming fallback worked.'),
+        ).toBeInTheDocument();
+        // Source badge flips to "Stream" so the analyst (and QA) know
+        // the structured backend wasn't available this time.
+        expect(screen.getByText('Stream')).toBeInTheDocument();
+      });
+    });
+
+    it('falls back to the stream on 500 (backend error)', async () => {
+      // 500 is "the structured endpoint is broken right now" — same
+      // graceful downgrade as 404, but a different signal for ops.
+      explainStructuredMock.mockRejectedValueOnce(
+        new ApiError(
+          'Internal Server Error',
+          500,
+          'rule lineage resolver crashed',
+        ),
+      );
+
+      const signalRef: { current: AbortSignal | undefined } = {
+        current: undefined,
+      };
+      const { response, handle } = buildMockStream({ signalCapture: signalRef });
+      explainStreamMock.mockImplementation(
+        async (_payload: unknown, signal?: AbortSignal) => {
+          signalRef.current = signal;
+          return response;
+        },
+      );
+
+      render(<ExplainDrawer open={true} onClose={vi.fn()} alert={ALERT} />);
+
+      await waitFor(() => {
+        expect(explainStreamMock).toHaveBeenCalledTimes(1);
+      });
+
+      await handle.enqueue({ kind: 'done', alert_id: ALERT.id });
+      await handle.close();
+
+      await waitFor(() => {
+        expect(screen.getByText('Stream')).toBeInTheDocument();
+      });
+    });
+
+    it('aborts the structured request when the drawer closes', async () => {
+      // Same lifecycle contract as the streaming path: closing the
+      // drawer mid-flight must abort the in-flight request so we
+      // don't keep an LLM call (and its cost) alive.
+      let capturedSignal: AbortSignal | undefined;
+      explainStructuredMock.mockImplementation(
+        async (_id: string, signal?: AbortSignal) => {
+          capturedSignal = signal;
+          // Never resolve — we want the abort to kill it.
+          return new Promise<AlertExplanation>(() => {});
+        },
+      );
+
+      const { rerender } = render(
+        <ExplainDrawer open={true} onClose={vi.fn()} alert={ALERT} />,
+      );
+
+      await waitFor(() => {
+        expect(explainStructuredMock).toHaveBeenCalled();
+        expect(capturedSignal).toBeDefined();
+      });
+      expect(capturedSignal?.aborted).toBe(false);
+
+      rerender(<ExplainDrawer open={false} onClose={vi.fn()} alert={ALERT} />);
+
+      await waitFor(() => {
+        expect(capturedSignal?.aborted).toBe(true);
+      });
+
+      // Stream must NOT have been invoked — the close happened before
+      // the structured request could fail and trigger fallback.
+      expect(explainStreamMock).not.toHaveBeenCalled();
+    });
+
+    it('renders structured payload even when llm_used is false (deterministic mode)', async () => {
+      // Air-gapped / no-BYOK path: structured endpoint returns the
+      // deterministic template instead of an LLM summary. The
+      // disclosure must say so plainly so analysts trust the output.
+      explainStructuredMock.mockResolvedValueOnce(
+        buildPayload({
+          llm_used: false,
+          llm_source: 'deterministic',
+          llm_reason:
+            'tenant has no BYOK credentials and air-gapped mode is enabled',
+          summary:
+            'Detection rule "Okta impossible travel" matched. Two ' +
+            'logins from geographically distant locations.',
+        }),
+      );
+
+      render(<ExplainDrawer open={true} onClose={vi.fn()} alert={ALERT} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Done')).toBeInTheDocument();
+      });
+
+      // Summary still renders — deterministic prose is still useful.
+      expect(
+        screen.getByText(/Detection rule "Okta impossible travel" matched/),
+      ).toBeInTheDocument();
+      // Disclosure footer flags this clearly so the user knows nobody
+      // pinged an LLM for this one.
+      expect(screen.getByText(/deterministic/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/no BYOK credentials and air-gapped/),
+      ).toBeInTheDocument();
+    });
   });
 });

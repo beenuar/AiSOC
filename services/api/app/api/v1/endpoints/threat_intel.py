@@ -1,19 +1,35 @@
-"""Internal threat-intel generation endpoints."""
+"""Internal threat-intel generation endpoints.
+
+Access control
+--------------
+Threat-intel data (IOCs, threat actors, feeds) is sensitive in MSSP/multi-tenant
+deployments — a noisy or malicious analyst could otherwise poison detections
+across the whole tenant by injecting false IOCs or deleting feeds.
+
+All endpoints below are gated on RBAC permissions resolved by
+``app.api.v1.deps.require_permission``:
+
+* ``threat_intel:read``  – list / get
+* ``threat_intel:write`` – create / delete
+
+The ``viewer`` role gets read access; analyst-tier roles
+(``threat_hunter``, ``soc_lead``, ``tenant_admin``) get write access.
+See ``app.core.security.ROLE_PERMISSIONS`` for the authoritative map.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import AuthUser, require_permission
 from app.db.database import get_db
-from app.models.tenant import User
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
 
 router = APIRouter(prefix="/threat-intel", tags=["threat-intel"])
@@ -105,13 +121,13 @@ class FeedOut(FeedCreate):
 
 @router.get("/iocs", response_model=list[IOCOut])
 async def list_iocs(
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:read"))],
     ioc_type: str | None = Query(None),
     severity: str | None = Query(None),
     is_active: bool | None = Query(None),
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[ThreatIntelIOC]:
     q = select(ThreatIntelIOC).where(ThreatIntelIOC.tenant_id == current_user.tenant_id)
     if ioc_type:
@@ -128,8 +144,8 @@ async def list_iocs(
 @router.post("/iocs", response_model=IOCOut, status_code=status.HTTP_201_CREATED)
 async def create_ioc(
     body: IOCCreate,
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> ThreatIntelIOC:
     ioc = ThreatIntelIOC(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(ioc)
@@ -141,8 +157,8 @@ async def create_ioc(
 @router.get("/iocs/{ioc_id}", response_model=IOCOut)
 async def get_ioc(
     ioc_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:read"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> ThreatIntelIOC:
     ioc = await db.get(ThreatIntelIOC, ioc_id)
     if not ioc or ioc.tenant_id != current_user.tenant_id:
@@ -153,8 +169,8 @@ async def get_ioc(
 @router.delete("/iocs/{ioc_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_ioc(
     ioc_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> None:
     ioc = await db.get(ThreatIntelIOC, ioc_id)
     if not ioc or ioc.tenant_id != current_user.tenant_id:
@@ -170,11 +186,11 @@ async def delete_ioc(
 
 @router.get("/actors", response_model=list[ThreatActorOut])
 async def list_actors(
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:read"))],
     is_active: bool | None = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[ThreatActor]:
     q = select(ThreatActor).where(ThreatActor.tenant_id == current_user.tenant_id)
     if is_active is not None:
@@ -187,8 +203,8 @@ async def list_actors(
 @router.post("/actors", response_model=ThreatActorOut, status_code=status.HTTP_201_CREATED)
 async def create_actor(
     body: ThreatActorCreate,
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> ThreatActor:
     actor = ThreatActor(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(actor)
@@ -204,8 +220,8 @@ async def create_actor(
 
 @router.get("/feeds", response_model=list[FeedOut])
 async def list_feeds(
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:read"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[ThreatIntelFeed]:
     result = await db.execute(
         select(ThreatIntelFeed).where(ThreatIntelFeed.tenant_id == current_user.tenant_id).order_by(ThreatIntelFeed.name)
@@ -216,8 +232,8 @@ async def list_feeds(
 @router.post("/feeds", response_model=FeedOut, status_code=status.HTTP_201_CREATED)
 async def create_feed(
     body: FeedCreate,
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> ThreatIntelFeed:
     feed = ThreatIntelFeed(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(feed)
@@ -229,8 +245,8 @@ async def create_feed(
 @router.delete("/feeds/{feed_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_feed(
     feed_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> None:
     feed = await db.get(ThreatIntelFeed, feed_id)
     if not feed or feed.tenant_id != current_user.tenant_id:

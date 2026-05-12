@@ -186,9 +186,7 @@ async def test_fetch_alerts_passes_since_seconds_as_query_param():
     """``since_seconds`` should land on the wire. The example's docstring
     explicitly tells readers "keep this in the signature, the scheduler
     always passes it" — so verify it actually flows through."""
-    route = respx.get("https://httpbin.org/anything").mock(
-        return_value=httpx.Response(200, json={"url": "x", "origin": "y"})
-    )
+    route = respx.get("https://httpbin.org/anything").mock(return_value=httpx.Response(200, json={"url": "x", "origin": "y"}))
 
     conn = HelloConnector(api_token="t")
     await conn.fetch_alerts(since_seconds=900)
@@ -225,9 +223,7 @@ async def test_fetch_alerts_swallows_invalid_json():
     """If the vendor returns 200 with garbage in the body, we must not
     crash the polling loop. ``[]`` is the right answer here — there's
     nothing to ingest, but the connector's still "alive enough"."""
-    respx.get("https://httpbin.org/anything").mock(
-        return_value=httpx.Response(200, content=b"not json at all")
-    )
+    respx.get("https://httpbin.org/anything").mock(return_value=httpx.Response(200, content=b"not json at all"))
     conn = HelloConnector(api_token="t")
     events = await conn.fetch_alerts()
     assert events == []

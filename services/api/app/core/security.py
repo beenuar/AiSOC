@@ -48,6 +48,11 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "reports:read",
         "reports:write",
         "threat_intel:read",
+        # Tenant admins must be able to manage their tenant's threat-intel
+        # surface (IOCs, actor profiles, feed config). Without :write the
+        # admin role could not even add a feed, let alone delete a poisoned
+        # IOC injected by a compromised analyst.
+        "threat_intel:write",
         "settings:read",
         "settings:write",
         # Workstream 7: tenant lake API. Tenant admins get full access
@@ -73,6 +78,10 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "reports:read",
         "reports:write",
         "threat_intel:read",
+        # SOC leads triage incidents and need to be able to add/expire
+        # IOCs derived from investigations without waiting on the threat-
+        # hunter or tenant-admin role.
+        "threat_intel:write",
         # SOC leads run investigations across the lake routinely.
         "lake:query",
         "lake:read_schema",

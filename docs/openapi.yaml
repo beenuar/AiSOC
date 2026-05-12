@@ -489,6 +489,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/explain:
+    post:
+      tags:
+      - alerts
+      summary: Generate a structured AI explanation for an alert
+      description: 'Return a structured explanation for one alert.
+
+
+        This is the *single-shot* counterpart to the agent service''s
+
+        NDJSON stream. Use this when the client is a non-interactive
+
+        consumer (PDF builder, SOAR playbook, mobile app) or when the
+
+        UI just wants the final payload without rendering tokens.'
+      operationId: explain_alert_api_v1_alerts__alert_id__explain_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Structured explanation payload (rule lineage, MITRE, FPR, actions,
+            summary)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Explain Alert Api V1 Alerts  Alert Id  Explain Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/cases:
     get:
       tags:
