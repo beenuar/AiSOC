@@ -55,7 +55,21 @@ Closed-source AI SOC vendors ship working products. AiSOC's contribution is maki
 
 ## Deploy in 60 seconds
 
-Three frictionless paths to a running, seeded AiSOC instance with `INC-RT-001` (the LockBit 3.0 ransomware showcase) already mid-investigation when you land on it. Each path runs `alembic upgrade head` and `python -m app.scripts.seed_demo` as part of its lifecycle, so the seeded data is present without a manual step.
+Four frictionless paths to a running, seeded AiSOC instance with `INC-RT-001` (the LockBit 3.0 ransomware showcase) already mid-investigation when you land on it. Each path runs `alembic upgrade head` and `python -m app.scripts.seed_demo` as part of its lifecycle, so the seeded data is present without a manual step.
+
+### 0. One-click installer — zero prerequisites
+
+Don't have Docker, Node, pnpm, or even git installed? Use the bootstrap installer. It detects your OS, installs everything idempotently, clones the repo, and launches the demo.
+
+```bash
+# Linux + macOS (one-liner):
+curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh | bash
+
+# Windows (PowerShell as Administrator):
+iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+```
+
+The installer covers Ubuntu/Debian (`apt`), Fedora/RHEL (`dnf`), Arch (`pacman`), openSUSE (`zypper`), Alpine (`apk`), macOS (`brew`), and Windows (`winget`). On Windows it also handles WSL2 enablement for Docker Desktop. Re-running is safe — every step is idempotent. To uninstall later, `./uninstall.sh` (Linux/macOS) or `.\uninstall.ps1` (Windows). See the [Quick install guide](docs/QUICK_INSTALL.md) for flags, troubleshooting, and what gets installed.
 
 ### 1. Render — one click, hosted
 
