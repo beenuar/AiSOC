@@ -213,9 +213,7 @@ def _explicit_rule_id_from_alert(alert: Alert) -> uuid.UUID | None:
     return None
 
 
-async def _resolve_rule_lineage(
-    db: AsyncSession, alert: Alert
-) -> tuple[DetectionRule | None, str, str]:
+async def _resolve_rule_lineage(db: AsyncSession, alert: Alert) -> tuple[DetectionRule | None, str, str]:
     """Find the detection rule (if any) that produced this alert.
 
     Returns ``(rule, confidence, match_method)``:
@@ -232,9 +230,7 @@ async def _resolve_rule_lineage(
     # 1. Explicit reference in raw_event or tags.
     explicit_id = _explicit_rule_id_from_alert(alert)
     if explicit_id is not None:
-        result = await db.execute(
-            select(DetectionRule).where(DetectionRule.id == explicit_id)
-        )
+        result = await db.execute(select(DetectionRule).where(DetectionRule.id == explicit_id))
         rule = result.scalar_one_or_none()
         if rule is not None:
             # The raw_event probe wins over the tag probe; we don't
@@ -280,9 +276,7 @@ async def _resolve_rule_lineage(
     # overlap is medium; category-only is low.
     best: tuple[int, DetectionRule] | None = None
     for rule in candidates:
-        rule_techniques = {
-            str(t) for t in (rule.mitre_techniques or []) if isinstance(t, str)
-        }
+        rule_techniques = {str(t) for t in (rule.mitre_techniques or []) if isinstance(t, str)}
         overlap = len(rule_techniques.intersection(technique_ids))
         # Score: technique overlap dominates, with a tie-breaker on
         # rule confidence and a small bonus for built-in rules (they
@@ -354,8 +348,7 @@ async def _historical_fp_rate(
             extra_filters.append(Alert.mitre_techniques.op("?|")(rule_techniques))
         scope = "rule"
         notes = (
-            f"Approximated by category={rule.category!r} and MITRE techniques "
-            f"matching {rule.name!r}; alerts don't carry a direct rule FK."
+            f"Approximated by category={rule.category!r} and MITRE techniques matching {rule.name!r}; alerts don't carry a direct rule FK."
         )
     elif alert.category and (alert.mitre_techniques or []):
         extra_filters = [
@@ -363,10 +356,7 @@ async def _historical_fp_rate(
             Alert.mitre_techniques.op("?|")(list(alert.mitre_techniques or [])),
         ]
         scope = "category"
-        notes = (
-            f"Computed across category={alert.category!r} alerts sharing at least "
-            "one MITRE technique with this alert."
-        )
+        notes = f"Computed across category={alert.category!r} alerts sharing at least one MITRE technique with this alert."
     elif alert.category:
         extra_filters = [Alert.category == alert.category]
         scope = "category"
@@ -380,9 +370,7 @@ async def _historical_fp_rate(
     query = (
         select(
             func.count().label("total"),
-            func.count()
-            .filter(Alert.disposition == "false_positive")
-            .label("fps"),
+            func.count().filter(Alert.disposition == "false_positive").label("fps"),
         )
         .where(and_(*base_filters, *extra_filters))
         .limit(_FP_RATE_SAMPLE_CAP)
@@ -439,9 +427,7 @@ def _extract_mitre_ids(alert: Alert) -> list[str]:
             found.append(item)
             seen.add(item)
 
-    text_pool = " ".join(
-        str(v) for v in (alert.tags or []) + [alert.title or "", alert.description or ""]
-    )
+    text_pool = " ".join(str(v) for v in (alert.tags or []) + [alert.title or "", alert.description or ""])
     for tid in _MITRE_ID_RE.findall(text_pool):
         if tid not in seen:
             found.append(tid)
@@ -481,8 +467,7 @@ def _resolve_technique_card(technique_id: str) -> MitreTechnique:
         name=raw.get("name", technique_id),
         tactic_names=list(raw.get("tactic_names") or []),
         description=desc[:280] + ("…" if len(desc) > 280 else ""),
-        url=raw.get("url")
-        or f"https://attack.mitre.org/techniques/{technique_id.replace('.', '/')}/",
+        url=raw.get("url") or f"https://attack.mitre.org/techniques/{technique_id.replace('.', '/')}/",
     )
 
 
@@ -541,9 +526,7 @@ def _extract_contributing_events(alert: Alert) -> list[ContributingEvent]:
     return events[:_MAX_CONTRIBUTING_EVENTS]
 
 
-def _build_suggested_actions(
-    alert: Alert, mitre_ids: list[str]
-) -> list[SuggestedAction]:
+def _build_suggested_actions(alert: Alert, mitre_ids: list[str]) -> list[SuggestedAction]:
     """Curated, never LLM-generated list of next steps.
 
     Generated suggestions are deliberately curated (not LLM-derived)
@@ -716,10 +699,7 @@ async def _call_llm_for_summary(
         if rule_lineage.rule_name
         else None
     )
-    prompt_mitre = [
-        {"id": t.id, "name": t.name, "tactic_names": t.tactic_names}
-        for t in mitre_techniques
-    ]
+    prompt_mitre = [{"id": t.id, "name": t.name, "tactic_names": t.tactic_names} for t in mitre_techniques]
     prompt_fp = {
         "fp_rate": fp.fp_rate,
         "sample_size": fp.sample_size,

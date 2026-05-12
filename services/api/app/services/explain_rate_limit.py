@@ -105,12 +105,8 @@ class ExplainRateLimiter:
         capacity: float | None = None,
         refill_per_second: float | None = None,
     ) -> None:
-        cap = capacity if capacity is not None else _env_float(
-            "AISOC_EXPLAIN_RATE_CAPACITY", _DEFAULT_CAPACITY
-        )
-        ref = refill_per_second if refill_per_second is not None else _env_float(
-            "AISOC_EXPLAIN_RATE_REFILL", _DEFAULT_REFILL
-        )
+        cap = capacity if capacity is not None else _env_float("AISOC_EXPLAIN_RATE_CAPACITY", _DEFAULT_CAPACITY)
+        ref = refill_per_second if refill_per_second is not None else _env_float("AISOC_EXPLAIN_RATE_REFILL", _DEFAULT_REFILL)
         if cap <= 0:
             raise ValueError("capacity must be positive")
         if ref <= 0:
@@ -130,9 +126,7 @@ class ExplainRateLimiter:
         if cost <= 0:
             raise ValueError("cost must be positive")
         if cost > self._capacity:
-            raise ValueError(
-                f"cost {cost} exceeds capacity {self._capacity}; would never succeed"
-            )
+            raise ValueError(f"cost {cost} exceeds capacity {self._capacity}; would never succeed")
 
         bucket = await self._get_bucket(str(tenant_id))
         async with bucket.lock:

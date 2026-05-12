@@ -93,11 +93,7 @@ def _env_baseline() -> tuple[str, str, str | None]:
     uses some mix of the two.
     """
     base_url = os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip()
-    model = (
-        os.getenv("OPENAI_MODEL", "").strip()
-        or os.getenv("LLM_MODEL", "").strip()
-        or os.getenv("AISOC_LLM_MODEL", "").strip()
-    )
+    model = os.getenv("OPENAI_MODEL", "").strip() or os.getenv("LLM_MODEL", "").strip() or os.getenv("AISOC_LLM_MODEL", "").strip()
     api_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("LLM_API_KEY", "").strip()
     return base_url, model, (api_key or None)
 
@@ -176,9 +172,7 @@ def _classify_source(
     so the API-side ``source`` value matches what the Settings UI's
     LLM status indicator reports.
     """
-    tenant_contributed = (
-        tenant_contributed_base_url or tenant_contributed_model or tenant_contributed_key
-    )
+    tenant_contributed = tenant_contributed_base_url or tenant_contributed_model or tenant_contributed_key
     env_contributed = (
         (not tenant_contributed_base_url and bool(env_base_url))
         or (not tenant_contributed_model and bool(env_model))
