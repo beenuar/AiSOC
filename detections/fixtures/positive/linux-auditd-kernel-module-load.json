@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_priv_esc_module_load",
+  "exe": "/sbin/insmod",
+  "syscall": "init_module",
+  "comm": "insmod",
+  "uid": 0,
+  "module": "diamorphine"
+}

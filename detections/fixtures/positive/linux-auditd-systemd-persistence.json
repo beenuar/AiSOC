@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_persistence_systemd",
+  "exe": "/usr/bin/tee",
+  "syscall": "openat",
+  "path": "/etc/systemd/system/backdoor.service",
+  "uid": 0,
+  "comm": "tee"
+}

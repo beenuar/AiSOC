@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_persistence_systemd",
+  "exe": "/usr/bin/dpkg",
+  "syscall": "openat",
+  "path": "/etc/systemd/system/nginx.service",
+  "uid": 0,
+  "comm": "dpkg"
+}

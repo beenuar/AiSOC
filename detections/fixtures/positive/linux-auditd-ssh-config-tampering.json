@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_critical_authorized_keys",
+  "exe": "/usr/bin/tee",
+  "syscall": "openat",
+  "path": "/root/.ssh/authorized_keys",
+  "uid": 0,
+  "comm": "tee"
+}

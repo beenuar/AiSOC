@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_priv_esc_module_load",
+  "exe": "/lib/systemd/systemd-modules-load",
+  "syscall": "finit_module",
+  "comm": "systemd-modules",
+  "uid": 0,
+  "module": "br_netfilter"
+}
