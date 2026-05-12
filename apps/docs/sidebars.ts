@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "connectors/index",
         "connectors/hello-connector",
+        "connectors/endpoint-decision-matrix",
         "connectors/api-coverage",
         "connectors/universal-capture",
         "connectors/azure-entra",
