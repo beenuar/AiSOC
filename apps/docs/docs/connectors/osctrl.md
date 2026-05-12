@@ -14,9 +14,10 @@ from the osquery table that produced the row, so detection rules in
 `startup_items`) to high without having to reason about vendor-specific severity
 fields.
 
-This connector is read-only on its own. The live-query response action
-(see [agent capabilities](/docs/concepts/capabilities)) reuses the same
-auth surface to dispatch ad-hoc queries from playbooks.
+This connector is read-only on its own. The companion AiSOC TLS endpoint
+(`aisoc-direct`, ships as a separate connector page) and the live-query
+response action (see [agent capabilities](/docs/concepts/capabilities)) build
+on the same auth surface to dispatch ad-hoc queries from playbooks.
 
 ## What you get
 

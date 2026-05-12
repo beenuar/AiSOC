@@ -507,6 +507,21 @@ clusters.
 
 ## [7.0.x] — 2026-05-10 — Endpoint telemetry wave (PR1–PR6)
 
+> **⚠️ Reconciliation notice (2026-05-12)**: The work described in this
+> section was developed on branch `feat/pr6-osquery-extensions`
+> (commits `e0d70fa1` → `3ab5aa81`) but the branch was **not merged into
+> `main`** before this changelog entry was written. The files referenced
+> below — including `services/osquery-tls/`,
+> `services/connectors/app/connectors/aisoc_direct.py`,
+> `services/agents/app/playbook/steps/osquery_live_query.py`, and the
+> osquery-extensions Go module — exist on that branch and can be reviewed
+> there, but are **not present on `main`** as of v7.1.0 planning. Treat
+> this section as a record of in-flight work pending PR merge, not as
+> shipped functionality. The community-feedback-driven roadmap
+> (`docs/community-feedback/2026-05-12/`) builds the generic
+> `live_action` interface (Issue #8) on `main` directly rather than
+> assuming this section's primitives are in place.
+
 ### Added — osctrl, FleetDM, aisoc-osquery-tls, aisoc-direct, native osquery detections, live-query playbook step, FIM, custom virtual tables
 
 Six-PR wave that closes [#44](https://github.com/beenuar/AiSOC/issues/44)
@@ -547,10 +562,20 @@ v7.0.0 baseline and the v7.0.1 hardening patch.
 - **`services/actions/app/clients/osquery_allowlist.py`** — Strict allowlist
   enforcing only safe SELECT-only queries against approved tables (no
   `ATTACH`, no `INSERT`, no `pragma_*` introspection of secrets).
-- **`services/agents/app/playbook/steps/osquery_live_query.py`** — New
-  `osquery_live_query` step type. Pushes allowlisted distributed queries to a
-  single host or fleet-wide via osctrl / FleetDM / aisoc-direct with
-  HMAC-signed ChatOps approval before execution.
+- **`services/agents/app/playbook/engine.py::_handle_osquery_live_query`** —
+  New `osquery_live_query` step type, registered in
+  `services/agents/app/playbook/models.py` as `StepType.OSQUERY_LIVE_QUERY` and
+  dispatched from the `STEP_HANDLERS` table at the bottom of `engine.py`.
+  Pushes allowlisted distributed queries to a single host or fleet-wide via
+  osctrl / FleetDM / aisoc-direct with HMAC-signed ChatOps approval before
+  execution. Tests live in
+  `services/agents/tests/test_osquery_live_query_step.py`.
+
+  > **v7.0.x reconciliation:** Earlier drafts of this CHANGELOG referenced a
+  > separate module at `services/agents/app/playbook/steps/osquery_live_query.py`.
+  > That module never landed on `main` — the handler is inlined in `engine.py`
+  > to keep the playbook engine's dispatch table in one place. The behaviour,
+  > tests, and CLI surface are identical to the originally documented design.
 
 #### PR4 — `aisoc-osquery-tls` FastAPI service + `aisoc-direct` connector
 
@@ -560,10 +585,26 @@ v7.0.0 baseline and the v7.0.1 hardening patch.
   Self-hosted osquery TLS plugin endpoints are FleetDM-compatible so any
   off-the-shelf osquery agent can enroll without a third-party SaaS hop.
   Uses dedicated SQLite + Alembic migrations under `services/osquery-tls/db/`.
-- **`services/connectors/app/connectors/aisoc_direct.py`** + matching
-  `plugins/aisoc-direct/plugin.yaml` — Direct-from-agent ingest connector that
-  consumes the osquery-tls log stream and normalises into the standard alert
-  schema; bypasses third-party SaaS entirely.
+- **`services/osquery-tls/app/api/v1/endpoints/log.py`** + matching
+  `plugins/aisoc-direct/plugin.yaml` and
+  `services/actions/app/clients/aisoc_direct_client.py` — Direct-from-agent
+  ingest path that consumes the osquery-tls log stream and normalises into
+  the standard alert schema; bypasses third-party SaaS entirely. The
+  `aisoc-direct` connector is implemented as a **virtual connector**: agents
+  push events directly into `/api/v1/log` on the osquery-tls service, which
+  fans them out to the same ingest pipeline the polled connectors use. The
+  marketplace manifest lives at `plugins/aisoc-direct/plugin.yaml`; the
+  outbound client (used by playbooks to drive distributed queries) lives at
+  `services/actions/app/clients/aisoc_direct_client.py`.
+
+  > **v7.0.x reconciliation:** Earlier drafts of this CHANGELOG referenced a
+  > polled connector module at
+  > `services/connectors/app/connectors/aisoc_direct.py`. That module never
+  > landed on `main`. The connector is implemented as a push-based virtual
+  > connector (the `osquery-tls` service is itself the ingest endpoint), so
+  > there is nothing to register in `services/connectors/app/connectors/__init__.py`.
+  > Functionally the data path is identical to the originally documented
+  > design.
 
 #### PR5 — Osquery packs + FIM endpoint + FIM dashboard
 
