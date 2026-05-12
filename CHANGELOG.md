@@ -7,6 +7,236 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Connectors — Wazuh Indexer ingest (Stage 2)
+
+New first-class endpoint connector for Wazuh deployments. AiSOC now polls the
+Wazuh Indexer API directly (no agent rewrite required) and normalizes alerts
+into the platform's OCSF-aligned schema, collapsing Wazuh's native severity
+ladder into the four-tier `info | low | medium | high` set used everywhere
+else.
+
+- **`services/connectors/app/connectors/wazuh.py`** — `WazuhConnector`
+  subclasses `BaseConnector`, polls `wazuh-alerts-*` indices over HTTPX with
+  basic-auth, paginates time-windowed queries, retries on 5xx with capped
+  backoff, and emits one normalized event per alert hit. Cursor is the
+  highest `@timestamp` seen so reruns are idempotent.
+- **`services/connectors/app/connectors/__init__.py`** — registered in
+  `_CONNECTOR_CLASSES`; the registry now declares 52 first-party connectors.
+- **`plugins/wazuh/plugin.yaml`** + `pnpm marketplace:sync` — connector ships
+  as a marketplace entry under category `siem`, mirrored into
+  `apps/web/public/marketplace/index.json`.
+- **`apps/docs/docs/connectors/wazuh.md`** + sidebar entry — operator setup
+  walkthrough (API user + role, time-window semantics, severity collapse
+  table, troubleshooting matrix).
+- **`services/connectors/tests/test_wazuh_connector.py`** — 24 unit tests
+  cover schema, auth headers, time-window query shape, retry policy, every
+  documented severity bucket, and the empty/error paths.
+
+### CLI — `aisoc plugin new` per-type templates
+
+Replaces the old hard-coded `plugin scaffold` with a real templated generator
+keyed on plugin kind (`enricher | connector | responder | detection | widget`).
+Templates ship inside the `aisoc-cli` wheel via `importlib.resources` so the
+CLI works unchanged after `pip install aisoc-cli`.
+
+- **`packages/aisoc-cli/src/aisoc_cli/main.py`** — `aisoc plugin new <NAME>
+  --type <kind>` loads the template tree from
+  `src/aisoc_cli/templates/<kind>/`, runs `string.Template` substitution for
+  `${slug}`, `${name}`, `${author}`, and writes a project that already
+  validates against the manifest schema. `aisoc plugin scaffold` is preserved
+  as an alias for backwards compatibility.
+- `pyproject.toml` — `force-include` ships the templates tree in the wheel.
+- Tests parameterize across all five plugin types and assert the manifest
+  validates and no `${...}` placeholders leak through.
+- `plugins/templates/README.md` is now a pointer to the canonical templates
+  inside the CLI package.
+- **`apps/docs/docs/plugins/cli.md`** — documents the new CLI surface and is
+  added to the Plugin SDK sidebar.
+
+### Infrastructure — GCP Cloud Run + Cloud SQL Terraform skeleton
+
+Adds a serverless-first BYOC equivalent of the existing AWS module so AiSOC
+can be stood up on Google Cloud with one `terraform apply`. Stage 2 #15.
+
+- **`infra/terraform/gcp/`** — Cloud Run for `api`/`web`/`ingest`, Cloud SQL
+  Postgres 16 + Memorystore Redis 7.2 on private IPs through a dedicated VPC
+  and Serverless VPC Access connector, Secret Manager for every credential
+  (auto-generated `postgres_password`, `secret_key`, `credential_key`,
+  `redis_auth`, optional `openai_api_key`), and Artifact Registry for images.
+  One service account per Cloud Run service with least-privilege
+  `secretAccessor` bindings. The skeleton points at the public GHCR demo
+  images so a fresh `apply` works zero-config; operators override via
+  `api_image` / `web_image` / `ingest_image`.
+- **`apps/docs/docs/deployment/gcp.md`** + sidebar entry (between `kubernetes`
+  and `env-vars`) — quickstart, state-backend guidance, Cloud SQL Auth Proxy
+  notes, cost envelope, and the long-running-services follow-up plan (GKE
+  Autopilot for `agents`, `realtime`, `connectors`, `alert-fusion`,
+  `threatintel`, `fusion`).
+- `infra/terraform/gcp/README.md` mirrors the deploy doc for module-local
+  consumption.
+
+### Live Actions — generic vendor/capability dispatcher (Stage 2 #8)
+
+Adds a vendor-pluggable response-action surface so plugins can register
+executors against the existing capability taxonomy without forking the
+in-tree executor list. The dispatcher always returns a typed
+`LiveActionResult`; unknown `(vendor_id, capability)` pairs return `FAILED`
+with `error="executor_not_found"` so the agent degrades gracefully instead
+of seeing a 500.
+
+- **`services/actions/app/live_actions/models.py`** —
+  `LiveActionRequest`/`Result`/`Descriptor` Pydantic models (UTC-aware).
+- **`services/actions/app/live_actions/registry.py`** — `LiveActionExecutor`
+  ABC + module-level `LiveActionRegistry`.
+- **`services/actions/app/live_actions/dispatcher.py`** — structured logging,
+  error translation, dry-run + missing-credential semantics
+  (`SIMULATED`, never `PARTIAL`).
+- Adapters wrap every existing in-tree executor (CrowdStrike, Okta, AWS SG,
+  Splunk) so they now show up as `builtin` descriptors.
+- **`services/api/app/api/v1/endpoints/live_actions.py`** — `discover`,
+  `dispatch`, `dry-run` REST routes; built-ins are registered at app startup.
+- 45 new tests across models / registry / dispatcher / router / builtins
+  (full actions suite: 99 passed).
+- **`apps/docs/docs/concepts/live-actions.md`** + sidebar slot.
+- Drive-by: fixed two pre-existing broken doc links flagged by the
+  Docusaurus build (osctrl → aisoc-direct stub, `air-gapped` → `env-vars`).
+
+### Agents — deterministic NL→ES|QL translator + 50-pair eval set (Stage 2 #16)
+
+Replaces the template fallback in
+`services/api/app/api/v1/endpoints/nl_query.py` with a real, offline-friendly,
+deterministic IR + renderer that emits ES|QL, KQL, and SPL and runs every
+output through a lightweight grammar validator before returning. An optional
+LLM enhancement path (`gpt-4o-mini`) is exposed via `enhance_with_llm` for
+callers with credentials; failures fall back to the deterministic path so the
+air-gapped story keeps working and the eval harness stays reproducible.
+
+- **`services/agents/app/nl_query/`** — IR, grammar, translator, renderers.
+- All `# TODO: translate` comments removed from `nl_query.py`.
+- **`services/agents/tests/eval_data/nl_query_eval.json`** — 50-pair gold
+  NL→ES|QL eval set.
+- **`services/agents/tests/test_nl_query_eval.py`** — 100% syntactic validity,
+  100% semantic match (50/50 perfect) against gold intents.
+- Pre-existing services/agents tests still green (162 passed) when ignoring
+  the asyncpg-dependent suites that fail on a fresh checkout.
+
+### Connectors — auditd file_tail + AiSOC audit.rules profile
+
+Replaces the host-agent dependency for Linux endpoint visibility with a
+file-tail connector that consumes `audit.log` directly, plus an opinionated
+auditctl ruleset whose `-k` keys map 1:1 to detection rules.
+
+- **`services/connectors/app/connectors/auditd.py`** — `AuditdConnector` tails
+  `/var/log/audit/audit.log`, reassembles multi-record events by msg id,
+  decodes hex `proctitle`/`argv` blobs, and normalizes via
+  `_severity_from_event` using `aisoc_*` keys baked into the audit rules
+  profile. Cursor is `(inode, byte_offset)` so log rotation is handled.
+- **`profiles/auditd/aisoc.rules`** + `profiles/auditd/README.md` — ships an
+  opinionated auditctl ruleset and documents install + reload.
+- **`detections/`** — 4 new detection rules pivot off `auditd_key` for
+  sudoers / SSH config tampering, kernel module load, and systemd
+  persistence. No host-agent dependency.
+- `plugins/auditd/plugin.yaml` + `pnpm marketplace:sync` — registers the
+  connector in the public marketplace.
+- **`apps/docs/docs/connectors/auditd.md`** + sidebar entry — setup doc.
+- **`services/connectors/tests/test_auditd_connector.py`** — covers schema,
+  hex decode, argv reassembly, multi-record merge, severity heuristic, and
+  file tailing (full connectors suite: 444 passed, excluding the
+  `apscheduler` dev-dep `test_scheduler.py`).
+
+### Documentation — operator notifications & plugin lifecycle
+
+Two new operator-facing docs pages, both registered in the Docusaurus sidebar:
+
+- **`apps/docs/docs/operations/notifications.md`** — complete inventory of
+  every notification surface in AiSOC: Web Push to the responder PWA (VAPID,
+  Redis, topic routing), Slack ChatOps via `/aisoc`, Slack/Teams ChatOps
+  verification, one-shot `notify_slack` from playbooks, `create_ticket`
+  simulation + recommended plugin path, honeytoken first-touch webhooks,
+  connector freshness alerts, on-call gating, suppression / quiet-hours, and
+  a per-mechanism testing recipe.
+- **`apps/docs/docs/plugins/lifecycle.md`** — operator's view of plugin
+  states (`Discovered → Loaded → Enabled/Disabled`, plus `signature_status`),
+  trust modes (`strict | warn | disabled`), filesystem + OCI discovery, the
+  full operator REST API with required permissions, configuration reference,
+  upgrade and rollback semantics, and the structlog events worth alerting on.
+
+Both pages cross-link the existing `concepts/live-actions`, `plugins/overview`,
+`plugins/publishing`, and `plugins/cli` pages so they sit in the right place
+in the information architecture.
+
+### API — blameless case post-mortem endpoint
+
+Mirrors the existing case auto-summary pipeline to produce a deterministic,
+blameless retrospective for any case.
+
+- **`services/api/app/services/case_postmortem.py`** — pure builder + async
+  DB orchestrator (`build_case_postmortem`). Reuses `SummaryCaseRow` /
+  `SummaryCommentRow` / `SummaryTaskRow` fetchers from `case_summary` so the
+  post-mortem and the live summary draw from the same source of truth.
+  Output is a Pydantic `CasePostmortem` covering incident overview,
+  contributing factors, detection timing/gaps, response phases (detect →
+  contain → eradicate → recover), blast radius, what went well / what fell
+  short, and concrete action items.
+- **`services/api/app/services/case_postmortem_html.py`** — pure HTML
+  renderer matching the summary renderer (inline CSS, print-friendly,
+  defensive escaping, no external assets).
+- **`services/api/app/api/v1/endpoints/cases.py`** —
+  `GET /api/v1/cases/{case_id}/postmortem` with `?format=json|html`.
+- **`services/api/tests/test_case_postmortem.py`** — pure-builder + HTML
+  tests including XSS escaping, deterministic ordering, and explicit
+  blamelessness assertions (analyst handles must not surface in the
+  narrative; the assignee header line is explicitly allow-listed).
+- **`apps/docs/docs/operations/case-reports.md`** + sidebar — operator page
+  covering both `/summary` and `/postmortem` with audience, output,
+  automation, and runbook archive guidance. Cases summary breadcrumb now
+  points operators at both endpoints.
+
+### Threat Intelligence — STIX → MISP push (Stage 3 #20)
+
+The threat-intel pipeline already pulled events from MISP (read-only). This
+closes the loop with a write path: every STIX 2.1 indicator or bundle
+published through `/api/v1/threatintel/stix/...` can be mirrored into the
+configured MISP instance as a native event with one or more attributes.
+
+- **`services/api/app/services/misp_push.py`**
+  - Pure mappers: `parse_stix_pattern`, `stix_indicator_to_misp_attribute`,
+    `stix_bundle_to_misp_event`, `confidence_to_threat_level`. Covers
+    `ipv4`/`ipv6`, `domain-name`, `url`, `email-addr`, `file:hashes`
+    (MD5/SHA-1/SHA-256/SHA-512) and `file:name`. Untranslatable patterns
+    are counted in `skipped_attributes`, never silently dropped.
+  - `MispPushClient` — async httpx wrapper for `/users/view/me` (health),
+    `/events/add` (push), `/events/view/{id}` (read-back). Every call runs
+    through the air-gap gate (`enforce_airgap_for_url`) first.
+- **`services/api/app/api/v1/endpoints/stix_taxii.py`**
+  - `POST /stix/indicators?push_to_misp=true` — response now includes a
+    `misp` block (`pushed`, `misp_event_id`, `misp_event_uuid`, `url`,
+    `pushed_attributes`, `skipped_attributes`, `error`).
+  - `POST /stix/bundles?push_to_misp=true` — same, but the whole bundle
+    becomes one MISP event.
+  - `GET /stix/misp/health` — calls MISP `/users/view/me`, never echoes the
+    API key back.
+  - `POST /stix/misp/dry-run` — returns the exact MISP event payload AiSOC
+    *would* send, plus an `airgap_blocked` flag for air-gapped audits.
+  - Push failures are intentionally non-fatal: the AiSOC store is the source
+    of truth, the MISP mirror is best-effort and surfaces the structured
+    error on the same response.
+- **`services/api/app/core/config.py`** — new MISP push settings:
+  `MISP_VERIFY_SSL`, `MISP_PUSH_AUTO`, `MISP_PUSH_DEFAULT_DISTRIBUTION`,
+  `MISP_PUSH_DEFAULT_THREAT_LEVEL`, `MISP_PUSH_DEFAULT_ANALYSIS`,
+  `MISP_PUSH_TIMEOUT_SECONDS`. Existing `MISP_URL` / `MISP_API_KEY` are
+  reused from the read path.
+- **`services/api/tests/test_misp_push.py`** — 76 tests covering pure
+  mappers, air-gap gating, MISP HTTP failures (401 / 5xx / timeout), the
+  publish endpoints with and without push, the health probe, and the
+  dry-run endpoint.
+- **`apps/docs/docs/integrations/misp-push.md`** + sidebar entry — operator
+  doc with config, endpoints, the STIX→MISP type table, failure modes, and
+  the dry-run-as-air-gap-proof workflow.
+- **`apps/docs/docs/operations/airgap.md`** — clarifies that the existing
+  `MISP_URL` / `MISP_API_KEY` envs cover both pull and push, with a pointer
+  to the new integration page.
+
 ### Security — MSSP RBAC hardening on `/threat-intel` (Issue F013)
 
 The `/v1/threat-intel/*` endpoints (IOCs, threat actors, intel feeds) were

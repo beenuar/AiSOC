@@ -393,18 +393,156 @@ dual-mode connector that works on both managed and air-gapped clusters.
 
 ---
 
+## v7.2.0 — Shipped ✅ (2026-05-13) — Stage-2 Connector + Surface Wave (`feat/wazuh-connector`)
+
+Eight-commit feature wave broadening connector reach (Wazuh + auditd), making
+the response-action layer vendor-pluggable, replacing the NL→query template
+fallback with a deterministic translator, closing the threat-intel write loop
+to MISP, adding a blameless case post-mortem surface, and standing up a GCP
+Terraform skeleton equivalent to the existing AWS module.
+
+### Connectors
+
+- [x] **`WazuhConnector`** (`services/connectors/app/connectors/wazuh.py`)
+      — polls the Wazuh Indexer `wazuh-alerts-*` indices over HTTPX with
+      basic-auth, paginates time-windowed queries, retries on 5xx with
+      capped backoff, and normalises severity into the four-tier ladder.
+      Marketplace manifest + per-connector docs + 24 unit tests.
+- [x] **`AuditdConnector`** (`services/connectors/app/connectors/auditd.py`)
+      — file-tail of `/var/log/audit/audit.log` with multi-record
+      reassembly by msg id, hex `proctitle`/`argv` decode, and
+      `(inode, byte_offset)` cursor for log rotation. Ships with
+      `profiles/auditd/aisoc.rules` opinionated auditctl ruleset whose
+      `-k` keys map 1:1 to detection rules; 4 new detection rules pivot
+      off `auditd_key` for sudoers / SSH / kernel-module / systemd
+      tampering. 444-test full connectors suite green (excluding
+      `test_scheduler.py` which needs the `apscheduler` dev dep).
+- [x] Connector registry now declares **52 first-party connectors**;
+      `pnpm marketplace:sync` rebuilt `marketplace/index.json` +
+      `apps/web/public/marketplace/index.json`.
+
+### CLI
+
+- [x] **`aisoc plugin new <NAME> --type {enricher|connector|responder|detection|widget}`**
+      replaces the old hard-coded `plugin scaffold` with per-type templates
+      shipped inside the `aisoc-cli` wheel via `importlib.resources`.
+      `string.Template` substitution for `${slug}`, `${name}`, `${author}`;
+      tests parameterised across all five plugin types asserting manifest
+      validation and zero placeholder leakage. `aisoc plugin scaffold`
+      retained as alias.
+
+### Live Actions
+
+- [x] **Generic `(vendor_id, capability)` dispatcher**
+      (`services/actions/app/live_actions/`) — pluggable
+      `LiveActionExecutor` ABC + module-level registry + dispatcher with
+      structured logging and error translation. Unknown pairs return
+      `LiveActionResult(status=FAILED, error="executor_not_found")` so the
+      agent degrades gracefully. Adapters wrap CrowdStrike, Okta,
+      AWS SG, Splunk so they show up as `builtin` descriptors.
+- [x] **`/api/v1/live-actions`** — `discover`, `dispatch`, `dry-run`. Honours
+      `dry_run` + missing-credentials → `SIMULATED`, never `PARTIAL`.
+- [x] 45 new tests across models / registry / dispatcher / router / builtins
+      (full actions suite: 99 passed).
+- [x] **`apps/docs/docs/concepts/live-actions.md`** + sidebar entry.
+
+### Agents
+
+- [x] **Deterministic NL→ES|QL translator**
+      (`services/agents/app/nl_query/`) — IR + grammar validator + renderers
+      for ES|QL / KQL / SPL. Replaces every `# TODO: translate` comment in
+      `services/api/app/api/v1/endpoints/nl_query.py`. Optional
+      `enhance_with_llm` (`gpt-4o-mini`) path with deterministic fallback
+      so the air-gapped story keeps working.
+- [x] **50-pair NL→ES|QL eval set**
+      (`services/agents/tests/eval_data/nl_query_eval.json`) +
+      `test_nl_query_eval.py` harness — 100% syntactic validity, 100%
+      semantic match (50/50 perfect) against gold intents.
+
+### API surfaces
+
+- [x] **Blameless case post-mortem** —
+      `GET /api/v1/cases/{case_id}/postmortem?format=json|html`. Pure
+      builder + async DB orchestrator
+      (`services/api/app/services/case_postmortem.py`) reusing the
+      `case_summary` fetchers; HTML renderer with inline CSS, defensive
+      escaping, no external assets. Tests assert XSS escaping,
+      deterministic ordering, and explicit blamelessness (analyst handles
+      must not surface in the narrative; assignee header line is
+      explicitly allow-listed).
+- [x] **STIX → MISP push** (Stage 3 #20) — closes the threat-intel write
+      loop. `POST /stix/indicators` and `POST /stix/bundles` accept
+      `?push_to_misp=true` and return a structured `misp` block on the same
+      response. `GET /stix/misp/health` and `POST /stix/misp/dry-run`
+      added for operator verification + air-gap audits. Pure mappers
+      cover `ipv4`/`ipv6`, `domain-name`, `url`, `email-addr`,
+      `file:hashes` (MD5/SHA-1/SHA-256/SHA-512) and `file:name`. Push
+      failures are non-fatal: AiSOC store remains source of truth, MISP is
+      best-effort. Reuses the existing `enforce_airgap_for_url` chokepoint.
+      76 new tests.
+
+### Infrastructure
+
+- [x] **`infra/terraform/gcp/`** — Cloud Run for `api`/`web`/`ingest`,
+      Cloud SQL Postgres 16 + Memorystore Redis 7.2 on private IPs through
+      a dedicated VPC + Serverless VPC Access connector, Secret Manager
+      for every credential, Artifact Registry for images, one service
+      account per Cloud Run service with least-privilege `secretAccessor`
+      bindings. Skeleton points at the public GHCR demo images so a fresh
+      `apply` works zero-config. `apps/docs/docs/deployment/gcp.md` +
+      sidebar slot between `kubernetes` and `env-vars`.
+
+### Documentation
+
+- [x] **`apps/docs/docs/operations/notifications.md`** — complete inventory
+      of every notification surface in AiSOC (Web Push, Slack/Teams
+      ChatOps, playbook `notify_slack`, `create_ticket` simulation,
+      honeytoken first-touch webhooks, connector freshness alerts, on-call
+      gating, suppression / quiet-hours, per-mechanism testing recipe).
+- [x] **`apps/docs/docs/plugins/lifecycle.md`** — operator's view of plugin
+      states, trust modes (`strict | warn | disabled`), filesystem + OCI
+      discovery, the full operator REST API with required permissions,
+      configuration reference, upgrade/rollback semantics, and the
+      structlog events worth alerting on.
+- [x] **`apps/docs/docs/integrations/misp-push.md`** — operator doc with
+      config, endpoints, the STIX→MISP type table, failure modes, and the
+      dry-run-as-air-gap-proof workflow.
+- [x] **`apps/docs/docs/operations/case-reports.md`** — covers both
+      `/summary` and `/postmortem` with audience, output, automation, and
+      runbook archive guidance. Cases summary breadcrumb now points
+      operators at both endpoints.
+- [x] **`apps/docs/docs/connectors/{wazuh,auditd}.md`** + per-connector
+      sidebar entries.
+- [x] **`apps/docs/docs/plugins/cli.md`** — documents the new `aisoc
+      plugin new --type` surface.
+- [x] **`apps/docs/sidebars.ts`** — every new page registered in the
+      correct category (Connectors, Plugin SDK, Operations, Integrations,
+      Concepts, Deployment).
+
+### Quality
+
+- [x] `ruff check services/` and `ruff format --check services/` clean
+      across the whole `services/` tree (CI scope).
+- [x] Targeted lint fixes committed: `E741` (ambiguous `l`),
+      `F402` (loop var shadowing `dataclasses.field`),
+      `E402` (post-`sys.path` import), `E501` long-string refactors in
+      `case_postmortem_html.py`, `test_misp_push.py`, and `auditd.py`.
+
+---
+
 ## v8.0 — Planned
 
 - Mobile responder console (React Native) — triage and acknowledge from phone
 - Plugin publishing marketplace v3 (commercial plugins, revenue sharing)
 - MSSP RBAC enforcement on `/api/v1/actors/*` endpoints (threat attribution)
-- Automated IOC sharing to community MISP instances via STIX/TAXII push
-- NL→query: "show me failed logins from new ASNs last 24h" → ES|QL / KQL
+- ~~Automated IOC sharing to community MISP instances via STIX/TAXII push~~ → **shipped in v7.2.0**
+- ~~NL→query: "show me failed logins from new ASNs last 24h" → ES|QL / KQL~~ → **shipped in v7.2.0** (deterministic translator + 50-pair eval set)
 - AI-generated threat intelligence briefings from public feeds
 - Embedded red-team scoring (ATT&CK coverage %) as a live dashboard widget
 - SLA breach predictor (ML model on historical MTTR data)
 - Incident cost estimator (breach impact calculator)
-- SOC-in-a-box one-click cloud deploy (Terraform module for AWS / GCP)
+- ~~SOC-in-a-box one-click cloud deploy (Terraform module for AWS / GCP)~~ → **GCP module shipped in v7.2.0** (AWS already shipped)
+- ~~Automated retro/blameless post-mortem drafting from case timeline~~ → **shipped in v7.2.0** (ideas backlog item promoted)
 
 ---
 
