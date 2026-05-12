@@ -40,6 +40,8 @@ from app.services.case_fanout import (
     fanout_create_case,
     fanout_status_change,
 )
+from app.services.case_postmortem import build_case_postmortem
+from app.services.case_postmortem_html import render_case_postmortem_html
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
 
@@ -1049,7 +1051,9 @@ _SUMMARY_BREADCRUMB_BODY = (
     "Case auto-summary generated. Download from "
     "/api/v1/cases/{case_id}/summary?format=html "
     "(or ?format=json for the structured payload). "
-    "Print the HTML page (Ctrl/Cmd-P → Save as PDF) for case-file archival."
+    "For the blameless retrospective, fetch "
+    "/api/v1/cases/{case_id}/postmortem?format=html. "
+    "Print either page (Ctrl/Cmd-P → Save as PDF) for the runbook archive."
 )
 
 
@@ -1113,6 +1117,48 @@ async def case_auto_summary(
         )
 
     return summary
+
+
+@router.get(
+    "/{case_id}/postmortem",
+    summary="Download the per-case blameless post-mortem (JSON or HTML)",
+    response_model=None,
+)
+async def case_auto_postmortem(
+    case_id: str,
+    db: DBSession,
+    user: AuthUser,
+    format: Literal["json", "html"] = Query(
+        "json",
+        description=(
+            "Response format. ``json`` returns the structured CasePostmortem; "
+            "``html`` returns a print-ready blameless retrospective (use the "
+            "browser's Save-as-PDF affordance for the runbook archive)."
+        ),
+    ),
+) -> Any:
+    """Generate a deterministic blameless post-mortem for one case.
+
+    Distinct from ``/summary``: the summary is a snapshot of *what the case
+    looks like right now*; the post-mortem is a retrospective oriented around
+    *what happened, when did we find out, what did we do, and what should we
+    change*. Both are deterministic — same case state in, same artefact out.
+    """
+    cid = await _resolve_case_id(case_id, db)
+    postmortem = await build_case_postmortem(db, cid)
+    if postmortem is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    if format == "html":
+        rendered = render_case_postmortem_html(postmortem)
+        case_label = postmortem.case.case_number or str(postmortem.case.case_id)[:8]
+        filename = _safe_filename_segment(f"case-{case_label}-postmortem") + ".html"
+        return HTMLResponse(
+            content=rendered,
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+
+    return postmortem
 
 
 @router.get(
