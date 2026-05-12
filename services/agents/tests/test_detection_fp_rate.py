@@ -171,9 +171,7 @@ def evaluate_per_rule_fp(
 
     # Cache positive fixtures keyed by slug for O(1) lookup during the
     # inner cross-fire loop below.
-    positives_by_slug: dict[str, dict[str, Any]] = {
-        spec["slug"]: spec["positive"] for _, spec in evaluable
-    }
+    positives_by_slug: dict[str, dict[str, Any]] = {spec["slug"]: spec["positive"] for _, spec in evaluable}
 
     for category, spec in evaluable:
         slug = spec["slug"]
@@ -216,8 +214,7 @@ def evaluate_per_rule_fp(
             reasons.append("own negative fixture matched (TN regression)")
         if r.cross_total and r.fpr > max_per_rule_fpr:
             reasons.append(
-                f"cross-fire FPR {r.fpr:.3f} > ceiling {max_per_rule_fpr:.3f} "
-                f"({r.cross_fire_count} of {r.cross_total} other fixtures)"
+                f"cross-fire FPR {r.fpr:.3f} > ceiling {max_per_rule_fpr:.3f} ({r.cross_fire_count} of {r.cross_total} other fixtures)"
             )
         if reasons:
             failing.append(
@@ -261,8 +258,7 @@ class TestPerRuleFalsePositiveRate(unittest.TestCase):
         self.assertGreater(
             self.report.rules_total,
             0,
-            "Per-rule FP gate ran with zero evaluable rules — "
-            "did detection_specs_index.py drop its match_when entries?",
+            "Per-rule FP gate ran with zero evaluable rules — did detection_specs_index.py drop its match_when entries?",
         )
 
     def test_no_per_rule_fpr_regression(self) -> None:
@@ -295,12 +291,7 @@ class TestPerRuleFalsePositiveRate(unittest.TestCase):
             more = ""
             if f["cross_fire_count"] > 5:
                 more = f" (+{f['cross_fire_count'] - 5} more)"
-            summary_lines.append(
-                f"  - {f['slug']:48s} "
-                f"FPR={f['fpr']:.3f} "
-                f"({f['cross_fire_count']}/{f['cross_total']}): "
-                f"{sample}{more}"
-            )
+            summary_lines.append(f"  - {f['slug']:48s} FPR={f['fpr']:.3f} ({f['cross_fire_count']}/{f['cross_total']}): {sample}{more}")
 
         self.fail("\n".join(summary_lines))
 
@@ -314,7 +305,4 @@ if __name__ == "__main__":  # pragma: no cover
     if rep.failing_rules:
         worst = sorted(rep.failing_rules, key=lambda f: f["fpr"], reverse=True)
         for f in worst[:20]:
-            print(
-                f"  {f['slug']:48s} FPR={f['fpr']:.3f} "
-                f"cross_fires={f['cross_fire_count']}/{f['cross_total']}"
-            )
+            print(f"  {f['slug']:48s} FPR={f['fpr']:.3f} cross_fires={f['cross_fire_count']}/{f['cross_total']}")
