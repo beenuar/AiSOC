@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security — MSSP RBAC hardening on `/threat-intel` (Issue F013)
+
+The `/v1/threat-intel/*` endpoints (IOCs, threat actors, intel feeds) were
+previously gated only by `get_current_user`, meaning **any authenticated
+role**, including `viewer` and `soc_analyst`, could `POST` an IOC, `DELETE`
+a feed, or create a new `ThreatActor` profile. In a managed-SOC / MSSP
+deployment that is a privilege-escalation vector: a compromised analyst
+seat can poison detections across the whole tenant by injecting false IOCs
+or deleting the feed that hydrates them.
+
+- **`services/api/app/api/v1/endpoints/threat_intel.py`** — every route now
+  declares the explicit permission it needs via
+  `Depends(require_permission("threat_intel:read" | "threat_intel:write"))`.
+  Read routes (`GET /iocs`, `/iocs/{id}`, `/actors`, `/feeds`) require
+  `threat_intel:read`; write routes (`POST /iocs`, `DELETE /iocs/{id}`,
+  `POST /actors`, `POST /feeds`, `DELETE /feeds/{id}`) require
+  `threat_intel:write`. The legacy `User`-typed dependency was replaced with
+  the platform-standard `AuthUser` so JWT and API-key callers are gated by
+  the same code path.
+- **`services/api/app/core/security.py`** — `ROLE_PERMISSIONS` now grants
+  `threat_intel:write` to `tenant_admin` and `soc_lead` in addition to the
+  existing `admin` / `platform_admin` / `threat_hunter` set. Without this
+  the endpoint hardening would have locked out the two roles that legitimately
+  need to manage tenant intel during an investigation.
+- **`services/api/tests/test_threat_intel_rbac.py`** — 38 new regression tests
+  pin the role/permission map (write-roles must hold `:write`, read-only roles
+  must not), assert that `CurrentUser.require_permission` raises HTTP 403 for
+  under-privileged roles and 200 for privileged ones, cover the API-key code
+  path including scope wildcards, and grep the endpoint module to ensure
+  every route still uses `require_permission(...)` (so a refactor that
+  silently downgrades a route fails CI).
+
+Tracked as **F013** in `docs/community-feedback/2026-05-12/`.
+
 ### Documentation — install pipeline + v2.2 architecture refresh
 
 Documentation-only refresh that aligns every install / architecture page
