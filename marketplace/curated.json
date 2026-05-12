@@ -1,7 +1,7 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-12T20:25:18Z",
+  "generated": "2026-05-12T20:45:55Z",
   "stats": {
     "considered": 1048,
     "eligible": 1044,
