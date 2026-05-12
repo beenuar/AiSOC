@@ -129,6 +129,15 @@ jobs:
         run: ruff check services/
       - name: Ruff format check (all services)
         run: ruff format --check services/
+      # The aisoc-api Docker image is built with `services/api` as its build
+      # context, so anything under `services/agents` is *not* shipped in the
+      # container. The natural-language query translator is consumed by both
+      # the agents runtime and the API's `/nl-query/*` endpoints, so we keep
+      # an in-tree vendored mirror at `services/api/app/_vendor/nl_query/`.
+      # This guard fails the build the moment the two trees drift — re-run
+      # `python scripts/sync_vendored_nl_query.py` locally to fix.
+      - name: Verify vendored nl_query is in sync
+        run: python scripts/sync_vendored_nl_query.py --check
 
   python-test:
     name: Python — Tests

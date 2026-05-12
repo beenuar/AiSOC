@@ -62,27 +62,63 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _load_nl_query_module():
-    """Load ``services/agents/app/nl_query`` under a collision-free name."""
-    import importlib.util
+def _candidate_nl_query_dirs() -> list[Path]:
+    """Return ordered list of directories that may contain the nl_query module.
 
-    # Walk up until we find the ``services/agents/app/nl_query`` tree so we
-    # are robust to both the repo layout (parents[6]) and any deployment
-    # variant where the file lives under a slightly different prefix.
+    The first entry is the in-tree vendored copy under
+    ``services/api/app/_vendor/nl_query/`` — this is what ships inside the
+    ``aisoc-api`` Docker image. The second entry is the source-of-truth tree
+    at ``services/agents/app/nl_query/``, used during local development when
+    the API runs outside of Docker.
+    """
     here = Path(__file__).resolve()
-    nl_query_dir: Path | None = None
+    candidates: list[Path] = []
+
+    # 1) Vendored copy — same Python package as this endpoint, so it lives at
+    #    ``<api-app-root>/_vendor/nl_query/``. ``parents[3]`` resolves to the
+    #    ``app`` directory: endpoints → v1 → api → app.
+    try:
+        api_app_root = here.parents[3]
+        vendored = api_app_root / "_vendor" / "nl_query"
+        if vendored.joinpath("__init__.py").is_file():
+            candidates.append(vendored)
+    except IndexError:  # pragma: no cover - defensive
+        pass
+
+    # 2) Source-of-truth tree — walk up the repo until we find it.
     for ancestor in here.parents:
-        candidate = ancestor / "services" / "agents" / "app" / "nl_query"
-        if candidate.joinpath("__init__.py").is_file():
-            nl_query_dir = candidate
+        source = ancestor / "services" / "agents" / "app" / "nl_query"
+        if source.joinpath("__init__.py").is_file():
+            candidates.append(source)
             break
-    if nl_query_dir is None:
-        raise ImportError("NL query module not found — expected services/agents/app/nl_query/")
-    init_file = nl_query_dir / "__init__.py"
+
+    return candidates
+
+
+def _load_nl_query_module():
+    """Load the nl_query translator under a collision-free module name.
+
+    Prefers the in-tree vendored copy (so the module is available inside the
+    Dockerized ``aisoc-api`` service whose build context excludes
+    ``services/agents``) and falls back to the source-of-truth tree at
+    ``services/agents/app/nl_query/`` for local non-Docker development.
+    """
+    import importlib.util
 
     package_name = "aisoc_agents_nl_query"
     if package_name in sys.modules:
         return sys.modules[package_name]
+
+    candidates = _candidate_nl_query_dirs()
+    if not candidates:
+        raise ImportError(
+            "NL query module not found — expected either "
+            "services/api/app/_vendor/nl_query/ (vendored) or "
+            "services/agents/app/nl_query/ (source)."
+        )
+
+    nl_query_dir = candidates[0]
+    init_file = nl_query_dir / "__init__.py"
 
     spec = importlib.util.spec_from_file_location(
         package_name,
