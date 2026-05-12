@@ -5,6 +5,62 @@ All notable changes to AiSOC will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Documentation — install pipeline + v2.2 architecture refresh
+
+Documentation-only refresh that aligns every install / architecture page
+with the actual shipped state of the repo. No service code, schema, or
+API surface changed.
+
+- **One-click install pipeline** is now a first-class doc surface.
+  - New Docusaurus page `apps/docs/docs/installation.md` (sidebar
+    position 2) walks through `install.sh` / `install.ps1` end-to-end —
+    supported package managers, what gets installed, idempotency, the
+    `uninstall.sh` / `uninstall.ps1` graduated cleanup flags, and the
+    security model.
+  - `apps/docs/docs/quickstart.md` adds it as **Path 0** ("zero-prerequisite
+    bootstrap") and renumbers the demo / dev paths.
+  - `apps/docs/docs/deployment/docker.md` opens with a callout to the
+    installer, refreshes every host/container port mapping against
+    `docker-compose.yml`, splits profile-gated services
+    (`connectors`, `osquery-tls`, `slack-bot`) out of the default stack,
+    and updates the GHCR image list to the full 16-image set.
+  - `apps/docs/docs/intro.md` adds the installer to **Get started** and
+    corrects the connector-count copy.
+  - Root `README.md` already had Path 0 — verified and synced with the
+    architecture refresh below.
+- **v2.2 architecture surfaces** are now reflected everywhere.
+  - `apps/docs/docs/architecture.md` data-flow diagram, monorepo layout,
+    and Service Responsibilities table now include `services/osquery-tls`,
+    `services/osquery-extensions`, and `services/slack-bot`. Connector
+    count corrected to 50 (was 26 / 42 in stale paragraphs).
+  - `docs/architecture/SYSTEM_DESIGN.md` connector count corrected to 50,
+    Service Responsibilities table extended with the v2.2 services, and a
+    new **§13 — v2.2 Additions** appended that documents endpoint
+    telemetry (osquery TLS server + extensions), ChatOps (`slack-bot`),
+    Responder PWA, MCP server, Investigation Ledger / Ambient Copilot,
+    and the one-click install pipeline. v2 / v2.1 narrative preserved.
+  - Root `README.md` mermaid diagram + service-map table extended with
+    `osquery-tls`, `slack-bot`, `mcp` and the corrected
+    `Realtime` / `Web Console` descriptions.
+- **Connector count corrected to 50 across the repo.**
+  - `apps/docs/docs/connectors/index.md`: catalog count updated and the
+    23 missing connectors added across the existing categories
+    (cloud / CNAPP / vuln-mgmt, SIEM, EDR/XDR, SaaS, ITSM, network,
+    endpoint fleet, container orchestration).
+  - `apps/docs/docs/connectors/api-coverage.md`: coverage-table heading
+    updated.
+  - `apps/web/src/components/onboarding/StartHero.tsx`: in-product copy
+    on the onboarding tile updated.
+  - `apps/docs/docs/intro.md`: two stale paragraphs updated.
+  - Source of truth: `services/connectors/app/connectors/__init__.py`
+    (`_CONNECTOR_CLASSES`).
+
+Old historical entries in `AI_STACK_PLAN_PROGRESS.md` reference 42
+connectors and are intentionally left as a snapshot of the v2.1 increment
+they describe.
+
 ## [7.2.0] — 2026-05-11
 
 ### Changed — `docker compose up -d` is now pull-by-default

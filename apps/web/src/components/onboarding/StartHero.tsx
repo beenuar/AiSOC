@@ -124,7 +124,7 @@ export function StartHero() {
                 Connect first source
               </span>
               <span className="text-xs leading-relaxed text-gray-300">
-                Pick from 26 connectors — EDR, SIEM, cloud, IAM. Credentials
+                Pick from 50 connectors — EDR, SIEM, cloud, IAM. Credentials
                 stay encrypted.
               </span>
             </Link>

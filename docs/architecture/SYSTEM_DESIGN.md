@@ -20,7 +20,7 @@ This document describes the end-to-end architecture of the AiSOC platform after 
                        ┌─────────────────┐   ┌──────────────────────┐
                        │  services/api   │   │ services/connectors  │
                        │  inbox tokens + │   │  APScheduler poll    │
-                       │  HMAC webhooks  │   │  42 connector classes│
+                       │  HMAC webhooks  │   │  50 connector classes│
                        │  CEF / HEC / DNS│   │  push_case + status  │
                        └────────┬────────┘   └──────────┬───────────┘
                                 │                       │
@@ -91,12 +91,19 @@ This document describes the end-to-end architecture of the AiSOC platform after 
 | `services/enrichment` | Go 1.21 | Per-IOC TTL-cached enrichment lookups | n/a |
 | `services/fusion` | Python 3.11 | Simhash dedup → correlation → ML scoring → publish fused alerts | Background ML retrain on feedback |
 | `services/api` | Python 3.11 | REST + WS, RBAC, case mgmt, rule engine, graph queries, ITSM webhook inbox, case fan-out | Schema migrations on boot |
-| `services/connectors` | Python 3.11 | 42 connector classes, APScheduler poll, `push_case` / `push_status_change` for Jira & ServiceNow | CredentialVault decrypt at poll time |
+| `services/connectors` | Python 3.11 | 50 connector classes, APScheduler poll, `push_case` / `push_status_change` for Jira & ServiceNow | CredentialVault decrypt at poll time |
 | `services/agents` | Python 3.11 | LangGraph multi-agent investigation runs | Loads full ATT&CK STIX bundle on boot, optional Qdrant embed |
 | `services/actions` | Python 3.11 | SOAR action execution with blast-radius gating | Approval workflows |
 | `services/threatintel` | Python 3.11 | IOC/actor search API | APScheduler poll loop for TAXII/MISP/OTX/KEV |
-| `services/realtime` | Node 20 | WebSocket fan-out for the web console | n/a |
-| `apps/web` | Next.js 14 | Server components + SWR | n/a |
+| `services/ueba` | Python 3.11 | Welford / Z-score user-behavior analytics, peer-group baselines | Background baseline rebuild |
+| `services/honeytokens` | Python 3.11 | Deception platform: mints AWS keys, doc lures, DNS canaries; emits `honeytoken.tripped` | n/a |
+| `services/purple-team` | Python 3.11 | Adversary emulation orchestrator (ATT&CK technique runner) | Detection-coverage scorer |
+| `services/osquery-tls` | Go 1.25 | TLS server for osquery enrol / config / distributed / log endpoints | Ships normalised host events into `services/ingest` |
+| `services/osquery-extensions` | Go 1.25 | Out-of-band osquery extensions (custom virtual tables + decorators) | Loaded by `osquery-tls`-managed agents |
+| `services/slack-bot` | Python 3.11 | ChatOps surface: posts approval prompts, `/aisoc` slash command | Verifies inbound interactions with HMAC-signed Slack request signatures |
+| `services/realtime` | Node 20 | WebSocket fan-out + Web Push for the web console + Responder PWA | n/a |
+| `services/mcp` | Node 20 (TypeScript) | Model Context Protocol stdio server, 11 tools for IDE-side agents (Claude / Cursor / Continue / Cody) | n/a |
+| `apps/web` | Next.js 14 | Server components + SWR + Responder PWA route group + benchmark scoreboard | n/a |
 
 ---
 
@@ -307,7 +314,7 @@ The following subsystems were added on top of the v2 design described above. The
 
 ### 12.1 Connector Platform (`services/connectors`)
 
-A first-class, in-process polling tier with 42 registered connector classes spanning seven categories — `edr`, `siem`, `cloud`, `iam`, `saas`, `vcs`, `network`. Every connector subclasses `BaseConnector` and declares:
+A first-class, in-process polling tier with **50 registered connector classes** spanning seven categories — `edr`, `siem`, `cloud`, `iam`, `saas`, `vcs`, `network`. Every connector subclasses `BaseConnector` and declares:
 
 * `schema()` — self-describing `ConnectorSchema(name, label, category, fields, oauth, default_poll_interval_seconds)` consumed by the web console for the connect form.
 * `capabilities()` — tuple of `Capability` enum values (`PULL_ALERTS`, `PUSH_CASE`, `PUSH_STATUS`, `FEDERATED_SEARCH`, …) that the orchestrator inspects at runtime.
@@ -369,4 +376,62 @@ Connectors are also the unit of distribution. Every connector ships a marketplac
 
 → [Plugin SDK (Python)](../../apps/docs/docs/plugins/python-sdk.md)
 → [Plugin SDK (Go)](../../apps/docs/docs/plugins/go-sdk.md)
+
+---
+
+## 13. v2.2 Additions (Endpoint Telemetry, ChatOps, Responder PWA, MCP, One-Click Install)
+
+The v2.2 increment is scoped to first-mile ergonomics — getting events into AiSOC from every realistic source, getting analysts out of the console for routine approvals, and getting the entire stack onto a freshly-imaged laptop in one command.
+
+### 13.1 Endpoint Telemetry (osquery TLS server + extensions)
+
+`services/osquery-tls` is a Go TLS server that implements the four osquery endpoints — `/enroll`, `/config`, `/distributed/read`, `/distributed/write`, `/log` — so that any host running osquery can be enrolled into AiSOC with a single enrol secret. Result rows are normalised into OCSF and shipped to `services/ingest`'s `/v1/ingest/batch` endpoint, sharing the same KEV correlator and ATT&CK tagger described in §1.
+
+`services/osquery-extensions` registers custom virtual tables and decorators that the standard osquery distribution doesn't ship — for example, AiSOC-specific process-lineage and EDR-correlated host metadata — and is loaded out-of-band by agents managed by `osquery-tls`. The split (server vs extensions) keeps the TLS server's surface area minimal and lets the extensions iterate without touching the enrol path.
+
+This makes AiSOC self-sufficient for endpoint telemetry: a tenant who doesn't own a CrowdStrike or SentinelOne licence can still get host events into the platform without standing up a separate fleet manager.
+
+### 13.2 ChatOps (`services/slack-bot`)
+
+A first-class Slack surface that closes the loop on the action-gating layer described in §8. When `services/actions` requires approval for a high-blast-radius action, the slack-bot posts an interactive message into the configured channel; an authorised approver clicks the button; Slack posts back to the bot, which verifies the request with an HMAC-signed Slack signature and forwards the approval to the actions service. The bot also exposes a `/aisoc` slash command for ad-hoc queries (case lookup, ledger snippet, IOC reputation).
+
+Crucially, **AiSOC remains the source of truth** — Slack is a projection. If the bot is offline, approvals fall back to the web console with no state divergence.
+
+### 13.3 Responder PWA
+
+A route group inside `apps/web` (Next.js 14) registers as an installable PWA targeted at on-call responders. It connects to `services/realtime` for WebSocket case updates and accepts Web Push notifications from the same service, so a responder can be paged on their phone with a tappable approve / deny / escalate prompt without opening the desktop console. The full set of console actions is available offline-tolerant: actions queued while disconnected are replayed when the WebSocket reconnects, with optimistic local state and server-side conflict resolution.
+
+### 13.4 Model Context Protocol Server (`services/mcp`)
+
+A TypeScript stdio MCP server that exposes 11 AiSOC tools (case search, alert detail, IOC pivot, ledger query, detection-as-code lookup, …) to IDE-side AI agents — Claude Code, Cursor, Continue, Cody. This makes AiSOC a first-class context source for any analyst writing detections, runbooks, or post-mortems in their editor. The MCP server is read-only by default; write tools require an explicit per-tool capability token.
+
+### 13.5 Investigation Ledger and Ambient Copilot
+
+Every prompt, tool invocation, and agent step inside `services/agents` is persisted into the **investigation ledger** — a per-case, append-only log that is replayable end-to-end. The ledger is the substrate for the Ambient Copilot in `apps/web`: a sidebar that shows what the agent is doing right now, why it picked the next tool, and what the analyst can do to redirect it. Combined with the LangGraph DAG in §7, this gives AiSOC a debugging surface for AI-driven investigations that mirrors the kind of structured logging analysts already expect from deterministic systems.
+
+### 13.6 One-Click Install Pipeline
+
+Two cross-platform bootstrap installers live at the repo root:
+
+* `install.sh` — Linux + macOS bash; supports `apt`, `dnf`, `pacman`, `zypper`, `apk`, and `brew`. Idempotent; safe to re-run.
+* `install.ps1` — Windows PowerShell; uses `winget` and handles WSL2 enablement for Docker Desktop.
+
+Both detect the OS, install missing prerequisites (git, Docker Engine + Compose v2 / Docker Desktop, Node.js 20 LTS, pnpm 8+ via `corepack`), clone the repo into `~/aisoc`, then invoke `pnpm aisoc:demo` to bring up the slim demo stack from the published GHCR images and open the browser at the seeded LockBit case. Companion uninstallers (`uninstall.sh`, `uninstall.ps1`) provide graduated cleanup — stop stack only, drop volumes, remove pulled images, delete `node_modules`, delete the repo clone — gated behind interactive confirmation prompts unless `--all --yes` is supplied.
+
+→ [One-click install (Docusaurus)](../../apps/docs/docs/installation.md)
+→ [Quick install reference](../QUICK_INSTALL.md)
+
+### 13.7 Updated Service Inventory (post v2.2)
+
+The full set of services in `services/` after v2.2 is:
+
+```
+actions/          agents/           api/              connectors/
+demo-producer/    enrichment/       fusion/           honeytokens/
+ingest/           mcp/              osquery-extensions/  osquery-tls/
+purple-team/      realtime/         slack-bot/        threatintel/
+ueba/
+```
+
+17 services in total. The `mcp/`, `osquery-extensions/`, `osquery-tls/`, and `slack-bot/` directories are the v2.2 additions; the rest are described in §2 and §12 above.
 

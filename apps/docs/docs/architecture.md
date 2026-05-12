@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Architecture
@@ -8,31 +8,37 @@ sidebar_position: 3
 
 ```
 External Sources
-  (EDR · SIEM · Cloud · Identity · Network · Threat Intel)
-        │
-        ▼ connectors
+  (EDR · SIEM · Cloud · Identity · Network · SaaS · Threat Intel)
+        │                                ▲
+        │                                │
+        │                       osquery-tls + osquery-extensions
+        │                          (endpoint telemetry, host live-query)
+        ▼ connectors (50 vendors, registry-based)
    Kafka spine  ◄── Honeytokens (deception events)
         │
-   ┌────┼──────────────────────────────────┐
-   ▼    ▼                                  ▼
-Fusion  UEBA                           Detections
-(ML)  (baseline)                  (Sigma·YARA·KQL·EQL)
-   │    │                                  │
-   └────┴──────────────────────────────────┘
+   ┌────┼─────────────────────┬────────────────────┐
+   ▼    ▼                     ▼                    ▼
+Fusion  UEBA                Detections        Threat Intel
+(ML +  (Welford,           (Sigma·YARA·       (TAXII · MISP ·
+ RBA)   Z-score)            KQL·EQL · DAC)     OTX · KEV)
+   │    │                     │                    │
+   └────┴─────────────────────┴────────────────────┘
                       │
               PostgreSQL · ClickHouse · OpenSearch
               Qdrant (vectors) · Neo4j (graph) · Redis
                       │
                FastAPI Core API (port 8000)
                       │
-            ┌─────────┼──────────┬─────────────┐
-            ▼         ▼          ▼             ▼
-         Next.js   Agents   Realtime         MCP
-        (port 3000) (8001)  (8086, WS+Push)  (TS, stdio)
-                       │
-                Investigation Ledger
-              (every prompt/tool/step,
-               replayable per case)
+   ┌─────────┬────────┼────────┬─────────────┬─────────────┐
+   ▼         ▼        ▼        ▼             ▼             ▼
+Next.js   Agents  Realtime   MCP        Slack-bot      Actions
+(3000)    (8001)  (8086,    (TS,       (ChatOps,       (8002,
+React +          WS+Push)  stdio)    HMAC-signed)   SOAR exec)
+PWA          │
+             ▼
+       Investigation Ledger
+     (every prompt/tool/step,
+      replayable per case)
 ```
 
 Key structural pieces include the **Investigation Ledger** (every
@@ -73,7 +79,7 @@ The v1.5 release ships from a review of G2, Gartner Peer Insights, and customer 
 - **Automated compliance evidence** — `services/api/app/api/v1/endpoints/compliance.py` collects point-in-time evidence for SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA.
 - **AI-generated incident reports** — one-click "Export Report" on every case generates a PDF incident report from the Investigation Ledger.
 - **Air-gap deployment configuration** — `services/api/app/api/v1/endpoints/deployment.py` exposes air-gap mode toggles for tenants that disallow external feeds.
-- **Ten new connectors** — SentinelOne, Cortex XDR, Wiz, Snyk, Zscaler, Proofpoint, ServiceNow, Jira, 1Password, Duo Security; the catalog is now 26 connectors. See [Connectors](./connectors/).
+- **Connector catalog growth** — SentinelOne, Cortex XDR / XSIAM, Wiz, Snyk, Zscaler, Proofpoint, ServiceNow, Jira, 1Password, Duo Security, Carbon Black, Chronicle, Cisco Umbrella, CrowdStrike, Datadog Cloud SIEM, Elastic, Mimecast, Okta, Rapid7 InsightIDR, Salesforce, Microsoft Sentinel, Splunk, Sumo Logic, Tenable, Trellix Helix, Trend Vision One, and more. **The catalog is now 50 connectors** across EDR, SIEM, cloud, identity, SaaS, network, and email categories. See [Connectors](./connectors/).
 
 ## Connector polling and credential vault
 
@@ -133,20 +139,23 @@ AiSOC/
 │   ├── web/                # Next.js 14 React frontend (incl. Responder PWA)
 │   └── docs/               # This Docusaurus site
 ├── services/
-│   ├── api/                # FastAPI gateway              (port 8000)
-│   ├── agents/             # LangGraph investigator       (port 8001)
-│   ├── realtime/           # Node/TS WebSocket + Web Push (port 8086)
-│   ├── ingest/             # Go OCSF normaliser           (port 8081)
-│   ├── enrichment/         # Go enrichment fan-out        (port 8080)
-│   ├── fusion/             # Fusion + ML scoring          (port 8003)
-│   ├── actions/            # Action executor              (port 8002)
-│   ├── threatintel/        # TAXII / MISP / OTX / KEV     (port 8005)
-│   ├── ueba/               # User behavior analytics      (port 8007)
-│   ├── honeytokens/        # Deception platform           (port 8008)
-│   ├── purple-team/        # Adversary emulation          (port 8006)
-│   ├── connectors/         # Connector polling + credential vault
-│   ├── demo-producer/      # Synthetic event generator for demos
-│   └── mcp/                # Model Context Protocol server (TypeScript)
+│   ├── api/                  # FastAPI gateway              (port 8000)
+│   ├── agents/               # LangGraph investigator       (port 8001)
+│   ├── realtime/             # Node/TS WebSocket + Web Push (port 8086)
+│   ├── ingest/               # Go OCSF normaliser           (port 8081)
+│   ├── enrichment/           # Go enrichment fan-out        (port 8080)
+│   ├── fusion/               # Fusion + ML scoring          (port 8003)
+│   ├── actions/              # Action executor              (port 8002)
+│   ├── threatintel/          # TAXII / MISP / OTX / KEV     (port 8005)
+│   ├── ueba/                 # User behavior analytics      (port 8007)
+│   ├── honeytokens/          # Deception platform           (port 8008)
+│   ├── purple-team/          # Adversary emulation          (port 8006)
+│   ├── connectors/           # Connector polling + credential vault (50 vendors)
+│   ├── demo-producer/        # Synthetic event generator for demos
+│   ├── mcp/                  # Model Context Protocol server (TypeScript)
+│   ├── osquery-tls/          # osquery TLS server: enrol hosts, ship results
+│   ├── osquery-extensions/   # Custom osquery tables/decorators
+│   └── slack-bot/            # ChatOps surface (HMAC-signed approvals)
 ├── packages/
 │   ├── plugin-sdk-py/      # Python plugin SDK
 │   ├── plugin-sdk-go/      # Go plugin SDK
@@ -186,10 +195,13 @@ AiSOC/
 | `ueba` | 8007 | Python | Welford baseline, Z-score scoring, anomaly stream |
 | `honeytokens` | 8008 | Python | Token lifecycle, HMAC signing, webhook dispatch |
 | `purple-team` | 8006 | Python | ART YAML parser, Caldera executor, ATT&CK heatmap, **detection drift snapshots** |
-| `connectors` | — | Python | Connector polling (APScheduler), credential vault (`CredentialVault`), registry-based connector discovery |
+| `connectors` | — | Python | Connector polling (APScheduler), credential vault (`CredentialVault`), registry-based discovery — **50 vendors shipped** across EDR / SIEM / cloud / IAM / SaaS / network / email |
 | `demo-producer` | — | Python | Synthetic event generator for demos and evaluation |
-| `mcp` | n/a | TypeScript | Model Context Protocol stdio server, 11 tools for IDE-side agents |
-| `web` | 3000 | TypeScript (Next.js) | React console + Responder PWA route group, **benchmark scoreboard** |
+| `mcp` | n/a | TypeScript | Model Context Protocol stdio server, 11 tools for IDE-side agents (Claude / Cursor / Continue / Cody) |
+| `osquery-tls` | 8443 | Go | TLS server implementing osquery's enrol/config/distributed/log endpoints; ships normalised host events into `ingest` |
+| `osquery-extensions` | — | Go | Out-of-band osquery extensions registering custom virtual tables and decorators consumed by `osquery-tls` |
+| `slack-bot` | — | Python | ChatOps surface: posts approval prompts, exposes `/aisoc` slash command, verifies inbound interactions with HMAC-signed Slack request signatures |
+| `web` | 3000 | TypeScript (Next.js) | React console + Responder PWA route group, **benchmark scoreboard**, conversational investigation chat |
 
 ## Storage Tier
 

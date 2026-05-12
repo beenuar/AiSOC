@@ -1,28 +1,40 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Quick Start
 
-Two paths to a running AiSOC instance:
+Three paths to a running AiSOC instance, in increasing order of how much you
+already have installed:
 
+0. **Zero-prerequisite bootstrap** — one shell command from a freshly-imaged
+   machine. Installs Docker, Node, pnpm, git, and clones the repo; then runs
+   Path A automatically. See [One-click install](./installation).
 1. **One-shot demo** — `pnpm aisoc:demo` brings up a slim stack from prebuilt
    GHCR images, seeds canonical demo data, kicks off an investigation, and
    opens your browser at the live case. Roughly 3-4 minutes on a warm Docker
    daemon.
 2. **Full development stack** — every microservice (UEBA, Honeytokens, Purple
-   Team, ClickHouse, OpenSearch, Neo4j, Qdrant, MCP) for hacking on AiSOC
-   itself.
+   Team, ClickHouse, OpenSearch, Neo4j, Qdrant, MCP, osquery TLS server,
+   Slack bot) for hacking on AiSOC itself.
+
+This page covers Paths A and B. If you don't have Docker / Node / pnpm yet,
+or if you just want a guaranteed-clean environment in one command, start with
+[Path 0 (One-click install)](./installation).
 
 ## Prerequisites
 
-| Tool | Minimum version |
-|------|-----------------|
-| Docker & Docker Compose | v2.x |
-| Node.js | ≥ 20 |
-| pnpm | ≥ 8 |
-| Python | 3.11+ (only needed for the eval harness and the dev stack) |
-| Go | 1.21+ (only needed if you hack on the Go services or plugins) |
+| Tool | Minimum version | Required for |
+|------|-----------------|--------------|
+| Docker & Docker Compose | v2.x | Both paths |
+| Node.js | ≥ 20 LTS | Both paths |
+| pnpm | ≥ 8 | Both paths |
+| Python | 3.11+ | Eval harness, dev stack only |
+| Go | 1.25+ | Only if hacking on Go services or plugins |
+
+> If you don't have all of the above, just use the
+> [One-click installer](./installation) — it installs every prerequisite
+> idempotently for Linux, macOS, and Windows, then runs Path A for you.
 
 ## Path A — one-shot demo
 

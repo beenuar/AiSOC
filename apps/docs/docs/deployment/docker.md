@@ -12,21 +12,35 @@ AiSOC ships three Compose flavors. Pick the one that matches what you are doing.
 | `docker-compose.yml` | Full developer stack | Active development against real source |
 | `docker-compose.prod.yml` | Production-leaning stack | Self-hosting on a single VM |
 
+> If you don't already have Docker installed, the simplest path is the
+> [one-click installer](../installation) — it installs Docker (Engine + Compose
+> v2 on Linux, Docker Desktop on macOS/Windows), Node, pnpm, and git
+> idempotently, then runs the streamlined demo for you.
+
 ## Streamlined demo
 
-The fastest path is the demo orchestrator. It pulls prebuilt images, runs the full stack, seeds an alert, and prints the URL of the resulting case in under five minutes.
+The fastest path is the demo orchestrator. It pulls prebuilt, signed images,
+runs the slim stack, seeds an alert, kicks off an investigation, and prints the
+URL of the resulting case in roughly 3-4 minutes on a warm Docker daemon.
 
 ```bash
 pnpm aisoc:demo
 ```
 
-Behind the scenes this runs `docker compose -f docker-compose.demo.yml up -d` against `ghcr.io/beenuar/aisoc-*` images. Stop it with:
+Behind the scenes this runs `docker compose -f docker-compose.demo.yml up -d`
+against `ghcr.io/beenuar/aisoc-*` images (with `pull_policy: missing`, so
+re-runs don't re-pull). Stop it with:
 
 ```bash
 pnpm aisoc:demo:down
 ```
 
-If GHCR is unreachable on your network the orchestrator transparently falls back to a local build.
+If GHCR is unreachable on your network the orchestrator transparently falls
+back to a local build of every service.
+
+To uninstall everything later (stack + volumes, optionally images, optionally
+node\_modules and the repo clone), use the bundled
+[uninstaller](../installation#uninstall).
 
 ## Development
 
@@ -34,19 +48,57 @@ If GHCR is unreachable on your network the orchestrator transparently falls back
 docker compose up -d
 ```
 
-This starts the full developer stack:
+This starts the full developer stack. Host-side ports are bound to
+`127.0.0.1` only by default (i.e. localhost-only) — adjust your reverse proxy
+or compose override if you need LAN access.
 
-- `api` (FastAPI) on port `8000`
-- `agents` (LangGraph runtime) on port `8001`
-- `realtime` (Node + WebSocket + VAPID Web Push) on port `8002`
-- `mcp` (Model Context Protocol server) on port `8003`
-- `ingest` (Go) on port `8010`
-- `enrichment` (Go) on port `8011`
-- `web` (Next.js) on port `3000`
-- `postgres` on port `5432`
-- `nats` on port `4222`
-- `opensearch` on port `9200`
-- `redis` on port `6379`
+### Application services
+
+| Service | Host port | Container port | Notes |
+|---------|-----------|----------------|-------|
+| `api` (FastAPI Core API) | 8000 | 8000 | OpenAPI at `/docs` |
+| `agents` (LangGraph investigator) | 8001 | 8084 | |
+| `actions` (SOAR executor) | 8002 | 8085 | |
+| `fusion` (alert fusion + ML) | 8003 | 8003 | |
+| `threatintel` | 8005 | 8005 | |
+| `purple-team` (adversary emulation) | 8006 | 8006 | |
+| `ueba` (user behavior analytics) | 8007 | 8004 | |
+| `honeytokens` (deception platform) | 8008 | 8005 | |
+| `slack-bot` (ChatOps) | 8009 | 8089 | `profiles: [slack]` |
+| `ingest-worker` (Go OCSF normaliser) | 8081 / 9090 | 8080 / 9090 | HTTP + Prometheus metrics |
+| `enrichment` (Go enrichment fan-out) | 8080 | 8082 | |
+| `realtime` (Node WS + Web Push) | 8086 | 4000 | |
+| `connectors` (50-vendor poller) | 8088 | 8003 | `profiles: [connectors]` |
+| `osquery-tls` (host telemetry server) | 8091 | 8007 | `profiles: [osquery]` |
+| `web` (Next.js console + Responder PWA) | 3000 | 3000 | |
+
+`mcp` (the Model Context Protocol stdio server) runs without a port — it is
+launched on demand by IDE-side agents (Claude Code, Cursor, Continue, Cody)
+over stdio.
+
+### Profile-gated services
+
+`connectors`, `osquery-tls`, and `slack-bot` live behind Docker Compose
+profiles so the default dev stack stays light. Enable them with:
+
+```bash
+COMPOSE_PROFILES=connectors,osquery,slack docker compose up -d
+```
+
+### Data-plane services
+
+| Service | Host port | Notes |
+|---------|-----------|-------|
+| `postgres` | 5432 | Cases, alerts, RBAC, vault |
+| `redis` | 6379 | Sessions, rate limiting, agent cache |
+| `kafka` | 9092 | Event spine |
+| `kafka-ui` | 8090 | Web UI for the Kafka cluster |
+| `clickhouse` | 8123 / 9000 | Analytical telemetry store |
+| `opensearch` | 9200 | Full-text + log search |
+| `qdrant` | 6333 | Vector store (RAG over runbooks + ATT&CK) |
+| `neo4j` | 7474 / 7687 | Investigation graph |
+| `prometheus` | 9091 | Metrics scraper |
+| `grafana` | 3001 | Pre-wired dashboards (`admin` / `admin`) |
 
 ## Production
 
@@ -56,11 +108,15 @@ Use the production compose file:
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Before going live, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) — TLS termination, secret rotation, network policies, and audit log forwarding all need to be in place.
+Before going live, walk through the
+[Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md)
+— TLS termination, secret rotation, network policies, audit log forwarding,
+and tenant-scoped backups all need to be in place.
 
 ### Environment variables
 
-Copy `.env.example` to `.env` and fill in every required value before starting. See [Environment Variables](./env-vars) for the full reference.
+Copy `.env.example` to `.env` and fill in every required value before starting.
+See [Environment Variables](./env-vars) for the full reference.
 
 ## Building images
 
@@ -75,25 +131,50 @@ docker compose build agents
 For releases, prebuilt and signed images are published to GHCR:
 
 ```
-ghcr.io/beenuar/aisoc-api:v5.2.0
-ghcr.io/beenuar/aisoc-agents:v5.2.0
-ghcr.io/beenuar/aisoc-realtime:v5.2.0
-ghcr.io/beenuar/aisoc-mcp:v5.2.0
-ghcr.io/beenuar/aisoc-ingest:v5.2.0
-ghcr.io/beenuar/aisoc-enrichment:v5.2.0
-ghcr.io/beenuar/aisoc-web:v5.2.0
+ghcr.io/beenuar/aisoc-api:<version>
+ghcr.io/beenuar/aisoc-agents:<version>
+ghcr.io/beenuar/aisoc-actions:<version>
+ghcr.io/beenuar/aisoc-fusion:<version>
+ghcr.io/beenuar/aisoc-threatintel:<version>
+ghcr.io/beenuar/aisoc-ueba:<version>
+ghcr.io/beenuar/aisoc-honeytokens:<version>
+ghcr.io/beenuar/aisoc-purple-team:<version>
+ghcr.io/beenuar/aisoc-connectors:<version>
+ghcr.io/beenuar/aisoc-osquery-tls:<version>
+ghcr.io/beenuar/aisoc-slack-bot:<version>
+ghcr.io/beenuar/aisoc-realtime:<version>
+ghcr.io/beenuar/aisoc-mcp:<version>
+ghcr.io/beenuar/aisoc-ingest:<version>
+ghcr.io/beenuar/aisoc-enrichment:<version>
+ghcr.io/beenuar/aisoc-web:<version>
 ```
 
-Each image is signed with Cosign — verify with `cosign verify --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' --certificate-oidc-issuer https://token.actions.githubusercontent.com <image>`.
+Each image is signed with Cosign — verify with:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/beenuar/aisoc-api:<version>
+```
 
 ## Health checks
 
+Every service exposes the same `GET /healthz` shape:
+
 ```bash
 curl http://localhost:8000/healthz
-# {"status": "ok", "version": "5.2.0"}
+# {"status": "ok", "version": "<version>"}
 ```
 
-Each service exposes the same shape on its own port (`8001`, `8002`, `8003`, `8010`, `8011`).
+A quick "is everything up" sweep across the application tier:
+
+```bash
+for port in 8000 8001 8002 8003 8005 8006 8007 8008 8081 8080 8086; do
+  printf "%-5s " "$port"
+  curl -fsS "http://localhost:${port}/healthz" || echo "FAIL"
+done
+```
 
 ## Logs
 
@@ -101,6 +182,14 @@ Each service exposes the same shape on its own port (`8001`, `8002`, `8003`, `80
 docker compose logs -f agents
 docker compose logs -f api
 docker compose logs -f realtime
+docker compose logs -f ingest-worker
 ```
 
-The full list of services is in [`docker-compose.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.yml) — `api`, `agents`, `fusion`, `actions`, `connectors`, `threatintel`, `ueba`, `honeytokens`, `purple-team`, `realtime`, `ingest-worker`, `enrichment`, `web`, plus the data-plane services (`postgres`, `redis`, `kafka`, `clickhouse`, `opensearch`, `qdrant`).
+## Reference
+
+The canonical service inventory is in
+[`docker-compose.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.yml).
+The deeper architectural picture — what each service owns, how the data plane
+fits together, and where ITSM / Slack / osquery bolt in — lives in
+[Architecture](../architecture) and the
+[System Design doc](https://github.com/beenuar/AiSOC/blob/main/docs/architecture/SYSTEM_DESIGN.md).

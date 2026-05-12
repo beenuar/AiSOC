@@ -137,7 +137,7 @@ Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source:
 
 AiSOC bundles the components a SOC normally pieces together from separate vendors:
 
-- **Connect data sources in three clicks** — a 51-connector click-and-connect catalog spans EDR/XDR (CrowdStrike Falcon, SentinelOne, Microsoft Defender XDR, Palo Alto Cortex XDR, Cortex XSIAM, VMware Carbon Black, Trellix Helix, Trend Vision One), SIEM (Splunk, Microsoft Sentinel, Elastic, Sumo Logic, Datadog Cloud SIEM, Google Chronicle, Rapid7 InsightIDR), cloud + CNAPP (AWS Security Hub, AWS GuardDuty, AWS CloudTrail, AWS VPC Flow Logs, Azure Activity, Azure Defender, GCP Cloud Audit, GCP SCC, Wiz, Lacework, Tenable, Prisma Cloud, Orca), identity (Okta, Microsoft Entra, Auth0, Duo Security, 1Password), SaaS (Microsoft 365 audit, Google Workspace, Cloudflare, Proofpoint, Mimecast, ServiceNow, Jira, Slack audit, Salesforce, Email inbox), VCS (GitHub, Snyk), endpoint fleet (osctrl, FleetDM for fleet-wide osquery), container + orchestration (Kubernetes audit logs via apiserver webhook or `audit.log` tail), and network (Tailscale, Zscaler, Cisco Umbrella). Each connector renders a schema-driven form, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
+- **Connect data sources in three clicks** — a 50-connector click-and-connect catalog spans EDR/XDR (CrowdStrike Falcon, SentinelOne, Microsoft Defender XDR, Palo Alto Cortex XDR, Cortex XSIAM, VMware Carbon Black, Trellix Helix, Trend Vision One), SIEM (Splunk, Microsoft Sentinel, Elastic, Sumo Logic, Datadog Cloud SIEM, Google Chronicle, Rapid7 InsightIDR), cloud + CNAPP (AWS Security Hub, AWS GuardDuty, AWS CloudTrail, AWS VPC Flow Logs, Azure Activity, Azure Defender, GCP Cloud Audit, GCP SCC, Wiz, Lacework, Tenable, Prisma Cloud, Orca), identity (Okta, Microsoft Entra, Auth0, Duo Security, 1Password), SaaS (Microsoft 365 audit, Google Workspace, Cloudflare, Proofpoint, Mimecast, ServiceNow, Jira, Slack audit, Salesforce, Email inbox), VCS (GitHub, Snyk), endpoint fleet (osctrl, FleetDM for fleet-wide osquery), container + orchestration (Kubernetes audit logs via apiserver webhook or `audit.log` tail), and network (Tailscale, Zscaler, Cisco Umbrella). Each connector renders a schema-driven form, runs a live `Test connection` round-trip before save, encrypts every secret with the application-layer `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256), and starts polling on a per-instance schedule. Walkthrough: [docs/connectors](apps/docs/docs/connectors/index.md). Threat model + key rotation: [docs/operations/credentials](apps/docs/docs/operations/credentials.md).
 - **Own your endpoint telemetry** — first-party `aisoc-osquery-tls` FastAPI service (`services/osquery-tls/`) and `aisoc-direct` lightweight agent connector ship a self-hosted osquery TLS plugin, FleetDM-compatible config/log endpoints, and a direct-from-agent ingest path that bypasses third-party SaaS. Built-in **file integrity monitoring (FIM)** endpoint (`services/osquery-tls/app/api/v1/endpoints/fim.py`) ingests `file_events` and synthesizes alerts on writes to `/etc/passwd`, `/etc/shadow`, sshd configs, sudoers, and Windows registry hives; bundled osquery packs cover incident response, OSquery-ATT&CK, and FIM out of the box. **16 native osquery detections** (`detections/endpoint/osquery-*.yaml`, IDs `det-endpoint-281..296`) cover credential access, persistence, lateral movement, defense evasion, and discovery — paired with positive/negative test fixtures (`detections/fixtures/osquery_*.json`) and CI-gated against the Detection Validation workflow. **Live-query playbook step** (`osquery_live_query`) lets responders push allowlisted distributed queries to single hosts or fleet-wide via osctrl/FleetDM with HMAC-signed ChatOps approval. **5 custom Go-based virtual tables** (`services/osquery-extensions/`) extend the agent with `aisoc_browser_extensions`, `aisoc_kernel_modules`, `aisoc_attck_persistence`, `aisoc_pending_actions`, and `aisoc_alert_cache` for richer endpoint visibility and bidirectional response. Walkthroughs: [docs/connectors/osctrl](apps/docs/docs/connectors/osctrl.md), [docs/connectors/fleetdm](apps/docs/docs/connectors/fleetdm.md).
 - **Ingest** events from any connector into a Kafka spine.
 - **Correlate** them in real time with deduplication, ML scoring, per-alert confidence scoring, and Sigma/YARA detection.
@@ -289,7 +289,8 @@ flowchart LR
     end
 
     subgraph Ingest["Ingest & Normalize"]
-        Connectors["Connectors\n(Python)"]
+        Connectors["Connectors\n(Python · 50 vendors)"]
+        OsqueryTLS["osquery-tls\n(Python · host telemetry)"]
         IngestSvc["Ingest worker\n(Go · OCSF)"]
         Enrich["Enrichment\n(Go · IOC + Shodan)"]
     end
@@ -319,12 +320,15 @@ flowchart LR
 
     subgraph Surface["Surface"]
         API["Core API\n(FastAPI)"]
-        RT["Realtime\n(Node · WS)"]
-        Web["Web Console\n(Next.js 14)"]
+        RT["Realtime\n(Node · WS + Web Push)"]
+        Web["Web Console + Responder PWA\n(Next.js 14)"]
         Actions["Actions / SOAR\n(Python)"]
+        Slack["Slack Bot\n(Python · ChatOps)"]
+        MCP["MCP Server\n(TS · stdio)"]
     end
 
     Sources --> Connectors --> IngestSvc --> Kafka
+    OsqueryTLS --> IngestSvc
     IngestSvc --> Enrich --> Kafka
     Kafka --> Fusion --> Kafka
     Kafka --> UEBA --> Kafka
@@ -340,6 +344,9 @@ flowchart LR
     Web --> API
     Web --> RT
     Actions --> Kafka
+    Slack --> API
+    Slack --> Actions
+    MCP --> API
 ```
 
 ### Service map
@@ -359,6 +366,8 @@ flowchart LR
 | `purple-team` | Python | 8006 | Atomic Red Team + Caldera + ATT&CK heatmap + detection drift snapshots |
 | `osquery-tls` | Python | 8091 | Native osquery TLS server — enroll nodes, distribute packs, stream FIM/process/network telemetry |
 | `osquery-extensions` | Python | — | Custom osquery extensions (AI-powered threat intel table, ML anomaly score table) |
+| `slack-bot` | Python | 8009 | ChatOps surface — interactive approvals for high-blast-radius actions, `/aisoc` slash command, HMAC-signed Slack signature verification |
+| `mcp` | TypeScript | — (stdio) | Model Context Protocol server exposing 11 read-only AiSOC tools (case search, alert detail, IOC pivot, ledger query, DAC lookup, …) to IDE-side AI agents (Claude Code, Cursor, Continue, Cody) |
 | `ingest` | Go | 8081 | OCSF normalization + Shodan/CVE |
 | `enrichment` | Go | 8080 | IOC enrichment (VT, AbuseIPDB, GreyNoise) |
 
