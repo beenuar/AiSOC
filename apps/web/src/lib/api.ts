@@ -412,6 +412,29 @@ export const alertsApi = {
         description: string;
       }>;
     }>(`/api/v1/alerts/${id}/timeline`),
+
+  /**
+   * Structured AI explanation for one alert (Stage 2 #6).
+   *
+   * `POST /api/v1/alerts/{id}/explain` returns a single JSON envelope
+   * with rule lineage, contributing events, MITRE technique cards, the
+   * live false-positive rate for the matched rule, suggested next
+   * steps, and a deterministic-or-LLM summary. Counterpart to the
+   * agents service's NDJSON token stream — use this when you want
+   * the *whole* answer in one shot (PDF builder, mobile app, the
+   * console drawer's first paint) instead of typing it out.
+   *
+   * The endpoint is rate-limited per tenant (token bucket; default
+   * burst 20, refill 0.2/s) and returns 429 with `Retry-After` when
+   * the bucket is empty. 404 means either the alert doesn't exist or
+   * the backend predates this endpoint — both are signals to fall
+   * back to the streaming explainer.
+   */
+  explain: (alertId: string, signal?: AbortSignal) =>
+    request<AlertExplanation>(`/api/v1/alerts/${alertId}/explain`, {
+      method: 'POST',
+      signal,
+    }),
 };
 
 // ─── Risk-Based Alerting (entity rollup) ─────────────────────────────────────
@@ -2022,6 +2045,101 @@ export type ExplainStreamFrame =
   | ExplainNextStepFrame
   | ExplainDoneFrame
   | ExplainErrorFrame;
+
+// ─── Structured Alert Explanation (POST /api/v1/alerts/{id}/explain) ────────
+//
+// Stage 2 #6 added a *structured* one-shot explainer alongside the agents
+// service's NDJSON streaming explainer. Where the stream emits tokens for
+// a typewriter UX, this endpoint returns the *whole* answer in one JSON
+// envelope — including richer context the streaming endpoint doesn't have:
+//
+//   * `rule_lineage`        — which detection rule fired (best-effort,
+//                              with a confidence band on the match itself)
+//   * `historical_fp_rate`  — live false-positive rate over the last 30
+//                              days, scoped to rule, technique, category,
+//                              or tenant (whichever has enough samples)
+//   * deterministic-or-LLM `summary` (with `llm_used` + `llm_reason` so
+//      the UI can disclose when the prose was generated vs. fallback)
+//
+// The dataclass shape mirrors `services/api/app/services/alert_explain.py`.
+// Keep the two in sync; the backend serializes via `dataclasses.asdict`.
+
+/** Lineage of the detection rule that produced an alert. */
+export interface RuleLineage {
+  rule_id: string | null;
+  rule_name: string | null;
+  rule_description: string | null;
+  rule_status: string | null;
+  rule_severity: string | null;
+  rule_confidence: number | null;
+  rule_language: string | null;
+  is_builtin: boolean;
+  /** Confidence in the lineage *match itself*, not the rule's own confidence. */
+  confidence: 'high' | 'medium' | 'low';
+  /**
+   * How the lineage was resolved. `none` means we couldn't match any rule.
+   * `raw_event` / `tags` are deterministic; `mitre_overlap` and `category`
+   * are best-effort guesses.
+   */
+  match_method: 'raw_event' | 'tags' | 'mitre_overlap' | 'category' | 'none';
+}
+
+/** Live false-positive rate for the matched rule (or fallback scope). */
+export interface HistoricalFpRate {
+  fp_rate: number;
+  sample_size: number;
+  false_positives: number;
+  lookback_days: number;
+  /** Which scope was used. Narrower = more relevant; broader = more samples. */
+  scope: 'rule' | 'category' | 'technique' | 'tenant';
+  /** Human-readable description of which scope was used and why. */
+  notes: string;
+}
+
+/** A deterministic, hand-curated suggested next step. */
+export interface SuggestedAction {
+  title: string;
+  rationale: string;
+  /** ID of a playbook the user can launch directly, or null if N/A. */
+  playbook_id: string | null;
+  priority: 'immediate' | 'soon' | 'fyi';
+}
+
+/** A single signal from the raw event that contributed to the alert. */
+export interface ContributingEvent {
+  label: string;
+  value: string;
+  /** Optional hint about why this signal mattered (e.g. "matched rule pattern"). */
+  annotation?: string;
+}
+
+/** Resolved MITRE ATT&CK technique card (id, name, tactics, link). */
+export interface MitreTechniqueCard {
+  id: string;
+  name: string;
+  tactic_names: string[];
+  description: string;
+  url: string;
+}
+
+/** Top-level structured explanation envelope. */
+export interface AlertExplanation {
+  alert_id: string;
+  summary: string;
+  rule_lineage: RuleLineage;
+  contributing_events: ContributingEvent[];
+  mitre_techniques: MitreTechniqueCard[];
+  historical_fp_rate: HistoricalFpRate;
+  suggested_actions: SuggestedAction[];
+  /** True when the summary was LLM-generated; false → deterministic fallback. */
+  llm_used: boolean;
+  /** Source of the summary: `tenant_byok`, `platform_default`, `deterministic`, etc. */
+  llm_source: string;
+  /** When `llm_used=false`, why we fell back (e.g. `airgap_blocked`, `no_credential`). */
+  llm_reason: string;
+  /** ISO-8601 timestamp the explanation was generated. */
+  generated_at: string;
+}
 
 // ─── Hunt / Search ───────────────────────────────────────────────────────────
 
