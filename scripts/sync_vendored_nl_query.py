@@ -77,6 +77,10 @@ def _check() -> int:
         if not filecmp.cmp(src, dst, shallow=False):
             drift.append(f"  - out of date: {name}")
 
+    for name in VENDORED_ONLY:
+        if not (VENDORED_DIR / name).is_file():
+            drift.append(f"  - missing vendored-only file: {name}")
+
     # Make sure no stray extra .py files snuck into the vendored tree.
     vendored_pyfiles = {p.name for p in VENDORED_DIR.iterdir() if p.is_file() and p.suffix == ".py"}
     extra_py = vendored_pyfiles - set(SYNCED_FILES)
@@ -123,8 +127,7 @@ def _sync() -> int:
             print(f"removing stale {path.relative_to(REPO_ROOT)}")
             path.unlink()
 
-    print("\nDone. Don't forget to commit the changes under "
-          "services/api/app/_vendor/nl_query/.")
+    print("\nDone. Don't forget to commit the changes under services/api/app/_vendor/nl_query/.")
     return 0
 
 

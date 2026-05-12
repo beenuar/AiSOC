@@ -43,6 +43,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.core.logging import safe_log_value
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
 from app.services.alert_explain import (
@@ -93,7 +94,7 @@ async def _acquire_or_429(
         # error envelope so retry-after semantics survive the 429.
         logger.info(
             "explain.rate_limited tenant_id=%s cost=%.2f remaining=%.2f retry_after=%.2fs",
-            tenant_id,
+            safe_log_value(tenant_id),
             cost,
             decision.remaining,
             decision.retry_after_seconds,
@@ -174,11 +175,15 @@ async def explain_alert(
         # errors, etc. — so reaching this branch means something
         # unexpected (e.g. database read failure mid-explain) blew up.
         # Log loudly and return a 502 so the client can retry; we do
-        # *not* expose the exception text to the caller.
+        # *not* expose the exception text to the caller. Tenant/alert
+        # IDs are UUIDs in practice but they originate from the request,
+        # so we route them through ``safe_log_value`` to neutralise any
+        # CR/LF injection attempt before they hit the log stream
+        # (CWE-117 / CodeQL ``py/log-injection``).
         logger.exception(
             "explain.failed tenant=%s alert=%s",
-            current_user.tenant_id,
-            alert_id,
+            safe_log_value(current_user.tenant_id),
+            safe_log_value(alert_id),
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -215,11 +220,16 @@ async def explain_alert(
         # Audit-log failures must never break the explain response.
         # We log a warning so ops can investigate, but we do not
         # propagate — the user already got their answer.
+        # Sanitise every interpolated value: tenant_id/alert_id come
+        # from the request and ``exc`` may carry arbitrary text
+        # (e.g. database constraint messages). ``safe_log_value``
+        # escapes CR/LF/NUL/ESC and truncates, defending against
+        # CWE-117 (CodeQL ``py/log-injection``).
         logger.warning(
             "explain.audit_failed tenant=%s alert=%s error=%s",
-            current_user.tenant_id,
-            alert_id,
-            exc,
+            safe_log_value(current_user.tenant_id),
+            safe_log_value(alert_id),
+            safe_log_value(exc),
         )
 
     return _explanation_to_payload(explanation)
