@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-11T03:45:31Z",
+  "generated": "2026-05-12T20:24:18Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,18 +20,20 @@
     }
   ],
   "stats": {
-    "total": 7104,
+    "total": 7105,
     "playbooks": 62,
-    "detections": 6993,
+    "detections": 6994,
     "plugins": 49,
     "verified": 985,
-    "community": 0,
+    "community": 1,
     "by_tier": {
       "beta": 6,
+      "community": 1,
       "imported": 6113,
       "stable": 985
     },
     "detections_by_tier": {
+      "community": 1,
       "imported": 6113,
       "stable": 880
     },
@@ -164,7 +166,7 @@
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 11,
-      "T1078.004": 97,
+      "T1078.004": 98,
       "T1082": 49,
       "T1083": 28,
       "T1087": 21,
@@ -534,8 +536,11 @@
       "T1690": 1
     },
     "unique_techniques": 493,
-    "total_with_mitre": 5777,
+    "total_with_mitre": 5778,
     "by_tier": {
+      "community": {
+        "T1078.004": 1
+      },
       "stable": {
         "T1003": 2,
         "T1003.001": 3,
@@ -28554,6 +28559,30 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/playbooks/cloud-takeover-response.yaml"
+    },
+    {
+      "id": "community-aisoc-hello-hunt-aws-root-login",
+      "type": "detection",
+      "name": "[Hello Hunt] AWS Root Account Console Login",
+      "description": "Tutorial detection from apps/docs/docs/detections/hello-hunt.md.\nFires when AWS CloudTrail records a successful console login under the\n`Root` user identity. Real environments should keep the AWS root account\nunused except for break-glass \u2014 any successful console login is worth a\nhuman eyeballing.\n\nThis rule is intentionally minimal so first-time contributors can read\nit end to end. See `apps/docs/docs/detections/hello-hunt.md` for a full\nwalkthrough.",
+      "version": "1.0.0",
+      "author": "AiSOC Tutorial",
+      "tags": [
+        "tlp.white",
+        "tutorial"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-credential-access",
+      "verified": false,
+      "source": "community",
+      "tier": "community",
+      "enabled": true,
+      "path": "detections/community/cloud/hello-hunt-aws-root-login.yaml"
     },
     {
       "id": "container-escape-response-v1",
