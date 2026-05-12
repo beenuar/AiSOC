@@ -42,7 +42,6 @@ from app.api.v1.deps import CurrentUser
 from app.core.security import ROLE_PERMISSIONS, has_permission
 from fastapi import HTTPException
 
-
 # ─── Static role-permission map (the source of truth) ────────────────────
 
 
