@@ -141,4 +141,6 @@ Several connectors today require you to bring your own credentials (an Azure AD 
 
 ## Writing a new connector
 
-See [Plugin SDK overview](/docs/plugins/overview) and [Contributing](/docs/contributing/guidelines). The short version: subclass `BaseConnector`, implement `schema()`, `test_connection()`, `fetch_alerts()`, and `normalize()`, register it in `services/connectors/app/connectors/__init__.py`, drop a `plugin.yaml` under `plugins/<id>/`, and run `pnpm marketplace:sync`.
+The fastest path is the [Hello, connector tutorial](/docs/connectors/hello-connector) — a complete, runnable walkthrough that builds a `BaseConnector` against [httpbin.org](https://httpbin.org). No vendor account required.
+
+For broader background see [Plugin SDK overview](/docs/plugins/overview) and [Contributing](/docs/contributing/guidelines). The short version: subclass `BaseConnector`, implement `schema()`, `test_connection()`, `fetch_alerts()`, and `normalize()`, register it in `services/connectors/app/connectors/__init__.py`, drop a `plugin.yaml` under `plugins/<id>/`, and run `pnpm marketplace:sync`.

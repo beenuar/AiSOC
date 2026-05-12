@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
       label: "Connectors",
       items: [
         "connectors/index",
+        "connectors/hello-connector",
         "connectors/api-coverage",
         "connectors/universal-capture",
         "connectors/azure-entra",
