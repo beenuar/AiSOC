@@ -80,6 +80,7 @@ const sidebars: SidebarsConfig = {
         "operations/air-gapped",
         "operations/theming",
         "operations/upgrades",
+        "operations/notifications",
         "operations/troubleshooting",
         "operations/faq",
         "operations/adoption-questions",
@@ -94,6 +95,7 @@ const sidebars: SidebarsConfig = {
         "plugins/go-sdk",
         "plugins/publishing",
         "plugins/cli",
+        "plugins/lifecycle",
       ],
     },
     {
