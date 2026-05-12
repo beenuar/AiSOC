@@ -1,0 +1,39 @@
+id: community-aisoc-hello-hunt-aws-root-login
+name: "[Hello Hunt] AWS Root Account Console Login"
+description: |
+  Tutorial detection from apps/docs/docs/detections/hello-hunt.md.
+  Fires when AWS CloudTrail records a successful console login under the
+  `Root` user identity. Real environments should keep the AWS root account
+  unused except for break-glass — any successful console login is worth a
+  human eyeballing.
+
+  This rule is intentionally minimal so first-time contributors can read
+  it end to end. See `apps/docs/docs/detections/hello-hunt.md` for a full
+  walkthrough.
+version: 1.0.0
+severity: high
+category: cloud
+tags:
+  - mitre.attack.T1078.004
+  - tlp.white
+  - tutorial
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: ConsoleLogin
+    userIdentity.type: Root
+    responseElements.ConsoleLogin: Success
+  condition: selection
+false_positives:
+  - Documented break-glass access — verify the change-management ticket
+    before closing.
+  - Initial AWS account setup before an IAM admin user exists.
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC Tutorial
+created: '2026-05-12'
+modified: '2026-05-12'
+references:
+  - https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#lock-away-credentials
