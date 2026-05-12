@@ -11,20 +11,20 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-05-12T14:59:13Z`
+Generated: `2026-05-12T18:18:23Z`
 
 ## Headline numbers
 
 - **Curated v1.0 detections**: `416` (target: ≥ 300)
-- **Total rules considered**: `1047` (quality floor: 0.55)
-- **Unique MITRE techniques covered**: `117`
+- **Total rules considered**: `1051` (quality floor: 0.55)
+- **Unique MITRE techniques covered**: `118`
 
 ## Coverage by buyer family
 
 | Family | Count | Target | Covered |
 |---|---|---|---|
 | **Ransomware** | 48 | ≥ 25 | ✅ |
-| **Credential Access** | 83 | ≥ 25 | ✅ |
+| **Credential Access** | 84 | ≥ 25 | ✅ |
 | **Lateral Movement** | 33 | ≥ 25 | ✅ |
 | **Data Exfiltration** | 41 | ≥ 25 | ✅ |
 | **Cloud** | 100 | ≥ 25 | ✅ |
@@ -52,8 +52,8 @@ Generated: `2026-05-12T14:59:13Z`
 - `application`: 29
 - `cloud`: 164
 - `data-exfil`: 20
-- `endpoint`: 115
-- `identity`: 75
+- `endpoint`: 117
+- `identity`: 73
 - `network`: 12
 
 ## How to audit

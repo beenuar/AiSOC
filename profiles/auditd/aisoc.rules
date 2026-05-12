@@ -1,0 +1,143 @@
+## AiSOC audit.rules profile (Linux auditd) — v1.0.0
+##
+## Drop this file at /etc/audit/rules.d/99-aisoc.rules and reload
+## with `augenrules --load`. Every rule names its bucket via a
+## ``-k aisoc_*`` key so the AiSOC `auditd` connector can map the
+## event to a severity tier (see services/connectors/app/connectors/auditd.py
+## for the mapping table).
+##
+## Severity buckets (matched by key prefix):
+##   aisoc_critical_*   -> high
+##   aisoc_priv_esc_*   -> medium
+##   aisoc_persistence_* -> medium
+##   aisoc_exec         -> medium
+##   aisoc_watch_*      -> low
+##   aisoc_audit_*      -> low
+##
+## Coverage targets (in priority order):
+##   1. execve from /tmp, /dev/shm, /var/tmp (post-exploit staging)
+##   2. writes to /etc/passwd, /etc/shadow, /etc/sudoers, /etc/sudoers.d
+##   3. SSH config + authorized_keys tampering
+##   4. Cron / systemd persistence
+##   5. Kernel module load / removal
+##   6. ptrace, mount, finit_module / init_module
+##   7. Audit subsystem self-tampering (auditctl -D, -e 0)
+##
+## We deliberately do NOT enable a blanket exec catch-all. Every
+## execve on a busy host produces ~10-50 records/second; that
+## overwhelms the file_tail connector and obscures real signal.
+## Operators who want full execve coverage can append:
+##
+##   -a always,exit -F arch=b64 -S execve -k aisoc_exec
+##
+## ...and accept the volume.
+
+## ---------------------------------------------------------------
+## Step 1: reset everything we know about so the policy is
+## deterministic across reloads. Comment this out if you're
+## layering AiSOC on top of an existing CIS / STIG ruleset.
+## ---------------------------------------------------------------
+
+-D
+-b 8192
+--backlog_wait_time 60000
+-f 1
+
+## ---------------------------------------------------------------
+## Step 2: high-signal execve from staging directories.
+## Suppresses /tmp, /var/tmp, /dev/shm execs which almost never
+## have a legitimate origin in production.
+## ---------------------------------------------------------------
+
+-a always,exit -F arch=b64 -S execve -F dir=/tmp -F success=1 -k aisoc_critical_exec_tmp
+-a always,exit -F arch=b64 -S execve -F dir=/var/tmp -F success=1 -k aisoc_critical_exec_tmp
+-a always,exit -F arch=b64 -S execve -F dir=/dev/shm -F success=1 -k aisoc_critical_exec_tmp
+-a always,exit -F arch=b32 -S execve -F dir=/tmp -F success=1 -k aisoc_critical_exec_tmp
+-a always,exit -F arch=b32 -S execve -F dir=/dev/shm -F success=1 -k aisoc_critical_exec_tmp
+
+## memfd_create -> execve is the canonical fileless-malware pattern.
+-a always,exit -F arch=b64 -S memfd_create -k aisoc_critical_memfd
+
+## ---------------------------------------------------------------
+## Step 3: identity / credential file watches.
+## Any write to these is a high-confidence signal in steady-state.
+## ---------------------------------------------------------------
+
+-w /etc/passwd        -p wa -k aisoc_critical_identity_write
+-w /etc/shadow        -p wa -k aisoc_critical_identity_write
+-w /etc/group         -p wa -k aisoc_critical_identity_write
+-w /etc/gshadow       -p wa -k aisoc_critical_identity_write
+-w /etc/sudoers       -p wa -k aisoc_critical_sudoers_write
+-w /etc/sudoers.d/    -p wa -k aisoc_critical_sudoers_write
+-w /etc/pam.d/        -p wa -k aisoc_critical_pam_write
+
+## ---------------------------------------------------------------
+## Step 4: SSH server + user key tampering.
+## ---------------------------------------------------------------
+
+-w /etc/ssh/sshd_config         -p wa -k aisoc_critical_ssh_config
+-w /etc/ssh/sshd_config.d/      -p wa -k aisoc_critical_ssh_config
+-w /root/.ssh/authorized_keys   -p wa -k aisoc_critical_authorized_keys
+
+## ---------------------------------------------------------------
+## Step 5: persistence (cron, systemd, init.d, profile.d).
+## ---------------------------------------------------------------
+
+-w /etc/crontab           -p wa -k aisoc_persistence_cron
+-w /etc/cron.d/           -p wa -k aisoc_persistence_cron
+-w /etc/cron.hourly/      -p wa -k aisoc_persistence_cron
+-w /etc/cron.daily/       -p wa -k aisoc_persistence_cron
+-w /etc/cron.weekly/      -p wa -k aisoc_persistence_cron
+-w /etc/cron.monthly/     -p wa -k aisoc_persistence_cron
+-w /var/spool/cron/       -p wa -k aisoc_persistence_cron
+-w /etc/systemd/system/   -p wa -k aisoc_persistence_systemd
+-w /lib/systemd/system/   -p wa -k aisoc_persistence_systemd
+-w /etc/init.d/           -p wa -k aisoc_persistence_initd
+-w /etc/profile           -p wa -k aisoc_persistence_profile
+-w /etc/profile.d/        -p wa -k aisoc_persistence_profile
+-w /etc/rc.local          -p wa -k aisoc_persistence_rclocal
+
+## ---------------------------------------------------------------
+## Step 6: kernel module / privilege escalation primitives.
+## ---------------------------------------------------------------
+
+-a always,exit -F arch=b64 -S init_module  -k aisoc_priv_esc_module_load
+-a always,exit -F arch=b64 -S finit_module -k aisoc_priv_esc_module_load
+-a always,exit -F arch=b64 -S delete_module -k aisoc_priv_esc_module_load
+-a always,exit -F arch=b64 -S ptrace -k aisoc_priv_esc_ptrace
+-a always,exit -F arch=b64 -S mount -k aisoc_priv_esc_mount
+-w /sbin/insmod  -p x -k aisoc_priv_esc_module_load
+-w /sbin/rmmod   -p x -k aisoc_priv_esc_module_load
+-w /sbin/modprobe -p x -k aisoc_priv_esc_module_load
+
+## ---------------------------------------------------------------
+## Step 7: audit subsystem self-tampering.
+## Detection rule det-endpoint-147 (linux-auditctl-disable.yaml)
+## already pivots on `exe ENDSWITH "/auditctl"`; this watch makes
+## the same signal available without an execve catch-all.
+## ---------------------------------------------------------------
+
+-w /etc/audit/                  -p wa -k aisoc_audit_self_tamper
+-w /etc/libaudit.conf           -p wa -k aisoc_audit_self_tamper
+-w /sbin/auditctl               -p x  -k aisoc_audit_self_tamper
+-w /sbin/auditd                 -p x  -k aisoc_audit_self_tamper
+-w /var/log/audit/              -p wa -k aisoc_audit_log_write
+
+## ---------------------------------------------------------------
+## Step 8: low-signal watches (still useful for retro hunts).
+## ---------------------------------------------------------------
+
+-w /etc/hosts             -p wa -k aisoc_watch_hosts
+-w /etc/resolv.conf       -p wa -k aisoc_watch_dns
+-w /etc/nsswitch.conf     -p wa -k aisoc_watch_nss
+
+## ---------------------------------------------------------------
+## Step 9: lock the configuration so a foothold can't `auditctl -e 0`
+## without rebooting. Keep this LAST — every rule below it is
+## ignored after `-e 2` is applied.
+##
+## Comment this out during initial rollout so you can iterate; turn
+## it on once your fleet is stable.
+## ---------------------------------------------------------------
+
+# -e 2

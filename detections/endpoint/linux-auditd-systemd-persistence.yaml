@@ -1,0 +1,33 @@
+id: det-endpoint-304
+name: Systemd Unit Persistence Via auditd Watch
+description: |
+  Triggers when the AiSOC auditd profile records a write under
+  /etc/systemd/system/ or /lib/systemd/system/. Pivots on auditd_key so the
+  rule fires for any modify-class syscall on a unit file without a per-syscall
+  companion rule. Dropping a .service or .timer file under these directories is
+  the canonical Linux persistence technique post-foothold; legitimate writes
+  are dominated by package managers and configuration-management agents and
+  should be straightforward to allowlist.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1543.002
+- mitre.attack.t1053.006
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    auditd_key == "aisoc_persistence_systemd"
+    AND exe NOT ENDSWITH_ANY ["/dpkg", "/rpm", "/apt", "/yum", "/dnf", "/systemctl", "/systemd"]
+false_positives:
+- Package install/upgrade dropping a unit file (dpkg, rpm)
+- systemctl edit or systemctl enable rewriting a unit
+- Sanctioned config-management agent (Ansible, Chef, Puppet) writing units
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-12'
+modified: '2026-05-12'

@@ -1,0 +1,32 @@
+id: det-endpoint-301
+name: Sudoers Tampering Via auditd Watch
+description: |
+  Triggers when the AiSOC auditd profile (profiles/auditd/aisoc.rules)
+  records a write to /etc/sudoers or any file under /etc/sudoers.d/.
+  Pivots on the auditd_key field exposed by services/connectors/app/connectors/auditd.py
+  so the rule fires regardless of which syscall (open, openat, rename, etc.)
+  produced the event. Sudoers changes are extremely high-signal in steady-state
+  and are the most reliable indicator of attacker-driven privilege escalation
+  short of a full root shell.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1548.003
+- mitre.attack.t1098
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    auditd_key == "aisoc_critical_sudoers_write"
+    AND exe NOT ENDSWITH_ANY ["/visudo", "/dpkg", "/rpm", "/apt", "/yum", "/dnf"]
+false_positives:
+- Package upgrade installing a new sudoers.d/ drop-in (visudo, dpkg, rpm)
+- Sanctioned automation/IaC pipeline (Ansible, Chef, Puppet) — tune by adding the agent's exe to the allowlist
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-12'
+modified: '2026-05-12'

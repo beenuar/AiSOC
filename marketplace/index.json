@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-12T14:59:12Z",
+  "generated": "2026-05-12T18:18:22Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,20 +20,20 @@
     }
   ],
   "stats": {
-    "total": 7105,
+    "total": 7110,
     "playbooks": 62,
-    "detections": 6993,
-    "plugins": 50,
-    "verified": 986,
+    "detections": 6997,
+    "plugins": 51,
+    "verified": 990,
     "community": 0,
     "by_tier": {
-      "beta": 6,
+      "beta": 7,
       "imported": 6113,
-      "stable": 986
+      "stable": 990
     },
     "detections_by_tier": {
       "imported": 6113,
-      "stable": 880
+      "stable": 884
     },
     "quarantined": 5921
   },
@@ -55,7 +55,7 @@
       "T1010": 2,
       "T1011": 1,
       "T1012": 24,
-      "T1014": 7,
+      "T1014": 8,
       "T1016": 20,
       "T1016.001": 1,
       "T1018": 42,
@@ -113,7 +113,7 @@
       "T1053.002": 12,
       "T1053.003": 21,
       "T1053.005": 58,
-      "T1053.006": 5,
+      "T1053.006": 6,
       "T1053.007": 2,
       "T1055": 56,
       "T1055.001": 11,
@@ -177,11 +177,11 @@
       "T1090.003": 11,
       "T1091": 5,
       "T1095": 8,
-      "T1098": 87,
+      "T1098": 88,
       "T1098.001": 26,
       "T1098.002": 6,
       "T1098.003": 34,
-      "T1098.004": 11,
+      "T1098.004": 12,
       "T1098.005": 7,
       "T1098.007": 1,
       "T1102": 17,
@@ -328,7 +328,7 @@
       "T1542.005": 1,
       "T1543": 25,
       "T1543.001": 8,
-      "T1543.002": 4,
+      "T1543.002": 5,
       "T1543.003": 60,
       "T1543.004": 4,
       "T1546": 15,
@@ -351,7 +351,7 @@
       "T1547.003": 2,
       "T1547.004": 4,
       "T1547.005": 4,
-      "T1547.006": 15,
+      "T1547.006": 16,
       "T1547.008": 2,
       "T1547.009": 4,
       "T1547.010": 6,
@@ -361,7 +361,7 @@
       "T1548": 34,
       "T1548.001": 12,
       "T1548.002": 76,
-      "T1548.003": 38,
+      "T1548.003": 39,
       "T1548.004": 1,
       "T1550": 13,
       "T1550.001": 4,
@@ -388,7 +388,7 @@
       "T1555.003": 15,
       "T1555.004": 6,
       "T1555.005": 5,
-      "T1556": 71,
+      "T1556": 72,
       "T1556.001": 1,
       "T1556.002": 3,
       "T1556.003": 1,
@@ -534,7 +534,7 @@
       "T1690": 1
     },
     "unique_techniques": 493,
-    "total_with_mitre": 5777,
+    "total_with_mitre": 5781,
     "by_tier": {
       "stable": {
         "T1003": 2,
@@ -544,7 +544,7 @@
         "T1003.006": 3,
         "T1003.008": 2,
         "T1011": 1,
-        "T1014": 1,
+        "T1014": 2,
         "T1018": 5,
         "T1020": 2,
         "T1021": 1,
@@ -570,7 +570,7 @@
         "T1053.001": 1,
         "T1053.003": 5,
         "T1053.005": 4,
-        "T1053.006": 1,
+        "T1053.006": 2,
         "T1055": 2,
         "T1055.001": 1,
         "T1055.012": 1,
@@ -602,10 +602,10 @@
         "T1090": 3,
         "T1090.003": 6,
         "T1095": 3,
-        "T1098": 28,
+        "T1098": 29,
         "T1098.001": 21,
         "T1098.003": 8,
-        "T1098.004": 7,
+        "T1098.004": 8,
         "T1098.007": 1,
         "T1105": 3,
         "T1110": 9,
@@ -670,7 +670,7 @@
         "T1542.001": 1,
         "T1543": 1,
         "T1543.001": 4,
-        "T1543.002": 2,
+        "T1543.002": 3,
         "T1543.003": 3,
         "T1543.004": 2,
         "T1546.002": 1,
@@ -685,13 +685,13 @@
         "T1547.001": 4,
         "T1547.004": 1,
         "T1547.005": 2,
-        "T1547.006": 5,
+        "T1547.006": 6,
         "T1547.010": 1,
         "T1547.015": 2,
         "T1548": 1,
         "T1548.001": 6,
         "T1548.002": 4,
-        "T1548.003": 2,
+        "T1548.003": 3,
         "T1548.004": 1,
         "T1550": 3,
         "T1550.002": 2,
@@ -712,7 +712,7 @@
         "T1555.003": 3,
         "T1555.004": 1,
         "T1555.005": 1,
-        "T1556": 40,
+        "T1556": 41,
         "T1556.001": 1,
         "T1556.003": 1,
         "T1556.004": 1,
@@ -42811,6 +42811,102 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/endpoint/fim-ssh-authorized-keys-changed.yaml"
+    },
+    {
+      "id": "det-endpoint-301",
+      "type": "detection",
+      "name": "Sudoers Tampering Via auditd Watch",
+      "description": "Triggers when the AiSOC auditd profile (profiles/auditd/aisoc.rules)\nrecords a write to /etc/sudoers or any file under /etc/sudoers.d/.\nPivots on the auditd_key field exposed by services/connectors/app/connectors/auditd.py\nso the rule fires regardless of which syscall (open, openat, rename, etc.)\nproduced the event. Sudoers changes are extremely high-signal in steady-state\nand are the most reliable indicator of attacker-driven privilege escalation\nshort of a full root shell.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1548.003",
+        "T1098"
+      ],
+      "log_source": "linux",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/linux-auditd-sudoers-tampering.yaml"
+    },
+    {
+      "id": "det-endpoint-302",
+      "type": "detection",
+      "name": "SSH Config Or Authorized Keys Tampering Via auditd Watch",
+      "description": "Triggers when the AiSOC auditd profile records a write to /etc/ssh/sshd_config,\n/etc/ssh/sshd_config.d/, or /root/.ssh/authorized_keys. Pivots on the\nauditd_key field so the rule fires for any modify-class syscall (open, openat,\nrename, link, unlink) without needing a per-syscall companion rule.\nSSH config + root authorized_keys are the two most common backdoor footholds\non Linux servers; production hosts should see zero modifications outside of\nconfig-management runs.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1098.004",
+        "T1556"
+      ],
+      "log_source": "linux",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/linux-auditd-ssh-config-tampering.yaml"
+    },
+    {
+      "id": "det-endpoint-303",
+      "type": "detection",
+      "name": "Kernel Module Load Or Unload Via auditd Watch",
+      "description": "Triggers when the AiSOC auditd profile records init_module / finit_module /\ndelete_module syscalls or execution of /sbin/insmod, /sbin/rmmod, /sbin/modprobe.\nPivots on auditd_key so the rule fires regardless of how the kernel module\nprimitive was invoked. Loadable kernel modules are the standard delivery\nvehicle for Linux rootkits (Diamorphine, Reptile, Symbiote, etc.); legitimate\nmodule loads are dominated by boot-time systemd-modules-load.service and\nfilesystem drivers and should be easy to allowlist by parent process.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1547.006",
+        "T1014"
+      ],
+      "log_source": "linux",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/linux-auditd-kernel-module-load.yaml"
+    },
+    {
+      "id": "det-endpoint-304",
+      "type": "detection",
+      "name": "Systemd Unit Persistence Via auditd Watch",
+      "description": "Triggers when the AiSOC auditd profile records a write under\n/etc/systemd/system/ or /lib/systemd/system/. Pivots on auditd_key so the\nrule fires for any modify-class syscall on a unit file without a per-syscall\ncompanion rule. Dropping a .service or .timer file under these directories is\nthe canonical Linux persistence technique post-foothold; legitimate writes\nare dominated by package managers and configuration-management agents and\nshould be straightforward to allowlist.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "endpoint",
+      "mitre_techniques": [
+        "T1543.002",
+        "T1053.006"
+      ],
+      "log_source": "linux",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/endpoint/linux-auditd-systemd-persistence.yaml"
     },
     {
       "id": "det-identity-001",
@@ -223864,6 +223960,25 @@
       "source": "core",
       "tier": "beta",
       "path": "plugins/aisoc-direct/plugin.yaml"
+    },
+    {
+      "id": "auditd",
+      "type": "plugin",
+      "name": "Linux Auditd",
+      "description": "Linux ``auditd`` connector \u2014 file_tail mode, no host-agent dependency. Tails ``/var/log/audit/audit.log`` forward from a saved byte cursor, reassembles multi-record auditd events (SYSCALL + EXECVE + PATH + CWD + PROCTITLE) into flat normalised documents, and feeds the same ``syscall`` / ``exe`` / ``argv`` / ``path`` / ``actor_uid`` / ``auditd_key`` primitives that detection content under ``detections/endpoint/linux-*.yaml`` pivots on. Ship the AiSOC ``audit.rules`` profile (``profiles/auditd/aisoc.rules``) for full coverage; rules with ``aisoc_*`` keys auto-bucket into AiSOC's four-tier severity ladder.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [],
+      "plugin_type": null,
+      "license": "MIT",
+      "homepage": "https://github.com/linux-audit/audit-userspace",
+      "min_aisoc_version": null,
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": false,
+      "source": "core",
+      "tier": "beta",
+      "path": "plugins/auditd/plugin.yaml"
     },
     {
       "id": "auth0",

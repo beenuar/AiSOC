@@ -53,6 +53,7 @@ const sidebars: SidebarsConfig = {
         "connectors/wazuh",
         "connectors/fleetdm",
         "connectors/osquery-extensions",
+        "connectors/auditd",
         "connectors/wiz",
         "connectors/aws-security-hub",
         "connectors/lacework",

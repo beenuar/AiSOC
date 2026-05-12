@@ -1,15 +1,15 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-12T14:59:13Z",
+  "generated": "2026-05-12T18:18:23Z",
   "stats": {
-    "considered": 1047,
-    "eligible": 1043,
+    "considered": 1051,
+    "eligible": 1047,
     "selected": 416,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 117,
+    "unique_techniques": 118,
     "selected_by_tier": {
       "imported": 42,
       "native": 374
@@ -25,8 +25,8 @@
       "application": 29,
       "cloud": 164,
       "data-exfil": 20,
-      "endpoint": 115,
-      "identity": 75,
+      "endpoint": 117,
+      "identity": 73,
       "network": 12
     }
   },
@@ -89,7 +89,7 @@
     },
     "credential-access": {
       "label": "Credential Access",
-      "count": 83,
+      "count": 84,
       "rule_ids": [
         "det-application-004",
         "det-application-008",
@@ -118,6 +118,7 @@
         "det-endpoint-141",
         "det-endpoint-267",
         "det-endpoint-272",
+        "det-endpoint-302",
         "det-identity-001",
         "det-identity-003",
         "det-identity-010",
@@ -449,6 +450,8 @@
         "det-endpoint-264",
         "det-endpoint-265",
         "det-endpoint-300",
+        "det-endpoint-301",
+        "det-endpoint-302",
         "det-identity-001",
         "det-identity-002",
         "det-identity-003",
@@ -456,8 +459,6 @@
         "det-identity-006",
         "det-identity-008",
         "det-identity-009",
-        "det-identity-011",
-        "det-identity-012",
         "det-identity-020",
         "det-identity-021",
         "det-identity-027",
@@ -649,15 +650,15 @@
     "T1070": 4,
     "T1071.001": 1,
     "T1078": 16,
-    "T1078.001": 2,
-    "T1078.004": 27,
+    "T1078.001": 1,
+    "T1078.004": 26,
     "T1082": 1,
     "T1087": 1,
     "T1087.004": 1,
-    "T1098": 15,
+    "T1098": 16,
     "T1098.001": 13,
     "T1098.003": 7,
-    "T1098.004": 5,
+    "T1098.004": 6,
     "T1098.007": 1,
     "T1105": 1,
     "T1110": 7,
@@ -692,6 +693,7 @@
     "T1537": 10,
     "T1539": 2,
     "T1543": 1,
+    "T1548.003": 1,
     "T1550": 4,
     "T1550.003": 1,
     "T1552": 2,
@@ -701,7 +703,7 @@
     "T1554": 1,
     "T1555": 2,
     "T1555.005": 1,
-    "T1556": 38,
+    "T1556": 39,
     "T1556.001": 1,
     "T1556.006": 5,
     "T1556.007": 1,
@@ -8147,6 +8149,59 @@
       "has_executable_body": true
     },
     {
+      "id": "det-endpoint-301",
+      "name": "Sudoers Tampering Via auditd Watch",
+      "path": "detections/endpoint/linux-auditd-sudoers-tampering.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1548.003",
+        "T1098"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "linux",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-endpoint-302",
+      "name": "SSH Config Or Authorized Keys Tampering Via auditd Watch",
+      "path": "detections/endpoint/linux-auditd-ssh-config-tampering.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098.004",
+        "T1556"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "linux",
+      "has_executable_body": true
+    },
+    {
       "id": "det-identity-001",
       "name": "Authentication Brute-Force Burst",
       "path": "detections/identity/brute-force-login.yaml",
@@ -8355,57 +8410,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-011",
-      "name": "Service Account Used for Interactive Login",
-      "path": "detections/identity/service-account-interactive-login.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078.004"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-012",
-      "name": "Root SSH Login on Production Host",
-      "path": "detections/identity/root-ssh-login.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "linux",
       "has_executable_body": true
     },
     {

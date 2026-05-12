@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.connectors.auditd import AuditdConnector
 from app.connectors.auth0 import Auth0Connector
 from app.connectors.aws_cloudtrail import AWSCloudTrailConnector
 from app.connectors.aws_guardduty import AWSGuardDutyConnector
@@ -81,6 +82,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     AWSSecurityHubConnector,
     AWSVPCFlowLogsConnector,
     Auth0Connector,
+    AuditdConnector,
     AzureActivityConnector,
     AzureDefenderConnector,
     AzureEntraConnector,
@@ -176,6 +178,7 @@ __all__ = [
     "AWSSecurityHubConnector",
     "AWSVPCFlowLogsConnector",
     "Auth0Connector",
+    "AuditdConnector",
     "AzureActivityConnector",
     "AzureDefenderConnector",
     "AzureEntraConnector",

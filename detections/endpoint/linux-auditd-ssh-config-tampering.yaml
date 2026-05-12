@@ -1,0 +1,33 @@
+id: det-endpoint-302
+name: SSH Config Or Authorized Keys Tampering Via auditd Watch
+description: |
+  Triggers when the AiSOC auditd profile records a write to /etc/ssh/sshd_config,
+  /etc/ssh/sshd_config.d/, or /root/.ssh/authorized_keys. Pivots on the
+  auditd_key field so the rule fires for any modify-class syscall (open, openat,
+  rename, link, unlink) without needing a per-syscall companion rule.
+  SSH config + root authorized_keys are the two most common backdoor footholds
+  on Linux servers; production hosts should see zero modifications outside of
+  config-management runs.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.004
+- mitre.attack.t1556
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    auditd_key IN ["aisoc_critical_ssh_config", "aisoc_critical_authorized_keys"]
+    AND exe NOT ENDSWITH_ANY ["/dpkg", "/rpm", "/apt", "/yum", "/dnf", "/cloud-init"]
+false_positives:
+- Package upgrade replacing sshd_config (dpkg, rpm)
+- cloud-init bootstrapping authorized_keys on first boot
+- Sanctioned config-management tooling (Ansible, Chef, Puppet) — allowlist the agent's exe
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-12'
+modified: '2026-05-12'

@@ -1,0 +1,33 @@
+id: det-endpoint-303
+name: Kernel Module Load Or Unload Via auditd Watch
+description: |
+  Triggers when the AiSOC auditd profile records init_module / finit_module /
+  delete_module syscalls or execution of /sbin/insmod, /sbin/rmmod, /sbin/modprobe.
+  Pivots on auditd_key so the rule fires regardless of how the kernel module
+  primitive was invoked. Loadable kernel modules are the standard delivery
+  vehicle for Linux rootkits (Diamorphine, Reptile, Symbiote, etc.); legitimate
+  module loads are dominated by boot-time systemd-modules-load.service and
+  filesystem drivers and should be easy to allowlist by parent process.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1547.006
+- mitre.attack.t1014
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    auditd_key == "aisoc_priv_esc_module_load"
+    AND exe NOT ENDSWITH_ANY ["/systemd-modules-load", "/kmod"]
+false_positives:
+- Boot-time module load by systemd-modules-load.service
+- Driver hot-plug (USB device, NVIDIA installer, ZFS/DKMS rebuild)
+- Container runtime loading overlay/br_netfilter on host
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-12'
+modified: '2026-05-12'
