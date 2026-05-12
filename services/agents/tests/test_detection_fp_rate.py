@@ -63,9 +63,8 @@ _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from detection_specs_index import all_specs  # type: ignore[import-not-found]
-from generate_detections import matches  # type: ignore[import-not-found]
-
+from detection_specs_index import all_specs  # type: ignore[import-not-found]  # noqa: E402
+from generate_detections import matches  # type: ignore[import-not-found]  # noqa: E402
 
 # CI gate (lower-is-better). Tighten only with a corresponding allowlist
 # entry or rule-narrowing PR. The 5% ceiling is a deliberate compromise:
