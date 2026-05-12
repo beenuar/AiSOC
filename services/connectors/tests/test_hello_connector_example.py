@@ -26,11 +26,9 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
-
 from app.connectors import CONNECTOR_REGISTRY
 from app.connectors._examples.hello_connector import HelloConnector
 from app.connectors.base import Capability
-
 
 # ---------------------------------------------------------------------------
 # Identity / registration invariants
