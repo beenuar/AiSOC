@@ -250,9 +250,15 @@ TAXII_URL=https://taxii.intel.corp/taxii2/
 TAXII_API_ROOT=intel
 TAXII_COLLECTION_IDS=indicators
 
-# MISP — your own MISP instance
+# MISP — your own MISP instance (read path = pull events into AiSOC)
 MISP_URL=https://misp.intel.corp
 MISP_API_KEY=…
+
+# MISP push (write path) — mirror STIX you publish in AiSOC into MISP.
+# Same MISP_URL / MISP_API_KEY as above. Push always runs through the
+# air-gap gate, so it will refuse to send if the host isn't on the
+# allowlist. See "Integrations → MISP push" for the request shape.
+MISP_PUSH_AUTO=false               # opt-in per request via ?push_to_misp=true
 
 # OTX has no internal mirror; leave OTX_API_KEY unset to keep the OTX
 # feed disabled cleanly. Setting it under air-gapped mode will be

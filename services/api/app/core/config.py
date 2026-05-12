@@ -349,6 +349,39 @@ class Settings(BaseSettings):
             return [int(p.strip()) for p in v.split(",") if p.strip()]
         return v
 
+    # ------------------------------------------------------------------
+    # Stage 3 #20 — Outbound MISP push from /threatintel/stix endpoints.
+    #
+    # When MISP_URL + MISP_API_KEY are set, the API can mirror published
+    # STIX indicators / bundles into a downstream MISP instance via the
+    # MISP REST API. The push is opt-in per request (``?push_to_misp=true``
+    # on POST /threatintel/stix/indicators and /bundles) unless
+    # ``MISP_PUSH_AUTO=true``, in which case every successful publish
+    # triggers a push.
+    #
+    # The push respects ``AISOC_AIRGAPPED`` — if MISP_URL points at a
+    # public host outside the allowlist, the call is refused at the
+    # ``enforce_airgap_for_url`` chokepoint rather than silently leaking.
+    #
+    # ``MISP_PUSH_DEFAULT_DISTRIBUTION``  – MISP distribution level
+    #     (0=org-only, 1=community, 2=connected, 3=all_communities,
+    #      4=sharing_group). Default 0 keeps everything in-org so an
+    #      operator who flips on auto-push doesn't accidentally publish
+    #      to the wider MISP ecosystem.
+    # ``MISP_PUSH_DEFAULT_THREAT_LEVEL``  – 1=high, 2=medium, 3=low,
+    #     4=undefined (MISP-native scale). Default 4.
+    # ``MISP_PUSH_DEFAULT_ANALYSIS``      – 0=initial, 1=ongoing,
+    #     2=completed. Default 0.
+    # ------------------------------------------------------------------
+    MISP_URL: str = ""
+    MISP_API_KEY: str = ""
+    MISP_VERIFY_SSL: bool = True
+    MISP_PUSH_AUTO: bool = False
+    MISP_PUSH_DEFAULT_DISTRIBUTION: int = 0
+    MISP_PUSH_DEFAULT_THREAT_LEVEL: int = 4
+    MISP_PUSH_DEFAULT_ANALYSIS: int = 0
+    MISP_PUSH_TIMEOUT_SECONDS: float = 30.0
+
     AISOC_AIRGAPPED: bool = False
     # Comma-separated host (or host:port) allowlist that overrides the
     # blanket egress block when AISOC_AIRGAPPED=True. Use this for an

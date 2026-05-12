@@ -102,7 +102,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Integrations",
-      items: ["integrations/mcp"],
+      items: ["integrations/mcp", "integrations/misp-push"],
     },
     {
       type: "category",
