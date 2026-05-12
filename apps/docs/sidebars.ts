@@ -71,6 +71,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Benchmarks",
+      items: ["benchmarks/alert-reduction"],
+    },
+    {
+      type: "category",
       label: "Operations",
       items: [
         "operations/security",
