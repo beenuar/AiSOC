@@ -423,7 +423,7 @@ def test_build_postmortem_basic_shape(baseline_inputs: PostmortemInputs) -> None
     assert pm.overview.blast_radius_hosts == 1
     assert pm.overview.blast_radius_identities == 2
     assert pm.overview.blast_radius_alerts == 3
-    assert "evil.example.com" in pm.overview.affected_domains
+    assert pm.overview.affected_domains == ["evil.example.com"]
 
     # Response.
     assert pm.response.total_actions == 3

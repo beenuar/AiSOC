@@ -153,25 +153,6 @@ _OUTCOME_KEYWORDS: dict[str, str] = {
 }
 
 
-# Aggregation verbs and their canonical ES|QL functions.
-_AGG_KEYWORDS: dict[str, str] = {
-    "count": "COUNT",
-    "number of": "COUNT",
-    "how many": "COUNT",
-    "total": "SUM",
-    "sum": "SUM",
-    "average": "AVG",
-    "avg": "AVG",
-    "mean": "AVG",
-    "max": "MAX",
-    "maximum": "MAX",
-    "min": "MIN",
-    "minimum": "MIN",
-    "unique": "DISTINCT_COUNT",
-    "distinct": "DISTINCT_COUNT",
-}
-
-
 _ORDER_KEYWORDS: dict[str, str] = {
     "top": "DESC",
     "highest": "DESC",
@@ -477,8 +458,11 @@ def _extract_aggregations(question: str, intents: QueryIntents) -> None:
     if lim_m and not top_m:
         try:
             intents.limit = int(lim_m.group(1))
-        except ValueError:
-            pass
+        except ValueError as exc:
+            # Regex group is `\d+`, so int() should never fail here. If it
+            # somehow does (e.g. an upstream regex change), keep the dataclass
+            # default rather than failing the whole NL → ES|QL parse.
+            logger.debug("nl_query.limit_parse_failed value=%r err=%s", lim_m.group(1), exc)
 
     # Sort hints (highest, lowest)
     for kw, direction in _ORDER_KEYWORDS.items():

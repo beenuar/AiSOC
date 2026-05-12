@@ -396,7 +396,19 @@ class MispPushClient:
         skipped = event.pop("_skipped", 0)
         attribute_count = event.pop("_attribute_count", 0)
         if attribute_count == 0:
+            logger.warning(
+                "misp_push.bundle_empty bundle_id=%s skipped=%d",
+                bundle.get("id", ""),
+                skipped,
+            )
             raise MispPushError(f"Bundle {bundle.get('id', '')!r} contained no MISP-translatable indicators.")
+        if skipped:
+            logger.info(
+                "misp_push.bundle_partial bundle_id=%s pushed=%d skipped=%d",
+                bundle.get("id", ""),
+                attribute_count,
+                skipped,
+            )
         result = await self.push_event(event)
         result["pushed_attributes"] = attribute_count
         result["skipped_attributes"] = skipped
