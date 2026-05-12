@@ -507,6 +507,21 @@ clusters.
 
 ## [7.0.x] — 2026-05-10 — Endpoint telemetry wave (PR1–PR6)
 
+> **⚠️ Reconciliation notice (2026-05-12)**: The work described in this
+> section was developed on branch `feat/pr6-osquery-extensions`
+> (commits `e0d70fa1` → `3ab5aa81`) but the branch was **not merged into
+> `main`** before this changelog entry was written. The files referenced
+> below — including `services/osquery-tls/`,
+> `services/connectors/app/connectors/aisoc_direct.py`,
+> `services/agents/app/playbook/steps/osquery_live_query.py`, and the
+> osquery-extensions Go module — exist on that branch and can be reviewed
+> there, but are **not present on `main`** as of v7.1.0 planning. Treat
+> this section as a record of in-flight work pending PR merge, not as
+> shipped functionality. The community-feedback-driven roadmap
+> (`docs/community-feedback/2026-05-12/`) builds the generic
+> `live_action` interface (Issue #8) on `main` directly rather than
+> assuming this section's primitives are in place.
+
 ### Added — osctrl, FleetDM, aisoc-osquery-tls, aisoc-direct, native osquery detections, live-query playbook step, FIM, custom virtual tables
 
 Six-PR wave that closes [#44](https://github.com/beenuar/AiSOC/issues/44)
