@@ -26,7 +26,6 @@ import asyncio
 import inspect
 
 import pytest
-
 from app.clients.aws_security_groups import AWSSecurityGroupsClient, AWSSGClient
 
 
