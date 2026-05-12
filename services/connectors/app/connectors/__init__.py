@@ -65,6 +65,7 @@ from app.connectors.tailscale import TailscaleConnector
 from app.connectors.tenable import TenableConnector
 from app.connectors.trellix_helix import TrellixHelixConnector
 from app.connectors.trend_vision_one import TrendVisionOneConnector
+from app.connectors.wazuh import WazuhConnector
 from app.connectors.wiz import WizConnector
 from app.connectors.zscaler import ZscalerConnector
 
@@ -123,6 +124,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     TenableConnector,
     TrellixHelixConnector,
     TrendVisionOneConnector,
+    WazuhConnector,
     WizConnector,
     ZscalerConnector,
 )
@@ -222,6 +224,7 @@ __all__ = [
     "TenableConnector",
     "TrellixHelixConnector",
     "TrendVisionOneConnector",
+    "WazuhConnector",
     "WizConnector",
     "ZscalerConnector",
     "get_connector_class",

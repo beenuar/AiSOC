@@ -1,0 +1,28 @@
+id: det-$slug-001
+name: Example detection from $name
+description: >
+  Replace this with a one-paragraph description of what this rule fires on,
+  why it matters, and which adversary behaviour it covers.
+version: 1.0.0
+severity: medium    # info | low | medium | high
+tags:
+  - mitre.attack.t0000
+  - tlp.white
+category: endpoint  # endpoint | network | cloud | identity | application
+log_source:
+  product: example
+  service: example
+detection:
+  condition: |
+    # TODO: replace with a real boolean expression over normalized event fields.
+    event.action == "example_action"
+    AND event.outcome == "success"
+false_positives:
+  - List the realistic noise sources here so analysts know how to tune.
+playbook: tpl-investigation
+enabled: true
+author: "$author"
+references:
+  - https://attack.mitre.org/
+created: '2026-01-01'
+modified: '2026-01-01'

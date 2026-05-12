@@ -1,0 +1,42 @@
+"""
+$name — AiSOC enricher plugin.
+
+Enrichers receive a normalized event payload and return a small dict of
+additional context to merge back into the event. They run on the hot path
+inside the orchestrator graph, so keep them fast and side-effect-free.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+
+class Plugin:
+    """Main plugin class — AiSOC instantiates this once per tenant per worker
+    and calls ``run()`` once per matching event.
+    """
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.api_key: str | None = config.get("api_key")
+        self.timeout_seconds: int = int(config.get("timeout_seconds", 5))
+
+    async def run(
+        self,
+        payload: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Enrich the alert/event payload.
+
+        Args:
+            payload: Normalized event in OCSF-aligned shape.
+            context: Runtime context — ``tenant_id``, ``trace_id``, etc.
+
+        Returns:
+            Dict to merge into ``payload["enrichments"]["$slug"]``. Return an
+            empty dict if you have nothing to add — never raise on misses.
+        """
+        # TODO: replace with your enrichment lookup.
+        return {
+            "enriched_by": "$slug",
+            "data": {},
+        }

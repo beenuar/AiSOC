@@ -1,0 +1,66 @@
+"""
+$name — AiSOC responder plugin.
+
+Responders execute containment / remediation actions. A playbook step calls
+``Plugin.execute(action, params, context)`` and expects a structured result
+back so the timeline can render what happened.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+
+class Plugin:
+    """Main plugin class. AiSOC instantiates one per tenant per worker."""
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.api_key: str | None = config.get("api_key")
+        self.dry_run: bool = bool(config.get("dry_run", False))
+        self.timeout_seconds: int = int(config.get("timeout_seconds", 15))
+
+    @property
+    def supported_actions(self) -> list[str]:
+        """Action names this responder knows how to run."""
+        # TODO: list the verbs your responder supports, e.g. ["disable_user",
+        # "isolate_host", "block_ip"]. The orchestrator validates against this.
+        return []
+
+    async def execute(
+        self,
+        action: str,
+        params: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run a single action.
+
+        Args:
+            action: Verb chosen by the playbook (one of ``supported_actions``).
+            params: Action-specific arguments (target user, host, IP, etc.).
+            context: Runtime context — ``tenant_id``, ``trace_id``, ``case_id``.
+
+        Returns:
+            ``{"status": "ok" | "skipped" | "error", "detail": ..., "artifact": ...}``
+
+            ``status="skipped"`` should be used in dry-run mode so the timeline
+            stays honest about what really happened.
+        """
+        if action not in self.supported_actions:
+            return {
+                "status": "error",
+                "detail": f"Unsupported action: {action}",
+            }
+
+        if self.dry_run:
+            return {
+                "status": "skipped",
+                "detail": "dry_run=true",
+                "artifact": {"action": action, "params": params},
+            }
+
+        # TODO: implement the real call to the upstream control plane.
+        return {
+            "status": "ok",
+            "detail": f"$slug executed {action}",
+            "artifact": {"action": action, "params": params},
+        }

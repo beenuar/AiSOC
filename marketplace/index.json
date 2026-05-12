@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-11T03:45:31Z",
+  "generated": "2026-05-12T14:59:12Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,16 +20,16 @@
     }
   ],
   "stats": {
-    "total": 7104,
+    "total": 7105,
     "playbooks": 62,
     "detections": 6993,
-    "plugins": 49,
-    "verified": 985,
+    "plugins": 50,
+    "verified": 986,
     "community": 0,
     "by_tier": {
       "beta": 6,
       "imported": 6113,
-      "stable": 985
+      "stable": 986
     },
     "detections_by_tier": {
       "imported": 6113,
@@ -225063,6 +225063,32 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/twilio-sms/plugin.yaml"
+    },
+    {
+      "id": "wazuh",
+      "type": "plugin",
+      "name": "Wazuh Connector",
+      "description": "Wazuh \u2014 open-source XDR/SIEM. Pulls alerts from the Wazuh indexer (OpenSearch-compatible) above a configurable rule-level threshold and collapses the 0-15 rule-level ladder onto AiSOC's four-tier severity taxonomy (info | low | medium | high) so detection and fusion logic stays vendor-agnostic.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "xdr",
+        "wazuh",
+        "opensource",
+        "hids",
+        "fim"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/wazuh.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/wazuh/plugin.yaml"
     },
     {
       "id": "yara-enricher",

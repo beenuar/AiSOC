@@ -49,6 +49,7 @@ const sidebars: SidebarsConfig = {
         "connectors/github",
         "connectors/tailscale",
         "connectors/osctrl",
+        "connectors/wazuh",
         "connectors/fleetdm",
         "connectors/osquery-extensions",
         "connectors/wiz",
@@ -90,6 +91,7 @@ const sidebars: SidebarsConfig = {
         "plugins/python-sdk",
         "plugins/go-sdk",
         "plugins/publishing",
+        "plugins/cli",
       ],
     },
     {

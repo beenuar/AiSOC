@@ -1,0 +1,29 @@
+id: $slug
+name: $name
+version: 0.1.0
+plugin_type: enricher
+tier: community
+description: >
+  $name enriches alerts and events with additional context — IoC reputation,
+  asset metadata, user attributes, geolocation, etc. AiSOC calls run() once
+  per matching event in the orchestrator pipeline.
+author: "$author"
+tags: [enricher]
+license: MIT
+min_aisoc_version: "4.0.0"
+runtime: python
+entry_point: plugin.py
+config_schema:
+  type: object
+  required: []
+  properties:
+    api_key:
+      type: string
+      description: "API key for the upstream enrichment service."
+      secret: true
+    timeout_seconds:
+      type: integer
+      description: "Per-request timeout. Keep low — enrichers run on the hot path."
+      default: 5
+      minimum: 1
+      maximum: 30

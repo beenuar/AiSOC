@@ -2,7 +2,8 @@
 AiSOC CLI — scaffold, validate, and publish plugins and detections.
 
 Commands:
-  aisoc plugin scaffold <name>      Generate plugin.yaml + plugin.py skeleton
+  aisoc plugin new <name>           Scaffold a typed plugin from disk templates
+  aisoc plugin scaffold <name>      Alias for `plugin new` (backwards compat)
   aisoc plugin validate [path]      Validate plugin.yaml against JSON Schema
   aisoc plugin publish [path]       Sign with Ed25519 key + POST to AiSOC API
   aisoc detection validate <file>   Validate Sigma rule syntax
@@ -13,7 +14,9 @@ from __future__ import annotations
 import base64
 import json
 import sys
+from importlib import resources
 from pathlib import Path
+from string import Template
 from typing import Any
 
 import click
@@ -29,6 +32,9 @@ from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
+
+PLUGIN_TYPES = ("enricher", "connector", "responder", "detection", "widget")
+DEFAULT_AUTHOR = "Your Name <you@example.com>"
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -55,57 +61,45 @@ PLUGIN_MANIFEST_SCHEMA: dict[str, Any] = {
     "additionalProperties": True,
 }
 
-# ── Plugin skeleton templates ─────────────────────────────────────────────────
-
-PLUGIN_YAML_TEMPLATE = """\
-id: {slug}
-name: {name}
-version: 0.1.0
-plugin_type: enricher
-description: "Short description of what {name} does"
-author: "Your Name <you@example.com>"
-tags: []
-min_aisoc_version: "4.0.0"
-runtime: python
-entry_point: plugin.py
-config_schema:
-  type: object
-  properties: {{}}
-"""
-
-PLUGIN_PY_TEMPLATE = '''\
-"""
-{name} plugin for AiSOC.
-
-Plugin type: enricher
-"""
-from __future__ import annotations
-
-from typing import Any
+# ── Template loading ──────────────────────────────────────────────────────────
 
 
-class Plugin:
-    """Main plugin class — AiSOC calls run() for enrichers."""
+def _templates_root() -> Path:
+    """Return the on-disk root of the bundled templates directory.
 
-    def __init__(self, config: dict[str, Any]) -> None:
-        self.config = config
+    Uses ``importlib.resources`` so this works whether the package is run from
+    a source checkout or installed into site-packages.
+    """
+    pkg_files = resources.files("aisoc_cli") / "templates"
+    return Path(str(pkg_files))
 
-    async def run(self, payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        """Enrich the alert/event payload.
 
-        Args:
-            payload: The alert or event data to enrich.
-            context: Runtime context (tenant_id, trace_id, etc.)
+def _render_templates(plugin_type: str, target: Path, substitutions: dict[str, str]) -> list[Path]:
+    """Render every ``*.tmpl`` file under ``templates/<plugin_type>/`` into ``target``.
 
-        Returns:
-            Enriched data to merge back into the payload.
-        """
-        # TODO: implement enrichment logic
-        return {{
-            "enriched_by": "{slug}",
-            "data": {{}},
-        }}
-'''
+    The directory layout under the template root is preserved verbatim. Each
+    ``foo.ext.tmpl`` becomes ``foo.ext`` in the output, with ``$slug``,
+    ``$name``, and ``$author`` substituted via ``string.Template`` (so we never
+    fight Python ``.format()`` over real curly braces in YAML/JSON).
+    """
+    root = _templates_root() / plugin_type
+    if not root.is_dir():
+        raise click.ClickException(
+            f"No templates bundled for plugin_type='{plugin_type}'. "
+            f"Expected directory: {root}"
+        )
+
+    written: list[Path] = []
+    for src in sorted(root.rglob("*.tmpl")):
+        rel = src.relative_to(root)
+        # Strip the trailing ".tmpl" suffix from the filename only.
+        out_rel = rel.with_name(rel.name[: -len(".tmpl")])
+        out_path = target / out_rel
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        rendered = Template(src.read_text()).safe_substitute(substitutions)
+        out_path.write_text(rendered)
+        written.append(out_path)
+    return written
 
 
 # ── CLI root ──────────────────────────────────────────────────────────────────
@@ -123,18 +117,13 @@ def plugin() -> None:
     """Plugin management commands."""
 
 
-@plugin.command("scaffold")
-@click.argument("name")
-@click.option("--output-dir", "-o", default=".", help="Directory to create plugin in")
-@click.option(
-    "--type",
-    "plugin_type",
-    default="enricher",
-    type=click.Choice(["enricher", "connector", "responder", "detection", "widget"]),
-    help="Plugin type",
-)
-def plugin_scaffold(name: str, output_dir: str, plugin_type: str) -> None:
-    """Scaffold a new plugin skeleton with plugin.yaml + plugin.py."""
+def _scaffold_plugin(name: str, output_dir: str, plugin_type: str, author: str) -> Path:
+    """Shared implementation for ``plugin new`` and ``plugin scaffold``."""
+    if plugin_type not in PLUGIN_TYPES:
+        raise click.ClickException(
+            f"Unknown plugin_type='{plugin_type}'. Expected one of: {', '.join(PLUGIN_TYPES)}"
+        )
+
     slug = name.lower().replace(" ", "-").replace("_", "-")
     out = Path(output_dir) / slug
     if out.exists():
@@ -142,27 +131,64 @@ def plugin_scaffold(name: str, output_dir: str, plugin_type: str) -> None:
         sys.exit(1)
     out.mkdir(parents=True)
 
-    yaml_content = PLUGIN_YAML_TEMPLATE.format(slug=slug, name=name).replace(
-        "enricher", plugin_type, 1
-    )
-    (out / "plugin.yaml").write_text(yaml_content)
+    substitutions = {"slug": slug, "name": name, "author": author}
+    written = _render_templates(plugin_type, out, substitutions)
 
-    py_content = PLUGIN_PY_TEMPLATE.format(slug=slug, name=name)
-    (out / "plugin.py").write_text(py_content)
-
+    files_listing = "\n".join(f"  • {p}" for p in written)
     console.print(
         Panel(
-            f"[green]Plugin scaffolded at[/green] [bold]{out}[/bold]\n\n"
-            f"Files created:\n"
-            f"  • {out}/plugin.yaml\n"
-            f"  • {out}/plugin.py\n\n"
+            f"[green]{plugin_type.capitalize()} plugin scaffolded at[/green] [bold]{out}[/bold]\n\n"
+            f"Files created:\n{files_listing}\n\n"
             f"Next steps:\n"
             f"  1. Edit [bold]{out}/plugin.yaml[/bold] to fill in metadata\n"
-            f"  2. Implement [bold]{out}/plugin.py[/bold]\n"
+            f"  2. Implement the entry point referenced by [bold]plugin.yaml[/bold]\n"
             f"  3. Run [bold]aisoc plugin validate {out}[/bold] to check",
             title="[bold green]Scaffold complete[/bold green]",
         )
     )
+    return out
+
+
+@plugin.command("new")
+@click.argument("name")
+@click.option("--output-dir", "-o", default=".", help="Directory to create plugin in")
+@click.option(
+    "--type",
+    "plugin_type",
+    default="enricher",
+    type=click.Choice(list(PLUGIN_TYPES)),
+    help="Plugin type",
+)
+@click.option(
+    "--author",
+    default=DEFAULT_AUTHOR,
+    show_default=True,
+    help="Author string written into plugin.yaml",
+)
+def plugin_new(name: str, output_dir: str, plugin_type: str, author: str) -> None:
+    """Scaffold a new plugin from the bundled templates for its type."""
+    _scaffold_plugin(name, output_dir, plugin_type, author)
+
+
+@plugin.command("scaffold")
+@click.argument("name")
+@click.option("--output-dir", "-o", default=".", help="Directory to create plugin in")
+@click.option(
+    "--type",
+    "plugin_type",
+    default="enricher",
+    type=click.Choice(list(PLUGIN_TYPES)),
+    help="Plugin type",
+)
+@click.option(
+    "--author",
+    default=DEFAULT_AUTHOR,
+    show_default=True,
+    help="Author string written into plugin.yaml",
+)
+def plugin_scaffold(name: str, output_dir: str, plugin_type: str, author: str) -> None:
+    """Alias for ``aisoc plugin new`` (kept for backwards compatibility)."""
+    _scaffold_plugin(name, output_dir, plugin_type, author)
 
 
 @plugin.command("validate")
