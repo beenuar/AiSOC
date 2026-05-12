@@ -16,6 +16,7 @@ Suites:
     8. Memory recall fidelity         (services/agents/tests/test_memory_recall.py)
     9. Override accuracy              (services/agents/tests/test_override_accuracy.py)
    10. Playbook completion rate       (services/agents/tests/test_playbook_completion_rate.py)
+   11. Per-rule cross-fire FP rate    (services/agents/tests/test_detection_fp_rate.py)
 
 Each substrate suite reports two metrics:
 
@@ -100,6 +101,10 @@ from tests.test_playbook_completion_rate import (  # type: ignore
     ACTION_ALIGNMENT_FLOOR as _PLAYBOOK_ALIGN_FLOOR,
     evaluate_playbook_completion,
 )
+from tests.test_detection_fp_rate import (  # type: ignore
+    MAX_PER_RULE_FPR as _DETECTION_FP_CEILING,
+    evaluate_per_rule_fp,
+)
 
 
 # Per-suite floors (must match what tests assert)
@@ -120,6 +125,11 @@ _TARGETS = {
     # sub-gates (overall, mapped high+critical, action alignment, no
     # orphan playbooks/templates). See _run_playbook_completion().
     "playbook_completion_rate": _PLAYBOOK_OVERALL_FLOOR,
+    # Per-rule cross-fire FP gate (Issue #5): lower-is-better. Each
+    # native detection rule is replayed against every other rule's
+    # positive fixture; "target" here is the *ceiling* on per-rule FPR.
+    # See services/agents/tests/test_detection_fp_rate.py.
+    "detection_fp_rate": _DETECTION_FP_CEILING,
 }
 
 # Per-template macro floors (kept slightly below per-case floors because each
@@ -294,6 +304,47 @@ def _run_hunt_corpus() -> dict:
             "positive_pass": positive_pass,
             "negative_pass": negative_pass,
             "no_orphans": no_orphans,
+        },
+    }
+
+
+def _run_detection_fp_rate() -> dict:
+    """Per-rule cross-fire FP gate (Issue #5).
+
+    ``scripts/validate_detections.py`` replays each native rule against its
+    own positive + negative fixture (TP / TN gate). That misses the failure
+    mode operators feel hardest in production: a rule that fires on events
+    intended for a *different* rule. This gate replays every native rule's
+    ``match_when`` against every other rule's positive fixture and trips
+    when any single rule's cross-fire FPR exceeds ``MAX_PER_RULE_FPR``
+    (default 5%).
+
+    Headline metric is "lower-is-better" — we surface the worst per-rule
+    FPR and the count of failing rules. The "target" field carries the
+    ceiling so the JSON consumer (CI / dashboard) can render it the same
+    way as the standard floor-based gates.
+    """
+    t0 = time.perf_counter()
+    rep = evaluate_per_rule_fp()
+    dur = (time.perf_counter() - t0) * 1000
+    return {
+        "metric": "worst_per_rule_fp_rate",
+        "value": round(rep.worst_fpr, 4),
+        "target": rep.max_per_rule_fpr,
+        "passed": rep.passed,
+        "duration_ms": round(dur, 1),
+        "details": {
+            "lower_is_better": True,
+            "rules_evaluated": rep.rules_total,
+            "rules_passed": rep.rules_passed,
+            "rules_failed": rep.rules_failed,
+            "mean_fpr": round(rep.mean_fpr, 4),
+            "worst_fpr": round(rep.worst_fpr, 4),
+            "ceiling": rep.max_per_rule_fpr,
+            # Cap the failing-rule list so a globally-broken rule pack
+            # doesn't bloat the eval JSON. The full list is always
+            # available by re-running the dedicated test module.
+            "failing_rules_sample": rep.failing_rules[:20],
         },
     }
 
@@ -604,6 +655,7 @@ def main() -> None:
             "memory_recall": _run_memory_recall(),
             "override_accuracy": _run_override_accuracy(),
             "playbook_completion_rate": _run_playbook_completion(),
+            "detection_fp_rate": _run_detection_fp_rate(),
         },
         "telemetry": _summarise_telemetry(),
     }

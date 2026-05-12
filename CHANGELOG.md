@@ -41,6 +41,34 @@ or deleting the feed that hydrates them.
 
 Tracked as **F013** in `docs/community-feedback/2026-05-12/`.
 
+### Detection quality — per-rule cross-fire FP eval gate (Issue F005)
+
+`scripts/validate_detections.py` already replays each native rule against
+its own positive + negative fixture (TP / TN gates), but that test cannot
+catch the failure mode operators feel hardest in production: rule **R**
+firing on an event that was meant for rule **O**. A single overly-broad
+rule that matches every `ConsoleLogin` or every `rundll32.exe` execution
+silently drives alert volume up and precision down across the whole pack
+without tripping the per-rule TP/TN replay.
+
+- **`services/agents/tests/test_detection_fp_rate.py`** — new pytest
+  suite that replays every native rule's `match_when` against every
+  *other* rule's positive fixture and grades the per-rule cross-fire
+  FPR. Fails CI if any rule exceeds `MAX_PER_RULE_FPR` (default 5%) or
+  regresses on its own positive/negative fixture. Failure output groups
+  the worst 10 offenders with their cross-fire targets so the operator
+  can narrow the rule (or allowlist a deliberate broad-vs-narrow
+  overlap via `EXPECTED_CROSS_FIRES`) without re-running a full eval
+  sweep. Current corpus: 816 native rules evaluated, mean FPR 0.0,
+  worst FPR 0.49% — well under the 5% ceiling.
+- **`scripts/run_evals.py`** — wires the new gate into the unified
+  eval runner as `suites.detection_fp_rate`, reporting
+  `worst_per_rule_fp_rate` (lower-is-better) alongside the existing
+  alert-reduction / investigation-completeness / response-quality
+  gates so dashboards and CI consume it through the same JSON shape.
+
+Tracked as **F005** in `docs/community-feedback/2026-05-12/`.
+
 ### Documentation — install pipeline + v2.2 architecture refresh
 
 Documentation-only refresh that aligns every install / architecture page
