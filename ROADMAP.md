@@ -1,5 +1,21 @@
 # AiSOC Roadmap
 
+> **📌 Active planning has moved (2026-05-12)**
+>
+> This file is the **historical record** of major-version deliverables (v4 →
+> v8 planned). Day-to-day planning, prioritization, and contributor-facing
+> issue intake now live in the community-feedback-driven **Now / Next /
+> Later** docs:
+>
+> - [`docs/community-feedback/2026-05-12/AiSOC_ROADMAP.md`](docs/community-feedback/2026-05-12/AiSOC_ROADMAP.md) — strategic narrative
+> - [`docs/community-feedback/2026-05-12/AiSOC_Community_Feedback_Synthesis.md`](docs/community-feedback/2026-05-12/AiSOC_Community_Feedback_Synthesis.md) — themes (`F001`–`Fxxx`)
+> - [`docs/community-feedback/2026-05-12/AiSOC_Proposed_Issues.md`](docs/community-feedback/2026-05-12/AiSOC_Proposed_Issues.md) — 23 implementation tickets
+>
+> Items in v7.1+ sections below that overlap with the new docs are flagged
+> inline with `→ Now/Next/Later: [ID]`. Where the new docs supersede a
+> deferred item entirely, the entry here is left intact for traceability
+> but reasoned about against the newer plan.
+
 This document captures the planned direction for AiSOC across major versions. All v4 deliverables and items deferred beyond v4 are listed here.
 
 ## v4.0 — Shipped

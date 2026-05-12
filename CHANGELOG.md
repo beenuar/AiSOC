@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security — MSSP RBAC hardening on `/threat-intel` (Issue F013)
+
+The `/v1/threat-intel/*` endpoints (IOCs, threat actors, intel feeds) were
+previously gated only by `get_current_user`, meaning **any authenticated
+role**, including `viewer` and `soc_analyst`, could `POST` an IOC, `DELETE`
+a feed, or create a new `ThreatActor` profile. In a managed-SOC / MSSP
+deployment that is a privilege-escalation vector: a compromised analyst
+seat can poison detections across the whole tenant by injecting false IOCs
+or deleting the feed that hydrates them.
+
+- **`services/api/app/api/v1/endpoints/threat_intel.py`** — every route now
+  declares the explicit permission it needs via
+  `Depends(require_permission("threat_intel:read" | "threat_intel:write"))`.
+  Read routes (`GET /iocs`, `/iocs/{id}`, `/actors`, `/feeds`) require
+  `threat_intel:read`; write routes (`POST /iocs`, `DELETE /iocs/{id}`,
+  `POST /actors`, `POST /feeds`, `DELETE /feeds/{id}`) require
+  `threat_intel:write`. The legacy `User`-typed dependency was replaced with
+  the platform-standard `AuthUser` so JWT and API-key callers are gated by
+  the same code path.
+- **`services/api/app/core/security.py`** — `ROLE_PERMISSIONS` now grants
+  `threat_intel:write` to `tenant_admin` and `soc_lead` in addition to the
+  existing `admin` / `platform_admin` / `threat_hunter` set. Without this
+  the endpoint hardening would have locked out the two roles that legitimately
+  need to manage tenant intel during an investigation.
+- **`services/api/tests/test_threat_intel_rbac.py`** — 38 new regression tests
+  pin the role/permission map (write-roles must hold `:write`, read-only roles
+  must not), assert that `CurrentUser.require_permission` raises HTTP 403 for
+  under-privileged roles and 200 for privileged ones, cover the API-key code
+  path including scope wildcards, and grep the endpoint module to ensure
+  every route still uses `require_permission(...)` (so a refactor that
+  silently downgrades a route fails CI).
+
+Tracked as **F013** in `docs/community-feedback/2026-05-12/`.
+
 ### Detection quality — per-rule cross-fire FP eval gate (Issue F005)
 
 `scripts/validate_detections.py` already replays each native rule against
@@ -535,6 +569,21 @@ clusters.
 
 ## [7.0.x] — 2026-05-10 — Endpoint telemetry wave (PR1–PR6)
 
+> **⚠️ Reconciliation notice (2026-05-12)**: The work described in this
+> section was developed on branch `feat/pr6-osquery-extensions`
+> (commits `e0d70fa1` → `3ab5aa81`) but the branch was **not merged into
+> `main`** before this changelog entry was written. The files referenced
+> below — including `services/osquery-tls/`,
+> `services/connectors/app/connectors/aisoc_direct.py`,
+> `services/agents/app/playbook/steps/osquery_live_query.py`, and the
+> osquery-extensions Go module — exist on that branch and can be reviewed
+> there, but are **not present on `main`** as of v7.1.0 planning. Treat
+> this section as a record of in-flight work pending PR merge, not as
+> shipped functionality. The community-feedback-driven roadmap
+> (`docs/community-feedback/2026-05-12/`) builds the generic
+> `live_action` interface (Issue #8) on `main` directly rather than
+> assuming this section's primitives are in place.
+
 ### Added — osctrl, FleetDM, aisoc-osquery-tls, aisoc-direct, native osquery detections, live-query playbook step, FIM, custom virtual tables
 
 Six-PR wave that closes [#44](https://github.com/beenuar/AiSOC/issues/44)
@@ -575,10 +624,20 @@ v7.0.0 baseline and the v7.0.1 hardening patch.
 - **`services/actions/app/clients/osquery_allowlist.py`** — Strict allowlist
   enforcing only safe SELECT-only queries against approved tables (no
   `ATTACH`, no `INSERT`, no `pragma_*` introspection of secrets).
-- **`services/agents/app/playbook/steps/osquery_live_query.py`** — New
-  `osquery_live_query` step type. Pushes allowlisted distributed queries to a
-  single host or fleet-wide via osctrl / FleetDM / aisoc-direct with
-  HMAC-signed ChatOps approval before execution.
+- **`services/agents/app/playbook/engine.py::_handle_osquery_live_query`** —
+  New `osquery_live_query` step type, registered in
+  `services/agents/app/playbook/models.py` as `StepType.OSQUERY_LIVE_QUERY` and
+  dispatched from the `STEP_HANDLERS` table at the bottom of `engine.py`.
+  Pushes allowlisted distributed queries to a single host or fleet-wide via
+  osctrl / FleetDM / aisoc-direct with HMAC-signed ChatOps approval before
+  execution. Tests live in
+  `services/agents/tests/test_osquery_live_query_step.py`.
+
+  > **v7.0.x reconciliation:** Earlier drafts of this CHANGELOG referenced a
+  > separate module at `services/agents/app/playbook/steps/osquery_live_query.py`.
+  > That module never landed on `main` — the handler is inlined in `engine.py`
+  > to keep the playbook engine's dispatch table in one place. The behaviour,
+  > tests, and CLI surface are identical to the originally documented design.
 
 #### PR4 — `aisoc-osquery-tls` FastAPI service + `aisoc-direct` connector
 
@@ -588,10 +647,26 @@ v7.0.0 baseline and the v7.0.1 hardening patch.
   Self-hosted osquery TLS plugin endpoints are FleetDM-compatible so any
   off-the-shelf osquery agent can enroll without a third-party SaaS hop.
   Uses dedicated SQLite + Alembic migrations under `services/osquery-tls/db/`.
-- **`services/connectors/app/connectors/aisoc_direct.py`** + matching
-  `plugins/aisoc-direct/plugin.yaml` — Direct-from-agent ingest connector that
-  consumes the osquery-tls log stream and normalises into the standard alert
-  schema; bypasses third-party SaaS entirely.
+- **`services/osquery-tls/app/api/v1/endpoints/log.py`** + matching
+  `plugins/aisoc-direct/plugin.yaml` and
+  `services/actions/app/clients/aisoc_direct_client.py` — Direct-from-agent
+  ingest path that consumes the osquery-tls log stream and normalises into
+  the standard alert schema; bypasses third-party SaaS entirely. The
+  `aisoc-direct` connector is implemented as a **virtual connector**: agents
+  push events directly into `/api/v1/log` on the osquery-tls service, which
+  fans them out to the same ingest pipeline the polled connectors use. The
+  marketplace manifest lives at `plugins/aisoc-direct/plugin.yaml`; the
+  outbound client (used by playbooks to drive distributed queries) lives at
+  `services/actions/app/clients/aisoc_direct_client.py`.
+
+  > **v7.0.x reconciliation:** Earlier drafts of this CHANGELOG referenced a
+  > polled connector module at
+  > `services/connectors/app/connectors/aisoc_direct.py`. That module never
+  > landed on `main`. The connector is implemented as a push-based virtual
+  > connector (the `osquery-tls` service is itself the ingest endpoint), so
+  > there is nothing to register in `services/connectors/app/connectors/__init__.py`.
+  > Functionally the data path is identical to the originally documented
+  > design.
 
 #### PR5 — Osquery packs + FIM endpoint + FIM dashboard
 
