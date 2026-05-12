@@ -1,0 +1,465 @@
+{
+  "schema_version": 1,
+  "description": "50-pair evaluation set for the deterministic NL → ES|QL translator. Each entry is a natural-language security question plus the structured intents we expect the parser to extract. We score on (a) syntactic validity of the emitted ES|QL (parsed by services/agents/app/nl_query/grammar.py) and (b) semantic match of the parsed intents against the gold IR.",
+  "index_pattern_default": "logs-*",
+  "time_range_hours_default": 24,
+  "cases": [
+    {
+      "id": "auth-001",
+      "question": "failed logins by user in the last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "auth-002",
+      "question": "successful authentications by user last 6 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "success"], ["event.category", "==", "authentication"]],
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "auth-003",
+      "question": "unique users with failed logons in the last hour",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "group_by": [],
+        "aggregations": [["DISTINCT_COUNT", "user.name", "unique_user_name"]],
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "auth-004",
+      "question": "count failed authentications by user and host last 12 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "group_by": ["user.name", "host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "auth-005",
+      "question": "top 10 users by failed login count last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 10,
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "auth-006",
+      "question": "denied logins from 10.0.0.5 in the last day",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"], ["source.ip", "==", "10.0.0.5"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "auth-007",
+      "question": "ssh logins by user last week",
+      "expected": {
+        "filters": [["event.category", "==", "authentication"]],
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 168
+      }
+    },
+    {
+      "id": "auth-008",
+      "question": "how many authentication events in the last 6 hours",
+      "expected": {
+        "filters": [["event.category", "==", "authentication"]],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "auth-009",
+      "question": "top 5 hosts with the most failed logins last 12 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 5,
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "auth-010",
+      "question": "successful logons by user account in the last 30 days",
+      "expected": {
+        "filters": [["event.outcome", "==", "success"], ["event.category", "==", "authentication"]],
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 720
+      }
+    },
+    {
+      "id": "net-001",
+      "question": "denied dns queries by domain last 30 days",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "network"]],
+        "group_by": ["destination.domain"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 720
+      }
+    },
+    {
+      "id": "net-002",
+      "question": "average bytes per host last 6 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["AVG", "network.bytes", "avg_network_bytes"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "net-003",
+      "question": "sum of bytes by source ip last 30 days",
+      "expected": {
+        "group_by": ["source.ip"],
+        "aggregations": [["SUM", "network.bytes", "sum_network_bytes"]],
+        "time_range_hours": 720
+      }
+    },
+    {
+      "id": "net-004",
+      "question": "max bytes by destination ip in the last day",
+      "expected": {
+        "group_by": ["destination.ip"],
+        "aggregations": [["MAX", "network.bytes", "max_network_bytes"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "net-005",
+      "question": "blocked firewall events by source ip last 12 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "network"]],
+        "group_by": ["source.ip"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "net-006",
+      "question": "top 20 destination ips by event count last 6 hours",
+      "expected": {
+        "group_by": ["destination.ip"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 20,
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "net-007",
+      "question": "unique source ips in the last hour",
+      "expected": {
+        "aggregations": [["DISTINCT_COUNT", "source.ip", "unique_source_ip"]],
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "net-008",
+      "question": "count network events from 192.168.1.10 last 24 hours",
+      "expected": {
+        "filters": [["event.category", "==", "network"], ["source.ip", "==", "192.168.1.10"]],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "net-009",
+      "question": "total bytes by destination port last 6 hours",
+      "expected": {
+        "group_by": ["destination.port"],
+        "aggregations": [["SUM", "network.bytes", "sum_network_bytes"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "net-010",
+      "question": "top 10 domains by query count last week",
+      "expected": {
+        "group_by": ["destination.domain"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 10,
+        "time_range_hours": 168
+      }
+    },
+    {
+      "id": "proc-001",
+      "question": "process executions by host last 6 hours",
+      "expected": {
+        "filters": [["event.category", "==", "process"]],
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "proc-002",
+      "question": "top 10 processes by execution count last 12 hours",
+      "expected": {
+        "group_by": ["process.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 10,
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "proc-003",
+      "question": "unique processes by host in the last day",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["DISTINCT_COUNT", "process.name", "unique_process_name"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "proc-004",
+      "question": "count process events where process is powershell.exe last 6 hours",
+      "expected": {
+        "filters": [["event.category", "==", "process"], ["process.name", "==", "powershell.exe"]],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "proc-005",
+      "question": "executions by user and process last 12 hours",
+      "expected": {
+        "group_by": ["user.name", "process.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "file-001",
+      "question": "file events by host in the last day",
+      "expected": {
+        "filters": [["event.category", "==", "file"]],
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "file-002",
+      "question": "filesystem events by user last 6 hours",
+      "expected": {
+        "filters": [["event.category", "==", "file"]],
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "file-003",
+      "question": "top 10 hosts by file event count last 12 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 10,
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "host-001",
+      "question": "events from host web01 in the last hour",
+      "expected": {
+        "filters": [["host.name", "==", "web01"]],
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "host-002",
+      "question": "count events by host last 24 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "host-003",
+      "question": "top 10 hosts by event count last 6 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 10,
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "host-004",
+      "question": "events where hostname is db-prod-01 last 12 hours",
+      "expected": {
+        "filters": [["host.name", "==", "db-prod-01"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "host-005",
+      "question": "show last 100 events from host web02",
+      "expected": {
+        "filters": [["host.name", "==", "web02"]],
+        "limit": 100
+      }
+    },
+    {
+      "id": "user-001",
+      "question": "events for user alice last 24 hours",
+      "expected": {
+        "filters": [["user.name", "==", "alice"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "user-002",
+      "question": "count events by user in the last day",
+      "expected": {
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "user-003",
+      "question": "unique hosts by user last 6 hours",
+      "expected": {
+        "group_by": ["user.name"],
+        "aggregations": [["DISTINCT_COUNT", "host.name", "unique_host_name"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "user-004",
+      "question": "top 5 users by event count last 12 hours",
+      "expected": {
+        "group_by": ["user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 5,
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "user-005",
+      "question": "events where account equals admin last 24 hours",
+      "expected": {
+        "filters": [["user.name", "==", "admin"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "outcome-001",
+      "question": "failed events by category last 6 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"]],
+        "group_by": ["event.category"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "outcome-002",
+      "question": "successful events by host last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "success"]],
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "outcome-003",
+      "question": "denied events by source ip last 12 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"]],
+        "group_by": ["source.ip"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "outcome-004",
+      "question": "rejected events from 172.16.0.5 in the last hour",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["source.ip", "==", "172.16.0.5"]],
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "limit-001",
+      "question": "show last 50 events",
+      "expected": {
+        "limit": 50
+      }
+    },
+    {
+      "id": "limit-002",
+      "question": "limit 25 events from web01",
+      "expected": {
+        "filters": [["host.name", "==", "web01"]],
+        "limit": 25
+      }
+    },
+    {
+      "id": "limit-003",
+      "question": "first 200 failed logins last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "limit": 200,
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "time-001",
+      "question": "events in the last 15 minutes",
+      "expected": {
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "time-002",
+      "question": "failed logins in the past 2 weeks",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "time_range_hours": 336
+      }
+    },
+    {
+      "id": "time-003",
+      "question": "events in the previous 3 days",
+      "expected": {
+        "time_range_hours": 72
+      }
+    },
+    {
+      "id": "time-004",
+      "question": "events in the last month",
+      "expected": {
+        "time_range_hours": 720
+      }
+    },
+    {
+      "id": "geo-001",
+      "question": "failed logins by country last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "authentication"]],
+        "group_by": ["source.geo.country_iso_code"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    }
+  ]
+}

@@ -1,8 +1,18 @@
-"""Natural-language query → multi-dialect execution (tier2-nl-query).
+"""Natural-language query → multi-dialect execution (Stage 2 #16).
 
 Accepts a plain-English security question, translates it to ES|QL, SPL, and
-KQL, then (optionally) executes the ES|QL variant against a connected
-Elasticsearch cluster and returns structured results ready for charting.
+KQL via the deterministic translator in :mod:`services.agents.app.nl_query`,
+optionally enhances the translation with an LLM (when one is configured and
+the air-gap policy allows the call), validates every emitted query against
+the dialect grammar, and finally executes the ES|QL variant against a
+connected Elasticsearch cluster.
+
+The previous implementation emitted ``// TODO: translate → <question>``
+fallbacks whenever no LLM was available. Stage 2 #16 removes that pattern
+entirely: the deterministic translator always produces a syntactically valid
+query, scored against the eval set in
+``services/agents/tests/eval_data/nl_query_eval.json`` to guarantee
+≥ 85% syntactic validity and ≥ 70% semantic match.
 
 Endpoints
 ---------
@@ -12,10 +22,10 @@ Endpoints
 
 from __future__ import annotations
 
-import json
-import textwrap
+import sys
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -26,6 +36,30 @@ from pydantic import BaseModel, Field
 from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap import path for ``services/agents/app/nl_query``.
+#
+# The translator is owned by ``services/agents`` so that the eval harness, the
+# agents themselves, and the API can all share the same code path. Mirroring
+# the pattern in detection_proposals.py we add the agents service to
+# ``sys.path`` lazily — this keeps services decoupled at deploy time while
+# letting both the API process and the eval CLI import the same module.
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[5]
+_AGENTS_PATH = str(_REPO_ROOT / "services" / "agents")
+if _AGENTS_PATH not in sys.path:
+    sys.path.insert(0, _AGENTS_PATH)
+
+from app.nl_query import (  # noqa: E402  -- requires the sys.path tweak above
+    GrammarError,
+    NLQuery,
+    TranslatedQuery,
+    enhance_with_llm,
+    translate as deterministic_translate,
+)
 
 router = APIRouter(prefix="/nl-query", tags=["nl_query"])
 
@@ -84,6 +118,10 @@ class NLQueryTranslateResponse(BaseModel):
     kql: str
     explanation: str
     created_at: datetime
+    # Translator metadata — surfaces which engine produced the query so the
+    # UI can flag deterministic vs. LLM-assisted answers.
+    engine: str = Field("deterministic", description="`deterministic` or `llm`.")
+    grammar_validated: bool = Field(True, description="True if every emitted query passed grammar checks.")
 
 
 class NLQueryExecuteRequest(NLQueryTranslateRequest):
@@ -111,76 +149,49 @@ class NLQueryExecuteResponse(NLQueryTranslateResponse):
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# LLM translation helper
+# Translation orchestration
 # ────────────────────────────────────────────────────────────────────────────
 
-_SYS_PROMPT = textwrap.dedent(
+
+async def _translate(
+    question: str,
+    index_pattern: str,
+    time_range_hours: int,
+) -> tuple[TranslatedQuery, str]:
+    """Translate *question* into ES|QL / SPL / KQL.
+
+    Returns a tuple of ``(TranslatedQuery, engine)`` where ``engine`` is
+    either ``"deterministic"`` or ``"llm"``. The deterministic translator is
+    always run first so that the response is guaranteed to be grammar-valid;
+    if an LLM API key is configured *and* the air-gap policy allows the
+    outbound call, we attempt to enhance the result with an LLM-generated
+    translation, but fall back to the deterministic output on any error.
     """
-    You are a senior security data engineer. The user will provide:
-    - A plain-English security question.
-    - The Elasticsearch index pattern and time range.
 
-    Translate the question into three query dialects and return JSON only:
-    {
-      "esql": "...",         // Elasticsearch ES|QL query
-      "spl":  "...",         // Splunk SPL query
-      "kql":  "...",         // Microsoft Sentinel KQL query
-      "explanation": "..."   // 1–2 sentences describing what the query does
-    }
+    nl = NLQuery(
+        question=question,
+        index_pattern=index_pattern,
+        time_range_hours=time_range_hours,
+    )
+    deterministic = deterministic_translate(
+        question,
+        index_pattern=index_pattern,
+        time_range_hours=time_range_hours,
+    )
 
-    Guidelines:
-    - Use `FROM <index_pattern>` and `| WHERE @timestamp > NOW() - <hours>h` for ES|QL.
-    - Prefer `STATS ... BY ...` for aggregations in ES|QL.
-    - Map common field names: user → user.name, src_ip → source.ip, dest_ip → destination.ip.
-    - Keep queries concise; add a `| LIMIT 500` to ES|QL.
-    """
-).strip()
-
-
-async def _translate(question: str, index_pattern: str, time_range_hours: int) -> dict[str, str]:
     api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(settings, "LLM_API_KEY", None)
     if not api_key:
-        return _template_fallback(question, index_pattern, time_range_hours)
+        return deterministic, "deterministic"
 
-    user_msg = json.dumps(
-        {
-            "question": question,
-            "index_pattern": index_pattern,
-            "time_range_hours": time_range_hours,
-        }
-    )
     completions_url = "https://api.openai.com/v1/chat/completions"
     try:
         enforce_airgap_for_url(completions_url)
     except AirgapViolation:
-        return _template_fallback(question, index_pattern, time_range_hours)
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                completions_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": "gpt-4o-mini",
-                    "response_format": {"type": "json_object"},
-                    "messages": [
-                        {"role": "system", "content": _SYS_PROMPT},
-                        {"role": "user", "content": user_msg},
-                    ],
-                },
-            )
-            resp.raise_for_status()
-            return json.loads(resp.json()["choices"][0]["message"]["content"])
-    except Exception:
-        return _template_fallback(question, index_pattern, time_range_hours)
+        return deterministic, "deterministic"
 
-
-def _template_fallback(question: str, index_pattern: str, time_range_hours: int) -> dict[str, str]:
-    return {
-        "esql": (f"FROM {index_pattern}\n| WHERE @timestamp > NOW() - {time_range_hours}h\n// TODO: translate → {question}\n| LIMIT 500"),
-        "spl": (f"index=* earliest=-{time_range_hours}h\n// TODO: translate → {question}"),
-        "kql": (f"// TODO: translate → {question}\n| where TimeGenerated > ago({time_range_hours}h)"),
-        "explanation": f"Template placeholder for: {question}",
-    }
+    enhanced = await enhance_with_llm(nl, api_key=api_key, fallback=deterministic)
+    engine = "llm" if enhanced is not deterministic else "deterministic"
+    return enhanced, engine
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -237,15 +248,17 @@ async def translate_query(
     body: NLQueryTranslateRequest,
     user: AuthUser,
 ) -> NLQueryTranslateResponse:
-    translated = await _translate(body.question, body.index_pattern, body.time_range_hours)
+    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
     return NLQueryTranslateResponse(
         request_id=uuid.uuid4(),
         question=body.question,
-        esql=translated.get("esql", ""),
-        spl=translated.get("spl", ""),
-        kql=translated.get("kql", ""),
-        explanation=translated.get("explanation", ""),
+        esql=translated.esql,
+        spl=translated.spl,
+        kql=translated.kql,
+        explanation=translated.explanation,
         created_at=datetime.now(UTC),
+        engine=engine,
+        grammar_validated=True,
     )
 
 
@@ -259,7 +272,7 @@ async def execute_query(
     body: NLQueryExecuteRequest,
     user: AuthUser,
 ) -> NLQueryExecuteResponse:
-    translated = await _translate(body.question, body.index_pattern, body.time_range_hours)
+    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
 
     # Always read the ES URL from server-side settings — never from user-supplied
     # body fields — to prevent partial-SSRF attacks (CodeQL py/partial-ssrf).
@@ -269,11 +282,13 @@ async def execute_query(
     base = NLQueryExecuteResponse(
         request_id=uuid.uuid4(),
         question=body.question,
-        esql=translated.get("esql", ""),
-        spl=translated.get("spl", ""),
-        kql=translated.get("kql", ""),
-        explanation=translated.get("explanation", ""),
+        esql=translated.esql,
+        spl=translated.spl,
+        kql=translated.kql,
+        explanation=translated.explanation,
         created_at=datetime.now(UTC),
+        engine=engine,
+        grammar_validated=True,
     )
 
     if not es_url or not es_api_key:
@@ -282,7 +297,7 @@ async def execute_query(
 
     try:
         base.result = await _execute_esql(
-            translated.get("esql", ""),
+            translated.esql,
             es_url=es_url,
             es_api_key=es_api_key,
             max_rows=body.max_rows,
@@ -292,6 +307,10 @@ async def execute_query(
             f"Air-gapped policy refused outbound request: {exc}. "
             "Add the Elasticsearch host to AISOC_AIRGAP_ALLOWLIST or point ES_URL at a private endpoint."
         )
+    except GrammarError as exc:
+        # Should never happen — every translator output is validated — but if a
+        # caller somehow passes through a hand-edited query we want a clean error.
+        base.execution_error = f"Refusing to execute malformed ES|QL: {exc}"
     except httpx.HTTPStatusError as exc:
         base.execution_error = f"ES query failed ({exc.response.status_code}): {exc.response.text[:500]}"
     except Exception as exc:
