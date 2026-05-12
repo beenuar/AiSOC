@@ -66,7 +66,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Detections",
-      items: ["detections/coverage"],
+      items: ["detections/coverage", "detections/hello-hunt"],
     },
     {
       type: "category",
@@ -89,6 +89,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "plugins/overview",
         "plugins/python-sdk",
+        "plugins/hello-plugin",
         "plugins/go-sdk",
         "plugins/publishing",
       ],

@@ -1,0 +1,14 @@
+id: aisoc.hello-plugin
+name: Hello Plugin (Tutorial)
+version: 1.0.0
+plugin_type: enricher
+description: >
+  Tutorial enricher that hashes the indicator value with SHA-256 locally.
+  Reference implementation for apps/docs/docs/plugins/hello-plugin.md.
+  Deliberately offline so it can run in air-gapped environments and CI
+  without any external API calls.
+author: AiSOC Tutorial
+tags:
+  - tutorial
+  - enricher
+  - offline
