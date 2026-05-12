@@ -1,0 +1,72 @@
+# AiSOC — GCP serverless skeleton
+#
+# Copy this file to `terraform.tfvars` and fill in at least `project_id`.
+# Every other variable has a sensible default for a startup-credit-friendly
+# demo deployment.
+
+# ─── Required ────────────────────────────────────────────────────────────────
+
+project_id = "your-gcp-project-id"
+
+# ─── Region / naming ─────────────────────────────────────────────────────────
+
+# region      = "us-central1"
+# name_prefix = "aisoc"
+
+# labels = {
+#   project    = "aisoc"
+#   managed_by = "terraform"
+#   env        = "demo"
+# }
+
+# ─── Networking ──────────────────────────────────────────────────────────────
+
+# vpc_cidr           = "10.20.0.0/24"
+# vpc_connector_cidr = "10.20.1.0/28"
+
+# ─── Cloud SQL ───────────────────────────────────────────────────────────────
+
+# postgres_tier         = "db-custom-2-7680"
+# postgres_version      = "POSTGRES_16"
+# postgres_disk_size_gb = 20
+# postgres_db_name      = "aisoc"
+# postgres_user         = "aisoc"
+# deletion_protection   = true   # set false for sandboxes you intend to destroy
+
+# ─── Memorystore ─────────────────────────────────────────────────────────────
+
+# redis_tier           = "BASIC"        # or STANDARD_HA for production
+# redis_memory_size_gb = 1
+# redis_version        = "REDIS_7_2"
+
+# ─── Cloud Run images ────────────────────────────────────────────────────────
+#
+# Defaults point at the public GHCR demo images so the skeleton runs with
+# zero CI work. Override with images from the Artifact Registry repo this
+# stack provisions for production.
+
+# api_image    = "ghcr.io/beenuar/aisoc-api:latest"
+# web_image    = "ghcr.io/beenuar/aisoc-web:latest"
+# ingest_image = "ghcr.io/beenuar/aisoc-ingest:latest"
+
+# ─── Cloud Run scaling ───────────────────────────────────────────────────────
+
+# api_min_instances    = 0   # >0 to avoid cold starts
+# api_max_instances    = 10
+# web_max_instances    = 5
+# ingest_max_instances = 5
+
+# ─── Access ──────────────────────────────────────────────────────────────────
+
+# allow_unauthenticated = true   # flip to false for IAP / private deploy
+# cors_origins          = "https://app.example.com,https://demo.example.com"
+
+# ─── Optional: agents / OpenAI ───────────────────────────────────────────────
+#
+# When set, an OPENAI_API_KEY secret is provisioned and mounted into the API
+# service. Leave blank for the air-gapped (Ollama / LiteLLM) configuration.
+#
+# Pass on the CLI to keep it out of disk:
+#   terraform apply -var "openai_api_key=$OPENAI_API_KEY"
+
+# openai_api_key = ""

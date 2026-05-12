@@ -107,7 +107,12 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Deployment",
-      items: ["deployment/docker", "deployment/kubernetes", "deployment/env-vars"],
+      items: [
+        "deployment/docker",
+        "deployment/kubernetes",
+        "deployment/gcp",
+        "deployment/env-vars",
+      ],
     },
     {
       type: "category",
