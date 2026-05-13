@@ -7,8 +7,8 @@ import { Logo } from './Logo';
 
 const NAV_LINKS = [
   { label: 'Platform', href: '/#features' },
-  { label: 'How it works', href: '/#architecture' },
-  { label: 'MITRE', href: '/#mitre' },
+  { label: 'Sovereign', href: '/sovereign' },
+  { label: 'Customers', href: '/customers' },
   { label: 'Why open source', href: '/why-open-source' },
   { label: 'Benchmark', href: '/benchmark' },
 ];

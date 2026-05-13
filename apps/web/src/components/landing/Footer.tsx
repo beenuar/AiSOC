@@ -11,6 +11,8 @@ const COLUMNS = [
       { label: 'Features', href: '/#features' },
       { label: 'How it works', href: '/#architecture' },
       { label: 'MITRE coverage', href: '/#mitre' },
+      { label: 'Sovereign + air-gap', href: '/sovereign' },
+      { label: 'Customers', href: '/customers' },
       { label: 'Benchmark', href: '/benchmark' },
       { label: 'Console', href: '/dashboard' },
     ],
