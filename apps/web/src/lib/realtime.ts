@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { realtimeApi } from './api';
 
-export type RealtimeChannel = 'alerts' | 'cases' | 'agents' | 'all';
+export type RealtimeChannel = 'alerts' | 'cases' | 'agents' | 'insights' | 'all';
 export type RealtimeStatus =
   | 'connecting'
   | 'open'

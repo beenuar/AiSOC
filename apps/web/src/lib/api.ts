@@ -1205,6 +1205,51 @@ export const metricsApi = {
     ),
 };
 
+// ─── SOC Insights (T3.1) ─────────────────────────────────────────────────────
+//
+// Backs the SOC Insights dashboard at /dashboards/soc-insights. The payload is
+// intentionally flat — 7 tiles, each with a value, previous-window value,
+// optional delta_pct (null when there's no prior data), and a 24-bucket
+// sparkline. The page re-fetches on every `insights_updated` WebSocket poke.
+
+export type InsightsWindow = '24h' | '7d' | '30d';
+
+export interface InsightSparkline {
+  points: number[];
+}
+
+export interface InsightTile {
+  key: string;
+  label: string;
+  value: number;
+  unit: 'hours' | 'pct' | 'count' | 'usd' | 'hours_saved';
+  previous_value: number;
+  delta_pct: number | null;
+  sparkline: InsightSparkline;
+}
+
+export interface SOCInsightsResponse {
+  window: InsightsWindow;
+  generated_at: string;
+  tenant_id: string;
+  tiles: InsightTile[];
+  manual_investigation_minutes: number;
+}
+
+export const insightsApi = {
+  /**
+   * Fetches the SOC Insights aggregate payload for the given window.
+   *
+   * The endpoint is tenant-scoped server-side; the client only needs to
+   * pick a window. SWR keys should include the window so flipping the
+   * filter doesn't show stale numbers from the previous range.
+   */
+  getSOC: (window: InsightsWindow) =>
+    request<SOCInsightsResponse>('/api/v1/insights/soc', {
+      params: { window },
+    }),
+};
+
 // ─── Connectors ──────────────────────────────────────────────────────────────
 
 export type ConnectorStatus =
@@ -3972,7 +4017,7 @@ export const savedViewsApi = {
 
 export const realtimeApi = {
   /** Returns a ready-to-open WebSocket URL for the given channel. */
-  channelUrl(channel: 'alerts' | 'cases' | 'agents' | 'all') {
+  channelUrl(channel: 'alerts' | 'cases' | 'agents' | 'insights' | 'all') {
     return `${wsOrigin()}/ws/${channel}?tenant_id=${encodeURIComponent(TENANT_ID)}`;
   },
 
