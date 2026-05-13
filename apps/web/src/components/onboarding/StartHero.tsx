@@ -82,15 +82,44 @@ export function StartHero() {
           </span>
 
           <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight text-white md:text-6xl lg:text-7xl">
-            Start triaging in 3 minutes.
+            Detect. Triage. Hunt. Respond.
           </h1>
 
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-gray-300 md:text-xl">
-            AiSOC ships a 200-incident eval harness, a pre-seeded LockBit 3.0
-            investigation, and 26 click-and-connect security sources. Pick how
-            you want to start — every option lands you in a working SOC, not a
-            blank dashboard.
+            AiSOC ships four named agents — Detect, Triage, Hunt, and
+            Respond — wired to a 200-incident eval harness, a pre-seeded
+            LockBit 3.0 investigation, and 26 click-and-connect security
+            sources. Pick how you want to start: every option lands you in a
+            working SOC, not a blank dashboard.
           </p>
+
+          {/* Four-agent strip — public agent contract per
+              apps/docs/docs/architecture/agents.md. Sub-agents (phishing,
+              identity, cloud, insider) are capabilities of Triage, never
+              first-class names here. */}
+          <ul
+            aria-label="The four AiSOC agents"
+            className="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-4"
+          >
+            {[
+              { name: 'Detect', caption: 'Fuse signals → incidents' },
+              { name: 'Triage', caption: 'Classify + escalate' },
+              { name: 'Hunt', caption: 'NL queries · YAML hunts' },
+              { name: 'Respond', caption: 'Plan · approve · execute' },
+            ].map((agent) => (
+              <li
+                key={agent.name}
+                className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+              >
+                <div className="text-xs font-semibold uppercase tracking-wider text-brand-300">
+                  {agent.name}
+                </div>
+                <div className="mt-0.5 text-[11px] leading-snug text-gray-400">
+                  {agent.caption}
+                </div>
+              </li>
+            ))}
+          </ul>
 
           {/* Three primary CTAs */}
           <div className="mt-10 grid gap-3 sm:grid-cols-3">

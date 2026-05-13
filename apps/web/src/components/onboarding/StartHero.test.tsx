@@ -72,9 +72,32 @@ describe('StartHero', () => {
 
   it('promises a working SOC instead of a blank dashboard', () => {
     render(<StartHero />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/3 minutes/i);
     // Buyer-value plan is explicit: every CTA must "land you in a working SOC,
     // not a blank dashboard." That promise is the page's contract.
     expect(screen.getByText(/working SOC, not a blank dashboard/i)).toBeInTheDocument();
+  });
+
+  // T2.5 (v8.0): the public surface promises exactly four named agents —
+  // Detect, Triage, Hunt, Respond. The hero is the most-trafficked place
+  // that contract is exposed, so we lock it down here. Sub-agents
+  // (phishing/identity/cloud/insider) are NEVER promoted to the hero.
+  it('lists the four branded agents and only those four', () => {
+    render(<StartHero />);
+
+    // H1 surfaces the four-agent narrative.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      /Detect\.\s*Triage\.\s*Hunt\.\s*Respond/i,
+    );
+
+    const strip = screen.getByLabelText(/four AiSOC agents/i);
+    for (const name of ['Detect', 'Triage', 'Hunt', 'Respond']) {
+      expect(strip).toHaveTextContent(new RegExp(name, 'i'));
+    }
+
+    // Sub-agent names must not appear in the hero — they're capabilities of
+    // Triage, never first-class on the marketing surface.
+    for (const forbidden of ['Phishing', 'Identity', 'Cloud', 'Insider']) {
+      expect(strip).not.toHaveTextContent(new RegExp(forbidden, 'i'));
+    }
   });
 });

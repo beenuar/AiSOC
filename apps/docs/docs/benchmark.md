@@ -6,6 +6,35 @@ description: AiSOC's open, deterministic regression harness. 200 synthetic incid
 
 # AiSOC Public Eval Harness
 
+<!-- BEGIN: north-star performance (T5.1 scaffold; T2.4 fills in once telemetry lands) -->
+
+:::tip North-star performance
+**p50 sub-minute, p95 sub-2-minute** end-to-end on the 200-incident eval.
+Token + USD-per-investigation budgets are reported alongside latency in the
+"Performance, tokens, and cost" section below. The full provenance — commit
+SHA, dataset SHA, and eval mode — is in the [provenance footer](#provenance).
+
+**These targets are wet-eval (live LLM agent) numbers**, not substrate
+self-checks. Substrate suites are reported separately in
+"Latest results" further down. Read [What's substrate vs wet?](#whats-substrate-vs-wet)
+before quoting any of these figures.
+:::
+
+<!-- END: north-star performance -->
+
+## What's substrate vs wet?
+
+This page reports two completely different classes of measurement, and we
+keep them visually separate so they're never confused:
+
+| Class | What it measures | Suites on this page |
+|-------|------------------|---------------------|
+| **Substrate self-check** | Determines whether AiSOC's deterministic substrate (extractors, fusion logic, report and plan templates, judges) is internally consistent. Runs in milliseconds, no LLM, no DB. CI gates every PR on it. | `mitre_accuracy`, `investigation_completeness`, `response_quality`, `playbook_completion_rate`, synthetic-telemetry coverage |
+| **Wet eval** (live agent) | Drives the live `services/agents` LangGraph orchestrator end-to-end against the same 200-incident corpus, with real LLM calls. Measures latency, token usage, USD cost, and (with an LLM-as-judge variant) live agent accuracy. Runs weekly, not per-PR. | latency p50 / p95 / p99, tokens per investigation, USD per investigation |
+
+Workspace rule we follow: **never present a substrate self-check as live
+agent performance**. Every table below is labelled with its class.
+
 > **An open, deterministic regression harness over the AiSOC substrate.**
 >
 > This page is _not_ a leaderboard for AI SOC agents. It is a CI-gated harness
@@ -101,6 +130,95 @@ every PR targeting `main` or `develop`.
 
 These numbers move with the codebase. The current snapshot lives at
 [`eval-results/eval/results/latest.json`](https://github.com/beenuar/AiSOC/blob/eval-results/eval/results/latest.json).
+
+## Performance, tokens, and cost
+
+<!-- BEGIN: T5.1 scaffolding for T2.4 wet-eval telemetry.
+     T2.4 (`scripts/run_evals.py` token + USD telemetry) populates the three
+     tables below by reading the `per_investigation` block out of
+     `eval_report.json`. Until full wet-eval lands, the cells are
+     deterministic-substrate budget projections (T2.4) or placeholders
+     (T5.5 wet-eval).
+
+     Workspace rule: NEVER replace the `<!-- T2.4 populates ... -->` cells
+     with fabricated numbers. The cells stay as placeholders until either
+     T2.4's deterministic budget or T5.5's wet-eval run produces them. -->
+
+:::warning Wet-eval, not substrate
+Every table in this section is a **wet eval** measurement — it requires the
+live `services/agents` LangGraph orchestrator and real LLM calls, which is
+populated by the weekly wet-eval CI job (T5.5) once T2.4's telemetry lands.
+T2.4 also exposes a deterministic-substrate _budget projection_
+(`per_investigation` block in `eval_report.json`) that estimates token /
+USD / latency at substrate-walk speed; that projection is published in the
+JSON and the CLI summary, but is not substituted into the tables below
+because substrate timings would not be honest representations of agent
+performance.
+:::
+
+### Table 1 — Latency per investigation
+
+End-to-end wall-clock time from "incident received" to "investigation
+complete + response plan synthesised", per template and aggregate. Run
+against the 200-incident `synthetic_incidents.json` corpus with the live
+agent driving real LLM calls. Lower is better.
+
+| Template family            | p50 (s) | p95 (s) | p99 (s) | n  |
+|----------------------------|--------:|--------:|--------:|---:|
+| Aggregate (all 200)        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | 200 |
+| Endpoint compromise        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Identity / OAuth phish     | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Cloud (AWS / Azure / GCP)  | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Network / WAF / DNS        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Application / SaaS         | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+
+> **Target gates** — aggregate p50 ≤ 60 s, aggregate p95 ≤ 120 s.
+> A weekly CI job (T5.5 — `wet-eval-weekly.yml`) regrades the corpus and
+> fails if either gate regresses by more than 10 % week-over-week.
+
+### Table 2 — Tokens per investigation
+
+Total prompt + completion tokens consumed by the agent for one investigation,
+across every LLM call in the LangGraph topology. Includes context-bundle
+tokens, tool-call tokens, and final-plan synthesis tokens.
+
+| Template family            | mean | median | p95  | n  |
+|----------------------------|-----:|-------:|-----:|---:|
+| Aggregate (all 200)        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | 200 |
+| Endpoint compromise        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Identity / OAuth phish     | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Cloud (AWS / Azure / GCP)  | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Network / WAF / DNS        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Application / SaaS         | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+
+> Tokens are reported as totals (prompt + completion) so the table is model-
+> independent. Per-call splits live in the JSON report under
+> `per_investigation.tokens_per_investigation` (T2.4 deterministic budget)
+> or `wet_eval.tokens.by_call` (T5.5 wet eval). The current rate card the
+> dollar figures below use is in [Rate card](./benchmark-methodology.md#rate-card).
+
+### Table 3 — USD per investigation
+
+Same denominator as Table 2, multiplied through the rate card current at
+the time of the run. Recorded in the JSON report so historic rate-card
+changes don't silently revalue old runs.
+
+| Template family            | mean ($) | median ($) | p95 ($) | n  |
+|----------------------------|---------:|-----------:|--------:|---:|
+| Aggregate (all 200)        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | 200 |
+| Endpoint compromise        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Identity / OAuth phish     | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Cloud (AWS / Azure / GCP)  | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Network / WAF / DNS        | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+| Application / SaaS         | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> | <!-- T2.4 populates --> |
+
+> The full breakdown by model (`gpt-4o`, `gpt-4o-mini`, local Ollama, …) and
+> per-call class (router, planner, judge) lives under
+> `per_investigation.rate_card_per_m_tokens_usd` (T2.4) or
+> `wet_eval.usd.by_model` (T5.5) in the JSON report. Rate-card sources and
+> effective dates live on the [methodology page](./benchmark-methodology.md#rate-card).
+
+<!-- END: T5.1 scaffolding for T2.4 wet-eval telemetry. -->
 
 ### Per-case vs. per-template metrics
 
@@ -530,3 +648,35 @@ Pull requests welcome. The fastest ways to make this harness honestly stronger:
   or that decouple the synthesizer from the judge keywords are highly welcome.
 
 See [`CONTRIBUTING.md`](https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md) for the full path.
+
+## Provenance {#provenance}
+
+Every published number on this page comes from a single deterministic pipeline.
+The provenance footer below is regenerated by the weekly wet-eval CI job
+(`.github/workflows/wet-eval-weekly.yml`, landed by T5.5) and the per-PR
+substrate run (`.github/workflows/ci.yml`). The fields are populated from
+`eval_report.json` so anyone can reproduce them.
+
+| Field            | Value (substrate run)                          | Source |
+|------------------|------------------------------------------------|--------|
+| Commit SHA       | <!-- T2.4 / CI populates -->                   | `git rev-parse HEAD` at eval time |
+| Run date (UTC)   | <!-- T2.4 / CI populates -->                   | `eval_report.json -> generated_at` |
+| Dataset SHA-256  | <!-- T2.4 / CI populates -->                   | `sha256(synthetic_incidents.json + synthetic_telemetry.jsonl)` |
+| Eval mode        | `substrate (per-PR)`                           | `eval_report.json -> mode` |
+| Harness version  | `scripts/run_evals.py @ <commit>`              | repo path |
+| Rate card date   | _wet-eval only_                                | [Rate card](./benchmark-methodology.md#rate-card) |
+
+The wet-eval row is populated by the weekly job once T2.4's telemetry lands.
+Until then, the cells are placeholders rather than imputed values — see the
+[methodology page](./benchmark-methodology.md) for why we do not backfill.
+
+Reproduce these numbers locally:
+
+```bash
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC
+pnpm eval:public        # runs run_evals.py + render_eval_charts.py
+```
+
+Full instructions, dataset description, rate card, and limitations live on
+the [methodology page](./benchmark-methodology.md).

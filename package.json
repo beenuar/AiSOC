@@ -28,6 +28,7 @@
     "playbooks:validate": "python3 scripts/validate_playbooks.py",
     "playbooks:lint": "python3 scripts/lint_playbooks.py",
     "eval:run": "python3 scripts/run_evals.py",
+    "eval:public": "python3 scripts/run_evals.py --out eval_report.json && python3 scripts/render_eval_charts.py eval_report.json",
     "marketplace:build": "python3 scripts/build_marketplace.py",
     "marketplace:check": "python3 scripts/build_marketplace.py --check",
     "marketplace:sync": "python3 scripts/build_marketplace.py && python3 scripts/curate_detections.py && cp marketplace/index.json apps/web/public/marketplace/index.json && cp marketplace/curated.json apps/web/public/marketplace/curated.json && echo 'marketplace/index.json + curated.json built and synced to apps/web/public/'",
