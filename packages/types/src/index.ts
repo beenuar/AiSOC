@@ -16,3 +16,4 @@ export * from "./connector";
 export * from "./playbook";
 export * from "./threat_intel";
 export * from "./detection_rule";
+export * from "./hunt";

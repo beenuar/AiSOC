@@ -1,78 +1,52 @@
-"use client";
-
 /**
- * /investigate page  — tabbed view: Chat | Timeline
+ * /investigate → /hunt redirect (T3.4).
  *
- * Author: Beenu <beenu@cyble.com>
+ * Track 3 collapses the standalone "Investigation" route into the new
+ * /hunt natural-language hunt surface. The investigation chat + timeline
+ * components live on at /hunt and are reachable via the same deep-link
+ * shape — any querystring (e.g. ``?runId=<uuid>``) the legacy callers
+ * relied on is preserved, so notification emails, agent runs, and
+ * bookmarked URLs from before the rebrand keep working.
+ *
+ * Server-side redirect (Next 13+ ``redirect()``) so we never render the
+ * old chat UI even for a flash; the browser sees a 307 and lands on
+ * /hunt with the URL bar updated.
  */
 
-import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { permanentRedirect } from "next/navigation";
 
-const InvestigationChat = dynamic(
-  () => import("@/components/copilot/InvestigationChat"),
-  { ssr: false },
-);
+export const metadata = {
+  title: "Investigate | AiSOC",
+};
 
-const InvestigationTimeline = dynamic(
-  () => import("@/components/copilot/InvestigationTimeline"),
-  { ssr: false },
-);
-
-type Tab = "chat" | "timeline";
-
-function InvestigatePageInner() {
-  const searchParams = useSearchParams();
-  const runId = searchParams.get("runId") ?? undefined;
-  const [activeTab, setActiveTab] = useState<Tab>("chat");
-
-  return (
-    <div className="flex h-full flex-col bg-slate-950 text-slate-100">
-      {/* Tab bar */}
-      <div className="flex border-b border-slate-800 bg-slate-900">
-        {(["chat", "timeline"] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2.5 text-sm font-medium capitalize transition-colors
-              ${activeTab === tab
-                ? "border-b-2 border-indigo-500 text-indigo-300"
-                : "text-slate-400 hover:text-slate-200"}`}
-          >
-            {tab === "chat" ? "💬 Chat" : "🕐 Timeline"}
-          </button>
-        ))}
-        {runId && (
-          <span className="ml-auto flex items-center pr-4 text-xs text-slate-500">
-            run: {runId.slice(0, 8)}…
-          </span>
-        )}
-      </div>
-
-      {/* Tab content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === "chat" && <InvestigationChat runId={runId} />}
-        {activeTab === "timeline" && (
-          <div className="h-full overflow-y-auto p-4">
-            <InvestigationTimeline runId={runId} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
+interface InvestigatePageProps {
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
-export default function InvestigatePage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex h-full items-center justify-center text-slate-400">
-          Loading…
-        </div>
+function buildHuntUrl(
+  searchParams: Record<string, string | string[] | undefined> | undefined,
+): string {
+  if (!searchParams) return "/hunt";
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        if (v != null) params.append(key, v);
       }
-    >
-      <InvestigatePageInner />
-    </Suspense>
-  );
+    } else {
+      params.append(key, value);
+    }
+  }
+  const qs = params.toString();
+  return qs ? `/hunt?${qs}` : "/hunt";
+}
+
+export default function InvestigateRedirect({
+  searchParams,
+}: InvestigatePageProps) {
+  // ``permanentRedirect`` emits a 308 so analytics + browser caches treat
+  // /hunt as the canonical address. Use ``redirect`` (307) instead if we
+  // ever need to flip the canonical route back.
+  permanentRedirect(buildHuntUrl(searchParams));
 }

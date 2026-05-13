@@ -2240,6 +2240,111 @@ export const huntApi = {
     request<void>(`/api/v1/hunt/saved/${id}`, { method: 'DELETE' }),
 };
 
+// ─── Natural-language query translator (T3.4) ────────────────────────────────
+//
+// Wraps `services/api/app/api/v1/endpoints/nl_query.py`. The translator
+// itself never mutates state — it just maps an English question to an
+// ES|QL / SPL / KQL triple plus a human-readable explanation. The /hunt
+// page calls this when an analyst clicks an example-query pill or hits
+// "Translate" in the NL input.
+
+export interface NlQueryTranslateRequest {
+  question: string;
+  index_pattern?: string;
+  time_range_hours?: number;
+}
+
+export interface NlQueryTranslateResponse {
+  request_id: string;
+  question: string;
+  esql: string;
+  spl: string;
+  kql: string;
+  explanation: string;
+  created_at: string;
+  engine: 'deterministic' | 'llm';
+  grammar_validated: boolean;
+}
+
+export const nlQueryApi = {
+  translate: (data: NlQueryTranslateRequest) =>
+    request<NlQueryTranslateResponse>('/api/v1/nl-query/translate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─── Saved natural-language hunts (T3.4) ─────────────────────────────────────
+//
+// Backs the /hunt page's NL hero block + saved-hunts sidebar. Distinct from
+// `huntApi` above (legacy SIEM-style query bar, demo-data fallback) and from
+// the hypothesis-driven `/hunts` workbench (heavyweight, detection-engineer
+// authored, separate page). Wire shape mirrors
+// `services/api/app/api/v1/endpoints/saved_hunts.py`.
+
+export type HuntLanguage = 'esql' | 'kql' | 'spl';
+
+export interface TranslatedQueryEnvelope {
+  esql: string;
+  kql: string;
+  spl: string;
+  explanation: string;
+}
+
+export interface SavedHunt {
+  id: string;
+  name: string;
+  nl_query: string;
+  translated_query: TranslatedQueryEnvelope;
+  language: HuntLanguage;
+  schedule: string | null;
+  last_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface CreateSavedHuntRequest {
+  name: string;
+  nl_query: string;
+  language?: HuntLanguage;
+  schedule?: string | null;
+}
+
+export interface RunSavedHuntResponse {
+  id: string;
+  name: string;
+  nl_query: string;
+  translated_query: TranslatedQueryEnvelope;
+  last_run_at: string;
+}
+
+export const savedHuntsApi = {
+  list: () => request<SavedHunt[]>('/api/v1/saved-hunts'),
+
+  get: (id: string) => request<SavedHunt>(`/api/v1/saved-hunts/${id}`),
+
+  create: (data: CreateSavedHuntRequest) =>
+    request<SavedHunt>('/api/v1/saved-hunts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  remove: (id: string) =>
+    request<void>(`/api/v1/saved-hunts/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Re-translate the saved NL question and stamp `last_run_at`. The endpoint
+   * does not execute the underlying ES|QL — that path is the job of
+   * `/api/v1/nl-query/execute` (which requires a configured Elasticsearch
+   * URL). We use the returned `translated_query` to populate the editor.
+   */
+  run: (id: string) =>
+    request<RunSavedHuntResponse>(`/api/v1/saved-hunts/${id}/run`, {
+      method: 'POST',
+    }),
+};
+
 // ─── Attack Graph (Neo4j) ────────────────────────────────────────────────────
 
 export type GraphNodeKind =
@@ -4044,6 +4149,8 @@ export default {
   threatIntel: threatIntelApi,
   agents: agentsApi,
   hunt: huntApi,
+  savedHunts: savedHuntsApi,
+  nlQuery: nlQueryApi,
   graph: graphApi,
   detection: detectionApi,
   detectionProposals: detectionProposalsApi,
