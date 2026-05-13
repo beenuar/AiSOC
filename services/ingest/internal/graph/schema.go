@@ -78,20 +78,26 @@ type RelType string
 
 // Canonical relationship types for v1.0. Same compatibility rules as labels.
 const (
-	RelAssumedBy     RelType = "ASSUMED_BY"
-	RelHasPermission RelType = "HAS_PERMISSION"
-	RelGrants        RelType = "GRANTS"
-	RelOwns          RelType = "OWNS"
-	RelConfiguredAs  RelType = "CONFIGURED_AS"
-	RelDeployedFrom  RelType = "DEPLOYED_FROM"
-	RelAccesses      RelType = "ACCESSES"
-	RelPeerOf        RelType = "PEER_OF"
-	RelTriggered     RelType = "TRIGGERED"
-	RelOccurredOn    RelType = "OCCURRED_ON"
-	RelMemberOf      RelType = "MEMBER_OF"
-	RelDeploys       RelType = "DEPLOYS"
-	RelReadsFrom     RelType = "READS_FROM"
-	RelWritesTo      RelType = "WRITES_TO"
+	RelAssumedBy            RelType = "ASSUMED_BY"
+	RelHasPermission        RelType = "HAS_PERMISSION"
+	RelGrants               RelType = "GRANTS"
+	RelOwns                 RelType = "OWNS"
+	RelConfiguredAs         RelType = "CONFIGURED_AS"
+	RelDeployedFrom         RelType = "DEPLOYED_FROM"
+	RelAccesses             RelType = "ACCESSES"
+	RelPeerOf               RelType = "PEER_OF"
+	RelTriggered            RelType = "TRIGGERED"
+	RelOccurredOn           RelType = "OCCURRED_ON"
+	RelMemberOf             RelType = "MEMBER_OF"
+	RelDeploys              RelType = "DEPLOYS"
+	RelReadsFrom            RelType = "READS_FROM"
+	RelWritesTo             RelType = "WRITES_TO"
+	// RelEffectivePermission is the cached output of the T3.2 resolver —
+	// materialised by `services/api/app/services/effective_permissions/`
+	// rather than by the ingest writer itself. Listed here so it travels
+	// with the canonical vocabulary and so the schema drift gate keeps the
+	// YAML, the Go enums, and the live database in lockstep.
+	RelEffectivePermission RelType = "EFFECTIVE_PERMISSION"
 )
 
 // AllRelTypes is the canonical, ordered enumeration of v1.0 relationships.
@@ -110,6 +116,7 @@ var AllRelTypes = []RelType{
 	RelDeploys,
 	RelReadsFrom,
 	RelWritesTo,
+	RelEffectivePermission,
 }
 
 // ChangeType describes a graph mutation that downstream consumers want to

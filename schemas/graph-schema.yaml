@@ -438,3 +438,26 @@ relationships:
       - { name: snapshot_id,     type: string,   required: true  }
       - { name: bytes_in,        type: int,      required: false }
       - { name: object_path,     type: string,   required: false }
+
+  - name: EFFECTIVE_PERMISSION
+    source_label: Identity
+    target_label: Resource
+    event_edge: false
+    description: >-
+      Cached result of the effective-permissions resolver (T3.2). Materialised
+      by `services/api/app/services/effective_permissions/` when a UI query or
+      a scheduled reconciliation asks "what can this principal actually do on
+      this resource right now?". The `actions` list is the resolved
+      allow-set (deny-overrides already applied) and `policy_chain_ids`
+      records every Policy / Role node consulted to derive it, so the UI can
+      reconstruct the provenance hop-by-hop without re-running the resolver.
+      Structural edge (not event-derived) — refreshed on policy-snapshot
+      change and pruned when stale.
+    properties:
+      - { name: snapshot_id,      type: string,   required: true  }
+      - { name: provider,         type: string,   required: true  }
+      - { name: actions,          type: list,     required: true  }
+      - { name: deny_actions,     type: list,     required: false }
+      - { name: policy_chain_ids, type: list,     required: false }
+      - { name: last_resolved,    type: datetime, required: true  }
+      - { name: resolver_version, type: string,   required: false }
