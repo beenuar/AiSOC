@@ -257,11 +257,18 @@ jobs:
           trap cleanup EXIT
 
           docker pull --quiet "${{ matrix.image }}"
+          # Outer shell is POSIX `sh` (not `bash`) on purpose — the alpine
+          # base image doesn't ship bash, so `bash -lc '...'` would fail
+          # at container-init *before* the bootstrap step even runs (the
+          # whole point of which is to apk-add bash). The wrapper itself
+          # only uses POSIX sh constructs (set -e, [ ], ||, if/fi). The
+          # actual installer is still invoked via `bash` because by then
+          # the bootstrap step has installed it.
           cid=$(docker create \
             --workdir /aisoc \
             -v "$PWD:/aisoc:ro" \
             "${{ matrix.image }}" \
-            bash -lc '
+            sh -lc '
               set -e
               echo "--- bootstrap ---"
               ${{ matrix.bootstrap }}
