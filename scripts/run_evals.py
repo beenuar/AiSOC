@@ -56,85 +56,122 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "services" / "agents"
 sys.path.insert(0, str(_AGENTS_ROOT))
+sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
-from tests.test_adversary_eval import (
-    _HEAVY_BUCKET_CEILING as _ADVERSARY_HEAVY_CEILING,
+# The per-investigation token/USD/latency telemetry block (T2.4) is stdlib-only
+# and lives in ``scripts/eval_telemetry.py`` so it can run on hosts that
+# don't have the full agent dev dependency stack (pydantic, langgraph, ...).
+from eval_telemetry import (  # type: ignore  # noqa: E402
+    DEFAULT_INCIDENTS_PATH,
+    DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
+    compute_per_investigation_telemetry,
 )
-from tests.test_adversary_eval import (
-    _LIGHT_BUCKET_FLOOR as _ADVERSARY_LIGHT_FLOOR,
-)
-from tests.test_adversary_eval import (
-    _OVERALL_FLOOR as _ADVERSARY_OVERALL_FLOOR,
-)
-from tests.test_adversary_eval import (  # type: ignore
-    evaluate_adversary_accuracy,
-)
-from tests.test_alert_reduction import (  # type: ignore
-    compute_reduction,
-    fuse_alerts,
-    generate_noisy_alert_stream,
-)
-from tests.test_confidence_calibration import (  # type: ignore
-    BRIER_THRESHOLD_INVESTIGATION as _CALIB_BRIER_INV,
-)
-from tests.test_confidence_calibration import (
-    BRIER_THRESHOLD_TRIAGE as _CALIB_BRIER_TRIAGE,
-)
-from tests.test_confidence_calibration import (
-    ECE_THRESHOLD_INVESTIGATION as _CALIB_ECE_INV,
-)
-from tests.test_confidence_calibration import (
-    ECE_THRESHOLD_TRIAGE as _CALIB_ECE_TRIAGE,
-)
-from tests.test_confidence_calibration import (
-    run_evaluation as _run_calibration_eval,
-)
-from tests.test_detection_fp_rate import (  # type: ignore
-    MAX_PER_RULE_FPR as _DETECTION_FP_CEILING,
-)
-from tests.test_detection_fp_rate import (
-    evaluate_per_rule_fp,
-)
-from tests.test_hunt_corpus import (
-    _NEGATIVE_CEILING as _HUNT_NEGATIVE_CEILING,
-)
-from tests.test_hunt_corpus import (
-    _POSITIVE_FLOOR as _HUNT_POSITIVE_FLOOR,
-)
-from tests.test_hunt_corpus import (  # type: ignore
-    evaluate_hunt_corpus,
-)
-from tests.test_investigation_completeness import (  # type: ignore
-    evaluate_completeness,
-)
-from tests.test_memory_recall import (  # type: ignore
-    RECALL_ACCURACY_FLOOR as _RECALL_FLOOR,
-)
-from tests.test_memory_recall import (
-    run_evaluation as _run_memory_recall_eval,
-)
-from tests.test_mitre_accuracy import evaluate_mitre_accuracy  # type: ignore
-from tests.test_override_accuracy import (  # type: ignore
-    OVERRIDE_ACCURACY_FLOOR as _OVERRIDE_FLOOR,
-)
-from tests.test_override_accuracy import (
-    run_evaluation as _run_override_accuracy_eval,
-)
-from tests.test_playbook_completion_rate import (
-    ACTION_ALIGNMENT_FLOOR as _PLAYBOOK_ALIGN_FLOOR,
-)
-from tests.test_playbook_completion_rate import (
-    HIGH_CRIT_MAPPED_FLOOR as _PLAYBOOK_HIGH_CRIT_FLOOR,
-)
-from tests.test_playbook_completion_rate import (  # type: ignore
-    OVERALL_COMPLETION_FLOOR as _PLAYBOOK_OVERALL_FLOOR,
-)
-from tests.test_playbook_completion_rate import (
-    evaluate_playbook_completion,
-)
-from tests.test_response_quality import (  # type: ignore
-    evaluate_response_quality,
-)
+
+# The substrate-suite imports below pull in the agent runtime (pydantic etc).
+# Wrap them in a try/except so ``--telemetry-only`` can still run on a bare
+# Python install — the new T2.4 token/USD/latency block doesn't need them.
+_SUBSTRATE_IMPORT_ERROR: Exception | None = None
+try:
+    from tests.test_adversary_eval import (
+        _HEAVY_BUCKET_CEILING as _ADVERSARY_HEAVY_CEILING,
+    )
+    from tests.test_adversary_eval import (
+        _LIGHT_BUCKET_FLOOR as _ADVERSARY_LIGHT_FLOOR,
+    )
+    from tests.test_adversary_eval import (
+        _OVERALL_FLOOR as _ADVERSARY_OVERALL_FLOOR,
+    )
+    from tests.test_adversary_eval import (  # type: ignore
+        evaluate_adversary_accuracy,
+    )
+    from tests.test_alert_reduction import (  # type: ignore
+        compute_reduction,
+        fuse_alerts,
+        generate_noisy_alert_stream,
+    )
+    from tests.test_confidence_calibration import (  # type: ignore
+        BRIER_THRESHOLD_INVESTIGATION as _CALIB_BRIER_INV,
+    )
+    from tests.test_confidence_calibration import (
+        BRIER_THRESHOLD_TRIAGE as _CALIB_BRIER_TRIAGE,
+    )
+    from tests.test_confidence_calibration import (
+        ECE_THRESHOLD_INVESTIGATION as _CALIB_ECE_INV,
+    )
+    from tests.test_confidence_calibration import (
+        ECE_THRESHOLD_TRIAGE as _CALIB_ECE_TRIAGE,
+    )
+    from tests.test_confidence_calibration import (
+        run_evaluation as _run_calibration_eval,
+    )
+    from tests.test_detection_fp_rate import (  # type: ignore
+        MAX_PER_RULE_FPR as _DETECTION_FP_CEILING,
+    )
+    from tests.test_detection_fp_rate import (
+        evaluate_per_rule_fp,
+    )
+    from tests.test_hunt_corpus import (
+        _NEGATIVE_CEILING as _HUNT_NEGATIVE_CEILING,
+    )
+    from tests.test_hunt_corpus import (
+        _POSITIVE_FLOOR as _HUNT_POSITIVE_FLOOR,
+    )
+    from tests.test_hunt_corpus import (  # type: ignore
+        evaluate_hunt_corpus,
+    )
+    from tests.test_investigation_completeness import (  # type: ignore
+        evaluate_completeness,
+    )
+    from tests.test_memory_recall import (  # type: ignore
+        RECALL_ACCURACY_FLOOR as _RECALL_FLOOR,
+    )
+    from tests.test_memory_recall import (
+        run_evaluation as _run_memory_recall_eval,
+    )
+    from tests.test_mitre_accuracy import evaluate_mitre_accuracy  # type: ignore
+    from tests.test_override_accuracy import (  # type: ignore
+        OVERRIDE_ACCURACY_FLOOR as _OVERRIDE_FLOOR,
+    )
+    from tests.test_override_accuracy import (
+        run_evaluation as _run_override_accuracy_eval,
+    )
+    from tests.test_playbook_completion_rate import (
+        ACTION_ALIGNMENT_FLOOR as _PLAYBOOK_ALIGN_FLOOR,
+    )
+    from tests.test_playbook_completion_rate import (
+        HIGH_CRIT_MAPPED_FLOOR as _PLAYBOOK_HIGH_CRIT_FLOOR,
+    )
+    from tests.test_playbook_completion_rate import (  # type: ignore
+        OVERALL_COMPLETION_FLOOR as _PLAYBOOK_OVERALL_FLOOR,
+    )
+    from tests.test_playbook_completion_rate import (
+        evaluate_playbook_completion,
+    )
+    from tests.test_response_quality import (  # type: ignore
+        evaluate_response_quality,
+    )
+    _SUBSTRATE_AVAILABLE = True
+except Exception as _exc:  # pragma: no cover - degraded mode for telemetry-only
+    _SUBSTRATE_IMPORT_ERROR = _exc
+    _SUBSTRATE_AVAILABLE = False
+    # Fallback constants so the module-level ``_TARGETS`` dict still constructs
+    # cleanly. Real values come from the test modules when ``--telemetry-only``
+    # is *not* in play. These match the floors hard-coded in the test files.
+    _ADVERSARY_HEAVY_CEILING = 0.50
+    _ADVERSARY_LIGHT_FLOOR = 0.85
+    _ADVERSARY_OVERALL_FLOOR = 0.40
+    _CALIB_BRIER_INV = 0.20
+    _CALIB_BRIER_TRIAGE = 0.20
+    _CALIB_ECE_INV = 0.10
+    _CALIB_ECE_TRIAGE = 0.10
+    _DETECTION_FP_CEILING = 0.05
+    _HUNT_NEGATIVE_CEILING = 0.0
+    _HUNT_POSITIVE_FLOOR = 1.0
+    _RECALL_FLOOR = 0.95
+    _OVERRIDE_FLOOR = 0.95
+    _PLAYBOOK_ALIGN_FLOOR = 0.85
+    _PLAYBOOK_HIGH_CRIT_FLOOR = 0.95
+    _PLAYBOOK_OVERALL_FLOOR = 0.50
 
 # Per-suite floors (must match what tests assert)
 _TARGETS = {
@@ -638,6 +675,52 @@ def _summarise_telemetry() -> dict:
     }
 
 
+def _build_per_investigation_block(model: str, *, keep_records: bool) -> dict:
+    """Compute the T2.4 per-investigation telemetry block.
+
+    The substrate doesn't call an LLM, so these are *deterministic budget
+    projections*. They are flat-out marked ``mode: deterministic_substrate``
+    in the JSON; the docs/UI must not present them as wet-eval ground truth.
+    Wet-eval (real LLM) replaces them in T5.5.
+
+    The headline keys ``tokens_per_investigation`` and
+    ``usd_per_investigation`` mirror the field names used by the Track 5 docs
+    page so a single JSON consumer can render either source.
+    """
+    rep = compute_per_investigation_telemetry(
+        DEFAULT_INCIDENTS_PATH,
+        model=model,
+        keep_records=keep_records,
+    )
+    block = rep.to_dict(include_records=keep_records)
+    # Hoist the most-asked-for headline numbers up to the block root so
+    # external consumers don't have to know about ``aggregate.tokens.total``.
+    total = block["aggregate"]["tokens"]["total"]
+    usd = block["aggregate"]["usd"]
+    latency = block["aggregate"]["latency_ms"]
+    block["tokens_per_investigation"] = {
+        "mean": total["mean"],
+        "median": total["median"],
+        "p95": total["p95"],
+        "p99": total["p99"],
+        "prompt_mean": block["aggregate"]["tokens"]["prompt"]["mean"],
+        "completion_mean": block["aggregate"]["tokens"]["completion"]["mean"],
+    }
+    block["usd_per_investigation"] = {
+        "mean": usd["mean"],
+        "median": usd["median"],
+        "p95": usd["p95"],
+        "p99": usd["p99"],
+    }
+    block["latency_per_investigation_ms"] = {
+        "p50": latency["p50"],
+        "p95": latency["p95"],
+        "p99": latency["p99"],
+        "mean": latency["mean"],
+    }
+    return block
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AiSOC Pillar-1 unified evaluation runner.")
     parser.add_argument("--json", action="store_true", help="Print JSON report to stdout.")
@@ -668,30 +751,83 @@ def main() -> None:
         default=1.0,
         help="Allowed MITRE accuracy regression vs baseline, in percentage points.",
     )
+    parser.add_argument(
+        "--telemetry-only",
+        action="store_true",
+        help=(
+            "Skip the substrate-suite gates and only emit the per-investigation "
+            "token/USD/latency telemetry block (T2.4). Useful on hosts without "
+            "the full agent dev dependency stack (pydantic, langgraph, ...)."
+        ),
+    )
+    parser.add_argument(
+        "--telemetry-model",
+        default=_TELEMETRY_DEFAULT_MODEL,
+        help=(
+            "Model name to apply against the rate card when computing the "
+            "per-investigation USD projection. Default: gpt-4o."
+        ),
+    )
+    parser.add_argument(
+        "--no-telemetry-records",
+        action="store_true",
+        help=(
+            "Drop the per-incident telemetry array from the JSON report. "
+            "Aggregate + per-template stats are always kept."
+        ),
+    )
     args = parser.parse_args()
 
-    summary: dict = {
-        "generated_at": datetime.now(UTC).isoformat(),
-        "dataset": "synthetic_incidents.json (200 cases, deterministic)",
-        "suites": {
-            "mitre_accuracy": _run_mitre(),
-            "alert_reduction": _run_alert_reduction(),
-            "investigation_completeness": _run_completeness(),
-            "response_quality": _run_response_quality(),
-            "hunt_corpus": _run_hunt_corpus(),
-            "adversary_eval": _run_adversary(),
-            "confidence_calibration": _run_confidence_calibration(),
-            "memory_recall": _run_memory_recall(),
-            "override_accuracy": _run_override_accuracy(),
-            "playbook_completion_rate": _run_playbook_completion(),
-            "detection_fp_rate": _run_detection_fp_rate(),
-        },
-        "telemetry": _summarise_telemetry(),
-    }
-    summary["all_passed"] = all(s["passed"] for s in summary["suites"].values())
+    if not args.telemetry_only and not _SUBSTRATE_AVAILABLE:
+        # Substrate suites need pydantic / langchain etc. If they're not
+        # installed we can still emit the telemetry block — surface the
+        # original ImportError so operators know what to fix.
+        msg = (
+            "Substrate-suite imports failed (likely missing agent dev deps "
+            f"such as pydantic): {_SUBSTRATE_IMPORT_ERROR!r}. "
+            "Pass --telemetry-only to emit just the T2.4 token/USD/latency block."
+        )
+        print(msg, file=sys.stderr)
+        sys.exit(2)
+
+    keep_records = not args.no_telemetry_records
+    per_investigation = _build_per_investigation_block(
+        args.telemetry_model,
+        keep_records=keep_records,
+    )
+
+    if args.telemetry_only:
+        summary: dict = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "dataset": "synthetic_incidents.json (200 cases, deterministic)",
+            "telemetry_only": True,
+            "per_investigation": per_investigation,
+        }
+        summary["all_passed"] = True  # telemetry-only never gates substrate
+    else:
+        summary = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "dataset": "synthetic_incidents.json (200 cases, deterministic)",
+            "suites": {
+                "mitre_accuracy": _run_mitre(),
+                "alert_reduction": _run_alert_reduction(),
+                "investigation_completeness": _run_completeness(),
+                "response_quality": _run_response_quality(),
+                "hunt_corpus": _run_hunt_corpus(),
+                "adversary_eval": _run_adversary(),
+                "confidence_calibration": _run_confidence_calibration(),
+                "memory_recall": _run_memory_recall(),
+                "override_accuracy": _run_override_accuracy(),
+                "playbook_completion_rate": _run_playbook_completion(),
+                "detection_fp_rate": _run_detection_fp_rate(),
+            },
+            "telemetry": _summarise_telemetry(),
+            "per_investigation": per_investigation,
+        }
+        summary["all_passed"] = all(s["passed"] for s in summary["suites"].values())
 
     regression_failure = False
-    if args.baseline is not None:
+    if args.baseline is not None and not args.telemetry_only:
         if not args.baseline.exists():
             summary["baseline_compare"] = {
                 "baseline_path": str(args.baseline),
@@ -735,6 +871,45 @@ def main() -> None:
 
     if args.json:
         print(json.dumps(summary, indent=2))
+    elif args.telemetry_only:
+        pi = summary["per_investigation"]
+        print()
+        print("=" * 78)
+        print("  AiSOC Eval - per-investigation telemetry (deterministic substrate)")
+        print("=" * 78)
+        print(f"  Mode:          {pi['mode']}")
+        print(f"  Model:         {pi['model']}")
+        print(
+            f"  Rate (USD/M):  input ${pi['rate_card_per_m_tokens_usd']['input']:.2f}  "
+            f"output ${pi['rate_card_per_m_tokens_usd']['output']:.2f}  (illustrative)"
+        )
+        print(f"  Incidents:     {pi['incidents']}  Templates: {pi['templates']}")
+        print("-" * 78)
+        tok = pi["tokens_per_investigation"]
+        print(
+            f"  Tokens / investigation:  mean={tok['mean']:.0f}  median={tok['median']:.0f}  "
+            f"p95={tok['p95']:.0f}  p99={tok['p99']:.0f}"
+        )
+        print(
+            f"      prompt mean={tok['prompt_mean']:.0f}    completion mean={tok['completion_mean']:.0f}"
+        )
+        usd = pi["usd_per_investigation"]
+        print(
+            f"  USD / investigation:     mean=${usd['mean']:.5f}  median=${usd['median']:.5f}  "
+            f"p95=${usd['p95']:.5f}  p99=${usd['p99']:.5f}"
+        )
+        lat = pi["latency_per_investigation_ms"]
+        print(
+            f"  Latency (ms / inv):      p50={lat['p50']:.4f}  p95={lat['p95']:.4f}  "
+            f"p99={lat['p99']:.4f}  (substrate-only path)"
+        )
+        print("=" * 78)
+        try:
+            rel = args.out.relative_to(_REPO_ROOT)
+        except ValueError:
+            rel = args.out
+        print(f"  Report written to: {rel}")
+        print()
     else:
         print()
         print("=" * 78)
@@ -774,6 +949,28 @@ def main() -> None:
             )
         else:
             print("  Synthetic telemetry: <not generated>")
+        print("-" * 78)
+        pi = summary.get("per_investigation") or {}
+        if pi:
+            tok = pi.get("tokens_per_investigation", {})
+            usd = pi.get("usd_per_investigation", {})
+            lat = pi.get("latency_per_investigation_ms", {})
+            print(
+                f"  Per-investigation budget (deterministic substrate, "
+                f"model={pi.get('model', '?')})"
+            )
+            print(
+                f"    tokens   mean={tok.get('mean', 0):.0f}  median={tok.get('median', 0):.0f}  "
+                f"p95={tok.get('p95', 0):.0f}  p99={tok.get('p99', 0):.0f}"
+            )
+            print(
+                f"    USD      mean=${usd.get('mean', 0):.5f}  median=${usd.get('median', 0):.5f}  "
+                f"p95=${usd.get('p95', 0):.5f}  p99=${usd.get('p99', 0):.5f}"
+            )
+            print(
+                f"    latency  p50={lat.get('p50', 0):.4f} ms  p95={lat.get('p95', 0):.4f} ms  "
+                f"p99={lat.get('p99', 0):.4f} ms  (substrate path)"
+            )
         print("=" * 78)
         verdict = "ALL GATES PASSED" if summary["all_passed"] else "REGRESSION DETECTED"
         print(f"  {verdict}")
