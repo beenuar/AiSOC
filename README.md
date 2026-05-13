@@ -10,10 +10,12 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
 [![Version](https://img.shields.io/badge/version-7.1.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Live demo on Fly.io (v8.0 launch)](https://img.shields.io/badge/Live%20demo-Fly.io-7b2bbe?style=flat-square&logo=fly-dot-io&logoColor=white)](https://demo.aisoc.dev)
+[![Render demo (one-click)](https://img.shields.io/badge/Render%20demo-one%20click-46e3b7?style=flat-square&logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC)
 
 [Live demo](https://tryaisoc.com) · [How AiSOC compares](#how-aisoc-compares) · [Public eval harness](apps/docs/docs/benchmark.md) · [Deploy in 60 seconds](#deploy-in-60-seconds) · [Deployment options](#deployment-options) · [Architecture](#architecture) · [Docs](apps/docs/)
 
-<sub>The demo at <a href="https://tryaisoc.com">tryaisoc.com</a> is a self-hosted instance fronted by a Cloudflare Tunnel — when it's reachable, the stack is running locally on a maintainer's box. It can therefore go offline at any time. To run your own (in 3.5 min, with seeded data), see <a href="#one-shot-demo">One-shot demo</a>; to expose your own instance on your own domain via Cloudflare Tunnel, see <a href="#public-demo-on-your-own-domain">Public demo on your own domain</a>.</sub>
+<sub>The demo at <a href="https://tryaisoc.com">tryaisoc.com</a> is a self-hosted instance fronted by a Cloudflare Tunnel — when it's reachable, the stack is running locally on a maintainer's box. It can therefore go offline at any time. To run your own (in 3.5 min, with seeded data), see <a href="#one-shot-demo">One-shot demo</a>; to expose your own instance on your own domain via Cloudflare Tunnel, see <a href="#public-demo-on-your-own-domain">Public demo on your own domain</a>. <strong>The Fly.io demo at <a href="https://demo.aisoc.dev">demo.aisoc.dev</a> goes live with the v8.0 launch — until then the badge above links to the placeholder hostname.</strong></sub>
 
 [![GitHub topics](https://img.shields.io/badge/topics-soc%20%7C%20siem%20%7C%20ai--security%20%7C%20mitre--attack-0ea5e9?style=flat-square)](https://github.com/beenuar/AiSOC/topics)
 
@@ -84,6 +86,14 @@ git clone https://github.com/beenuar/AiSOC.git && cd AiSOC && pnpm aisoc:demo
 ```
 
 Pulls prebuilt `ghcr.io/beenuar/*` images, brings up the slim demo profile (Postgres, Redis, Kafka, api, agents, realtime, web), runs the seeder as a one-shot container, and opens your browser at `/cases/INC-RT-001?tab=ledger` with `demo@aisoc.dev` already auto-logged-in. Idempotent: re-running is a no-op against a seeded volume. Target on a clean Mac with a warm Docker daemon: clone-to-investigation in **~3.5 min warm / ~5 min cold**. Stop with `pnpm aisoc:demo:down`. See [One-shot demo](#one-shot-demo) for the timing breakdown and what you'll see on screen.
+
+**Screencast path — `--quick` mode:** for a deterministic four-case demo that runs in under four minutes on a warm laptop (the path the [90-second screencast](apps/web/public/.demo-mp4-placeholder) records against), pass `--quick`:
+
+```bash
+pnpm aisoc:demo --quick  # 4 cases in 4 minutes
+```
+
+This seeds exactly four cases — `DEMO-001` (spear-phishing), `DEMO-002` (cloud takeover), `DEMO-003` (insider exfil), `DEMO-004` (ransomware) — with byte-stable UUIDs and timestamps, then lands the browser on `DEMO-004`. Re-running cleans the four cases and reseeds, so it doubles as a reset button. Run `pnpm aisoc:demo --help` for the full flag list.
 
 ### 3. Fly.io — one script, hosted, persistent
 
