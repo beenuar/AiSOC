@@ -1,0 +1,47 @@
+{
+  "results": [
+    {
+      "id": 101,
+      "creationDate": 4070908800000,
+      "summary": "External share link created",
+      "description": "A public share link was generated for page id 12345",
+      "category": "permissions",
+      "author": {"displayName": "Alice Smith", "username": "alice@example.com"},
+      "remoteAddress": "10.0.0.1",
+      "affectedObject": {"name": "Quarterly Plan", "objectType": "page"}
+    },
+    {
+      "id": 102,
+      "creationDate": 4070908860000,
+      "summary": "Space permissions updated",
+      "description": "Space permissions changed for ENG",
+      "category": "permissions",
+      "author": {"displayName": "Bob Builder", "username": "bob@example.com"},
+      "remoteAddress": "10.0.0.2",
+      "affectedObject": {"name": "ENG", "objectType": "space"}
+    },
+    {
+      "id": 103,
+      "creationDate": 4070908920000,
+      "summary": "Page viewed",
+      "description": "A page was viewed",
+      "category": "general configuration",
+      "author": {"displayName": "Carol Carter", "username": "carol@example.com"},
+      "remoteAddress": "10.0.0.3",
+      "affectedObject": {"name": "Onboarding Guide", "objectType": "page"}
+    },
+    {
+      "id": 104,
+      "creationDate": 4070908980000,
+      "summary": "Removed user from site",
+      "description": "User dave@example.com removed from site",
+      "category": "users and groups",
+      "author": {"displayName": "Site Admin", "username": "admin@example.com"},
+      "remoteAddress": "10.0.0.4",
+      "affectedObject": {"name": "dave@example.com", "objectType": "user"}
+    }
+  ],
+  "start": 0,
+  "limit": 100,
+  "size": 4
+}
