@@ -51,8 +51,11 @@
 .NOTES
     Exit codes:
         0  success
-        1  invalid arguments
+        1  invalid arguments / unexpected error
         2  not run from inside an AiSOC clone (and -RemoveRepo wasn't given)
+        3  refused to delete a path for safety reasons (system dir, not an
+           AiSOC clone, etc.) — visible separately so CI scripts don't
+           silently treat a refusal as "all done"
 #>
 
 [CmdletBinding()]
@@ -71,6 +74,11 @@ if ($All) {
     $RemoveNodeModules = $true
     $RemoveRepo = $true
 }
+
+# Tracks whether we refused a delete for safety reasons. We don't fail-fast
+# on refusals (the user might still want to clean up volumes / images), but
+# we do exit non-zero at the end so CI scripts notice.
+$script:SafetyRefused = $false
 
 # ─── Logging helpers (match install.ps1 style) ──────────────────────────────
 
@@ -140,13 +148,21 @@ if (-not $RepoRoot) {
 
 # ─── Step 1: stop the demo stack ────────────────────────────────────────────
 
-function Stop-DemoStack {
+function Test-DockerReachable {
+    # PowerShell native commands don't throw on non-zero exit, so try/catch
+    # around `docker info` is a no-op. Check $LASTEXITCODE explicitly.
     $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) {
+    if (-not $docker) { return $false }
+    & docker info *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Stop-DemoStack {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Write-Warn "docker not on PATH; skipping compose down."
         return
     }
-    try { docker info 2>$null | Out-Null } catch {
+    if (-not (Test-DockerReachable)) {
         Write-Warn "docker daemon not reachable; skipping compose down."
         return
     }
@@ -172,12 +188,11 @@ function Stop-DemoStack {
 
 function Remove-AiSOCImages {
     if (-not $RemoveImages) { return }
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Write-Warn "docker unreachable; skipping image removal."
         return
     }
-    try { docker info 2>$null | Out-Null } catch {
+    if (-not (Test-DockerReachable)) {
         Write-Warn "docker daemon not reachable; skipping image removal."
         return
     }
@@ -223,6 +238,41 @@ function Remove-NodeModulesTrees {
 
 # ─── Step 4: blow away the repo clone ───────────────────────────────────────
 
+function Test-DangerousPath {
+    # Refuse rm -rf on system or home-root directories. The "Steam deleted
+    # my home" defense — better paranoid than apologetic.
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $true }
+    $abs = $Path
+    try { $abs = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath } catch {}
+    # Normalise: strip trailing slash and lower-case for matching.
+    $norm = $abs.TrimEnd('\', '/').ToLowerInvariant()
+
+    # Bare drive roots (C:, D:\, etc.) — refuse before doing anything else.
+    if ($norm -match '^[a-z]:$' -or $norm -match '^[a-z]:\\?$') { return $true }
+
+    # Build the blocklist defensively — any of these env vars could in theory
+    # be empty on a weird system, and calling .ToLowerInvariant() on $null
+    # throws. We collect candidates as nullable strings, then filter empties.
+    $candidates = New-Object System.Collections.Generic.List[string]
+    $candidates.Add($env:SystemDrive)
+    $candidates.Add($env:windir)
+    $candidates.Add($env:ProgramFiles)
+    $candidates.Add(${env:ProgramFiles(x86)})
+    $candidates.Add($env:USERPROFILE)
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $candidates.Add((Join-Path $env:USERPROFILE 'Desktop'))
+        $candidates.Add((Join-Path $env:USERPROFILE 'Documents'))
+        $candidates.Add((Join-Path $env:USERPROFILE 'Downloads'))
+    }
+    foreach ($c in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($c)) { continue }
+        $b = $c.TrimEnd('\', '/').ToLowerInvariant()
+        if ($norm -eq $b) { return $true }
+    }
+    return $false
+}
+
 function Remove-RepoClone {
     if (-not $RemoveRepo) { return }
     $target = if ($RepoRoot) { $RepoRoot } else { Join-Path $env:USERPROFILE 'aisoc' }
@@ -230,9 +280,36 @@ function Remove-RepoClone {
         Write-Warn "No repo found at $target; nothing to remove."
         return
     }
+    # Final sanity check: target must look like an AiSOC clone. Stops us
+    # from rm -rf'ing some unrelated dir the user happened to put in
+    # %USERPROFILE%\aisoc.
+    $composeFile = Join-Path $target 'docker-compose.demo.yml'
+    $pkgFile = Join-Path $target 'package.json'
+    $looksLikeAiSOC = $false
+    if ((Test-Path $composeFile) -and (Test-Path $pkgFile)) {
+        $pkgContent = Get-Content $pkgFile -Raw -ErrorAction SilentlyContinue
+        if ($pkgContent -and $pkgContent -match '"name"\s*:\s*"aisoc"') {
+            $looksLikeAiSOC = $true
+        }
+    }
+    if (-not $looksLikeAiSOC) {
+        Write-Warn "$target doesn't look like an AiSOC clone (missing compose file or package.json marker)."
+        Write-Warn "Refusing to delete it — clean it up manually if you really want to."
+        $script:SafetyRefused = $true
+        return
+    }
+    if (Test-DangerousPath -Path $target) {
+        Write-Err "Refusing to delete $target — looks like a system or profile root directory."
+        Write-Err "If you really meant to delete this path, do it by hand."
+        $script:SafetyRefused = $true
+        return
+    }
     Write-Section "Removing AiSOC repo"
     Write-Warn "About to recursively delete: $target"
     if (Confirm-Action "Are you absolutely sure?") {
+        # cd somewhere safe before deleting — PowerShell holds a lock on
+        # the cwd, so deleting it can fail or leave orphan handles.
+        try { Set-Location $env:TEMP } catch { try { Set-Location $env:SystemDrive } catch {} }
         try {
             Remove-Item -Recurse -Force -LiteralPath $target -ErrorAction Stop
             Write-Ok "Repo deleted."
@@ -251,7 +328,12 @@ Remove-NodeModulesTrees
 Remove-RepoClone
 
 Write-Host ""
-Write-Host "AiSOC uninstall complete." -ForegroundColor Green
+if ($script:SafetyRefused) {
+    Write-Host "AiSOC uninstall finished — but at least one delete was refused for safety." -ForegroundColor Yellow
+    Write-Host "See messages above. Exiting with code 3 so CI/scripts notice." -ForegroundColor Yellow
+} else {
+    Write-Host "AiSOC uninstall complete." -ForegroundColor Green
+}
 Write-Host ""
 Write-Host "Things this script intentionally did NOT remove:" -ForegroundColor DarkGray
 Write-Host "  - Docker Desktop, Node, pnpm, git (shared dev tools)"
@@ -262,3 +344,5 @@ Write-Host ""
 Write-Host "To remove the leftover infrastructure images too:" -ForegroundColor DarkGray
 Write-Host "  docker image prune -a    # removes ALL dangling+unused images, not just AiSOC's"
 Write-Host ""
+
+if ($script:SafetyRefused) { exit 3 }

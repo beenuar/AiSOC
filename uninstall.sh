@@ -33,8 +33,11 @@
 #
 # Exit codes:
 #   0  success
-#   1  invalid arguments
+#   1  invalid arguments / unexpected error
 #   2  not run from inside an AiSOC clone (and --repo wasn't given)
+#   3  refused to delete a path for safety reasons (system dir, not an AiSOC
+#      clone, etc.) — visible separately so CI scripts don't silently treat
+#      a refusal as "all done"
 ###############################################################################
 
 set -euo pipefail
@@ -67,6 +70,11 @@ REMOVE_IMAGES=0
 REMOVE_NODE_MODULES=0
 REMOVE_REPO=0
 YES=0  # skip confirmation prompts (for CI / scripted use)
+
+# Tracks whether we refused a delete for safety reasons. We don't fail-fast
+# on refusals (the user might still want volumes/images cleaned), but we exit
+# non-zero at the end so CI scripts notice.
+SAFETY_REFUSED=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -196,6 +204,35 @@ remove_node_modules() {
 
 # ─── Step 4: blow away the repo clone ────────────────────────────────────────
 
+is_dangerous_path() {
+  # Refuse rm -rf on anything that looks like a system directory or the
+  # user's home root. This is the "did Steam delete my home directory"
+  # safety check — better paranoid than apologetic. We canonicalise via
+  # realpath when available so symlinks can't dodge the blacklist.
+  local p="$1"
+  case "$p" in
+    ""|/|/.|/..) return 0 ;;
+  esac
+  # Block the user's home root, common system dirs, and the FS root.
+  local abs="$p"
+  if command -v realpath >/dev/null 2>&1; then
+    abs="$(realpath "$p" 2>/dev/null || printf '%s' "$p")"
+  fi
+  case "$abs" in
+    /|/bin|/sbin|/usr|/usr/*|/etc|/etc/*|/var|/var/*|/opt|/opt/*) return 0 ;;
+    /lib|/lib/*|/lib64|/lib64/*|/boot|/boot/*|/dev|/dev/*|/proc|/proc/*|/sys|/sys/*) return 0 ;;
+    /tmp|/private/tmp|"$HOME"|"$HOME/") return 0 ;;
+    /Users|/Users/*|/home|/home/*)
+      # Allow /home/<user>/something but not /home or /home/<user> itself.
+      # Same for /Users.
+      local depth
+      depth=$(printf '%s' "$abs" | tr -cd '/' | wc -c | tr -d ' ')
+      [ "$depth" -le 2 ] && return 0
+      ;;
+  esac
+  return 1
+}
+
 remove_repo_clone() {
   if [ "$REMOVE_REPO" = "0" ]; then return 0; fi
   # Two candidate locations: $REPO_ROOT (whatever we found) and the canonical
@@ -206,9 +243,29 @@ remove_repo_clone() {
     warn "No repo found at $target; nothing to remove."
     return 0
   fi
+  # Final sanity check: the path must look like an AiSOC clone (has the
+  # compose file AND a package.json claiming the project name). This stops
+  # us from rm -rf'ing some unrelated directory the user happened to put
+  # in $HOME/aisoc.
+  if [ ! -f "$target/docker-compose.demo.yml" ] || ! grep -q '"name": "aisoc"' "$target/package.json" 2>/dev/null; then
+    warn "$target doesn't look like an AiSOC clone (missing compose file or package.json marker)."
+    warn "Refusing to delete it — clean it up manually if you really want to."
+    SAFETY_REFUSED=1
+    return 0
+  fi
+  if is_dangerous_path "$target"; then
+    err "Refusing to delete $target — looks like a system or home root directory."
+    err "If you really meant to delete this path, do it by hand."
+    SAFETY_REFUSED=1
+    return 0
+  fi
   section "Removing AiSOC repo"
   warn "About to recursively delete: $target"
   if confirm "Are you absolutely sure?"; then
+    # cd somewhere safe before rm -rf'ing — if $REPO_ROOT is the cwd of
+    # this shell, deleting it can confuse macOS's filesystem and leave
+    # the script unable to print the final banner.
+    cd /tmp 2>/dev/null || cd / || true
     rm -rf "$target"
     ok "Repo deleted."
   fi
@@ -223,10 +280,22 @@ main() {
   remove_node_modules
   remove_repo_clone
 
-  cat <<EOF
+  if [ "$SAFETY_REFUSED" = "1" ]; then
+    cat <<EOF
+
+${C_YELLOW}AiSOC uninstall finished — but at least one delete was refused for safety.${C_RESET}
+${C_YELLOW}See messages above. Exiting with code 3 so CI/scripts notice.${C_RESET}
+
+EOF
+  else
+    cat <<EOF
 
 ${C_GREEN}AiSOC uninstall complete.${C_RESET}
 
+EOF
+  fi
+
+  cat <<EOF
 ${C_DIM}Things this script intentionally did NOT remove:${C_RESET}
   - Docker, Node, pnpm, git (shared dev tools)
   - Your membership in the 'docker' group
@@ -237,6 +306,10 @@ ${C_DIM}To remove the leftover infrastructure images too:${C_RESET}
   docker image prune -a    # removes ALL dangling+unused images, not just AiSOC's
 
 EOF
+
+  if [ "$SAFETY_REFUSED" = "1" ]; then
+    exit 3
+  fi
 }
 
 main "$@"

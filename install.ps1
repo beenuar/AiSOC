@@ -44,6 +44,20 @@
 .PARAMETER Branch
     Git branch to clone. Default: main.
 
+.PARAMETER SkipPreflight
+    Skip the preflight checks (RAM, disk, network, ports, WSL2, Docker reach).
+    Use only if you know exactly what you're doing — preflight catches >80%
+    of "doesn't work for me" reports.
+
+.PARAMETER Diagnose
+    Run preflight checks and exit. No installs, no demo. Useful for triaging
+    a half-broken machine without committing to a full install.
+
+.PARAMETER NonInteractive
+    Don't prompt for anything; refuse to do any step that needs user input
+    (e.g. accepting Docker Desktop's EULA on first launch). Auto-enabled
+    when stdin is redirected (iwr | iex) or when $env:CI is set.
+
 .EXAMPLE
     # One-liner from PowerShell (run as your normal user, not Administrator —
     # winget will elevate per-package as needed):
@@ -63,6 +77,8 @@
         1  prerequisite install failed
         2  Docker Desktop refused to come up / WSL2 not enabled
         3  pnpm aisoc:demo failed (stack didn't boot or seed)
+        4  preflight checks failed (machine doesn't meet minimums)
+        5  git clone failed (network / branch / disk)
 
     Tested on:
         - Windows 11 23H2 (x64 + ARM64)
@@ -83,6 +99,9 @@ param(
     [switch]$NoLaunch,
     [switch]$NoPull,
     [switch]$Rebuild,
+    [switch]$SkipPreflight,
+    [switch]$Diagnose,
+    [switch]$NonInteractive,
     [string]$CloneDir = (Join-Path $env:USERPROFILE 'aisoc'),
     [string]$Branch = 'main'
 )
@@ -92,12 +111,19 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ─── Logging helpers ──────────────────────────────────────────────────────
-# We deliberately avoid Write-Host's color params for non-interactive runs
-# (CI, redirected stdout). Detection: $Host.UI.RawUI is null when there's
-# no console (e.g. piped through iex from iwr in a non-interactive context).
+# Auto-detect non-interactive contexts. The classic case is `iwr | iex` from
+# a CI runner — there's no terminal to prompt at, and any Read-Host or winget
+# UAC dialog would silently hang the pipeline.
+if (-not $NonInteractive) {
+    if ([Console]::IsInputRedirected -or $env:CI -eq 'true' -or $env:CI -eq '1') {
+        $NonInteractive = $true
+    }
+}
 
-$script:UseColor = ($null -ne $Host.UI.RawUI) -and ($null -eq $env:NO_COLOR)
+# ─── Logging helpers ──────────────────────────────────────────────────────
+# Write-Host with -ForegroundColor is safe even when stdout is redirected —
+# PowerShell strips ANSI codes for non-console hosts. So we don't need a
+# UseColor flag; the runtime DTRT.
 
 function Write-Log    { param([string]$Msg) Write-Host "[aisoc] $Msg" -ForegroundColor DarkGray }
 function Write-Info   { param([string]$Msg) Write-Host "[aisoc] $Msg" -ForegroundColor Blue }
@@ -146,11 +172,24 @@ function Test-WSL2 {
     Write-Section 'WSL2 check'
     $hasWsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
     if (-not $hasWsl) {
-        Write-Warn "WSL is not installed. Installing now (this requires a reboot)..."
+        if ($NonInteractive) {
+            # `wsl --install` needs admin, can't be silenced, and forces a
+            # reboot. None of those work in CI / iwr|iex pipelines.
+            Stop-WithError @"
+WSL is not installed and we're running non-interactively.
+WSL installation requires administrator privileges and a reboot.
+
+Please run the following from an elevated PowerShell, reboot, then re-run
+this installer interactively:
+
+  wsl --install
+"@ 2
+        }
+        Write-Warn "WSL is not installed. Installing now (this requires admin and a reboot)..."
         Write-Info "Running: wsl --install --no-launch"
         & wsl.exe --install --no-launch
         if ($LASTEXITCODE -ne 0) {
-            Stop-WithError "wsl --install failed. Run an elevated PowerShell and try: wsl --install" 2
+            Stop-WithError "wsl --install failed (exit $LASTEXITCODE). Run an elevated PowerShell and try: wsl --install" 2
         }
         Write-Warn "WSL2 was installed but Windows must reboot before Docker Desktop can use it."
         Write-Warn "Reboot now, then re-run this installer."
@@ -161,6 +200,15 @@ function Test-WSL2 {
     # docker-desktop distro. We only fail if WSL itself is broken.
     $statusOutput = & wsl.exe --status 2>&1
     if ($LASTEXITCODE -ne 0 -and $statusOutput -match 'WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') {
+        if ($NonInteractive) {
+            Stop-WithError @"
+WSL needs the 'Virtual Machine Platform' Windows feature, which requires
+admin + reboot to enable. Run the following from an elevated PowerShell,
+reboot, then re-run this installer interactively:
+
+  Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All
+"@ 2
+        }
         Write-Warn "WSL needs the Virtual Machine Platform Windows feature."
         Write-Info "Enabling Virtual Machine Platform (you may need to reboot)..."
         Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart -ErrorAction SilentlyContinue | Out-Null
@@ -224,7 +272,18 @@ function Install-WingetPackage {
     )
     if (-not $DisplayName) { $DisplayName = $Id }
     Write-Info "Installing $DisplayName via winget (id: $Id)..."
-    $args = @(
+
+    # Heads-up for the iwr|iex crowd: winget triggers UAC for installers that
+    # need elevation. There's no clean way to detect that ahead of time, but
+    # we can at least warn so the user knows to look for the prompt.
+    if ($NonInteractive) {
+        Write-Warn "winget may trigger a UAC elevation prompt for $DisplayName."
+        Write-Warn "If running unattended, the script will hang here until UAC is acknowledged."
+    }
+
+    # NOTE: don't name this `$args` — that's a PowerShell automatic variable
+    # for unbound positional args and shadowing it triggers StrictMode warnings.
+    $wingetArgs = @(
         'install',
         '--id', $Id,
         '--exact',                   # match Id exactly, no fuzzy suggestions
@@ -233,7 +292,7 @@ function Install-WingetPackage {
         '--accept-source-agreements',
         '--source', 'winget'         # pin to the official source, not msstore
     )
-    $proc = Start-Process -FilePath 'winget' -ArgumentList $args -Wait -PassThru -NoNewWindow
+    $proc = Start-Process -FilePath 'winget' -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
     switch ($proc.ExitCode) {
         0 { Write-Ok "$DisplayName installed." }
         -1978335189 { Write-Ok "$DisplayName already installed (winget said no upgrade needed)." }  # APPINSTALLER_CLI_ERROR_NO_APPLICABLE_INSTALLER
@@ -256,6 +315,72 @@ function Update-PathFromRegistry {
     $machine = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
     $user    = [System.Environment]::GetEnvironmentVariable('Path', 'User')
     $env:Path = ($machine, $user -join ';') -replace ';;', ';'
+}
+
+# ─── Preflight integration ────────────────────────────────────────────────
+# preflight.ps1 lives at scripts\install\preflight.ps1 in the repo. When
+# the user runs install.ps1 from inside a clone, we source it directly.
+# When they ran the one-liner (`iwr | iex`), $PSScriptRoot is empty and
+# we have no clone yet, so we fetch preflight.ps1 from the same branch
+# we're going to clone shortly and dot-source it from a temp file.
+
+function Invoke-Preflight {
+    if ($SkipPreflight) {
+        Write-Warn "Skipping preflight checks (--SkipPreflight given)."
+        return
+    }
+
+    Write-Section 'Preflight checks'
+
+    $preflightLocal = $null
+    if ($PSScriptRoot) {
+        $candidate = Join-Path $PSScriptRoot 'scripts\install\preflight.ps1'
+        if (Test-Path $candidate) {
+            $preflightLocal = $candidate
+        }
+    }
+
+    if (-not $preflightLocal) {
+        # We're running as a one-liner. Fetch preflight.ps1 from the same
+        # branch we're about to clone. We use a temp file rather than
+        # `iex (iwr ...)` because dot-sourcing is cleaner and the file
+        # has multiple functions we want in scope.
+        $url = "https://raw.githubusercontent.com/beenuar/AiSOC/$Branch/scripts/install/preflight.ps1"
+        $preflightLocal = Join-Path $env:TEMP "aisoc-preflight-$([guid]::NewGuid().ToString('N')).ps1"
+        Write-Info "Fetching preflight.ps1 from $url ..."
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $preflightLocal -ErrorAction Stop
+        } catch {
+            Write-Warn "Could not fetch preflight.ps1: $($_.Exception.Message)"
+            Write-Warn "Continuing without preflight (re-run with -SkipPreflight to suppress this warning)."
+            return
+        }
+    }
+
+    # Dot-source so its functions land in our scope.
+    try {
+        . $preflightLocal
+    } catch {
+        Write-Warn "Failed to load preflight library: $($_.Exception.Message)"
+        Write-Warn "Continuing without preflight."
+        return
+    }
+
+    if (-not (Get-Command -Name 'Invoke-AiSOCPreflight' -ErrorAction SilentlyContinue)) {
+        Write-Warn "preflight.ps1 loaded but didn't expose Invoke-AiSOCPreflight; skipping."
+        return
+    }
+
+    try {
+        $ok = Invoke-AiSOCPreflight
+    } catch {
+        Write-Err "Preflight crashed: $($_.Exception.Message)"
+        Stop-WithError "Preflight could not complete. Re-run with -SkipPreflight to bypass at your own risk." 4
+    }
+
+    if (-not $ok) {
+        Stop-WithError "Preflight failed. Fix the issues above and re-run, or pass -SkipPreflight to override." 4
+    }
 }
 
 # ─── Step 1: Git ──────────────────────────────────────────────────────────
@@ -285,6 +410,24 @@ function Install-Docker {
         Test-DockerDaemon
         return
     }
+
+    if ($NonInteractive) {
+        # Docker Desktop's first-run flow is interactive (EULA + WSL2 prompt).
+        # Refusing to install in non-interactive mode is much safer than
+        # silently installing a Docker that the user can't actually start.
+        Stop-WithError @"
+Docker Desktop is not installed and we're running non-interactively.
+Docker Desktop's first run requires accepting an EULA from a UI, which can't
+happen in this context.
+
+Please either:
+  1. Install Docker Desktop manually from https://docker.com/products/docker-desktop
+     and re-run this installer, OR
+  2. Re-run this installer from an interactive PowerShell window:
+       irm https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+"@ 2
+    }
+
     Install-WingetPackage -Id 'Docker.DockerDesktop' -DisplayName 'Docker Desktop'
 
     # Docker Desktop install puts docker.exe at:
@@ -307,20 +450,31 @@ function Install-Docker {
     Write-Ok "docker installed: $((& docker --version))"
 
     # Try to start Docker Desktop. The shortcut path is consistent across
-    # versions. Start-Process with -PassThru lets us check the spawn
-    # succeeded; the actual daemon takes 10-30 s more to come up.
+    # versions. Start-Process is fire-and-forget; the actual daemon takes
+    # 30-90 s more to come up on the first run because the WSL2 distro
+    # has to be created.
     $dockerDesktop = "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
     if (Test-Path $dockerDesktop) {
         Write-Info "Launching Docker Desktop..."
         Start-Process -FilePath $dockerDesktop -ErrorAction SilentlyContinue | Out-Null
+    } else {
+        Write-Warn "Docker Desktop executable not found at expected path:"
+        Write-Warn "  $dockerDesktop"
+        Write-Warn "Please launch Docker Desktop manually from the Start Menu."
     }
 
     Test-DockerDaemon
 }
 
 function Test-DockerDaemon {
-    Write-Info "Waiting for Docker daemon (up to 90 s)..."
-    $deadline = (Get-Date).AddSeconds(90)
+    # First-run Docker Desktop on Windows can take 2-3 minutes because it
+    # provisions a WSL2 distro and installs the Linux kernel. We poll for
+    # up to 3 minutes, with progress messages every 30 s so the user
+    # doesn't think we're hung.
+    $timeoutSeconds = 180
+    Write-Info "Waiting for Docker daemon (up to $timeoutSeconds s — first run can be slow)..."
+    $deadline   = (Get-Date).AddSeconds($timeoutSeconds)
+    $lastNotice = Get-Date
     while ((Get-Date) -lt $deadline) {
         try {
             & docker info *>&1 | Out-Null
@@ -329,15 +483,22 @@ function Test-DockerDaemon {
                 return
             }
         } catch { }
+
+        if (((Get-Date) - $lastNotice).TotalSeconds -gt 30) {
+            $remaining = [int](($deadline - (Get-Date)).TotalSeconds)
+            Write-Info "  ... still waiting (${remaining}s remaining). If this is your first run, accept any prompts from Docker Desktop."
+            $lastNotice = Get-Date
+        }
         Start-Sleep -Seconds 3
     }
-    Write-Err "Docker daemon is not responding after 90 s."
+    Write-Err "Docker daemon is not responding after $timeoutSeconds s."
     Write-Err ""
     Write-Err "First-time Docker Desktop setup is interactive:"
     Write-Err "  1. Find 'Docker Desktop' in the Start Menu and launch it."
     Write-Err "  2. Accept the licence agreement."
-    Write-Err "  3. Wait for the whale icon in the system tray to stop animating."
-    Write-Err "  4. Re-run this installer."
+    Write-Err "  3. If asked, install the WSL2 kernel update."
+    Write-Err "  4. Wait for the whale icon in the system tray to stop animating."
+    Write-Err "  5. Re-run this installer."
     exit 2
 }
 
@@ -345,7 +506,10 @@ function Test-DockerDaemon {
 
 function Install-Node {
     $major = Get-CommandMajorVersion -Name 'node'
-    if ($major -ne $null -and $major -ge 20) {
+    # $null on the LHS is the PowerShell idiom — putting $null on the right
+    # unboxes the LHS if it's an array, which Get-CommandMajorVersion can
+    # technically return if Select-Object -First 1 misbehaves.
+    if (($null -ne $major) -and ($major -ge 20)) {
         Write-Ok "node already installed: $((& node --version))"
         return
     }
@@ -360,21 +524,44 @@ function Install-Node {
 
 function Install-Pnpm {
     $major = Get-CommandMajorVersion -Name 'pnpm'
-    if ($major -ne $null -and $major -ge 8) {
+    if ($null -ne $major -and $major -ge 8) {
         Write-Ok "pnpm already installed: $((& pnpm --version))"
         return
     }
+
+    # Try corepack first (the modern Node-bundled package-manager manager).
+    # Fall back to a global npm install if corepack misbehaves — older Node
+    # bundles, locked-down corporate networks, or registry hiccups all
+    # break corepack in different ways.
     Write-Info "Enabling corepack and activating pnpm 8.15.1..."
+    $corepackOk = $true
     & corepack enable 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Stop-WithError "corepack enable failed. Make sure node was installed correctly."
+    if ($LASTEXITCODE -ne 0) { $corepackOk = $false }
+    if ($corepackOk) {
+        & corepack prepare pnpm@8.15.1 --activate 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { $corepackOk = $false }
     }
-    & corepack prepare pnpm@8.15.1 --activate 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Stop-WithError "corepack prepare pnpm failed."
+
+    if (-not $corepackOk -or -not (Test-CommandExists pnpm)) {
+        Write-Warn "corepack route failed; falling back to: npm install -g pnpm@8.15.1"
+        & npm install -g pnpm@8.15.1 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Stop-WithError @"
+Could not install pnpm via corepack OR npm.
+
+Workaround: install pnpm manually, then re-run this script:
+  npm install -g pnpm@8.15.1
+  irm https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
+"@
+        }
+    }
+
+    if (-not (Test-CommandExists pnpm)) {
+        # PATH refresh hasn't picked up the new global bin yet.
+        Update-PathFromRegistry
     }
     if (-not (Test-CommandExists pnpm)) {
-        Stop-WithError "pnpm was activated but isn't on PATH. Open a new PowerShell window and re-run this script."
+        Stop-WithError "pnpm was installed but isn't on PATH. Open a new PowerShell window and re-run this script."
     }
     Write-Ok "pnpm installed: $((& pnpm --version))"
 }
@@ -403,11 +590,24 @@ function Resolve-Repo {
             Write-Info "Updating existing clone at $CloneDir..."
             Push-Location $CloneDir
             try {
-                & git fetch --quiet origin
-                & git checkout --quiet $Branch
-                & git pull --ff-only --quiet
-            } catch {
-                Write-Warn "git pull failed; using whatever is on disk."
+                # PowerShell try/catch doesn't catch non-zero native exit
+                # codes, so check $LASTEXITCODE explicitly. We don't fail
+                # hard on update failure — the user might have local edits
+                # or be offline; we'd rather use what's on disk than abort.
+                & git fetch --quiet origin 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warn "git fetch failed; using local state."
+                } else {
+                    & git checkout --quiet $Branch 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Warn "git checkout $Branch failed; staying on current branch."
+                    } else {
+                        & git pull --ff-only --quiet 2>&1 | Out-Null
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Warn "git pull failed (likely local commits); using local state."
+                        }
+                    }
+                }
             } finally {
                 Pop-Location
             }
@@ -419,12 +619,44 @@ function Resolve-Repo {
     }
 
     Write-Info "Cloning AiSOC into $CloneDir (branch: $Branch)..."
-    & git clone --branch $Branch --depth 50 https://github.com/beenuar/AiSOC.git $CloneDir
-    if ($LASTEXITCODE -ne 0) {
-        Stop-WithError "git clone failed."
+
+    # Retry up to 3 times with backoff. The most common failure on Windows
+    # is corporate-proxy-related (407, SSL handshake failures) on the first
+    # attempt but fine after a retry once the proxy creds are cached.
+    $maxAttempts = 3
+    $attempt     = 0
+    while ($attempt -lt $maxAttempts) {
+        $attempt++
+        & git clone --branch $Branch --depth 50 https://github.com/beenuar/AiSOC.git $CloneDir
+        if ($LASTEXITCODE -eq 0) {
+            $script:RepoRoot = $CloneDir
+            Write-Ok "Cloned AiSOC to $RepoRoot"
+            return
+        }
+
+        if ($attempt -lt $maxAttempts) {
+            Write-Warn "git clone failed (attempt $attempt/$maxAttempts). Retrying in 3 s..."
+            # Clean up partial clone so the retry doesn't trip over an
+            # existing dir.
+            if (Test-Path $CloneDir) {
+                try { Remove-Item -Recurse -Force $CloneDir -ErrorAction Stop } catch { }
+            }
+            Start-Sleep -Seconds 3
+        }
     }
-    $script:RepoRoot = $CloneDir
-    Write-Ok "Cloned AiSOC to $RepoRoot"
+
+    Stop-WithError @"
+git clone failed after $maxAttempts attempts.
+
+Common causes:
+  * No internet (try: Test-NetConnection github.com -Port 443)
+  * Corporate proxy not configured for git
+    (try: git config --global http.proxy http://proxy:port)
+  * Branch '$Branch' doesn't exist on the remote
+    (try: git ls-remote --heads https://github.com/beenuar/AiSOC.git)
+
+Then re-run this installer.
+"@ 5
 }
 
 # ─── Step 6: .env bootstrap ───────────────────────────────────────────────
@@ -513,9 +745,63 @@ function Write-SuccessBanner {
 # ─── Main ─────────────────────────────────────────────────────────────────
 
 function Invoke-Main {
+    # Friendly error handler. Without this, an unhandled exception dumps a
+    # gnarly red PowerShell stack trace at the user with no context. We catch
+    # it, surface the most useful info, and link them to where to file an
+    # issue with that info pre-filled.
+    trap {
+        $err = $_
+        Write-Host ''
+        Write-Host '┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓' -ForegroundColor Red
+        Write-Host '┃  AiSOC installer hit an unexpected error.                                    ┃' -ForegroundColor Red
+        Write-Host '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛' -ForegroundColor Red
+        Write-Host ''
+        Write-Host "  Error: $($err.Exception.Message)" -ForegroundColor Yellow
+        if ($err.InvocationInfo) {
+            Write-Host "  At:    $($err.InvocationInfo.ScriptName):$($err.InvocationInfo.ScriptLineNumber)" -ForegroundColor DarkGray
+            Write-Host "         $($err.InvocationInfo.Line.Trim())" -ForegroundColor DarkGray
+        }
+        Write-Host ''
+        Write-Host '  What to try:' -ForegroundColor Cyan
+        Write-Host '    1. Re-run with: .\install.ps1 -Diagnose'
+        Write-Host '       (preflight only — no installs)'
+        Write-Host '    2. Read the troubleshooting guide:'
+        Write-Host '       https://github.com/beenuar/AiSOC/blob/main/docs/QUICK_INSTALL.md#troubleshooting'
+        Write-Host '    3. File an issue with the system info below:'
+        Write-Host '       https://github.com/beenuar/AiSOC/issues/new?template=installer-bug.md'
+        Write-Host ''
+        Write-Host '  System info:' -ForegroundColor DarkGray
+        try {
+            $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+            if ($os) {
+                Write-Host "    OS:      $($os.Caption) build $($os.BuildNumber) ($env:PROCESSOR_ARCHITECTURE)" -ForegroundColor DarkGray
+            }
+        } catch { }
+        Write-Host "    PSVer:   $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+        if (Test-CommandExists docker) {
+            try { Write-Host "    Docker:  $((& docker --version) 2>$null)" -ForegroundColor DarkGray } catch { }
+        }
+        if (Test-CommandExists node) {
+            try { Write-Host "    Node:    $((& node --version) 2>$null)" -ForegroundColor DarkGray } catch { }
+        }
+        Write-Host ''
+        exit 1
+    }
+
     Write-Section 'AiSOC One-Click Installer (Windows)'
 
     Test-WindowsVersion
+
+    # Preflight before we touch anything. In Diagnose mode this is also
+    # the only thing we run.
+    Invoke-Preflight
+
+    if ($Diagnose) {
+        Write-Host ''
+        Write-Ok "Diagnose complete. No changes were made."
+        Write-Info "Drop -Diagnose to continue with the full install."
+        exit 0
+    }
 
     if (-not $NoInstall) {
         Test-WSL2

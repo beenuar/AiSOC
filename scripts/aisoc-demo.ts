@@ -240,17 +240,52 @@ async function waitFor(
   return false;
 }
 
+// Returns true if we're sure there's no display the browser could land on.
+// On Linux this is the usual "headless server" check (no DISPLAY/WAYLAND
+// and no xdg-open). On macOS and Windows the OS always has a session, so
+// we only honor the explicit AISOC_NO_BROWSER opt-out.
+function isHeadless(): boolean {
+  if (process.env.AISOC_NO_BROWSER === "1") return true;
+  if (process.env.CI) return true;
+  const p = platform();
+  if (p === "linux") {
+    if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return true;
+  }
+  return false;
+}
+
 function openBrowser(url: string) {
   const p = platform();
-  const cmd =
-    p === "darwin" ? "open" : p === "win32" ? "start" : "xdg-open";
   try {
     if (p === "win32") {
-      // `start` is a cmd.exe builtin — needs `cmd /c`
+      // `start` is a cmd.exe builtin, not an exe — must go through cmd.
+      // The empty "" arg is cmd's title slot; without it `start` swallows
+      // the URL as a window title when the URL starts with a quote.
       spawnSync("cmd", ["/c", "start", "", url], { stdio: "ignore", detached: true });
-    } else {
-      spawnSync(cmd, [url], { stdio: "ignore", detached: true });
+      return;
     }
+    if (p === "darwin") {
+      spawnSync("open", [url], { stdio: "ignore", detached: true });
+      return;
+    }
+    // Linux: xdg-open is present on most desktops but not on minimal
+    // server installs (Debian-slim, Alpine, GitHub Actions ubuntu-latest
+    // when no desktop env). Probe for it first; if missing, just log.
+    const probe = spawnSync("which", ["xdg-open"], { stdio: "ignore" });
+    if (probe.status === 0) {
+      spawnSync("xdg-open", [url], { stdio: "ignore", detached: true });
+      return;
+    }
+    // Fall back to common alternatives that some distros ship.
+    for (const alt of ["sensible-browser", "x-www-browser", "gnome-open"]) {
+      const altProbe = spawnSync("which", [alt], { stdio: "ignore" });
+      if (altProbe.status === 0) {
+        spawnSync(alt, [url], { stdio: "ignore", detached: true });
+        return;
+      }
+    }
+    // No opener available; URL is already in the success banner above.
+    log(c.dim("(no browser opener found — open the URL manually)"));
   } catch {
     // Best-effort. The URL is logged anyway.
   }
@@ -276,9 +311,23 @@ function checkDocker(): boolean {
   }
   log(c.green("ok") + ` ${compose}`);
 
-  const info = tryRun("docker info --format '{{.ServerVersion}}'");
+  // Cross-platform note: single-quote --format works on POSIX shells but
+  // not on Windows cmd, where {{ gets interpreted by Go's template parser
+  // through cmd's mangled quoting. Use spawnSync directly with shell:false
+  // so the args are passed verbatim to docker.exe and the quoting layer
+  // is removed entirely.
+  const infoResult = spawnSync(
+    "docker",
+    ["info", "--format", "{{.ServerVersion}}"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  const info = infoResult.status === 0 ? infoResult.stdout.trim() : "";
   if (!info) {
-    console.error(c.red("docker daemon is not running. Start Docker Desktop and retry."));
+    console.error(
+      c.red(
+        "docker daemon is not running. Start Docker Desktop (or `sudo systemctl start docker` on Linux) and retry.",
+      ),
+    );
     return false;
   }
   log(c.green("ok") + ` docker daemon up (server ${info})`);
@@ -500,6 +549,10 @@ async function openInBrowser(
   step(7, 7, `Opening browser at ${url}`);
   if (flags.noOpen) {
     log(c.dim("--no-open: not launching browser"));
+  } else if (isHeadless()) {
+    // CI, headless server, or AISOC_NO_BROWSER=1. Don't try to spawn a
+    // GUI process the user can't see — just leave the URL in the banner.
+    log(c.dim("headless environment detected — not launching browser (set AISOC_NO_BROWSER=0 to override)"));
   } else {
     openBrowser(url);
   }

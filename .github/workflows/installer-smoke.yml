@@ -1,0 +1,380 @@
+name: Installer Smoke
+
+# Gates regressions in the one-click installer. Three layers, fastest first:
+#
+#   1. Lint — shellcheck on the bash side, PSScriptAnalyzer on the PowerShell
+#      side, plus `bash -n`/`pwsh -NoProfile -Command` parse-only checks.
+#      Catches obvious typos, missing quoting, $args shadowing, etc., in
+#      under a minute.
+#
+#   2. Diagnose — runs `./install.sh --diagnose --non-interactive` inside
+#      clean containers for every distro family the installer claims to
+#      support (Ubuntu, Debian, Fedora, Alpine, Arch, openSUSE). The
+#      preflight library is allowed to fail (the runner doesn't have a real
+#      Docker daemon inside the container) — what we're asserting is that
+#      the script *parses, loads, runs preflight without crashing, and
+#      exits with one of the documented codes (0 success, 4 preflight
+#      failure)*. A 1/2/3 (prereq install / docker daemon / demo phase)
+#      means the script blew past preflight when it shouldn't have, which
+#      is the actual regression we care about.
+#
+#      Windows preflight is checked in a 3rd job on a windows-latest runner
+#      because `pwsh` on linux can't accurately exercise winget/WSL paths.
+#
+#   3. (Future) Full install — actually run `./install.sh --no-launch` in
+#      a privileged container with a real dockerd. Slow + flaky to set up
+#      on hosted runners, so deferred to a nightly workflow rather than a
+#      PR gate.
+#
+# This workflow runs on any change to the installer surface AND on a
+# weekly schedule, so we catch upstream rot (a new shellcheck release
+# flagging a previously-clean construct, a distro removing a package
+# we relied on, etc.) before a contributor does.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - 'uninstall.sh'
+      - 'uninstall.ps1'
+      - 'scripts/install/**'
+      - '.github/workflows/installer-smoke.yml'
+  push:
+    branches:
+      - main
+      - 'release/**'
+      - 'hotfix/**'
+    paths:
+      - 'install.sh'
+      - 'install.ps1'
+      - 'uninstall.sh'
+      - 'uninstall.ps1'
+      - 'scripts/install/**'
+      - '.github/workflows/installer-smoke.yml'
+  schedule:
+    # Mondays 06:00 UTC — catches "it broke on its own" upstream changes.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-bash:
+    name: Lint bash (shellcheck + parse)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: shellcheck
+        run: |
+          # Pinned to the runner's bundled shellcheck. We don't pull a
+          # newer release here on purpose — we want CI to match what a
+          # contributor's `apt install shellcheck` gives them on Ubuntu
+          # LTS. If a newer release flags something, that's noise to
+          # triage in a separate PR, not a surprise gate.
+          shellcheck --version
+          shellcheck install.sh
+          shellcheck uninstall.sh
+          shellcheck scripts/install/preflight.sh
+
+      - name: bash -n parse-only check
+        run: |
+          # Belt-and-braces: shellcheck rarely misses syntax errors but
+          # `bash -n` catches the few it does (notably bash 4+ syntax that
+          # would explode on macOS bash 3.2).
+          bash -n install.sh
+          bash -n uninstall.sh
+          bash -n scripts/install/preflight.sh
+
+      - name: Bash 3.2 compatibility (macOS-style) parse
+        run: |
+          # macOS still ships bash 3.2.57 by default and we promise to
+          # support it. Easiest way to catch a bash-4-only construct is
+          # to disable POSIX-mode extensions and run the parser in
+          # compat31 mode. Not bulletproof but cheap insurance.
+          bash --version | head -1
+          BASH_COMPAT=3.1 bash -n install.sh
+          BASH_COMPAT=3.1 bash -n scripts/install/preflight.sh
+
+  lint-powershell:
+    name: Lint PowerShell (PSScriptAnalyzer + parse)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          # PSScriptAnalyzer ships with the windows-latest runner image.
+          # We treat warnings as warnings (Information output) but error
+          # on Errors. This stays loose on style and strict on bugs.
+          $version = (Get-Module -ListAvailable PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1).Version
+          Write-Host "PSScriptAnalyzer $version"
+
+          $files = @(
+            'install.ps1',
+            'uninstall.ps1',
+            'scripts/install/preflight.ps1'
+          )
+
+          # Rules we deliberately disable, with rationale so future-us
+          # doesn't re-enable them and wonder why CI exploded:
+          #
+          #   PSAvoidUsingWriteHost — we use Write-Host on purpose for
+          #   user-facing installer output (goes to the console host,
+          #   not the success/error/info streams a parent script might
+          #   be piping). Documented approved pattern for interactive
+          #   scripts.
+          #
+          #   PSUseShouldProcessForStateChangingFunctions — would force
+          #   -WhatIf/-Confirm onto every install function. We have
+          #   explicit Confirm-Action prompts + -NonInteractive parameter
+          #   handling instead, which is more honest about the granularity
+          #   of confirmation an installer actually needs.
+          #
+          #   PSUseApprovedVerbs — preflight.ps1 uses the Pf-* prefix as
+          #   an internal namespace marker (Pf-CheckRam, Pf-Summary, etc.).
+          #   "Pf" isn't an approved verb, but renaming all of them to
+          #   Test-PfRam etc. would be a large cosmetic diff and the
+          #   functions are all script-scoped. install.ps1 and uninstall.ps1
+          #   use proper approved verbs everywhere.
+          $excludeRules = @(
+            'PSAvoidUsingWriteHost',
+            'PSUseShouldProcessForStateChangingFunctions',
+            'PSUseApprovedVerbs'
+          )
+
+          $errorCount = 0
+          foreach ($f in $files) {
+            Write-Host ""
+            Write-Host "== $f =="
+            $results = Invoke-ScriptAnalyzer -Path $f -Severity @('Error','Warning') -ExcludeRule $excludeRules
+            if ($null -ne $results) {
+              $results | Format-Table -AutoSize
+              $errs = @($results | Where-Object { $_.Severity -eq 'Error' })
+              $errorCount += $errs.Count
+            } else {
+              Write-Host "clean"
+            }
+          }
+          if ($errorCount -gt 0) {
+            Write-Host ""
+            Write-Host "PSScriptAnalyzer found $errorCount error(s)." -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Parse-only check (AST)
+        shell: pwsh
+        run: |
+          # Parse via the PowerShell AST. Catches syntax errors the
+          # analyzer doesn't surface as Errors (e.g. mismatched braces).
+          $files = @(
+            'install.ps1',
+            'uninstall.ps1',
+            'scripts/install/preflight.ps1'
+          )
+          $bad = 0
+          foreach ($f in $files) {
+            $tokens = $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f).Path, [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              Write-Host "Parse errors in ${f}:" -ForegroundColor Red
+              $errors | ForEach-Object {
+                Write-Host "  Line $($_.Extent.StartLineNumber): $($_.Message)"
+              }
+              $bad++
+            } else {
+              Write-Host "$f parses cleanly"
+            }
+          }
+          if ($bad -gt 0) { exit 1 }
+
+  diagnose-linux:
+    name: --diagnose in clean ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint-bash
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each entry: a distro family + the package-manager bootstrap
+        # the installer's preflight needs (curl + ca-certs + procps for
+        # `ps`/port checks; tar/gzip on alpine for the install path it
+        # may eventually exercise). We deliberately do NOT pre-install
+        # docker/git/node — the script should be tolerant of their
+        # absence in --diagnose mode (preflight reports them, doesn't
+        # try to install).
+        include:
+          - distro: ubuntu-24.04
+            image: ubuntu:24.04
+            bootstrap: 'apt-get update && apt-get install -y --no-install-recommends bash curl ca-certificates procps lsof iproute2 file'
+          - distro: ubuntu-22.04
+            image: ubuntu:22.04
+            bootstrap: 'apt-get update && apt-get install -y --no-install-recommends bash curl ca-certificates procps lsof iproute2 file'
+          - distro: debian-12
+            image: debian:12
+            bootstrap: 'apt-get update && apt-get install -y --no-install-recommends bash curl ca-certificates procps lsof iproute2 file'
+          - distro: fedora-40
+            image: fedora:40
+            bootstrap: 'dnf install -y bash curl ca-certificates procps-ng lsof iproute file'
+          - distro: alpine-3.20
+            image: alpine:3.20
+            bootstrap: 'apk add --no-cache bash curl ca-certificates procps lsof iproute2 file coreutils'
+          - distro: archlinux
+            image: archlinux:latest
+            bootstrap: 'pacman -Sy --noconfirm bash curl ca-certificates procps-ng lsof iproute2 file'
+          - distro: opensuse-leap
+            image: opensuse/leap:15.6
+            bootstrap: 'zypper --non-interactive install bash curl ca-certificates procps lsof iproute2 file'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run --diagnose in ${{ matrix.image }}
+        run: |
+          # Mount the checkout into the container and run preflight only.
+          # We accept exit codes 0 (preflight passed) and 4 (preflight
+          # found something it doesn't like, which on a stripped-down
+          # CI container is *expected* — no docker, no swap, etc.). What
+          # we reject is anything that means the script crashed or fell
+          # through preflight into the install phase: 1, 2, 3, or any
+          # signal-style 13X. Those are the regressions that ship angry
+          # users.
+          set -e
+          # `cleanup` traps so we always print logs even on the unhappy
+          # paths, and so the docker rm doesn't leak across matrix legs
+          # if the runner's reused.
+          cid=""
+          cleanup() { [ -n "$cid" ] && docker rm -f "$cid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
+          docker pull --quiet "${{ matrix.image }}"
+          cid=$(docker create \
+            --workdir /aisoc \
+            -v "$PWD:/aisoc:ro" \
+            "${{ matrix.image }}" \
+            bash -lc '
+              set -e
+              echo "--- bootstrap ---"
+              ${{ matrix.bootstrap }}
+              echo "--- diagnose ---"
+              # --non-interactive so the installer never tries to read
+              # stdin (which would hang). Capture exit code without
+              # tripping `set -e`.
+              rc=0
+              bash /aisoc/install.sh --diagnose --non-interactive || rc=$?
+              echo "--- exit code: $rc ---"
+              # 0 = preflight clean; 4 = preflight failed (acceptable in CI
+              # where there is no docker daemon, real ports are not in use,
+              # etc. — we just want preflight to RUN). Anything else is a
+              # script-level regression.
+              if [ "$rc" -eq 0 ] || [ "$rc" -eq 4 ]; then
+                echo "OK: documented exit code $rc"
+                exit 0
+              fi
+              echo "REGRESSION: undocumented exit code $rc from --diagnose" >&2
+              exit 1
+            '
+          )
+          docker start --attach "$cid"
+
+  diagnose-windows:
+    name: -Diagnose on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 10
+    needs: lint-powershell
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run -Diagnose -NonInteractive
+        shell: pwsh
+        run: |
+          # Exit code policy mirrors the linux job: 0 = preflight clean,
+          # 4 = preflight failed for environment reasons (CI runners
+          # don't always have Docker Desktop / WSL2 in the state our
+          # preflight expects). Anything else is a regression.
+          $rc = 0
+          try {
+            & .\install.ps1 -Diagnose -NonInteractive
+            $rc = $LASTEXITCODE
+          } catch {
+            Write-Host "Caught exception:" -ForegroundColor Yellow
+            Write-Host $_.Exception.Message
+            $rc = 1
+          }
+          Write-Host ""
+          Write-Host "exit code: $rc"
+          if ($rc -eq 0 -or $rc -eq 4) {
+            Write-Host "OK: documented exit code $rc"
+            exit 0
+          }
+          Write-Host "REGRESSION: undocumented exit code $rc from -Diagnose" -ForegroundColor Red
+          exit 1
+
+  uninstaller-safety:
+    name: Uninstaller safety refusal exit code
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: lint-bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Refuse to nuke a non-AiSOC directory
+        run: |
+          # Spin up a clean ubuntu container, set up a fake $HOME/aisoc
+          # directory that does NOT look like an AiSOC clone (no compose
+          # file, no package.json), then run the uninstaller from a
+          # neutral cwd with --repo --yes. The script should:
+          #   1. Fail to locate a real clone (no compose marker anywhere).
+          #   2. Fall through to the canonical $HOME/aisoc path.
+          #   3. See the dir exists but lacks the AiSOC marker.
+          #   4. Refuse to delete it and exit with code 3.
+          # This is the regression that, if it ever flips back to exit 0,
+          # silently turns "I refused to delete this" into "all clean!"
+          # for any CI/scripted caller.
+          set -e
+          docker run --rm \
+            -v "$PWD:/aisoc-src:ro" \
+            ubuntu:24.04 \
+            bash -lc '
+              set -e
+              apt-get update >/dev/null
+              apt-get install -y --no-install-recommends bash curl ca-certificates >/dev/null
+
+              # Copy the uninstaller out of the read-only mount so its
+              # BASH_SOURCE-based self-discovery does NOT find the real
+              # checkout (which IS a valid AiSOC clone and would be a
+              # legitimate delete target).
+              cp /aisoc-src/uninstall.sh /tmp/uninstall.sh
+              chmod +x /tmp/uninstall.sh
+
+              # Make a fake $HOME/aisoc that is NOT an AiSOC clone.
+              export HOME=/root
+              mkdir -p "$HOME/aisoc"
+              echo "fake content" > "$HOME/aisoc/somefile"
+
+              # Run from /tmp (not from the real checkout) so
+              # find_repo() falls through cleanly.
+              cd /tmp
+              rc=0
+              bash /tmp/uninstall.sh --repo --yes || rc=$?
+              echo "uninstaller exit code: $rc"
+
+              if [ "$rc" -ne 3 ]; then
+                echo "REGRESSION: expected exit 3 (safety refusal), got $rc" >&2
+                exit 1
+              fi
+              if [ ! -f "$HOME/aisoc/somefile" ]; then
+                echo "REGRESSION: uninstaller deleted the file even though it refused!" >&2
+                exit 1
+              fi
+              echo "OK: uninstaller correctly refused with exit 3 and left $HOME/aisoc intact"
+            '
