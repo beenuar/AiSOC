@@ -8,6 +8,7 @@ import (
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 	"github.com/beenuar/aisoc/services/ingest/internal/enrichment"
+	"github.com/beenuar/aisoc/services/ingest/internal/graph"
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 	"github.com/rs/zerolog/log"
 	kafka "github.com/segmentio/kafka-go"
@@ -15,9 +16,10 @@ import (
 
 // Publisher sends normalized events to Kafka
 type Publisher struct {
-	writer      *kafka.Writer
-	vulnWriter  *kafka.Writer // dedicated writer for VULNERABILITY_MATCH topic
-	cfg         *config.Config
+	writer       *kafka.Writer
+	vulnWriter   *kafka.Writer // dedicated writer for VULNERABILITY_MATCH topic
+	graphWriter  *kafka.Writer // dedicated writer for security.graph_updates (T1.1, v8.0)
+	cfg          *config.Config
 }
 
 // New creates a new Kafka publisher
@@ -43,11 +45,63 @@ func New(cfg *config.Config) (*Publisher, error) {
 		}
 	}
 
+	// Graph-update writer (T1.1, v8.0). Created unconditionally when the
+	// topic is configured so any service that wants to listen — including
+	// the realtime websocket service in T1.4 — can subscribe even if the
+	// graph writer is disabled and never publishes.
+	var graphWriter *kafka.Writer
+	if cfg.GraphUpdatesTopic != "" {
+		graphWriter = &kafka.Writer{
+			Addr:                   kafka.TCP(cfg.KafkaBrokers),
+			Topic:                  cfg.GraphUpdatesTopic,
+			Balancer:               &kafka.Hash{},
+			MaxAttempts:            3,
+			AllowAutoTopicCreation: true,
+		}
+	}
+
 	return &Publisher{
-		writer:     w,
-		vulnWriter: vulnWriter,
-		cfg:        cfg,
+		writer:      w,
+		vulnWriter:  vulnWriter,
+		graphWriter: graphWriter,
+		cfg:         cfg,
 	}, nil
+}
+
+// PublishGraphUpdate sends a graph-mutation envelope to security.graph_updates.
+// Implements graph.UpdatePublisher so the graph writer can fan out node/edge
+// changes for downstream consumers (T1.4 realtime websocket).
+//
+// Failures are returned to the caller so the writer can record them, but the
+// caller (graph.Writer.publishChanges) treats this as best-effort.
+func (p *Publisher) PublishGraphUpdate(ctx context.Context, update graph.GraphUpdate) error {
+	if p.graphWriter == nil {
+		return nil
+	}
+	data, err := json.Marshal(update)
+	if err != nil {
+		return err
+	}
+	key := []byte(update.EntityID)
+	if update.TenantID != "" {
+		key = []byte(update.TenantID + ":" + update.EntityID)
+	}
+	msg := kafka.Message{
+		Key:   key,
+		Value: data,
+		Headers: []kafka.Header{
+			{Key: "change_type", Value: []byte(update.ChangeType)},
+			{Key: "schema_version", Value: []byte(update.SchemaVersion)},
+		},
+	}
+	if update.TenantID != "" {
+		msg.Headers = append(msg.Headers, kafka.Header{Key: "tenant_id", Value: []byte(update.TenantID)})
+	}
+	if err := p.graphWriter.WriteMessages(ctx, msg); err != nil {
+		log.Warn().Err(err).Str("entity_id", update.EntityID).Msg("Failed to publish graph update")
+		return err
+	}
+	return nil
 }
 
 // PublishVulnMatch sends a VULNERABILITY_MATCH event to the dedicated Kafka topic.
@@ -150,6 +204,11 @@ func (p *Publisher) Close() {
 	if p.vulnWriter != nil {
 		if err := p.vulnWriter.Close(); err != nil {
 			log.Error().Err(err).Msg("Error closing vuln Kafka writer")
+		}
+	}
+	if p.graphWriter != nil {
+		if err := p.graphWriter.Close(); err != nil {
+			log.Error().Err(err).Msg("Error closing graph-updates Kafka writer")
 		}
 	}
 }

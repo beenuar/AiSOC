@@ -57,6 +57,31 @@ type Config struct {
 	// max is ~10 MiB, so 16 MiB gives a little headroom without
 	// leaving the door open for a runaway producer.
 	K8sAuditMaxBodyBytes int64
+
+	// Graph writer (T1.1 — v8.0).
+	//
+	// GraphEnabled toggles the ingest-side graph writer. The writer runs in
+	// a fan-out goroutine — failures NEVER block fusion ingest. When this
+	// is off the writer is never constructed and the pipeline behaves as
+	// it did pre-T1.1.
+	GraphEnabled bool
+	// Neo4jURI / Neo4jUser / Neo4jPassword are the bolt creds. Only Password
+	// is actually sensitive; URI + user are non-secret and end up in the
+	// ingest service's startup log for debuggability. Empty password is
+	// rejected at construction time when GraphEnabled is true.
+	Neo4jURI      string
+	Neo4jUser     string
+	Neo4jPassword string
+	Neo4jDatabase string
+	// GraphBatchSize / GraphFlushIntervalMs / GraphQueueSize control the
+	// batched UNWIND flusher. Defaults are tuned for v8.0 sandbox load
+	// (~1k events/sec); production deployments override via env.
+	GraphBatchSize       int
+	GraphFlushIntervalMs int
+	GraphQueueSize       int
+	// GraphUpdatesTopic is the Kafka topic consumed by the realtime service
+	// (T1.4) for live graph-update streaming. Empty means "don't publish".
+	GraphUpdatesTopic string
 }
 
 // Load reads configuration from environment variables
@@ -96,6 +121,17 @@ func Load() (*Config, error) {
 		// Kubernetes audit webhook (Track D, v7.1.0).
 		K8sAuditSharedSecret: getEnv("K8S_AUDIT_SHARED_SECRET", ""),
 		K8sAuditMaxBodyBytes: int64(mustGetEnvInt("K8S_AUDIT_MAX_BODY_BYTES", 16*1024*1024)),
+
+		// Graph writer (T1.1, v8.0).
+		GraphEnabled:         getEnv("AISOC_GRAPH_ENABLED", "false") == "true",
+		Neo4jURI:             getEnv("AISOC_NEO4J_URI", "bolt://localhost:7687"),
+		Neo4jUser:            getEnv("AISOC_NEO4J_USER", "neo4j"),
+		Neo4jPassword:        getEnv("AISOC_NEO4J_PASSWORD", "neo4j"),
+		Neo4jDatabase:        getEnv("AISOC_NEO4J_DATABASE", "neo4j"),
+		GraphBatchSize:       mustGetEnvInt("AISOC_GRAPH_BATCH_SIZE", 100),
+		GraphFlushIntervalMs: mustGetEnvInt("AISOC_GRAPH_FLUSH_INTERVAL_MS", 100),
+		GraphQueueSize:       mustGetEnvInt("AISOC_GRAPH_QUEUE_SIZE", 2048),
+		GraphUpdatesTopic:    getEnv("AISOC_GRAPH_UPDATES_TOPIC", "security.graph_updates"),
 	}
 
 	if cfg.JWTSecret == "" && os.Getenv("ENV") != "development" {

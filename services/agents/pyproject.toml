@@ -44,6 +44,12 @@ pytest-asyncio = "^0.23.0"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Custom marker registry — keep ``pytest --strict-markers`` clean.
+# ``integration`` gates tests that require external infra (Kafka, Neo4j,
+# Postgres). Unit-only CI runs ``pytest -m "not integration"``.
+markers = [
+    "integration: mark a test as requiring external infrastructure (Kafka, Neo4j, Postgres). Run with `pytest -m integration`.",
+]
 
 [build-system]
 requires = ["poetry-core"]

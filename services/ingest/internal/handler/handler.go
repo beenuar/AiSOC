@@ -2,27 +2,48 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	"github.com/beenuar/aisoc/services/ingest/internal/graph"
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
 	"github.com/rs/zerolog/log"
 )
 
+// GraphWriter is the subset of *graph.Writer the handler depends on.
+// Defined as an interface so the HTTP path can be unit-tested without
+// constructing a real Neo4j-backed writer (and so a nil writer is allowed
+// when graph projection is disabled).
+type GraphWriter interface {
+	WriteEvent(ctx context.Context, ev *graph.Event) error
+}
+
 // Handler holds handler dependencies
 type Handler struct {
-	norm *normalizer.Normalizer
-	pub  *publisher.Publisher
-	cfg  *config.Config
+	norm  *normalizer.Normalizer
+	pub   *publisher.Publisher
+	graph GraphWriter
+	cfg   *config.Config
 }
 
 // New creates a new Handler
 func New(norm *normalizer.Normalizer, pub *publisher.Publisher, cfg *config.Config) *Handler {
 	return &Handler{norm: norm, pub: pub, cfg: cfg}
+}
+
+// SetGraphWriter wires in the graph projection writer. nil disables graph
+// fan-out — the rest of the pipeline behaves identically.
+//
+// The fan-out is intentional: the graph writer runs concurrently with the
+// fusion publish, and a failure / queue-full in the graph writer must NOT
+// block the fusion path (T1.1 acceptance criterion).
+func (h *Handler) SetGraphWriter(g GraphWriter) {
+	h.graph = g
 }
 
 // IngestRequest is the API payload for submitting events
@@ -97,6 +118,22 @@ func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(normalized) > 0 {
+		// Fan-out graph writer (T1.1, v8.0). Runs concurrently with fusion
+		// publish. A failure in WriteEvent never propagates here — the
+		// writer drops the event onto an internal queue with backpressure
+		// handled by drop-and-metric, so this loop is non-blocking.
+		if h.graph != nil {
+			for _, ev := range normalized {
+				gev := graph.ExtractFromOCSF(ev.ID, ev.TenantID, req.ConnectorType, ev.OcsfEvent)
+				if gev == nil {
+					continue
+				}
+				// WriteEvent is non-blocking; ctx is only used to honor
+				// shutdown. We deliberately don't wait on it.
+				_ = h.graph.WriteEvent(r.Context(), gev)
+			}
+		}
+
 		if err := h.pub.PublishBatch(r.Context(), normalized); err != nil {
 			log.Error().Err(err).Str("tenant_id", tenantID).Msg("Failed to publish batch")
 			writeError(w, http.StatusInternalServerError, "failed to publish events")
