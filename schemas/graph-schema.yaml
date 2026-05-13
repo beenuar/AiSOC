@@ -1,0 +1,440 @@
+# AiSOC Security Knowledge Graph — schema v1.0
+#
+# This file is the machine-readable source of truth for the graph that
+# `services/ingest` materialises into Neo4j at ingest time. It is consumed by
+# `scripts/export_graph_schema.py --check` (the CI drift gate) and is mirrored
+# by the narrative documentation at
+# `apps/docs/docs/architecture/graph-schema.md`.
+#
+# Any change to a node label, relationship type, or property here MUST be
+# accompanied by:
+#   1. a matching change to the Go source enums in
+#      `services/ingest/internal/graph/schema.go`
+#   2. a matching change to the narrative doc above
+#   3. a SchemaVersion bump (semver: MAJOR.MINOR) if the change is not
+#      strictly additive
+#
+# Event-edge convention: relationships marked `event_edge: true` are written
+# from observed events, so they always carry `ts`, `source_event_id`, and
+# `snapshot_id`. Structural relationships (e.g. `:HAS_PERMISSION`, `:GRANTS`)
+# are reconciled from configuration snapshots and carry `snapshot_id` and a
+# `valid_from`/`valid_to` window instead.
+
+version: v1.0
+
+# ---------------------------------------------------------------------------
+# Node labels
+# ---------------------------------------------------------------------------
+node_labels:
+  - label: Identity
+    description: >-
+      An authenticatable principal — a User, ServiceAccount, federated SSO
+      identity, or any token-bearing subject. The superclass label that every
+      `User` and `ServiceAccount` node also carries so cross-IdP queries can
+      ignore the subclass.
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: provider,      type: string,   required: true  }
+      - { name: external_id,   type: string,   required: true  }
+      - { name: display_name,  type: string,   required: false }
+      - { name: email,         type: string,   required: false }
+      - { name: created_at,    type: datetime, required: false }
+      - { name: last_seen_at,  type: datetime, required: false }
+
+  - label: User
+    description: >-
+      A human principal. Also carries the `Identity` label.
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: email,         type: string,   required: false }
+      - { name: display_name,  type: string,   required: false }
+      - { name: department,    type: string,   required: false }
+      - { name: manager_id,    type: string,   required: false }
+      - { name: status,        type: string,   required: false }
+
+  - label: ServiceAccount
+    description: >-
+      A non-human principal — bot, CI runner, workload identity, IAM role used
+      programmatically. Also carries the `Identity` label.
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: provider,      type: string,   required: true  }
+      - { name: kind,          type: string,   required: false }
+      - { name: owner_user_id, type: string,   required: false }
+      - { name: created_at,    type: datetime, required: false }
+
+  - label: Role
+    description: >-
+      A named bundle of permissions that an Identity can hold or assume —
+      IAM role, Entra role, GitHub team, RBAC role, etc.
+    properties:
+      - { name: id,           type: string,   required: true  }
+      - { name: provider,     type: string,   required: true  }
+      - { name: name,         type: string,   required: true  }
+      - { name: scope,        type: string,   required: false }
+      - { name: kind,         type: string,   required: false }
+
+  - label: Permission
+    description: >-
+      A single primitive capability — `s3:GetObject`, `read:packages`,
+      `Microsoft.Compute/virtualMachines/start`. The atomic unit a Policy
+      grants and that effective-permission queries traverse.
+    properties:
+      - { name: id,         type: string, required: true }
+      - { name: provider,   type: string, required: true }
+      - { name: action,     type: string, required: true }
+      - { name: effect,     type: string, required: false }
+
+  - label: Policy
+    description: >-
+      A named document that grants one or more Permissions, optionally scoped
+      to a Resource. The provider-side artefact (IAM policy JSON, Entra
+      policy, Kubernetes Role).
+    properties:
+      - { name: id,         type: string,   required: true  }
+      - { name: provider,   type: string,   required: true  }
+      - { name: name,       type: string,   required: true  }
+      - { name: document,   type: string,   required: false }
+      - { name: managed,    type: bool,     required: false }
+      - { name: updated_at, type: datetime, required: false }
+
+  - label: Resource
+    description: >-
+      Any IaaS/PaaS/SaaS object that can be the subject or object of a
+      permission — S3 bucket, VM, Snowflake table, GitHub repo, Confluence
+      page. Repos and Containers carry both `Resource` and their subclass
+      label so resource-wide queries pick them up.
+    properties:
+      - { name: id,         type: string,   required: true  }
+      - { name: provider,   type: string,   required: true  }
+      - { name: kind,       type: string,   required: true  }
+      - { name: arn,        type: string,   required: false }
+      - { name: region,     type: string,   required: false }
+      - { name: tenant,     type: string,   required: false }
+      - { name: tags,       type: map,      required: false }
+      - { name: created_at, type: datetime, required: false }
+
+  - label: Configuration
+    description: >-
+      A point-in-time configuration snapshot of a Resource — bucket policy,
+      VM extension list, repo branch-protection rules. Pinned by
+      `snapshot_id` so the graph can answer "what did this look like at the
+      time of the alert?".
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: resource_id,   type: string,   required: true  }
+      - { name: snapshot_id,   type: string,   required: true  }
+      - { name: captured_at,   type: datetime, required: true  }
+      - { name: source,        type: string,   required: true  }
+      - { name: payload_hash,  type: string,   required: false }
+
+  - label: Endpoint
+    description: >-
+      A device — laptop, server, EC2 instance, mobile, kiosk. Carries enough
+      identity to dedupe across EDR/MDM/cloud feeds and to anchor on-host
+      events.
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: hostname,      type: string,   required: false }
+      - { name: os,            type: string,   required: false }
+      - { name: provider,      type: string,   required: false }
+      - { name: serial,        type: string,   required: false }
+      - { name: enrolled,      type: bool,     required: false }
+      - { name: last_seen_at,  type: datetime, required: false }
+
+  - label: Repo
+    description: >-
+      A source-code repository. Subclass of `Resource`. Anchors CI/CD
+      provenance and `:DEPLOYS` edges to the Images it ships.
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: provider,      type: string,   required: true  }
+      - { name: full_name,     type: string,   required: true  }
+      - { name: default_branch,type: string,   required: false }
+      - { name: visibility,    type: string,   required: false }
+
+  - label: Container
+    description: >-
+      A running container instance — Kubernetes Pod container, ECS task,
+      docker run. Connects an `Image` to the `Endpoint` it ran on.
+    properties:
+      - { name: id,           type: string,   required: true  }
+      - { name: name,         type: string,   required: false }
+      - { name: pod,          type: string,   required: false }
+      - { name: namespace,    type: string,   required: false }
+      - { name: started_at,   type: datetime, required: false }
+      - { name: ended_at,     type: datetime, required: false }
+
+  - label: Image
+    description: >-
+      A container image artefact — `registry/org/name@sha256:...`. The graph
+      treats the digest as the identity so retags don't fork the node.
+    properties:
+      - { name: id,        type: string,   required: true  }
+      - { name: digest,    type: string,   required: true  }
+      - { name: registry,  type: string,   required: false }
+      - { name: tag,       type: string,   required: false }
+      - { name: pushed_at, type: datetime, required: false }
+
+  - label: NetworkPath
+    description: >-
+      A reachable network edge between two endpoints (or endpoint and CIDR)
+      observed from flow logs, service-mesh telemetry, or firewall config.
+      Used to compute blast radius and lateral-movement candidates.
+    properties:
+      - { name: id,          type: string,   required: true  }
+      - { name: protocol,    type: string,   required: false }
+      - { name: port,        type: int,      required: false }
+      - { name: direction,   type: string,   required: false }
+      - { name: observed_at, type: datetime, required: false }
+
+  - label: SaaSApp
+    description: >-
+      A third-party SaaS application registered against the tenant — OAuth
+      app, marketplace integration, OIDC client. Subclass of `Resource` for
+      access-graph queries.
+    properties:
+      - { name: id,          type: string,   required: true  }
+      - { name: provider,    type: string,   required: true  }
+      - { name: client_id,   type: string,   required: false }
+      - { name: name,        type: string,   required: true  }
+      - { name: risk_tier,   type: string,   required: false }
+
+  - label: Alert
+    description: >-
+      A single normalised alert produced by ingest or downstream detection.
+      Anchors event-edges (`:OCCURRED_ON`, `:TRIGGERED`) into the graph.
+    properties:
+      - { name: id,          type: string,   required: true  }
+      - { name: severity,    type: string,   required: true  }
+      - { name: source,      type: string,   required: true  }
+      - { name: title,       type: string,   required: false }
+      - { name: created_at,  type: datetime, required: true  }
+      - { name: tenant_id,   type: string,   required: true  }
+
+  - label: Case
+    description: >-
+      An investigation that collects one or more Alerts. The graph node
+      mirrors the canonical case row in Postgres so graph queries can hop
+      from a case to all touched entities.
+    properties:
+      - { name: id,          type: string,   required: true  }
+      - { name: status,      type: string,   required: true  }
+      - { name: tenant_id,   type: string,   required: true  }
+      - { name: created_at,  type: datetime, required: true  }
+      - { name: assignee_id, type: string,   required: false }
+
+  - label: Detection
+    description: >-
+      A detection rule — Sigma, custom YAML, hunt-as-code. Connected to the
+      Alerts it produced via `:TRIGGERED`. Lets the graph answer
+      "show me every alert this rule has ever fired on this resource".
+    properties:
+      - { name: id,         type: string,   required: true  }
+      - { name: name,       type: string,   required: true  }
+      - { name: source,     type: string,   required: true  }
+      - { name: severity,   type: string,   required: false }
+      - { name: updated_at, type: datetime, required: false }
+
+# ---------------------------------------------------------------------------
+# Relationships
+# ---------------------------------------------------------------------------
+# event_edge: true relationships always carry {ts, source_event_id,
+# snapshot_id}. Structural edges carry {snapshot_id, valid_from, valid_to}.
+relationships:
+  - name: ASSUMED_BY
+    source_label: Role
+    target_label: Identity
+    event_edge: true
+    description: >-
+      Written when an Identity assumes a Role (sts:AssumeRole, Entra PIM
+      activation, kubectl impersonation). The edge is the *event*, not the
+      latent capability — so it carries `ts`, `source_event_id`,
+      `snapshot_id`.
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+      - { name: session_id,      type: string,   required: false }
+      - { name: ttl_seconds,     type: int,      required: false }
+
+  - name: HAS_PERMISSION
+    source_label: Identity
+    target_label: Permission
+    event_edge: false
+    description: >-
+      Structural edge: the Identity (often via membership in a Role) holds
+      the Permission as of the latest reconciliation snapshot. Materialised
+      from `:MEMBER_OF` + `:GRANTS` so that effective-permissions queries
+      are a single hop.
+    properties:
+      - { name: snapshot_id, type: string,   required: true  }
+      - { name: via_role_id, type: string,   required: false }
+      - { name: via_policy_id, type: string, required: false }
+      - { name: valid_from,  type: datetime, required: false }
+      - { name: valid_to,    type: datetime, required: false }
+
+  - name: GRANTS
+    source_label: Policy
+    target_label: Permission
+    event_edge: false
+    description: >-
+      Structural edge: the Policy document grants this Permission, with the
+      effect (allow / deny) carried on the relationship so the graph can
+      represent deny-overrides.
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: effect,      type: string, required: true  }
+      - { name: condition,   type: string, required: false }
+      - { name: resource_arn, type: string, required: false }
+
+  - name: OWNS
+    source_label: Identity
+    target_label: Resource
+    event_edge: false
+    description: >-
+      Structural edge: the Identity is the declared owner of the Resource
+      (IAM resource owner, repo admin, table owner). Drives blast-radius
+      attribution and contacts for containment approval.
+    properties:
+      - { name: snapshot_id, type: string,   required: true  }
+      - { name: since,       type: datetime, required: false }
+
+  - name: CONFIGURED_AS
+    source_label: Resource
+    target_label: Configuration
+    event_edge: false
+    description: >-
+      Structural edge: the Resource is described by this Configuration
+      snapshot. Multiple Configuration nodes per resource form a time-series
+      of states; the most-recent one is reachable in O(1) via the
+      `:CONFIGURED_AS {is_current: true}` shortcut.
+    properties:
+      - { name: snapshot_id, type: string,   required: true  }
+      - { name: is_current,  type: bool,     required: false }
+      - { name: valid_from,  type: datetime, required: false }
+      - { name: valid_to,    type: datetime, required: false }
+
+  - name: DEPLOYED_FROM
+    source_label: Container
+    target_label: Image
+    event_edge: false
+    description: >-
+      Structural edge: a Container instance was launched from a specific
+      Image digest. Lets the graph answer "every running container of this
+      CVE-affected image".
+    properties:
+      - { name: snapshot_id, type: string,   required: true  }
+      - { name: deployed_at, type: datetime, required: false }
+
+  - name: ACCESSES
+    source_label: Identity
+    target_label: Resource
+    event_edge: true
+    description: >-
+      Event edge: the Identity accessed the Resource (an audit-log event).
+      Captures the *observation*, not a latent privilege — used for
+      anomaly detection and to seed reactive blast-radius hops.
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+      - { name: action,          type: string,   required: false }
+      - { name: outcome,         type: string,   required: false }
+      - { name: source_ip,       type: string,   required: false }
+      - { name: user_agent,      type: string,   required: false }
+
+  - name: PEER_OF
+    source_label: NetworkPath
+    target_label: NetworkPath
+    event_edge: false
+    description: >-
+      Structural edge: two NetworkPaths terminate the same reachable
+      pair-wise route. Used to expand short-circuit reachability between
+      indirectly-connected segments without exploding the path graph.
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: latency_ms,  type: int,    required: false }
+
+  - name: TRIGGERED
+    source_label: Detection
+    target_label: Alert
+    event_edge: true
+    description: >-
+      Event edge: the Detection fired and produced the Alert. Always
+      one-to-many on the Detection side; the alert carries its own
+      `:OCCURRED_ON` to the affected Resource/Endpoint.
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+      - { name: rule_version,    type: string,   required: false }
+
+  - name: OCCURRED_ON
+    source_label: Alert
+    target_label: Resource
+    event_edge: true
+    description: >-
+      Event edge: the Alert is anchored to a Resource (often Endpoint or
+      SaaSApp via the Resource superclass). Drives the "alert → asset"
+      pivot in the case console.
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+      - { name: confidence,      type: float,    required: false }
+
+  - name: MEMBER_OF
+    source_label: Identity
+    target_label: Role
+    event_edge: false
+    description: >-
+      Structural edge: the Identity is currently a member of the Role
+      (group). Combined with `:GRANTS` to compute `:HAS_PERMISSION`.
+    properties:
+      - { name: snapshot_id, type: string,   required: true  }
+      - { name: since,       type: datetime, required: false }
+      - { name: until,       type: datetime, required: false }
+
+  - name: DEPLOYS
+    source_label: Repo
+    target_label: Image
+    event_edge: false
+    description: >-
+      Structural edge: the Repo produces (deploys) the Image — derived from
+      CI/CD provenance (`build.yaml`, image labels, attestations). Roots
+      software-supply-chain queries.
+    properties:
+      - { name: snapshot_id, type: string,   required: true  }
+      - { name: pipeline,    type: string,   required: false }
+      - { name: last_build_at, type: datetime, required: false }
+
+  - name: READS_FROM
+    source_label: Identity
+    target_label: Resource
+    event_edge: true
+    description: >-
+      Event edge: a specific *read* data-flow event — distinct from
+      `:ACCESSES` so blast-radius queries can isolate exfil-shaped activity
+      from generic access. `bytes_out` is best-effort.
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+      - { name: bytes_out,       type: int,      required: false }
+      - { name: object_path,     type: string,   required: false }
+
+  - name: WRITES_TO
+    source_label: Identity
+    target_label: Resource
+    event_edge: true
+    description: >-
+      Event edge: a specific *write* data-flow event — distinct from
+      `:ACCESSES` so blast-radius queries can isolate impact-shaped
+      activity. `bytes_in` is best-effort.
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+      - { name: bytes_in,        type: int,      required: false }
+      - { name: object_path,     type: string,   required: false }
