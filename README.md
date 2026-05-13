@@ -970,3 +970,7 @@ For security issues, please do not open a public issue. Use [GitHub's private vu
 [Report a bug](https://github.com/beenuar/AiSOC/issues/new?template=bug_report.md) · [Request a feature](https://github.com/beenuar/AiSOC/issues/new?template=feature_request.md) · [Contribute](CONTRIBUTING.md) · [Read the docs](apps/docs/)
 
 </div>
+
+---
+
+> **Reproduce these numbers:** `pnpm eval:public` — methodology at [docs.aisoc.dev/benchmark-methodology](https://docs.aisoc.dev/benchmark-methodology). Every figure on the [public benchmark page](apps/docs/docs/benchmark.md) is reproducible from a fresh clone in under 30 seconds (substrate suite, no LLM key required).
