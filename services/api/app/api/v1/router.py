@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     feedback,
     fusion,
     graph,
+    health,
     hunts,
     identity_graph,
     identity_timeline,
@@ -101,6 +102,11 @@ api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(compliance.router)
 api_router.include_router(metrics.router)
+# v1.5 SOC Console parity — per-stage health strip for the operator
+# dashboard. Lives at /api/v1/health/pipeline and returns the
+# ingest → normalize → fuse → correlate → alert snapshot defined in
+# endpoints/health.py.
+api_router.include_router(health.router)
 api_router.include_router(sla.router)
 api_router.include_router(investigations.router)
 
