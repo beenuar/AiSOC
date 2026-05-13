@@ -34,6 +34,7 @@ from app.api.v1.endpoints import (
     inbox,
     inbox_itsm,
     insider_threat,
+    insights,
     investigations,
     knowledge_base,
     lake,
@@ -94,6 +95,11 @@ api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(compliance.router)
 api_router.include_router(metrics.router)
+# SOC Insights aggregator (T3.1 — v8.0 parallel team plan).
+# Backs apps/web/src/app/(app)/dashboards/soc-insights/page.tsx with a
+# single deterministic payload (7 tiles + sparklines + delta vs the
+# preceding window) so the dashboard can render in one round trip.
+api_router.include_router(insights.router)
 api_router.include_router(sla.router)
 api_router.include_router(investigations.router)
 
