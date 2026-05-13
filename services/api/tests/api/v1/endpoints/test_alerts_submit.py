@@ -29,6 +29,7 @@ quickstart video desyncs from reality.
 AiSOC — open-source AI Security Operations Center (MIT License)
 Author: Beenu Arora <beenu@cyble.com>
 """
+
 from __future__ import annotations
 
 import uuid
@@ -165,9 +166,7 @@ class TestSeverityNormalisation:
             ("emergency", "critical"),
         ],
     )
-    def test_known_vendor_strings_map_to_canonical_tier(
-        self, raw: str, expected: str
-    ) -> None:
+    def test_known_vendor_strings_map_to_canonical_tier(self, raw: str, expected: str) -> None:
         assert _normalize_severity(raw) == expected
 
     @pytest.mark.parametrize("raw", [None, "", "   "])

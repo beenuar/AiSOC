@@ -248,26 +248,15 @@ def _synthesise_alert_from_events(
     first = events[0] if events else {}
 
     # Title
-    title = (
-        override_title
-        or first.get("displayMessage")
-        or first.get("eventType")
-        or first.get("name")
-        or "AiSOC submitted alert"
-    )
+    title = override_title or first.get("displayMessage") or first.get("eventType") or first.get("name") or "AiSOC submitted alert"
 
     # Severity: pick the highest in the batch unless overridden
     severities = [_normalize_severity(e.get("severity")) for e in events]
-    severity = _normalize_severity(override_severity) if override_severity else (
-        _max_severity(severities) if severities else "medium"
-    )
+    severity = _normalize_severity(override_severity) if override_severity else (_max_severity(severities) if severities else "medium")
     priority = _SEVERITY_PRIORITY[severity]
 
     # Description: count + first event hint
-    description = override_description or (
-        f"Submitted via aisoc submit / API. {len(events)} event(s) in batch. "
-        f"First event: {title}."
-    )
+    description = override_description or (f"Submitted via aisoc submit / API. {len(events)} event(s) in batch. First event: {title}.")
 
     # Affected entities
     affected_ips: list[str] = []
@@ -285,13 +274,9 @@ def _synthesise_alert_from_events(
         # ``affected_users`` (i.e. we've already recorded this person under
         # a different identifier in an earlier event).
         actor_identifiers = [
-            actor[key]
-            for key in ("alternateId", "displayName", "email", "name", "id")
-            if isinstance(actor.get(key), str) and actor[key]
+            actor[key] for key in ("alternateId", "displayName", "email", "name", "id") if isinstance(actor.get(key), str) and actor[key]
         ]
-        if actor_identifiers and not any(
-            ident in affected_users for ident in actor_identifiers
-        ):
+        if actor_identifiers and not any(ident in affected_users for ident in actor_identifiers):
             affected_users.append(actor_identifiers[0])
 
         # IP from client
@@ -301,11 +286,7 @@ def _synthesise_alert_from_events(
 
         # Host from client geographicalContext or client.id
         geo = client.get("geographicalContext") or {}
-        host_hint = (
-            client.get("device")
-            or client.get("id")
-            or geo.get("city")
-        )
+        host_hint = client.get("device") or client.get("id") or geo.get("city")
         if isinstance(host_hint, str) and host_hint and host_hint not in affected_hosts:
             affected_hosts.append(host_hint)
 
