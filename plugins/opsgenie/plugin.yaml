@@ -1,0 +1,29 @@
+id: opsgenie
+name: Opsgenie (Alerts + Audit)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Opsgenie on-call platform connector. Pulls alerts and tenant audit log
+  events (API key issuance, role changes, integration edits, escalation
+  policy changes) via the REST API. Supports both US and EU data residencies.
+author: AiSOC Core Team
+tags: [saas, oncall, paging, alerts, audit, opsgenie]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/opsgenie.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_key]
+  properties:
+    api_key:
+      type: string
+      description: "Opsgenie API key (GenieKey scheme)"
+      secret: true
+    region:
+      type: string
+      description: "Data residency region — selects api.opsgenie.com vs api.eu.opsgenie.com"
+      enum:
+        - us
+        - eu
+      default: us
