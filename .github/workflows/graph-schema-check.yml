@@ -1,0 +1,47 @@
+name: Graph schema drift check
+
+# Drift gate for the AiSOC security knowledge graph (T1.3).
+#
+# Keeps three representations of the schema aligned:
+#   1. schemas/graph-schema.yaml       — the checked-in source of truth
+#   2. services/ingest/internal/graph/ — the Go enums consumed at ingest time
+#                                        (may not exist yet during T1.1)
+#   3. The live Neo4j database         — checked only when reachable
+#
+# The script falls through gracefully when the Go source is missing or Neo4j
+# is unreachable, so this workflow is safe to run on branches where T1.1 is
+# still in flight.
+
+on:
+  pull_request:
+    paths:
+      - "schemas/graph-schema.yaml"
+      - "services/ingest/internal/graph/**"
+      - "scripts/export_graph_schema.py"
+      - ".github/workflows/graph-schema-check.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "schemas/graph-schema.yaml"
+      - "services/ingest/internal/graph/**"
+      - "scripts/export_graph_schema.py"
+      - ".github/workflows/graph-schema-check.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  graph-schema-check:
+    name: Graph schema — Drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install --quiet pyyaml
+      - name: Graph schema drift check
+        run: python scripts/export_graph_schema.py --check
