@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { metricsApi, type FunnelMetrics } from '@/lib/api';
 
 interface AlertRule {
   name: string;
@@ -39,13 +41,37 @@ export default function NoiseTuningView() {
   const totalFP = rules.reduce((s, r) => s + r.fpCount, 0);
   const fpRate = ((totalFP / totalVerdicts) * 100).toFixed(1);
   const autoTunedCount = rules.filter((r) => r.autoTune).length;
-  const noiseReduction = 34;
+
+  // Live signal-to-noise ratio from /api/v1/metrics/funnel.
+  // SNR = TP / (TP + FP) across dispositioned alerts in the window.
+  // We expose it here as "Noise Reduction" — the share of analyst verdicts
+  // that turned out to be true positives, i.e. how much noise survived
+  // detection tuning vs. how much was correctly suppressed.
+  // Fall back to the locally-computed inverse-FP-rate when the API has
+  // not returned yet or is unavailable, so the panel never looks empty.
+  const { data: funnel } = useSWR<FunnelMetrics>(
+    'funnel-metrics:24h',
+    () => metricsApi.getFunnel('24h'),
+    {
+      refreshInterval: 60_000,
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    },
+  );
+
+  const noiseReductionPct =
+    funnel && Number.isFinite(funnel.signal_to_noise)
+      ? Math.round(funnel.signal_to_noise * 100)
+      : Math.max(
+          0,
+          Math.round(100 - (totalFP / Math.max(totalVerdicts, 1)) * 100),
+        );
 
   const summaryCards = [
     { label: 'Total Verdicts This Month', value: totalVerdicts.toLocaleString() },
     { label: 'FP Rate',                   value: `${fpRate}%` },
     { label: 'Auto-Tuned Rules',          value: autoTunedCount },
-    { label: 'Noise Reduction',           value: `${noiseReduction}%` },
+    { label: 'Noise Reduction',           value: `${noiseReductionPct}%` },
   ];
 
   function toggleAutoTune(index: number) {
