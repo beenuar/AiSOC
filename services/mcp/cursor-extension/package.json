@@ -1,0 +1,110 @@
+{
+  "name": "aisoc-extension",
+  "displayName": "AiSOC",
+  "description": "Run triage, replay decisions, and explain agent reasoning from inside your IDE.",
+  "version": "0.1.0",
+  "publisher": "aisoc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beenuar/AiSOC.git",
+    "directory": "services/mcp/cursor-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/beenuar/AiSOC/issues"
+  },
+  "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/mcp/cursor-extension",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "aisoc",
+    "mcp",
+    "security",
+    "soc",
+    "incident-response",
+    "siem"
+  ],
+  "activationEvents": [
+    "onCommand:aisoc.runTriage",
+    "onCommand:aisoc.replayDecision",
+    "onCommand:aisoc.explainStep",
+    "onCommand:aisoc.queryDetections",
+    "onCommand:aisoc.setApiKey",
+    "onCommand:aisoc.clearApiKey"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aisoc.runTriage",
+        "title": "AiSOC: Run Triage on Case…",
+        "category": "AiSOC"
+      },
+      {
+        "command": "aisoc.replayDecision",
+        "title": "AiSOC: Replay Investigation Step…",
+        "category": "AiSOC"
+      },
+      {
+        "command": "aisoc.explainStep",
+        "title": "AiSOC: Explain Why the Agent Did This",
+        "category": "AiSOC"
+      },
+      {
+        "command": "aisoc.queryDetections",
+        "title": "AiSOC: Find Detections for This Technique",
+        "category": "AiSOC"
+      },
+      {
+        "command": "aisoc.setApiKey",
+        "title": "AiSOC: Set API Key…",
+        "category": "AiSOC"
+      },
+      {
+        "command": "aisoc.clearApiKey",
+        "title": "AiSOC: Clear Stored API Key",
+        "category": "AiSOC"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "AiSOC",
+      "properties": {
+        "aisoc.mcpEndpoint": {
+          "type": "string",
+          "default": "http://localhost:8765/mcp",
+          "description": "URL of the AiSOC MCP HTTP gateway. The extension posts JSON-RPC `tools/call` requests to this endpoint."
+        },
+        "aisoc.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "**Do not paste your API key here.** This setting exists for transparency only — the active key is stored in your IDE's secret storage and managed via the `AiSOC: Set API Key…` command. Leave this empty.",
+          "scope": "machine"
+        },
+        "aisoc.requestTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "Per-request timeout when calling the MCP endpoint, in milliseconds."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}
