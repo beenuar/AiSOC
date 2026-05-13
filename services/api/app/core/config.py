@@ -319,6 +319,23 @@ class Settings(BaseSettings):
     AISOC_DRIFT_SWEEP_INTERVAL_HOURS: int = 168
 
     # ------------------------------------------------------------------
+    # v1.5 SOC Console parity — funnel + pipeline health (PR-3).
+    # ------------------------------------------------------------------
+    # Denominator used by /metrics/funnel mitre_coverage. Defaults to the
+    # current size of the MITRE ATT&CK Enterprise technique catalog so the
+    # ratio stays interpretable as "% of ATT&CK we're watching for". Operators
+    # can pin a smaller universe (e.g. the subset they care about) via the env
+    # var ``AISOC_FUNNEL_MITRE_TOTAL``.
+    AISOC_FUNNEL_MITRE_TOTAL: int = 201
+
+    # /health/pipeline staleness thresholds (seconds). A connector is treated
+    # as "stale" when its ``last_event_at`` is older than the warn threshold
+    # and "down" when it exceeds the down threshold. Defaults match the
+    # 5-minute poll cadence documented in services/connectors.
+    AISOC_PIPELINE_STALE_WARN_SECONDS: int = 600  # 10 minutes
+    AISOC_PIPELINE_STALE_DOWN_SECONDS: int = 1800  # 30 minutes
+
+    # ------------------------------------------------------------------
     # Air-gapped operating mode (Tier 3.1 — air-gapped certification).
     # When AISOC_AIRGAPPED is True the API:
     #   * refuses to make any LLM / threat-intel / model-phone-home
