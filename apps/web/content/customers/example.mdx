@@ -1,0 +1,62 @@
+---
+title: "Example Customer Inc."
+industry: "FinTech"
+region: "EU (Ireland)"
+logo: "/customers/example/logo.svg"
+challenge: "Reduce a multi-thousand-alert daily backlog without losing forensic depth."
+result_numbers:
+  - { metric: "MTTR", before: "4h 12m", after: "12m" }
+  - { metric: "Alerts triaged / day", before: "5,000", after: "320" }
+  - { metric: "Auto-resolved", before: "0%", after: "78%" }
+quote: "We replaced our manual triage queue with an auditable agent loop and our analysts finally stopped chasing duplicates. The investigation ledger settled three SOC 2 questions in one review."
+quote_role: "Head of SOC"
+quote_company: "Example Customer Inc."
+order: 1000
+draft: true
+related_features:
+  - { label: "Investigation ledger", href: "/why-open-source#investigation-ledger" }
+  - { label: "Alert reduction benchmark", href: "/benchmark" }
+  - { label: "MITRE ATT&CK coverage", href: "/#mitre" }
+---
+
+> **Example / Template — replace before publishing.** This file exists so the
+> `/customers/[slug]` route renders end-to-end during local development. Every
+> number, quote, role, and company name on this page is fabricated. Copy this
+> file, swap the frontmatter, rewrite the body, and remove `draft: true` to
+> publish a real case study.
+
+## The setup
+
+Example Customer Inc. operates a regulated payments stack across two AWS
+regions and a Microsoft 365 tenant. Before AiSOC, the SOC was running a
+queue of roughly 5,000 alerts per day across two SIEM tools and a managed
+EDR — most of them duplicates of the same underlying entity behaviour.
+
+## What changed with AiSOC
+
+The team enabled the connectors for AWS CloudTrail, M365 audit, and the
+EDR. Risk-Based Alerting collapsed entity-level activity into a single
+queue; the autonomous triage agent took the first pass on every promoted
+alert; and the investigation ledger captured the prompt, tool calls, and
+evidence for every decision.
+
+Within a sprint:
+
+- The daily review queue dropped from ~5,000 to ~320 entity-level alerts.
+- Mean time to resolution fell from over four hours to twelve minutes for
+  the bulk of routine cases (the L1 / L2 substitute path).
+- 78% of triaged alerts auto-resolved with confidence-gated playbooks, with
+  every action signed and replayable in the ledger.
+
+## What the auditor saw
+
+The SOC 2 Type II auditor opened the investigation ledger directly and
+walked five sampled cases end-to-end: the prompts the agent issued, the
+evidence rows it cited, and the actions it executed. No vendor summary.
+That review closed three controls (CC7.2, CC7.3, CC7.4) in a single pass.
+
+## What's next
+
+Example Customer Inc. is rolling AiSOC out to its second business unit
+and contributing two detection rules upstream — both expected to land in
+the next community release.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80" role="img" aria-label="Example Customer Inc. (placeholder logo)">
+  <rect x="0" y="0" width="320" height="80" rx="12" fill="#0a0d14" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+  <g transform="translate(20 20)">
+    <rect x="0" y="0" width="40" height="40" rx="8" fill="rgba(99,102,241,0.18)" stroke="rgba(129,140,248,0.5)" stroke-width="1.5"/>
+    <path d="M12 14 L20 22 L12 30 M22 30 L30 30" stroke="#a5b4fc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <g font-family="Inter, system-ui, -apple-system, sans-serif" fill="#e5e7eb">
+    <text x="76" y="38" font-size="18" font-weight="600">Example Customer</text>
+    <text x="76" y="60" font-size="12" font-weight="400" fill="#9ca3af">placeholder logo · replace before publishing</text>
+  </g>
+</svg>
