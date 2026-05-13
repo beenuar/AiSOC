@@ -144,24 +144,112 @@ These numbers move with the codebase. The current snapshot lives at
      with fabricated numbers. The cells stay as placeholders until either
      T2.4's deterministic budget or T5.5's wet-eval run produces them. -->
 
-:::warning Wet-eval, not substrate
-Every table in this section is a **wet eval** measurement — it requires the
-live `services/agents` LangGraph orchestrator and real LLM calls, which is
-populated by the weekly wet-eval CI job (T5.5) once T2.4's telemetry lands.
-T2.4 also exposes a deterministic-substrate _budget projection_
-(`per_investigation` block in `eval_report.json`) that estimates token /
-USD / latency at substrate-walk speed; that projection is published in the
-JSON and the CLI summary, but is not substituted into the tables below
-because substrate timings would not be honest representations of agent
-performance.
+This section presents two parallel views of the same workload:
+
+- A **deterministic-substrate budget projection** computed by T2.4. This
+  runs in milliseconds without any LLM call and is gated on every PR.
+- A **wet-eval measurement** populated by T5.5's weekly job. This is the
+  honest "live agent on real LLM" view; at substrate-only commits the
+  cells are placeholders, never imputed.
+
+We keep them visually separate so substrate budgets are never read as
+agent performance.
+
+### Deterministic-substrate budget projection (T2.4)
+
+:::info Substrate budget — projection, not wet eval
+The four tables and four charts immediately below are computed from
+`eval_report.json -> per_investigation`. They are a **projection** of
+what the live agent will burn on the same workload, derived from a
+4-chars-per-token estimator and an illustrative 2025-era public rate
+card. They are **not** real LLM calls, real wall-clock latency, or real
+billing. Quote them as a CI-gated upper bound; quote the wet-eval block
+below for live performance.
+
+Reproduce locally::
+
+    python3 scripts/run_evals.py --telemetry-only --json --out report.json
+    python3 scripts/render_eval_charts.py report.json --no-markdown
 :::
 
-### Table 1 — Latency per investigation
+Headline numbers, current substrate snapshot (`gpt-4o` rate card,
+illustrative — input $2.50/M, output $10.00/M; n = 200 incidents,
+55 templates):
+
+| Metric (substrate budget) | mean   | median | p95    | p99    |
+|---------------------------|-------:|-------:|-------:|-------:|
+| Total tokens / investigation | 2,186 | 2,114 | 2,452 | 2,478 |
+| Prompt tokens / investigation | 956 | 963 | 1,031 | 1,050 |
+| Completion tokens / investigation | 1,230 | 1,120 | 1,440 | 1,440 |
+| USD / investigation       | $0.01469 | $0.01368 | $0.01693 | $0.01699 |
+| Latency / investigation (ms, substrate path) | 0.0072 | 0.0073 | 0.0107 | 0.0137 |
+
+The latency numbers above are **substrate path only** — incident
+description tokenize + telemetry-event JSON serialize. They are
+microseconds on a laptop, not seconds. The wet-eval table below is the
+right place to read live wall-clock latency. We surface the substrate
+distribution because the *shape* across templates is informative — a
+template with ten times the telemetry events takes ten times longer to
+walk, even at substrate speed, and that ratio is preserved when wet
+eval runs.
+
+#### Latency distribution (substrate path)
+
+![p50 / p95 / p99 latency, deterministic substrate](./benchmark-charts/latency-p50-p95-p99.svg)
+
+Substrate-path wall-clock per investigation. Bars: p50 / p95 / p99 /
+mean. Wet-eval (T5.5) replaces the absolute numbers with real-LLM
+wall-clock; the relative shape across templates carries over.
+
+#### Tokens per investigation distribution
+
+![Tokens per investigation, deterministic substrate](./benchmark-charts/tokens-distribution.svg)
+
+Histogram across all 200 incidents. The tail on the right is dominated
+by `critical`-severity templates (ransomware-encryption,
+process-hollowing-svchost, …) whose larger response plans push
+`completion_tokens` up by ≈ 1.8×. Median and p95 are marked.
+
+#### USD per investigation distribution
+
+![USD per investigation, deterministic substrate](./benchmark-charts/usd-distribution.svg)
+
+Same incidents, multiplied through the illustrative `gpt-4o` rate card
+($2.50/M input, $10.00/M output). The p95 budget sits just under
+$0.017 / investigation. Substitute your own rate card by passing
+`--telemetry-model` to `scripts/run_evals.py`; the JSON report carries
+the full token matrix so the same eval can be re-priced against any
+model.
+
+#### Latency p95 by template (top 20)
+
+![Latency p95 by template, deterministic substrate](./benchmark-charts/latency-by-template.svg)
+
+Slowest 20 templates by substrate-path p95 latency, with p50 and p95
+shown as overlaid bars. Useful for spotting templates whose telemetry
+shape balloons the prompt budget; under wet eval the same templates
+will dominate end-to-end latency too.
+
+:::warning Wet-eval, not substrate
+The three tables in the next subsection are a **wet eval** measurement
+— they require the live `services/agents` LangGraph orchestrator and
+real LLM calls, which is populated by the weekly wet-eval CI job (T5.5).
+T2.4's deterministic-substrate budget projection lives directly above
+and in the JSON report, but is **not** substituted into the wet-eval
+tables below because substrate timings would not be honest
+representations of agent performance.
+:::
+
+### Wet eval — Table 1 — Latency per investigation
 
 End-to-end wall-clock time from "incident received" to "investigation
 complete + response plan synthesised", per template and aggregate. Run
 against the 200-incident `synthetic_incidents.json` corpus with the live
 agent driving real LLM calls. Lower is better.
+
+> **Substrate budget for the same metric** is in the
+> [substrate-budget section](#deterministic-substrate-budget-projection-t24)
+> above (microsecond range — substrate path only, not wet wall-clock).
 
 | Template family            | p50 (s) | p95 (s) | p99 (s) | n  |
 |----------------------------|--------:|--------:|--------:|---:|
@@ -176,11 +264,16 @@ agent driving real LLM calls. Lower is better.
 > A weekly CI job (T5.5 — `wet-eval-weekly.yml`) regrades the corpus and
 > fails if either gate regresses by more than 10 % week-over-week.
 
-### Table 2 — Tokens per investigation
+### Wet eval — Table 2 — Tokens per investigation
 
 Total prompt + completion tokens consumed by the agent for one investigation,
 across every LLM call in the LangGraph topology. Includes context-bundle
 tokens, tool-call tokens, and final-plan synthesis tokens.
+
+> **Substrate budget for the same metric**: aggregate p95 ≈ 2,452 tokens
+> at the time of writing. Read the
+> [substrate-budget section](#deterministic-substrate-budget-projection-t24)
+> as a CI-gated upper bound that runs every PR.
 
 | Template family            | mean | median | p95  | n  |
 |----------------------------|-----:|-------:|-----:|---:|
@@ -197,11 +290,16 @@ tokens, tool-call tokens, and final-plan synthesis tokens.
 > or `wet_eval.tokens.by_call` (T5.5 wet eval). The current rate card the
 > dollar figures below use is in [Rate card](./benchmark-methodology.md#rate-card).
 
-### Table 3 — USD per investigation
+### Wet eval — Table 3 — USD per investigation
 
 Same denominator as Table 2, multiplied through the rate card current at
 the time of the run. Recorded in the JSON report so historic rate-card
 changes don't silently revalue old runs.
+
+> **Substrate budget for the same metric**: aggregate p95 ≈ $0.01693 at
+> the illustrative `gpt-4o` rate card. Read the
+> [substrate-budget section](#deterministic-substrate-budget-projection-t24)
+> for the per-template breakdown and chart.
 
 | Template family            | mean ($) | median ($) | p95 ($) | n  |
 |----------------------------|---------:|-----------:|--------:|---:|

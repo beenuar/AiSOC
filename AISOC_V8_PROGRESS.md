@@ -23,7 +23,7 @@
 - [ ] T2.1 Pre-fetched context bundle (P0, M) → T1.1
 - [ ] T2.2 LangGraph parallel topology (P0, M) → T2.1
 - [ ] T2.3 LLM-input contract (P0, M) → T2.1
-- [ ] T2.4 Token + USD eval telemetry (P0, S)
+- [x] T2.4 Token + USD eval telemetry (P0, S)
 - [x] T2.5 Four-agent brand consolidation (P0, S)
 
 ### Track 3 — UI
@@ -103,6 +103,7 @@ These independent tasks fire concurrently as background subagents:
 
 ## Changelog
 
+- 2026-05-13 — T2.4 shipped: per-investigation token / USD / latency telemetry now lives in `eval_report.json -> per_investigation`. New stdlib-only module `scripts/eval_telemetry.py` (deterministic 4-chars/token estimator, illustrative 2025-era public rate card mirroring `services/agents/app/core/cost_telemetry.py`, mean/median/p50/p95/p99 across all 200 incidents and per-template). `scripts/run_evals.py` gains `--telemetry-only` / `--telemetry-model` / `--no-telemetry-records` flags so the substrate-walk numbers can run without the agent dependency stack. `scripts/render_eval_charts.py` extended with a hand-rolled SVG emitter (zero new deps) that writes four charts into `apps/docs/docs/benchmark-charts/`: `latency-p50-p95-p99.svg`, `tokens-distribution.svg`, `usd-distribution.svg`, `latency-by-template.svg`. `apps/docs/docs/benchmark.md` gains a clearly-labeled "Deterministic-substrate budget projection (T2.4)" section with the four SVGs inline plus a substrate budget table; the existing wet-eval tables stay as placeholders per workspace rule. Wet eval lives in T5.5; substrate budgets are an upper-bound CI gate, never quoted as live agent performance. New unit tests at `services/agents/tests/test_eval_telemetry.py` (18 cases: rate-card maths, token estimator, aggregate stats, severity scaling, SVG renderer round-trip including the no-records fallback) — all green.
 - 2026-05-13 — Branch created, progress tracker initialised, wave-1 subagents dispatched.
 - 2026-05-13 — T7.2 shipped: L0–L4 automation maturity white paper. Canonical
   docs concept page at `apps/docs/docs/concepts/automation-maturity.md`,
