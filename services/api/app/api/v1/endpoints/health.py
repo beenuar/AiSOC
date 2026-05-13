@@ -145,9 +145,7 @@ def _p95_seconds_expr(expr: Any) -> Any:
 # ─────────────────────────────── ingest stage ────────────────────────────────
 
 
-async def _ingest_stage(
-    db, tenant_id, *, now: datetime
-) -> PipelineStage:
+async def _ingest_stage(db, tenant_id, *, now: datetime) -> PipelineStage:
     """Build the ``ingest`` row from connector freshness aggregates.
 
     Reads every Connector for the tenant, runs ``compute_freshness``
@@ -231,9 +229,7 @@ async def _normalize_stage(
     is the most honest single-number proxy for normalization latency.
     """
     p95_seconds = await db.scalar(
-        select(
-            _p95_seconds_expr(func.extract("epoch", Alert.created_at - Alert.event_time))
-        ).where(
+        select(_p95_seconds_expr(func.extract("epoch", Alert.created_at - Alert.event_time))).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.created_at >= window_start,
@@ -285,9 +281,7 @@ async def _fuse_stage(
     compute without instrumenting the fusion service itself.
     """
     p95_seconds = await db.scalar(
-        select(
-            _p95_seconds_expr(func.extract("epoch", Alert.last_seen - Alert.first_seen))
-        ).where(
+        select(_p95_seconds_expr(func.extract("epoch", Alert.last_seen - Alert.first_seen))).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.created_at >= window_start,
@@ -416,9 +410,7 @@ async def _alert_stage(
     )
 
     p95_seconds = await db.scalar(
-        select(
-            _p95_seconds_expr(func.extract("epoch", Alert.first_seen_at - Alert.created_at))
-        ).where(
+        select(_p95_seconds_expr(func.extract("epoch", Alert.first_seen_at - Alert.created_at))).where(
             and_(
                 Alert.tenant_id == tenant_id,
                 Alert.created_at >= window_start,

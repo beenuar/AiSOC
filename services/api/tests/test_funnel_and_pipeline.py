@@ -34,7 +34,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -430,48 +429,27 @@ class TestStatusFromLatency:
     def test_none_returns_unknown(self) -> None:
         from app.api.v1.endpoints.health import _status_from_latency
 
-        assert (
-            _status_from_latency(p95_seconds=None, warn_seconds=600, down_seconds=1800)
-            == "unknown"
-        )
+        assert _status_from_latency(p95_seconds=None, warn_seconds=600, down_seconds=1800) == "unknown"
 
     def test_below_warn_is_green(self) -> None:
         from app.api.v1.endpoints.health import _status_from_latency
 
-        assert (
-            _status_from_latency(p95_seconds=0.0, warn_seconds=600, down_seconds=1800)
-            == "green"
-        )
-        assert (
-            _status_from_latency(p95_seconds=599.0, warn_seconds=600, down_seconds=1800)
-            == "green"
-        )
+        assert _status_from_latency(p95_seconds=0.0, warn_seconds=600, down_seconds=1800) == "green"
+        assert _status_from_latency(p95_seconds=599.0, warn_seconds=600, down_seconds=1800) == "green"
         # Exactly at the warn ceiling → still green (≤, not <).
-        assert (
-            _status_from_latency(p95_seconds=600.0, warn_seconds=600, down_seconds=1800)
-            == "green"
-        )
+        assert _status_from_latency(p95_seconds=600.0, warn_seconds=600, down_seconds=1800) == "green"
 
     def test_below_down_is_yellow(self) -> None:
         from app.api.v1.endpoints.health import _status_from_latency
 
-        assert (
-            _status_from_latency(p95_seconds=601.0, warn_seconds=600, down_seconds=1800)
-            == "yellow"
-        )
+        assert _status_from_latency(p95_seconds=601.0, warn_seconds=600, down_seconds=1800) == "yellow"
         # Exactly at the down ceiling → still yellow.
-        assert (
-            _status_from_latency(p95_seconds=1800.0, warn_seconds=600, down_seconds=1800)
-            == "yellow"
-        )
+        assert _status_from_latency(p95_seconds=1800.0, warn_seconds=600, down_seconds=1800) == "yellow"
 
     def test_above_down_is_red(self) -> None:
         from app.api.v1.endpoints.health import _status_from_latency
 
-        assert (
-            _status_from_latency(p95_seconds=1801.0, warn_seconds=600, down_seconds=1800)
-            == "red"
-        )
+        assert _status_from_latency(p95_seconds=1801.0, warn_seconds=600, down_seconds=1800) == "red"
 
 
 class TestWorstStatus:
@@ -546,9 +524,7 @@ class TestIngestStage:
         from app.api.v1.endpoints.health import _ingest_stage
 
         db = MagicMock()
-        db.execute = AsyncMock(
-            return_value=_execute_result_all([_connector_row(is_enabled=False)])
-        )
+        db.execute = AsyncMock(return_value=_execute_result_all([_connector_row(is_enabled=False)]))
         stage = await _ingest_stage(db, uuid.uuid4(), now=datetime.now(UTC))
         assert stage.status == "unknown"
         assert stage.backlog == 0
@@ -953,33 +929,19 @@ class TestGetPipelineHealth:
         # Patch each stage helper so we don't have to feed a long
         # AsyncMock side_effect chain. The orchestrator's job is the
         # ordering + overall_status — that's what we lock in here.
-        ingest = PipelineStage(
-            stage="ingest", backlog=0, p95_latency_ms=0.0, error_rate=0.0, status="green"
-        )
-        normalize = PipelineStage(
-            stage="normalize", backlog=0, p95_latency_ms=10.0, error_rate=0.0, status="green"
-        )
-        fuse = PipelineStage(
-            stage="fuse", backlog=0, p95_latency_ms=20.0, error_rate=0.0, status="green"
-        )
-        correlate = PipelineStage(
-            stage="correlate", backlog=0, p95_latency_ms=0.0, error_rate=0.0, status="green"
-        )
-        alert = PipelineStage(
-            stage="alert", backlog=0, p95_latency_ms=30.0, error_rate=0.0, status="green"
-        )
+        ingest = PipelineStage(stage="ingest", backlog=0, p95_latency_ms=0.0, error_rate=0.0, status="green")
+        normalize = PipelineStage(stage="normalize", backlog=0, p95_latency_ms=10.0, error_rate=0.0, status="green")
+        fuse = PipelineStage(stage="fuse", backlog=0, p95_latency_ms=20.0, error_rate=0.0, status="green")
+        correlate = PipelineStage(stage="correlate", backlog=0, p95_latency_ms=0.0, error_rate=0.0, status="green")
+        alert = PipelineStage(stage="alert", backlog=0, p95_latency_ms=30.0, error_rate=0.0, status="green")
 
         with (
-            patch(
-                "app.api.v1.endpoints.health._ingest_stage", new=AsyncMock(return_value=ingest)
-            ),
+            patch("app.api.v1.endpoints.health._ingest_stage", new=AsyncMock(return_value=ingest)),
             patch(
                 "app.api.v1.endpoints.health._normalize_stage",
                 new=AsyncMock(return_value=normalize),
             ),
-            patch(
-                "app.api.v1.endpoints.health._fuse_stage", new=AsyncMock(return_value=fuse)
-            ),
+            patch("app.api.v1.endpoints.health._fuse_stage", new=AsyncMock(return_value=fuse)),
             patch(
                 "app.api.v1.endpoints.health._correlate_stage",
                 new=AsyncMock(return_value=correlate),
@@ -1007,18 +969,13 @@ class TestGetPipelineHealth:
     @pytest.mark.asyncio
     async def test_overall_is_worst_of_stages(self) -> None:
         from app.api.v1.endpoints.health import (
-            PipelineHealth,
             PipelineStage,
             get_pipeline_health,
         )
 
         # 1 yellow stage among greens ⇒ overall yellow.
-        green = PipelineStage(
-            stage="x", backlog=0, p95_latency_ms=0.0, error_rate=0.0, status="green"
-        )
-        yellow = PipelineStage(
-            stage="alert", backlog=4, p95_latency_ms=900_000.0, error_rate=0.0, status="yellow"
-        )
+        green = PipelineStage(stage="x", backlog=0, p95_latency_ms=0.0, error_rate=0.0, status="green")
+        yellow = PipelineStage(stage="alert", backlog=4, p95_latency_ms=900_000.0, error_rate=0.0, status="yellow")
 
         with (
             patch("app.api.v1.endpoints.health._ingest_stage", new=AsyncMock(return_value=green)),
@@ -1032,9 +989,7 @@ class TestGetPipelineHealth:
         assert payload.overall_status == "yellow"
 
         # 1 red stage ⇒ overall red, no matter what the others say.
-        red = PipelineStage(
-            stage="fuse", backlog=0, p95_latency_ms=99_999_999.0, error_rate=0.0, status="red"
-        )
+        red = PipelineStage(stage="fuse", backlog=0, p95_latency_ms=99_999_999.0, error_rate=0.0, status="red")
 
         with (
             patch("app.api.v1.endpoints.health._ingest_stage", new=AsyncMock(return_value=green)),

@@ -755,51 +755,63 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     # (i.e. multiple raw events fused into a single alert). Single-event
     # alerts are excluded so the ratio stays meaningful when one detection
     # rule fires repeatedly.
-    correlation_instances = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.created_at >= start,
-                Alert.created_at < end,
-                func.jsonb_array_length(Alert.source_event_ids) >= 2,
+    correlation_instances = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    func.jsonb_array_length(Alert.source_event_ids) >= 2,
+                )
             )
         )
-    ) or 0
+        or 0
+    )
 
-    alerts_generated = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.created_at >= start,
-                Alert.created_at < end,
+    alerts_generated = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                )
             )
         )
-    ) or 0
+        or 0
+    )
 
     # Signal-to-noise: of *resolved* alerts in the window, what fraction
     # ended in disposition='true_positive'? Closed alerts with no disposition
     # are excluded from both numerator and denominator so the ratio reflects
     # analyst judgement, not lifecycle state.
-    sig_total = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.created_at >= start,
-                Alert.created_at < end,
-                Alert.disposition.in_(("true_positive", "false_positive", "benign", "duplicate")),
+    sig_total = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    Alert.disposition.in_(("true_positive", "false_positive", "benign", "duplicate")),
+                )
             )
         )
-    ) or 0
-    sig_tp = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.created_at >= start,
-                Alert.created_at < end,
-                Alert.disposition == "true_positive",
+        or 0
+    )
+    sig_tp = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    Alert.disposition == "true_positive",
+                )
             )
         )
-    ) or 0
+        or 0
+    )
     signal_to_noise = round((sig_tp / sig_total), 4) if sig_total else 0.0
 
     # MTTD in seconds for alerts created in this window that have been seen.
@@ -818,15 +830,18 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     # Analyst queue depth = open alerts (snapshot, not window-bound) that an
     # analyst would see in their queue right now: status in {new, triaging,
     # in_progress} and no disposition.
-    analyst_queue_depth = await db.scalar(
-        select(func.count()).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.status.in_(("new", "triaging", "in_progress")),
-                Alert.disposition.is_(None),
+    analyst_queue_depth = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.status.in_(("new", "triaging", "in_progress")),
+                    Alert.disposition.is_(None),
+                )
             )
         )
-    ) or 0
+        or 0
+    )
 
     # Correlation efficiency = correlation_instances / events_of_interest.
     # "What share of raw events did the fusion engine collapse into a
@@ -873,27 +888,35 @@ async def _mitre_covered(db, tenant_id, start, end) -> int:
         platform-wide where ``tenant_id IS NULL``)
     """
     alert_techs = (
-        await db.execute(
-            select(func.distinct(func.jsonb_array_elements_text(Alert.mitre_techniques))).where(
-                and_(
-                    Alert.tenant_id == tenant_id,
-                    Alert.created_at >= start,
-                    Alert.created_at < end,
+        (
+            await db.execute(
+                select(func.distinct(func.jsonb_array_elements_text(Alert.mitre_techniques))).where(
+                    and_(
+                        Alert.tenant_id == tenant_id,
+                        Alert.created_at >= start,
+                        Alert.created_at < end,
+                    )
                 )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     rule_techs = (
-        await db.execute(
-            select(func.distinct(func.jsonb_array_elements_text(DetectionRule.mitre_techniques))).where(
-                and_(
-                    DetectionRule.status == "enabled",
-                    (DetectionRule.tenant_id == tenant_id) | (DetectionRule.tenant_id.is_(None)),
+        (
+            await db.execute(
+                select(func.distinct(func.jsonb_array_elements_text(DetectionRule.mitre_techniques))).where(
+                    and_(
+                        DetectionRule.status == "enabled",
+                        (DetectionRule.tenant_id == tenant_id) | (DetectionRule.tenant_id.is_(None)),
+                    )
                 )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     techniques = {t for t in alert_techs if t} | {t for t in rule_techs if t}
     return len(techniques)
