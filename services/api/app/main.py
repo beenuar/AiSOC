@@ -28,6 +28,7 @@ from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.demo_mode import DemoModeMiddleware
 from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
+from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
@@ -123,6 +124,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.warning("weekly_digest worker failed to start", error=str(exc))
 
+    # T3.4: Saved-hunt scheduler. Sweeps aisoc_saved_hunts on a tick and
+    # fires any hunt whose cron schedule says it's due. Default off until
+    # the executor is wired (see app.workers.hunt_scheduler TODO).
+    hunt_scheduler_task: asyncio.Task | None = None
+    if settings.HUNT_SCHEDULER_ENABLED:
+        try:
+            hunt_scheduler_task = asyncio.create_task(
+                run_hunt_scheduler(), name="hunt_scheduler_worker"
+            )
+            logger.info("hunt_scheduler worker started")
+        except Exception as exc:
+            logger.warning("hunt_scheduler worker failed to start", error=str(exc))
+
     yield
 
     logger.info("AiSOC API shutting down")
@@ -143,6 +157,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("weekly_digest worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("weekly_digest worker shutdown error", error=type(exc).__name__)
+
+    if hunt_scheduler_task is not None and not hunt_scheduler_task.done():
+        hunt_scheduler_task.cancel()
+        try:
+            await hunt_scheduler_task
+        except asyncio.CancelledError:
+            logger.debug("hunt_scheduler worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("hunt_scheduler worker shutdown error", error=type(exc).__name__)
     await engine.dispose()
     await close_neo4j()
     # Close the ClickHouse warm-tier client. We don't pre-init it on

@@ -121,6 +121,92 @@ _FIELD_ALIASES: dict[str, str] = {
 }
 
 
+# Country names → ISO 3166-1 alpha-2 codes. Used by the geo-from filter so a
+# question like *"Did we get any new attacks from Iran?"* gets translated to
+# ``source.geo.country_iso_code == "IR"`` instead of being misparsed as a
+# bare hostname filter. Lowercase keys so the matcher can do a single-pass
+# lookup against the normalised question.
+#
+# We deliberately limit the table to ~50 high-traffic-for-SOC entries (G20 +
+# common attack-source nations) rather than pulling a full 250-entry library.
+# The translator still falls back to "no results, but here's the parsed query"
+# for misses, so a lookup miss never breaks the UX — it just gives us less
+# useful filtering. New entries are fine to add as they come up; keep the
+# file deterministic by hand-curating.
+_COUNTRY_TO_ISO: dict[str, str] = {
+    "afghanistan": "AF",
+    "argentina": "AR",
+    "australia": "AU",
+    "austria": "AT",
+    "belarus": "BY",
+    "belgium": "BE",
+    "brazil": "BR",
+    "canada": "CA",
+    "china": "CN",
+    "colombia": "CO",
+    "cuba": "CU",
+    "czech republic": "CZ",
+    "denmark": "DK",
+    "egypt": "EG",
+    "estonia": "EE",
+    "finland": "FI",
+    "france": "FR",
+    "germany": "DE",
+    "greece": "GR",
+    "hong kong": "HK",
+    "hungary": "HU",
+    "india": "IN",
+    "indonesia": "ID",
+    "iran": "IR",
+    "iraq": "IQ",
+    "ireland": "IE",
+    "israel": "IL",
+    "italy": "IT",
+    "japan": "JP",
+    "kazakhstan": "KZ",
+    "lebanon": "LB",
+    "libya": "LY",
+    "malaysia": "MY",
+    "mexico": "MX",
+    "myanmar": "MM",
+    "netherlands": "NL",
+    "new zealand": "NZ",
+    "nigeria": "NG",
+    "north korea": "KP",
+    "norway": "NO",
+    "pakistan": "PK",
+    "philippines": "PH",
+    "poland": "PL",
+    "portugal": "PT",
+    "qatar": "QA",
+    "romania": "RO",
+    "russia": "RU",
+    "saudi arabia": "SA",
+    "singapore": "SG",
+    "south africa": "ZA",
+    "south korea": "KR",
+    "spain": "ES",
+    "sweden": "SE",
+    "switzerland": "CH",
+    "syria": "SY",
+    "taiwan": "TW",
+    "thailand": "TH",
+    "turkey": "TR",
+    "ukraine": "UA",
+    "united arab emirates": "AE",
+    "united kingdom": "GB",
+    "uk": "GB",
+    "britain": "GB",
+    "united states": "US",
+    "usa": "US",
+    "us": "US",
+    "america": "US",
+    "venezuela": "VE",
+    "vietnam": "VN",
+    "yemen": "YE",
+}
+
+
 # Words that signal an event category. The values are the canonical
 # ``event.category`` filters we'll add when one of these keywords appears.
 _CATEGORY_KEYWORDS: dict[str, str] = {
@@ -234,8 +320,95 @@ def _resolve_field(token: str) -> str | None:
     return None
 
 
+def _extract_country_filter(text: str, intents: QueryIntents) -> set[str]:
+    """Detect natural-language country mentions and add a geo filter.
+
+    Returns the set of *raw country tokens* matched in ``text`` so the
+    downstream ``from <hostname>`` matcher can skip them and avoid
+    double-classifying e.g. "Iran" as a hostname.
+
+    Triggers on either:
+
+    * Explicit prepositional phrasing — "from Iran", "in Russia",
+      "originating from China", "out of North Korea" — which is the
+      common SOC-analyst voice.
+    * Bare country mentions when the question contains a category keyword
+      that implies geo provenance (``attacks``, ``traffic``, ``logins``,
+      ``sessions``, ``connections``, ``activity``, ``hits``).
+
+    The matcher walks the country table longest-first so multi-word names
+    ("united states", "united kingdom", "north korea") win over their
+    single-word substrings ("united", "korea").
+    """
+    matched_tokens: set[str] = set()
+    seen_iso: set[str] = set()
+
+    # Sort longest-first so "north korea" beats the substrings "north" and
+    # "korea". The table is small (<100 entries) so the cost is irrelevant.
+    countries = sorted(_COUNTRY_TO_ISO.keys(), key=len, reverse=True)
+
+    geo_preps = (
+        "from",
+        "in",
+        "out of",
+        "originating from",
+        "originated from",
+        "based in",
+        "located in",
+        "coming from",
+    )
+    geo_categories = (
+        "attack",
+        "attacks",
+        "traffic",
+        "login",
+        "logins",
+        "session",
+        "sessions",
+        "connection",
+        "connections",
+        "activity",
+        "hits",
+        "request",
+        "requests",
+        "scan",
+        "scans",
+    )
+    has_geo_category = any(re.search(rf"\b{kw}\b", text) for kw in geo_categories)
+
+    for country in countries:
+        iso = _COUNTRY_TO_ISO[country]
+        # Explicit "from <country>" / "in <country>" / etc.
+        for prep in geo_preps:
+            if re.search(rf"\b{prep}\s+{re.escape(country)}\b", text):
+                if iso not in seen_iso:
+                    intents.filters.append(("source.geo.country_iso_code", "==", iso))
+                    seen_iso.add(iso)
+                matched_tokens.add(country)
+                # Also add the trailing word so the bare-hostname loop
+                # downstream skips e.g. "korea" when it saw "north korea".
+                matched_tokens.update(country.split())
+                break
+        # Bare mention when the question reads like a geo question.
+        if country in matched_tokens:
+            continue
+        if has_geo_category and re.search(rf"\b{re.escape(country)}\b", text):
+            if iso not in seen_iso:
+                intents.filters.append(("source.geo.country_iso_code", "==", iso))
+                seen_iso.add(iso)
+            matched_tokens.add(country)
+            matched_tokens.update(country.split())
+
+    return matched_tokens
+
+
 def _extract_filters(question: str, intents: QueryIntents) -> None:
     text = _normalise(question)
+
+    # Geo-from filter (must run before the bare ``from <hostname>`` matcher
+    # at the bottom of this function so "from Iran" doesn't become a
+    # ``host.name`` filter against the literal string "iran").
+    country_tokens = _extract_country_filter(text, intents)
 
     # event.outcome filter (failed / successful / etc.)
     for kw, outcome in _OUTCOME_KEYWORDS.items():
@@ -341,6 +514,9 @@ def _extract_filters(question: str, intents: QueryIntents) -> None:
         # first) and skip anything that looks like an IPv4 address — that's
         # handled by the dedicated source.ip extractor higher up.
         if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", value):
+            continue
+        # Skip country names already handled by the geo filter above.
+        if value in country_tokens:
             continue
         key = ("host.name", value)
         if key in seen_pairs:

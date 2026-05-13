@@ -56,6 +56,7 @@ from app.api.v1.endpoints import (
     rbac,
     remediation,
     reports,
+    saved_hunts,
     saved_views,
     shifts,
     sla,
@@ -150,6 +151,13 @@ api_router.include_router(translation.router)
 
 # Hypothesis-driven hunt workbench (Tier 2)
 api_router.include_router(hunts.router)
+
+# Saved natural-language hunts — Track 3, T3.4 (`/hunt` NL surface).
+# Backs the "Saved hunts" sidebar on the /hunt page. Stores the analyst's
+# plain-English question + translator output, optionally on a cron. Tenant-
+# shared (every analyst in the tenant sees every saved hunt). Distinct from
+# /hunts (above), which is the heavyweight detection-engineer hunt workbench.
+api_router.include_router(saved_hunts.router)
 
 # Email-security + phishing-triage workflow (Tier 3)
 api_router.include_router(phishing.router)

@@ -9,7 +9,7 @@ import warnings
 from functools import lru_cache
 from typing import Any
 
-from pydantic import PostgresDsn, RedisDsn, field_validator
+from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default placeholders shipped in source. Anything matching these in a
@@ -151,6 +151,27 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     WEEKLY_DIGEST_WORKER_ENABLED: bool = True
     WEEKLY_DIGEST_POLL_INTERVAL_SECONDS: int = 3600
+
+    # ------------------------------------------------------------------
+    # T3.4 — Saved-hunt scheduler. The worker scans ``aisoc_saved_hunts``
+    # and fires any hunt whose cron schedule says it's due, opening a
+    # case per hit. Default off until query execution is wired through to
+    # the in-process Elasticsearch client (see TODO in
+    # ``app.workers.hunt_scheduler``); flipping to ``true`` exercises the
+    # sweep + bookkeeping path which is the hot path covered by tests.
+    # ``HUNT_SCHEDULER_POLL_INTERVAL_SECONDS`` controls the sweep cadence
+    # (seconds). 30s gives sub-minute resolution for ``* * * * *`` saved
+    # hunts without thrashing the DB.
+    # The ``AISOC_HUNT_SCHEDULER_ENABLED`` env alias matches the operator-
+    # facing name documented in the task plan.
+    # ------------------------------------------------------------------
+    HUNT_SCHEDULER_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "HUNT_SCHEDULER_ENABLED", "AISOC_HUNT_SCHEDULER_ENABLED"
+        ),
+    )
+    HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
 
     # Database
     DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"  # type: ignore[assignment]

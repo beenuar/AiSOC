@@ -30,6 +30,7 @@ from app.connectors.carbon_black import CarbonBlackConnector
 from app.connectors.chronicle import ChronicleConnector
 from app.connectors.cisco_umbrella import CiscoUmbrellaConnector
 from app.connectors.cloudflare import CloudflareConnector
+from app.connectors.confluence_audit import ConfluenceAuditConnector
 from app.connectors.cortex_xdr import CortexXDRConnector
 from app.connectors.cortex_xsiam import CortexXSIAMConnector
 from app.connectors.crowdstrike import CrowdStrikeConnector
@@ -37,6 +38,7 @@ from app.connectors.datadog_cloud_siem import DatadogCloudSIEMConnector
 from app.connectors.duo_security import DuoSecurityConnector
 from app.connectors.elastic import ElasticConnector
 from app.connectors.email_inbox import EmailInboxConnector
+from app.connectors.falco import FalcoConnector
 from app.connectors.fleetdm import FleetDMConnector
 from app.connectors.gcp_cloud_audit import GCPCloudAuditConnector
 from app.connectors.gcp_scc import GCPSCCConnector
@@ -50,8 +52,10 @@ from app.connectors.microsoft_sentinel import MicrosoftSentinelConnector
 from app.connectors.mimecast import MimecastConnector
 from app.connectors.okta import OktaConnector
 from app.connectors.onepassword import OnePasswordConnector
+from app.connectors.opsgenie import OpsgenieConnector
 from app.connectors.orca import OrcaConnector
 from app.connectors.osctrl import OsctrlConnector
+from app.connectors.pagerduty import PagerDutyConnector
 from app.connectors.prisma_cloud import PrismaCloudConnector
 from app.connectors.proofpoint import ProofpointConnector
 from app.connectors.rapid7_insightidr import Rapid7InsightIDRConnector
@@ -64,6 +68,8 @@ from app.connectors.splunk import SplunkConnector
 from app.connectors.sumo_logic import SumoLogicConnector
 from app.connectors.tailscale import TailscaleConnector
 from app.connectors.tenable import TenableConnector
+from app.connectors.tines import TinesConnector
+from app.connectors.torq import TorqConnector
 from app.connectors.trellix_helix import TrellixHelixConnector
 from app.connectors.trend_vision_one import TrendVisionOneConnector
 from app.connectors.wazuh import WazuhConnector
@@ -90,6 +96,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     ChronicleConnector,
     CiscoUmbrellaConnector,
     CloudflareConnector,
+    ConfluenceAuditConnector,
     CortexXDRConnector,
     CortexXSIAMConnector,
     CrowdStrikeConnector,
@@ -97,6 +104,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     DuoSecurityConnector,
     ElasticConnector,
     EmailInboxConnector,
+    FalcoConnector,
     FleetDMConnector,
     GCPCloudAuditConnector,
     GCPSCCConnector,
@@ -110,8 +118,10 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     MimecastConnector,
     OktaConnector,
     OnePasswordConnector,
+    OpsgenieConnector,
     OrcaConnector,
     OsctrlConnector,
+    PagerDutyConnector,
     PrismaCloudConnector,
     ProofpointConnector,
     Rapid7InsightIDRConnector,
@@ -124,6 +134,8 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     SumoLogicConnector,
     TailscaleConnector,
     TenableConnector,
+    TinesConnector,
+    TorqConnector,
     TrellixHelixConnector,
     TrendVisionOneConnector,
     WazuhConnector,
@@ -188,6 +200,7 @@ __all__ = [
     "ChronicleConnector",
     "CiscoUmbrellaConnector",
     "CloudflareConnector",
+    "ConfluenceAuditConnector",
     "ConnectorSchema",
     "CortexXDRConnector",
     "CortexXSIAMConnector",
@@ -196,6 +209,7 @@ __all__ = [
     "DuoSecurityConnector",
     "ElasticConnector",
     "EmailInboxConnector",
+    "FalcoConnector",
     "Field",
     "FleetDMConnector",
     "GCPCloudAuditConnector",
@@ -211,8 +225,10 @@ __all__ = [
     "OAuthHints",
     "OktaConnector",
     "OnePasswordConnector",
+    "OpsgenieConnector",
     "OrcaConnector",
     "OsctrlConnector",
+    "PagerDutyConnector",
     "PrismaCloudConnector",
     "ProofpointConnector",
     "Rapid7InsightIDRConnector",
@@ -225,6 +241,8 @@ __all__ = [
     "SumoLogicConnector",
     "TailscaleConnector",
     "TenableConnector",
+    "TinesConnector",
+    "TorqConnector",
     "TrellixHelixConnector",
     "TrendVisionOneConnector",
     "WazuhConnector",

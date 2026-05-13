@@ -37,6 +37,7 @@ from app.models.responder import (
     PasskeyChallenge,
     PasskeyCredential,
 )
+from app.models.saved_hunt import SavedHunt
 from app.models.saved_view import SavedView
 from app.models.tenant import ApiKey, Tenant, User
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
@@ -89,6 +90,7 @@ __all__ = [
     "RemediationWhitelist",
     "ReportArtefact",
     "ReportTemplate",
+    "SavedHunt",
     "SavedView",
     "ThreatActor",
     "ThreatIntelFeed",

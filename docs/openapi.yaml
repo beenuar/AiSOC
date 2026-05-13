@@ -5353,6 +5353,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/insights/soc:
+    get:
+      tags:
+      - insights
+      summary: SOC Insights dashboard aggregate (T3.1)
+      description: 'Return the seven-tile SOC Insights payload for the tenant.
+
+
+        Tenant scoping is enforced by ``current_user.tenant_id`` plus an
+
+        explicit ``tenant_id`` predicate in every aggregate, so the payload
+
+        is safe to render for any role that can read the dashboard.'
+      operationId: get_soc_insights_api_v1_insights_soc_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: window
+        in: query
+        required: false
+        schema:
+          enum:
+          - 24h
+          - 7d
+          - 30d
+          type: string
+          description: Rolling window. One of 24h, 7d, 30d.
+          default: 24h
+          title: Window
+        description: Rolling window. One of 24h, 7d, 30d.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOCInsightsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/sla/metrics:
     get:
       tags:
@@ -8882,6 +8925,152 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/app__api__v1__endpoints__hunts__HuntResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/saved-hunts:
+    get:
+      tags:
+      - saved-hunts
+      summary: List Saved Hunts
+      description: 'Return every saved hunt visible in the caller''s tenant.
+
+
+        Sorted by ``updated_at DESC`` so the most recently re-run hunt lands
+
+        first; the UI renders this list as the "Saved hunts" sidebar.'
+      operationId: list_saved_hunts_api_v1_saved_hunts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SavedHuntModel'
+                type: array
+                title: Response List Saved Hunts Api V1 Saved Hunts Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - saved-hunts
+      summary: Create Saved Hunt
+      description: Translate the NL question and persist the hunt.
+      operationId: create_saved_hunt_api_v1_saved_hunts_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSavedHuntRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedHuntModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/saved-hunts/{hunt_id}:
+    get:
+      tags:
+      - saved-hunts
+      summary: Get Saved Hunt
+      description: Fetch one saved hunt.
+      operationId: get_saved_hunt_api_v1_saved_hunts__hunt_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: hunt_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Hunt Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedHuntModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - saved-hunts
+      summary: Delete Saved Hunt
+      description: Delete a saved hunt owned by the caller's tenant.
+      operationId: delete_saved_hunt_api_v1_saved_hunts__hunt_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: hunt_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Hunt Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/saved-hunts/{hunt_id}/run:
+    post:
+      tags:
+      - saved-hunts
+      summary: Run Saved Hunt
+      description: 'Re-translate the saved NL question and stamp ``last_run_at``.
+
+
+        Why re-translate on every run? The translator is the platform''s source
+
+        of truth for "what does this question mean today?" — improving the
+
+        translator (e.g. adding a new field alias) should automatically benefit
+
+        saved hunts the next time they''re executed without an analyst having to
+
+        re-save them. The stored ``translated_query`` is the snapshot taken at
+
+        save time and serves as a baseline for diffing.'
+      operationId: run_saved_hunt_api_v1_saved_hunts__hunt_id__run_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: hunt_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Hunt Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunSavedHuntResponse'
         '422':
           description: Validation Error
           content:
@@ -14857,6 +15046,45 @@ components:
       - rule_body
       - category
       title: CreateRuleRequest
+    CreateSavedHuntRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 160
+          minLength: 1
+          title: Name
+        nl_query:
+          type: string
+          maxLength: 4000
+          minLength: 3
+          title: Nl Query
+        language:
+          type: string
+          enum:
+          - esql
+          - kql
+          - spl
+          title: Language
+          default: esql
+        schedule:
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Schedule
+      type: object
+      required:
+      - name
+      - nl_query
+      title: CreateSavedHuntRequest
+      description: 'Body for ``POST /saved-hunts``.
+
+
+        The caller supplies the NL question and a name; we translate server-side
+
+        so the stored ``translated_query`` is guaranteed to match what the
+
+        platform will execute (no client-side drift).'
     CreateSavedViewRequest:
       properties:
         view_type:
@@ -17394,6 +17622,61 @@ components:
       - inbox_url
       title: IngestTokenResponse
       description: Push-token response. ``inbox_url`` is the absolute endpoint.
+    InsightSparkline:
+      properties:
+        points:
+          items:
+            type: number
+          type: array
+          title: Points
+          description: Bucket values, oldest → newest. Length == 24.
+      type: object
+      title: InsightSparkline
+      description: A bucketed time-series the UI renders as a tiny inline SVG.
+    InsightTile:
+      properties:
+        key:
+          type: string
+          title: Key
+          description: Stable identifier — used as a React key.
+        label:
+          type: string
+          title: Label
+          description: Human-readable tile heading.
+        value:
+          type: number
+          title: Value
+          description: Headline metric for the current window.
+        unit:
+          type: string
+          title: Unit
+          description: Display unit. The UI picks formatting per unit (``hours`` →
+            1 decimal, ``pct`` → percentage, ``usd`` → currency, ``count`` → integer,
+            ``hours_saved`` → integer).
+        previous_value:
+          type: number
+          title: Previous Value
+          description: Value of the same metric over the immediately preceding window
+            of equal length. Used to compute the delta.
+        delta_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Delta Pct
+          description: Percentage change vs ``previous_value``. ``None`` when the
+            previous window had no data (so the percent change is undefined rather
+            than misleadingly infinite).
+        sparkline:
+          $ref: '#/components/schemas/InsightSparkline'
+      type: object
+      required:
+      - key
+      - label
+      - value
+      - unit
+      - previous_value
+      title: InsightTile
+      description: One tile on the SOC Insights dashboard.
     InstallRequest:
       properties:
         type:
@@ -20327,6 +20610,42 @@ components:
       - plugin_id
       - result
       title: RunResponse
+    RunSavedHuntResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        nl_query:
+          type: string
+          title: Nl Query
+        translated_query:
+          $ref: '#/components/schemas/TranslatedQueryEnvelope'
+        last_run_at:
+          type: string
+          title: Last Run At
+      type: object
+      required:
+      - id
+      - name
+      - nl_query
+      - translated_query
+      - last_run_at
+      title: RunSavedHuntResponse
+      description: 'Synchronous run result returned by ``POST /saved-hunts/{id}/run``.
+
+
+        The endpoint *does not* execute the underlying ES|QL — that path is the
+
+        job of :mod:`app.api.v1.endpoints.nl_query` (``/nl-query/execute``) and
+
+        requires a configured Elasticsearch URL. The ``/run`` endpoint here only
+
+        re-translates and stamps ``last_run_at`` so the UI can show "last run
+
+        just now" and so the scheduler treats a manual run as resetting cadence.'
     RunSummary:
       properties:
         id:
@@ -20500,6 +20819,40 @@ components:
       - occurred_at
       - metadata
       title: SLAEventOut
+    SOCInsightsResponse:
+      properties:
+        window:
+          type: string
+          enum:
+          - 24h
+          - 7d
+          - 30d
+          title: Window
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        tiles:
+          items:
+            $ref: '#/components/schemas/InsightTile'
+          type: array
+          title: Tiles
+        manual_investigation_minutes:
+          type: integer
+          title: Manual Investigation Minutes
+          default: 45
+      type: object
+      required:
+      - window
+      - generated_at
+      - tenant_id
+      - tiles
+      title: SOCInsightsResponse
+      description: Aggregated SOC insights payload.
     SOCKpis:
       properties:
         mttd_hours:
@@ -20828,6 +21181,58 @@ components:
       - pattern
       - valid_from
       title: STIXIndicatorWithPush
+    SavedHuntModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        nl_query:
+          type: string
+          title: Nl Query
+        translated_query:
+          $ref: '#/components/schemas/TranslatedQueryEnvelope'
+        language:
+          type: string
+          enum:
+          - esql
+          - kql
+          - spl
+          title: Language
+        schedule:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Schedule
+        last_run_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Run At
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created By
+      type: object
+      required:
+      - id
+      - name
+      - nl_query
+      - translated_query
+      - language
+      - created_at
+      - updated_at
+      title: SavedHuntModel
+      description: Wire format for a saved hunt row.
     SavedViewModel:
       properties:
         id:
@@ -22116,6 +22521,32 @@ components:
       - source_format
       - results
       title: TranslateResponse
+    TranslatedQueryEnvelope:
+      properties:
+        esql:
+          type: string
+          title: Esql
+          default: ''
+        kql:
+          type: string
+          title: Kql
+          default: ''
+        spl:
+          type: string
+          title: Spl
+          default: ''
+        explanation:
+          type: string
+          title: Explanation
+          default: ''
+      type: object
+      title: TranslatedQueryEnvelope
+      description: 'Translator output stored alongside the NL question.
+
+
+        Mirrors :class:`services.agents.app.nl_query.translator.TranslatedQuery`
+
+        but without the ``intents`` IR (which is internal to the translator).'
     TranslationResult:
       properties:
         format:
@@ -22881,11 +23312,6 @@ components:
         type:
           type: string
           title: Error Type
-        input:
-          title: Input
-        ctx:
-          type: object
-          title: Context
       type: object
       required:
       - loc
