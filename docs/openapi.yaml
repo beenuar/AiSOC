@@ -464,7 +464,14 @@ paths:
       tags:
       - alerts
       summary: Get Alert
-      description: Get a single alert by ID.
+      description: "Get a single alert by ID, enriched with Investigation Rail data.\n\
+        \nThe endpoint returns the standard alert fields plus everything the\nrail\
+        \ needs to render in one shot:\n\n* a deterministic ``narrative`` (lazily\
+        \ filled and persisted if the\n  row was created before fusion started emitting\
+        \ it),\n* ``related_entities`` grouped for pivot,\n* a compact ``mini_timeline``,\n\
+        * normalised ``recommended_actions``.\n\nThe lazy-fill is best-effort: if\
+        \ the narrative builder ever raises\nwe log and return the alert with ``narrative=None``\
+        \ so the page\nkeeps rendering. The frontend already handles the null case."
       operationId: get_alert_api_v1_alerts__alert_id__get
       security:
       - HTTPBearer: []
@@ -482,7 +489,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AlertResponse'
+                $ref: '#/components/schemas/AlertDetailResponse'
         '422':
           description: Validation Error
           content:
@@ -12387,6 +12394,202 @@ components:
       - threat_intel_age_hours
       - checks
       title: AirgapStatus
+    AlertDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        priority:
+          type: integer
+          title: Priority
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        mitre_tactics:
+          items: {}
+          type: array
+          title: Mitre Tactics
+        mitre_techniques:
+          items: {}
+          type: array
+          title: Mitre Techniques
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        ai_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ai Score
+        ai_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ai Summary
+        ai_recommendations:
+          items: {}
+          type: array
+          title: Ai Recommendations
+        confidence:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Confidence
+        confidence_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confidence Label
+        confidence_rationale:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Confidence Rationale
+        disposition:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Disposition
+        affected_ips:
+          items: {}
+          type: array
+          title: Affected Ips
+        affected_hosts:
+          items: {}
+          type: array
+          title: Affected Hosts
+        affected_users:
+          items: {}
+          type: array
+          title: Affected Users
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        tags:
+          items: {}
+          type: array
+          title: Tags
+        event_time:
+          type: string
+          format: date-time
+          title: Event Time
+        first_seen:
+          type: string
+          format: date-time
+          title: First Seen
+        last_seen:
+          type: string
+          format: date-time
+          title: Last Seen
+        snoozed_until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Snoozed Until
+        snoozed_by_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Snoozed By Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        narrative:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Narrative
+        related_entities:
+          items:
+            $ref: '#/components/schemas/RelatedEntity'
+          type: array
+          title: Related Entities
+          default: []
+        mini_timeline:
+          items:
+            $ref: '#/components/schemas/MiniTimelineEvent'
+          type: array
+          title: Mini Timeline
+          default: []
+        recommended_actions:
+          items:
+            $ref: '#/components/schemas/RecommendedAction'
+          type: array
+          title: Recommended Actions
+          default: []
+      type: object
+      required:
+      - id
+      - tenant_id
+      - title
+      - description
+      - severity
+      - status
+      - priority
+      - category
+      - mitre_tactics
+      - mitre_techniques
+      - connector_type
+      - ai_score
+      - ai_summary
+      - ai_recommendations
+      - affected_ips
+      - affected_hosts
+      - affected_users
+      - case_id
+      - tags
+      - event_time
+      - first_seen
+      - last_seen
+      - created_at
+      - updated_at
+      title: AlertDetailResponse
+      description: "Alert response enriched with everything the Investigation Rail\
+        \ needs.\n\nThe list endpoint stays on the smaller :class:`AlertResponse`\
+        \ shape\nto keep paginated payloads light. The detail endpoint promotes to\n\
+        this enriched shape so the rail renders without extra round-trips:\n\n* ``narrative``\
+        \ — deterministic correlation prose. Cached on the\n  ``Alert`` row by the\
+        \ fusion service; lazily filled by the\n  endpoint when missing (legacy rows).\
+        \ Always a string by the\n  time it leaves the API.\n* ``related_entities``\
+        \ — pivotable entities grouped by\n  principal / network / workflow / tenant.\n\
+        * ``mini_timeline`` — up to ``MAX_TIMELINE_EVENTS`` recent events\n  merged\
+        \ from the case timeline and the audit log.\n* ``recommended_actions`` — normalised\
+        \ structured actions from\n  the ResponderAgent (or the legacy list-of-strings\
+        \ shape)."
     AlertLinkCreate:
       properties:
         alert_id:
@@ -18883,6 +19086,57 @@ components:
       - connector_count
       - health_score
       title: MetricsOut
+    MiniTimelineEvent:
+      properties:
+        id:
+          type: string
+          title: Id
+        ts:
+          type: string
+          format: date-time
+          title: Ts
+        kind:
+          type: string
+          title: Kind
+          description: audit | case_comment | status_change | investigation | …
+        agent:
+          type: string
+          title: Agent
+          description: actor — system | analyst@… | agent-id
+        summary:
+          type: string
+          title: Summary
+          description: One-line description, plain text
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        duration_ms:
+          type: integer
+          title: Duration Ms
+          default: 0
+      type: object
+      required:
+      - id
+      - ts
+      - kind
+      - agent
+      - summary
+      title: MiniTimelineEvent
+      description: 'One event in the alert''s condensed timeline.
+
+
+        Modelled after ``LedgerEvent`` in the ledger UI so the rail can
+
+        reuse the same row renderer. Fields the rail doesn''t need
+
+        (``input_hash``/``output_hash``/``duration_ms``) are always
+
+        ``None``/``0`` for non-investigation events. The frontend knows
+
+        to hide those affordances when they''re empty.'
     MispDryRunRequest:
       properties:
         indicator:
@@ -20662,6 +20916,39 @@ components:
       required:
       - score
       title: RatingIn
+    RecommendedAction:
+      properties:
+        priority:
+          type: integer
+          minimum: 1.0
+          title: Priority
+          default: 99
+        action:
+          type: string
+          title: Action
+        rationale:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rationale
+        risk:
+          type: string
+          title: Risk
+          description: low | medium | high
+          default: low
+      type: object
+      required:
+      - action
+      title: RecommendedAction
+      description: 'Structured action emitted by the ResponderAgent at investigation
+        close.
+
+
+        Tolerates the legacy list-of-strings shape that older demo seeds
+
+        used (string → ``action`` with priority ``99`` and risk ``"low"``).
+
+        The plan calls for the structured shape; this is a migration aid.'
     RedispositionApplyRequest:
       properties:
         alert_ids:
@@ -20739,6 +21026,51 @@ components:
           default: My phone
       type: object
       title: RegisterBeginRequest
+    RelatedEntity:
+      properties:
+        group:
+          type: string
+          title: Group
+          description: 'Rail column: principal | network | workflow | tenant'
+        kind:
+          type: string
+          title: Kind
+          description: 'Concrete entity type: host | ip | user | rule | mitre | …'
+        value:
+          type: string
+          title: Value
+          description: Canonical identifier rendered in the chip
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+          description: Optional human-friendly label
+        pivot:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pivot
+          description: Frontend route to deep-link into AttackGraphView (or another
+            workbench). When None the chip is informational only.
+      type: object
+      required:
+      - group
+      - kind
+      - value
+      title: RelatedEntity
+      description: 'One pivotable entity attached to an alert.
+
+
+        The ``kind`` field is the *concrete* entity type (``host``, ``ip``,
+
+        ``user``, ``rule``, …) — the frontend keys icons and pivot routes
+
+        off it. The ``group`` field is the rail column the entity renders
+
+        under (``principal``, ``network``, ``workflow``, ``tenant``). One
+
+        entity belongs to exactly one group; we don''t duplicate rows.'
     ReviewAction:
       properties:
         action:
