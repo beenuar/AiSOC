@@ -1,0 +1,20 @@
+Replace with the 90-second AiSOC screencast (`demo.mp4`) before the v8.0
+launch. The landing-page hero (`apps/web/src/components/onboarding/StartHero.tsx`)
+links its thumbnail at `/demo.mp4`; until the real file is dropped in here,
+the thumbnail is decorative and the screencast section reads as
+"Coming with the v8.0 launch".
+
+Source-of-truth screencast brief:
+* 90 seconds, recorded against `pnpm aisoc:demo --quick` (the deterministic
+  4-case path — DEMO-001 phishing, DEMO-002 cloud takeover, DEMO-003 insider
+  exfil, DEMO-004 ransomware). See `services/api/app/scripts/seed_demo.py`.
+* Opens on the AiSOC console at `/cases?status=in_progress`, then lands on
+  DEMO-004 (LockBit ransomware) — the case `pnpm aisoc:demo --quick` deeplinks.
+* H.264 / 1280x720 / ≤ 8 MB so the asset stays inside GitHub's 100 MB
+  per-file ceiling and inside Cloudflare R2's free egress.
+* Encode with the same poster as `demo-thumbnail.svg` (1280x720) so the
+  hero card doesn't reflow when the video lands.
+
+Do NOT commit a placeholder binary in place of this file — empty `.mp4`
+artefacts get reported as "corrupt" by GitHub and break the OG card
+preview. The text placeholder keeps the slot honest.
