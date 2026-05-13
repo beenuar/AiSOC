@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Quick Start
 
-Three paths to a running AiSOC instance, in increasing order of how much you
+Four paths to a running AiSOC instance, in increasing order of how much you
 already have installed:
 
 0. **Zero-prerequisite bootstrap** — one shell command from a freshly-imaged
@@ -17,10 +17,14 @@ already have installed:
 2. **Full development stack** — every microservice (UEBA, Honeytokens, Purple
    Team, ClickHouse, OpenSearch, Neo4j, Qdrant, MCP, osquery TLS server,
    Slack bot) for hacking on AiSOC itself.
+3. **Founder-style CLI** — the same dev stack as Path B, but driven entirely
+   through the `aisoc` CLI: `aisoc serve`, `aisoc db upgrade`, `aisoc submit`,
+   `aisoc mcp serve`. Ideal for screen-recording demos and for operators who
+   prefer a single binary over `docker compose` + `alembic` + `curl`.
 
-This page covers Paths A and B. If you don't have Docker / Node / pnpm yet,
-or if you just want a guaranteed-clean environment in one command, start with
-[Path 0 (One-click install)](./installation).
+This page covers Paths A, B, and C. If you don't have Docker / Node / pnpm
+yet, or if you just want a guaranteed-clean environment in one command, start
+with [Path 0 (One-click install)](./installation).
 
 ## Prerequisites
 
@@ -250,6 +254,148 @@ permissions / scopes / role assignments and a troubleshooting section.
 | Compliance | `/compliance` | SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA |
 | Audit Log | `/audit` | Immutable, tenant-scoped activity ledger |
 | Responder PWA | `/responder` | Mobile passkey-only console for on-call analysts |
+
+## Path C — founder-style CLI
+
+Same backing services as Path B (full dev stack), but every step is one
+`aisoc <verb>` command. This is the path the recorded product demo follows
+and the fastest way to go from "fresh clone" to "alert submitted, agent
+investigating" without remembering the `docker compose` / `alembic` /
+`curl` invocations.
+
+### 1. Clone & install the CLI
+
+```bash
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC
+cp .env.example .env
+
+python -m venv .venv && source .venv/bin/activate
+pip install -e packages/aisoc-cli
+```
+
+`.env.example` is already wired up with a working `POSTGRES_PASSWORD` and a
+pre-generated dev `AISOC_CREDENTIAL_KEY`. Add at least one AI provider key
+(`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) before continuing.
+
+Confirm the CLI is on PATH:
+
+```bash
+aisoc --help
+```
+
+You should see the operator commands: `serve`, `db`, `mcp`, `submit`,
+`plugin`, `detection`, `keygen`.
+
+### 2. Start the dev stack
+
+```bash
+aisoc serve
+```
+
+Under the hood this runs `docker compose -f docker-compose.dev.yml up -d`
+against the full dev profile (Postgres, Redis, Kafka, ClickHouse, api,
+agents, fusion, ingest-worker, web, mcp, …). The command resolves the repo
+root automatically, so it works from any subdirectory.
+
+Use `aisoc serve --no-detach` if you want to watch the logs inline, or run
+`docker compose ps` separately to confirm every container is healthy.
+
+### 3. Run database migrations
+
+```bash
+aisoc db upgrade
+```
+
+This shells into the `api` container and runs the project's migration
+script against Postgres. It is idempotent — safe to re-run after each
+`aisoc serve`.
+
+### 4. Submit your first alert
+
+The repo ships a canonical OCSF / Okta System Log fixture under
+[`examples/alerts/lateral-movement.json`](https://github.com/beenuar/AiSOC/blob/main/examples/alerts/lateral-movement.json):
+two `user.session.start` events for the same user — first from a New York
+corporate IP, then from Saint Petersburg eight minutes later — designed to
+trip the impossible-travel detector.
+
+```bash
+aisoc submit examples/alerts/lateral-movement.json
+```
+
+What this does:
+
+1. Reads the JSON file. The fixture is self-describing — its
+   `connector_id` / `connector_type` / `source_format` (if present) win
+   over the CLI flags, so the same fixture works against any environment.
+2. POSTs to `http://127.0.0.1:8081/v1/ingest/batch` (override with
+   `--ingest-url` or `AISOC_INGEST_URL`) using the canonical envelope:
+   `connector_id`, `connector_type`, `source_format`, `events`.
+3. Sends the required `X-Tenant-ID` header (override with `--tenant-id`
+   or `AISOC_TENANT_ID`).
+4. Prints `accepted` / `rejected` counts plus the `request_id`.
+
+A non-zero exit code means the ingest service rejected the payload or
+isn't reachable; the error message tells you to run `aisoc serve` first
+if the latter.
+
+### 5. Watch fusion + agents pick it up
+
+```bash
+# Tail the API logs to watch the event flow through fusion → detection
+docker compose logs -f api fusion agents
+
+# Or just open the UI and watch /alerts populate
+open http://localhost:3000/alerts
+```
+
+Within a few seconds you should see the two Okta events normalized into
+OCSF `class_uid 3002` (Authentication), correlated by user, and surfaced
+on the alerts board.
+
+### 6. Hook your IDE in over MCP (optional)
+
+If you use Cursor, Claude Desktop, or Continue, point them at the local
+MCP server so you can talk to your running AiSOC instance from the editor:
+
+```bash
+# Stand up the MCP server over stdio (Cursor / Claude / Continue)
+aisoc mcp serve --transport stdio
+
+# Or auto-wire it into a specific IDE config
+aisoc mcp install --host cursor
+aisoc mcp install --host claude
+aisoc mcp install --host continue
+```
+
+`aisoc mcp serve` prefers the local TypeScript build at
+`services/mcp/dist/index.js` when present, and falls back to
+`npx @aisoc/mcp` otherwise — so it works on a fresh clone before you've
+run `pnpm build`.
+
+### 7. Tear down
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+Or keep the stack running and re-submit different fixtures — `aisoc
+submit` accepts any JSON file shaped like a single event, a list of
+events, or `{ "events": [...] }`. Drop in your own Okta / Entra / GitHub
+sample exports to dogfood your detection content end to end.
+
+### Founder-style CLI cheat sheet
+
+| Step | Command |
+|---|---|
+| Start the dev stack | `aisoc serve` |
+| Apply DB migrations | `aisoc db upgrade` |
+| Submit a sample alert | `aisoc submit examples/alerts/lateral-movement.json` |
+| Run the MCP server over stdio | `aisoc mcp serve --transport stdio` |
+| Wire MCP into Cursor / Claude / Continue | `aisoc mcp install --host <host>` |
+| Validate a plugin manifest | `aisoc plugin validate plugins/<id>` |
+| Validate a Sigma rule | `aisoc detection validate detections/<id>.yml` |
+| Generate a vault `AISOC_CREDENTIAL_KEY` | `aisoc keygen` |
 
 ## Next Steps
 
