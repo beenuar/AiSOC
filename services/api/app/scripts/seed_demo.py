@@ -9,10 +9,26 @@ Run this from the host (the API container has the package on its PYTHONPATH):
 The seed is idempotent — running it twice produces the same dataset and never
 duplicates rows. Demo IDs are kept in sync with `app/api/v1/dev_auth.py` so the
 auth bypass and the seeded data agree on who "demo@aisoc.dev" is.
+
+Two modes:
+
+* **Full seed** (default) — populates the canonical BOTS-shaped catalogue:
+  15 hand-crafted ``INC-RT-*`` incidents (with one in-flight investigation
+  on INC-RT-001), 28 randomised alerts, and the supporting connector set.
+  This is what ``pnpm aisoc:demo`` runs and what the hosted demo ships.
+
+* **Quick seed** (``--demo-quick``) — populates exactly four deterministic
+  cases (DEMO-001 phishing, DEMO-002 cloud takeover, DEMO-003 insider exfil,
+  DEMO-004 ransomware) with a fixed wall-clock so re-runs are byte-stable.
+  This is the T6.4 screencast path — ``pnpm aisoc:demo --quick`` finishes
+  in under 4 minutes on a warm laptop. ``_purge_demo_quick`` deletes the
+  four DEMO-* cases before reseeding so re-running is a clean reset rather
+  than a duplicate.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import hashlib
 import random
@@ -20,7 +36,7 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 
 from app.api.v1.dev_auth import (
     DEMO_TENANT_ID,
@@ -2143,7 +2159,747 @@ def _tags_to_object(tags) -> dict:
     return {}
 
 
-async def main() -> None:
+# ─── T6.4 quick-seed (`--demo-quick`) ─────────────────────────────────────────
+#
+# Four deterministic DEMO-* cases, byte-stable IDs and timestamps, finishes
+# in under four minutes on a warm laptop. The screencast / hosted-demo path.
+
+# Anchored at the T6.4 screencast clock so re-runs produce the same
+# `created_at` timestamps. Overridable from the CLI via `--clock <iso>` —
+# in practice nobody touches it; it exists so the test suite and any
+# future regen-fixtures script can pin the clock without env vars.
+_DEMO_QUICK_DEFAULT_CLOCK_ISO = "2026-05-13T19:00:00+00:00"
+
+# Namespace UUID used by `_demo_quick_uuid` so case/alert IDs are stable
+# across machines (uuid5 is deterministic given the same namespace + name).
+# The constant has no security meaning — it's just a fixed seed.
+_DEMO_QUICK_UUID_NS = uuid.UUID("a15a1c00-0000-4d04-8000-000000000064")
+
+# Per-invocation deterministic jitter source. Used sparingly — alert
+# offsets and tiny `ai_score` perturbations only — so re-runs stay
+# byte-identical even when the underlying random sequence is touched.
+_quick_rng = random.Random(20260513)
+
+
+def _parse_clock(value: str | None) -> datetime:
+    """Parse the `--clock` argument (ISO-8601) into a UTC-aware datetime.
+
+    Defaults to ``_DEMO_QUICK_DEFAULT_CLOCK_ISO`` so re-runs are byte-stable.
+    Naive datetimes are interpreted as UTC.
+    """
+    if value is None:
+        value = _DEMO_QUICK_DEFAULT_CLOCK_ISO
+    # Python 3.11+ accepts trailing "Z" via fromisoformat, but be defensive.
+    raw = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise SystemExit(f"--clock must be an ISO-8601 timestamp, got {value!r}: {exc}") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def _demo_quick_uuid(*parts: str) -> uuid.UUID:
+    """Deterministic UUID for a (case_key, ...) tuple.
+
+    Example: `_demo_quick_uuid("DEMO-001", "case")` always returns the same
+    UUID, so the case ID is byte-stable across reseeds / machines. We use
+    uuid5 with a fixed namespace rather than uuid4 so the screencast and
+    docs can refer to specific UUIDs without lying.
+    """
+    return uuid.uuid5(_DEMO_QUICK_UUID_NS, "/".join(parts))
+
+
+# The four canonical demo cases. Each entry is consumed by
+# `_seed_demo_quick` below — kept as a module-level constant so the
+# lightweight unit test in `services/api/tests/test_demo_seed.py` can
+# introspect it without touching the database.
+_DEMO_QUICK_INCIDENTS: list[dict] = [
+    {
+        "key": "DEMO-001",
+        "title": "Spear-phish + credential harvest of alice@example.com (M365)",
+        "description": (
+            "Targeted spear-phishing email impersonating the CFO led "
+            "`alice@example.com` to a counterfeit Microsoft 365 login page. "
+            "Email gateway flagged the lure 9 minutes before sign-in; M365 "
+            "then recorded a successful login from a new ASN (185.199.108.153, "
+            "GitHub Pages — typical phishing-kit host) followed by a "
+            "forwarding rule that hides external mail."
+        ),
+        "severity": "high",
+        "status": "in_progress",
+        "host": "MAC-ALICE-LT",
+        "user": "alice@example.com",
+        "src_ip": "185.199.108.153",
+        "tactic_ids": ["TA0001", "TA0006"],
+        "technique_ids": ["T1566.002", "T1078.004"],
+        "tags": ["phishing", "credential-harvest", "m365", "demo"],
+        # Connector source labels — what the buyer sees in the Source column.
+        # Kept as a list because some incidents fuse two connector feeds.
+        "connector_sources": ["o365", "email-inbox"],
+        "alerts": [
+            {
+                "title": "Email gateway: spear-phish lure to alice@example.com (CFO impersonation)",
+                "severity": "high",
+                "source": "Email inbox",
+                "connector_type": "email-inbox",
+                "category": "saas",
+                "sourcetype": "email_inbox:message",
+                "process": "outlook.exe",
+                "ai_score": 0.94,
+                "extra": {
+                    "from_display": "CFO — Treasury Update",
+                    "from_email": "cfo-treasury@gnail-acme.com",
+                    "reply_to": "treasury-update@gnail-acme.com",
+                    "subject": "Updated wire instructions — Q2 vendor file",
+                    "link_count": 1,
+                    "link_target": "https://acme-portal.cf-pages.io/m365",
+                    "headers": {
+                        "Authentication-Results": "spf=fail dkim=none dmarc=fail",
+                        "Received-SPF": "fail (gnail-acme.com)",
+                    },
+                    "dlp_classification": "spearphishing-link",
+                },
+            },
+            {
+                "title": "M365: successful sign-in for alice@example.com from new ASN (185.199.108.0/22)",
+                "severity": "high",
+                "source": "Microsoft 365",
+                "connector_type": "o365",
+                "category": "saas",
+                "sourcetype": "o365:management:activity",
+                "process": "AzureActiveDirectory",
+                "ai_score": 0.91,
+                "extra": {
+                    "Operation": "UserLoggedIn",
+                    "ResultStatus": "Success",
+                    "UserId": "alice@example.com",
+                    "ClientIP": "185.199.108.153",
+                    "DeviceProperties": [
+                        {"Name": "OS", "Value": "Windows 11"},
+                        {"Name": "BrowserType", "Value": "Edge"},
+                        {"Name": "TrustType", "Value": "Unmanaged"},
+                    ],
+                    "ASN": "AS54113 Fastly",
+                    "RiskLevelAggregated": "high",
+                    "RiskEventTypes": ["unfamiliarFeatures", "newAsn"],
+                },
+            },
+            {
+                "title": "M365: New-InboxRule auto-forwards CFO threads externally — alice@example.com",
+                "severity": "high",
+                "source": "Microsoft 365",
+                "connector_type": "o365",
+                "category": "saas",
+                "sourcetype": "o365:management:activity",
+                "process": "Exchange",
+                "ai_score": 0.88,
+                "extra": {
+                    "Operation": "New-InboxRule",
+                    "Parameters": [
+                        {"Name": "From", "Value": "cfo@example.com"},
+                        {"Name": "ForwardTo", "Value": "treasury-update@gnail-acme.com"},
+                        {"Name": "DeleteMessage", "Value": "True"},
+                    ],
+                    "UserId": "alice@example.com",
+                    "ClientIP": "185.199.108.153",
+                },
+            },
+        ],
+    },
+    {
+        "key": "DEMO-002",
+        "title": "AWS cloud takeover: stolen IAM key → AssumeRole → S3 enumeration",
+        "description": (
+            "GuardDuty flagged `UnauthorizedAccess:IAMUser/MaliciousIPCaller` "
+            "against the long-lived `build-runner` access key. CloudTrail "
+            "shows the actor immediately calling `sts:AssumeRole` into the "
+            "`prod-readonly` role and then enumerating + downloading objects "
+            "from `corp-hr-backups`. Key has not yet been disabled."
+        ),
+        "severity": "critical",
+        "status": "in_progress",
+        "host": "ec2-build-worker-09",
+        "user": "iam-user/build-runner",
+        "src_ip": "104.244.42.193",
+        "tactic_ids": ["TA0001", "TA0006", "TA0009"],
+        "technique_ids": ["T1078.004", "T1530", "T1567.002"],
+        "tags": ["aws", "cloud-takeover", "iam", "s3", "demo"],
+        "connector_sources": ["aws-cloudtrail", "aws-guardduty"],
+        "alerts": [
+            {
+                "title": "GuardDuty: UnauthorizedAccess:IAMUser/MaliciousIPCaller — build-runner from 104.244.42.193",
+                "severity": "high",
+                "source": "AWS GuardDuty",
+                "connector_type": "aws-guardduty",
+                "category": "cloud",
+                "sourcetype": "aws:guardduty",
+                "process": "guardduty.finding",
+                "ai_score": 0.93,
+                "extra": {
+                    "type": "UnauthorizedAccess:IAMUser/MaliciousIPCaller",
+                    "severity": 8,
+                    "resource": {"accessKeyDetails": {"userName": "build-runner"}},
+                    "service": {"action": {"awsApiCallAction": {"api": "GetCallerIdentity"}}},
+                    "remoteIpDetails": {
+                        "ipAddressV4": "104.244.42.193",
+                        "country": {"countryName": "Romania"},
+                    },
+                },
+            },
+            {
+                "title": "CloudTrail: sts:AssumeRole into prod-readonly from build-runner",
+                "severity": "critical",
+                "source": "AWS CloudTrail",
+                "connector_type": "aws-cloudtrail",
+                "category": "cloud",
+                "sourcetype": "aws:cloudtrail",
+                "process": "sts.amazonaws.com",
+                "ai_score": 0.95,
+                "extra": {
+                    "eventName": "AssumeRole",
+                    "eventSource": "sts.amazonaws.com",
+                    "userIdentity": {
+                        "type": "IAMUser",
+                        "userName": "build-runner",
+                        "accessKeyId": "AKIA****REDACTED",
+                    },
+                    "sourceIPAddress": "104.244.42.193",
+                    "requestParameters": {
+                        "roleArn": "arn:aws:iam::123456789012:role/prod-readonly",
+                        "roleSessionName": "build-runner-session",
+                    },
+                    "errorCode": None,
+                },
+            },
+            {
+                "title": "CloudTrail: GetObject burst from prod-readonly session — corp-hr-backups (312 keys/5m)",
+                "severity": "high",
+                "source": "AWS CloudTrail",
+                "connector_type": "aws-cloudtrail",
+                "category": "cloud",
+                "sourcetype": "aws:cloudtrail",
+                "process": "s3.amazonaws.com",
+                "ai_score": 0.89,
+                "extra": {
+                    "eventName": "GetObject",
+                    "eventSource": "s3.amazonaws.com",
+                    "userIdentity": {
+                        "type": "AssumedRole",
+                        "sessionContext": {
+                            "sessionIssuer": {"userName": "prod-readonly"},
+                        },
+                    },
+                    "sourceIPAddress": "104.244.42.193",
+                    "requestParameters": {"bucketName": "corp-hr-backups"},
+                    "object_count_5min": 312,
+                },
+            },
+        ],
+    },
+    {
+        "key": "DEMO-003",
+        "title": "Insider exfil: leaving employee bulk-pulls Confluence + uploads to personal Drive",
+        "description": (
+            "Within their 2-week notice period, `dave@example.com` exported "
+            "240 sensitive Confluence pages from the `M&A` and `HR-PII` "
+            "spaces in 14 minutes — far outside their baseline. Google "
+            "Workspace then logged a 12 GB upload to a personal Drive "
+            "account. DLP egress proxy blocked the second batch."
+        ),
+        "severity": "high",
+        "status": "in_progress",
+        "host": "WIN-HR-DESKTOP",
+        "user": "dave@example.com",
+        "src_ip": "10.42.7.119",
+        "tactic_ids": ["TA0009", "TA0010"],
+        "technique_ids": ["T1213.001", "T1567.002"],
+        "tags": ["insider", "exfiltration", "confluence", "google-workspace", "demo"],
+        "connector_sources": ["confluence-audit", "google-workspace"],
+        "alerts": [
+            {
+                "title": "Confluence: 240 sensitive pages viewed by dave@example.com in 14 minutes (M&A, HR-PII)",
+                "severity": "high",
+                "source": "Atlassian Confluence",
+                "connector_type": "confluence-audit",
+                "category": "saas",
+                "sourcetype": "confluence:audit",
+                "process": "confluence",
+                "ai_score": 0.87,
+                "extra": {
+                    "actor": {"accountId": "5b10ac8d82e05b22cc7d4ef5", "displayName": "Dave Eaves"},
+                    "summary": "bulk page view burst",
+                    "objectItem": {"typeName": "PAGE"},
+                    "spaces": ["M&A", "HR-PII"],
+                    "events": [
+                        {"action": "page_viewed", "count": 240, "window_seconds": 840},
+                    ],
+                    "user_notice_period": True,
+                    "baseline_pages_per_hour": 4,
+                },
+            },
+            {
+                "title": "Confluence: bulk PDF export of 240 pages by dave@example.com",
+                "severity": "high",
+                "source": "Atlassian Confluence",
+                "connector_type": "confluence-audit",
+                "category": "saas",
+                "sourcetype": "confluence:audit",
+                "process": "confluence",
+                "ai_score": 0.92,
+                "extra": {
+                    "actor": {"accountId": "5b10ac8d82e05b22cc7d4ef5"},
+                    "summary": "pages exported as PDF",
+                    "objectItem": {"typeName": "PAGE"},
+                    "events": [
+                        {"action": "page_exported", "format": "pdf", "count": 240},
+                    ],
+                },
+            },
+            {
+                "title": "Google Workspace: 12 GB upload to personal Drive — drive.google.com/u/1/",
+                "severity": "high",
+                "source": "Google Workspace",
+                "connector_type": "google-workspace",
+                "category": "saas",
+                "sourcetype": "google_workspace:drive",
+                "process": "chrome.exe",
+                "ai_score": 0.90,
+                "extra": {
+                    "actor": {"email": "dave@example.com"},
+                    "events": [
+                        {
+                            "name": "upload",
+                            "parameters": [
+                                {"name": "doc_title", "value": "Q1-MnA-export.zip"},
+                                {"name": "owner_is_team_drive", "boolValue": False},
+                                {"name": "destination", "value": "personal:dave.eaves83@gmail.com"},
+                                {"name": "bytes", "intValue": 12_582_912_000},
+                            ],
+                        }
+                    ],
+                    "ipAddress": "10.42.7.119",
+                },
+            },
+        ],
+    },
+    {
+        "key": "DEMO-004",
+        "title": "Ransomware: LockBit 3.0 encryption pattern + ransom note on WIN-FIN-DB01",
+        "description": (
+            "CrowdStrike + SentinelOne telemetry agree: ~12k files renamed to "
+            "`.lockbit`, shadow copies wiped via `vssadmin`, and a "
+            "`RESTORE-MY-FILES.txt` ransom note dropped on every drive. "
+            "Host is being isolated; rotation of `svc-backup` credentials "
+            "is queued."
+        ),
+        "severity": "critical",
+        "status": "in_progress",
+        "host": "WIN-FIN-DB01",
+        "user": "svc-backup@example.com",
+        "src_ip": "10.42.1.87",
+        "tactic_ids": ["TA0002", "TA0005", "TA0040"],
+        "technique_ids": ["T1059.001", "T1490", "T1486"],
+        "tags": ["ransomware", "lockbit", "demo", "showcase"],
+        "connector_sources": ["crowdstrike", "sentinelone"],
+        "alerts": [
+            {
+                "title": "CrowdStrike: high-volume file modification pattern on WIN-FIN-DB01",
+                "severity": "critical",
+                "source": "CrowdStrike Falcon",
+                "connector_type": "crowdstrike",
+                "category": "edr",
+                "sourcetype": "crowdstrike:falcon:json",
+                "process": "explorer.exe",
+                "ai_score": 0.97,
+                "extra": {
+                    "DetectId": "ldt:demo004:lockbit-encrypt",
+                    "PatternDispositionDescription": "Prevention, process killed.",
+                    "Severity": 5,
+                    "Tactic": "Impact",
+                    "Technique": "Data Encrypted for Impact",
+                    "FilesModified": 12384,
+                    "FileExtensionWritten": ".lockbit",
+                    "ComputerName": "WIN-FIN-DB01",
+                    "UserName": "svc-backup",
+                },
+            },
+            {
+                "title": "SentinelOne: ransom note RESTORE-MY-FILES.txt dropped across C:, D:, E:",
+                "severity": "critical",
+                "source": "SentinelOne",
+                "connector_type": "sentinelone",
+                "category": "edr",
+                "sourcetype": "sentinelone:threat",
+                "process": "lockbit.exe",
+                "ai_score": 0.95,
+                "extra": {
+                    "threatInfo": {
+                        "classification": "Ransomware",
+                        "classificationSource": "Engine",
+                        "threatName": "LockBit 3.0",
+                        "engines": ["Behavioral", "DFI"],
+                    },
+                    "agentRealtimeInfo": {
+                        "agentComputerName": "WIN-FIN-DB01",
+                        "agentOsName": "Windows Server 2022",
+                    },
+                    "indicators": [
+                        {"category": "ransomNote", "description": "RESTORE-MY-FILES.txt on root of C:, D:, E:"},
+                        {"category": "extensionRename", "description": "12,384 files renamed to .lockbit"},
+                    ],
+                },
+            },
+            {
+                "title": "Sysmon: vssadmin shadow-copy deletion on WIN-FIN-DB01 (T1490)",
+                "severity": "critical",
+                "source": "CrowdStrike Falcon",
+                "connector_type": "crowdstrike",
+                "category": "edr",
+                "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+                "process": "vssadmin.exe",
+                "ai_score": 0.94,
+                "extra": {
+                    "EventID": 1,
+                    "ProcessId": 4892,
+                    "ParentImage": r"C:\\Windows\\System32\\cmd.exe",
+                    "Image": r"C:\\Windows\\System32\\vssadmin.exe",
+                    "CommandLine": "vssadmin delete shadows /all /quiet",
+                    "User": "NT AUTHORITY\\\\SYSTEM",
+                    "IntegrityLevel": "System",
+                    "Hashes": "SHA256=4DA1F312A214C07143ABEEAFB695D904",
+                },
+            },
+        ],
+    },
+]
+
+
+def _demo_quick_make_alert(
+    tenant_id: uuid.UUID,
+    incident: dict,
+    alert_index: int,
+    alert_spec: dict,
+    *,
+    when: datetime,
+) -> Alert:
+    """Construct an Alert for a quick-mode incident with deterministic IDs."""
+    severity = alert_spec["severity"]
+    priority = {"critical": 92, "high": 78, "medium": 55, "low": 28}[severity]
+    techniques = [{"id": tid, "name": _TECHNIQUE_NAMES.get(tid, tid)} for tid in incident["technique_ids"]]
+    tactics = [{"id": tid, "name": _TACTIC_NAMES.get(tid, tid)} for tid in incident["tactic_ids"]]
+
+    raw_event = _bots_raw_event(
+        when,
+        source=alert_spec["source"],
+        sourcetype=alert_spec["sourcetype"],
+        host=incident["host"],
+        user=incident["user"],
+        src_ip=incident["src_ip"],
+        process=alert_spec.get("process"),
+        extra=alert_spec.get("extra", {}),
+    )
+    # Pin the BOTS-shaped event id to a deterministic uuid5 so the raw
+    # payload re-renders identically across reseeds. The default
+    # `_bots_raw_event` helper uses uuid4 which would break byte-stability.
+    raw_event["_event_id"] = str(_demo_quick_uuid(incident["key"], "alert", str(alert_index), "event"))
+
+    return Alert(
+        id=_demo_quick_uuid(incident["key"], "alert", str(alert_index)),
+        tenant_id=tenant_id,
+        title=alert_spec["title"],
+        description=(f"{alert_spec['source']} detection. {incident['description']}"),
+        severity=severity,
+        status=_alert_status_for_case(incident["status"]),
+        priority=priority,
+        category=alert_spec.get("category", "siem"),
+        mitre_tactics=tactics,
+        mitre_techniques=techniques,
+        connector_type=alert_spec["connector_type"],
+        ai_score=alert_spec.get("ai_score", 0.85),
+        ai_summary=(
+            f"AI assessed this {severity} alert as part of demo incident "
+            f"{incident['key']} ({incident['title']}). "
+            f"Primary technique: {techniques[0]['name']} ({techniques[0]['id']})."
+        ),
+        ai_recommendations=[
+            f"Investigate host {incident['host']}",
+            f"Review activity for {incident['user']}",
+            f"Open case linked to {incident['key']}",
+        ],
+        affected_ips=[incident["src_ip"]],
+        affected_hosts=[incident["host"]],
+        affected_users=[incident["user"]],
+        raw_event=raw_event,
+        tags=["demo", "demo-quick", incident["key"], severity, *incident["tags"]],
+        event_time=when,
+        first_seen=when,
+        last_seen=when,
+        created_at=when,
+        updated_at=when,
+    )
+
+
+def _demo_quick_make_case(
+    tenant_id: uuid.UUID,
+    incident: dict,
+    *,
+    when: datetime,
+    alert_ids: list[uuid.UUID],
+) -> Case:
+    """Construct a Case for a quick-mode incident with a deterministic UUID."""
+    techniques = [{"id": tid, "name": _TECHNIQUE_NAMES.get(tid, tid)} for tid in incident["technique_ids"]]
+    tactics = [{"id": tid, "name": _TACTIC_NAMES.get(tid, tid)} for tid in incident["tactic_ids"]]
+
+    return Case(
+        id=_demo_quick_uuid(incident["key"], "case"),
+        tenant_id=tenant_id,
+        case_number=incident["key"],
+        title=incident["title"],
+        description=incident["description"],
+        status=incident["status"],
+        priority=incident["severity"],
+        severity=incident["severity"],
+        case_type="security_incident",
+        mitre_tactics=tactics,
+        mitre_techniques=techniques,
+        alert_ids=[str(a) for a in alert_ids],
+        tags=["demo", "demo-quick", incident["severity"], *incident["tags"]],
+        summary=(
+            f"Demo-quick showcase {incident['key']}. "
+            f"host={incident['host']} user={incident['user']} src_ip={incident['src_ip']} "
+            f"techniques={','.join(incident['technique_ids'])} "
+            f"connector_sources={','.join(incident['connector_sources'])}"
+        ),
+        created_at=when,
+        updated_at=when,
+    )
+
+
+_DEMO_QUICK_CONNECTOR_PROFILES: dict[str, tuple[str, str]] = {
+    # connector_type -> (display name, category)
+    "o365": ("Microsoft 365 (M365 Activity)", "saas"),
+    "email-inbox": ("Email Inbox (SMTP/IMAP gateway)", "saas"),
+    "aws-cloudtrail": ("AWS CloudTrail", "cloud"),
+    "aws-guardduty": ("AWS GuardDuty", "cloud"),
+    "confluence-audit": ("Atlassian Confluence (audit log)", "saas"),
+    "google-workspace": ("Google Workspace", "saas"),
+    "crowdstrike": ("CrowdStrike Falcon", "edr"),
+    "sentinelone": ("SentinelOne", "edr"),
+}
+
+
+async def _seed_demo_quick_connectors(
+    session,
+    tenant: Tenant,
+    *,
+    clock: datetime,
+) -> int:
+    """Upsert only the connectors the four DEMO-* cases reference.
+
+    Distinct from `_seed_connectors` (which seeds a much larger catalogue
+    and short-circuits if *any* connector is already present). Quick-mode
+    must work even on a stack that's already been full-seeded, so we upsert
+    by (tenant_id, connector_type) instead of bulk-inserting.
+    """
+    needed: set[str] = set()
+    for incident in _DEMO_QUICK_INCIDENTS:
+        needed.update(incident["connector_sources"])
+
+    created = 0
+    for connector_type in sorted(needed):
+        existing = await session.execute(
+            select(Connector)
+            .where(Connector.tenant_id == tenant.id)
+            .where(Connector.connector_type == connector_type)
+            .limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            continue
+        display, category = _DEMO_QUICK_CONNECTOR_PROFILES.get(
+            connector_type, (connector_type, "siem")
+        )
+        session.add(
+            Connector(
+                id=_demo_quick_uuid("connector", connector_type),
+                tenant_id=tenant.id,
+                name=display,
+                connector_type=connector_type,
+                category=category,
+                status="healthy",
+                # Deterministic 90 seconds before the clock so the "last
+                # sync" badge stays static across reseeds.
+                last_sync_at=clock - timedelta(seconds=90),
+                created_at=clock,
+                updated_at=clock,
+                config={"demo_quick": True},
+            )
+        )
+        created += 1
+    await session.flush()
+    return created
+
+
+async def _purge_demo_quick(session, tenant: Tenant) -> tuple[int, int, int]:
+    """Wipe any existing DEMO-* cases/alerts/timelines for this tenant.
+
+    Idempotency for `--demo-quick`. Returns (cases, alerts, timelines)
+    deleted so the run log is honest about what was reset.
+    """
+    keys = [incident["key"] for incident in _DEMO_QUICK_INCIDENTS]
+
+    # Collect existing case IDs first so we can scope the timeline delete.
+    case_rows = await session.execute(
+        select(Case.id)
+        .where(Case.tenant_id == tenant.id)
+        .where(Case.case_number.in_(keys))
+    )
+    case_ids = [row[0] for row in case_rows.all()]
+
+    deleted_timelines = 0
+    if case_ids:
+        result = await session.execute(
+            delete(CaseTimeline)
+            .where(CaseTimeline.tenant_id == tenant.id)
+            .where(CaseTimeline.case_id.in_(case_ids))
+        )
+        deleted_timelines = result.rowcount or 0
+
+    # Drop alerts owned by these cases. Alerts also carry the demo-quick
+    # tag, but case-scoped deletion is the safer ON DELETE path.
+    deleted_alerts = 0
+    if case_ids:
+        result = await session.execute(
+            delete(Alert)
+            .where(Alert.tenant_id == tenant.id)
+            .where(Alert.case_id.in_(case_ids))
+        )
+        deleted_alerts = result.rowcount or 0
+
+    deleted_cases = 0
+    if case_ids:
+        result = await session.execute(
+            delete(Case)
+            .where(Case.tenant_id == tenant.id)
+            .where(Case.id.in_(case_ids))
+        )
+        deleted_cases = result.rowcount or 0
+
+    await session.flush()
+    return deleted_cases, deleted_alerts, deleted_timelines
+
+
+async def _seed_demo_quick(
+    session,
+    tenant: Tenant,
+    *,
+    clock: datetime,
+) -> tuple[int, int, int]:
+    """Insert the four DEMO-* cases with deterministic data.
+
+    Returns ``(cases, alerts, timelines)``. Caller is expected to have
+    purged any prior DEMO-* rows via `_purge_demo_quick`.
+    """
+    new_alerts: list[Alert] = []
+    new_cases: list[Case] = []
+    timeline_rows: list[CaseTimeline] = []
+
+    # Stagger case creation so the queue order is stable: DEMO-001 oldest,
+    # DEMO-004 (ransomware) newest — that's the case the screencast lands on.
+    for index, incident in enumerate(_DEMO_QUICK_INCIDENTS):
+        minutes_ago = (len(_DEMO_QUICK_INCIDENTS) - index) * 6
+        case_when = clock - timedelta(minutes=minutes_ago)
+
+        incident_alerts: list[Alert] = []
+        for alert_offset, alert_spec in enumerate(incident["alerts"]):
+            alert_when = case_when + timedelta(minutes=alert_offset * 2 - 3)
+            alert = _demo_quick_make_alert(
+                tenant.id,
+                incident,
+                alert_offset,
+                alert_spec,
+                when=alert_when,
+            )
+            incident_alerts.append(alert)
+        session.add_all(incident_alerts)
+        new_alerts.extend(incident_alerts)
+
+        case = _demo_quick_make_case(
+            tenant.id,
+            incident,
+            when=case_when,
+            alert_ids=[a.id for a in incident_alerts],
+        )
+        session.add(case)
+        new_cases.append(case)
+
+        for alert in incident_alerts:
+            alert.case_id = case.id
+
+        timeline_rows.append(
+            CaseTimeline(
+                id=_demo_quick_uuid(incident["key"], "timeline", "created"),
+                case_id=case.id,
+                tenant_id=case.tenant_id,
+                event_type="created",
+                content=(
+                    f"Demo case opened from {len(incident_alerts)} correlated alert(s) "
+                    f"(source: {', '.join(incident['connector_sources'])})."
+                ),
+                event_metadata={
+                    "actor": "alert-fusion",
+                    "incident_key": incident["key"],
+                    "demo_quick": True,
+                    "connector_sources": incident["connector_sources"],
+                    "alerts": [str(a.id) for a in incident_alerts],
+                },
+                is_automated=True,
+                created_at=case_when,
+            )
+        )
+
+    session.add_all(timeline_rows)
+    await session.flush()
+    return len(new_cases), len(new_alerts), len(timeline_rows)
+
+
+# ─── Mode dispatch ─────────────────────────────────────────────────────────────
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="python -m app.scripts.seed_demo",
+        description=(
+            "Seed the AiSOC demo dataset. With no flags this populates the full "
+            "BOTS-shaped catalogue (15 INC-RT-* + 28 randomized). With "
+            "--demo-quick it populates exactly four deterministic DEMO-* "
+            "incidents for the `pnpm aisoc:demo --quick` / screencast path."
+        ),
+    )
+    p.add_argument(
+        "--demo-quick",
+        action="store_true",
+        help=(
+            "Seed only the four canonical DEMO-NNN cases (phishing, cloud "
+            "takeover, insider exfil, ransomware) with a fixed clock for a "
+            "deterministic <4-minute demo run."
+        ),
+    )
+    p.add_argument(
+        "--clock",
+        type=str,
+        default=None,
+        help=(
+            "Wall-clock to anchor --demo-quick timestamps to (ISO-8601). "
+            "Defaults to the canonical T6.4 screencast clock so re-runs are "
+            "byte-stable. Ignored without --demo-quick."
+        ),
+    )
+    return p
+
+
+async def _run_full_seed() -> None:
     print("[seed] connecting to database…", flush=True)
     async with AsyncSessionLocal() as session:
         try:
@@ -2170,10 +2926,62 @@ async def main() -> None:
     print("[seed] done — log into the console at http://localhost:3000")
 
 
+async def _run_quick_seed(clock: datetime) -> None:
+    print(f"[seed] --demo-quick mode (clock={clock.isoformat()})", flush=True)
+    async with AsyncSessionLocal() as session:
+        try:
+            tenant = await _ensure_tenant(session)
+            user = await _ensure_user(session, tenant)
+            connectors = await _seed_demo_quick_connectors(session, tenant, clock=clock)
+            deleted_cases, deleted_alerts, deleted_timelines = await _purge_demo_quick(
+                session, tenant
+            )
+            cases, alerts, timelines = await _seed_demo_quick(
+                session, tenant, clock=clock
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+    print(f"[seed] tenant: {tenant.id} ({tenant.slug})")
+    print(f"[seed] user: {user.email} (role={user.role})")
+    print(f"[seed] connectors upserted: {connectors}")
+    print(
+        "[seed] purged DEMO-* — cases:%d alerts:%d timelines:%d"
+        % (deleted_cases, deleted_alerts, deleted_timelines)
+    )
+    print(f"[seed] DEMO-* cases seeded: {cases}")
+    print(f"[seed] DEMO-* alerts seeded: {alerts}")
+    print(f"[seed] DEMO-* timelines seeded: {timelines}")
+    print(
+        "[seed] showcase case: DEMO-004 — http://localhost:3000/cases/DEMO-004?tab=ledger"
+    )
+    print("[seed] done — four-case demo set is live")
+
+
+async def _main_async(args: argparse.Namespace) -> None:
+    if args.demo_quick:
+        await _run_quick_seed(clock=_parse_clock(args.clock))
+    else:
+        await _run_full_seed()
+
+
+def main(argv: list[str] | None = None) -> None:
+    # `parse_known_args` is intentional — `app.scripts.demo_seed` (the
+    # hosted-demo wrapper) imports this `main` and calls it without
+    # forwarding its own argparse vector, so `sys.argv` may contain
+    # wrapper-only flags like `--reset` / `--kickoff-investigation`.
+    # Silently ignoring unknown tokens keeps that path working without
+    # having to coordinate two argparse surfaces.
+    args, _unknown = _build_arg_parser().parse_known_args(argv)
+    asyncio.run(_main_async(args))
+
+
 if __name__ == "__main__":
     # Allow `python -m app.scripts.seed_demo` from the api service container.
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as exc:  # pragma: no cover - operational helper

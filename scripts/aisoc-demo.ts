@@ -96,6 +96,51 @@ interface Flags {
   // consumes for nightly regression tracking.
   budgetMs: number | null;
   resultsFile: string | null;
+  // T6.4 quick-seed path. `demoQuick` swaps the seeder to its 4-case
+  // deterministic mode (DEMO-001..DEMO-004) and re-points the browser
+  // deeplink at DEMO-004 (the ransomware case) so the screencast lands
+  // on the most visually-impactful incident. `clock` lets a power user
+  // override the canonical T6.4 timestamp anchor; in practice nobody
+  // touches it — it exists so byte-stable reseeds are reproducible.
+  demoQuick: boolean;
+  clock: string | null;
+}
+
+function printHelp(): void {
+  // Hand-written usage rather than re-parsing the file header so the
+  // user sees a concise, actionable summary instead of the implementation
+  // notes that follow each flag in the JSDoc block.
+  const exe = "pnpm aisoc:demo";
+  console.log(`${c.bold("AiSOC Demo")} — one-command path to a running demo stack.
+
+${c.bold("Usage:")}
+  ${exe} [flags]
+  ${exe} --quick                  ${c.dim("# 4 deterministic cases in <4 min")}
+  ${exe} --help
+
+${c.bold("Demo content:")}
+  ${c.dim("default")}             15 BOTS-shaped INC-RT-* incidents + 28 randomized alerts
+  ${c.dim("--demo-quick")}        4 canonical DEMO-* cases (phishing / cloud / insider /
+                       ransomware), deterministic IDs and timestamps,
+                       browser opens on DEMO-004 (LockBit ransomware)
+
+${c.bold("Flags:")}
+  --demo-quick, --quick    seed only the 4 canonical DEMO-* cases (T6.4 screencast path)
+  --clock <iso>            override the --demo-quick clock anchor (ISO-8601)
+  --no-pull                skip \`docker compose pull\` (use cached images)
+  --no-open                skip launching the browser (CI / headless)
+  --rebuild                \`docker compose up --build\` instead of prebuilt images
+  --tag <tag>              override AISOC_TAG (default: latest)
+  --budget-ms <number>     exit 3 if total elapsed exceeds this many ms
+  --results-file <path>    write per-phase timing JSON for the acceptance harness
+  --help, -h               print this and exit
+
+${c.bold("Exit codes:")}
+  0  success, browser opened
+  1  failed to start the stack
+  2  stack started but data could not be seeded or investigated
+  3  success but exceeded --budget-ms (acceptance regression)
+`);
 }
 
 function parseFlags(argv: string[]): Flags {
@@ -106,6 +151,8 @@ function parseFlags(argv: string[]): Flags {
     tag: "latest",
     budgetMs: null,
     resultsFile: null,
+    demoQuick: false,
+    clock: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -119,6 +166,10 @@ function parseFlags(argv: string[]): Flags {
       flags.budgetMs = Number.isFinite(n) && n > 0 ? n : null;
     } else if (a === "--results-file") {
       flags.resultsFile = argv[++i] ?? null;
+    } else if (a === "--demo-quick" || a === "--quick") {
+      flags.demoQuick = true;
+    } else if (a === "--clock") {
+      flags.clock = argv[++i] ?? null;
     }
   }
   return flags;
@@ -415,8 +466,11 @@ async function waitForHealth(): Promise<boolean> {
   return true;
 }
 
-function seedData(): boolean {
-  step(5, 7, "Ensuring canonical demo data is seeded");
+function seedData(flags: Flags): boolean {
+  const label = flags.demoQuick
+    ? "Seeding 4 deterministic DEMO-* cases (--demo-quick)"
+    : "Ensuring canonical demo data is seeded";
+  step(5, 7, label);
   // The `seed` service in docker-compose.demo.yml runs `python -m
   // app.scripts.seed_demo` automatically once the api healthcheck passes
   // and then exits. We re-run it here as a safety net for two cases:
@@ -426,8 +480,10 @@ function seedData(): boolean {
   //     postgres volume survived but the seeder isn't going to fire again
   //     because the api is already considered healthy on the next `up`.
   // Idempotency is enforced inside seed_demo.py — repeated runs are a
-  // no-op as long as INC-RT-001 etc. already exist.
-  const code = runStream("docker", [
+  // no-op as long as INC-RT-001 etc. already exist; in --demo-quick mode
+  // _purge_demo_quick wipes the four DEMO-* cases before reseeding so
+  // re-running this command is a clean reset rather than a duplicate.
+  const seedArgs = [
     "compose",
     "-f",
     COMPOSE_FILE,
@@ -437,7 +493,14 @@ function seedData(): boolean {
     "python",
     "-m",
     "app.scripts.seed_demo",
-  ]);
+  ];
+  if (flags.demoQuick) {
+    seedArgs.push("--demo-quick");
+    if (flags.clock) {
+      seedArgs.push("--clock", flags.clock);
+    }
+  }
+  const code = runStream("docker", seedArgs);
   if (code !== 0) {
     console.error(
       c.yellow(
@@ -449,25 +512,39 @@ function seedData(): boolean {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SHOWCASE_CASE_NUMBER = "INC-RT-001";
+// In full-seed mode the screencast deeplinks at the in-flight LockBit case
+// INC-RT-001. In --demo-quick mode that case isn't seeded, so we land on
+// DEMO-004 instead — the visually-loudest of the four quick-mode incidents.
+const SHOWCASE_CASE_NUMBER_FULL = "INC-RT-001";
+const SHOWCASE_CASE_NUMBER_QUICK = "DEMO-004";
 
 function sanitizeCaseId(id: unknown): string | null {
   if (typeof id === "string" && UUID_RE.test(id)) return id;
   return null;
 }
 
-async function findSeededCase(): Promise<{ id: string; case_number: string; title: string } | null> {
-  step(6, 7, "Locating the showcase ransomware investigation");
+async function findSeededCase(
+  flags: Flags,
+): Promise<{ id: string; case_number: string; title: string } | null> {
+  const showcase = flags.demoQuick
+    ? SHOWCASE_CASE_NUMBER_QUICK
+    : SHOWCASE_CASE_NUMBER_FULL;
+  step(
+    6,
+    7,
+    flags.demoQuick
+      ? `Locating the DEMO-004 ransomware case (--demo-quick)`
+      : "Locating the showcase ransomware investigation",
+  );
   // The dev-mode auth bypass returns the demo user/tenant for unauthenticated
   // requests when ENV=development, so we can hit /v1/cases without a token.
   //
-  // We specifically look for INC-RT-001 — the in-flight LockBit 3.0 case
-  // that seed_demo.py builds with a running PlaybookRun, an investigation
-  // already mid-stream, and decision-graph artifacts. That's the case the
-  // onboarding deeplink (NEXT_PUBLIC_DEMO_DEEPLINK=/cases/INC-RT-001?tab=
-  // ledger) targets. If it's missing we fall back to the first case in the
-  // list, but log a warning because the demo UX assumes the showcase case
-  // is present.
+  // In full-seed mode we look for INC-RT-001 (in-flight LockBit 3.0 with a
+  // running PlaybookRun + decision-graph artifacts). In --demo-quick mode
+  // we look for DEMO-004 instead — the LockBit case from the T6.4 4-case
+  // set, which is the visually-loudest incident and the one the screencast
+  // lands on. If the expected showcase is missing we fall back to the first
+  // case in the list and log a warning so it shows up in CI logs.
   for (let attempt = 0; attempt < 30; attempt++) {
     // Pull the full first page (default page_size on the API is plenty
     // larger than the seed's ~16 cases). Filtering server-side by
@@ -475,21 +552,21 @@ async function findSeededCase(): Promise<{ id: string; case_number: string; titl
     // currently expose that filter, and the volume is trivially small.
     const res = await fetchJson("http://localhost:8000/v1/cases?page_size=50", 4000);
     if (res && Array.isArray(res.items) && res.items.length > 0) {
-      const showcase = res.items.find(
-        (item: any) => item.case_number === SHOWCASE_CASE_NUMBER,
+      const found = res.items.find(
+        (item: any) => item.case_number === showcase,
       );
-      const target = showcase ?? res.items[0];
+      const target = found ?? res.items[0];
       const safeId = sanitizeCaseId(target.id);
       if (!safeId) {
         log(c.yellow("warn") + " API returned a non-UUID case ID — skipping");
         return null;
       }
-      if (showcase) {
+      if (found) {
         log(c.green("ok") + ` found showcase ${target.case_number} (${safeId})`);
       } else {
         log(
           c.yellow("warn") +
-            ` ${SHOWCASE_CASE_NUMBER} not found; falling back to ${target.case_number}`,
+            ` ${showcase} not found; falling back to ${target.case_number}`,
         );
       }
       return { id: safeId, case_number: target.case_number, title: target.title };
@@ -678,12 +755,21 @@ function emitReport(flags: Flags, report: RunReport): void {
 // ---------- Main ----------
 
 async function main() {
-  const flags = parseFlags(process.argv.slice(2));
+  // --help is parsed inline (not by parseFlags) so we can exit cleanly
+  // without spinning up Docker or running through the normal flag-defaults
+  // dance. Honor `-h` and `--help` from anywhere in the argv vector.
+  const raw = process.argv.slice(2);
+  if (raw.includes("--help") || raw.includes("-h")) {
+    printHelp();
+    process.exit(0);
+  }
+  const flags = parseFlags(raw);
 
   console.log(
     c.bold("AiSOC Demo") +
       c.dim(
         ` — tag=${flags.tag}${flags.rebuild ? " · rebuild" : ""}` +
+          (flags.demoQuick ? " · quick" : "") +
           (flags.budgetMs ? ` · budget=${formatMs(flags.budgetMs)}` : ""),
       ),
   );
@@ -695,10 +781,10 @@ async function main() {
     console.error(c.red("\nstack failed to come up healthy. Run `pnpm aisoc:doctor` for details."));
     process.exit(1);
   }
-  if (!seedData()) {
+  if (!seedData(flags)) {
     console.error(c.yellow("seed step had issues; continuing"));
   }
-  const seededCase = await findSeededCase();
+  const seededCase = await findSeededCase(flags);
   // We track these for the run report so the acceptance harness can
   // distinguish "stack came up but no case showed" (a seed regression)
   // from "everything booted but the LLM call failed" (a flaky live LLM).
