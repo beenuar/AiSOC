@@ -55,6 +55,14 @@ class Alert(Base):
     confidence_label: Mapped[str | None] = mapped_column(String(16), nullable=True)
     confidence_rationale: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # Correlation narrative — deterministic, human-readable text cached on
+    # the alert at fusion-time (or lazily computed by the API on first read
+    # for legacy rows). Surfaced verbatim by the InvestigationRail (W6 in
+    # the v1.5 SOC Console Parity plan) so the right pane renders without
+    # an LLM round-trip. The streaming LLM explanation lives behind the
+    # rail's "Deep Explain" button via /api/v1/alerts/{id}/explain.
+    narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Entities (denormalized for fast querying)
     affected_ips: Mapped[list] = mapped_column(JSONB, default=list)
     affected_hosts: Mapped[list] = mapped_column(JSONB, default=list)

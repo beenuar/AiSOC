@@ -7,7 +7,7 @@ import { alertsApi, type Alert, type AlertFilters, type ConfidenceLabel } from '
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { EntityRiskQueue } from './EntityRiskQueue';
-import { ExplainDrawer } from './ExplainDrawer';
+import { InvestigationRail } from './InvestigationRail';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
@@ -17,6 +17,14 @@ import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
 // points to the entities they touch, and the queue surfaces those entities
 // (not the raw alerts) to the analyst. The "alerts" tab keeps the legacy
 // alert-centric grid for tenants that prefer it or have RBA disabled.
+//
+// v1.5 W6 — The alerts tab is now a two-pane layout: the dense grid on the
+// left, an Investigation Rail on the right. Selecting a row populates the
+// rail with the deterministic narrative + related entities + recent events +
+// recommended actions envelope from `GET /alerts/{id}`. The legacy
+// `ExplainDrawer` is no longer mounted from this view directly; it has been
+// demoted to a "Deep Explain" button inside the rail itself, so analysts
+// only burn an LLM call when they explicitly ask for it.
 type ViewMode = 'entities' | 'alerts';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -177,14 +185,39 @@ function FiltersBar({
   );
 }
 
-// WS-D1 — AlertRow accepts an onExplain callback so the Explain button can open
-// the SSE-streaming side drawer without navigating away. The button uses
-// e.preventDefault() + e.stopPropagation() to suppress the parent <Link>.
-function AlertRow({ alert, onExplain }: { alert: Alert; onExplain: (a: Alert) => void }) {
+// v1.5 W6 — AlertRow is now a *selection* affordance. Plain click selects the
+// row (which populates the Investigation Rail to the right); modifier-clicks
+// or middle-clicks still navigate to the full detail page so we don't break
+// "open in new tab" muscle memory. The row gets a left-border highlight
+// when selected so the analyst can see at a glance which alert the rail is
+// describing.
+function AlertRow({
+  alert,
+  selected,
+  onSelect,
+}: {
+  alert: Alert;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
   return (
     <Link
       href={`/alerts/${alert.id}`}
-      className="flex items-center gap-4 px-4 py-3 hover:bg-gray-800/20 transition-colors border-b border-gray-800/40 last:border-0"
+      onClick={(e) => {
+        // Modifier or middle-click → keep the native Link behaviour so
+        // analysts can open the alert in a new tab/window. Only a plain
+        // left-click is hijacked for in-pane selection.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+        e.preventDefault();
+        onSelect(alert.id);
+      }}
+      aria-current={selected ? 'true' : undefined}
+      className={clsx(
+        'flex items-center gap-4 px-4 py-3 transition-colors border-b border-gray-800/40 last:border-0 border-l-2',
+        selected
+          ? 'border-l-blue-500 bg-blue-500/5 hover:bg-blue-500/10'
+          : 'border-l-transparent hover:bg-gray-800/20',
+      )}
     >
       <SeverityDot severity={alert.severity} />
 
@@ -209,20 +242,6 @@ function AlertRow({ alert, onExplain }: { alert: Alert; onExplain: (a: Alert) =>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {/* WS-D1: Explain button — opens SSE-streaming side drawer */}
-        <button
-          type="button"
-          aria-label="AI explain this alert"
-          title="AI Explain"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onExplain(alert);
-          }}
-          className="text-[10px] font-medium px-2 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/50 transition-colors shrink-0"
-        >
-          ✦ Explain
-        </button>
         {alert.confidenceLabel && <ConfidencePill label={alert.confidenceLabel} />}
         <SeverityBadge severity={alert.severity} />
         <StatusBadge status={alert.status} />
@@ -242,8 +261,6 @@ export function AlertsView() {
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.
   const [viewMode, setViewMode] = useState<ViewMode>('entities');
-  // WS-D1 — controls the SSE-streaming Explain side drawer.
-  const [explainAlert, setExplainAlert] = useState<Alert | null>(null);
 
   const { data, error, isLoading } = useSWR(
     ['alerts', filters],
@@ -345,18 +362,6 @@ export function AlertsView() {
           isLoading={isLoading}
           error={error}
           onFilterChange={handleFilterChange}
-          onExplain={setExplainAlert}
-        />
-      )}
-
-      {/* WS-D1 — SSE-streaming AI explain side drawer.
-          We always mount the drawer (open controls CSS visibility) so the
-          closing animation can finish before the alert ref is cleared.  */}
-      {explainAlert && (
-        <ExplainDrawer
-          open={true}
-          alert={explainAlert}
-          onClose={() => setExplainAlert(null)}
         />
       )}
     </div>
@@ -375,7 +380,6 @@ function AlertsTable({
   isLoading,
   error,
   onFilterChange,
-  onExplain,
 }: {
   alerts: Alert[];
   total: number;
@@ -386,11 +390,16 @@ function AlertsTable({
   isLoading: boolean;
   error: unknown;
   onFilterChange: (f: AlertFilters) => void;
-  onExplain: (a: Alert) => void;
 }) {
+  // v1.5 W6 — Selection lives at the AlertsTable level (not AlertsView)
+  // because the rail is only rendered inside the "alerts" view mode.
+  // Switching to the entities tab unmounts this state cleanly, which is
+  // what we want — the rail is alert-scoped, not entity-scoped.
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+
   return (
     <div className="space-y-4">
-      {/* Stats strip */}
+      {/* Stats strip (full width) */}
       <div className="grid grid-cols-4 gap-3">
         {[
           { label: 'Total', value: total, color: 'text-gray-200' },
@@ -425,85 +434,159 @@ function AlertsTable({
 
       <FiltersBar filters={filters} onChange={onFilterChange} total={total} />
 
-      {/* Table */}
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
-        <div className="flex items-center px-4 py-2 border-b border-gray-800/60 bg-gray-900/80">
-          <span className="text-xs text-gray-500 flex-1">ALERT</span>
-          <span className="text-xs text-gray-500 w-20">SEVERITY</span>
-          <span className="text-xs text-gray-500 w-24">STATUS</span>
-          <span className="text-xs text-gray-500 w-24 text-right">TIME</span>
+      {/*
+        v1.5 W6 — two-pane layout. On wide screens the queue takes the left
+        seven cols and the Investigation Rail takes the right five; on narrow
+        screens they stack so the rail sits beneath the queue rather than
+        squeezing the columns into illegibility. The rail is `sticky` so it
+        stays in view while the analyst scrolls the queue.
+      */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <div className="xl:col-span-7 space-y-4">
+          <AlertsTableGrid
+            alerts={alerts}
+            isLoading={isLoading}
+            error={error}
+            filters={filters}
+            selectedAlertId={selectedAlertId}
+            onSelect={setSelectedAlertId}
+            onFilterChange={onFilterChange}
+          />
+          <AlertsPagination
+            alerts={alerts}
+            total={total}
+            filters={filters}
+            onFilterChange={onFilterChange}
+          />
         </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : error ? (
-          <div className="p-4">
-            <ErrorState
-              title="Couldn't load alerts"
-              description="The alerts feed didn't respond. Check the API service or try again."
-              error={error}
+        <div className="xl:col-span-5">
+          <div className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:overflow-hidden xl:flex xl:flex-col">
+            <InvestigationRail
+              alertId={selectedAlertId}
+              onClose={() => setSelectedAlertId(null)}
             />
           </div>
-        ) : alerts.length === 0 ? (
-          <div className="p-4">
-            {/*
-              WS-F5 — distinguish "no data at all" from "filtered out". The
-              filter-aware copy is the difference between an analyst thinking
-              "the system is broken" and "I should clear my filters".
-            */}
-            {filters.severity || filters.status ? (
-              <EmptyState
-                icon={EmptyStateIcons.search}
-                title="No alerts match these filters"
-                description="Try clearing the severity or status filter to widen the search."
-                action={
-                  <button
-                    onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25 })}
-                    className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
-                  >
-                    Clear filters
-                  </button>
-                }
-              />
-            ) : (
-              <EmptyState
-                icon={EmptyStateIcons.alert}
-                title="No alerts yet"
-                description="Once a connector ingests events that trip a detection, alerts will appear here. Connect a data source from Settings → Connectors to start streaming."
-              />
-            )}
-          </div>
-        ) : (
-          <div>
-            {alerts.map((alert) => (
-              <AlertRow key={alert.id} alert={alert} onExplain={onExplain} />
-            ))}
-          </div>
-        )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Queue grid (split out from AlertsTable so the two-pane shell stays lean) ─
+
+function AlertsTableGrid({
+  alerts,
+  isLoading,
+  error,
+  filters,
+  selectedAlertId,
+  onSelect,
+  onFilterChange,
+}: {
+  alerts: Alert[];
+  isLoading: boolean;
+  error: unknown;
+  filters: AlertFilters;
+  selectedAlertId: string | null;
+  onSelect: (id: string) => void;
+  onFilterChange: (f: AlertFilters) => void;
+}) {
+  return (
+    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
+      <div className="flex items-center px-4 py-2 border-b border-gray-800/60 bg-gray-900/80">
+        <span className="text-xs text-gray-500 flex-1 pl-2">ALERT</span>
+        <span className="text-xs text-gray-500 w-20">SEVERITY</span>
+        <span className="text-xs text-gray-500 w-24">STATUS</span>
+        <span className="text-xs text-gray-500 w-24 text-right">TIME</span>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>Showing {alerts.length} of {total} alerts</span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}
-            disabled={(filters.page || 1) <= 1}
-            className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Prev
-          </button>
-          <span className="px-2">Page {filters.page || 1}</span>
-          <button
-            onClick={() => onFilterChange({ ...filters, page: (filters.page || 1) + 1 })}
-            disabled={alerts.length < (filters.pageSize || 25)}
-            className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Next
-          </button>
+      {isLoading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
+      ) : error ? (
+        <div className="p-4">
+          <ErrorState
+            title="Couldn't load alerts"
+            description="The alerts feed didn't respond. Check the API service or try again."
+            error={error}
+          />
+        </div>
+      ) : alerts.length === 0 ? (
+        <div className="p-4">
+          {/*
+            WS-F5 — distinguish "no data at all" from "filtered out". The
+            filter-aware copy is the difference between an analyst thinking
+            "the system is broken" and "I should clear my filters".
+          */}
+          {filters.severity || filters.status ? (
+            <EmptyState
+              icon={EmptyStateIcons.search}
+              title="No alerts match these filters"
+              description="Try clearing the severity or status filter to widen the search."
+              action={
+                <button
+                  onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25 })}
+                  className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                >
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={EmptyStateIcons.alert}
+              title="No alerts yet"
+              description="Once a connector ingests events that trip a detection, alerts will appear here. Connect a data source from Settings → Connectors to start streaming."
+            />
+          )}
+        </div>
+      ) : (
+        <div>
+          {alerts.map((alert) => (
+            <AlertRow
+              key={alert.id}
+              alert={alert}
+              selected={selectedAlertId === alert.id}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlertsPagination({
+  alerts,
+  total,
+  filters,
+  onFilterChange,
+}: {
+  alerts: Alert[];
+  total: number;
+  filters: AlertFilters;
+  onFilterChange: (f: AlertFilters) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between text-xs text-gray-500">
+      <span>Showing {alerts.length} of {total} alerts</span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}
+          disabled={(filters.page || 1) <= 1}
+          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Prev
+        </button>
+        <span className="px-2">Page {filters.page || 1}</span>
+        <button
+          onClick={() => onFilterChange({ ...filters, page: (filters.page || 1) + 1 })}
+          disabled={alerts.length < (filters.pageSize || 25)}
+          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next
+        </button>
       </div>
     </div>
   );

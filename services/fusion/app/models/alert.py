@@ -152,6 +152,16 @@ class FusedAlert(BaseModel):
     confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
     confidence_rationale: list[ConfidenceFactor] = Field(default_factory=list)
 
+    # Deterministic correlation narrative — Wave 6 of v1.5 SOC Console Parity.
+    # Populated at fusion time by ``services.fusion.app.services.narrative.build_narrative``
+    # and surfaced verbatim by the InvestigationRail on ``/alerts`` (no LLM
+    # round-trip needed). The streaming LLM explanation lives behind a
+    # "Deep Explain" button at ``POST /alerts/{id}/explain``. ``None`` here
+    # only happens when the fusion engine cannot build a narrative for the
+    # alert (e.g. minimal-content fixture rows in tests); the API will
+    # lazily compute it on first read in that case.
+    narrative: str | None = None
+
     fused_at: datetime = Field(default_factory=datetime.utcnow)
 
 
