@@ -81,11 +81,7 @@ def _to_narrative_inputs(
 
     # ``confidence_score`` is on [0, 1]; the narrative surfaces a /100 number
     # so the rail prose reads naturally ("Confidence: high (78/100)").
-    confidence_pct: int | None = (
-        round(max(0.0, min(1.0, fused.confidence_score)) * 100)
-        if fused.confidence_score is not None
-        else None
-    )
+    confidence_pct: int | None = round(max(0.0, min(1.0, fused.confidence_score)) * 100) if fused.confidence_score is not None else None
 
     return NarrativeInputs(
         severity=raw.severity.value,  # type: ignore[arg-type]
@@ -230,9 +226,7 @@ class FusionEngine:
         # Failures here are never fatal — the API will recompute on first read
         # via the same builder (vendored in ``services/api/app/_vendor/``).
         try:
-            fused.narrative = build_narrative(
-                _to_narrative_inputs(fused, incident, top_promotion)
-            )
+            fused.narrative = build_narrative(_to_narrative_inputs(fused, incident, top_promotion))
         except Exception as exc:
             logger.warning("narrative_build_failed", alert_id=str(alert.id), error=str(exc))
 

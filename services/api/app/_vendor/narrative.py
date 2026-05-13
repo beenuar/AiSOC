@@ -254,9 +254,7 @@ def _rationale_block(inputs: NarrativeInputs) -> str | None:
         sign = "+" if factor.contribution >= 0 else "−"
         lines.append(f"{_BULLET}{sign} **{factor.label}** — {factor.value}")
     if inputs.confidence is not None and inputs.confidence_label is not None:
-        lines.append(
-            f"{_BULLET}Confidence: **{inputs.confidence_label}** ({inputs.confidence}/100)"
-        )
+        lines.append(f"{_BULLET}Confidence: **{inputs.confidence_label}** ({inputs.confidence}/100)")
     elif inputs.confidence is not None:
         lines.append(f"{_BULLET}Confidence: **{inputs.confidence}/100**")
     elif inputs.confidence_label is not None:
@@ -267,21 +265,16 @@ def _rationale_block(inputs: NarrativeInputs) -> str | None:
 def _correlation_block(inputs: NarrativeInputs) -> str | None:
     pieces: list[str] = []
     if inputs.correlation_decision == "correlated" and inputs.incident_alert_count and inputs.incident_alert_count > 1:
-        pieces.append(
-            f"Correlated activity: this alert is part of an incident with "
-            f"**{inputs.incident_alert_count}** related alerts."
-        )
+        pieces.append(f"Correlated activity: this alert is part of an incident with **{inputs.incident_alert_count}** related alerts.")
     elif inputs.correlation_decision == "new_incident":
         pieces.append("Correlated activity: this is the **first** alert on a newly opened incident.")
     if inputs.rba_entity and inputs.rba_score is not None:
         pieces.append(
-            f"Risk-based alerting has accumulated **{inputs.rba_score:.0f}** points on "
-            f"`{inputs.rba_entity}` before this alert fired."
+            f"Risk-based alerting has accumulated **{inputs.rba_score:.0f}** points on `{inputs.rba_entity}` before this alert fired."
         )
     if inputs.exploit_in_wild:
         pieces.append(
-            "**Exploit-in-wild**: one of the indicators on this alert matches an asset "
-            "vulnerability marked as actively exploited."
+            "**Exploit-in-wild**: one of the indicators on this alert matches an asset vulnerability marked as actively exploited."
         )
     if not pieces:
         return None

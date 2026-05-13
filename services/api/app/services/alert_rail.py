@@ -32,10 +32,10 @@ Author: Beenu Arora <beenu@cyble.com>
 
 from __future__ import annotations
 
-import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -44,7 +44,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.alert import Alert
 from app.models.audit import AuditLog
 from app.models.case import CaseTimeline
-
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
 
@@ -75,10 +74,7 @@ class RelatedEntity(BaseModel):
     label: str | None = Field(default=None, description="Optional human-friendly label")
     pivot: str | None = Field(
         default=None,
-        description=(
-            "Frontend route to deep-link into AttackGraphView (or another "
-            "workbench). When None the chip is informational only."
-        ),
+        description=("Frontend route to deep-link into AttackGraphView (or another workbench). When None the chip is informational only."),
     )
 
 
@@ -164,7 +160,7 @@ class _EntityBucket:
     _seen: set[tuple[str, str, str]]
 
     @classmethod
-    def empty(cls) -> "_EntityBucket":
+    def empty(cls) -> _EntityBucket:
         return cls(entities=[], _seen=set())
 
     def add(
@@ -183,9 +179,7 @@ class _EntityBucket:
         if key in self._seen:
             return
         self._seen.add(key)
-        self.entities.append(
-            RelatedEntity(group=group, kind=kind, value=v, label=label, pivot=pivot)
-        )
+        self.entities.append(RelatedEntity(group=group, kind=kind, value=v, label=label, pivot=pivot))
 
 
 def build_related_entities(alert: Alert) -> list[RelatedEntity]:
@@ -404,12 +398,7 @@ async def build_mini_timeline(
 
     # ── Case timeline ───────────────────────────────────────────────────
     if alert.case_id is not None:
-        case_q = (
-            select(CaseTimeline)
-            .where(CaseTimeline.case_id == alert.case_id)
-            .order_by(CaseTimeline.created_at.desc())
-            .limit(limit)
-        )
+        case_q = select(CaseTimeline).where(CaseTimeline.case_id == alert.case_id).order_by(CaseTimeline.created_at.desc()).limit(limit)
         case_rows = (await db.execute(case_q)).scalars().all()
         events.extend(_case_event(row) for row in case_rows)
 

@@ -34,7 +34,6 @@ import pytest
 from app.services.narrative_loader import build_narrative
 from app.services.narrative_projection import project_alert_to_narrative_inputs
 
-
 # ─── Test fixtures ───────────────────────────────────────────────────────────
 
 
@@ -151,9 +150,7 @@ def test_denormalised_column_wins_over_raw_event() -> None:
 
 def test_raw_event_fallback_when_denormalised_empty() -> None:
     """When ``affected_ips`` is empty we fall through to ``raw_event``."""
-    inputs = project_alert_to_narrative_inputs(
-        _alert(raw_event={"source_ip": "192.168.1.99"})
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(raw_event={"source_ip": "192.168.1.99"}))
     # source_ip is one of the accepted aliases per the projection's
     # blob key list — see narrative_projection._from_blob.
     assert inputs.src_ip == "192.168.1.99"
@@ -161,16 +158,12 @@ def test_raw_event_fallback_when_denormalised_empty() -> None:
 
 def test_hostname_pulls_from_raw_event_aliases() -> None:
     """``raw_event.computer_name`` is an alias for ``hostname``."""
-    inputs = project_alert_to_narrative_inputs(
-        _alert(raw_event={"computer_name": "win-finance-07"})
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(raw_event={"computer_name": "win-finance-07"}))
     assert inputs.hostname == "win-finance-07"
 
 
 def test_username_pulls_from_raw_event_aliases() -> None:
-    inputs = project_alert_to_narrative_inputs(
-        _alert(raw_event={"account_name": "svc_backup"})
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(raw_event={"account_name": "svc_backup"}))
     assert inputs.username == "svc_backup"
 
 
@@ -212,9 +205,7 @@ def test_empty_strings_in_columns_are_skipped() -> None:
 
 
 def test_mitre_tactics_accepts_bare_strings() -> None:
-    inputs = project_alert_to_narrative_inputs(
-        _alert(mitre_tactics=["initial-access", "execution"])
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(mitre_tactics=["initial-access", "execution"]))
     assert inputs.mitre_tactics == ("initial-access", "execution")
 
 
@@ -236,9 +227,7 @@ def test_mitre_tactics_accepts_dict_shape() -> None:
 
 
 def test_mitre_techniques_strip_whitespace() -> None:
-    inputs = project_alert_to_narrative_inputs(
-        _alert(mitre_techniques=["  T1078  ", ""])
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(mitre_techniques=["  T1078  ", ""]))
     assert inputs.mitre_techniques == ("T1078",)
 
 
@@ -303,13 +292,7 @@ def test_rationale_silently_drops_malformed_rows() -> None:
 
 
 def test_rba_promotion_is_extracted() -> None:
-    inputs = project_alert_to_narrative_inputs(
-        _alert(
-            enrichment_data={
-                "rba_top_promotion": {"entity": "host:web-01", "score": 78.3}
-            }
-        )
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(enrichment_data={"rba_top_promotion": {"entity": "host:web-01", "score": 78.3}}))
     assert inputs.rba_entity == "host:web-01"
     assert inputs.rba_score == pytest.approx(78.3)
 
@@ -321,9 +304,7 @@ def test_rba_promotion_missing_returns_none() -> None:
 
 
 def test_exploit_in_wild_flag_via_enrichment_data() -> None:
-    inputs = project_alert_to_narrative_inputs(
-        _alert(enrichment_data={"exploit_in_wild": True})
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(enrichment_data={"exploit_in_wild": True}))
     assert inputs.exploit_in_wild is True
 
 
@@ -358,9 +339,7 @@ def test_incident_alert_count_is_always_none_in_api_projection() -> None:
     incident" suffix when ``incident_alert_count`` is ``None`` — that's
     the contract this test pins.
     """
-    inputs = project_alert_to_narrative_inputs(
-        _alert(case_id=uuid.uuid4())
-    )
+    inputs = project_alert_to_narrative_inputs(_alert(case_id=uuid.uuid4()))
     assert inputs.incident_alert_count is None
 
 

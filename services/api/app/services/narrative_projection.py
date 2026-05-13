@@ -28,11 +28,11 @@ Author: Beenu Arora <beenu@cyble.com>
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from app.models.alert import Alert
 from app.services.narrative_loader import NarrativeFactor, NarrativeInputs
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -221,16 +221,12 @@ def project_alert_to_narrative_inputs(alert: Alert) -> NarrativeInputs:
     # Entity precedence — prefer the denormalised columns (which the
     # fusion service curated at correlation time) and fall back to the
     # raw event blob for shapes we don't promote to first-class columns.
-    src_ip = _first_str(alert.affected_ips or ()) or _from_blob(
-        raw_event, ("src_ip", "source_ip", "client_ip")
-    )
+    src_ip = _first_str(alert.affected_ips or ()) or _from_blob(raw_event, ("src_ip", "source_ip", "client_ip"))
     dst_ip = _from_blob(raw_event, ("dst_ip", "destination_ip", "remote_ip"))
     hostname = _first_str(alert.affected_hosts or ()) or _from_blob(
         raw_event, ("host", "hostname", "device_name", "device", "computer_name")
     )
-    username = _first_str(alert.affected_users or ()) or _from_blob(
-        raw_event, ("user", "username", "user_name", "account_name", "account")
-    )
+    username = _first_str(alert.affected_users or ()) or _from_blob(raw_event, ("user", "username", "user_name", "account_name", "account"))
     file_hash = _from_blob(raw_event, ("file_hash", "sha256", "sha1", "md5", "hash"))
     domain = _from_blob(raw_event, ("domain", "target_domain", "host_domain"))
     url = _from_blob(raw_event, ("url", "request_url", "uri"))

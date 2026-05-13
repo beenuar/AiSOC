@@ -29,7 +29,7 @@ Author: Beenu Arora <beenu@cyble.com>
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -46,7 +46,7 @@ from app.services.alert_rail import (
     build_recommended_actions,
     build_related_entities,
 )
-
+from pydantic import ValidationError
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -159,9 +159,7 @@ class TestBuildRelatedEntities:
 
     def test_tenant_group_has_connector_and_case_pivots(self) -> None:
         case_id = uuid.uuid4()
-        entities = build_related_entities(
-            _alert(connector_type="okta", case_id=case_id)
-        )
+        entities = build_related_entities(_alert(connector_type="okta", case_id=case_id))
         by_kind = {e.kind: e for e in entities}
         assert by_kind["connector"].group == "tenant"
         assert by_kind["connector"].value == "okta"
@@ -287,22 +285,16 @@ class TestBuildRecommendedActions:
 
     def test_risk_outside_canonical_set_falls_back_to_low(self) -> None:
         """The frontend only knows three risk tints — sanitise here."""
-        actions = build_recommended_actions(
-            _alert(ai_recommendations=[{"action": "x", "risk": "spicy"}])
-        )
+        actions = build_recommended_actions(_alert(ai_recommendations=[{"action": "x", "risk": "spicy"}]))
         assert actions[0].risk == "low"
 
     def test_risk_is_lowercased(self) -> None:
-        actions = build_recommended_actions(
-            _alert(ai_recommendations=[{"action": "x", "risk": "HIGH"}])
-        )
+        actions = build_recommended_actions(_alert(ai_recommendations=[{"action": "x", "risk": "HIGH"}]))
         assert actions[0].risk == "high"
 
     def test_priority_lower_than_one_is_clamped(self) -> None:
         """Pydantic's ``ge=1`` would otherwise raise — the helper clamps first."""
-        actions = build_recommended_actions(
-            _alert(ai_recommendations=[{"action": "x", "priority": 0}])
-        )
+        actions = build_recommended_actions(_alert(ai_recommendations=[{"action": "x", "priority": 0}]))
         assert actions[0].priority == 1
 
     def test_malformed_priority_falls_back_to_index(self) -> None:
@@ -347,7 +339,7 @@ class TestBuildMiniTimeline:
             "resource": "alert",
             "changes": {"status": ["new", "investigating"]},
             "metadata_": {},
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         }
         base.update(overrides)
         return SimpleNamespace(**base)
@@ -360,7 +352,7 @@ class TestBuildMiniTimeline:
             "event_metadata": {"channel": "slack"},
             "is_automated": False,
             "user_id": uuid.uuid4(),
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         }
         base.update(overrides)
         return SimpleNamespace(**base)
@@ -379,7 +371,7 @@ class TestBuildMiniTimeline:
     @pytest.mark.asyncio
     async def test_case_and_audit_events_are_merged(self) -> None:
         alert = _alert(case_id=uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         case_row = self._case_row(created_at=now - timedelta(minutes=2))
         audit_row = self._audit_row(created_at=now - timedelta(minutes=1))
 
@@ -512,13 +504,13 @@ class TestPydanticContracts:
 
     def test_recommended_action_priority_must_be_at_least_one(self) -> None:
         """Defence in depth — the helper clamps, but the model also enforces."""
-        with pytest.raises(Exception):  # pydantic.ValidationError
+        with pytest.raises(ValidationError):
             RecommendedAction(priority=0, action="x")
 
     def test_mini_timeline_event_payload_is_optional(self) -> None:
         e = MiniTimelineEvent(
             id="abc",
-            ts=datetime.now(timezone.utc),
+            ts=datetime.now(UTC),
             kind="audit",
             agent="system",
             summary="x",

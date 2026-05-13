@@ -47,7 +47,7 @@ from app.services.alert_rail import (
     RelatedEntity,
 )
 from fastapi import HTTPException
-
+from pydantic import ValidationError
 
 # ─── Schema-only payload helper ──────────────────────────────────────────────
 
@@ -318,7 +318,7 @@ class TestAlertDetailResponseContract:
         helper does the sanitising; the model just enforces the
         sanitised contract.
         """
-        with pytest.raises(Exception):  # pydantic.ValidationError
+        with pytest.raises(ValidationError):
             AlertDetailResponse.model_validate(
                 _alert_payload(
                     recommended_actions=[

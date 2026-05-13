@@ -290,9 +290,7 @@ async def get_alert(
     we log and return the alert with ``narrative=None`` so the page
     keeps rendering. The frontend already handles the null case.
     """
-    result = await db.execute(
-        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
@@ -307,11 +305,7 @@ async def get_alert(
             narrative_text = build_narrative(inputs)
             if narrative_text:
                 alert.narrative = narrative_text
-                await db.execute(
-                    update(Alert)
-                    .where(Alert.id == alert.id)
-                    .values(narrative=narrative_text, updated_at=datetime.now(UTC))
-                )
+                await db.execute(update(Alert).where(Alert.id == alert.id).values(narrative=narrative_text, updated_at=datetime.now(UTC)))
                 await db.commit()
         except Exception:  # noqa: BLE001 — never let narrative kill a detail view
             logger.warning(
