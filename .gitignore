@@ -35,6 +35,7 @@ bin/
 # Python
 .venv/
 venv/
+.eval-test-venv/
 .mypy_cache/
 .pytest_cache/
 htmlcov/
