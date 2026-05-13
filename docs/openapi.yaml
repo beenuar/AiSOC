@@ -5768,6 +5768,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/metrics/funnel:
+    get:
+      tags:
+      - metrics
+      summary: Get Funnel Metrics
+      description: 'Return the live tenant funnel for the SOC Console (v1.5).
+
+
+        Funnel: events_of_interest → correlation_instances → alerts_generated →
+
+        analyst_queue_depth, plus efficiency ratios and MITRE coverage.
+
+
+        ``deltas`` compares the current window to the immediately preceding window
+
+        of the same length (e.g. for ``period=24h`` we compare to the 24h ending
+
+        24h ago). Values are percentage changes rounded to two decimals; a delta
+
+        of ``0.0`` means "no meaningful baseline" (the previous window was empty).'
+      operationId: get_funnel_metrics_api_v1_metrics_funnel_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(1h|24h|7d|30d)$
+          default: 24h
+          title: Period
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelMetrics'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/health/pipeline:
+    get:
+      tags:
+      - health
+      summary: Get Pipeline Health
+      description: 'Return a 5-stage health snapshot of the SOC pipeline for the tenant.
+
+
+        Stages: ``ingest → normalize → fuse → correlate → alert``. See the
+
+        module docstring for what each cell measures and why some columns
+
+        are intentionally ``0`` until deeper instrumentation lands.
+
+
+        The window for latency / backlog computations is the last hour.
+
+        The ``status`` ladder is ``unknown | green | yellow | red`` and
+
+        follows the same convention as
+
+        ``app.services.connector_freshness``.'
+      operationId: get_pipeline_health_api_v1_health_pipeline_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineHealth'
+      security:
+      - HTTPBearer: []
   /api/v1/sla/metrics:
     get:
       tags:
@@ -17006,6 +17083,102 @@ components:
       - updatedAt
       title: FrontendDetectionRule
       description: Mirrors `DetectionRule` in apps/web/src/lib/api.ts.
+    FunnelDeltas:
+      properties:
+        events_of_interest:
+          type: number
+          title: Events Of Interest
+        correlation_instances:
+          type: number
+          title: Correlation Instances
+        alerts_generated:
+          type: number
+          title: Alerts Generated
+        signal_to_noise:
+          type: number
+          title: Signal To Noise
+        mttd_seconds:
+          type: number
+          title: Mttd Seconds
+        analyst_queue_depth:
+          type: number
+          title: Analyst Queue Depth
+      type: object
+      required:
+      - events_of_interest
+      - correlation_instances
+      - alerts_generated
+      - signal_to_noise
+      - mttd_seconds
+      - analyst_queue_depth
+      title: FunnelDeltas
+      description: Period-over-period percentage deltas for the funnel KPI bar.
+    FunnelMetrics:
+      properties:
+        period:
+          type: string
+          title: Period
+        events_of_interest:
+          type: integer
+          title: Events Of Interest
+        correlation_instances:
+          type: integer
+          title: Correlation Instances
+        alerts_generated:
+          type: integer
+          title: Alerts Generated
+        signal_to_noise:
+          type: number
+          title: Signal To Noise
+        mttd_seconds:
+          type: number
+          title: Mttd Seconds
+        analyst_queue_depth:
+          type: integer
+          title: Analyst Queue Depth
+        correlation_efficiency:
+          type: number
+          title: Correlation Efficiency
+        alert_yield:
+          type: number
+          title: Alert Yield
+        mitre_coverage:
+          $ref: '#/components/schemas/MitreCoverage'
+        deltas:
+          $ref: '#/components/schemas/FunnelDeltas'
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - period
+      - events_of_interest
+      - correlation_instances
+      - alerts_generated
+      - signal_to_noise
+      - mttd_seconds
+      - analyst_queue_depth
+      - correlation_efficiency
+      - alert_yield
+      - mitre_coverage
+      - deltas
+      - generated_at
+      title: FunnelMetrics
+      description: 'Tenant funnel + efficiency for the selected period.
+
+
+        All counts are absolute for ``period``. ``signal_to_noise`` is the
+
+        fraction of *resolved* alerts that ended in disposition ``true_positive``
+
+        (i.e. signal / (signal + noise)). ``mttd_seconds`` mirrors /metrics/soc''s
+
+        MTTD definition (Alert.created_at → Alert.first_seen_at) but expressed in
+
+        seconds for funnel-level precision. ``deltas`` compares this period to the
+
+        immediately preceding period of the same length.'
     GateLogOut:
       properties:
         id:
@@ -18857,6 +19030,31 @@ components:
       - pushed
       title: MispPushResult
       description: Embedded in a STIX response when ``push_to_misp=true``.
+    MitreCoverage:
+      properties:
+        covered:
+          type: integer
+          title: Covered
+        total:
+          type: integer
+          title: Total
+        ratio:
+          type: number
+          title: Ratio
+      type: object
+      required:
+      - covered
+      - total
+      - ratio
+      title: MitreCoverage
+      description: "Slice of the MITRE ATT&CK landscape we have observable coverage\
+        \ for.\n\n``covered`` counts the distinct techniques observed via either:\n\
+        \  * a tenant alert in the selected window (``Alert.mitre_techniques``), or\n\
+        \  * an enabled tenant/platform detection rule\n    (``DetectionRule.mitre_techniques``\
+        \ where ``status == 'enabled'``).\n\n``total`` is configurable via ``AISOC_FUNNEL_MITRE_TOTAL``\
+        \ and defaults to\nthe MITRE ATT&CK Enterprise v17 technique count (201) so\
+        \ the ratio is\ninterpretable as \"% of ATT&CK we're watching for\". The ratio\
+        \ is clamped to\n``[0.0, 1.0]`` even if operators downsize the universe."
     MitreCoverageCell:
       properties:
         techniqueId:
@@ -19830,6 +20028,66 @@ components:
       - description
       - category
       title: PermissionOut
+    PipelineHealth:
+      properties:
+        overall_status:
+          type: string
+          title: Overall Status
+        stages:
+          items:
+            $ref: '#/components/schemas/PipelineStage'
+          type: array
+          title: Stages
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - overall_status
+      - stages
+      - generated_at
+      title: PipelineHealth
+      description: Top-level response for ``GET /health/pipeline``.
+    PipelineStage:
+      properties:
+        stage:
+          type: string
+          title: Stage
+        backlog:
+          type: integer
+          title: Backlog
+        p95_latency_ms:
+          type: number
+          title: P95 Latency Ms
+        error_rate:
+          type: number
+          title: Error Rate
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - stage
+      - backlog
+      - p95_latency_ms
+      - error_rate
+      - status
+      title: PipelineStage
+      description: 'One row in the pipeline health strip.
+
+
+        ``status`` follows the green/yellow/red/unknown ladder used by
+
+        ``app.services.connector_freshness``. ``backlog`` is the number of items
+
+        currently waiting at this stage (e.g. enabled-but-stale connectors for
+
+        ``ingest``, unacked alerts for ``alert``). ``p95_latency_ms`` is the 95th
+
+        percentile end-to-end latency for items that traversed this stage in the
+
+        last hour. ``error_rate`` is errors / processed in the same window.'
     PluginManifestOut:
       properties:
         id:
