@@ -17,8 +17,14 @@
 
 Work lands on the fork; the integration PR is raised against `upstream/main`.
 
-PR compare URL:
+PR compare URL (click to finalise on GitHub):
 `https://github.com/beenuar/AiSOC/compare/main...prince30121:AiSOC:v8.0/parallel-team-kickoff?expand=1`
+
+PR title: `v8.0 wave-1: graph at ingest, four-agent rebrand, /hunt, 6 connectors, public benchmark, GTM surface`
+
+PR body: see `.pr-body-wave1.md` (gitignored — local working copy). Paste the full contents into the GitHub web UI when opening the PR.
+
+Status: branch pushed to fork on 2026-05-13; PR ready to open. `gh` CLI is unauthenticated on this workstation, so the PR is finalised via the compare URL.
 
 ### Commit signing
 

@@ -77,6 +77,9 @@ eval_mitre_accuracy_report.json
 .gocache/
 *.tsbuildinfo
 
+# PR body scratch files (local working copy, never committed)
+.pr-body-*.md
+
 # Local progress tracking (per AGENTS.md preference, not committed)
 PROGRESS.md
 PR_TRIAGE.md
