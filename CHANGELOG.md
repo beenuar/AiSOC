@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.3.1] — 2026-05-14
+
+### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone
+
+Tail end of the v7.3.0 founder-flow smoke test on a clean machine revealed
+three latent issues that broke the "open the console, see your alert"
+moment in the demo. This patch closes all three.
+
+- **Alerts table schema drift** — the `Alert` ORM model
+  (`services/api/app/models/alert.py`) declared eleven columns that no
+  migration had ever added to the database: `affected_ips`,
+  `affected_hosts`, `affected_users`, `affected_assets`,
+  `parent_alert_id`, `child_alert_ids`, `is_merged`, `assigned_to_id`,
+  `assigned_at`, `enrichment_data`, `tags`. Result: a fresh stack
+  returned HTTP 500 from `GET /api/v1/alerts` with
+  `column alerts.affected_ips does not exist`. New idempotent migration
+  `042_alerts_schema_drift_fix.sql` adds all eleven with sensible
+  defaults (`'[]'::jsonb`, `'{}'::jsonb`, `FALSE`, `NULL`).
+- **Migration idempotency** — `005_compliance.sql` and
+  `025_connectors_click_and_connect.sql` failed re-application on
+  partially-migrated DBs (a `CREATE POLICY` that didn't check for
+  existence, and a chain of `ALTER TABLE … RENAME COLUMN` calls that
+  threw when the source columns were already renamed). Both now wrap
+  the offending statements in `DO $$ … END $$` blocks gated on
+  `pg_policies` / `information_schema.columns` lookups, so
+  `aisoc db upgrade` is fully idempotent.
+- **`aisoc submit` → console wiring** — the v7.3.0 CLI POSTed to
+  `services/ingest`'s `/v1/ingest/batch`, which only emits to Kafka. With
+  the detection / correlation pipeline still wiring up in the demo
+  environment, accepted events never became `Alert` rows, so the web
+  console stayed empty. New endpoint
+  `POST /api/v1/alerts/submit` in `services/api/app/api/v1/endpoints/alerts.py`
+  synthesises one `Alert` row directly from the event batch (severity
+  normalised across the canonical five-tier ladder, MITRE / affected
+  entities derived from the OCSF payload) and persists it. The CLI
+  (`packages/aisoc-cli/src/aisoc_cli/main.py`) now targets that endpoint,
+  with the same `--tenant` / `--connector-id` / `--source-format`
+  overrides, plus dev-mode auth bypass when no `Authorization` header is
+  supplied. 16 CLI tests + 48 API tests cover request shape, severity
+  mapping, timestamp coercion (`@timestamp` / `time` / Okta `published`),
+  affected-user deduplication, and JSONB column defaults.
+
+After this hotfix, the recorded demo runs end-to-end on a fresh clone:
+`docker compose up`, `aisoc db upgrade` (clean — no failures),
+`aisoc submit examples/alerts/lateral-movement.json` (201, `alert_id`
+returned), and the Web console at `http://127.0.0.1:3000/alerts` lists
+the new alert with no 500s.
+
 ## [7.3.0] — 2026-05-14
 
 ### Founder-flow series — codebase aligned to the screen-recording demo (PR1–PR7)

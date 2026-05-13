@@ -328,30 +328,46 @@ What this does:
 1. Reads the JSON file. The fixture is self-describing — its
    `connector_id` / `connector_type` / `source_format` (if present) win
    over the CLI flags, so the same fixture works against any environment.
-2. POSTs to `http://127.0.0.1:8081/v1/ingest/batch` (override with
-   `--ingest-url` or `AISOC_INGEST_URL`) using the canonical envelope:
-   `connector_id`, `connector_type`, `source_format`, `events`.
+2. POSTs to `http://127.0.0.1:8000/api/v1/alerts/submit` (override with
+   `--api-url` or `AISOC_API_URL`) using the canonical envelope:
+   `connector_id`, `connector_type`, `source_format`, `events`. The API
+   service synthesises a single `Alert` row directly from the batch
+   (severity normalised across the canonical five-tier ladder, MITRE /
+   affected entities derived from the OCSF payload), persists it, and
+   returns the new `alert_id`.
 3. Sends the required `X-Tenant-ID` header (override with `--tenant-id`
-   or `AISOC_TENANT_ID`).
-4. Prints `accepted` / `rejected` counts plus the `request_id`.
+   or `AISOC_TENANT_ID`). When no `Authorization` header is supplied and
+   the API is running in dev mode (the default for `docker compose up`),
+   the request is authenticated as the demo tenant operator.
+4. Prints the `alert_id` plus `accepted` / `rejected` counts.
 
-A non-zero exit code means the ingest service rejected the payload or
+A non-zero exit code means the API service rejected the payload or
 isn't reachable; the error message tells you to run `aisoc serve` first
 if the latter.
 
-### 5. Watch fusion + agents pick it up
+Why direct-to-API instead of via the ingest spine? The Kafka-based
+detection / correlation pipeline is still wiring up in the demo
+environment, so events POSTed to `/v1/ingest/batch` accept cleanly but
+never become `Alert` rows. The `/api/v1/alerts/submit` endpoint
+short-circuits that gap so the recorded demo's "submit → see in console"
+moment works on a fresh clone today. Production deployments still flow
+events through `services/ingest` → Kafka → fusion → detection; this
+endpoint is for fixtures and tabletop exercises.
+
+### 5. Watch the alert land in the console
 
 ```bash
-# Tail the API logs to watch the event flow through fusion → detection
-docker compose logs -f api fusion agents
+# List alerts via the API
+curl -s http://localhost:8000/api/v1/alerts | jq
 
-# Or just open the UI and watch /alerts populate
+# Or open the UI and watch /alerts populate
 open http://localhost:3000/alerts
 ```
 
-Within a few seconds you should see the two Okta events normalized into
-OCSF `class_uid 3002` (Authentication), correlated by user, and surfaced
-on the alerts board.
+Within a couple of seconds you should see the synthesised alert
+(severity `medium`, title derived from the highest-severity event in
+the batch, affected user `alice@example.com`, affected IPs from both
+sessions) on the alerts board.
 
 ### 6. Hook your IDE in over MCP (optional)
 

@@ -129,6 +129,296 @@ class AlertStatsResponse(BaseModel):
     critical_open: int
 
 
+class AlertSubmitRequest(BaseModel):
+    """Direct-write alert submission payload.
+
+    The founder-flow demo (`aisoc submit <file>`) and any operator who wants
+    to land a hand-crafted alert on the local dev stack without a connector
+    POST one of these. The body intentionally mirrors the ingest envelope
+    used by real connectors so the same fixture works against either path:
+
+        { connector_id, connector_type, source_format, events: [...] }
+
+    The single payload synthesises one ``Alert`` row, written directly into
+    the tenant's database, so the result is visible in
+    ``GET /api/v1/alerts`` and the web console within the same second.
+    This deliberately bypasses the Kafka detection/correlation pipeline
+    (which fresh clones don't run by default) so the documented "alert in
+    seconds" promise in the quickstart actually holds.
+    """
+
+    events: list[dict] = []
+    connector_id: str | None = None
+    connector_type: str | None = None
+    source_format: str | None = None
+    title: str | None = None
+    description: str | None = None
+    severity: str | None = None
+    tags: list[str] | None = None
+
+
+# Map vendor-native severity strings to the canonical AiSOC severity ladder.
+# Keep this in sync with the five-tier ladder documented in AGENTS.md
+# (info | low | medium | high | critical).
+_SEVERITY_MAP = {
+    "info": "info",
+    "informational": "info",
+    "debug": "info",
+    "low": "low",
+    "minor": "low",
+    "warning": "low",
+    "medium": "medium",
+    "moderate": "medium",
+    "warn": "medium",
+    "high": "high",
+    "error": "high",
+    "major": "high",
+    "critical": "critical",
+    "crit": "critical",
+    "severe": "critical",
+    "fatal": "critical",
+    "emergency": "critical",
+}
+_SEVERITY_PRIORITY = {
+    "info": 10,
+    "low": 30,
+    "medium": 50,
+    "high": 75,
+    "critical": 95,
+}
+
+
+def _normalize_severity(raw: str | None) -> str:
+    if not raw:
+        return "medium"
+    return _SEVERITY_MAP.get(raw.strip().lower(), "medium")
+
+
+def _max_severity(values: list[str]) -> str:
+    """Pick the highest severity from a list using the canonical ladder."""
+    ladder = ["info", "low", "medium", "high", "critical"]
+    best = "info"
+    for v in values:
+        if ladder.index(v) > ladder.index(best):
+            best = v
+    return best
+
+
+def _coerce_published(event: dict) -> datetime | None:
+    """Extract an event timestamp from an OCSF / Okta-shaped dict.
+
+    Accepts ``published`` (Okta), ``time`` (OCSF), or ``@timestamp``. Returns
+    ``None`` when the field is missing or unparseable so the caller can fall
+    back to ``datetime.now(UTC)``.
+    """
+    for key in ("published", "time", "@timestamp", "event_time"):
+        value = event.get(key)
+        if not value:
+            continue
+        if isinstance(value, datetime):
+            return value if value.tzinfo else value.replace(tzinfo=UTC)
+        if isinstance(value, str):
+            try:
+                # Tolerate trailing 'Z' which fromisoformat handles natively
+                # on Python 3.11+ but not in some older variants.
+                normalized = value.rstrip("Z") + "+00:00" if value.endswith("Z") else value
+                return datetime.fromisoformat(normalized)
+            except ValueError:
+                continue
+    return None
+
+
+def _synthesise_alert_from_events(
+    *,
+    tenant_id: uuid.UUID,
+    events: list[dict],
+    connector_type: str | None,
+    override_title: str | None,
+    override_description: str | None,
+    override_severity: str | None,
+    override_tags: list[str] | None,
+) -> Alert:
+    """Build a single ``Alert`` row that represents the submitted event batch.
+
+    The shape of incoming events is intentionally loose — they may be raw
+    OCSF, Okta system-log entries, or any dict with the usual suspects
+    (``displayMessage``, ``severity``, ``actor``, ``client``, ``published``).
+    The function extracts what it can and falls back to safe defaults.
+    """
+    first = events[0] if events else {}
+
+    # Title
+    title = (
+        override_title
+        or first.get("displayMessage")
+        or first.get("eventType")
+        or first.get("name")
+        or "AiSOC submitted alert"
+    )
+
+    # Severity: pick the highest in the batch unless overridden
+    severities = [_normalize_severity(e.get("severity")) for e in events]
+    severity = _normalize_severity(override_severity) if override_severity else (
+        _max_severity(severities) if severities else "medium"
+    )
+    priority = _SEVERITY_PRIORITY[severity]
+
+    # Description: count + first event hint
+    description = override_description or (
+        f"Submitted via aisoc submit / API. {len(events)} event(s) in batch. "
+        f"First event: {title}."
+    )
+
+    # Affected entities
+    affected_ips: list[str] = []
+    affected_hosts: list[str] = []
+    affected_users: list[str] = []
+    earliest: datetime | None = None
+    latest: datetime | None = None
+
+    for event in events:
+        actor = event.get("actor") or {}
+        client = event.get("client") or {}
+
+        # User: collect candidate identifiers in priority order; skip the
+        # actor entirely if *any* of them already appears in
+        # ``affected_users`` (i.e. we've already recorded this person under
+        # a different identifier in an earlier event).
+        actor_identifiers = [
+            actor[key]
+            for key in ("alternateId", "displayName", "email", "name", "id")
+            if isinstance(actor.get(key), str) and actor[key]
+        ]
+        if actor_identifiers and not any(
+            ident in affected_users for ident in actor_identifiers
+        ):
+            affected_users.append(actor_identifiers[0])
+
+        # IP from client
+        ip = client.get("ipAddress") or client.get("ip")
+        if isinstance(ip, str) and ip and ip not in affected_ips:
+            affected_ips.append(ip)
+
+        # Host from client geographicalContext or client.id
+        geo = client.get("geographicalContext") or {}
+        host_hint = (
+            client.get("device")
+            or client.get("id")
+            or geo.get("city")
+        )
+        if isinstance(host_hint, str) and host_hint and host_hint not in affected_hosts:
+            affected_hosts.append(host_hint)
+
+        # Timestamps
+        ts = _coerce_published(event)
+        if ts is not None:
+            if earliest is None or ts < earliest:
+                earliest = ts
+            if latest is None or ts > latest:
+                latest = ts
+
+    now = datetime.now(UTC)
+    event_time = latest or earliest or now
+    first_seen = earliest or now
+    last_seen = latest or now
+
+    # Tags: combine override + a marker so demo alerts are recognisable
+    tags = list(override_tags or [])
+    if "submitted" not in tags:
+        tags.append("submitted")
+    if connector_type and connector_type not in tags:
+        tags.append(connector_type)
+
+    return Alert(
+        tenant_id=tenant_id,
+        title=title,
+        description=description,
+        severity=severity,
+        status="new",
+        priority=priority,
+        category="identity" if "okta" in (connector_type or "").lower() else None,
+        connector_type=connector_type,
+        # JSONB list columns: populate explicitly so the response model
+        # validation never trips on ``None`` for fresh inserts (the
+        # ``default=list`` column default only fires after a real flush
+        # against Postgres, not in unit tests with a mocked session).
+        mitre_tactics=[],
+        mitre_techniques=[],
+        ai_recommendations=[],
+        affected_ips=affected_ips,
+        affected_hosts=affected_hosts,
+        affected_users=affected_users,
+        tags=tags,
+        raw_event={
+            "events": events,
+            "connector_type": connector_type,
+            "source": "aisoc-submit-api",
+        },
+        event_time=event_time,
+        first_seen=first_seen,
+        last_seen=last_seen,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+@router.post(
+    "/submit",
+    response_model=AlertResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_alert(
+    payload: AlertSubmitRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    db: TenantDBSession,
+) -> AlertResponse:
+    """Submit one alert directly from an OCSF event batch.
+
+    This is the destination for `aisoc submit <file>` and the local-dev fast
+    path documented in the quickstart. We deliberately bypass the Kafka
+    detect/correlate/fuse pipeline (which fresh clones don't run by default)
+    so that a hand-crafted fixture lands in the database — and therefore in
+    ``GET /api/v1/alerts`` and the web console — within the same second.
+
+    Authorisation: requires ``alerts:write``. In development mode the
+    auth bypass in :mod:`app.api.v1.deps` resolves to the deterministic
+    demo tenant, so the documented ``aisoc submit`` CLI works against a
+    fresh clone with no token plumbing.
+    """
+    if not payload.events:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="events must be a non-empty list",
+        )
+
+    alert = _synthesise_alert_from_events(
+        tenant_id=current_user.tenant_id,
+        events=payload.events,
+        connector_type=payload.connector_type,
+        override_title=payload.title,
+        override_description=payload.description,
+        override_severity=payload.severity,
+        override_tags=payload.tags,
+    )
+
+    db.add(alert)
+    await db.flush()
+    await db.refresh(alert)
+
+    logger.info(
+        "alert.submitted",
+        extra={
+            "alert_id": str(alert.id),
+            "tenant_id": str(alert.tenant_id),
+            "severity": alert.severity,
+            "events": len(payload.events),
+            "connector_type": payload.connector_type,
+        },
+    )
+
+    return AlertResponse.model_validate(alert)
+
+
 @router.get("", response_model=AlertListResponse)
 async def list_alerts(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],

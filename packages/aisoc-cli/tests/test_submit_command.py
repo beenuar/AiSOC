@@ -3,17 +3,19 @@
 These tests pin the contract the founder-flow quickstart relies on:
 
 * ``aisoc submit <file>`` is registered and discoverable via ``--help``.
-* The CLI POSTs to ``{ingest_url}/v1/ingest/batch`` with an ``X-Tenant-ID``
-  header and the canonical ingest envelope shape (connector_id,
-  connector_type, source_format, events).
+* The CLI POSTs to ``{api_url}/api/v1/alerts/submit`` with the canonical
+  submit envelope (connector_id, connector_type, source_format, events).
 * Fixture-level overrides (a file with ``connector_id`` / ``connector_type``
   / ``source_format`` keys) win over the matching CLI flags.
-* The CLI surfaces accepted / rejected counts on success, and exits non-zero
-  on transport errors, 4xx responses, or non-JSON responses.
+* The CLI surfaces the synthesised alert (id, severity, title) on success,
+  and exits non-zero on transport errors, 4xx responses, or non-JSON
+  responses.
+* Backward compat: the legacy ``--ingest-url`` flag still works and is
+  treated as an alias for ``--api-url``.
 
 We use ``httpx.MockTransport`` to intercept the HTTP call without standing
-up a real ingest service. If these tests break, the quickstart video will
-desync from the CLI.
+up a real API. If these tests break, the quickstart video desyncs from the
+CLI.
 """
 from __future__ import annotations
 
@@ -38,6 +40,26 @@ def _write_fixture(tmp_path: Path, payload: Any, name: str = "alert.json") -> Pa
     path = tmp_path / name
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def _ok_alert_response(
+    *,
+    alert_id: str = "11111111-2222-4333-8444-555555555555",
+    tenant_id: str = "00000000-0000-0000-0000-000000000001",
+    title: str = "User login to Okta",
+    severity: str = "medium",
+) -> dict[str, Any]:
+    """Build a minimally-valid AlertResponse for mock transports.
+
+    The CLI only reads four fields, so this stays focused on what the
+    surface contract actually requires.
+    """
+    return {
+        "id": alert_id,
+        "tenant_id": tenant_id,
+        "title": title,
+        "severity": severity,
+    }
 
 
 class _CapturingTransport(httpx.MockTransport):
@@ -78,11 +100,19 @@ def test_submit_help_lists_command(runner: CliRunner) -> None:
 def test_submit_help_shows_options(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["submit", "--help"])
     assert result.exit_code == 0, result.output
-    for flag in ("--ingest-url", "--tenant-id", "--connector-id", "--connector-type", "--source-format"):
+    for flag in (
+        "--api-url",
+        "--api-key",
+        "--ingest-url",
+        "--tenant-id",
+        "--connector-id",
+        "--connector-type",
+        "--source-format",
+    ):
         assert flag in result.output
 
 
-def test_submit_posts_envelope_with_tenant_header(
+def test_submit_posts_to_alerts_submit_endpoint(
     runner: CliRunner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -98,24 +128,22 @@ def test_submit_posts_envelope_with_tenant_header(
     )
 
     def respond(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={"accepted": 2, "rejected": 0, "request_id": "req-001"},
-        )
+        return httpx.Response(201, json=_ok_alert_response())
 
     transport = _install_transport(monkeypatch, respond)
 
     result = runner.invoke(
         cli,
-        ["submit", str(fixture_path), "--ingest-url", "http://localhost:8081"],
+        ["submit", str(fixture_path), "--api-url", "http://localhost:8000"],
     )
     assert result.exit_code == 0, result.output
     assert len(transport.requests) == 1
 
     req = transport.requests[0]
     assert req.method == "POST"
-    assert str(req.url) == "http://localhost:8081/v1/ingest/batch"
-    assert req.headers["X-Tenant-ID"] == "00000000-0000-0000-0000-000000000001"
+    assert str(req.url) == "http://localhost:8000/api/v1/alerts/submit"
+    # No Authorization header in dev mode (the API resolves the demo user).
+    assert "authorization" not in {k.lower() for k in req.headers.keys()}
     assert req.headers["Content-Type"].startswith("application/json")
 
     body = json.loads(req.content.decode("utf-8"))
@@ -124,8 +152,30 @@ def test_submit_posts_envelope_with_tenant_header(
     assert body["source_format"] == "json"
     assert len(body["events"]) == 2
 
-    assert "accepted: 2" in result.output
-    assert "request_id: req-001" in result.output
+    assert "alert_id" in result.output
+    assert "severity" in result.output
+
+
+def test_submit_sends_authorization_when_api_key_set(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture_path = _write_fixture(tmp_path, {"events": [{"uuid": "x"}]})
+
+    transport = _install_transport(
+        monkeypatch,
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
+    )
+
+    result = runner.invoke(
+        cli,
+        ["submit", str(fixture_path), "--api-key", "aisoc_test_token_123"],
+    )
+    assert result.exit_code == 0, result.output
+
+    req = transport.requests[0]
+    assert req.headers["Authorization"] == "Bearer aisoc_test_token_123"
 
 
 def test_submit_accepts_bare_list_payload(
@@ -137,7 +187,7 @@ def test_submit_accepts_bare_list_payload(
 
     transport = _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(200, json={"accepted": 2, "rejected": 0}),
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
     )
 
     result = runner.invoke(cli, ["submit", str(fixture_path)])
@@ -155,7 +205,7 @@ def test_submit_wraps_single_object_payload(
 
     transport = _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(200, json={"accepted": 1, "rejected": 0}),
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
     )
 
     result = runner.invoke(cli, ["submit", str(fixture_path)])
@@ -181,7 +231,7 @@ def test_submit_fixture_overrides_beat_cli_flags(
 
     transport = _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(200, json={"accepted": 1, "rejected": 0}),
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
     )
 
     result = runner.invoke(
@@ -213,7 +263,7 @@ def test_submit_uses_cli_flags_when_fixture_has_no_overrides(
 
     transport = _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(200, json={"accepted": 1, "rejected": 0}),
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
     )
 
     result = runner.invoke(
@@ -221,8 +271,6 @@ def test_submit_uses_cli_flags_when_fixture_has_no_overrides(
         [
             "submit",
             str(fixture_path),
-            "--tenant-id",
-            "deadbeef-0000-4000-8000-000000000000",
             "--connector-id",
             "demo-cli",
             "--connector-type",
@@ -230,31 +278,56 @@ def test_submit_uses_cli_flags_when_fixture_has_no_overrides(
         ],
     )
     assert result.exit_code == 0, result.output
-    req = transport.requests[0]
-    assert req.headers["X-Tenant-ID"] == "deadbeef-0000-4000-8000-000000000000"
-    body = json.loads(req.content.decode("utf-8"))
+    body = json.loads(transport.requests[0].content.decode("utf-8"))
     assert body["connector_id"] == "demo-cli"
+    assert body["connector_type"] == "okta_system_log"
 
 
-def test_submit_env_overrides_default_url_and_tenant(
+def test_submit_env_overrides_default_api_url(
     runner: CliRunner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixture_path = _write_fixture(tmp_path, {"events": [{"uuid": "x"}]})
-    monkeypatch.setenv("AISOC_INGEST_URL", "http://ingest-worker:8080")
-    monkeypatch.setenv("AISOC_TENANT_ID", "11111111-1111-4111-8111-111111111111")
+    monkeypatch.setenv("AISOC_API_URL", "http://api-worker:8000")
 
     transport = _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(200, json={"accepted": 1, "rejected": 0}),
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
     )
 
     result = runner.invoke(cli, ["submit", str(fixture_path)])
     assert result.exit_code == 0, result.output
     req = transport.requests[0]
-    assert str(req.url) == "http://ingest-worker:8080/v1/ingest/batch"
-    assert req.headers["X-Tenant-ID"] == "11111111-1111-4111-8111-111111111111"
+    assert str(req.url) == "http://api-worker:8000/api/v1/alerts/submit"
+
+
+def test_submit_deprecated_ingest_url_still_works(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backward compat: --ingest-url is a deprecated alias for --api-url.
+
+    Pre-W3 demo scripts and the v1.0 quickstart voiceover still set
+    ``--ingest-url http://127.0.0.1:8081``. We keep the flag working
+    (with a deprecation warning) so neither breaks.
+    """
+    fixture_path = _write_fixture(tmp_path, {"events": [{"uuid": "x"}]})
+
+    transport = _install_transport(
+        monkeypatch,
+        lambda _: httpx.Response(201, json=_ok_alert_response()),
+    )
+
+    result = runner.invoke(
+        cli,
+        ["submit", str(fixture_path), "--ingest-url", "http://legacy-host:8081"],
+    )
+    assert result.exit_code == 0, result.output
+    req = transport.requests[0]
+    assert str(req.url) == "http://legacy-host:8081/api/v1/alerts/submit"
+    assert "deprecated" in result.output.lower()
 
 
 def test_submit_returns_nonzero_on_4xx(
@@ -265,12 +338,12 @@ def test_submit_returns_nonzero_on_4xx(
     fixture_path = _write_fixture(tmp_path, {"events": [{"uuid": "x"}]})
     _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(400, text="missing X-Tenant-ID"),
+        lambda _: httpx.Response(400, text="events must be a non-empty list"),
     )
 
     result = runner.invoke(cli, ["submit", str(fixture_path)])
     assert result.exit_code == 1, result.output
-    assert "Ingest service returned 400" in result.output
+    assert "AiSOC API returned 400" in result.output
 
 
 def test_submit_returns_nonzero_on_transport_error(
@@ -287,7 +360,7 @@ def test_submit_returns_nonzero_on_transport_error(
 
     result = runner.invoke(cli, ["submit", str(fixture_path)])
     assert result.exit_code == 1, result.output
-    assert "Ingest service unreachable" in result.output
+    assert "AiSOC API unreachable" in result.output
     assert "aisoc serve" in result.output
 
 
@@ -337,7 +410,12 @@ def test_submit_real_lateral_movement_fixture(
 
     transport = _install_transport(
         monkeypatch,
-        lambda _: httpx.Response(200, json={"accepted": 2, "rejected": 0, "request_id": "req-9"}),
+        lambda _: httpx.Response(
+            201,
+            json=_ok_alert_response(
+                title="User login to Okta", severity="medium"
+            ),
+        ),
     )
 
     result = runner.invoke(cli, ["submit", str(fixture_path)])

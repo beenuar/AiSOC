@@ -12,7 +12,7 @@ Commands:
   aisoc db upgrade                  Run database migrations against the dev stack
   aisoc mcp serve [--transport]     Launch the MCP server for IDE assistants
   aisoc mcp install --host <h>      Wire AiSOC into Claude / Cursor / Continue
-  aisoc submit <file>               POST an alert/event JSON payload to the ingest API
+  aisoc submit <file>               POST an alert/event JSON payload to the AiSOC API
 """
 from __future__ import annotations
 
@@ -708,21 +708,33 @@ def mcp_install(host: str) -> None:
 #
 # `aisoc submit <file>` lets the founder-flow demo and any operator land a
 # canned OCSF/Okta-shaped payload on the local dev stack in one command.
-# It POSTs to the Go ingest service's batch endpoint with the same envelope
-# the real connectors use (see services/connectors/app/ingest_client.py):
+# It POSTs to the API's direct-write submit endpoint, which synthesises an
+# Alert row from the event batch and writes it straight to the database — so
+# the result is visible in the web console within the same second.
 #
-#     POST {ingest_url}/v1/ingest/batch
-#     X-Tenant-ID: <uuid>
+#     POST {api_url}/api/v1/alerts/submit
+#     Authorization: Bearer <token>          # optional in dev mode
 #     { connector_id, connector_type, source_format, events: [...] }
+#
+# This deliberately bypasses the Kafka detect/correlate/fuse pipeline (which
+# fresh clones don't run by default) so the documented "alert in seconds"
+# quickstart promise actually holds.
 #
 # The fixture format is intentionally forgiving — the file may be:
 #   * { "events": [...], "connector_id": ..., "connector_type": ..., "source_format": ... }
 #   * a bare JSON list of event dicts
 #   * a single event dict (auto-wrapped)
-# Any keys present in a dict-shaped fixture override the matching CLI flags,
-# so a fixture can pin its own connector identity without operator flags.
+# Any keys present in a dict-shaped fixture override the matching CLI flags.
+#
+# Backward compatibility: pre-W3 versions of this command POSTed to the Go
+# ingest service at port 8081 with an ``X-Tenant-ID`` header. We keep the
+# ``--ingest-url`` flag and ``AISOC_INGEST_URL`` env var as deprecated aliases
+# for ``--api-url`` / ``AISOC_API_URL`` so existing demo scripts and the v1.0
+# video voiceover keep working. The tenant id, when not derivable from the
+# bearer token (dev mode bypass), comes from ``--tenant-id`` /
+# ``AISOC_TENANT_ID`` and is still echoed in the request panel.
 
-_DEFAULT_INGEST_URL = "http://127.0.0.1:8081"
+_DEFAULT_API_URL = "http://127.0.0.1:8000"
 _DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 _DEFAULT_CONNECTOR_ID = "aisoc-cli-submit"
 _DEFAULT_CONNECTOR_TYPE = "okta_system_log"
@@ -767,42 +779,76 @@ def _coerce_events(payload: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
     return cleaned, overrides
 
 
+def _resolve_api_url(api_url: str, ingest_url: str | None) -> str:
+    """Pick the effective API base URL, honouring deprecated `--ingest-url`.
+
+    Precedence (highest first):
+      1. ``--ingest-url`` / ``AISOC_INGEST_URL`` (deprecated, prints a warning)
+      2. ``--api-url`` / ``AISOC_API_URL``
+      3. default ``http://127.0.0.1:8000``
+    """
+    if ingest_url:
+        console.print(
+            "[yellow]--ingest-url / AISOC_INGEST_URL is deprecated; "
+            "use --api-url / AISOC_API_URL instead.[/yellow]"
+        )
+        return ingest_url
+    return api_url
+
+
 @cli.command()
 @click.argument(
     "file",
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
 )
 @click.option(
+    "--api-url",
+    envvar="AISOC_API_URL",
+    default=_DEFAULT_API_URL,
+    show_default=True,
+    help="Base URL for the AiSOC API (e.g. http://127.0.0.1:8000).",
+)
+@click.option(
     "--ingest-url",
     envvar="AISOC_INGEST_URL",
-    default=_DEFAULT_INGEST_URL,
-    show_default=True,
-    help="Base URL for the ingest service (e.g. http://127.0.0.1:8081).",
+    default=None,
+    show_default=False,
+    help="DEPRECATED alias for --api-url; overrides --api-url when set.",
+)
+@click.option(
+    "--api-key",
+    envvar="AISOC_API_KEY",
+    default=None,
+    show_default=False,
+    help=(
+        "AiSOC bearer token. Optional in dev mode (the API resolves an "
+        "unauthenticated request to the demo tenant)."
+    ),
 )
 @click.option(
     "--tenant-id",
     envvar="AISOC_TENANT_ID",
     default=_DEFAULT_TENANT_ID,
     show_default=True,
-    help="Tenant UUID sent in the X-Tenant-ID header.",
+    help="Tenant UUID — informational; the API derives tenant from the bearer token.",
 )
 @click.option(
     "--connector-id",
     default=_DEFAULT_CONNECTOR_ID,
     show_default=True,
-    help="connector_id field in the ingest envelope.",
+    help="connector_id field on the synthesised alert.",
 )
 @click.option(
     "--connector-type",
     default=_DEFAULT_CONNECTOR_TYPE,
     show_default=True,
-    help="connector_type field — chooses the normalizer profile (e.g. okta_system_log).",
+    help="connector_type field — used for routing and tag inference (e.g. okta_system_log).",
 )
 @click.option(
     "--source-format",
     default=_DEFAULT_SOURCE_FORMAT,
     show_default=True,
-    help="source_format hint for the normalizer.",
+    help="source_format hint, echoed onto the alert for downstream parsers.",
 )
 @click.option(
     "--timeout",
@@ -813,19 +859,25 @@ def _coerce_events(payload: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
 )
 def submit(
     file: Path,
-    ingest_url: str,
+    api_url: str,
+    ingest_url: str | None,
+    api_key: str | None,
     tenant_id: str,
     connector_id: str,
     connector_type: str,
     source_format: str,
     timeout: float,
 ) -> None:
-    """Submit a JSON alert/event payload to the local ingest service.
+    """Submit a JSON alert/event payload to the AiSOC API.
 
-    Reads ``FILE``, normalizes it into the ingest batch envelope, and POSTs to
-    ``{ingest_url}/v1/ingest/batch`` with the tenant header. Used by the
-    quickstart video script to drop a lateral-movement alert into the stack
-    in one command.
+    Reads ``FILE``, normalises it into the submit envelope, and POSTs to
+    ``{api_url}/api/v1/alerts/submit``. The API synthesises one ``Alert`` row
+    from the batch and writes it directly to the database, so the result is
+    visible in ``GET /api/v1/alerts`` and the web console within the same
+    second — bypassing the Kafka pipeline that fresh clones don't run.
+
+    Used by the quickstart video script to drop a lateral-movement alert
+    into the stack in one command.
     """
     try:
         raw = file.read_text(encoding="utf-8")
@@ -846,7 +898,8 @@ def submit(
     connector_type = overrides.get("connector_type", connector_type)
     source_format = overrides.get("source_format", source_format)
 
-    url = f"{ingest_url.rstrip('/')}/v1/ingest/batch"
+    effective_url = _resolve_api_url(api_url, ingest_url)
+    url = f"{effective_url.rstrip('/')}/api/v1/alerts/submit"
     body = {
         "connector_id": connector_id,
         "connector_type": connector_type,
@@ -867,24 +920,23 @@ def submit(
         )
     )
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-Tenant-ID": tenant_id,
-    }
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(url, headers=headers, json=body)
     except httpx.HTTPError as exc:
         console.print(
-            f"[red]Ingest service unreachable at {url}:[/red] {exc}\n"
+            f"[red]AiSOC API unreachable at {url}:[/red] {exc}\n"
             "Is the dev stack running? Try [bold]aisoc serve[/bold] first."
         )
         sys.exit(1)
 
     if resp.status_code >= 400:
         console.print(
-            f"[red]Ingest service returned {resp.status_code}:[/red] {resp.text[:500]}"
+            f"[red]AiSOC API returned {resp.status_code}:[/red] {resp.text[:500]}"
         )
         sys.exit(1)
 
@@ -892,33 +944,26 @@ def submit(
         data = resp.json()
     except ValueError:
         console.print(
-            f"[red]Ingest service returned non-JSON ({resp.status_code}):[/red] "
+            f"[red]AiSOC API returned non-JSON ({resp.status_code}):[/red] "
             f"{resp.text[:200]}"
         )
         sys.exit(1)
 
-    accepted = data.get("accepted", 0)
-    rejected = data.get("rejected", 0)
-    request_id = data.get("request_id", "-")
-    errors = data.get("errors") or []
+    alert_id = data.get("id", "-")
+    alert_severity = data.get("severity", "-")
+    alert_title = data.get("title", "-")
+    alert_tenant = data.get("tenant_id", "-")
 
     console.print(
         Panel(
             f"[bold]status:[/bold] {resp.status_code}\n"
-            f"[bold]accepted:[/bold] {accepted}\n"
-            f"[bold]rejected:[/bold] {rejected}\n"
-            f"[bold]request_id:[/bold] {request_id}",
-            title="[bold green]ingest response[/bold green]",
+            f"[bold]alert_id:[/bold] {alert_id}\n"
+            f"[bold]tenant_id:[/bold] {alert_tenant}\n"
+            f"[bold]severity:[/bold] {alert_severity}\n"
+            f"[bold]title:[/bold] {alert_title}",
+            title="[bold green]alert created[/bold green]",
         )
     )
-
-    if errors:
-        console.print("[yellow]errors:[/yellow]")
-        for err in errors:
-            console.print(f"  • {err}")
-
-    if rejected and not accepted:
-        sys.exit(1)
 
 
 if __name__ == "__main__":
