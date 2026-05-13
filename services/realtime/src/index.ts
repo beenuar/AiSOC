@@ -37,10 +37,16 @@ const server = http.createServer(app);
 
 // --- WebSocket server ---
 // Accept both `/ws` (legacy) and `/ws/:channel` (preferred). The channel lets
-// callers say up-front what they care about (alerts, cases, agents, all) so we
-// can avoid spamming a panel that only renders alerts with case/agent traffic.
-type Channel = 'alerts' | 'cases' | 'agents' | 'all';
-const VALID_CHANNELS: Channel[] = ['alerts', 'cases', 'agents', 'all'];
+// callers say up-front what they care about (alerts, cases, agents, insights,
+// all) so we can avoid spamming a panel that only renders alerts with
+// case/agent traffic.
+//
+// The `insights` channel (T3.1) is consumed by
+// apps/web/src/app/(app)/dashboards/soc-insights/page.tsx to know when to
+// re-fetch the aggregator endpoint. The payload itself stays small —
+// it's a poke, not a data delivery.
+type Channel = 'alerts' | 'cases' | 'agents' | 'insights' | 'all';
+const VALID_CHANNELS: Channel[] = ['alerts', 'cases', 'agents', 'insights', 'all'];
 
 const wss = new WebSocketServer({ noServer: true });
 
@@ -119,8 +125,11 @@ wss.on('connection', (ws, req) => {
  */
 const CHANNEL_FOR_TYPE: Record<string, Channel[]> = {
   'alert.fused': ['alerts', 'all'],
-  'case.updated': ['cases', 'all'],
+  'case.updated': ['cases', 'all', 'insights'],
   'agent.event': ['agents', 'all'],
+  // T3.1: SOC Insights dashboard tick. Both the dedicated `insights`
+  // subscribers and any `all`-subscribed admin consoles get the poke.
+  'insights_updated': ['insights', 'all'],
 };
 
 function broadcastToTenant(tenantId: string, message: { type: string } & Record<string, unknown>) {
@@ -136,6 +145,40 @@ function broadcastToTenant(tenantId: string, message: { type: string } & Record<
       client.send(payload);
     }
   }
+}
+
+// --- Insights tick (T3.1) ---------------------------------------------------
+// The SOC Insights dashboard (apps/web/src/app/(app)/dashboards/soc-insights)
+// renders 7 rolling-window tiles that need to stay fresh while an analyst
+// keeps the page open. Rather than have the client poll on a setInterval
+// (which fights React's strict-mode double-renders and burns auth headers),
+// we drive the cadence from the server: every 30s, broadcast a tiny
+// `insights_updated` poke to every tenant with an active socket. The web
+// client listens on the `insights` channel and uses the poke to revalidate
+// its SWR cache against /v1/insights/soc.
+//
+// The poke is intentionally payload-free so we don't have to keep the
+// realtime service in sync with the aggregator's schema; the dashboard
+// pulls fresh numbers from the API.
+const INSIGHTS_TICK_MS = Number.parseInt(
+  process.env.INSIGHTS_TICK_MS || '30000',
+  10,
+);
+
+function broadcastInsightsTick(): void {
+  for (const tenantId of clients.keys()) {
+    broadcastToTenant(tenantId, {
+      type: 'insights_updated',
+      reason: 'tick',
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+// In tests we set INSIGHTS_TICK_MS=0 to suppress the timer; production keeps
+// the 30s cadence the dashboard spec calls for.
+if (INSIGHTS_TICK_MS > 0) {
+  setInterval(broadcastInsightsTick, INSIGHTS_TICK_MS).unref?.();
 }
 
 // Rate limiters using express-rate-limit (recognised by CodeQL js/missing-rate-limiting).

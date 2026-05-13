@@ -30,7 +30,10 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Architecture",
-      items: ["architecture/itsm-as-source-of-truth"],
+      items: [
+        "architecture/graph-schema",
+        "architecture/itsm-as-source-of-truth",
+      ],
     },
     {
       type: "category",
