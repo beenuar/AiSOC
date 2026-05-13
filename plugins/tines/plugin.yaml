@@ -1,0 +1,28 @@
+id: tines
+name: Tines (Audit + Cases)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Tines automation platform connector. Pulls story / agent / credential audit
+  events plus case lifecycle events via the Tines REST API. Requires a
+  Personal Access Token with at least read-only scope on the target tenant.
+author: AiSOC Core Team
+tags: [saas, soar, automation, audit, tines]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/tines.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [base_url, api_token]
+  properties:
+    base_url:
+      type: string
+      description: "Tines tenant URL including scheme (e.g. https://acme.tines.com)"
+    api_token:
+      type: string
+      description: "Personal Access Token (read-only is sufficient)"
+      secret: true
+    team_id:
+      type: string
+      description: "Optional team filter — scope ingestion to a single Team ID"
