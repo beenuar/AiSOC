@@ -68,7 +68,7 @@
 
 ### Track 7 — Narrative + IDE-driven SOC
 - [~] T7.1 Cursor extension (P0, M) — scaffold landed at `services/mcp/cursor-extension/`; marketplace publish deferred
-- [ ] T7.2 L0–L4 white paper (P1, S)
+- [x] T7.2 L0–L4 white paper (P1, S)
 - [ ] T7.3 Three anchor blog posts (P1, S) → T5.1, T7.1
 
 ---
@@ -104,6 +104,13 @@ These independent tasks fire concurrently as background subagents:
 ## Changelog
 
 - 2026-05-13 — Branch created, progress tracker initialised, wave-1 subagents dispatched.
+- 2026-05-13 — T7.2 shipped: L0–L4 automation maturity white paper. Canonical
+  docs concept page at `apps/docs/docs/concepts/automation-maturity.md`,
+  full-length white paper (~4,400 words) at
+  `apps/web/content/papers/l0-l4-automation-maturity.md`, rendered PDF at
+  `apps/web/public/papers/l0-l4-automation-maturity.pdf`, render tool at
+  `scripts/render_white_paper.py` (WeasyPrint + python-markdown). Sidebar
+  wired and `concepts/capabilities.md` cross-linked.
 - 2026-05-13 — T5.1 + T5.2 landed: benchmark.md gains north-star callout, latency/tokens/USD scaffold (T2.4-populates placeholders) + provenance footer; new benchmark-methodology.md (dataset, substrate-vs-wet, rate card, reproduce, limitations); `pnpm eval:public` entry point + `scripts/render_eval_charts.py` renderer; README footer points reproducers at the methodology page.
 - 2026-05-13 — T1.3 shipped: graph schema v1.0 published (`schemas/graph-schema.yaml`, `apps/docs/docs/architecture/graph-schema.md`) with Mermaid ER diagram, 17 labels, 14 relationships, event-edge convention. CI drift gate at `.github/workflows/graph-schema-check.yml` runs `scripts/export_graph_schema.py --check` on PRs touching the schema or `services/ingest/internal/graph/**`.
 - 2026-05-13 — T7.1 IDE extension scaffold landed at `services/mcp/cursor-extension/` (4 MCP-backed commands, typed JSON-RPC client, webview renderer, 19 passing smoke tests; marketplace publish deferred to follow-up).

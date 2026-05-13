@@ -87,7 +87,7 @@ hypothesis-driven hunts.
 |---|---|---|
 | **Risk-Based Alerting (RBA)** | `services/fusion/app/services/entity_risk.py` | Alerts contribute time-decayed risk points to entities (user, host, src_ip, domain). Points decay exponentially with a configurable half-life. When an entity's score crosses `rba_promotion_threshold`, AiSOC promotes it to an incident with contributing alerts attached. The entity-centric queue surfaces the top-N highest-risk entities. CI-gated at ≥ 50:1 alert-to-incident ratio. |
 | **ChatOps user verification** | `services/actions/app/executors/chatops.py` | Sends Slack/Teams interactive prompts with three HMAC-signed callback choices (acknowledge / deny / escalate). Tokens carry action, case, tenant, user reference, and expiry. Timeout auto-escalates. |
-| **L0–L4 remediation maturity tiers** | `/api/v1/remediation` | Each tier unlocks progressively more autonomous remediation. `evaluate_gate()` checks tier, blast-radius, and per-action whitelist before allowing auto-execution. Full gate audit log. |
+| **L0–L4 remediation maturity tiers** | `/api/v1/remediation` | Each tier unlocks progressively more autonomous remediation. `evaluate_gate()` checks tier, blast-radius, and per-action whitelist before allowing auto-execution. Full gate audit log. See the [Automation Maturity concept page](./automation-maturity.md) and the [L0–L4 white paper](https://tryaisoc.com/papers/l0-l4-automation-maturity.pdf) for the full model. |
 
 ---
 
