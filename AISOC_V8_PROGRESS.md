@@ -8,6 +8,25 @@
 **Started**: 2026-05-13
 **Coordinator**: parent agent (this conversation)
 **Mode**: 7-track parallel team, kicked off via background subagents
+**Author**: Prince Sinha · [@prince30121](https://github.com/prince30121) · Senior Director, Innovations at Cyble
+
+### Git remote model
+
+- `origin` → `https://github.com/prince30121/AiSOC.git` (fork — push target)
+- `upstream` → `https://github.com/beenuar/AiSOC.git` (canonical — PR target)
+
+Work lands on the fork; the integration PR is raised against `upstream/main`.
+
+PR compare URL:
+`https://github.com/beenuar/AiSOC/compare/main...prince30121:AiSOC:v8.0/parallel-team-kickoff?expand=1`
+
+### Commit signing
+
+- Local repo only (workspace rule: no global config touched)
+- SSH-based signing via `~/.ssh/id_rsa.pub` (`commit.gpgsign = true`, `tag.gpgsign = true`)
+- Allowed signers at `.git/allowed_signers` (untracked — local only)
+- All wave-1 commits re-signed via `git rebase --exec 'git commit --amend --no-edit --reset-author -S'` against `upstream/main`
+- New commits also carry `Signed-off-by: Prince Sinha <prince.sinha@cyble.com>` (DCO trailer)
 
 ---
 
@@ -64,7 +83,7 @@
 - [ ] T6.1 app.aisoc.dev managed waitlist (P0, L) → T1.1, T2.2, T3.2, T3.3
 - [x] T6.2 Reference-customer page template (P0, S)
 - [x] T6.3 Sovereign + air-gap landing page (P1, S)
-- [ ] T6.4 Demo seeder + screencast polish (P1, S)
+- [x] T6.4 Demo seeder + screencast polish (P1, S)
 
 ### Track 7 — Narrative + IDE-driven SOC
 - [~] T7.1 Cursor extension (P0, M) — scaffold landed at `services/mcp/cursor-extension/`; marketplace publish deferred
@@ -94,15 +113,27 @@ These independent tasks fire concurrently as background subagents:
 ## Coordination notes
 
 - **Branch model**: every subagent commits to `v8.0/parallel-team-kickoff`. Conflicts resolved by the coordinator at merge time.
+- **Push target**: `origin` (fork at `prince30121/AiSOC`).
+- **PR target**: `upstream/main` (`beenuar/AiSOC:main`).
 - **No secrets**: no API keys, tokens, or credentials committed (workspace rule).
 - **No competitor names** in code/docs/comments (workspace rule).
 - **No plan-file edits**: the plan in `plans/` is the source of truth; this file is the progress mirror.
 - **CI gate**: each wave-1 finish must keep `pnpm lint` and `python -m pytest services/agents/tests/` green.
+- **DCO**: all commits sign-off with `Signed-off-by: Prince Sinha <prince.sinha@cyble.com>` and SSH-sign via `id_rsa`.
+
+## Wave-1 summary
+
+- **29 commits** on `v8.0/parallel-team-kickoff` since `upstream/main`
+- **12 of 12** subagents finished (10 `[x]` shipped, 2 `[~]` scaffold-landed: T1.1 graph writer foundation, T7.1 IDE extension scaffold)
+- **0 secrets** committed (workspace rule)
+- **0 competitor names** introduced (workspace rule)
+- **Foundation laid for wave-2**: T1.1 unblocks T1.2 / T1.4 / T2.1 / T3.2 / T3.3 / T6.1; T2.4 telemetry unblocks T5.4 / T5.5; T3.4 `/hunt` unblocks T3.7 NL→playbook
 
 ---
 
 ## Changelog
 
+- 2026-05-13 — Wave-1 integration: 29 commits re-signed and re-authored as `Prince Sinha <prince.sinha@cyble.com>` via `git rebase --exec '... --reset-author -S'` against `upstream/main`; SSH commit signing configured locally with `~/.ssh/id_rsa.pub`; `Signed-off-by` DCO trailer applied to new commits. Branch ready to push to `origin` (fork) and PR against `upstream/main`.
 - 2026-05-13 — T1.1 ingest-side graph writer scaffold landed (status `[~]`). New package `services/ingest/internal/graph/` with `schema.go` (versioned v1.0 — 17 node labels + 14 relationships matching `schemas/graph-schema.yaml`), `writer.go` (Neo4j Bolt driver, batched UNWIND upserts keyed on `(label, natural_key)` + props_hash, bounded queue with drop-and-metric so failures never block fusion, root-context cancellation for prompt shutdown), and `extractor.go` (real extractors for `aws_security_hub` / `github_audit` / `okta_system_log` / `kubernetes_audit` plus a generic fallback that pulls actor + endpoint nodes from any OCSF event so the other 10 source types still produce a non-empty projection). `services/ingest/internal/handler/handler.go` fan-outs into the writer concurrently with the fusion publish (graph failure never blocks). New `PublishGraphUpdate` on the Kafka publisher emits `{entity_id, change_type, ts, label, rel_type, schema_version}` envelopes to a new `security.graph_updates` topic for T1.4. New env config: `AISOC_GRAPH_ENABLED` (default off), `AISOC_NEO4J_URI` / `AISOC_NEO4J_USER` / `AISOC_NEO4J_PASSWORD` (env-only, never committed), `AISOC_GRAPH_BATCH_SIZE`, `AISOC_GRAPH_FLUSH_INTERVAL_MS`, `AISOC_GRAPH_QUEUE_SIZE`, `AISOC_GRAPH_UPDATES_TOPIC`. 16 Go unit tests at `services/ingest/internal/graph/{writer,extractor}_test.go` green in 1.3s — exercise UNWIND batching, idempotency on natural_key, partial-failure surfacing, queue-full drop, the never-blocks-on-failure contract (blocking fake driver hangs but `WriteEvent` returns immediately), and per-extractor entity/edge shapes. Python integration test at `services/agents/tests/test_graph_freshness.py` (`@pytest.mark.integration`) probes p95 < 2s graph freshness end-to-end, skips cleanly when Kafka or Neo4j aren't available. New `integration` marker registered in `services/agents/pyproject.toml`. `services/ingest/go.mod` adds `github.com/neo4j/neo4j-go-driver/v5 v5.27.0`. T1.2 (config snapshots) and the 360-event synthetic corpus expansion are explicitly deferred — TODO comments call out the connector list and the corpus stub.
 - 2026-05-13 — T2.4 shipped: per-investigation token / USD / latency telemetry now lives in `eval_report.json -> per_investigation`. New stdlib-only module `scripts/eval_telemetry.py` (deterministic 4-chars/token estimator, illustrative 2025-era public rate card mirroring `services/agents/app/core/cost_telemetry.py`, mean/median/p50/p95/p99 across all 200 incidents and per-template). `scripts/run_evals.py` gains `--telemetry-only` / `--telemetry-model` / `--no-telemetry-records` flags so the substrate-walk numbers can run without the agent dependency stack. `scripts/render_eval_charts.py` extended with a hand-rolled SVG emitter (zero new deps) that writes four charts into `apps/docs/docs/benchmark-charts/`: `latency-p50-p95-p99.svg`, `tokens-distribution.svg`, `usd-distribution.svg`, `latency-by-template.svg`. `apps/docs/docs/benchmark.md` gains a clearly-labeled "Deterministic-substrate budget projection (T2.4)" section with the four SVGs inline plus a substrate budget table; the existing wet-eval tables stay as placeholders per workspace rule. Wet eval lives in T5.5; substrate budgets are an upper-bound CI gate, never quoted as live agent performance. New unit tests at `services/agents/tests/test_eval_telemetry.py` (18 cases: rate-card maths, token estimator, aggregate stats, severity scaling, SVG renderer round-trip including the no-records fallback) — all green.
 - 2026-05-13 — Branch created, progress tracker initialised, wave-1 subagents dispatched.
