@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.3.0] — 2026-05-14
+
+### Founder-flow series — codebase aligned to the screen-recording demo (PR1–PR7)
+
+The recorded "fresh-clone to first alert" demo now runs verbatim on `main`.
+Seven dependency-ordered PRs landed the missing surface area the script
+walked through, plus the docs path that mirrors it.
+
+- **PR1 — `docker-compose.dev.yml`** (`docker-compose.dev.yml`): new alias
+  file that `include`s `docker-compose.yml` via the Compose Spec, so the
+  `docker compose -f docker-compose.dev.yml up -d` step in the demo no
+  longer 404s on a fresh clone.
+- **PR2 — `.env.example` cleanup** (`.env.example`, `docker-compose.yml`,
+  `services/api/app/core/config.py`): standalone `POSTGRES_PASSWORD`,
+  pre-filled `AISOC_CREDENTIAL_KEY` (Fernet), explicit required-vars
+  header. `DATABASE_URL` and the Postgres service now share the same
+  default secret so first-run no longer hits a password mismatch.
+- **PR3 — `scripts/run_evals.py` CLI contract** (`scripts/run_evals.py`,
+  `scripts/tests/test_run_evals_cli.py`): real `--suite` flag with
+  per-suite runners, `PASS/FAIL` banners, and a graceful `ImportError`
+  hint when the eval substrate isn't installed. The video step
+  `python scripts/run_evals.py --suite all` now does what the voice-over
+  claims.
+- **PR4 — `aisoc serve` / `aisoc db upgrade` / `aisoc mcp serve` /
+  `aisoc mcp install`** (`packages/aisoc-cli/src/aisoc_cli/main.py`,
+  `packages/aisoc-cli/tests/test_ops_commands.py`): four new operator
+  subcommands that wrap `docker compose`, the SQL migration runner, and
+  the MCP Node entrypoint. `aisoc mcp install` writes the right config
+  block for `cursor`, `claude`, or `continue`. 12 CLI surface tests
+  cover argv construction, exit-code propagation, missing-Docker handling,
+  local-`dist` vs. `npx @aisoc/mcp` fallback, and host-choice validation.
+- **PR5 — `aisoc submit` + lateral-movement fixture**
+  (`packages/aisoc-cli/src/aisoc_cli/main.py`,
+  `packages/aisoc-cli/tests/test_submit_command.py`,
+  `examples/alerts/lateral-movement.json`): POSTs a JSON fixture to the
+  ingest service's `/v1/ingest/batch` with the `X-Tenant-ID` header that
+  `services/ingest/internal/handler/handler.go` requires. Fixture-level
+  `connector_id` / `connector_type` / `source_format` overrides are
+  honored; CLI flags + env vars (`AISOC_INGEST_URL`, `AISOC_TENANT_ID`)
+  override the fixture. The shipped fixture is an Okta System Log
+  impossible-travel scenario (NYC → St. Petersburg, 8 minutes apart) that
+  routes through the `okta_system_log` profile (OCSF class_uid 3002).
+  14 CLI tests use `httpx.MockTransport` for the full request/response
+  matrix including 400/500, transport errors, and malformed JSON.
+- **PR6 — quickstart Path C** (`apps/docs/docs/quickstart.md`): the
+  founder-style CLI walkthrough the demo follows, with a single-screen
+  cheat sheet. Path A (`pnpm aisoc:demo`) and Path B (raw `docker compose`)
+  are unchanged.
+- **PR7 — version bump** (this commit): `VERSION` file at repo root +
+  `apps/web/package.json` bumped 7.2.0 → 7.3.0. CHANGELOG section
+  promoted from `[Unreleased]` to `[7.3.0]`.
+
 ### Alerts console — Investigation Rail & correlation narrative (v1.5 W6 / PR-4)
 
 The `/alerts` queue is now a two-pane workbench: the existing queue on the left and an **Investigation Rail** on the right. Selecting a row hydrates narrative, related entities (with pivot links), a six-event mini-timeline, and structured recommended actions — no drawer hop for first-pass triage.
