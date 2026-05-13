@@ -30,7 +30,12 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Console",
-      items: ["console/funnel-kpis", "console/queue", "console/rule-tuning"],
+      items: [
+        "console/funnel-kpis",
+        "console/queue",
+        "console/rule-tuning",
+        "console/investigation-rail",
+      ],
     },
     {
       type: "category",

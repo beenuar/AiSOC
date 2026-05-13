@@ -138,6 +138,16 @@ jobs:
       # `python scripts/sync_vendored_nl_query.py` locally to fix.
       - name: Verify vendored nl_query is in sync
         run: python scripts/sync_vendored_nl_query.py --check
+      # Same story for the correlation-narrative builder. It lives canonically
+      # in `services/fusion/app/services/narrative.py` (called at fusion time
+      # to populate `FusedAlert.narrative`) and is mirrored into
+      # `services/api/app/_vendor/narrative.py` so the API can lazily compute
+      # the narrative on first read of an alert whose `narrative` column is
+      # still NULL — without depending on `services/fusion` being inside the
+      # Docker build context. Re-run `python scripts/sync_vendored_narrative.py`
+      # locally if this check fails.
+      - name: Verify vendored narrative builder is in sync
+        run: python scripts/sync_vendored_narrative.py --check
 
   python-test:
     name: Python — Tests

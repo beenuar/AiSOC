@@ -1,5 +1,6 @@
 """Alert management endpoints."""
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -18,6 +19,16 @@ from app.services.alert_queue import (
     build_queue,
     claim_alert,
 )
+from app.services.alert_rail import (
+    MiniTimelineEvent,
+    RecommendedAction,
+    RelatedEntity,
+    build_rail_envelope,
+)
+from app.services.narrative_loader import build_narrative
+from app.services.narrative_projection import project_alert_to_narrative_inputs
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -59,6 +70,31 @@ class AlertResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AlertDetailResponse(AlertResponse):
+    """Alert response enriched with everything the Investigation Rail needs.
+
+    The list endpoint stays on the smaller :class:`AlertResponse` shape
+    to keep paginated payloads light. The detail endpoint promotes to
+    this enriched shape so the rail renders without extra round-trips:
+
+    * ``narrative`` — deterministic correlation prose. Cached on the
+      ``Alert`` row by the fusion service; lazily filled by the
+      endpoint when missing (legacy rows). Always a string by the
+      time it leaves the API.
+    * ``related_entities`` — pivotable entities grouped by
+      principal / network / workflow / tenant.
+    * ``mini_timeline`` — up to ``MAX_TIMELINE_EVENTS`` recent events
+      merged from the case timeline and the audit log.
+    * ``recommended_actions`` — normalised structured actions from
+      the ResponderAgent (or the legacy list-of-strings shape).
+    """
+
+    narrative: str | None = None
+    related_entities: list[RelatedEntity] = []
+    mini_timeline: list[MiniTimelineEvent] = []
+    recommended_actions: list[RecommendedAction] = []
 
 
 class AlertSnoozeRequest(BaseModel):
@@ -233,18 +269,72 @@ async def get_alert_queue(
     )
 
 
-@router.get("/{alert_id}", response_model=AlertResponse)
+@router.get("/{alert_id}", response_model=AlertDetailResponse)
 async def get_alert(
     alert_id: uuid.UUID,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
     db: DBSession,
-) -> AlertResponse:
-    """Get a single alert by ID."""
-    result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
+) -> AlertDetailResponse:
+    """Get a single alert by ID, enriched with Investigation Rail data.
+
+    The endpoint returns the standard alert fields plus everything the
+    rail needs to render in one shot:
+
+    * a deterministic ``narrative`` (lazily filled and persisted if the
+      row was created before fusion started emitting it),
+    * ``related_entities`` grouped for pivot,
+    * a compact ``mini_timeline``,
+    * normalised ``recommended_actions``.
+
+    The lazy-fill is best-effort: if the narrative builder ever raises
+    we log and return the alert with ``narrative=None`` so the page
+    keeps rendering. The frontend already handles the null case.
+    """
+    result = await db.execute(
+        select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+    )
     alert = result.scalar_one_or_none()
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    return AlertResponse.model_validate(alert)
+
+    # ── Lazy-fill narrative for legacy rows ─────────────────────────────
+    # New alerts get a narrative at fusion time. Older rows predate that
+    # column being populated; the first detail-view read materialises
+    # and persists one so we only pay the cost once per row.
+    if not alert.narrative:
+        try:
+            inputs = project_alert_to_narrative_inputs(alert)
+            narrative_text = build_narrative(inputs)
+            if narrative_text:
+                alert.narrative = narrative_text
+                await db.execute(
+                    update(Alert)
+                    .where(Alert.id == alert.id)
+                    .values(narrative=narrative_text, updated_at=datetime.now(UTC))
+                )
+                await db.commit()
+        except Exception:  # noqa: BLE001 — never let narrative kill a detail view
+            logger.warning(
+                "narrative lazy-fill failed for alert %s; serving without narrative",
+                alert.id,
+                exc_info=True,
+            )
+
+    envelope = await build_rail_envelope(db, alert)
+
+    # ``model_validate`` against the parent class to inherit field
+    # coercion, then merge the rail fields. We don't add the rail data
+    # to the ORM model — keeping the envelope construction in the view
+    # layer means the rail can evolve without migrations.
+    payload = AlertDetailResponse.model_validate(alert)
+    return payload.model_copy(
+        update={
+            "narrative": alert.narrative,
+            "related_entities": envelope.related_entities,
+            "mini_timeline": envelope.mini_timeline,
+            "recommended_actions": envelope.recommended_actions,
+        }
+    )
 
 
 @router.patch("/{alert_id}", response_model=AlertResponse)
