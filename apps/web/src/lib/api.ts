@@ -1432,6 +1432,64 @@ export interface DashboardMetrics {
   threatsBySource: Array<{ source: string; count: number }>;
 }
 
+/**
+ * Funnel KPI metrics (PR-3 / W1).
+ *
+ * Mirrors ``FunnelMetrics`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/metrics.py``. Drives the
+ * ``FunnelKpiBar`` and ``EfficiencyReport`` widgets on the dashboard.
+ */
+export interface FunnelMetrics {
+  period: '1h' | '24h' | '7d' | '30d';
+  events_of_interest: number;
+  correlation_instances: number;
+  alerts_generated: number;
+  /** 0..1 ratio: 1 − (FP / total dispositioned alerts). */
+  signal_to_noise: number;
+  /** Mean time-to-detect in seconds (Alert.created_at → first_seen_at). */
+  mttd_seconds: number;
+  /** Active alerts owned by analysts (`status in new/triaging/in_progress`). */
+  analyst_queue_depth: number;
+  /** Alerts produced per correlation instance, clamped to [0, 1]. */
+  correlation_efficiency: number;
+  /** Alerts produced per event-of-interest, clamped to [0, 1]. */
+  alert_yield: number;
+  mitre_coverage: { covered: number; total: number; ratio: number };
+  /** Period-over-period deltas (fraction, e.g. 0.05 = +5%). */
+  deltas: {
+    events_of_interest: number;
+    correlation_instances: number;
+    alerts_generated: number;
+    signal_to_noise: number;
+    mttd_seconds: number;
+    analyst_queue_depth: number;
+  };
+  /** ISO-8601 server timestamp. */
+  generated_at: string;
+}
+
+/**
+ * Pipeline health (PR-3 / W9).
+ *
+ * Mirrors ``PipelineHealth`` Pydantic model. Drives the
+ * ``PipelineHealth`` strip on /dashboard.
+ */
+export interface PipelineStage {
+  stage: 'ingest' | 'normalize' | 'fuse' | 'correlate' | 'alert';
+  backlog: number;
+  p95_latency_ms: number;
+  error_rate: number;
+  status: 'unknown' | 'green' | 'yellow' | 'red';
+}
+
+export interface PipelineHealth {
+  /** Worst stage status, surfaced at the top of the pipeline rail. */
+  overall_status: 'unknown' | 'green' | 'yellow' | 'red';
+  stages: PipelineStage[];
+  /** ISO-8601 server timestamp. */
+  generated_at: string;
+}
+
 export const metricsApi = {
   getDashboard: () =>
     request<DashboardMetrics>('/api/v1/metrics/dashboard'),
@@ -1443,6 +1501,14 @@ export const metricsApi = {
         params: { period },
       },
     ),
+
+  /** Funnel KPIs (events → correlations → alerts) with deltas. */
+  getFunnel: (period: '1h' | '24h' | '7d' | '30d' = '24h') =>
+    request<FunnelMetrics>('/api/v1/metrics/funnel', { params: { period } }),
+
+  /** Per-stage pipeline health (ingest → normalize → fuse → correlate → alert). */
+  getPipelineHealth: () =>
+    request<PipelineHealth>('/api/v1/health/pipeline'),
 };
 
 // ─── Connectors ──────────────────────────────────────────────────────────────

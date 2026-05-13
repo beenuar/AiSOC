@@ -23,6 +23,9 @@ import { format } from 'date-fns';
 import { LiveFeedPanel } from './LiveFeedPanel';
 import { SOCMetricsDashboard } from './SOCMetricsDashboard';
 import { DashboardWelcome } from './DashboardWelcome';
+import { FunnelKpiBar } from './FunnelKpiBar';
+import { EfficiencyReport } from './EfficiencyReport';
+import { PipelineHealth } from './PipelineHealth';
 
 const RechartsArea = dynamic(
   () => import('recharts').then((m) => {
@@ -224,6 +227,8 @@ const WIDGET_ORDER_KEY = 'aisoc:dashboard:widget-order';
 
 type WidgetId =
   | 'welcome'
+  | 'funnel-kpis'
+  | 'efficiency-and-pipeline'
   | 'top-metrics'
   | 'charts-row'
   | 'bottom-row'
@@ -231,6 +236,8 @@ type WidgetId =
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   'welcome',
+  'funnel-kpis',
+  'efficiency-and-pipeline',
   'top-metrics',
   'charts-row',
   'bottom-row',
@@ -400,6 +407,19 @@ export function DashboardView() {
   /** Map each widget ID to its rendered section. */
   const widgetContent: Record<WidgetId, ReactNode> = {
     welcome: <Suspense fallback={null}><DashboardWelcome /></Suspense>,
+
+    // PR-3 / W1: Six-tile funnel KPI strip (events → correlations → alerts +
+    // signal/noise, MTTD, analyst queue) backed by /api/v1/metrics/funnel.
+    'funnel-kpis': <FunnelKpiBar period="24h" />,
+
+    // PR-3 / W1+W9: Efficiency ratios (correlation efficiency, alert yield,
+    // MITRE coverage) alongside per-stage pipeline health.
+    'efficiency-and-pipeline': (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <EfficiencyReport period="24h" />
+        <PipelineHealth />
+      </div>
+    ),
 
     'top-metrics': (
       <div>
