@@ -78,13 +78,13 @@ The original Wiz severity is preserved verbatim under
 
 ## Live actions
 
-The Wiz connector is **read-only** in v7.1.0 — it pulls findings but
+The Wiz connector is **read-only** as of v7.3.1 — it pulls findings but
 does not push back into Wiz. Containment for cloud findings flows through
 the [AWS Security Hub](/docs/connectors/aws-security-hub) and
 [Cloudflare](/docs/connectors/cloudflare) connectors which expose
 `BLOCK_IP` / `ALLOW_IP` capabilities. A future `RESOLVE_ISSUE` capability
 that calls back into the Wiz GraphQL `updateIssue` mutation is on the
-v7.2 roadmap.
+roadmap.
 
 ## Troubleshooting
 
