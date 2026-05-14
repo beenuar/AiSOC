@@ -17,6 +17,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from app.context import ContextBundle
 from app.models.state import AgentStatus, InvestigationState
 
 logger = structlog.get_logger()
@@ -162,14 +163,30 @@ def _parse_response(text: str) -> dict[str, Any]:
     }
 
 
-async def run_identity(state: InvestigationState) -> InvestigationState:
-    """Analyse an identity/authentication alert for compromise indicators."""
+async def run_identity(
+    state: InvestigationState,
+    bundle: ContextBundle | None = None,
+) -> InvestigationState:
+    """Analyse an identity/authentication alert for compromise indicators.
+
+    Accepts an optional :class:`ContextBundle` (T2.1) carrying pre-fetched
+    entity neighbourhood, historical similar-case verdicts, UEBA deviation
+    (peer-baseline cosine distance), and threat-intel matches. When supplied
+    the bundle's safe summary fields are appended to the LLM prompt; the
+    agent's own enrichment paths become *augmentations*, not primary
+    discovery.
+
+    Backward-compatible: when ``bundle`` is ``None`` the agent falls back
+    to the prior bare-alert reasoning path.
+    """
     logger.info("Identity agent starting", incident_id=str(state.incident_id))
 
     state.status = AgentStatus.RUNNING
     state.iteration_count += 1
 
-    context = _build_identity_context(state)
+    base_context = _build_identity_context(state)
+    bundle_lines = bundle.prompt_context_lines() if bundle is not None else []
+    prompt_context = base_context + (("\n" + "\n".join(bundle_lines)) if bundle_lines else "")
 
     model_name = os.getenv("AISOC_LLM_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model_name, temperature=0.0, max_tokens=768)
@@ -179,7 +196,7 @@ async def run_identity(state: InvestigationState) -> InvestigationState:
         response = await llm.ainvoke(
             [
                 SystemMessage(content=_SYSTEM_PROMPT),
-                HumanMessage(content=context),
+                HumanMessage(content=prompt_context),
             ]
         )
         result = _parse_response(response.content)
