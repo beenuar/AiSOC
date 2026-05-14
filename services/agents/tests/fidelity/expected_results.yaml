@@ -1,0 +1,68 @@
+# Fidelity benchmark — expected substrate-mode results.
+#
+# These thresholds gate the substrate harness in CI. They are NOT a
+# claim about live agent (wet) accuracy on these datasets — see
+# apps/docs/docs/benchmark-fidelity.md for the substrate-vs-wet
+# distinction. Wet numbers are produced manually and copied into
+# apps/docs/docs/benchmark.md.
+#
+# Methodology:
+#  - Substrate mode = deterministic rule-based classifier from
+#    services/agents/tests/fidelity/runner.py. Same code path runs
+#    against the committed micro fixture in CI and against the full
+#    dataset locally (when downloaded via scripts/datasets/).
+#  - Macro F1 ignores label families with zero support so a single
+#    unrepresented family cannot dominate scoring.
+#  - Background flows in CTU-13 are excluded (per the dataset
+#    authors' protocol) before any score is computed.
+#
+# When a substrate threshold regresses, that means the loader (or
+# classifier rule) has been changed in a way that breaks fidelity on
+# a published, citable corpus. Investigate before merging.
+
+micro_fixture:
+  # services/agents/tests/eval_data/cicids_micro.csv (100 hand-picked
+  # synthetic flows, balanced across CICIDS-2017 label families).
+  dataset: cicids
+  mode: substrate
+  rows_scored_min: 100
+  accuracy_min: 0.85
+  macro_f1_min: 0.80
+  per_family_min:
+    benign: { recall: 0.85 }
+    port_scan: { recall: 0.85 }
+    ddos: { recall: 0.80 }
+    dos: { recall: 0.80 }
+    bot: { recall: 0.70 }
+    brute_force: { recall: 0.70 }
+    web_attack: { recall: 0.50 }
+
+cicids_full:
+  # Local-only: requires scripts/datasets/download_cicids.py to have
+  # populated datasets/cicids2017/. Numbers below are the substrate
+  # floor we publish in apps/docs/docs/benchmark.md and re-run before
+  # any release. Wet numbers, when available, are tracked separately
+  # in benchmark.md and never overwrite these substrate floors.
+  dataset: cicids
+  mode: substrate
+  notes: |
+    Floors observed locally on the eight CICIDS-2017 daily CSVs at
+    commit time. The CI harness does not run this — only the micro
+    fixture above runs on every PR.
+  rows_scored_min: 1000
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+ctu13_full:
+  # Local-only: requires scripts/datasets/download_ctu13.py to have
+  # populated datasets/ctu13/. Background flows excluded per the CTU
+  # protocol. Substrate-only.
+  dataset: ctu13
+  mode: substrate
+  notes: |
+    Substrate floors aggregated across all 13 binetflow scenarios
+    after dropping Background. Numbers are illustrative until the
+    next manual run; see benchmark-fidelity.md for the procedure.
+  rows_scored_min: 1000
+  accuracy_min: 0.55
+  macro_f1_min: 0.45
