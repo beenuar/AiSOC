@@ -11,8 +11,7 @@ import os
 import tempfile
 
 import pytest
-
-from app.services.rule_engine import _SigmaConditionParser, _eval_condition
+from app.services.rule_engine import _eval_condition, _SigmaConditionParser
 
 
 class TestSigmaConditionGrammar:
