@@ -117,6 +117,34 @@ services/ingest  POST /v1/ingest/batch  X-Tenant-ID: <uuid>
    Kafka spine ──▶ Fusion · UEBA · Detections (existing pipeline)
 ```
 
+### Founder-flow direct-write submit (v7.3.1+)
+
+For the fresh-clone demo and any flow where Kafka / Fusion / `services/ingest`
+is not required for the first alert, `services/api` exposes a dedicated
+direct-write endpoint:
+
+```
+POST /api/v1/alerts/submit   (X-Tenant-ID: <uuid>)
+    │
+    │ payload: { "events": [<OCSF event>, ...], "rule_id": "demo.lateral-movement" }
+    ▼
+services/api
+    │ 1. parse OCSF events (no Kafka, no services/ingest)
+    │ 2. _synthesise_alert_from_events()  ── derives entities, MITRE tags, severity
+    │ 3. INSERT INTO alerts(...)          ── single row, idempotent
+    │ 4. return { id, status: "new" }
+    ▼
+PostgreSQL  ──▶  /alerts console (lights up immediately)
+```
+
+This is the path used by the `aisoc submit` CLI command and the
+[`examples/alerts/lateral-movement.json`](https://github.com/beenuar/AiSOC/tree/main/examples/alerts/lateral-movement.json)
+canonical payload. The classic Kafka-fed pipeline above is still the
+**production** path; the direct-write endpoint exists so a fresh clone of
+the repo, an `aisoc serve` process, and a single `aisoc submit` call are
+enough to see an alert on `/alerts` — no broker, no schedulers, no
+connectors required.
+
 The `services/api` service holds the **encrypt** authority for the vault
 and is the only writer to `connectors.auth_config_encrypted`.
 `services/connectors` ships a vendored read-path `decrypt_dict()` that
@@ -230,6 +258,20 @@ The agent-side writer lives in
 [`services/agents/app/investigator/ledger.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/ledger.py),
 and the UI consumer is
 [`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx).
+
+### Prompt sanitization layer
+
+Investigator agents (`recon`, `forensic`, `responder`, `report_writer`) consume
+attacker-influenced strings — enrichment payloads, dark-web excerpts, vendor
+descriptions, raw alert fields — and hand them to an LLM. Every one of those
+agents now routes its context through
+[`services/agents/app/investigator/prompt_sanitizer.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/prompt_sanitizer.py),
+which strips known role / chat delimiters, redacts common jailbreak phrasings,
+caps field length, bounds list size and recursion depth, and wraps the result
+in explicit `<UNTRUSTED_DATA>` tags. The agents still validate the LLM's
+response against a Pydantic schema before persisting it. See the
+[LLM prompt safety section in the security guide](./operations/security#llm-prompt-safety)
+for the threat model and defence-in-depth layers.
 
 ## Investigation Rail and correlation narrative
 

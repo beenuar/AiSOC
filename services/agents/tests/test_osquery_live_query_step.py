@@ -264,3 +264,190 @@ class TestHostFallback:
 
         call_args = lq.call_args
         assert "context-host" in call_args[0][0]
+
+
+# ---------------------------------------------------------------------------
+# H-7 / Batch 10 — runtime clamp tests for params.timeout_seconds.
+#
+# These exercise the *runtime* defence (engine.clamp_timeout) rather than the
+# Pydantic field cap, because params is an untyped dict and a malicious or
+# malformed playbook can bypass the Pydantic validator entirely. See
+# ``test_playbook_models_bounds.py::TestParamsAreNotValidated`` for the
+# matching failure case at the model layer.
+# ---------------------------------------------------------------------------
+
+
+class TestRuntimeTimeoutClamp:
+    @pytest.mark.asyncio
+    async def test_pathological_timeout_is_clamped_to_default_max(self) -> None:
+        """An attacker passes ``timeout_seconds: 86400`` (1 day).
+
+        Without the runtime clamp, the connector thread would pin for 24h.
+        With the clamp, the value collapses to DEFAULT_MAX_TIMEOUT_SECONDS.
+        """
+        from app.playbook.bounds import DEFAULT_MAX_TIMEOUT_SECONDS
+
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                "timeout_seconds": 86_400,  # pathological
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        # Backend client must be called with the clamped value, not 86400.
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]  # 4th positional arg
+        assert forwarded_timeout == DEFAULT_MAX_TIMEOUT_SECONDS
+
+    @pytest.mark.asyncio
+    async def test_negative_timeout_is_clamped_to_min(self) -> None:
+        from app.playbook.bounds import MIN_TIMEOUT_SECONDS
+
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                "timeout_seconds": -5,
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]
+        assert forwarded_timeout == MIN_TIMEOUT_SECONDS
+
+    @pytest.mark.asyncio
+    async def test_missing_timeout_uses_handler_default(self) -> None:
+        """When params omits timeout_seconds, the handler default (60) wins."""
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                # No timeout_seconds in params at all.
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]
+        assert forwarded_timeout == 60
+
+    @pytest.mark.asyncio
+    async def test_in_range_timeout_passes_through(self) -> None:
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                "timeout_seconds": 120,
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]
+        assert forwarded_timeout == 120
+
+    @pytest.mark.asyncio
+    async def test_string_timeout_is_parsed_not_dropped(self) -> None:
+        """YAML may surface numeric strings; the clamp must parse them."""
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                "timeout_seconds": "90",  # string from YAML
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]
+        assert forwarded_timeout == 90
+
+    @pytest.mark.asyncio
+    async def test_bool_timeout_does_not_become_one(self) -> None:
+        """``timeout_seconds: true`` MUST NOT coerce to 1 — that would silently
+        cause every osquery to time out immediately, which is a sneaky DoS.
+        """
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                "timeout_seconds": True,  # malformed
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]
+        # Falls back to the handler default, NOT to int(True) == 1.
+        assert forwarded_timeout == 60
+
+    @pytest.mark.asyncio
+    async def test_param_cap_is_runtime_ceiling_not_field_cap(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The runtime ceiling is the *param* cap (15 min), not the looser
+        Pydantic field cap (1h). This pins the layered defence: approval
+        steps may declare timeout=3600 on the typed field, but params-driven
+        values cannot exceed the runtime cap.
+        """
+        from app.playbook.bounds import ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
+
+        # Operator typo: setting AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS=100000 must
+        # NOT silently uncap the runtime guard.
+        monkeypatch.setenv("AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS", "100000")
+
+        lq = AsyncMock(return_value={"results": {}, "partial": False})
+        _inject_stubs(osctrl_live_query=lq)
+
+        step = _step(
+            {
+                "backend": "osctrl",
+                "template": "running_processes",
+                "target_hosts": ["h1"],
+                "base_url": "http://osc",
+                "api_token": "tok",
+                "timeout_seconds": 50_000,  # would exceed the param cap
+            }
+        )
+        await _handle_osquery_live_query(step, _ctx(), MagicMock())
+
+        call_args = lq.call_args
+        forwarded_timeout = call_args[0][3]
+        assert forwarded_timeout == ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS

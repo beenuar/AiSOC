@@ -149,7 +149,11 @@ ghcr.io/beenuar/aisoc-enrichment:<version>
 ghcr.io/beenuar/aisoc-web:<version>
 ```
 
-Each image is signed with Cosign — verify with:
+### Image provenance
+
+Each image is signed with [Cosign](https://docs.sigstore.dev/cosign/overview/)
+using keyless OIDC signatures issued through GitHub Actions. Verify any
+release artifact before deploying it into a sensitive environment:
 
 ```bash
 cosign verify \
@@ -157,6 +161,10 @@ cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/beenuar/aisoc-api:<version>
 ```
+
+The certificate identity is bound to this repository's workflow, so a
+successful verification proves the image was produced by the official
+release pipeline and has not been tampered with in transit.
 
 ## Health checks
 

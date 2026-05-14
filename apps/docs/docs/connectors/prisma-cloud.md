@@ -56,7 +56,7 @@ Prisma Cloud only shows it once.
 2. **API URL** — paste the region-specific value from
    **System → API Endpoints** (e.g. `https://api.prismacloud.io`).
 3. **Access Key ID** and **Secret Key** — paste from step 1.
-4. **Compute API URL** — leave blank. v7.1.0 only consumes the unified
+4. **Compute API URL** — leave blank. AiSOC only consumes the unified
    `/alert` endpoint, which already includes runtime findings collapsed
    in from Compute (Twistlock).
 5. **Test connection** — AiSOC exchanges the access keys for a
@@ -114,7 +114,7 @@ If a module isn't licensed on the tenant, no alerts of that type appear
 
 ## Live actions
 
-The Prisma Cloud connector is **read-only** in v7.1.0. Containment for
+The Prisma Cloud connector is **read-only** as of v7.3.1. Containment for
 cloud findings flows through the
 [AWS Security Hub](/docs/connectors/aws-security-hub),
 [AWS GuardDuty](/docs/connectors/aws-guardduty),

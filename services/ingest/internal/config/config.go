@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/envmode"
 )
 
 // Config holds all ingest service configuration
@@ -98,7 +100,13 @@ func Load() (*Config, error) {
 		K8sAuditMaxBodyBytes: int64(mustGetEnvInt("K8S_AUDIT_MAX_BODY_BYTES", 16*1024*1024)),
 	}
 
-	if cfg.JWTSecret == "" && os.Getenv("ENV") != "development" {
+	// JWT_SECRET is required outside development-class environments. The
+	// previous check exact-matched ``ENV == "development"`` only, so an
+	// operator who set ``ENVIRONMENT=development`` (the alias the Python
+	// API treats as equivalent) without also setting ``ENV`` would crash
+	// here even though every other service treated their stack as dev.
+	// envmode.IsDevRuntime closes that gap.
+	if cfg.JWTSecret == "" && !envmode.IsDevRuntime() {
 		return nil, fmt.Errorf("JWT_SECRET must be set in non-development environments")
 	}
 

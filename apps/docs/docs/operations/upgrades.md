@@ -64,14 +64,16 @@ The supported upgrade path is "stop, pull, migrate, start". Rolling upgrades acr
 
 cd /opt/aisoc                 # your install path
 git fetch --tags
-git checkout v6.1.0           # the target tag
+git checkout v7.3.1           # the target tag
 
 # 3. Pull dependencies.
 pnpm install --frozen-lockfile
 (cd services/api && uv sync)
 
 # 4. Run database migrations.
-(cd services/api && uv run alembic upgrade head)
+#    From v7.3.1 onwards you can use the CLI directly:
+aisoc db upgrade
+#    (Equivalent to: cd services/api && uv run alembic upgrade head)
 
 # 5. Start the API service back up.
 docker compose -f docker-compose.dev.yml up -d api
@@ -79,6 +81,16 @@ docker compose -f docker-compose.dev.yml up -d api
 # 6. Verify health and remove the maintenance gate.
 curl -fsS http://localhost:8000/healthz
 ```
+
+:::tip v7.3.1 migration idempotency
+The v7.3.1 release made the close-to-7.x migrations (`005_compliance.sql`,
+`025_connectors_click_and_connect.sql`, and the new
+`042_alerts_schema_drift_fix.sql`) idempotent. If a previous upgrade left
+your `alerts` table partially migrated, just re-run `aisoc db upgrade` —
+the migration only adds columns that are missing instead of failing on
+already-present ones. See the [CHANGELOG](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md#731)
+for the full column list.
+:::
 
 For Kubernetes deployments, the same flow applies: scale the API deployment to zero, run the migration as a `Job`, then scale back up. The Helm chart in [`infra/helm/`](https://github.com/beenuar/AiSOC/tree/main/infra/helm) exposes this as `helm upgrade --set runMigrations=true`.
 
@@ -98,7 +110,7 @@ If any of those fail, see [Troubleshooting](./troubleshooting) — the upgrade c
 Patch and minor releases are designed to roll back cleanly. The procedure mirrors the upgrade:
 
 ```bash
-git checkout v6.0.0           # the previous tag
+git checkout v7.3.0           # the previous tag
 pnpm install --frozen-lockfile
 (cd services/api && uv sync)
 (cd services/api && uv run alembic downgrade <previous_revision>)
@@ -126,4 +138,4 @@ If your environment requires a longer support window, raise it in [Discussions](
 
 ## Pre-1.0 history
 
-Versions `1.0.0` through `5.x` shipped during the original feature build-out and are documented in the [CHANGELOG](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md). The `6.0.0` release in May 2026 was the first version we consider production-ready; new deployments should start from the latest `6.x`.
+Versions `1.0.0` through `5.x` shipped during the original feature build-out and are documented in the [CHANGELOG](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md). The `6.0.0` release in May 2026 was the first version we consider production-ready; new deployments should start from the latest tagged release (currently `v7.3.1`).
