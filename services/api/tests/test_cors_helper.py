@@ -26,12 +26,11 @@ than relying on integration coverage.
 from __future__ import annotations
 
 import pytest
-
 from app.core.cors import (
-    CORSConfigurationError,
     DEFAULT_ALLOW_HEADERS,
     DEFAULT_ALLOW_METHODS,
     DEFAULT_CORS_ORIGINS,
+    CORSConfigurationError,
     build_cors_kwargs,
     resolve_cors_origins,
 )
@@ -74,9 +73,7 @@ class TestResolveCorsOrigins:
 
         assert resolve_cors_origins() == ["https://new.example.com"]
 
-    def test_legacy_cors_origins_used_when_canonical_unset(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_legacy_cors_origins_used_when_canonical_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("CORS_ORIGINS", "https://legacy.example.com")
 
         assert resolve_cors_origins() == ["https://legacy.example.com"]
@@ -89,9 +86,7 @@ class TestResolveCorsOrigins:
 
         assert resolve_cors_origins() == ["https://legacy.example.com"]
 
-    def test_whitespace_and_blank_entries_are_stripped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_whitespace_and_blank_entries_are_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(
             "AISOC_CORS_ORIGINS",
             "  https://a.example.com , ,https://b.example.com,  ",
@@ -119,9 +114,7 @@ class TestResolveCorsOrigins:
 class TestBuildCorsKwargsSafePaths:
     """The happy-path cases that production deploys should hit."""
 
-    def test_returns_methods_and_headers_compatible_with_credentials(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_methods_and_headers_compatible_with_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_CORS_ORIGINS", "https://app.example.com")
 
         kwargs = build_cors_kwargs(service_name="api", allow_credentials=True)
@@ -135,9 +128,7 @@ class TestBuildCorsKwargsSafePaths:
         assert "*" not in kwargs["allow_methods"]
         assert "*" not in kwargs["allow_headers"]
 
-    def test_no_credentials_uses_wildcard_methods_headers(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_credentials_uses_wildcard_methods_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # For services like /enrich + /ueba we don't carry cookies, so the
         # spec allows "*" — and it keeps the surface forward-compatible.
         monkeypatch.setenv("AISOC_CORS_ORIGINS", "https://app.example.com")
@@ -148,9 +139,7 @@ class TestBuildCorsKwargsSafePaths:
         assert kwargs["allow_methods"] == ["*"]
         assert kwargs["allow_headers"] == ["*"]
 
-    def test_caller_overrides_methods_and_headers(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_caller_overrides_methods_and_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_CORS_ORIGINS", "https://app.example.com")
 
         kwargs = build_cors_kwargs(
@@ -165,9 +154,7 @@ class TestBuildCorsKwargsSafePaths:
         assert kwargs["allow_headers"] == ["Authorization", "X-Tenant-ID"]
         assert kwargs["expose_headers"] == ["X-Request-ID"]
 
-    def test_expose_headers_omitted_when_not_provided(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_expose_headers_omitted_when_not_provided(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_CORS_ORIGINS", "https://app.example.com")
 
         kwargs = build_cors_kwargs(service_name="api", allow_credentials=True)
@@ -229,14 +216,9 @@ class TestBuildCorsKwargsProductionGuard:
         # The whole point of the guard: credentials get silently disabled so
         # the spec-incompatible combination never goes out.
         assert kwargs["allow_credentials"] is False
-        assert any(
-            "wildcard" in record.message.lower() and "api" in record.message
-            for record in caplog.records
-        )
+        assert any("wildcard" in record.message.lower() and "api" in record.message for record in caplog.records)
 
-    def test_wildcard_without_credentials_is_allowed_everywhere(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_wildcard_without_credentials_is_allowed_everywhere(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Public, unauthenticated surfaces (honeytoken pixels, /healthz on
         # public probes) can legitimately ship a wildcard. We must not
         # break those.
@@ -248,9 +230,7 @@ class TestBuildCorsKwargsProductionGuard:
         assert kwargs["allow_origins"] == ["*"]
         assert kwargs["allow_credentials"] is False
 
-    def test_explicit_list_unaffected_by_environment(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_explicit_list_unaffected_by_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_CORS_ORIGINS", "https://app.example.com")
         monkeypatch.setenv("AISOC_ENV", "production")
 

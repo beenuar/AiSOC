@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Iterable
+from collections.abc import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -98,12 +98,7 @@ def _split_origins(raw: str | None) -> list[str]:
 
 def _is_production_environment() -> bool:
     """Return True if any well-known env var indicates a production deploy."""
-    env_value = (
-        os.getenv("AISOC_ENV")
-        or os.getenv("ENVIRONMENT")
-        or os.getenv("APP_ENV")
-        or ""
-    ).strip().lower()
+    env_value = (os.getenv("AISOC_ENV") or os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "").strip().lower()
     return env_value in _PRODUCTION_ENV_VALUES
 
 
