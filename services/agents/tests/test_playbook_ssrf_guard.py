@@ -8,11 +8,9 @@ from collections.abc import Iterable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.playbook.engine import _handle_http, _handle_notify
 from app.playbook.models import PlaybookStep, StepType
 from app.playbook.ssrf_guard import SSRFError, validate_outbound_url
-
 
 # ---------------------------------------------------------------------------
 # Helpers

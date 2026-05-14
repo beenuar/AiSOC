@@ -231,9 +231,7 @@ def validate_outbound_url(url: str, *, allow_private: bool | None = None) -> str
     for ip in addresses:
         blocked_flag, reason = _is_disallowed_address(ip, allow_private=allow_private)
         if blocked_flag:
-            raise SSRFError(
-                f"hostname {host!r} resolves to a blocked address {ip} ({reason})"
-            )
+            raise SSRFError(f"hostname {host!r} resolves to a blocked address {ip} ({reason})")
 
     return url
 
