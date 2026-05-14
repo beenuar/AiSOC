@@ -263,34 +263,58 @@ paths:
       tags:
       - alerts
       summary: Submit Alert
-      description: 'Submit one alert directly from an OCSF event batch.
-
-
-        This is the destination for `aisoc submit <file>` and the local-dev fast
-
-        path documented in the quickstart. We deliberately bypass the Kafka
-
-        detect/correlate/fuse pipeline (which fresh clones don''t run by default)
-
-        so that a hand-crafted fixture lands in the database — and therefore in
-
-        ``GET /api/v1/alerts`` and the web console — within the same second.
-
-
-        Authorisation: requires ``alerts:write``. In development mode the
-
-        auth bypass in :mod:`app.api.v1.deps` resolves to the deterministic
-
-        demo tenant, so the documented ``aisoc submit`` CLI works against a
-
-        fresh clone with no token plumbing.'
+      description: "Submit one alert directly from an OCSF event batch.\n\nThis is\
+        \ the destination for `aisoc submit <file>` and the local-dev fast\npath documented\
+        \ in the quickstart. We deliberately bypass the Kafka\ndetect/correlate/fuse\
+        \ pipeline (which fresh clones don't run by default)\nso that a hand-crafted\
+        \ fixture lands in the database — and therefore in\n``GET /api/v1/alerts``\
+        \ and the web console — within the same second.\n\n**Hardening (Batch 8 /\
+        \ H-5)**:\n\n* **Payload caps** — events are first run through\n  :func:`app.services.event_sanitiser.sanitise_event_batch`,\
+        \ which\n  enforces ``AISOC_SUBMIT_MAX_EVENTS`` (default 200), per-event size\n\
+        \  ``AISOC_SUBMIT_MAX_EVENT_BYTES`` (default 64 KiB), and total batch\n  size\
+        \ ``AISOC_SUBMIT_MAX_TOTAL_BYTES`` (default 1 MiB). Violations\n  return ``413\
+        \ Payload Too Large`` rather than the 200 OK + truncated\n  alert we used\
+        \ to silently emit.\n* **Secret redaction** — the sanitiser also redacts keys\
+        \ matching\n  common secret patterns (``password``, ``token``, ``api_key``,\
+        \ …)\n  *before* the payload is persisted to ``alerts.raw_event``, so a\n\
+        \  leaky connector cannot smuggle bearer tokens into the alert table\n  where\
+        \ they would be visible to every analyst with ``alerts:read``.\n* **Idempotency**\
+        \ — when the client supplies an ``Idempotency-Key``\n  header, the resulting\
+        \ alert is keyed ``(tenant_id, idempotency_key)``\n  via a partial unique\
+        \ index (migration ``044``). A retry of the\n  same key resolves to the existing\
+        \ row and returns HTTP ``200``\n  instead of creating a duplicate, so at-least-once\
+        \ connectors and\n  the ``aisoc submit`` CLI can retry safely on network blips.\n\
+        * **Timestamp bounds** — event timestamps outside the configured\n  retention\
+        \ window are clamped (see\n  :mod:`app.services.timestamp_bounds`); the resulting\
+        \ alert is\n  tagged ``ts-clamped`` so analysts can see the connector misbehaved.\n\
+        \nAuthorisation: requires ``alerts:write``. In development mode the\nauth\
+        \ bypass in :mod:`app.api.v1.deps` resolves to the deterministic\ndemo tenant,\
+        \ so the documented ``aisoc submit`` CLI works against a\nfresh clone with\
+        \ no token plumbing."
       operationId: submit_alert_api_v1_alerts_submit_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional opaque client-supplied key (8–128 chars, [A-Za-z0-9._:-]).
+            When supplied, a retry of the same key for the same tenant returns the
+            existing alert with HTTP 200 instead of creating a duplicate.
+          title: Idempotency-Key
+        description: Optional opaque client-supplied key (8–128 chars, [A-Za-z0-9._:-]).
+          When supplied, a retry of the same key for the same tenant returns the existing
+          alert with HTTP 200 instead of creating a duplicate.
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AlertSubmitRequest'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -304,8 +328,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
   /api/v1/alerts:
     get:
       tags:
