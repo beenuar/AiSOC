@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-12T21:04:21Z",
+  "generated": "2026-05-14T12:28:24Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,17 +20,17 @@
     }
   ],
   "stats": {
-    "total": 7111,
+    "total": 7117,
     "playbooks": 62,
     "detections": 6998,
-    "plugins": 51,
-    "verified": 990,
+    "plugins": 57,
+    "verified": 996,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 990
+      "stable": 996
     },
     "detections_by_tier": {
       "community": 1,
@@ -224301,6 +224301,32 @@
       "path": "plugins/cloudflare-waf/plugin.yaml"
     },
     {
+      "id": "confluence_audit",
+      "type": "plugin",
+      "name": "Atlassian Confluence Audit",
+      "description": "Atlassian Confluence Cloud audit-trail connector. Pulls page, space, permission, and user/group audit events via the Confluence Cloud REST API. Requires an Atlassian Cloud API token; the calling user needs site-admin access to read the full audit log.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "atlassian",
+        "confluence",
+        "audit",
+        "wiki",
+        "permissions"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/confluence_audit.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/confluence-audit/plugin.yaml"
+    },
+    {
       "id": "cortex-xsiam",
       "type": "plugin",
       "name": "Palo Alto Cortex XSIAM Connector",
@@ -224399,6 +224425,32 @@
       "source": "core",
       "tier": "beta",
       "path": "plugins/email-inbox/plugin.yaml"
+    },
+    {
+      "id": "falco",
+      "type": "plugin",
+      "name": "Falco (Runtime Security)",
+      "description": "Falco runtime security connector for Linux and Kubernetes. Receives JSON rule-engine output over HTTP from falcosidekick or Falco's built-in HTTP output plugin, optionally validating a shared-secret header on each delivery. Push-driven \u2014 no API key required.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "runtime",
+        "kubernetes",
+        "linux",
+        "cncf",
+        "falco"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/falco.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/falco/plugin.yaml"
     },
     {
       "id": "fleetdm",
@@ -224821,6 +224873,32 @@
       "path": "plugins/onepassword-events/plugin.yaml"
     },
     {
+      "id": "opsgenie",
+      "type": "plugin",
+      "name": "Opsgenie (Alerts + Audit)",
+      "description": "Opsgenie on-call platform connector. Pulls alerts and tenant audit log events (API key issuance, role changes, integration edits, escalation policy changes) via the REST API. Supports both US and EU data residencies.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "oncall",
+        "paging",
+        "alerts",
+        "audit",
+        "opsgenie"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/opsgenie.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/opsgenie/plugin.yaml"
+    },
+    {
       "id": "orca",
       "type": "plugin",
       "name": "Orca Security Connector",
@@ -224871,6 +224949,32 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/osctrl/plugin.yaml"
+    },
+    {
+      "id": "pagerduty",
+      "type": "plugin",
+      "name": "PagerDuty (Incidents + Audit)",
+      "description": "PagerDuty on-call platform connector. Pulls incident lifecycle events (triggered / acknowledged / resolved) and tenant audit records (role changes, integration edits, API key issuance) via the REST API. Requires a read-only REST API key.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "oncall",
+        "paging",
+        "incidents",
+        "audit",
+        "pagerduty"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/pagerduty.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/pagerduty/plugin.yaml"
     },
     {
       "id": "pagerduty-paging",
@@ -225155,6 +225259,56 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/tenable-io/plugin.yaml"
+    },
+    {
+      "id": "tines",
+      "type": "plugin",
+      "name": "Tines (Audit + Cases)",
+      "description": "Tines automation platform connector. Pulls story / agent / credential audit events plus case lifecycle events via the Tines REST API. Requires a Personal Access Token with at least read-only scope on the target tenant.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "soar",
+        "automation",
+        "audit",
+        "tines"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/tines.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/tines/plugin.yaml"
+    },
+    {
+      "id": "torq",
+      "type": "plugin",
+      "name": "Torq (Workflow Executions + Audit)",
+      "description": "Torq automation platform connector. Streams workflow execution outcomes (success / warning / failed / killed) and tenant audit events (workflow edits, credential changes, role assignments) via the Torq Public API. Requires an API key pair (key_id + secret) issued under Settings \u2192 API Keys.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "soar",
+        "automation",
+        "audit",
+        "torq"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/torq.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/torq/plugin.yaml"
     },
     {
       "id": "trend-vision-one",

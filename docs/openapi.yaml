@@ -1541,6 +1541,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/attack-chain:
+    get:
+      tags:
+      - cases
+      summary: Get Attack Chain
+      description: 'Return the ranked attack-chain timeline for the case''s seed alert.
+
+
+        The seed alert is the earliest ``alert.event_time`` linked to the
+
+        case. If the case has no linked alerts the response is an empty
+
+        chain — never a 500.'
+      operationId: get_attack_chain_api_v1_cases__case_id__attack_chain_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Case Id
+      - name: window
+        in: query
+        required: false
+        schema:
+          enum:
+          - 1h
+          - 6h
+          - 24h
+          - 72h
+          - 7d
+          - 30d
+          type: string
+          default: 24h
+          title: Window
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Attack Chain Api V1 Cases  Case Id  Attack Chain
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/connectors/catalog:
     get:
       tags:
@@ -2518,7 +2572,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateRuleRequest'
+              $ref: '#/components/schemas/app__api__v1__endpoints__detection_rules__UpdateRuleRequest'
       responses:
         '200':
           description: Successful Response
@@ -5845,49 +5899,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/insights/soc:
-    get:
-      tags:
-      - insights
-      summary: SOC Insights dashboard aggregate (T3.1)
-      description: 'Return the seven-tile SOC Insights payload for the tenant.
-
-
-        Tenant scoping is enforced by ``current_user.tenant_id`` plus an
-
-        explicit ``tenant_id`` predicate in every aggregate, so the payload
-
-        is safe to render for any role that can read the dashboard.'
-      operationId: get_soc_insights_api_v1_insights_soc_get
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: window
-        in: query
-        required: false
-        schema:
-          enum:
-          - 24h
-          - 7d
-          - 30d
-          type: string
-          description: Rolling window. One of 24h, 7d, 30d.
-          default: 24h
-          title: Window
-        description: Rolling window. One of 24h, 7d, 30d.
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SOCInsightsResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/metrics/funnel:
     get:
       tags:
@@ -5927,6 +5938,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FunnelMetrics'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/insights/soc:
+    get:
+      tags:
+      - insights
+      summary: SOC Insights dashboard aggregate (T3.1)
+      description: 'Return the seven-tile SOC Insights payload for the tenant.
+
+
+        Tenant scoping is enforced by ``current_user.tenant_id`` plus an
+
+        explicit ``tenant_id`` predicate in every aggregate, so the payload
+
+        is safe to render for any role that can read the dashboard.'
+      operationId: get_soc_insights_api_v1_insights_soc_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: window
+        in: query
+        required: false
+        schema:
+          enum:
+          - 24h
+          - 7d
+          - 30d
+          type: string
+          description: Rolling window. One of 24h, 7d, 30d.
+          default: 24h
+          title: Window
+        description: Rolling window. One of 24h, 7d, 30d.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SOCInsightsResponse'
         '422':
           description: Validation Error
           content:
@@ -6606,6 +6660,87 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/identity/effective-permissions/providers:
+    get:
+      tags:
+      - identity-effective-permissions
+      summary: List supported effective-permissions providers
+      description: 'Return ``{"providers": [{"name", "coverage"}, ...]}``.
+
+
+        The UI calls this once on mount to render the provider switcher and to
+
+        grey out scaffolded providers.'
+      operationId: list_providers_api_v1_identity_effective_permissions_providers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Providers Api V1 Identity Effective Permissions
+                  Providers Get
+      security:
+      - HTTPBearer: []
+  /api/v1/identity/{principal_id}/effective-permissions:
+    get:
+      tags:
+      - identity-effective-permissions
+      summary: Resolve effective permissions for a principal
+      description: 'Resolve and return the effective-permissions envelope.
+
+
+        Cache write is dispatched as a FastAPI ``BackgroundTask`` so the request
+
+        returns as soon as the resolver finishes — the UI never waits on Neo4j.'
+      operationId: get_effective_permissions_api_v1_identity__principal_id__effective_permissions_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: principal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Principal Id
+      - name: provider
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Provider to resolve against (aws|azure|gcp|okta|gws).
+          title: Provider
+        description: Provider to resolve against (aws|azure|gcp|okta|gws).
+      - name: snapshot_b64
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional base64-encoded JSON snapshot for dry-run resolution.
+            Only honoured when AISOC_ALLOW_INLINE_SNAPSHOT=1 is set.
+          title: Snapshot B64
+        description: Optional base64-encoded JSON snapshot for dry-run resolution.
+          Only honoured when AISOC_ALLOW_INLINE_SNAPSHOT=1 is set.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Effective Permissions Api V1 Identity  Principal
+                  Id  Effective Permissions Get
         '422':
           description: Validation Error
           content:
@@ -8980,6 +9115,175 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/business-context/rules:
+    get:
+      tags:
+      - business-context
+      summary: Get Rules
+      description: 'Return the tenant''s current rule set.
+
+
+        Always returns a 200 — a tenant with no rules gets an empty list
+
+        and an empty YAML body. The editor uses the ``enabled`` flag to
+
+        show the "rules paused" banner so analysts aren''t surprised when
+
+        a saved rule isn''t taking effect.'
+      operationId: get_rules_api_v1_business_context_rules_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RulesEnvelope'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - business-context
+      summary: Replace Rules
+      description: 'Replace the tenant''s whole rule set with a new YAML document.
+
+
+        The engine snapshot is swapped atomically *before* the write
+
+        "completes" from the caller''s perspective, so the next evaluation
+
+        on the same process sees the fresh rules within microseconds —
+
+        well inside the 1s "save → preview" budget the task spec calls
+
+        out. Multi-process deployments still honour the budget because the
+
+        JSONB-backed reload (T3.5-followup) will SET version on save and
+
+        every worker re-pulls on TTL miss.'
+      operationId: replace_rules_api_v1_business_context_rules_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceRulesRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RulesEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/business-context/rules/{rule_id}:
+    put:
+      tags:
+      - business-context
+      summary: Update Rule
+      description: 'Patch a single rule by id.
+
+
+        The body is the YAML for *that one rule*; we splice it into the
+
+        tenant''s rule list, replacing the existing entry of the same id (or
+
+        appending if it''s a new id). Returns the same envelope shape as
+
+        ``POST /rules`` so the editor can re-render in one round trip.'
+      operationId: update_rule_api_v1_business_context_rules__rule_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/app__api__v1__endpoints__business_context__UpdateRuleRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RulesEnvelope'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - business-context
+      summary: Delete Rule
+      operationId: delete_rule_api_v1_business_context_rules__rule_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Rule Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/business-context/rules/preview:
+    post:
+      tags:
+      - business-context
+      summary: Preview Rules
+      description: 'Dry-run the candidate YAML against a sample of alerts.
+
+
+        Doesn''t persist anything; doesn''t modify the engine snapshot for
+
+        the tenant. The response is shaped so the settings page can render
+
+        a before/after table with a one-line "X of Y alerts changed" header.'
+      operationId: preview_rules_api_v1_business_context_rules_preview_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/nl-detection/translate:
     post:
       tags:
@@ -20870,6 +21174,82 @@ components:
       - preferences
       title: PreferencesPatch
       description: Partial update payload for user preferences (merged server-side).
+    PreviewRequest:
+      properties:
+        yaml:
+          type: string
+          maxLength: 262144
+          title: Yaml
+        alerts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Alerts
+      type: object
+      required:
+      - yaml
+      title: PreviewRequest
+    PreviewResponse:
+      properties:
+        sample_size:
+          type: integer
+          title: Sample Size
+        changed_count:
+          type: integer
+          title: Changed Count
+        suppressed_count:
+          type: integer
+          title: Suppressed Count
+        elapsed_ms:
+          type: number
+          title: Elapsed Ms
+        rows:
+          items:
+            $ref: '#/components/schemas/PreviewRow'
+          type: array
+          title: Rows
+      type: object
+      required:
+      - sample_size
+      - changed_count
+      - suppressed_count
+      - elapsed_ms
+      - rows
+      title: PreviewResponse
+    PreviewRow:
+      properties:
+        alert_id:
+          type: string
+          title: Alert Id
+        matched_rule_ids:
+          items:
+            type: string
+          type: array
+          title: Matched Rule Ids
+        before:
+          additionalProperties: true
+          type: object
+          title: Before
+        after:
+          additionalProperties: true
+          type: object
+          title: After
+        suppressed:
+          type: boolean
+          title: Suppressed
+        changed:
+          type: boolean
+          title: Changed
+      type: object
+      required:
+      - alert_id
+      - matched_rule_ids
+      - before
+      - after
+      - suppressed
+      - changed
+      title: PreviewRow
     ProposalResponse:
       properties:
         id:
@@ -21485,6 +21865,16 @@ components:
         under (``principal``, ``network``, ``workflow``, ``tenant``). One
 
         entity belongs to exactly one group; we don''t duplicate rows.'
+    ReplaceRulesRequest:
+      properties:
+        yaml:
+          type: string
+          maxLength: 262144
+          title: Yaml
+      type: object
+      required:
+      - yaml
+      title: ReplaceRulesRequest
     ReviewAction:
       properties:
         action:
@@ -21680,6 +22070,56 @@ components:
           title: Permission Ids
       type: object
       title: RoleUpdate
+    RuleActionWire:
+      properties:
+        set_severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Set Severity
+        route_to:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Route To
+        tag:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tag
+        suppress:
+          type: boolean
+          title: Suppress
+          default: false
+      type: object
+      title: RuleActionWire
+    RuleConditionWire:
+      properties:
+        field:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Field
+        op:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Op
+        value:
+          title: Value
+        logical:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Logical
+        children:
+          items:
+            $ref: '#/components/schemas/RuleConditionWire'
+          type: array
+          title: Children
+      type: object
+      title: RuleConditionWire
+      description: Mirror of :class:`RuleCondition` for the wire / OpenAPI shape.
     RuleOverrideCreate:
       properties:
         child_tenant_id:
@@ -21859,6 +22299,78 @@ components:
           title: Is Default
       type: object
       title: RulePackUpdate
+    RuleWire:
+      properties:
+        id:
+          type: string
+          title: Id
+        description:
+          type: string
+          title: Description
+          default: ''
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        priority:
+          type: integer
+          title: Priority
+          default: 100
+        when:
+          $ref: '#/components/schemas/RuleConditionWire'
+        then:
+          $ref: '#/components/schemas/RuleActionWire'
+      type: object
+      required:
+      - id
+      - when
+      - then
+      title: RuleWire
+    RulesEnvelope:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        version:
+          type: integer
+          title: Version
+        yaml:
+          type: string
+          title: Yaml
+        rules:
+          items:
+            $ref: '#/components/schemas/RuleWire'
+          type: array
+          title: Rules
+        enabled:
+          type: boolean
+          title: Enabled
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - tenant_id
+      - version
+      - yaml
+      - rules
+      - enabled
+      - updated_at
+      title: RulesEnvelope
+      description: 'Response payload for ``GET /rules``.
+
+
+        The editor needs *both* the YAML source (so Monaco can show
+
+        formatting + comments) and the parsed view (so the rule-builder
+
+        side-panel can render structured forms). ``version`` is the
+
+        engine snapshot version the parsed view came from — a monotonic
+
+        integer the UI uses to detect "someone else saved while I was
+
+        editing".'
     RunDetail:
       properties:
         id:
@@ -24638,47 +25150,6 @@ components:
           title: Edges
       type: object
       title: UpdateObservablesRequest
-    UpdateRuleRequest:
-      properties:
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Name
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        rule_body:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Rule Body
-        status:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Status
-        severity:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Severity
-        confidence:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Confidence
-        tags:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-          title: Tags
-      type: object
-      title: UpdateRuleRequest
     UpdateSavedViewRequest:
       properties:
         name:
@@ -25014,6 +25485,11 @@ components:
         type:
           type: string
           title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
       type: object
       required:
       - loc
@@ -25249,6 +25725,16 @@ components:
       - approved_by
       - created_at
       title: WhitelistOut
+    app__api__v1__endpoints__business_context__UpdateRuleRequest:
+      properties:
+        yaml:
+          type: string
+          maxLength: 262144
+          title: Yaml
+      type: object
+      required:
+      - yaml
+      title: UpdateRuleRequest
     app__api__v1__endpoints__cases__TimelineEvent:
       properties:
         id:
@@ -25337,6 +25823,47 @@ components:
       - execution_time_ms
       - errors
       title: HuntResponse
+    app__api__v1__endpoints__detection_rules__UpdateRuleRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        rule_body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Body
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        confidence:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Confidence
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+      type: object
+      title: UpdateRuleRequest
     app__api__v1__endpoints__hunts__HuntResponse:
       properties:
         id:
