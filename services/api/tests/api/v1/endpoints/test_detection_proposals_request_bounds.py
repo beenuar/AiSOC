@@ -22,7 +22,6 @@ from app.api.v1.endpoints.detection_proposals import (
 )
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # max_regression_pp bounds (shared by both request models)
 # ---------------------------------------------------------------------------

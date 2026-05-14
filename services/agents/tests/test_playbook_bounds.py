@@ -10,9 +10,7 @@ from __future__ import annotations
 import importlib
 
 import pytest
-
 from app.playbook import bounds
-
 
 # ---------------------------------------------------------------------------
 # Constants — these are part of the security contract; if anyone tightens or
@@ -32,24 +30,14 @@ class TestConstants:
         (≤15min). Inverting these would either break approval playbooks or
         defeat the runtime guard.
         """
-        assert (
-            bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS
-            >= bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
-        )
+        assert bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS >= bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
 
     def test_param_cap_is_tighter_than_field_cap(self) -> None:
         # If these ever become equal, delete one — the layering loses meaning.
-        assert (
-            bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
-            < bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS
-        )
+        assert bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS < bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS
 
     def test_defaults_within_absolute_bounds(self) -> None:
-        assert (
-            bounds.MIN_TIMEOUT_SECONDS
-            <= bounds.DEFAULT_MAX_TIMEOUT_SECONDS
-            <= bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
-        )
+        assert bounds.MIN_TIMEOUT_SECONDS <= bounds.DEFAULT_MAX_TIMEOUT_SECONDS <= bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
         assert 0 <= bounds.DEFAULT_MAX_RETRIES <= bounds.ABSOLUTE_MAX_RETRIES
 
 
@@ -64,9 +52,7 @@ class TestClampTimeout:
 
     def test_value_at_default_max_passes_through(self) -> None:
         # No env override → ceiling is DEFAULT_MAX_TIMEOUT_SECONDS.
-        assert bounds.clamp_timeout(bounds.DEFAULT_MAX_TIMEOUT_SECONDS) == (
-            bounds.DEFAULT_MAX_TIMEOUT_SECONDS
-        )
+        assert bounds.clamp_timeout(bounds.DEFAULT_MAX_TIMEOUT_SECONDS) == (bounds.DEFAULT_MAX_TIMEOUT_SECONDS)
 
     def test_value_above_default_max_is_clamped(self) -> None:
         result = bounds.clamp_timeout(86400)  # 1 day — pathological
@@ -109,16 +95,12 @@ class TestClampTimeout:
     def test_float_is_truncated_to_int(self) -> None:
         assert bounds.clamp_timeout(12.7) == 12
 
-    def test_env_override_raises_ceiling(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_override_raises_ceiling(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS", "600")
         # 500 should now pass through (was previously clamped to 300).
         assert bounds.clamp_timeout(500) == 500
 
-    def test_env_override_cannot_exceed_param_absolute_max(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_override_cannot_exceed_param_absolute_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Env override must itself be clamped to ABSOLUTE_MAX_PARAM_*.
 
         Otherwise an operator typo (``AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS=86400``)
@@ -131,17 +113,13 @@ class TestClampTimeout:
         result = bounds.clamp_timeout(50000)
         assert result == bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
 
-    def test_env_override_garbage_falls_back_to_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_override_garbage_falls_back_to_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS", "not-a-number")
         # 500 must still be clamped to DEFAULT_MAX_TIMEOUT_SECONDS since the
         # env value is unusable.
         assert bounds.clamp_timeout(500) == bounds.DEFAULT_MAX_TIMEOUT_SECONDS
 
-    def test_env_override_below_min_is_clamped_up(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_override_below_min_is_clamped_up(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS", "-10")
         # Ceiling clamped to MIN_TIMEOUT_SECONDS, so any value above that
         # collapses to MIN.
@@ -178,9 +156,7 @@ class TestClampRetries:
     def test_non_numeric_string_uses_fallback(self) -> None:
         assert bounds.clamp_retries("nope", default=1) == 1
 
-    def test_env_override_cannot_exceed_absolute_max(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_override_cannot_exceed_absolute_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_PLAYBOOK_MAX_RETRIES", "1000")
         # Ceiling is hard-clamped to ABSOLUTE_MAX_RETRIES.
         assert bounds.clamp_retries(500) == bounds.ABSOLUTE_MAX_RETRIES
@@ -192,33 +168,24 @@ class TestClampRetries:
 
 
 class TestEffectiveCeilings:
-    def test_max_timeout_seconds_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_max_timeout_seconds_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS", raising=False)
         assert bounds.max_timeout_seconds() == bounds.DEFAULT_MAX_TIMEOUT_SECONDS
 
-    def test_max_timeout_seconds_clamped_to_param_absolute(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_max_timeout_seconds_clamped_to_param_absolute(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(
             "AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS",
             str(bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS + 10_000),
         )
         # Even with a huge env value, the function clamps to the param cap,
         # NOT the looser Pydantic field cap.
-        assert (
-            bounds.max_timeout_seconds()
-            == bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
-        )
+        assert bounds.max_timeout_seconds() == bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS
 
     def test_max_retries_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AISOC_PLAYBOOK_MAX_RETRIES", raising=False)
         assert bounds.max_retries() == bounds.DEFAULT_MAX_RETRIES
 
-    def test_empty_env_value_falls_back_to_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_env_value_falls_back_to_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Empty string (e.g. ``AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS=``) must be
         # treated as unset, not as invalid int.
         monkeypatch.setenv("AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS", "")

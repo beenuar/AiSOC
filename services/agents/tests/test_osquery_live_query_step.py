@@ -421,9 +421,7 @@ class TestRuntimeTimeoutClamp:
         assert forwarded_timeout == 60
 
     @pytest.mark.asyncio
-    async def test_param_cap_is_runtime_ceiling_not_field_cap(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_param_cap_is_runtime_ceiling_not_field_cap(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The runtime ceiling is the *param* cap (15 min), not the looser
         Pydantic field cap (1h). This pins the layered defence: approval
         steps may declare timeout=3600 on the typed field, but params-driven

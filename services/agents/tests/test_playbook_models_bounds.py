@@ -7,15 +7,13 @@ that exceed the cap should fail to load instead of silently running.
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from app.playbook.bounds import (
     ABSOLUTE_MAX_RETRIES,
     ABSOLUTE_MAX_TIMEOUT_SECONDS,
     MIN_TIMEOUT_SECONDS,
 )
 from app.playbook.models import PlaybookStep, StepType
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # timeout_seconds bounds
