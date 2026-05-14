@@ -8,6 +8,12 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field
 
+from .bounds import (
+    ABSOLUTE_MAX_RETRIES,
+    ABSOLUTE_MAX_TIMEOUT_SECONDS,
+    MIN_TIMEOUT_SECONDS,
+)
+
 
 class StepType(str, Enum):
     """Supported step action types."""
@@ -76,8 +82,16 @@ class PlaybookStep(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     condition: StepConditionField = None
     on_failure: Literal["abort", "continue", "retry"] = "abort"
-    retry_max: int = 0
-    timeout_seconds: int = 30
+    # Hard ceilings — see services/agents/app/playbook/bounds.py for rationale.
+    # Pydantic validates these on the typed field; handlers that read
+    # ``params.timeout_seconds`` directly MUST also pass the value through
+    # ``bounds.clamp_timeout`` at runtime.
+    retry_max: int = Field(default=0, ge=0, le=ABSOLUTE_MAX_RETRIES)
+    timeout_seconds: int = Field(
+        default=30,
+        ge=MIN_TIMEOUT_SECONDS,
+        le=ABSOLUTE_MAX_TIMEOUT_SECONDS,
+    )
     # For branching: step IDs to jump to on true / false
     next_true: str | None = None
     next_false: str | None = None
