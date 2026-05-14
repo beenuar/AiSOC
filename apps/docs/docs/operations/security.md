@@ -116,7 +116,7 @@ The `users` table is excluded from RLS deliberately — it would create a chicke
 
 ## Audit logging
 
-Every state-changing API action is appended to an immutable audit log. The schema lives in [`004_audit_log.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/004_audit_log.sql), the model in `services/api/app/models/audit.py`, and the helper that emits events in [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py).
+Every state-changing API action is appended to an immutable audit log. The schema lives in [`004_audit_log.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/004_audit_log.sql) (chain columns added in [`043_audit_log_hash_chain.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/043_audit_log_hash_chain.sql)), the model in `services/api/app/models/audit.py`, and the helper that emits events in [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py).
 
 Each event captures:
 
@@ -124,14 +124,50 @@ Each event captures:
 |---|---|
 | `tenant_id` | Resolved from the actor's session |
 | `actor_id`, `actor_email` | Authenticated user (or API-key owner) |
-| `actor_ip` | `X-Forwarded-For` (first hop) or `request.client.host` |
+| `actor_ip` | Resolved by `resolve_client_ip()` — direct TCP peer by default; `X-Forwarded-For` is consulted **only** if the peer is in `AISOC_TRUSTED_PROXIES` |
 | `action` | Dot/colon string — e.g. `cases:create`, `connectors:delete`, `playbooks:execute` |
 | `resource`, `resource_id` | What was touched |
-| `changes` | Before/after delta JSON |
-| `metadata_` | `user_agent`, `request_id`, and any caller-supplied context |
-| `created_at` | UTC timestamp, set by Postgres |
+| `changes` | Before/after delta JSON, **redacted** by `redact_changes()` before persistence (secrets, tokens, passwords masked; capped at `AISOC_AUDIT_MAX_CHANGES_BYTES`) |
+| `metadata_` | `user_agent`, `request_id`, and any caller-supplied context (header values truncated to bounded length) |
+| `prev_hash`, `entry_hash` | SHA-256 chain link — see "Tamper-evident hash chain" below |
+| `created_at` | UTC timestamp set deterministically by the application (folded into `entry_hash`) |
 
-The log is **append-only**: there is no `UPDATE` or `DELETE` endpoint, and the table has RLS enabled so a tenant can only read their own events. The middleware that auto-populates audit on common write paths is `services/api/app/middleware/audit_middleware.py`; high-value actions (case state transitions, playbook executions, credential rotations) call `emit_audit(...)` explicitly so the `changes` payload is precise.
+### Trusted-proxy IP attribution
+
+Earlier releases lifted `actor_ip` from `X-Forwarded-For` unconditionally. Any client behind an unstripping edge could spoof their source IP into the audit trail by attaching their own header. The current implementation gates that on an explicit operator allow-list:
+
+* `AISOC_TRUSTED_PROXIES` is **empty by default** → `X-Forwarded-For` is ignored entirely and the direct TCP peer is recorded.
+* When set to a comma-separated list of CIDRs (e.g. `10.0.0.0/8,192.168.0.0/16`), the header is consulted **only** when the immediate TCP peer is itself inside the list. The chain is walked right-to-left and the closest untrusted hop wins — that's the real originating client.
+* Malformed CIDRs in the env are logged and dropped; malformed `X-Forwarded-For` headers degrade safely to the direct peer. Audit must never fail closed because someone typoed a header.
+
+Configure `AISOC_TRUSTED_PROXIES` to the CIDR(s) of your ingress / load balancer in production. The trusted-proxy resolver lives in [`services/api/app/core/trusted_proxy.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/trusted_proxy.py).
+
+### `changes` redaction and size cap
+
+The `changes` payload often holds before/after snapshots of user objects, settings, or credentials. We sanitize it on the write path in [`services/api/app/services/audit_redaction.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_redaction.py):
+
+* Keys matching common sensitive patterns (case-insensitive: `password`, `secret`, `token`, `api_key`, `private_key`, `*credential*`, `authorization`, `bearer`, `cookie`, `session`, `*_seed`, `client_secret`, etc.) are replaced with `***REDACTED***` recursively. Nested dicts, lists, and tuples are walked.
+* The serialized JSON is capped at `AISOC_AUDIT_MAX_CHANGES_BYTES` (default 65,536). Over-sized payloads are replaced with a `{ "_truncated": true, "_size": <bytes> }` marker rather than persisted — this stops a single bad caller from ballooning the audit table.
+* Recursion is capped (`_MAX_DEPTH`) and total node count is capped (`_MAX_NODES`) so a hostile or buggy caller can't DOS the redactor with a cyclic / pathological structure.
+
+If you legitimately need to record a large diff, log a stable reference (e.g. a content hash, an object key, a git SHA) in `changes` and store the diff body in your evidence pipeline instead.
+
+### Tamper-evident hash chain
+
+The `audit_log` table already enforces append-only at the trigger level. What that does *not* defend against is a privileged operator with SQL access bypassing the trigger (`ALTER TABLE … DISABLE TRIGGER ALL`, `TRUNCATE`, or DB-level credential theft) and substituting a forged history.
+
+Migration `043_audit_log_hash_chain.sql` adds two columns to close that gap **without trusting Postgres**:
+
+* `prev_hash` — the `entry_hash` of the previous audit row for the same tenant (or `NULL` for the first row).
+* `entry_hash` — `sha256(prev_hash || domain_separator || canonical_json(row))`.
+
+The hashing algorithm lives in [`services/api/app/services/audit_hash.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_hash.py) and is intentionally pure — `verify_chain()` accepts a plain list of row dicts (e.g. read from a CSV export) and replays the chain deterministically. Anyone — internal auditor, customer compliance team, external assessor — can prove that no row was deleted, reordered, or silently rewritten.
+
+The chain is **per-tenant** so tenant operations stay isolated. Legacy rows that pre-date the migration carry `entry_hash = NULL` and are tolerated at the head of a tenant's history; once a tenant has any chained row, every subsequent row must be chained, and a gap is treated as a forgery signal by `verify_chain()`.
+
+The set of hashed fields is deliberately conservative — `tenant_id`, `actor_id`, `actor_email`, `actor_ip`, `action`, `resource`, `resource_id`, the **redacted** `changes`, `metadata_`, `created_at`, and the row `id`. Adding a hashed field is a chain-breaking schema change.
+
+The log is **append-only**: there is no `UPDATE` or `DELETE` endpoint, and the table has RLS enabled so a tenant can only read their own events. The middleware that auto-populates audit on common write paths is [`services/api/app/middleware/audit_middleware.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/middleware/audit_middleware.py); high-value actions (case state transitions, playbook executions, credential rotations) call `emit_audit(...)` explicitly so the `changes` payload is precise. Both paths participate in the hash chain.
 
 For SOC 2 / ISO 27001 evidence collection, the [Compliance service](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/compliance.py) reads from this log directly — there is no separate compliance event store to keep in sync.
 
@@ -228,6 +264,8 @@ When you move from `pnpm aisoc:demo` to a production deployment, walk through th
 - [ ] Require WebAuthn/passkeys for any role that triggers destructive playbook actions or credential changes.
 - [ ] Confirm `FORCE ROW LEVEL SECURITY` is set on every tenant-partitioned table (verify with `\d+ <tablename>` in `psql`).
 - [ ] Set up an external log sink for the audit log (Splunk, Elastic, Loki) — the in-DB log is the source of truth, but a copy in your SIEM is good practice.
+- [ ] Configure `AISOC_TRUSTED_PROXIES` to the CIDR(s) of your ingress / load balancer so `actor_ip` is sourced from `X-Forwarded-For` instead of the immediate TCP peer. Leave empty if the API is exposed directly to clients.
+- [ ] Schedule a periodic `verify_chain()` job against an offsite read replica or a CSV export of the `audit_log` table and alert on any verification failure.
 - [ ] Confirm TLS is terminated at the ingress and that internal traffic is on a private network.
 - [ ] Enable mTLS between services if you're running on Kubernetes with a mesh.
 - [ ] Subscribe to the AiSOC GitHub Security Advisories for vulnerability notifications.

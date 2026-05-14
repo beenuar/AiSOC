@@ -5,18 +5,38 @@ middleware appends an AuditLog row **after** the response has been produced so
 it never blocks the hot path.
 
 Non-authenticated requests and GET/HEAD/OPTIONS are silently skipped.
+
+Hardening (BATCH 7 — H-4 + M-12)
+--------------------------------
+
+* Uses :func:`app.core.trusted_proxy.resolve_client_ip` so
+  ``X-Forwarded-For`` is only honoured for trusted hops. The previous
+  implementation took the first XFF value unconditionally.
+* Caps user-agent / request-id header sizes before writing them to the
+  ``metadata`` JSONB column.
+* Writes ``prev_hash`` / ``entry_hash`` so middleware-emitted rows
+  participate in the same tamper-evident chain as :func:`emit_audit`.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
+from datetime import UTC, datetime
 
+from app.core.trusted_proxy import resolve_client_ip
 from app.db.database import AsyncSessionLocal
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+logger = logging.getLogger("aisoc.audit.middleware")
+
 _MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
+
+# Header value caps — keep audit rows bounded even under malicious peers.
+_MAX_UA_LEN = 512
+_MAX_REQUEST_ID_LEN = 128
 
 # Map URL patterns → (action, resource) label pairs for cleaner audit records.
 _ROUTE_LABELS: list[tuple[re.Pattern[str], str, str]] = [
@@ -68,6 +88,12 @@ def _extract_jwt_claims(request: Request) -> tuple[uuid.UUID | None, uuid.UUID |
         return None, None, None
 
 
+def _truncate(value: str | None, limit: int) -> str | None:
+    if value is None:
+        return None
+    return value if len(value) <= limit else value[:limit]
+
+
 class AuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
@@ -98,21 +124,27 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
             async with AsyncSessionLocal() as db:
                 from app.models.audit import AuditLog  # noqa: PLC0415
+                from app.services.audit import _resolve_prev_hash  # noqa: PLC0415
+                from app.services.audit_hash import compute_entry_hash  # noqa: PLC0415
 
-                forwarded = request.headers.get("x-forwarded-for")
-                actor_ip = (forwarded.split(",")[0].strip() if forwarded else None) or (
-                    str(request.client.host) if request.client else None
-                )
+                try:
+                    actor_ip = resolve_client_ip(request)
+                except Exception:  # noqa: BLE001
+                    logger.warning("audit-middleware: failed to resolve client IP", exc_info=True)
+                    actor_ip = None
+
                 meta: dict = {}
-                ua = request.headers.get("user-agent")
+                ua = _truncate(request.headers.get("user-agent"), _MAX_UA_LEN)
                 if ua:
                     meta["user_agent"] = ua
-                rid = request.headers.get("x-request-id")
+                rid = _truncate(request.headers.get("x-request-id"), _MAX_REQUEST_ID_LEN)
                 if rid:
                     meta["request_id"] = rid
                 meta["status_code"] = response.status_code
 
+                created_at = datetime.now(UTC)
                 event = AuditLog(
+                    id=uuid.uuid4(),
                     tenant_id=tenant_id,
                     actor_id=user_id,
                     actor_email=email,
@@ -121,7 +153,35 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     resource=resource,
                     resource_id=resource_id,
                     metadata_=meta or None,
+                    created_at=created_at,
                 )
+
+                # Chain-link the middleware event onto the tenant's history.
+                try:
+                    prev = await _resolve_prev_hash(db, tenant_id)
+                    event.prev_hash = prev
+                    event.entry_hash = compute_entry_hash(
+                        prev_hash=prev,
+                        row_id=event.id,
+                        tenant_id=event.tenant_id,
+                        actor_id=event.actor_id,
+                        actor_email=event.actor_email,
+                        actor_ip=event.actor_ip,
+                        action=event.action,
+                        resource=event.resource,
+                        resource_id=event.resource_id,
+                        changes=event.changes,
+                        metadata=event.metadata_,
+                        created_at=event.created_at,
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "audit-middleware: failed to compute hash chain",
+                        exc_info=True,
+                    )
+                    event.prev_hash = None
+                    event.entry_hash = None
+
                 db.add(event)
                 await db.commit()
         except Exception:
