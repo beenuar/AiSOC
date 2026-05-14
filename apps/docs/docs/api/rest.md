@@ -72,6 +72,7 @@ The full spec is also committed at [`docs/openapi.yaml`](https://github.com/been
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET/POST` | `/alerts` | List / ingest alerts |
+| `POST` | `/alerts/submit` | **Founder-flow direct-write submit** — synthesises an `Alert` row directly from a batch of OCSF events, bypassing Kafka / `services/ingest` / `services/fusion`. Powers `aisoc submit` and the fresh-clone demo so the console at `/alerts` lights up immediately. See [`packages/aisoc-cli`](https://github.com/aisoc-community/aisoc/tree/main/packages/aisoc-cli) and [`examples/alerts/lateral-movement.json`](https://github.com/aisoc-community/aisoc/tree/main/examples/alerts/lateral-movement.json) for the canonical payload. |
 | `GET/PATCH/DELETE` | `/alerts/{id}` | Alert detail / update / delete |
 | `POST` | `/alerts/{id}/assign` | Assign to analyst |
 | `GET/POST` | `/rules` | Detection rule catalog |

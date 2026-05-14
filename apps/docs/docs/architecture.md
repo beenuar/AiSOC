@@ -117,6 +117,34 @@ services/ingest  POST /v1/ingest/batch  X-Tenant-ID: <uuid>
    Kafka spine ──▶ Fusion · UEBA · Detections (existing pipeline)
 ```
 
+### Founder-flow direct-write submit (v7.3.1+)
+
+For the fresh-clone demo and any flow where Kafka / Fusion / `services/ingest`
+is not required for the first alert, `services/api` exposes a dedicated
+direct-write endpoint:
+
+```
+POST /api/v1/alerts/submit   (X-Tenant-ID: <uuid>)
+    │
+    │ payload: { "events": [<OCSF event>, ...], "rule_id": "demo.lateral-movement" }
+    ▼
+services/api
+    │ 1. parse OCSF events (no Kafka, no services/ingest)
+    │ 2. _synthesise_alert_from_events()  ── derives entities, MITRE tags, severity
+    │ 3. INSERT INTO alerts(...)          ── single row, idempotent
+    │ 4. return { id, status: "new" }
+    ▼
+PostgreSQL  ──▶  /alerts console (lights up immediately)
+```
+
+This is the path used by the `aisoc submit` CLI command and the
+[`examples/alerts/lateral-movement.json`](https://github.com/beenuar/AiSOC/tree/main/examples/alerts/lateral-movement.json)
+canonical payload. The classic Kafka-fed pipeline above is still the
+**production** path; the direct-write endpoint exists so a fresh clone of
+the repo, an `aisoc serve` process, and a single `aisoc submit` call are
+enough to see an alert on `/alerts` — no broker, no schedulers, no
+connectors required.
+
 The `services/api` service holds the **encrypt** authority for the vault
 and is the only writer to `connectors.auth_config_encrypted`.
 `services/connectors` ships a vendored read-path `decrypt_dict()` that

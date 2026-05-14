@@ -14,9 +14,11 @@ filters as defense-in-depth in case a model is not yet covered by RLS.
 
 GraphiQL exposure
 -----------------
-GraphiQL is enabled only when ``ENVIRONMENT == "development"``. In any
-other environment the introspection UI is disabled to reduce attack
-surface.
+GraphiQL is enabled only in development-class environments (see
+``app.core.config.DEV_ENVIRONMENTS``). In production the introspection UI
+is disabled to reduce attack surface; this is checked via the canonical
+``is_dev_env`` helper rather than an ad-hoc string compare so adding a
+new dev alias automatically gets the right behaviour.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from strawberry.fastapi import GraphQLRouter
 
 from app.api.v1.deps import CurrentUser, get_current_user
-from app.core.config import settings
+from app.core.config import is_dev_env, settings
 from app.db.rls import get_tenant_db
 from app.graphql.query import Query
 
@@ -54,13 +56,13 @@ schema = strawberry.Schema(query=Query)
 
 # ─── FastAPI router ───────────────────────────────────────────────────────────
 
-# GraphiQL is only enabled in development. Production-like environments get a
-# pure JSON endpoint with no introspection UI.
+# GraphiQL is only enabled in development-class environments. Production
+# gets a pure JSON endpoint with no introspection UI.
 #
 # strawberry-graphql >= 0.231 replaced the old ``graphiql: bool`` kwarg with
 # ``graphql_ide: GraphQL_IDE | None`` (where ``"graphiql"`` is the default and
 # ``None`` disables the IDE entirely). We pin to that newer API.
-_graphql_ide: str | None = "graphiql" if settings.ENVIRONMENT.lower() == "development" else None
+_graphql_ide: str | None = "graphiql" if is_dev_env(settings.ENVIRONMENT) else None
 
 graphql_router = GraphQLRouter(
     schema,

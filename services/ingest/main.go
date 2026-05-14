@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	"github.com/beenuar/aisoc/services/ingest/internal/envmode"
 	"github.com/beenuar/aisoc/services/ingest/internal/handler"
 	"github.com/beenuar/aisoc/services/ingest/internal/inbox"
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
@@ -24,9 +25,15 @@ import (
 )
 
 func main() {
-	// Configure structured JSON logging
+	// Configure structured logging. Use the human-friendly console writer
+	// in any dev-class environment (development, dev, local, demo, test) —
+	// previously this exact-matched ``ENV == "development"`` only, so
+	// ``ENVIRONMENT=development`` (the alias the Python API treats as
+	// equivalent) silently flipped this service to JSON logs and made
+	// local debugging confusing. envmode.IsDevRuntime keeps both layers
+	// in lock-step.
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	if os.Getenv("ENV") == "development" {
+	if envmode.IsDevRuntime() {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 

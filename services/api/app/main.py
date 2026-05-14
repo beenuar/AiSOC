@@ -17,7 +17,7 @@ from app.api.v1.router import api_router
 from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
 from app.core.airgap import airgap_status
-from app.core.config import settings, warn_if_insecure_defaults
+from app.core.config import is_dev_env, settings, warn_if_insecure_defaults
 from app.core.logging import configure_logging
 from app.core.telemetry import instrument_app
 from app.db.clickhouse import close_clickhouse
@@ -31,7 +31,6 @@ from app.services.plugin_manager import get_plugin_manager
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
-_DEV_ENVIRONMENTS = {"development", "dev", "local", "demo", "test"}
 _metrics_bearer = HTTPBearer(auto_error=False)
 
 logger = structlog.get_logger(__name__)
@@ -60,8 +59,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # log stream so operators see them before anything else.
     warn_if_insecure_defaults(settings)
 
-    # Create all database tables (dev only; use Alembic migrations in prod)
-    if settings.ENVIRONMENT == "development":
+    # Create all database tables (dev only; use Alembic migrations in prod).
+    # We keep this narrowly scoped to the canonical ``"development"`` label
+    # so demo / test / local don't quietly run ``create_all`` on top of a
+    # real schema. The looser dev gate is used below for SQL migrations.
+    if (settings.ENVIRONMENT or "").strip().lower() == "development":
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
@@ -77,7 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # production for now since prod is expected to have a managed migration
     # pipeline; demo / dev environments bootstrap themselves on boot so the
     # first deploy of a new feature is usable immediately.
-    if settings.ENVIRONMENT in _DEV_ENVIRONMENTS:
+    if settings.is_dev:
         try:
             from app.scripts.run_migrations import main as run_sql_migrations  # noqa: PLC0415
 
@@ -158,9 +160,13 @@ def create_application() -> FastAPI:
         title="AiSOC Platform API",
         description=("AiSOC — open-source AI Security Operations Center. Autonomous threat detection, investigation, and response."),
         version=settings.VERSION,
-        docs_url="/api/docs" if settings.ENVIRONMENT != "production" else None,
-        redoc_url="/api/redoc" if settings.ENVIRONMENT != "production" else None,
-        openapi_url="/api/openapi.json" if settings.ENVIRONMENT != "production" else None,
+        # Docs are exposed in every non-production environment. We use the
+        # ``is_production`` predicate (the inverse of the dev set) so any
+        # operator who names a new dev-class environment in DEV_ENVIRONMENTS
+        # automatically gets docs without touching this file.
+        docs_url="/api/docs" if not settings.is_production else None,
+        redoc_url="/api/redoc" if not settings.is_production else None,
+        openapi_url="/api/openapi.json" if not settings.is_production else None,
         lifespan=lifespan,
     )
 
@@ -243,7 +249,12 @@ async def health_check() -> dict:
 
 
 def _metrics_environment_is_dev() -> bool:
-    return (settings.ENVIRONMENT or "").strip().lower() in _DEV_ENVIRONMENTS
+    # Delegate to the canonical helper so the dev allow-list stays in one
+    # place. We intentionally read ``settings.ENVIRONMENT`` (cached) rather
+    # than ``os.environ`` because boot-time CORS/docs decisions were made
+    # against the same cached value — flipping it at request time would be
+    # inconsistent.
+    return is_dev_env(settings.ENVIRONMENT)
 
 
 @app.get("/metrics", tags=["system"])
