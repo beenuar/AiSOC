@@ -20,6 +20,70 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:soc@example.com';
 const PUSH_REDIS = new Redis(REDIS_URL);
 
+// Mirror the shared Python helper in services/api/app/core/cors.py:
+//   1. AISOC_CORS_ORIGINS (canonical, comma-separated)
+//   2. CORS_ORIGINS (legacy alias kept for Helm charts / dev scripts)
+//   3. Default allow-list (local dev + tryaisoc.com)
+// SSE + WebSocket connections from the console carry the auth cookie, so
+// allow_credentials is effectively in play here. If an operator sets the
+// allow-list to "*" we refuse to start in production rather than silently
+// turn /sse into a cross-origin CSRF target.
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'https://tryaisoc.com',
+  'https://www.tryaisoc.com',
+];
+
+function resolveCorsOrigins(): string[] {
+  for (const env of ['AISOC_CORS_ORIGINS', 'CORS_ORIGINS']) {
+    const raw = (process.env[env] || '').trim();
+    if (!raw) continue;
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts;
+  }
+  return [...DEFAULT_CORS_ORIGINS];
+}
+
+function isProductionEnv(): boolean {
+  const env = (process.env.AISOC_ENV || process.env.ENVIRONMENT || process.env.APP_ENV || '')
+    .trim()
+    .toLowerCase();
+  return env === 'production' || env === 'prod';
+}
+
+const CORS_ORIGINS = resolveCorsOrigins();
+const CORS_ALLOW_CREDENTIALS = !CORS_ORIGINS.includes('*');
+if (CORS_ORIGINS.includes('*')) {
+  if (isProductionEnv()) {
+    // Fail loud at startup instead of silently exposing /sse + /internal/*.
+    throw new Error(
+      'realtime: refusing to start with wildcard CORS origin in production. ' +
+        'Set AISOC_CORS_ORIGINS to an explicit allow-list.',
+    );
+  }
+  log.warn(
+    'CORS wildcard origin in dev — disabling credentials for the SSE + internal routes',
+  );
+}
+log.info(
+  { origins: CORS_ORIGINS, allowCredentials: CORS_ALLOW_CREDENTIALS },
+  'CORS configured',
+);
+
+// Build a single header value for /sse so we mirror the request's Origin only
+// when it's on the allow-list. Browsers reject `Access-Control-Allow-Origin: *`
+// when a cookie or `Authorization` header is in flight, so we can't blanket
+// star the SSE response anymore.
+function pickAllowedOrigin(req: express.Request): string | null {
+  const origin = (req.headers.origin as string | undefined) || '';
+  if (!origin) return null;
+  if (CORS_ORIGINS.includes('*')) return '*';
+  return CORS_ORIGINS.includes(origin) ? origin : null;
+}
+
 const pushManager = new PushManager({
   redis: PUSH_REDIS,
   logger: log,
@@ -30,7 +94,36 @@ const pushManager = new PushManager({
 
 // --- Express setup ---
 const app = express();
-app.use(cors());
+// Use an explicit allow-list rather than the default reflective CORS. The
+// console (apps/web) sends a session cookie on `/v1/push/*` and `/internal/*`
+// calls go agent-to-realtime over the private network; we must never echo
+// back a wildcard with credentials enabled.
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        // Same-origin / curl / health probes — let them through.
+        callback(null, true);
+        return;
+      }
+      if (CORS_ORIGINS.includes('*') || CORS_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+    credentials: CORS_ALLOW_CREDENTIALS,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: [
+      'Accept',
+      'Authorization',
+      'Content-Type',
+      'X-Tenant-ID',
+      'X-Internal-Token',
+    ],
+    maxAge: 300,
+  }),
+);
 app.use(express.json());
 
 const server = http.createServer(app);
@@ -170,7 +263,19 @@ app.get('/sse', sseRateLimit, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // SSE responses bypass the cors() middleware for the streamed write path,
+  // so mirror the request's Origin ourselves — but only if it's on the
+  // configured allow-list. Browsers reject `*` when a cookie is attached.
+  const allowedOrigin = pickAllowedOrigin(req);
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    if (allowedOrigin !== '*') {
+      res.setHeader('Vary', 'Origin');
+      if (CORS_ALLOW_CREDENTIALS) {
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
+    }
+  }
   res.flushHeaders();
 
   const heartbeat = setInterval(() => {

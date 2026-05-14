@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.cors import build_cors_kwargs
 
 # ---------------------------------------------------------------------------
 # OpenTelemetry setup (best-effort)
@@ -49,11 +50,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Honeytoken trip pixels/links are intentionally fetched from arbitrary
+# origins (that's the detection), so we keep allow_credentials=False and a
+# permissive default — AISOC_CORS_ORIGINS still lets operators tighten this
+# per-deploy without code changes.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **build_cors_kwargs(service_name="honeytokens", allow_credentials=False),
 )
 
 app.include_router(router)

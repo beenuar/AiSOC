@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.cors import build_cors_kwargs
 
 # ---------------------------------------------------------------------------
 # OpenTelemetry setup (best-effort)
@@ -50,11 +51,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# UEBA endpoints don't carry browser session cookies (the API service does),
+# so we can stay with allow_credentials=False and a permissive default. Setting
+# AISOC_CORS_ORIGINS still tightens this in production deploys without code
+# changes.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **build_cors_kwargs(service_name="ueba", allow_credentials=False),
 )
 
 app.include_router(router)

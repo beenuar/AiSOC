@@ -18,6 +18,7 @@ from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
 from app.core.airgap import airgap_status
 from app.core.config import settings, warn_if_insecure_defaults
+from app.core.cors import build_cors_kwargs
 from app.core.logging import configure_logging
 from app.core.telemetry import instrument_app
 from app.db.clickhouse import close_clickhouse
@@ -174,12 +175,18 @@ def create_application() -> FastAPI:
     app.add_middleware(AuditMiddleware)
     app.add_middleware(DemoModeMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=1000)
+    # CORS allow-list is resolved from AISOC_CORS_ORIGINS / CORS_ORIGINS via
+    # the shared helper; settings.CORS_ORIGINS is the Pydantic-parsed fallback
+    # for when neither env var is set (e.g. local pytest). The helper also
+    # enforces "no wildcard with credentials in production" so bad deploys
+    # fail loudly at startup instead of silently turning into CSRF targets.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        **build_cors_kwargs(
+            service_name="api",
+            allow_credentials=True,
+            default_origins=settings.CORS_ORIGINS,
+        ),
     )
 
     # Routers

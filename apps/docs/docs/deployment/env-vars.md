@@ -107,7 +107,8 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 |----------|---------|-------------|
 | `REALTIME_BASE_URL` | `http://realtime:8086` | Internal URL the API uses to fan out push events |
 | `REALTIME_INTERNAL_TOKEN` | — | Shared secret with the realtime service for internal RPC |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Comma-separated allow-list |
+| `AISOC_CORS_ORIGINS` | _(uses service default)_ | Canonical, repo-wide, comma-separated CORS allow-list. Applies to every API, agent, ingest, enrichment, realtime, UEBA, honeytoken, purple-team, and connectors process. See [CORS configuration](#cors-configuration) below for the full rules. |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Legacy alias kept for backwards compatibility. `AISOC_CORS_ORIGINS` takes precedence when both are set. |
 | `OTEL_ENDPOINT` | — | OTLP collector endpoint |
 | `MAX_TENANTS` | `1000` | Hard cap for multi-tenant deployments |
 | `DEFAULT_TENANT_PLAN` | `starter` | Default plan for newly provisioned tenants |
@@ -283,6 +284,45 @@ The Next.js frontend reads only public, build-time variables. Anything sensitive
 
 ---
 
+## CORS configuration
+
+CORS is configured the same way across every AiSOC service — Python (FastAPI), Go (`ingest`, `enrichment`), and TypeScript (`realtime`) — by reading a single environment variable. This is the variable to set when you put AiSOC behind a custom domain or want to restrict cross-origin access in production.
+
+### Variables
+
+| Variable | Priority | Description |
+|----------|----------|-------------|
+| `AISOC_CORS_ORIGINS` | **1 (canonical)** | Comma-separated allow-list. Set this in every environment. |
+| `CORS_ORIGINS` | 2 (legacy alias) | Honoured when `AISOC_CORS_ORIGINS` is unset. Existing Helm charts and dev scripts that already use this keep working. |
+| _(none set)_ | 3 (default) | Each service falls back to `http://localhost:3000`, `http://localhost:3001`, `http://127.0.0.1:3000`, `http://127.0.0.1:3001`, `https://tryaisoc.com`, `https://www.tryaisoc.com`. |
+
+Examples:
+
+```bash
+# Production, single console domain
+AISOC_CORS_ORIGINS=https://soc.example.com
+
+# Multiple consoles (analyst app + responder PWA on a subdomain)
+AISOC_CORS_ORIGINS=https://soc.example.com,https://responder.example.com
+
+# Local dev across the standard ports (matches the default)
+AISOC_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+```
+
+### Production safety guard
+
+The Python helper at [`services/api/app/core/cors.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/cors.py) (vendored byte-identical into every Python service) and the TypeScript guard in [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/index.ts) both **refuse to start** if the allow-list contains `*` while `allow_credentials` is `true` and any of `AISOC_ENV`, `ENVIRONMENT`, or `APP_ENV` equals `production` or `prod`. This catches the canonical CORS misconfiguration (wildcard + cookies / `Authorization` headers) before the deploy goes live.
+
+Outside production the same combination logs a warning and silently disables credentials — local dev stays usable when someone exports `CORS_ORIGINS=*`.
+
+The `honeytokens`, `purple-team`, and `ueba` services run with `allow_credentials=false` by design (no session cookies cross-origin), so wildcard origins are allowed there even in production — useful when honeytoken trip pixels are fetched from arbitrary origins.
+
+### Go services (`ingest`, `enrichment`) and the realtime service (`realtime`)
+
+These services read the same `AISOC_CORS_ORIGINS` / `CORS_ORIGINS` pair and fall back to the same default allow-list. `ingest` and `enrichment` keep `AllowCredentials: false` (they are token-authenticated per request, not cookie-authenticated). The realtime service runs with credentials enabled because the SSE / WebSocket streams carry the console's session cookie; it enforces the same production wildcard guard as the Python helper.
+
+---
+
 ## Example `.env` (full stack)
 
 ```bash
@@ -294,7 +334,8 @@ REDIS_URL=redis://localhost:6379/0
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 OPENSEARCH_URL=http://localhost:9200
 QDRANT_URL=http://localhost:6333
-CORS_ORIGINS=http://localhost:3000
+# Canonical, applies to every service. Legacy CORS_ORIGINS still works.
+AISOC_CORS_ORIGINS=http://localhost:3000
 
 # --- API: SSO (set both blocks if you actually use SSO) ---
 JWT_SECRET=$(openssl rand -hex 32)
