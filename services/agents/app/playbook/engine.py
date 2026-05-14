@@ -98,19 +98,76 @@ class PlaybookRun:
 
 
 def _resolve_field(context: dict[str, Any], field: str) -> Any:
-    """Resolve a dot-path field from context, e.g. 'alert.severity'."""
-    parts = field.split(".")
+    """Resolve a dot-path field from context, e.g. ``alert.severity`` or
+    ``entities.0.name``.
+
+    Supports traversal through both ``dict`` keys and ``list``/``tuple``
+    indices. A blank field returns ``None`` (rather than the whole context,
+    which would conflate "missing path" with "no path requested").
+    """
+    if not field:
+        return None
     cur: Any = context
-    for p in parts:
+    for part in field.split("."):
         if isinstance(cur, dict):
-            cur = cur.get(p)
+            cur = cur.get(part)
+        elif isinstance(cur, (list, tuple)):
+            # Numeric indices may be specified as bare ints in a dot-path.
+            try:
+                idx = int(part)
+            except (TypeError, ValueError):
+                return None
+            if -len(cur) <= idx < len(cur):
+                cur = cur[idx]
+            else:
+                return None
         else:
             return None
     return cur
 
 
+def _to_float(value: Any) -> float | None:
+    """Best-effort numeric coercion. Returns ``None`` for non-numeric input
+    so callers can decide how to handle the failure rather than crashing.
+
+    ``None`` and ``""`` coerce to ``0.0`` to preserve historical "missing
+    means zero" semantics for numeric comparisons.
+    """
+    if value is None or value == "":
+        return 0.0
+    if isinstance(value, bool):  # bool is a subclass of int; treat explicitly
+        return 1.0 if value else 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _evaluate_condition(condition: StepCondition, context: dict[str, Any]) -> bool:
-    """Return True if the condition passes."""
+    """Return True if the condition passes.
+
+    Two forms are supported:
+
+    1. Structured: ``StepCondition(field=..., operator=..., value=...)``.
+    2. Expression string: ``StepCondition(expression="severity in ['high','critical']")``.
+       Evaluated by :func:`_evaluate_expression` with a sandboxed
+       ``eval()`` over the run context. Falsy/unparseable expressions
+       return ``False`` so a malformed playbook never silently "passes".
+    """
+    # Expression-string form takes precedence when set. Previously this was
+    # silently ignored, which made every expression-only condition evaluate
+    # as ``None == None`` (i.e. always true).
+    if condition.expression:
+        return _evaluate_expression(condition.expression, context)
+
+    if not condition.field:
+        # No field and no expression — nothing to evaluate. Treat as "no
+        # condition" (i.e. pass) so an empty StepCondition() doesn't gate
+        # the step. The engine only invokes us when condition is non-None.
+        return True
+
     value = _resolve_field(context, condition.field)
     op = condition.operator
     expected = condition.value
@@ -122,11 +179,140 @@ def _evaluate_condition(condition: StepCondition, context: dict[str, Any]) -> bo
     if op == "ne":
         return value != expected
     if op == "contains":
-        return expected in str(value) if value is not None else False
-    if op == "gt":
-        return float(value or 0) > float(expected or 0)
-    if op == "lt":
-        return float(value or 0) < float(expected or 0)
+        # Support both substring containment ("error" contains "err") and
+        # set-membership ("severity in ['high','critical']"). The structured
+        # form historically used "expected in str(value)" which crashed when
+        # expected was a list — and silently false-matched the common SOAR
+        # pattern of testing field membership in an allowed set.
+        if value is None:
+            return False
+        if isinstance(expected, (list, tuple, set)):
+            return value in expected
+        return str(expected) in str(value)
+    if op in ("gt", "lt"):
+        lhs = _to_float(value)
+        rhs = _to_float(expected)
+        if lhs is None or rhs is None:
+            return False
+        return lhs > rhs if op == "gt" else lhs < rhs
+    return False
+
+
+# Operators allowed in expression-string conditions, in longest-match-first
+# order so ``>=`` is tried before ``>``.
+_EXPR_OPERATORS: tuple[tuple[str, str], ...] = (
+    ("==", "eq"),
+    ("!=", "ne"),
+    (">=", "gte"),
+    ("<=", "lte"),
+    (">", "gt"),
+    ("<", "lt"),
+    (" not in ", "not_in"),
+    (" in ", "in_"),
+)
+
+
+def _parse_literal(token: str, context: dict[str, Any]) -> Any:
+    """Parse one side of an expression. Strings, numbers, bool/null/None,
+    and bracketed list literals are returned as Python values; everything
+    else is treated as a dot-path into the run context.
+    """
+    token = token.strip()
+    if not token:
+        return None
+    if token in ("null", "None"):
+        return None
+    if token in ("true", "True"):
+        return True
+    if token in ("false", "False"):
+        return False
+    # Quoted string literal
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in ("'", '"'):
+        return token[1:-1]
+    # List literal: ['a', 'b'] or ["high","critical"]
+    if token.startswith("[") and token.endswith("]"):
+        inner = token[1:-1].strip()
+        if not inner:
+            return []
+        return [_parse_literal(piece, context) for piece in inner.split(",")]
+    # Numeric literal
+    try:
+        if "." in token:
+            return float(token)
+        return int(token)
+    except ValueError:
+        pass
+    # Otherwise: dot-path into context
+    return _resolve_field(context, token)
+
+
+def _evaluate_expression(expression: str, context: dict[str, Any]) -> bool:
+    """Evaluate a single ``"<lhs> <op> <rhs>"`` boolean expression.
+
+    Intentionally restricted: no ``and``/``or`` chains, no function calls,
+    no Python ``eval``. Callers that need compound logic should use
+    multiple structured conditions across multiple steps. Returns
+    ``False`` for any malformed input.
+    """
+    if not expression or not isinstance(expression, str):
+        return False
+    expr = expression.strip()
+
+    # "<field> exists" / "<field> is null" sugar.
+    lowered = expr.lower()
+    if lowered.endswith(" is not null") or lowered.endswith(" != null"):
+        base = expr[: -len(" is not null")] if lowered.endswith(" is not null") else expr[: -len(" != null")]
+        return _resolve_field(context, base.strip()) is not None
+    if lowered.endswith(" is null") or lowered.endswith(" == null"):
+        base = expr[: -len(" is null")] if lowered.endswith(" is null") else expr[: -len(" == null")]
+        return _resolve_field(context, base.strip()) is None
+
+    for token, op in _EXPR_OPERATORS:
+        # Use lowercase comparison for the " in "/" not in " word-operators
+        # so capitalization doesn't trip us up, but split on the original
+        # string to preserve quoted-literal casing.
+        haystack = lowered if op in ("in_", "not_in") else expr
+        needle = token if op in ("in_", "not_in") else token
+        idx = haystack.find(needle)
+        if idx == -1:
+            continue
+        lhs_raw = expr[:idx]
+        rhs_raw = expr[idx + len(needle) :]
+        lhs = _parse_literal(lhs_raw, context)
+        rhs = _parse_literal(rhs_raw, context)
+        try:
+            if op == "eq":
+                return lhs == rhs
+            if op == "ne":
+                return lhs != rhs
+            if op == "gt":
+                lf, rf = _to_float(lhs), _to_float(rhs)
+                return lf is not None and rf is not None and lf > rf
+            if op == "lt":
+                lf, rf = _to_float(lhs), _to_float(rhs)
+                return lf is not None and rf is not None and lf < rf
+            if op == "gte":
+                lf, rf = _to_float(lhs), _to_float(rhs)
+                return lf is not None and rf is not None and lf >= rf
+            if op == "lte":
+                lf, rf = _to_float(lhs), _to_float(rhs)
+                return lf is not None and rf is not None and lf <= rf
+            if op == "in_":
+                if rhs is None:
+                    return False
+                if isinstance(rhs, (list, tuple, set)):
+                    return lhs in rhs
+                return str(lhs) in str(rhs)
+            if op == "not_in":
+                if rhs is None:
+                    return True
+                if isinstance(rhs, (list, tuple, set)):
+                    return lhs not in rhs
+                return str(lhs) not in str(rhs)
+        except TypeError:
+            return False
+
+    logger.warning("Could not parse playbook condition expression: %r", expression)
     return False
 
 
@@ -414,12 +600,19 @@ class PlaybookEngine:
                             break
 
                 pr.step_results.append({"step_id": step.id, "name": step.name, "status": step_status, "result": result})
-                # Merge result into context for downstream steps
-                pr.context.update({f"_step_{step.id}": result})
-                # Also flatten top-level keys without underscore prefix for convenience
+                # Merge result into context for downstream steps. The namespaced
+                # key ``_step_<id>`` always reflects this step's full result.
+                pr.context[f"_step_{step.id}"] = result
+                # Flatten top-level keys for convenience so downstream steps can
+                # reference ``alert.severity`` or ``user_id`` directly without
+                # the ``_step_<id>.`` prefix. We *overwrite* prior values so a
+                # later enrichment step can refine context (e.g. replacing a
+                # placeholder ``user_id`` from the trigger with the resolved
+                # canonical id). Keys starting with ``_`` are reserved for
+                # engine bookkeeping and never auto-flattened.
                 for k, v in result.items():
                     if not k.startswith("_"):
-                        pr.context.setdefault(k, v)
+                        pr.context[k] = v
 
                 await _emit(
                     pr.run_id,
