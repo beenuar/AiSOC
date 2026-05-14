@@ -153,6 +153,27 @@ Verification entry point: `verify_ed25519_signature()` in `services/api/app/core
 
 If you run private plugins (not from the public marketplace), the same flow applies — register the publisher's public key and AiSOC will refuse unsigned or tampered manifests.
 
+### OCI install hardening (H-3)
+
+Plugins can be installed from an OCI image via `oras pull` (`POST /api/v1/plugins/install/oci`). Because the install path writes arbitrary files into `AISOC_PLUGINS_DIR` and then imports them, it is wrapped with several non-negotiable checks. They live in `services/api/app/services/plugin_manager.py` and are exercised by the test suite at `services/api/tests/test_plugin_manager.py`.
+
+| Check | What it prevents |
+| --- | --- |
+| `_validate_oci_ref()` | Argv injection into `oras pull`. Refs must match `[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}`, must not start with `-`, and must not target the well-known cloud metadata hosts (`169.254.169.254`, `metadata.google.internal`, `metadata.azure.com`). |
+| `_validate_plugin_id()` | Path traversal and module shadowing. Plugin ids must match `[A-Za-z0-9][A-Za-z0-9._-]{1,63}` — no slashes, no `..`, no NULs. The same rule runs at `discover()` time so legacy on-disk ids that fail to validate are skipped with a loud log instead of silently loaded. |
+| `argv` ordering | `oras pull --output <tmpdir> -- <ref>` is constructed as a Python list (no shell). `--output` comes before `--` so flags are parsed before the ref; the ref is the sole positional. Both invariants are pinned by `test_oras_argv_uses_double_dash`. |
+| `_assert_no_symlinks()` | A hostile image cannot pack a symlink that points at `/etc/passwd`, the instance-metadata service, or another tenant's plugin dir. The whole extracted tree is rejected on the first symlink encountered. |
+| `_select_extracted_plugin_dir()` | The plugin root is chosen by looking for a manifest, not by sorting subdirectories. Multiple candidate dirs raise `PluginError`, so a tarball that packs a stray `docs/` next to the real plugin cannot accidentally install the wrong directory. |
+| Signature-before-copy | `_verify_plugin_signature()` runs against the temp dir *before* anything is copied into `AISOC_PLUGINS_DIR`. In `strict` mode an unsigned/tampered image is rejected and the temp dir is cleaned up — no malicious `plugin.py` ever lands somewhere the runtime would later import it. |
+| `_safe_copytree()` | Defence in depth: `shutil.copytree(..., symlinks=True)` so even if a symlink slipped past the check above it would be copied as a link, not followed. |
+
+Operator implications:
+
+- The `oras` CLI must be on `PATH`. The 120 s subprocess timeout is fixed and not currently tunable.
+- Plugin manifests with non-conforming ids (slashes, leading dots, > 64 chars) will fail to load after upgrading. Rename the id in `plugin.yaml` and reinstall.
+- If you have a private registry that is reachable only by IP and that IP happens to be one of the forbidden metadata hosts, use a DNS name instead. There is no per-deployment override for the deny list — it's small on purpose.
+- The signature trust mode is still controlled by `PLUGIN_TRUST_MODE` (`disabled` | `warn` | `strict`) and `PLUGIN_TRUSTED_KEYS_DIR`. In `strict` mode an OCI install with no signature or a bad signature is rejected before the copy step.
+
 ## Network and transport
 
 AiSOC is HTTP-first. The expected production deployment terminates TLS at an ingress (nginx, Envoy, ALB, Cloud Run, …) and forwards plaintext to the API service over a private network. The API trusts `X-Forwarded-For` and `X-Forwarded-Proto` for IP attribution and HTTPS-redirect logic; configure your ingress to strip and replace those headers from external traffic.

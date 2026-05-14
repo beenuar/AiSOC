@@ -112,6 +112,8 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 | `MAX_TENANTS` | `1000` | Hard cap for multi-tenant deployments |
 | `DEFAULT_TENANT_PLAN` | `starter` | Default plan for newly provisioned tenants |
 | `AISOC_PLUGINS_DIR` | `/opt/aisoc/plugins` | Filesystem path the plugin loader scans |
+| `PLUGIN_TRUST_MODE` | `warn` | `disabled` skips signature checks, `warn` records `signature_status` but loads anyway, `strict` rejects unsigned/invalid plugins (including OCI installs). See [Operations → Security → OCI install hardening](../operations/security#oci-install-hardening-h-3). |
+| `PLUGIN_TRUSTED_KEYS_DIR` | `/etc/aisoc/plugin-keys` | Directory of Ed25519 public keys (`*.pem`/`*.pub`) that are allowed to sign plugins. |
 | `AISOC_DEMO_MODE` | `false` | When `true`, mutating requests outside the demo tenant return 403 |
 | `AISOC_DEMO_TENANT` | `demo` | Tenant slug allowed to write in demo mode |
 | `AISOC_DEMO_BANNER` | `Demo data resets daily at 00:00 UTC. All write actions are disabled.` | Banner text rendered by the web app |
