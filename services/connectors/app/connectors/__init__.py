@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.connectors.abnormal_security import AbnormalSecurityConnector
 from app.connectors.auditd import AuditdConnector
 from app.connectors.auth0 import Auth0Connector
 from app.connectors.aws_cloudtrail import AWSCloudTrailConnector
@@ -26,15 +27,19 @@ from app.connectors.azure_activity import AzureActivityConnector
 from app.connectors.azure_defender import AzureDefenderConnector
 from app.connectors.azure_entra import AzureEntraConnector
 from app.connectors.base import BaseConnector, ConnectorSchema, Field, OAuthHints
+from app.connectors.box import BoxConnector
 from app.connectors.carbon_black import CarbonBlackConnector
 from app.connectors.chronicle import ChronicleConnector
 from app.connectors.cisco_umbrella import CiscoUmbrellaConnector
 from app.connectors.cloudflare import CloudflareConnector
+from app.connectors.cloudflare_zt import CloudflareZTConnector
 from app.connectors.confluence_audit import ConfluenceAuditConnector
 from app.connectors.cortex_xdr import CortexXDRConnector
 from app.connectors.cortex_xsiam import CortexXSIAMConnector
 from app.connectors.crowdstrike import CrowdStrikeConnector
+from app.connectors.datadog import DatadogConnector
 from app.connectors.datadog_cloud_siem import DatadogCloudSIEMConnector
+from app.connectors.dropbox import DropboxConnector
 from app.connectors.duo_security import DuoSecurityConnector
 from app.connectors.elastic import ElasticConnector
 from app.connectors.email_inbox import EmailInboxConnector
@@ -50,6 +55,7 @@ from app.connectors.lacework import LaceworkConnector
 from app.connectors.m365_audit import M365AuditConnector
 from app.connectors.microsoft_sentinel import MicrosoftSentinelConnector
 from app.connectors.mimecast import MimecastConnector
+from app.connectors.oci import OCIConnector
 from app.connectors.okta import OktaConnector
 from app.connectors.onepassword import OnePasswordConnector
 from app.connectors.opsgenie import OpsgenieConnector
@@ -63,15 +69,19 @@ from app.connectors.salesforce import SalesforceConnector
 from app.connectors.sentinelone import SentinelOneConnector
 from app.connectors.servicenow import ServiceNowConnector
 from app.connectors.slack_audit import SlackAuditConnector
+from app.connectors.snowflake import SnowflakeConnector
 from app.connectors.snyk import SnykConnector
 from app.connectors.splunk import SplunkConnector
+from app.connectors.sublime_security import SublimeSecurityConnector
 from app.connectors.sumo_logic import SumoLogicConnector
+from app.connectors.sysdig import SysdigConnector
 from app.connectors.tailscale import TailscaleConnector
 from app.connectors.tenable import TenableConnector
 from app.connectors.tines import TinesConnector
 from app.connectors.torq import TorqConnector
 from app.connectors.trellix_helix import TrellixHelixConnector
 from app.connectors.trend_vision_one import TrendVisionOneConnector
+from app.connectors.vault import VaultConnector
 from app.connectors.wazuh import WazuhConnector
 from app.connectors.wiz import WizConnector
 from app.connectors.zscaler import ZscalerConnector
@@ -87,20 +97,25 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     AWSGuardDutyConnector,
     AWSSecurityHubConnector,
     AWSVPCFlowLogsConnector,
+    AbnormalSecurityConnector,
     Auth0Connector,
     AuditdConnector,
     AzureActivityConnector,
     AzureDefenderConnector,
     AzureEntraConnector,
+    BoxConnector,
     CarbonBlackConnector,
     ChronicleConnector,
     CiscoUmbrellaConnector,
     CloudflareConnector,
+    CloudflareZTConnector,
     ConfluenceAuditConnector,
     CortexXDRConnector,
     CortexXSIAMConnector,
     CrowdStrikeConnector,
+    DatadogConnector,
     DatadogCloudSIEMConnector,
+    DropboxConnector,
     DuoSecurityConnector,
     ElasticConnector,
     EmailInboxConnector,
@@ -116,6 +131,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     M365AuditConnector,
     MicrosoftSentinelConnector,
     MimecastConnector,
+    OCIConnector,
     OktaConnector,
     OnePasswordConnector,
     OpsgenieConnector,
@@ -129,15 +145,19 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     SentinelOneConnector,
     ServiceNowConnector,
     SlackAuditConnector,
+    SnowflakeConnector,
     SnykConnector,
     SplunkConnector,
+    SublimeSecurityConnector,
     SumoLogicConnector,
+    SysdigConnector,
     TailscaleConnector,
     TenableConnector,
     TinesConnector,
     TorqConnector,
     TrellixHelixConnector,
     TrendVisionOneConnector,
+    VaultConnector,
     WazuhConnector,
     WizConnector,
     ZscalerConnector,
@@ -189,23 +209,28 @@ __all__ = [
     "AWSGuardDutyConnector",
     "AWSSecurityHubConnector",
     "AWSVPCFlowLogsConnector",
+    "AbnormalSecurityConnector",
     "Auth0Connector",
     "AuditdConnector",
     "AzureActivityConnector",
     "AzureDefenderConnector",
     "AzureEntraConnector",
     "BaseConnector",
+    "BoxConnector",
     "CONNECTOR_REGISTRY",
     "CarbonBlackConnector",
     "ChronicleConnector",
     "CiscoUmbrellaConnector",
     "CloudflareConnector",
+    "CloudflareZTConnector",
     "ConfluenceAuditConnector",
     "ConnectorSchema",
     "CortexXDRConnector",
     "CortexXSIAMConnector",
     "CrowdStrikeConnector",
     "DatadogCloudSIEMConnector",
+    "DatadogConnector",
+    "DropboxConnector",
     "DuoSecurityConnector",
     "ElasticConnector",
     "EmailInboxConnector",
@@ -223,6 +248,7 @@ __all__ = [
     "MicrosoftSentinelConnector",
     "MimecastConnector",
     "OAuthHints",
+    "OCIConnector",
     "OktaConnector",
     "OnePasswordConnector",
     "OpsgenieConnector",
@@ -236,15 +262,19 @@ __all__ = [
     "SentinelOneConnector",
     "ServiceNowConnector",
     "SlackAuditConnector",
+    "SnowflakeConnector",
     "SnykConnector",
     "SplunkConnector",
+    "SublimeSecurityConnector",
     "SumoLogicConnector",
+    "SysdigConnector",
     "TailscaleConnector",
     "TenableConnector",
     "TinesConnector",
     "TorqConnector",
     "TrellixHelixConnector",
     "TrendVisionOneConnector",
+    "VaultConnector",
     "WazuhConnector",
     "WizConnector",
     "ZscalerConnector",
