@@ -117,9 +117,7 @@ def _assert_tenant_scoped(executed: list[tuple[str, dict[str, Any]]], tenant_id:
         if "aisoc_hunts" in normalized or "aisoc_hunt_runs" in normalized:
             assert "tenant_id" in normalized, f"tenant_id missing from SQL: {sql}"
             assert "tenant_id" in params, f"tenant_id not bound for SQL: {sql}"
-            assert params["tenant_id"] == tenant_id, (
-                f"wrong tenant bound: {params['tenant_id']} != {tenant_id}"
-            )
+            assert params["tenant_id"] == tenant_id, f"wrong tenant bound: {params['tenant_id']} != {tenant_id}"
 
 
 # ────────────────────────────────────────────────────────────────────────────

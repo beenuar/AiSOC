@@ -225,10 +225,9 @@ async def list_hunts(
         wheres.append("priority = :priority")
         params["priority"] = priority
 
-    q = text(
-        f"SELECT * FROM aisoc_hunts WHERE {' AND '.join(wheres)} "
-        "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
-    ).bindparams(**params)
+    q = text(f"SELECT * FROM aisoc_hunts WHERE {' AND '.join(wheres)} ORDER BY created_at DESC LIMIT :limit OFFSET :offset").bindparams(
+        **params
+    )
     try:
         rows = (await db.execute(q)).fetchall()
         return [_row_to_hunt(r) for r in rows]
@@ -281,9 +280,7 @@ async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) ->
 async def get_hunt(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> HuntResponse:
     row = (
         await db.execute(
-            text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
-                id=hunt_id, tenant_id=user.tenant_id
-            )
+            text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not row:
@@ -336,10 +333,7 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
         sets.append("tags = CAST(:tags AS TEXT[])")
         params["tags"] = body.tags
 
-    q = text(
-        f"UPDATE aisoc_hunts SET {', '.join(sets)} "
-        "WHERE id = :id AND tenant_id = :tenant_id RETURNING *"
-    ).bindparams(**params)
+    q = text(f"UPDATE aisoc_hunts SET {', '.join(sets)} WHERE id = :id AND tenant_id = :tenant_id RETURNING *").bindparams(**params)
     try:
         row = (await db.execute(q)).fetchone()
         if not row:
@@ -357,9 +351,7 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
 async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user: AuthUser) -> HuntRunResponse:
     hunt_row = (
         await db.execute(
-            text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
-                id=hunt_id, tenant_id=user.tenant_id
-            )
+            text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not hunt_row:
@@ -447,9 +439,7 @@ async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[H
     # listing runs (covers historical runs whose own tenant_id might be NULL).
     parent = (
         await db.execute(
-            text("SELECT 1 FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
-                id=hunt_id, tenant_id=user.tenant_id
-            )
+            text("SELECT 1 FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not parent:
@@ -457,11 +447,9 @@ async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[H
 
     rows = (
         await db.execute(
-            text(
-                "SELECT * FROM aisoc_hunt_runs "
-                "WHERE hunt_id = :id AND tenant_id = :tenant_id "
-                "ORDER BY run_at DESC LIMIT 100"
-            ).bindparams(id=hunt_id, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_hunt_runs WHERE hunt_id = :id AND tenant_id = :tenant_id ORDER BY run_at DESC LIMIT 100").bindparams(
+                id=hunt_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchall()
     return [
@@ -484,9 +472,9 @@ async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[H
 async def add_findings(hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSession, user: AuthUser) -> HuntResponse:
     existing = (
         await db.execute(
-            text(
-                "SELECT findings FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=hunt_id, tenant_id=user.tenant_id)
+            text("SELECT findings FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=hunt_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not existing:
