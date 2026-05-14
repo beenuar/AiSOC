@@ -279,9 +279,7 @@ class TestCoercePublished:
         """A 1970 epoch from a broken connector is pinned to the boundary
         and flagged as clamped — H-5 contract."""
         now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
-        result, clamped = _coerce_published(
-            {"published": "1970-01-01T00:00:00Z"}, now=now
-        )
+        result, clamped = _coerce_published({"published": "1970-01-01T00:00:00Z"}, now=now)
         assert result is not None
         assert clamped is True
         # Default max_age is 90 days, so the boundary lands at now - 90d.
@@ -291,9 +289,7 @@ class TestCoercePublished:
         """A 2099 timestamp from a misconfigured device is clamped to the
         future boundary (default = now + 5 minutes)."""
         now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
-        result, clamped = _coerce_published(
-            {"published": "2099-12-31T23:59:59Z"}, now=now
-        )
+        result, clamped = _coerce_published({"published": "2099-12-31T23:59:59Z"}, now=now)
         assert result is not None
         assert clamped is True
         assert result == now + timedelta(seconds=300)
@@ -395,9 +391,7 @@ class TestSynthesiseAlertFromEvents:
         assert alert.affected_users == ["alice@example.com", "bob@example.com"]
         assert alert.affected_ips == ["203.0.113.42", "203.0.113.99"]
 
-    def test_timestamps_pin_to_earliest_and_latest_event(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_timestamps_pin_to_earliest_and_latest_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``first_seen`` / ``last_seen`` are the batch envelope.
 
         The submit path bounds event timestamps against ``now_utc()`` (see
@@ -408,9 +402,7 @@ class TestSynthesiseAlertFromEvents:
         the valid range and no clamping occurs.
         """
         pinned_now = datetime(2026, 5, 14, 10, 0, 0, tzinfo=UTC)
-        monkeypatch.setattr(
-            "app.api.v1.endpoints.alerts.now_utc", lambda: pinned_now
-        )
+        monkeypatch.setattr("app.api.v1.endpoints.alerts.now_utc", lambda: pinned_now)
         events = [
             _okta_event(published="2026-05-14T09:30:14Z"),
             _okta_event(published="2026-05-14T09:45:00Z"),

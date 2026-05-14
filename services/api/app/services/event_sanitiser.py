@@ -373,11 +373,13 @@ def sanitise_event_batch(
             # to fit either. We don't break here because we want to
             # report the truncation count accurately for telemetry.
             for trailing_idx in range(idx + 1, len(events)):
-                out.append({
-                    "_truncated": True,
-                    "_reason": "batch_size_cap",
-                    "_index": trailing_idx,
-                })
+                out.append(
+                    {
+                        "_truncated": True,
+                        "_reason": "batch_size_cap",
+                        "_index": trailing_idx,
+                    }
+                )
                 stats["truncated"] += 1
             break
 

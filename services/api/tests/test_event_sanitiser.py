@@ -45,7 +45,6 @@ from app.services.event_sanitiser import (
     sanitise_event_batch,
 )
 
-
 # ════════════════════════════════════════════════════════════════════════════
 # Section 1: secret redaction — the most important guarantee
 # ════════════════════════════════════════════════════════════════════════════

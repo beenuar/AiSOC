@@ -456,10 +456,7 @@ async def submit_alert(
         if not _IDEMPOTENCY_KEY_RE.match(idempotency_key):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Idempotency-Key must be 8–128 ASCII chars matching "
-                    "[A-Za-z0-9._:-]"
-                ),
+                detail=("Idempotency-Key must be 8–128 ASCII chars matching [A-Za-z0-9._:-]"),
             )
 
         # Cheap check first — if a row with this (tenant, key) already
