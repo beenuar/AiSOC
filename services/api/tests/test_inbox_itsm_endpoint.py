@@ -354,7 +354,7 @@ async def test_fetch_token_and_connector_happy_path() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     db = _mock_db(token_row, connector_row)
     tok, conn = await _fetch_token_and_connector(db, tenant_token="tok-xyz", connector_instance_id=connector_id)
@@ -431,7 +431,7 @@ async def test_fetch_token_and_connector_cross_tenant_raises_403() -> None:
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),  # tenant B — different
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     db = _mock_db(token_row, connector_row)
     with pytest.raises(HTTPException) as exc:
@@ -460,7 +460,7 @@ async def test_fetch_token_and_connector_disabled_connector_raises_409() -> None
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=False,
+        is_enabled=False,
     )
     db = _mock_db(token_row, connector_row)
     with pytest.raises(HTTPException) as exc:
@@ -483,7 +483,7 @@ async def test_fetch_token_and_connector_unsupported_vendor_raises_422() -> None
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         connector_type="splunk",
-        enabled=True,
+        is_enabled=True,
     )
     db = _mock_db(token_row, connector_row)
     with pytest.raises(HTTPException) as exc:
@@ -726,7 +726,7 @@ async def test_endpoint_invalid_json_raises_400() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
     request = _build_request(b"this is not json")
@@ -759,7 +759,7 @@ async def test_endpoint_non_object_json_raises_400() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
     request = _build_request(b"[1,2,3]")
@@ -791,7 +791,7 @@ async def test_endpoint_missing_external_id_returns_200_with_note() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
     request = _build_request(json.dumps({"webhookEvent": "ping"}).encode())
@@ -828,7 +828,7 @@ async def test_endpoint_unlinked_external_id_returns_200_with_note() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     # ref_row=None means the JOIN found no AiSOC link.
     db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
@@ -882,7 +882,7 @@ async def test_endpoint_idempotent_when_case_already_in_target_status() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     ref_row = SimpleNamespace(
         id=uuid.uuid4(),
@@ -933,7 +933,7 @@ async def test_endpoint_unmapped_status_bumps_last_synced_only() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     ref_row = SimpleNamespace(
         id=uuid.uuid4(),
@@ -985,7 +985,7 @@ async def test_endpoint_real_status_change_writes_and_returns_changed() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     ref_row = SimpleNamespace(
         id=uuid.uuid4(),
@@ -1036,7 +1036,7 @@ async def test_endpoint_servicenow_dispatches_to_servicenow_parser() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="servicenow",
-        enabled=True,
+        is_enabled=True,
     )
     ref_row = SimpleNamespace(
         id=uuid.uuid4(),
@@ -1085,7 +1085,7 @@ async def test_endpoint_hmac_required_but_missing_returns_401() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     db = _build_db_for_endpoint(token_row=token_row, connector_row=connector_row, ref_row=None)
     request = _build_request(b"{}")
@@ -1118,7 +1118,7 @@ async def test_endpoint_hmac_valid_passes_through() -> None:
         id=connector_id,
         tenant_id=tenant_id,
         connector_type="jira",
-        enabled=True,
+        is_enabled=True,
     )
     ref_row = SimpleNamespace(
         id=uuid.uuid4(),

@@ -32,6 +32,13 @@ def _make_settings(**overrides) -> Settings:
         "PLUGIN_TRUST_MODE": "strict",
         # Pre-generated Fernet key. Real deployments mount this via Fly secret.
         "AISOC_CREDENTIAL_KEY": "Z7t9fM3pZ8U_bN5oVxQYr1w2kLsHd4aJiTvE6cNxYpA=",
+        # SAML/OIDC session signing secret. Empty/placeholder values now warn
+        # in prod (issue #130, finding #10), so the "clean prod" baseline
+        # has to set a real value.
+        "JWT_SECRET": "b" * 64,
+        # Bearer token the agents service uses to push events into realtime.
+        # Empty in prod means the channel is unauthenticated, which warns.
+        "REALTIME_INTERNAL_TOKEN": "c" * 64,
     }
     base.update(overrides)
     # ``_env_file=None`` skips .env discovery so test runs are deterministic
@@ -99,6 +106,40 @@ def test_empty_credential_key_in_dev_does_not_warn():
     s = _make_settings(ENVIRONMENT="development", AISOC_CREDENTIAL_KEY="")
     msgs = warn_if_insecure_defaults(s)
     assert not any("AISOC_CREDENTIAL_KEY" in m for m in msgs)
+
+
+def test_empty_jwt_secret_in_prod_warns():
+    """SAML/OIDC session tokens must be signed with a real secret in prod."""
+    s = _make_settings(JWT_SECRET="")
+    msgs = warn_if_insecure_defaults(s)
+    assert any("JWT_SECRET" in m for m in msgs)
+
+
+def test_placeholder_jwt_secret_in_prod_warns():
+    """The "changeme" sentinel is treated as empty — same warning fires."""
+    s = _make_settings(JWT_SECRET="changeme-insecure-default")
+    msgs = warn_if_insecure_defaults(s)
+    assert any("JWT_SECRET" in m for m in msgs)
+
+
+def test_empty_jwt_secret_in_dev_does_not_warn():
+    """Dev environments are noisy; we don't nag there."""
+    s = _make_settings(ENVIRONMENT="development", JWT_SECRET="")
+    msgs = warn_if_insecure_defaults(s)
+    assert not any("JWT_SECRET" in m for m in msgs)
+
+
+def test_empty_realtime_token_in_prod_warns():
+    """Agents → realtime channel is unauthenticated when the token is unset."""
+    s = _make_settings(REALTIME_INTERNAL_TOKEN="")
+    msgs = warn_if_insecure_defaults(s)
+    assert any("REALTIME_INTERNAL_TOKEN" in m for m in msgs)
+
+
+def test_empty_realtime_token_in_dev_does_not_warn():
+    s = _make_settings(ENVIRONMENT="development", REALTIME_INTERNAL_TOKEN="")
+    msgs = warn_if_insecure_defaults(s)
+    assert not any("REALTIME_INTERNAL_TOKEN" in m for m in msgs)
 
 
 # ─── /metrics auth gate ────────────────────────────────────────────────────

@@ -343,6 +343,14 @@ class Settings(BaseSettings):
     REALTIME_BASE_URL: str = "http://realtime:8086"
     REALTIME_INTERNAL_TOKEN: str = ""
 
+    # SAML/OIDC session token signing secret. Consumed by ``app/auth/saml.py``
+    # and ``app/auth/oidc.py`` to mint AiSOC session JWTs after an external
+    # identity provider returns a successful authn response. We surface this
+    # as a real Settings field (not just ``os.getenv``) so that
+    # ``warn_if_insecure_defaults`` can be exercised deterministically in
+    # tests by passing ``JWT_SECRET=""`` instead of mutating the environment.
+    JWT_SECRET: str = ""
+
     # Relying party identity for WebAuthn / Passkey ceremonies. RP_ID must
     # match the eTLD+1 of the PWA origin (no scheme, no port). RP_NAME is
     # what the OS prompt shows the user.
@@ -638,8 +646,7 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     # to sign tokens with an empty or well-known placeholder, but we still
     # want a noisy boot-time warning so the operator sees the misconfig
     # *before* the first SSO callback 500s.
-    _jwt_secret = os.getenv("JWT_SECRET", "")
-    if not is_dev_env(s.ENVIRONMENT) and (not _jwt_secret or _jwt_secret == "changeme-insecure-default"):
+    if not is_dev_env(s.ENVIRONMENT) and (not s.JWT_SECRET or s.JWT_SECRET == "changeme-insecure-default"):
         msgs.append(
             "JWT_SECRET is empty or set to the well-known placeholder — SAML/OIDC "
             "session token issuance will fail closed until you wire a real secret."
