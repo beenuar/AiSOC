@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,8 +50,7 @@ class FindingOut(FindingCreate):
     last_evaluated_at: str
     resolved_at: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScanRunOut(BaseModel):
@@ -67,8 +66,7 @@ class ScanRunOut(BaseModel):
     findings_closed: int
     error_message: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SuppressRequest(BaseModel):

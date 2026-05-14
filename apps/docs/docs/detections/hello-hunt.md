@@ -297,6 +297,15 @@ curl -s "http://localhost:8000/v1/alerts?rule_id=community-aisoc-hello-hunt-aws-
 
 You should see one alert come back with `severity: "high"` and the original CloudTrail event embedded under `raw`. Drop the rule ID into the [Explain Drawer](/docs/api/rest) and you'll get the full lineage: which selection block matched, which field values, and which playbook template the rule recommends.
 
+:::tip Two ingestion paths — pick the right one for what you're testing
+
+- **`POST /v1/ingest/batch`** (above) — sends the event through the full pipeline (`services/ingest` → Kafka → `services/fusion` → rule engine → alert). This is the path you want for testing **detection rules**, because the rule engine is in the loop. Use it for `hello-hunt`.
+- **`POST /api/v1/alerts/submit`** ([v7.3.1+](../api/rest)) — synthesises an `Alert` row directly from a batch of OCSF events, bypassing Kafka / `services/ingest` / `services/fusion` / the rule engine. This is the founder-flow path used by `aisoc submit` and the fresh-clone demo. Use it when you want a row in `/alerts` immediately and don't care whether a rule actually fired.
+
+If you `aisoc submit` the positive fixture above, you'll see an alert in `/alerts` — but its `rule_id` will be whatever the submit payload carries, **not** `community-aisoc-hello-hunt-aws-root-login`. The direct-write path doesn't consult the detection corpus.
+
+:::
+
 ## Graduating from `community/` to `native/`
 
 When you've run the rule against a few weeks of real telemetry and you want it promoted into the curated v1.0 set:
