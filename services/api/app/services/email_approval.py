@@ -221,7 +221,8 @@ class MailDeliveryClient(Protocol):
         html: str,
         text: str,
         from_addr: str | None = None,
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, Any]:
+        """Deliver an email and return a provider-specific response payload."""
 
 
 class MailgunClient:

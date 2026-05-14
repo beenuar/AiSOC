@@ -180,5 +180,5 @@ class ApprovalTimeoutScheduler:
             # here — that's the whole point of the shutdown path — so
             # suppress it explicitly alongside any tear-down errors.
             with contextlib.suppress(asyncio.CancelledError, Exception):
-                await task
+                _ = await task
         self._timers.clear()

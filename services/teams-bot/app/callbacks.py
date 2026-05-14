@@ -35,8 +35,13 @@ log = structlog.get_logger(__name__)
 
 
 class _ActionsClient(Protocol):
-    async def approve_action(self, action_id: str) -> dict[str, Any]: ...
-    async def reject_action(self, action_id: str) -> dict[str, Any]: ...
+    # Protocol bodies are documentation-only. Using docstrings instead of
+    # ``...`` avoids CodeQL ``py/ineffectual-statement`` warnings on stub bodies.
+    async def approve_action(self, action_id: str) -> dict[str, Any]:
+        """Approve the action identified by ``action_id``."""
+
+    async def reject_action(self, action_id: str) -> dict[str, Any]:
+        """Reject the action identified by ``action_id``."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -52,7 +57,8 @@ class _AuditEvent:
 
 
 class _AuditSink(Protocol):
-    async def record(self, event: _AuditEvent) -> None: ...
+    async def record(self, event: _AuditEvent) -> None:
+        """Persist an approval-audit event."""
 
 
 class CallbackResult(dict):

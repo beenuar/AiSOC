@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import app.connectors.confluence_audit as confluence_audit_module
 import httpx
 import pytest
 import respx
@@ -93,15 +94,15 @@ async def test_fetch_alerts_uses_pagination(fixture):
     respx.get(f"{_SITE}/wiki/rest/api/audit").mock(side_effect=handler)
 
     connector = ConfluenceAuditConnector(_SITE, _EMAIL, _TOKEN)
-    # Lower the page size to match the fixture.
-    import app.connectors.confluence_audit as mod
-
-    monkey_orig = mod._PAGE_SIZE  # noqa: SLF001
+    # Lower the page size to match the fixture. We reuse the module-level
+    # ``confluence_audit_module`` alias rather than re-importing inline so
+    # CodeQL (``py/import-and-import-from``) sees a single import style.
+    monkey_orig = confluence_audit_module._PAGE_SIZE  # noqa: SLF001
     try:
-        mod._PAGE_SIZE = 4  # type: ignore[assignment]
+        confluence_audit_module._PAGE_SIZE = 4  # type: ignore[assignment]
         events = await connector.fetch_alerts(since_seconds=10**9)
     finally:
-        mod._PAGE_SIZE = monkey_orig  # type: ignore[assignment]
+        confluence_audit_module._PAGE_SIZE = monkey_orig  # type: ignore[assignment]
 
     # First page returned 4 items, second page returned []; pagination
     # terminated cleanly.

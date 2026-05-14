@@ -223,7 +223,8 @@ class AttackChainLoader(Protocol):
     set passed in.
     """
 
-    async def load_seed(self, alert_id: uuid.UUID, tenant_id: uuid.UUID) -> CandidateAlert | None: ...
+    async def load_seed(self, alert_id: uuid.UUID, tenant_id: uuid.UUID) -> CandidateAlert | None:
+        """Return the seed alert if it exists in the given tenant, else None."""
 
     async def load_candidates_for_entities(
         self,
@@ -232,7 +233,8 @@ class AttackChainLoader(Protocol):
         start: datetime,
         end: datetime,
         exclude_ids: set[uuid.UUID],
-    ) -> list[CandidateAlert]: ...
+    ) -> list[CandidateAlert]:
+        """Return candidate alerts sharing entities with the seed in ``[start, end]``."""
 
 
 # ---------------------------------------------------------------------------

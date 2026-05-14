@@ -25,13 +25,22 @@ log = structlog.get_logger(__name__)
 
 
 class _ActionsClient(Protocol):
-    async def approve_action(self, action_id: str) -> dict[str, Any]: ...
-    async def reject_action(self, action_id: str) -> dict[str, Any]: ...
-    async def aclose(self) -> None: ...
+    # Protocol method bodies are documentation-only. We use docstrings (rather
+    # than ``...``) so static analysers don't flag the bodies as ineffectual
+    # statements (CodeQL ``py/ineffectual-statement``).
+    async def approve_action(self, action_id: str) -> dict[str, Any]:
+        """Approve the action identified by ``action_id``."""
+
+    async def reject_action(self, action_id: str) -> dict[str, Any]:
+        """Reject the action identified by ``action_id``."""
+
+    async def aclose(self) -> None:
+        """Release underlying network resources."""
 
 
 class _AuditSink(Protocol):
-    async def record(self, event: Any) -> None: ...
+    async def record(self, event: Any) -> None:
+        """Persist an approval-audit event."""
 
 
 class _FallbackActionsClient:

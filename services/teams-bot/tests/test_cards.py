@@ -33,7 +33,9 @@ def test_case_context_card_has_required_envelope():
         {"id": "case-1", "case_number": "CASE-0001", "title": "EDR detection"},
         web_base="https://app.aisoc.test",
     )
-    assert card["$schema"].startswith("http://adaptivecards.io")
+    # Pinned to the exact canonical schema URL — avoids CodeQL ``py/incomplete-url-substring-sanitization``
+    # by checking the full string rather than a substring prefix.
+    assert card["$schema"] == "http://adaptivecards.io/schemas/adaptive-card.json"
     assert card["type"] == "AdaptiveCard"
     assert card["version"] == "1.5"
     assert isinstance(card["body"], list) and len(card["body"]) >= 2

@@ -63,9 +63,14 @@ def _default_snapshot_loader(provider: str) -> dict[str, Any]:
     surfaces a 412 Precondition Failed ("no policy snapshot ingested yet").
     """
 
+    # ``provider`` is validated against ``SUPPORTED_PROVIDERS`` upstream, but
+    # CodeQL's ``py/log-injection`` taint analysis does not recognise the
+    # membership check as a sanitiser. Strip CR/LF explicitly so the value
+    # entering the log record cannot forge log lines.
+    safe_provider = provider.replace("\r", "").replace("\n", " ")
     logger.warning(
         "no production snapshot loader wired for provider=%s — returning {}",
-        provider,
+        safe_provider,
     )
     return {}
 

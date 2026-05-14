@@ -237,8 +237,10 @@ class ThreatIntelMatch(BaseModel):
 
 # Allowed top-level keys in ``summary_for_llm`` — kept here (not in
 # ``app/llm/contract.py``) so the model is the source of truth and the
-# contract validator can import this whitelist.
-_LLM_SAFE_KEYS = (
+# contract validator can import this whitelist. Public (no leading
+# underscore) because the contract tests and downstream validators
+# import this tuple directly.
+LLM_SAFE_KEYS = (
     "incident_id",
     "alert_summary",
     "entity_count",
@@ -341,7 +343,7 @@ class ContextBundle(BaseModel):
     def summary_for_llm(self) -> dict[str, Any]:
         """Pre-digested, contract-safe summary for LLM prompts.
 
-        Every key returned here is on ``_LLM_SAFE_KEYS`` and contains either
+        Every key returned here is on ``LLM_SAFE_KEYS`` and contains either
         a scalar, a small list of scalars, or a list of short string summaries
         — never raw OCSF / log payloads. ``LLMInputContract`` (T2.3) treats
         the output of this method as the canonical safe shape.

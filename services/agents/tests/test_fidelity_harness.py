@@ -67,8 +67,11 @@ def _load_expected() -> dict[str, object]:
 
 def test_cicids_micro_fixture_present() -> None:
     assert MICRO_FIXTURE.exists(), MICRO_FIXTURE
-    # 100 flows + 1 header row.
-    assert sum(1 for _ in MICRO_FIXTURE.open("r", encoding="utf-8")) == 101
+    # 100 flows + 1 header row. Read the file outside the assert so the file
+    # handle is properly closed (CodeQL ``py/side-effect-in-assert``).
+    with MICRO_FIXTURE.open("r", encoding="utf-8") as handle:
+        line_count = sum(1 for _ in handle)
+    assert line_count == 101
 
 
 def test_cicids_loader_normalises_features() -> None:

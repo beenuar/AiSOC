@@ -2410,10 +2410,13 @@ _DEMO_QUICK_DEFAULT_CLOCK_ISO = "2026-05-13T19:00:00+00:00"
 # The constant has no security meaning — it's just a fixed seed.
 _DEMO_QUICK_UUID_NS = uuid.UUID("a15a1c00-0000-4d04-8000-000000000064")
 
-# Per-invocation deterministic jitter source. Used sparingly — alert
-# offsets and tiny `ai_score` perturbations only — so re-runs stay
-# byte-identical even when the underlying random sequence is touched.
-_quick_rng = random.Random(20260513)
+# Per-invocation deterministic jitter source was previously declared here
+# (``_quick_rng = random.Random(20260513)``) for alert offset and ``ai_score``
+# perturbations. It has been removed because no call site reads from it any
+# more — keeping a global, never-used RNG drew a CodeQL
+# ``py/unused-global-variable`` warning and provided no behavioural value.
+# If deterministic jitter is reintroduced, declare the RNG inside the helper
+# that actually consumes it so it stays scoped and analysable.
 
 
 def _parse_clock(value: str | None) -> datetime:

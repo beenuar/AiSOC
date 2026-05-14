@@ -59,11 +59,17 @@ def _import_or_skip(mod_name: str, hint: str) -> Any:
 
     The integration test should be invisible on a developer laptop that
     hasn't installed the stack yet — skip beats fail.
+
+    ``pytest.skip()`` raises ``Skipped`` and never returns, but CodeQL
+    (``py/mixed-returns``) does not model it as ``NoReturn``, so we add
+    an explicit ``return None`` after it to make every control-flow path
+    end in an explicit ``return``.
     """
     try:
         return __import__(mod_name)
     except ImportError:
         pytest.skip(f"{mod_name} not installed locally — install {hint} to run this integration test")
+        return None
 
 
 def _build_event(idx: int) -> dict:
@@ -119,6 +125,7 @@ def _ingest_event(httpx: Any, event: dict, tenant: str) -> None:
         )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"ingest service unreachable at {INGEST_BASE_URL}: {exc}")
+        return  # pytest.skip raises; this satisfies static analysers that ``resp`` is always bound below
     if resp.status_code >= 500:
         pytest.skip(f"ingest service unhealthy: {resp.status_code} {resp.text}")
     assert resp.status_code < 400, resp.text
@@ -203,6 +210,7 @@ def test_graph_writer_does_not_block_fusion_on_failure() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"ingest service unreachable at {INGEST_BASE_URL}: {exc}")
+        return  # pytest.skip raises; satisfies static analysers that ``resp`` is bound below
 
     assert resp.status_code < 400, f"ingest returned {resp.status_code} — fusion should never block on graph: {resp.text}"
 

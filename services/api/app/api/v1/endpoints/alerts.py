@@ -501,7 +501,7 @@ async def submit_alert(
                 extra={
                     "alert_id": str(cached.id),
                     "tenant_id": str(cached.tenant_id),
-                    "idempotency_key": idempotency_key,
+                    "idempotency_key": _log_safe(idempotency_key),
                 },
             )
             return AlertResponse.model_validate(cached)
@@ -576,7 +576,7 @@ async def submit_alert(
                 "alert.submit.idempotency_race_no_row",
                 extra={
                     "tenant_id": str(current_user.tenant_id),
-                    "idempotency_key": idempotency_key,
+                    "idempotency_key": _log_safe(idempotency_key),
                 },
             )
             raise HTTPException(
@@ -589,7 +589,7 @@ async def submit_alert(
             extra={
                 "alert_id": str(cached.id),
                 "tenant_id": str(cached.tenant_id),
-                "idempotency_key": idempotency_key,
+                "idempotency_key": _log_safe(idempotency_key),
             },
         )
         return AlertResponse.model_validate(cached)
@@ -604,7 +604,7 @@ async def submit_alert(
             "severity": alert.severity,
             "events": len(sanitised_events),
             "connector_type": _log_safe(payload.connector_type),
-            "idempotency_key": idempotency_key,
+            "idempotency_key": _log_safe(idempotency_key),
             "timestamps_clamped": "ts-clamped" in (alert.tags or []),
             "redacted_keys": sanitise_stats.get("redacted", 0),
             "truncated_events": sanitise_stats.get("truncated", 0),
