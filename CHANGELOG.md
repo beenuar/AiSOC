@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Pydantic v2 configuration migration (H-6)
+
+Eliminates the 63+ `PydanticDeprecatedSince20: Support for class-based
+`config` is deprecated, use ConfigDict instead` warnings that were
+emitted on every API/service boot and during every test run.
+
+- **`BaseSettings` → `SettingsConfigDict`** —
+  `services/fusion/app/core/config.py` and
+  `services/threatintel/app/config.py` now declare `model_config =
+  SettingsConfigDict(env_file=…, extra="ignore")` instead of the
+  v1-style `class Config: env_file = …` inner class. Behaviour is
+  identical; the migration is purely an API surface fix that prevents
+  pydantic-settings from emitting a runtime deprecation each time the
+  service starts.
+- **`BaseModel` → `ConfigDict`** — every FastAPI endpoint that exposes
+  a Pydantic response model with `from_attributes = True` (so SQLAlchemy
+  rows can be returned directly) has been migrated to
+  `model_config = ConfigDict(from_attributes=True)`. Touches:
+  `services/api/app/api/v1/endpoints/{sla,threat_intel,reports,mssp,remediation,identity_graph,insider_threat,assets,posture}.py`
+  and `services/ueba/app/api/routes.py`. No schema or wire-format
+  changes — `model_dump()`/`from_orm` continue to work as before.
+- **No more silent warnings in CI** — pytest under
+  `-W error::DeprecationWarning` (pydantic only) now imports the full
+  API surface clean.
+
 ## [7.3.1] — 2026-05-14
 
 ### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone

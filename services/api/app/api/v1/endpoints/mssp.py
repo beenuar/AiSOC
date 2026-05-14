@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,8 +29,7 @@ class ChildTenantOut(BaseModel):
     mssp_role: str
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TenantNoteCreate(BaseModel):
@@ -44,8 +43,7 @@ class TenantNoteOut(TenantNoteCreate):
     author_id: uuid.UUID | None
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DelegationCreate(BaseModel):
@@ -61,8 +59,7 @@ class DelegationOut(DelegationCreate):
     revoked_at: datetime | None
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MetricsOut(BaseModel):
@@ -76,8 +73,7 @@ class MetricsOut(BaseModel):
     connector_count: int
     health_score: float | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -281,8 +277,7 @@ class RulePackOut(BaseModel):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RulePackRuleAdd(BaseModel):
@@ -303,8 +298,7 @@ class PackAssignmentOut(BaseModel):
     parameter_overrides: dict
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RuleOverrideCreate(BaseModel):
@@ -327,8 +321,7 @@ class RuleOverrideOut(BaseModel):
     parameter_overrides: dict
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EffectiveRuleOut(BaseModel):
@@ -346,8 +339,7 @@ class EffectiveRuleOut(BaseModel):
     override_note: str | None
     parameter_overrides: dict
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EffectiveRuleCountOut(BaseModel):
@@ -640,8 +632,7 @@ class MSSPKpiOverview(BaseModel):
     connectors_online: int
     connectors_degraded: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ManagedTenantRow(BaseModel):
@@ -654,8 +645,7 @@ class ManagedTenantRow(BaseModel):
     connector_status: str
     last_event_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CrossTenantIncident(BaseModel):
@@ -667,8 +657,7 @@ class CrossTenantIncident(BaseModel):
     created_at: str
     assignee: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 _MSSP_TENANTS_MOCK = [

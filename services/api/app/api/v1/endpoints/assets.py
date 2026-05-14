@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,8 +53,7 @@ class AssetOut(AssetCreate):
     # ORM attribute is asset_metadata; expose as metadata in JSON via validator
     asset_metadata: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     def model_post_init(self, __context: Any) -> None:
         # Populate the `metadata` field from the ORM's `asset_metadata` column.
@@ -86,8 +85,7 @@ class VulnerabilityOut(VulnerabilityCreate):
     # ORM attribute is asset_metadata; expose as metadata in JSON via validator
     asset_metadata: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     def model_post_init(self, __context: Any) -> None:
         if self.asset_metadata and not self.metadata:
