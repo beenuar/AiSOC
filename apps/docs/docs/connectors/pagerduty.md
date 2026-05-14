@@ -76,10 +76,10 @@ Vendor signals collapse to the AiSOC 4-tier ladder per the wave-1 PagerDuty rule
 
 ## What this connector does **not** cover
 
-- **Triggering pages from AiSOC** — that's the [PagerDuty Paging action plugin](/docs/connectors/pagerduty-paging), a separate write-mode integration.
+- **Triggering pages from AiSOC** — that's the PagerDuty Paging action plugin (a separate write-mode integration, doc page TBD).
 - **Per-incident log entry stream** — only the top-level incident envelope is pulled. The fine-grained "log_entries" stream is a separate endpoint and deliberately omitted from wave-1 to avoid quota pressure.
 
 ## Related
 
 - [Opsgenie](/docs/connectors/opsgenie) — sibling on-call platform with the same audit surface.
-- [PagerDuty Paging](/docs/connectors/pagerduty-paging) — outbound paging action plugin (write-mode counterpart).
+- PagerDuty Paging — outbound paging action plugin (write-mode counterpart, doc page TBD).
