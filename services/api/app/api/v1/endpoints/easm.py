@@ -37,7 +37,7 @@ async def _run_scan_job(
     ip_targets: list[str],
 ) -> None:
     """Background task that runs discovery + drift detection."""
-    from app.db.database import AsyncSessionLocal as async_session_factory  # noqa: deferred
+    from app.db.database import AsyncSessionLocal as async_session_factory
 
     try:
         discovered = await run_discovery(org_query, ip_targets=ip_targets or None)

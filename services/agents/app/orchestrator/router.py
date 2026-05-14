@@ -380,10 +380,7 @@ async def _run_parallel(state: InvestigationState, signals: list[str]) -> Invest
         copy.iteration_count = state.iteration_count
         branch_inputs.append(copy)
 
-    coros = [
-        _resolve_runner(name)(branch_inputs[idx])
-        for idx, name in enumerate(signals)
-    ]
+    coros = [_resolve_runner(name)(branch_inputs[idx]) for idx, name in enumerate(signals)]
     branch_results = await asyncio.gather(*coros, return_exceptions=True)
 
     successful: list[InvestigationState] = []
