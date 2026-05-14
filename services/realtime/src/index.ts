@@ -73,34 +73,6 @@ log.info(
   'CORS configured',
 );
 
-// Build a single header value for /sse. Two safe shapes only:
-//   - Allow-list match: reflect the request's specific Origin (and we may
-//     pair it with `Access-Control-Allow-Credentials: true` because the
-//     Origin came from a hardcoded allow-list, not from request headers).
-//   - Dev wildcard: emit the literal '*'. CORS_ALLOW_CREDENTIALS is false
-//     in this branch (see above), so browsers do not attach the auth
-//     cookie and `*` is safe.
-// We deliberately never reflect a user-supplied Origin from the wildcard
-// branch — doing so would be the canonical "CORS misconfiguration for
-// credentials transfer" sink that CodeQL flags, and depends on a runtime
-// boolean invariant that static analysis can't follow.
-function pickAllowedOrigin(req: express.Request): string | null {
-  if (CORS_ORIGINS.includes('*')) return '*';
-  const origin = (req.headers.origin as string | undefined) || '';
-  if (!origin) return null;
-  // Walk the constant allow-list and return the *constant's* element on
-  // match. The returned string is provably not data-derived from the
-  // request header, which breaks the CodeQL "CORS misconfiguration for
-  // credentials transfer" taint flow (the request origin is used only as
-  // an equality comparand, never propagated to the response header).
-  for (const allowed of CORS_ORIGINS) {
-    if (allowed === origin) {
-      return allowed;
-    }
-  }
-  return null;
-}
-
 const pushManager = new PushManager({
   redis: PUSH_REDIS,
   logger: log,
@@ -280,22 +252,13 @@ app.get('/sse', sseRateLimit, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  // SSE responses bypass the cors() middleware for the streamed write path,
-  // so set the CORS headers ourselves. `pickAllowedOrigin` returns either
-  // the literal '*' (dev wildcard, credentials always off) or an Origin
-  // value that already passed the hardcoded allow-list check — never a
-  // raw user-supplied Origin from the wildcard branch. That makes it safe
-  // to pair the reflected Origin with `Access-Control-Allow-Credentials`.
-  const allowedOrigin = pickAllowedOrigin(req);
-  if (allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    if (allowedOrigin !== '*') {
-      res.setHeader('Vary', 'Origin');
-      if (CORS_ALLOW_CREDENTIALS) {
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
-    }
-  }
+  // CORS headers for SSE are emitted by the `cors()` middleware on lines
+  // ~118–143 above, which the `cors` npm package implements safely (CodeQL
+  // recognises `cors({ origin: <function> })` as a sanitiser). SSE auth is
+  // done via the `tenant_id` query parameter, not via a session cookie,
+  // so we deliberately do not enable `Access-Control-Allow-Credentials`
+  // on this endpoint — that eliminates the entire "CORS misconfiguration
+  // for credentials transfer" attack surface that CodeQL warns about.
   res.flushHeaders();
 
   const heartbeat = setInterval(() => {
