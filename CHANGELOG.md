@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security — audit log integrity (H-4 + M-12)
+
+Hardens the immutable audit log against three distinct trust-boundary
+failures discovered during the bugfix sweep:
+
+- **Spoofable `actor_ip`.** Previous releases lifted `actor_ip` from
+  `X-Forwarded-For` unconditionally. Any client able to reach the API
+  without a stripping ingress could attach their own header and write an
+  arbitrary source IP into compliance-grade audit rows. The new
+  `services/api/app/core/trusted_proxy.py` resolves IPs through an
+  explicit operator-configured allow-list (`AISOC_TRUSTED_PROXIES`,
+  empty by default). When the env var is empty the header is ignored and
+  the direct TCP peer is recorded; when set, only requests whose
+  immediate peer falls inside the configured CIDR list consult the
+  header, and the chain is walked right-to-left to return the closest
+  untrusted hop. Both the `emit_audit()` helper
+  (`services/api/app/services/audit.py`) and the auto-audit middleware
+  (`services/api/app/middleware/audit_middleware.py`) route through this
+  resolver.
+- **Secrets leaking into `changes`.** The `changes` payload is now
+  passed through `redact_changes()`
+  (`services/api/app/services/audit_redaction.py`) before persistence.
+  Keys matching case-insensitive sensitive patterns (`password`,
+  `secret`, `token`, `api_key`, `private_key`, `*credential*`,
+  `authorization`, `bearer`, `cookie`, `session`, `client_secret`, `*_seed`,
+  …) are replaced with `***REDACTED***` recursively across dicts, lists
+  and tuples. Serialized payloads larger than
+  `AISOC_AUDIT_MAX_CHANGES_BYTES` (default 65,536) are substituted with a
+  `{ "_truncated": true, "_size": <bytes> }` marker so a single bad
+  caller can't balloon the table. Recursion depth and node count are
+  capped to prevent DOS via pathological input.
+- **Trigger-bypass tampering.** The append-only trigger on `audit_log`
+  doesn't defend against SQL-level access (disabling triggers,
+  `TRUNCATE`, credential theft). Migration
+  `043_audit_log_hash_chain.sql` adds `prev_hash` / `entry_hash` columns
+  (per-tenant SHA-256 chain), and
+  `services/api/app/services/audit_hash.py` provides a pure
+  `compute_entry_hash()` + `verify_chain()` pair. Both `emit_audit()`
+  and the middleware now stamp every new row with the hash of the
+  previous tenant row, so any deletion, reorder, or rewrite is
+  detectable at audit time. The verifier accepts plain row dicts (e.g.
+  from a CSV export) so internal or external auditors can replay the
+  chain without DB access. Legacy unchained rows are tolerated at the
+  head of a tenant's history; gaps after the chain has started are
+  treated as forgery signals.
+
+New env vars (see `apps/docs/docs/deployment/env-vars.md`):
+
+- `AISOC_TRUSTED_PROXIES` — comma-separated CIDR list. Empty by default.
+- `AISOC_AUDIT_MAX_CHANGES_BYTES` — `65536` by default.
+
+80 new unit tests cover the resolver, redactor, and hash chain
+(`test_trusted_proxy.py`, `test_audit_redaction.py`, `test_audit_hash.py`),
+including tamper-detection scenarios (rewritten row, deleted row,
+reordered rows, `prev_hash` / `entry_hash` tampering) and robustness
+under malformed input. No regressions across the existing 1,283-test
+suite.
+
 ## [7.3.1] — 2026-05-14
 
 ### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone

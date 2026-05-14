@@ -28,3 +28,10 @@ class AuditLog(Base):
     changes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    # Tamper-evident hash chain. ``prev_hash`` is the ``entry_hash`` of
+    # the previous audit row for the same tenant; ``entry_hash`` is a
+    # sha256 digest over the canonical serialization of this row mixed
+    # with ``prev_hash``. See migration 043_audit_log_hash_chain.sql
+    # and ``app.services.audit_hash`` for the canonical algorithm.
+    prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entry_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

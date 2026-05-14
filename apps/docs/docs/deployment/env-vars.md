@@ -36,6 +36,15 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
 
+### Audit log
+
+Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py), [`services/api/app/core/trusted_proxy.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/trusted_proxy.py), [`services/api/app/services/audit_redaction.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_redaction.py). Background: [Security operations → Audit logging](../operations/security#audit-logging).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_TRUSTED_PROXIES` | _empty_ | Comma-separated list of CIDRs (e.g. `10.0.0.0/8,192.168.0.0/16`) for trusted ingress / load balancer hops. When empty, `X-Forwarded-For` is **ignored** and `actor_ip` is the direct TCP peer — set this in production so the audit log records the real client IP without being spoofable from the public side. |
+| `AISOC_AUDIT_MAX_CHANGES_BYTES` | `65536` | Hard cap on the serialized `changes` payload stored per audit row. Over-sized values are replaced with a `{ "_truncated": true, "_size": <bytes> }` marker. Set higher only if you genuinely need richer diffs and have provisioned the storage. |
+
 ### Passkeys (WebAuthn)
 
 | Variable | Default | Description |
