@@ -60,8 +60,12 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "services" / "agents"
-sys.path.insert(0, str(_AGENTS_ROOT))
+# Order matters: scripts/ also contains a tests/ package (scripts/tests/) for
+# the CLI smoke test, and would shadow services/agents/tests/ if it landed at
+# position 0 of sys.path. Insert scripts/ first, then agents/ on top, so that
+# `from tests.test_adversary_eval import ...` resolves to the substrate tests.
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+sys.path.insert(0, str(_AGENTS_ROOT))
 
 # The per-investigation token/USD/latency telemetry block (T2.4) is stdlib-only
 # and lives in ``scripts/eval_telemetry.py`` so it can run on hosts that
