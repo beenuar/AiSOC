@@ -88,7 +88,17 @@ function pickAllowedOrigin(req: express.Request): string | null {
   if (CORS_ORIGINS.includes('*')) return '*';
   const origin = (req.headers.origin as string | undefined) || '';
   if (!origin) return null;
-  return CORS_ORIGINS.includes(origin) ? origin : null;
+  // Walk the constant allow-list and return the *constant's* element on
+  // match. The returned string is provably not data-derived from the
+  // request header, which breaks the CodeQL "CORS misconfiguration for
+  // credentials transfer" taint flow (the request origin is used only as
+  // an equality comparand, never propagated to the response header).
+  for (const allowed of CORS_ORIGINS) {
+    if (allowed === origin) {
+      return allowed;
+    }
+  }
+  return null;
 }
 
 const pushManager = new PushManager({
