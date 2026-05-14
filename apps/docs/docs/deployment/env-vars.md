@@ -225,23 +225,27 @@ Source: [`services/ingest/internal/config/config.go`](https://github.com/beenuar
 
 Source: [`services/ueba/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/ueba/app/core/config.py)
 
-All variables use the `UEBA_` prefix.
+Every variable in this section accepts **both** an unprefixed name (e.g. `DATABASE_URL`, `KAFKA_BOOTSTRAP_SERVERS`) and the legacy `UEBA_`-prefixed name (e.g. `UEBA_DATABASE_URL`, `UEBA_KAFKA_BOOTSTRAP_SERVERS`). When both are set, the **unprefixed form wins** — this matches the convention used by every other Python service in the repo and the `services/ueba` section of `docker-compose.yml`, which exports unprefixed names.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `UEBA_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for baselines and anomalies |
-| `UEBA_KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
-| `UEBA_KAFKA_INPUT_TOPIC` | `security.events` | Topic the scorer consumes |
-| `UEBA_KAFKA_OUTPUT_TOPIC` | `ueba.anomalies` | Topic the scorer emits to |
-| `UEBA_KAFKA_CONSUMER_GROUP` | `ueba-service` | Kafka consumer group ID |
-| `UEBA_BASELINE_WINDOW_DAYS` | `30` | History window used to compute behavioural baselines |
-| `UEBA_ANOMALY_THRESHOLD` | `3.0` | Z-score threshold for flagging an event as anomalous |
-| `UEBA_PEER_GROUP_MIN_SIZE` | `3` | Minimum peers required for peer-group analysis |
-| `UEBA_SCORING_BATCH_SIZE` | `100` | Events processed per scoring batch |
-| `UEBA_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP gRPC endpoint |
-| `UEBA_SERVICE_NAME` | `aisoc-ueba` | OTel service name |
-| `UEBA_HOST` | `0.0.0.0` | HTTP listener interface |
-| `UEBA_PORT` | `8004` | HTTP listener port |
+The table below shows the canonical (unprefixed) name first and the legacy alias second. New deployments should prefer the unprefixed form. (See PR [#135](https://github.com/beenuar/AiSOC/pull/135) for the implementation and [Issue #134](https://github.com/beenuar/AiSOC/issues/134) for the original report.)
+
+| Variable | Legacy alias | Default | Description |
+|----------|--------------|---------|-------------|
+| `DATABASE_URL` | `UEBA_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for baselines and anomalies |
+| `KAFKA_BOOTSTRAP_SERVERS` | `UEBA_KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
+| `KAFKA_INPUT_TOPIC` | `UEBA_KAFKA_INPUT_TOPIC` | `security.events` | Topic the scorer consumes |
+| `KAFKA_OUTPUT_TOPIC` | `UEBA_KAFKA_OUTPUT_TOPIC` | `ueba.anomalies` | Topic the scorer emits to |
+| `KAFKA_CONSUMER_GROUP` | `UEBA_KAFKA_CONSUMER_GROUP` | `ueba-service` | Kafka consumer group ID |
+| `BASELINE_WINDOW_DAYS` | `UEBA_BASELINE_WINDOW_DAYS` | `30` | History window used to compute behavioural baselines |
+| `ANOMALY_THRESHOLD` | `UEBA_ANOMALY_THRESHOLD` | `3.0` | Z-score threshold for flagging an event as anomalous |
+| `PEER_GROUP_MIN_SIZE` | `UEBA_PEER_GROUP_MIN_SIZE` | `3` | Minimum peers required for peer-group analysis |
+| `SCORING_BATCH_SIZE` | `UEBA_SCORING_BATCH_SIZE` | `100` | Events processed per scoring batch |
+| `OTEL_ENDPOINT` | `UEBA_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP gRPC endpoint |
+| `SERVICE_NAME` | `UEBA_SERVICE_NAME` | `aisoc-ueba` | OTel service name |
+| `HOST` | `UEBA_HOST` | `0.0.0.0` | HTTP listener interface |
+| `PORT` | `UEBA_PORT` | `8004` | HTTP listener port |
+
+`services/ueba/alembic/env.py` follows the same rule: it reads `DATABASE_URL` first and falls back to `UEBA_DATABASE_URL`, so `alembic upgrade head` and the running service always see the same DSN.
 
 ---
 

@@ -283,6 +283,17 @@ When you move from `pnpm aisoc:demo` to a production deployment, walk through th
 - [ ] Enable mTLS between services if you're running on Kubernetes with a mesh.
 - [ ] Subscribe to the AiSOC GitHub Security Advisories for vulnerability notifications.
 
+## Static analysis (CodeQL)
+
+GitHub CodeQL runs on every pull request and on a nightly schedule against `main`. As of the v8.0 wave-1 push the Python alert count on `main` is zero, and we treat that as a CI gate — a new alert breaks the security workflow and blocks the next release.
+
+Two patterns are worth documenting because they came up repeatedly during the sweep that drove the alert count to zero:
+
+- **`py/log-injection` — sanitise inline at the call site.** When a user-controlled or DB-derived string lands in a structured log entry, do the cleansing right where the log call happens, not in a helper function. CodeQL's taint tracker doesn't follow `_log_safe(value)` through a function boundary reliably, but it does recognise an inline `.replace("\r", "").replace("\n", " ")[:32]` chain. The canonical example is `services/api/app/api/v1/endpoints/waitlist.py` — `entry_id` and `user.user_id` are `uuid.UUID`-typed so they can't actually contain CR/LF, but we still sanitise them explicitly so the property is visible to both CodeQL and future readers.
+- **`py/import-and-import-from` — pick one import style per module.** Tests that need to monkey-patch a module-level constant should use `pytest.MonkeyPatch.setattr(module, "_NAME", value)` (importing the module via the standard `from app.connectors.foo import _NAME` form), not `import app.connectors.foo as foo_module` _and_ a from-import for the same names. The dual style trips CodeQL's import-redundancy check.
+
+The remaining alert categories (`py/uninitialized-local-variable`, `py/side-effect-in-assert`, `py/incomplete-url-substring-sanitization`, `py/ineffectual-statement`, `py/unnecessary-lambda`, `py/mixed-returns`, `py/unused-global-variable`, `py/unused-import`) are all standard Python correctness items and the fixes were uncontroversial — see the `[Unreleased]` section of the [CHANGELOG](../../../CHANGELOG.md) for the per-PR breakdown.
+
 ## Reporting a vulnerability
 
 Security issues should be reported privately via [GitHub Security Advisories](https://github.com/beenuar/AiSOC/security/advisories/new), not as public issues. We aim to acknowledge reports within 2 business days and ship a coordinated disclosure with the reporter. The [Contributing guidelines](../contributing/guidelines) cover the full process.

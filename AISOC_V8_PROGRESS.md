@@ -24,7 +24,12 @@ PR title: `v8.0 wave-1 shipped + wave-2 checkpoint`
 
 PR body: see `.pr-body-wave1.md` (gitignored — local working copy). Paste the full contents into the GitHub web UI when opening the PR.
 
-Status (refreshed 2026-05-14, 11:35 IST): wave-2 worker subagents errored mid-task; their checkpoint output is now committed as 11 per-track `(wip)` commits + 2 progress-doc commits on top of the wave-1 base. Branch was renamed to `v8.0/agentic-soc-foundation` mid-session and pushed to fork at HEAD `7c822a5f` (44 commits ahead of `upstream/main`). `gh` CLI is unauthenticated on this workstation, so the PR is **pending — paste the compare URL above into the browser** with the body from `.pr-body-wave1.md`.
+Status (refreshed 2026-05-14, 17:20 UTC):
+
+- **Wave-1 SHIPPED** — PR [#125](https://github.com/beenuar/AiSOC/pull/125) merged to `upstream/main` at `b854010e` on 2026-05-14T13:47 UTC. All wave-1 deliverables (graph at ingest, four-agent rebrand, `/hunt`, 6 fully-tested connectors, L0–L4 maturity, public scoreboard) are live on `main`.
+- **Post-merge wave** — 12 follow-on PRs landed on `main` after PR #125: critical/high security fixes (#116–#128), CodeQL alert sweep to zero (#133, #136, #137), security smoke + UX cleanup (#132), playbook engine correctness (#129), and the first community contribution (#135 — UEBA env-var alignment, closes #134).
+- **Wave-2** — still tracked here as `[~]` (in flight) for the 10 remaining connectors and the cross-track polish items below. `VERSION` stays at `7.3.1` until wave-2 lands; all v8.0 work is documented under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
+- **Original wave-2 background subagents** — errored mid-task; their checkpoint output landed as the 11 per-track `(wip)` commits below, all of which are now on `main` as part of the PR #125 squash-merge.
 
 Wave-2 commits (most recent first, all SSH-signed, attributed Prince Sinha):
 - `ecf2ffe1` T7.3 three anchor blog posts (graph, latency, L0–L4) (wip)

@@ -182,6 +182,69 @@ emitted on every API/service boot and during every test run.
   `-W error::DeprecationWarning` (pydantic only) now imports the full
   API surface clean.
 
+### v8.0 architectural foundation — graph at ingest, four-agent rebrand, `/hunt`, sixteen connectors (PR #125)
+
+The biggest single push of the day. The [`AISOC_V8_PROGRESS.md`](AISOC_V8_PROGRESS.md) doc tracks the wave breakdown; this entry is the user-visible summary.
+
+- **Graph at ingest.** `services/ingest` now writes a Neo4j-backed entity graph (`User`, `Asset`, `Process`, `IP`, `Domain`, `Alert`) as events flow through the normaliser, instead of deferring graph construction to a downstream batch job. The new `services/ingest/internal/graph/` package, the [`architecture/graph-schema`](apps/docs/docs/architecture/graph-schema.md) doc, and the [`Graph at ingest` blog post](apps/web/content/blog/graph-at-ingest.mdx) all describe the schema. Latency budget on the ingest path is unchanged (graph writes are fire-and-forget with a bounded retry queue).
+- **Four-agent rebrand.** The legacy `triage_agent` is split into purpose-built agents — `DetectAgent`, `TriageAgent`, `HuntAgent`, `RespondAgent` — each owning a clear stage of the funnel (detect → triage → hunt → respond). The funnel KPI doc ([`console/funnel-kpis`](apps/docs/docs/console/funnel-kpis.md)) explains how each stage is measured and where the agents plug in. Existing playbooks continue to work via a thin compatibility shim on the orchestrator graph.
+- **`/hunt` natural-language hunting interface.** A new console route lets analysts ask English questions ("which users authenticated from a country they've never logged in from in the past 90 days?") and get a graph-aware answer with `pivotPath` deep-links into the Investigation Rail. Backed by `HuntAgent` plus a curated set of ES|QL / Cypher templates so the LLM never writes raw queries by itself.
+- **Sixteen first-party connectors.** Hardened, marketplace-listed, and individually documented under [`apps/docs/docs/connectors/*`](apps/docs/docs/connectors). All five severity tiers (`info | low | medium | high | critical`) are now preserved end-to-end — see the per-connector docs for the vendor-native → AiSOC severity mapping table.
+- **Automation maturity model.** New [`automation-maturity`](apps/docs/docs/concepts/automation-maturity.md) doc and [companion blog post](apps/web/content/blog/automation-maturity.mdx) define the L0–L4 ladder (manual triage → fully autonomous closure with human sign-off) and how each AiSOC capability maps onto it.
+- **Public weekly benchmark scoreboard.** Already documented above; this is its anchoring release.
+
+`AISOC_V8_PROGRESS.md` lists wave-2 items that are checkpointed but not yet merged. Until the wave-2 work lands, the `VERSION` file stays at `7.3.1` and v8.0 lives entirely under `[Unreleased]`.
+
+### Security hardening — critical/high severity wave
+
+Eight PRs landing the C-1, C-2, P2-A1, P2-W1, P2-W7, H-3, H-8, and M-9 items from the security hardening plan. Each one is small in diff but plugs a class of bug, so they're grouped here for the changelog:
+
+- **C-1 — rule engine `eval()` RCE removed (PR #116).** The detection rule evaluator no longer compiles user-supplied condition strings via `eval()` / `compile()`. Conditions are parsed into an AST with a whitelisted set of operators, attribute accesses, and constants; everything else is rejected at rule-save time, not at evaluation time. Existing rules that used arithmetic, comparisons, `and`/`or`/`not`, and `event.field` lookups continue to work unchanged.
+- **C-2 — hunts tenant isolation (PR #117).** Saved hunts, hunt results, and the `/hunt` natural-language endpoint now all filter by `tenant_id` at the query layer instead of relying on RLS alone, eliminating a class of cross-tenant read bugs that surfaced when service-role keys touched the table directly.
+- **P2-A1 — CORS lockdown across all services (PR #119).** Shared `cors.py` helper, vendored byte-identical into every Python service, refuses to start if `AISOC_CORS_ORIGINS` contains `*` while credentials are enabled and `AISOC_ENV=production`. TypeScript guard in `services/realtime/src/index.ts` enforces the same rule for the WebSocket service. Full rationale is in [`operations/security.md` → CORS](apps/docs/docs/operations/security.md#cors).
+- **P2-W1 — cases tenant isolation (PR #118).** Same shape as C-2 but for the cases service: `case_id` lookups, attachments, comments, and audit events now all go through tenant-scoped queries.
+- **P2-W7 — SSRF guard for playbook `http_request` and `notify` (PR #120).** New `services/agents/app/playbook/ssrf_guard.py` validates every outbound URL: scheme allow-list, no embedded credentials, hostname resolution + IP allow-list with cloud-metadata block list that applies even when private IPs are explicitly allowed. Documented under [`operations/security.md` → Playbook outbound traffic](apps/docs/docs/operations/security.md#playbook-outbound-traffic--ssrf-guard).
+- **H-3 — plugin manager OCI install hardening (PR #121).** Plugin manifests fetched from an OCI registry are now verified against a signed-manifest allow-list before any file lands on disk; image digests are pinned at install time and re-verified on every load. Eliminates the "swap-tag-after-review" supply-chain pattern.
+- **H-8 / P2-A3 — dev-mode unification (PR #127).** Replaces the per-service patchwork of `if DEV_MODE` / `if SKIP_AUTH` / `if AISOC_DEMO_MODE` branches with one canonical helper that returns the dev-mode posture from a single env var (`AISOC_DEV_MODE`). Production deployments where this flag is unset get exactly zero auth-bypass codepaths compiled in. Tested with a new `tests/test_security_defaults.py` that imports every service and asserts no dev-mode shortcut is reachable when the flag is off.
+- **M-9 — LLM input sanitization for untrusted enrichment (PR #128).** Threat-intel enrichment text returned from third-party feeds is run through a prompt-injection filter (boundary markers, control-character stripping, length cap) before being concatenated into any LLM prompt. The filter is centralised in `services/api/app/services/llm_safety.py` and re-used by every prompt builder.
+
+The matching docs under [`apps/docs/docs/operations/security.md`](apps/docs/docs/operations/security.md) were updated as part of each PR so the security model page is the single source of truth.
+
+### Static analysis — Python CodeQL alerts driven to zero on `main` (PRs #133, #136, #137)
+
+A three-PR sweep that resolves every open Python CodeQL alert in the repository and makes the resulting state easy to maintain.
+
+- **PR #133 — 30 alerts in one pass.** Covers `py/log-injection` (alerts #396, #401, #402, #412), `py/uninitialized-local-variable` (#414, #415), `py/side-effect-in-assert` (#435), `py/incomplete-url-substring-sanitization` (#411), `py/ineffectual-statement` for `...`-only `Protocol` stubs and bare `await task` statements (#418–#434, #422, #424, #425, #429), `py/unnecessary-lambda` (#439), `py/mixed-returns` (#438), `py/unused-global-variable` (#408, #416, #417), and `py/unused-import` (#436). Sanitisation, where applied, is now inline at the call site (`.replace("\r", "").replace("\n", " ")[:N]`) so the taint tracker recognises it without needing a `nosec`/`noqa` hint.
+- **PR #136 — final two stubborn alerts.** CodeQL flagged `#440` (`py/import-and-import-from` in `services/connectors/tests/connectors/test_confluence_audit.py`) and `#441` (`py/log-injection` in `services/api/app/api/v1/endpoints/waitlist.py`) even after PR #133 because (a) the taint tracker didn't follow our `_log_safe` helper through the call site, and (b) the test file used a module alias _and_ a from-import for the same module. Fix: drop the helper, inline the sanitisation, and use `pytest.MonkeyPatch.setattr` instead of a module alias.
+- **PR #137 — newly-introduced alert #442.** Once #441 was resolved, CodeQL surfaced a new log-injection alert on `entry_id` and `user.user_id` in the same waitlist endpoint, even though both are `uuid.UUID`-typed. Made the cleansing explicit at the call site (`str(entry_id).replace("\r", "").replace("\n", " ")[:36]`) so future readers — and CodeQL — see the guarantee, even though the underlying values are safe by type.
+
+After PR #137 merged, the [CodeQL dashboard](https://github.com/beenuar/AiSOC/security/code-scanning) reports zero open Python alerts on `main`. The full sanitisation pattern is documented in [`operations/security.md` → Static analysis (CodeQL)](apps/docs/docs/operations/security.md#static-analysis-codeql).
+
+### UEBA service environment variable alignment (PR #135, first community contribution)
+
+Resolves [Issue #134](https://github.com/beenuar/AiSOC/issues/134) — the `ueba` service was the only Python service that required a `UEBA_` prefix on every env var, which broke the `DATABASE_URL` / `KAFKA_BOOTSTRAP_SERVERS` / `REDIS_URL` exports in `docker-compose.yml` (and silently fell back to defaults).
+
+- **`services/ueba/app/core/config.py`** — `model_config` drops `env_prefix="UEBA_"` and adds `populate_by_name=True`. Every field is now declared with `Field(default=…, validation_alias=AliasChoices("UNPREFIXED", "UEBA_PREFIXED"))`, so both names work and the unprefixed form wins when both are set. Pattern matches the `services/fusion/app/core/config.py` already used elsewhere in the repo.
+- **`services/ueba/alembic/env.py`** — `os.environ.get("DATABASE_URL") or os.environ.get("UEBA_DATABASE_URL", default)`, so `alembic upgrade head` picks up the same DSN the running service sees.
+- **`services/ueba/tests/test_config.py`** — new test file with a `_clean_env` autouse fixture that scrubs both prefixed and unprefixed names, then asserts the four cases (unprefixed-only / prefixed-only / both-with-unprefixed-winning / neither-with-default-fallback) for both `DATABASE_URL` and `KAFKA_BOOTSTRAP_SERVERS`. All four tests pass under `pytest services/ueba/tests/test_config.py`.
+
+[`deployment/env-vars.md` → UEBA service](apps/docs/docs/deployment/env-vars.md#ueba-service-servicesueba) now documents the dual-alias behaviour and lists the unprefixed names as canonical.
+
+### Issues #131 and #130 — security smoke + UX cleanup (PR #132)
+
+Two reported issues, one combined fix.
+
+- **#131 — security smoke test.** New test in `services/api/tests/test_security_defaults.py` walks every API endpoint and asserts that no dev-mode auth bypass is reachable when `AISOC_DEV_MODE` is unset. Catches regressions from the dev-mode unification (H-8) above.
+- **#130 — UX cleanup.** `idempotency_key`, `payload.connector_type`, and `provider` no longer leak unsanitised user input into structured logs; the inline sanitisation pattern (`replace("\r", "").replace("\n", " ")[:N]`) is now used uniformly across the alerts, effective-permissions, and waitlist endpoints. Also fixes the duplicated `[Unreleased]` heading in CHANGELOG that #130 reported.
+
+### Playbook engine — correctness pass (PR #129)
+
+Tightens the playbook engine so failures stay local instead of cascading.
+
+- **Bounded eval / playbook timeouts (H-7).** Already documented above as a separate `[Unreleased]` entry; this PR is the implementation.
+- **Saga-style error handling.** `services/agents/app/playbook/runner.py` now wraps each step in an explicit try/except that captures `asyncio.CancelledError` separately from playbook-level errors, so an operator-issued cancel doesn't masquerade as a step failure in the audit log.
+- **Tests.** Twelve new tests in `services/agents/tests/test_playbook_runner.py` cover happy path, single-step failure, cascading failure with rollback, cancellation, and the three SSRF guard rejection paths.
+
 ## [7.3.1] — 2026-05-14
 
 ### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone

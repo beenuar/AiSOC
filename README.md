@@ -939,16 +939,26 @@ The public roadmap lives in [ROADMAP.md](ROADMAP.md). All releases through **v7.
 - **v7.1.0** — Cloud Security Coverage Wave: documentation backfill for Wiz, AWS Security Hub, and Lacework; two new CNAPP connectors (Prisma Cloud, Orca); three native AWS connectors (GuardDuty, CloudTrail, VPC Flow Logs); dual-mode Kubernetes audit log connector (apiserver webhook + file_tail) with a new `k8s-audit` ingest template.
 - **v7.3.0** — Founder-flow series (PR1–PR7): `docker-compose.dev.yml` alias, `.env.example` cleanup with a pre-filled `AISOC_CREDENTIAL_KEY`, `scripts/run_evals.py --suite` CLI contract, `aisoc serve` / `aisoc db upgrade` / `aisoc mcp serve|install`, the `aisoc submit` CLI command + canonical `examples/alerts/lateral-movement.json` fixture, and the Path C founder-style CLI walkthrough in [`apps/docs/docs/quickstart.md`](apps/docs/docs/quickstart.md). The recorded "fresh-clone to first alert" demo now runs verbatim on `main`.
 - **v7.3.1** — Smoke-test hotfix: idempotent migrations (`005_compliance.sql`, `025_connectors_click_and_connect.sql`, new `042_alerts_schema_drift_fix.sql` adding eleven missing `alerts` columns), and a new `POST /api/v1/alerts/submit` endpoint that synthesises an `Alert` row directly from a batch of OCSF events. `aisoc submit` now targets the new endpoint, so the web console at `/alerts` lights up immediately on a fresh clone without Kafka / Fusion in the loop.
+- **v8.0 wave-1 (on `main`, not yet tagged)** — Architectural foundation for the v8.0 line, landed by [#125](https://github.com/beenuar/AiSOC/pull/125) plus the security and correctness wave that followed:
+  - **Graph at ingest** — Neo4j v1.0 schema (17 node labels, 14 edge types), batched UNWIND upserts off the Kafka consumer, `security.graph_updates` topic, and OCSF extractors for AWS Security Hub / GitHub audit / Okta system log / Kubernetes audit (`services/ingest/internal/graph/`).
+  - **Four-agent rebrand** — `DetectAgent`, `TriageAgent`, `HuntAgent`, `RespondAgent` are now the public façade in `services/agents/app/agents/`, with back-compat aliases so existing imports keep working.
+  - **`/hunt` natural-language surface** — `apps/web/src/app/(app)/hunt/` plus `services/api/app/api/v1/endpoints/saved_hunts.py`. Type a hypothesis in English, get ES|QL / SPL / KQL templates back, save and schedule the hunt.
+  - **Sixteen first-party connectors** — wave-1 (6 fully tested: tines, torq, falco, pagerduty, opsgenie, confluence_audit) and wave-2 (10 wip, of which cloudflare_zt / sysdig / vault / snowflake already have full fixtures + tests).
+  - **L0–L4 automation maturity** — `apps/web/content/papers/l0-l4-automation-maturity.md` + PDF, plus the marketing surfaces (sovereign one-pager, three anchor blog posts, reference-customer template).
+  - **Public weekly benchmark scoreboard** — `apps/docs/docs/benchmark-scoreboard.mdx` + `apps/docs/static/data/scoreboard.json`, fed by the weekly `wet-eval.yml` GitHub Action.
+  - **Security wave** — 8 critical/high CVE-class fixes shipped before the v8.0 cut: rule-engine `eval()` RCE elimination ([#116](https://github.com/beenuar/AiSOC/pull/116)), `/hunts` and `/cases` tenant isolation ([#117](https://github.com/beenuar/AiSOC/pull/117), [#118](https://github.com/beenuar/AiSOC/pull/118)), CORS lockdown ([#119](https://github.com/beenuar/AiSOC/pull/119)), playbook SSRF guard ([#120](https://github.com/beenuar/AiSOC/pull/120)), plugin-manager OCI install hardening ([#121](https://github.com/beenuar/AiSOC/pull/121)), audit-log trust-boundary closures ([#122](https://github.com/beenuar/AiSOC/pull/122)), `/alerts/submit` abuse + replay hardening ([#123](https://github.com/beenuar/AiSOC/pull/123)), Pydantic v1 → v2 settings migration ([#124](https://github.com/beenuar/AiSOC/pull/124)), bounded eval + playbook timeouts ([#126](https://github.com/beenuar/AiSOC/pull/126)), dev-mode unification ([#127](https://github.com/beenuar/AiSOC/pull/127)), and untrusted-enrichment sanitisation before LLM ([#128](https://github.com/beenuar/AiSOC/pull/128)).
+  - **Static-analysis hygiene** — Python CodeQL alert count on `main` driven to zero by [#133](https://github.com/beenuar/AiSOC/pull/133), [#136](https://github.com/beenuar/AiSOC/pull/136), and [#137](https://github.com/beenuar/AiSOC/pull/137); enforced as a CI gate going forward.
+  - **First community contribution** — [#135](https://github.com/beenuar/AiSOC/pull/135) (UEBA service environment-variable alignment, closes [#134](https://github.com/beenuar/AiSOC/issues/134)). Every UEBA variable now accepts both unprefixed (`DATABASE_URL`) and legacy (`UEBA_DATABASE_URL`) forms; unprefixed wins. Documented in [Environment variables](apps/docs/docs/deployment/env-vars.md#ueba-service-servicesueba).
 
-Next (**v8.0** — see [ROADMAP.md](ROADMAP.md)):
+Next (**v8.0 wave-2** — checkpointed with `[~]` in `AISOC_V8_PROGRESS.md`):
 
-- Mobile responder console (React Native) — triage and acknowledge from phone
-- Plugin marketplace v3 (commercial plugins, revenue sharing, signed publishing)
-- NL→query: `"show me failed logins from new ASNs last 24h"` → ES|QL / KQL
-- AI-generated threat intel briefings from public feeds
-- Embedded red-team scoring (live ATT&CK coverage % widget)
-- SLA breach predictor (ML on historical MTTR data) and incident cost estimator
-- SOC-in-a-box one-click cloud deploy (Terraform module for AWS / GCP)
+- Versioned `:CONFIGURED_AS {ts}` config-snapshot writers for AWS / GitHub / Lacework / Okta (T1.2)
+- `LLMInputContract` fail-closed validator coverage across every sub-agent (T2.3)
+- Attack-chain ranking + timeline UI hardening (T3.3) and business-context YAML rule engine (T3.5)
+- Effective-permissions resolvers for Azure / GCP / Okta / GWS (T3.2)
+- ChatOps full coverage: Slack Block Kit approvals, Teams Adaptive Card mirror, signed email approval URLs (T3.6)
+- Remaining wave-2 connectors hardened to wave-1 quality (sublime_security, abnormal_security, box, dropbox, oci, datadog)
+- Mobile responder console (React Native), plugin marketplace v3, AI-generated threat intel briefings, embedded red-team scoring widget, SLA breach predictor, SOC-in-a-box one-click cloud deploy
 
 ---
 
