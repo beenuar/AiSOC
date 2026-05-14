@@ -10799,6 +10799,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/easm/assets:
     get:
       tags:
@@ -10809,7 +10811,11 @@ paths:
 
         ``tenant_id`` defaults to the authenticated user''s tenant, so the analyst
 
-        console can hit ``/easm/assets`` without explicit tenant scoping.'
+        console can hit ``/easm/assets`` without explicit tenant scoping. A user
+
+        can never request another tenant''s assets — supplying a foreign
+
+        ``tenant_id`` returns 403.'
       operationId: list_external_assets_api_v1_easm_assets_get
       security:
       - HTTPBearer: []
@@ -10861,7 +10867,12 @@ paths:
       tags:
       - easm
       summary: List External Asset Drift
-      description: List drift events (new ports, certs, sub-domains, etc.).
+      description: 'List drift events (new ports, certs, sub-domains, etc.).
+
+
+        A user can never request another tenant''s drift events — supplying a
+
+        foreign ``tenant_id`` returns 403.'
       operationId: list_external_asset_drift_api_v1_easm_drift_get
       security:
       - HTTPBearer: []

@@ -73,10 +73,7 @@ def _issue_jwt(claims: dict[str, Any]) -> str:
     # let the caller surface a 503/500 — operators must wire ``JWT_SECRET``
     # explicitly (e.g. via Fly/k8s secrets).
     if not _JWT_SECRET or _JWT_SECRET == "changeme-insecure-default":
-        raise RuntimeError(
-            "JWT_SECRET is not configured. Set the env var to a long random "
-            "string before issuing SAML session tokens."
-        )
+        raise RuntimeError("JWT_SECRET is not configured. Set the env var to a long random string before issuing SAML session tokens.")
     payload = {
         **claims,
         "iat": datetime.now(UTC),

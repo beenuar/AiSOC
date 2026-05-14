@@ -53,10 +53,7 @@ def _issue_jwt(claims: dict[str, Any]) -> str:
     # is not a credential, and silently using it forfeits the entire SSO
     # trust model.
     if not _JWT_SECRET or _JWT_SECRET == "changeme-insecure-default":
-        raise RuntimeError(
-            "JWT_SECRET is not configured. Set the env var to a long random "
-            "string before issuing OIDC session tokens."
-        )
+        raise RuntimeError("JWT_SECRET is not configured. Set the env var to a long random string before issuing OIDC session tokens.")
     payload = {
         **claims,
         "iat": datetime.now(UTC),

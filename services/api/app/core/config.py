@@ -649,10 +649,7 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     # realtime service. We no longer ship a "changeme" default in code, but
     # warn here so operators don't quietly run with no inter-service auth.
     if not is_dev_env(s.ENVIRONMENT) and not s.REALTIME_INTERNAL_TOKEN:
-        msgs.append(
-            "REALTIME_INTERNAL_TOKEN is empty in a non-development environment — "
-            "agent → realtime events are unauthenticated."
-        )
+        msgs.append("REALTIME_INTERNAL_TOKEN is empty in a non-development environment — agent → realtime events are unauthenticated.")
 
     # Air-gap sanity check: if an operator flipped on AISOC_AIRGAPPED but
     # the LLM is still pointed at a public endpoint (api.openai.com, etc.)
