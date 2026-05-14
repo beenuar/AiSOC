@@ -56,7 +56,10 @@ CREATE TABLE IF NOT EXISTS aisoc_attack_chains (
     tenant_id           UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     seed_alert_id       UUID NOT NULL,
     case_id             UUID,
-    window              VARCHAR(8) NOT NULL,
+    -- NB: ``window`` is a reserved keyword in PostgreSQL (used by SQL window
+    -- functions), so the SQL column is named ``time_window`` even though the
+    -- service layer / API surface continues to call it ``window``.
+    time_window         VARCHAR(8) NOT NULL,
     chain               JSONB NOT NULL DEFAULT '[]'::jsonb,
     entity_graph        JSONB NOT NULL DEFAULT '{}'::jsonb,
     chain_signature     VARCHAR(64) NOT NULL,
@@ -64,9 +67,9 @@ CREATE TABLE IF NOT EXISTS aisoc_attack_chains (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT aisoc_attack_chains_window_check
-        CHECK (window IN ('1h', '6h', '24h', '72h', '7d', '30d')),
+        CHECK (time_window IN ('1h', '6h', '24h', '72h', '7d', '30d')),
     CONSTRAINT aisoc_attack_chains_unique_signature
-        UNIQUE (tenant_id, seed_alert_id, window, chain_signature)
+        UNIQUE (tenant_id, seed_alert_id, time_window, chain_signature)
 );
 
 CREATE INDEX IF NOT EXISTS aisoc_attack_chains_seed_idx
