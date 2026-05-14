@@ -1,7 +1,7 @@
 import { QueueView } from '@/components/queue/QueueView';
 
 export const metadata = {
-  title: 'Investigation Queue | AiSOC',
+  title: 'Investigation Queue',
 };
 
 export default function QueuePage() {

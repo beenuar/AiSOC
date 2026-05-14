@@ -1,7 +1,7 @@
 import { RuleEditor } from '@/components/detections/RuleEditor';
 
 export const metadata = {
-  title: 'New detection rule | AiSOC',
+  title: 'New detection rule',
 };
 
 export default function NewDetectionPage() {

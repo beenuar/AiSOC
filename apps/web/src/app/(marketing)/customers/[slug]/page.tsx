@@ -39,11 +39,11 @@ export async function generateMetadata({
   const { slug } = await params;
   const study = getCustomerBySlug(slug);
   if (!study) {
-    return { title: 'Customer not found — AiSOC' };
+    return { title: 'Customer not found' };
   }
   const fm = study.frontmatter;
   return {
-    title: `${fm.title} — AiSOC customer story`,
+    title: `${fm.title} — customer story`,
     description: fm.challenge,
     alternates: { canonical: `/customers/${slug}` },
     openGraph: {

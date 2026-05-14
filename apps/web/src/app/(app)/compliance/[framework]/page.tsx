@@ -17,7 +17,7 @@ const FRAMEWORK_NAMES: Record<string, string> = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { framework } = await params;
   const name = FRAMEWORK_NAMES[framework] ?? framework.toUpperCase();
-  return { title: `${name} Compliance — AiSOC` };
+  return { title: `${name} Compliance` };
 }
 
 export default async function ComplianceFrameworkPage({ params }: Props) {

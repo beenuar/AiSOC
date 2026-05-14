@@ -406,7 +406,7 @@ async def _fetch_token_and_connector(
         await db.execute(
             text(
                 """
-                SELECT id, tenant_id, connector_type, enabled
+                SELECT id, tenant_id, connector_type, is_enabled
                 FROM connectors
                 WHERE id = :id
                 """
@@ -434,7 +434,7 @@ async def _fetch_token_and_connector(
             detail="Token and connector belong to different tenants",
         )
 
-    if not connector_row.enabled:
+    if not connector_row.is_enabled:
         # A disabled connector should not be receiving traffic. Prefer 409
         # over 200 here so the vendor's webhook delivery dashboard surfaces
         # the issue instead of silently consuming the events.

@@ -1,7 +1,7 @@
 import { AlertsView } from '@/components/alerts/AlertsView';
 
 export const metadata = {
-  title: 'Alerts | AiSOC',
+  title: 'Alerts',
 };
 
 export default function AlertsPage() {

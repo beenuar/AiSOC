@@ -633,6 +633,27 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     if not is_dev_env(s.ENVIRONMENT) and not s.AISOC_CREDENTIAL_KEY:
         msgs.append("AISOC_CREDENTIAL_KEY is empty in a non-development environment — connector credentials cannot be encrypted at rest.")
 
+    # JWT signing secret used by the SAML/OIDC session-issuance paths in
+    # ``app/auth/saml.py`` and ``app/auth/oidc.py``. Those modules now refuse
+    # to sign tokens with an empty or well-known placeholder, but we still
+    # want a noisy boot-time warning so the operator sees the misconfig
+    # *before* the first SSO callback 500s.
+    _jwt_secret = os.getenv("JWT_SECRET", "")
+    if not is_dev_env(s.ENVIRONMENT) and (not _jwt_secret or _jwt_secret == "changeme-insecure-default"):
+        msgs.append(
+            "JWT_SECRET is empty or set to the well-known placeholder — SAML/OIDC "
+            "session token issuance will fail closed until you wire a real secret."
+        )
+
+    # Internal token used by the agents service to authenticate to the
+    # realtime service. We no longer ship a "changeme" default in code, but
+    # warn here so operators don't quietly run with no inter-service auth.
+    if not is_dev_env(s.ENVIRONMENT) and not s.REALTIME_INTERNAL_TOKEN:
+        msgs.append(
+            "REALTIME_INTERNAL_TOKEN is empty in a non-development environment — "
+            "agent → realtime events are unauthenticated."
+        )
+
     # Air-gap sanity check: if an operator flipped on AISOC_AIRGAPPED but
     # the LLM is still pointed at a public endpoint (api.openai.com, etc.)
     # surface that as an insecure-default rather than silently 503-ing

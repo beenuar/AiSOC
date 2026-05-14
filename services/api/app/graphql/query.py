@@ -46,6 +46,19 @@ _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL", "ht
 # ─── helpers ──────────────────────────────────────────────────────────────────
 
 
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE/ILIKE wildcard metacharacters in a user-supplied
+    search string.
+
+    Without this, a user can pass ``%`` or ``_`` and turn an ``ILIKE``
+    intended as substring search into a wildcard scan (mild data-exposure
+    risk and a DoS surface on large tables). We escape ``%``, ``_`` and the
+    escape character ``\\`` itself, and rely on the resolver to pass
+    ``escape="\\"`` to the SQLAlchemy ``ilike`` call.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _db(info: Info) -> AsyncSession:
     """Pull the async session injected by the Strawberry FastAPI integration."""
     return info.context["db"]
@@ -202,7 +215,8 @@ class Query:
         if status:
             q = q.where(Alert.status == status)
         if search:
-            q = q.where(Alert.title.ilike(f"%{search}%"))
+            safe = _escape_like(search)
+            q = q.where(Alert.title.ilike(f"%{safe}%", escape="\\"))
 
         total_result = await db.execute(select(func.count()).select_from(q.subquery()))
         total = total_result.scalar_one()
@@ -249,7 +263,8 @@ class Query:
         if priority:
             q = q.where(Case.priority == priority)
         if search:
-            q = q.where(Case.title.ilike(f"%{search}%"))
+            safe = _escape_like(search)
+            q = q.where(Case.title.ilike(f"%{safe}%", escape="\\"))
 
         total_result = await db.execute(select(func.count()).select_from(q.subquery()))
         total = total_result.scalar_one()

@@ -4,12 +4,15 @@ import { LandingNav } from '@/components/landing/LandingNav';
 import { Footer } from '@/components/landing/Footer';
 
 export const metadata: Metadata = {
-  title: 'Why AiSOC is open source',
+  // Use `absolute` so the root layout's `template: '%s | AiSOC'` doesn't
+  // append a redundant " | AiSOC" to a title that already leads with the
+  // brand name.
+  title: { absolute: 'Why AiSOC is open source' },
   description:
     'AiSOC is MIT-licensed and self-hostable, with the agent loop and prompt templates in the repo. This page explains why that posture matters for regulated buyers and what the trade-offs are.',
   alternates: { canonical: '/why-open-source' },
   openGraph: {
-    title: 'Why AiSOC is open source — AiSOC',
+    title: 'Why AiSOC is open source',
     description:
       'AiSOC is MIT-licensed and self-hostable. The agent loop and prompts are in the repo, and a 200-incident eval harness runs in CI.',
     type: 'article',

@@ -26,10 +26,23 @@ type Phase = 'idle' | 'pending' | 'success' | 'error';
 // the URL and is only ever reached interactively from a phone.
 export const dynamic = 'force-dynamic';
 
+/**
+ * Sanitize ``?next=`` to a same-origin relative path. Protects against
+ * open-redirect via a crafted login link.
+ */
+function sanitizeNext(raw: string | null | undefined): string {
+  const fallback = '/responder/triage';
+  if (!raw) return fallback;
+  if (raw.startsWith('//') || raw.startsWith('\\\\')) return fallback;
+  if (!raw.startsWith('/')) return fallback;
+  if (raw.startsWith('/\\')) return fallback;
+  return raw;
+}
+
 function ResponderLoginInner() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search?.get('next') || '/responder/triage';
+  const next = sanitizeNext(search?.get('next'));
 
   const [email, setEmail] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');

@@ -39,6 +39,17 @@ async def send_alert(
         LOG.info("No alert_webhook_url configured; skipping outbound alert.")
         return False
 
+    # Require an explicit HMAC secret. Previously this defaulted to "changeme"
+    # in ``app/core/config.py``, which meant alerts were signed with a public
+    # value — a downstream verifier couldn't distinguish a real trigger from
+    # one a third party forged using the same well-known string.
+    if not settings.alert_webhook_secret:
+        LOG.error(
+            "alert_webhook_url is configured but alert_webhook_secret is empty; "
+            "refusing to send unsigned/forge-able alerts. Set HONEYTOKEN_ALERT_WEBHOOK_SECRET."
+        )
+        return False
+
     payload_dict = {
         "event": "honeytoken.triggered",
         "honeytoken_id": str(honeytoken_id),

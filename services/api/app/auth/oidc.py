@@ -41,12 +41,22 @@ router = APIRouter(prefix="/auth/oidc", tags=["auth-oidc"])
 
 # ─── JWT helpers ──────────────────────────────────────────────────────────────
 
-_JWT_SECRET = os.getenv("JWT_SECRET", "changeme-insecure-default")
+_JWT_SECRET = os.getenv("JWT_SECRET", "")
 _JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 _JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
 
 
 def _issue_jwt(claims: dict[str, Any]) -> str:
+    # Refuse to sign OIDC session tokens with a missing or well-known-default
+    # secret. See the matching guard in ``services/api/app/auth/saml.py`` for
+    # the rationale: a literal "changeme-insecure-default" baked into source
+    # is not a credential, and silently using it forfeits the entire SSO
+    # trust model.
+    if not _JWT_SECRET or _JWT_SECRET == "changeme-insecure-default":
+        raise RuntimeError(
+            "JWT_SECRET is not configured. Set the env var to a long random "
+            "string before issuing OIDC session tokens."
+        )
     payload = {
         **claims,
         "iat": datetime.now(UTC),

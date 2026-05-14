@@ -431,7 +431,8 @@ async def list_cases(
         rows = await db.execute(text(q).bindparams(**params))
         return [_row_to_case(r) for r in rows.fetchall()]
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED, summary="Create case")
@@ -476,7 +477,8 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
     response = _row_to_case(row)
 
@@ -588,7 +590,8 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
     response = _row_to_case(row)
 
@@ -655,7 +658,8 @@ async def add_alerts(case_id: str, body: AddAlertsRequest, db: DBSession, user: 
         raise
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.post("/{case_id}/observables", response_model=CaseResponse, summary="Update observable graph")
@@ -700,7 +704,8 @@ async def update_observables(case_id: str, body: UpdateObservablesRequest, db: D
         return _row_to_case(row)
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.post("/{case_id}/comments", response_model=CommentResponse, status_code=201, summary="Add comment")
@@ -748,7 +753,8 @@ async def add_comment(case_id: str, body: AddCommentRequest, db: DBSession, user
         )
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/{case_id}/comments", response_model=list[CommentResponse], summary="List case comments")
@@ -1000,7 +1006,8 @@ async def create_task(
         return _row_to_task(row)
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.patch("/{case_id}/tasks/{task_id}", response_model=TaskResponse, summary="Update task")
@@ -1056,7 +1063,8 @@ async def update_task(
         raise
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in cases endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────

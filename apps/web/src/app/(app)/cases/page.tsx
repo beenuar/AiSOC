@@ -5,7 +5,7 @@ import {
 } from '@/lib/api';
 
 export const metadata = {
-  title: 'Cases | AiSOC',
+  title: 'Cases',
 };
 
 // The /cases page must reflect the current state of the backend on every

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -28,6 +29,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
 
@@ -272,7 +275,8 @@ async def collect_evidence(body: CollectEvidenceRequest, db: DBSession, user: Au
         return _row_to_evidence(row)
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in compliance endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/evidence", response_model=list[EvidenceResponse], summary="List evidence items")
@@ -308,7 +312,8 @@ async def list_evidence(
         rows = (await db.execute(q)).fetchall()
         return [_row_to_evidence(r) for r in rows]
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in compliance endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/evidence/{evidence_id}", response_model=EvidenceResponse, summary="Get evidence item")
@@ -337,7 +342,8 @@ async def review_evidence(evidence_id: uuid.UUID, body: ReviewEvidenceRequest, d
         raise
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in compliance endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/report", response_model=list[CompliancePosture], summary="Generate compliance posture report")
@@ -367,7 +373,8 @@ async def compliance_report(
     try:
         rows = (await db.execute(q)).fetchall()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in compliance endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
     # Aggregate by framework
     by_fw: dict[str, Any] = {}

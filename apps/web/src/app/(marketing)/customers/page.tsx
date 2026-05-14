@@ -12,7 +12,7 @@ import { listCustomers } from '@/lib/customers';
  */
 
 export const metadata: Metadata = {
-  title: 'Customers — AiSOC',
+  title: 'Customers',
   description:
     'Reference customers running AiSOC in production: who they are, the security challenge, and the measurable outcome.',
   alternates: { canonical: '/customers' },

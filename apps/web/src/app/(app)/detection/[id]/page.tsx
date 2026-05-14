@@ -7,7 +7,7 @@ interface DetectionEditPageProps {
 }
 
 export const metadata = {
-  title: 'Detection rule | AiSOC',
+  title: 'Detection rule',
 };
 
 export default async function DetectionEditPage({

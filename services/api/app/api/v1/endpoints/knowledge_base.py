@@ -15,6 +15,7 @@ Endpoints
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import UTC, datetime
@@ -26,6 +27,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/kb", tags=["knowledge_base"])
 
@@ -176,7 +179,8 @@ async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBD
             rows.append(row)
         except Exception as exc:
             await db.rollback()
-            raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+            logger.exception("Database error in knowledge_base endpoint")
+            raise HTTPException(status_code=503, detail="Database error") from exc
     await db.commit()
     return [_row_to_doc(r) for r in rows]
 
@@ -189,7 +193,8 @@ async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
         ).fetchall()
         return [_row_to_doc(r) for r in rows]
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in knowledge_base endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/documents/{doc_id}", response_model=KBDocResponse, summary="Get KB document")
@@ -229,7 +234,8 @@ async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryRe
     try:
         db_rows = (await db.execute(sql)).fetchall()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in knowledge_base endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
     chunks = [
         KBChunk(

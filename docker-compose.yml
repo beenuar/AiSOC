@@ -487,12 +487,15 @@ services:
     restart: unless-stopped
 
   honeytokens:
+    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
+    # `aisoc serve` skips it by default. Opt in with `--profile extras` and the
+    # local Dockerfile build will run.
+    profiles: ["extras"]
     build:
       context: ./services/honeytokens
       dockerfile: Dockerfile
-    # Not in publish-images.yml matrix yet — pull falls back to local build.
     image: ghcr.io/beenuar/aisoc-honeytokens:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: build
     container_name: aisoc-honeytokens
     depends_on:
       postgres:
@@ -513,12 +516,15 @@ services:
     restart: unless-stopped
 
   purple-team:
+    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
+    # `aisoc serve` skips it by default. Opt in with `--profile extras` and the
+    # local Dockerfile build will run.
+    profiles: ["extras"]
     build:
       context: ./services/purple-team
       dockerfile: Dockerfile
-    # Not in publish-images.yml matrix yet — pull falls back to local build.
     image: ghcr.io/beenuar/aisoc-purple-team:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: build
     container_name: aisoc-purple-team
     depends_on:
       postgres:

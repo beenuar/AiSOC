@@ -60,12 +60,23 @@ router = APIRouter(prefix="/auth/saml", tags=["auth-saml"])
 
 # ─── JWT helpers ──────────────────────────────────────────────────────────────
 
-_JWT_SECRET = os.getenv("JWT_SECRET", "changeme-insecure-default")
+_JWT_SECRET = os.getenv("JWT_SECRET", "")
 _JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 _JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
 
 
 def _issue_jwt(claims: dict[str, Any]) -> str:
+    # Refuse to mint a token signed with a missing or well-known-default
+    # secret. Previously this defaulted to ``"changeme-insecure-default"``,
+    # so a misconfigured deployment would happily sign session tokens with
+    # a value that's literally checked into source. We now fail closed and
+    # let the caller surface a 503/500 — operators must wire ``JWT_SECRET``
+    # explicitly (e.g. via Fly/k8s secrets).
+    if not _JWT_SECRET or _JWT_SECRET == "changeme-insecure-default":
+        raise RuntimeError(
+            "JWT_SECRET is not configured. Set the env var to a long random "
+            "string before issuing SAML session tokens."
+        )
     payload = {
         **claims,
         "iat": datetime.now(UTC),

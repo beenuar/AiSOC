@@ -21,7 +21,7 @@ import { Footer } from '@/components/landing/Footer';
  */
 
 export const metadata: Metadata = {
-  title: 'Sovereign + air-gap deployment — AiSOC',
+  title: 'Sovereign + air-gap deployment',
   description:
     'AiSOC runs anywhere: air-gapped, on-prem, hybrid, public cloud, or managed SaaS — with cloud LLM APIs, a local Ollama sidecar, or a bring-your-own LLM endpoint. EU, US, India, or custom data residency.',
   alternates: { canonical: '/sovereign' },

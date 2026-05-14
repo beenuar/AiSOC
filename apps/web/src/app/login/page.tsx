@@ -24,10 +24,33 @@ export const dynamic = 'force-dynamic';
 const DEMO_EMAIL = 'demo@aisoc.dev';
 const DEMO_PASSWORD = 'aisoc-demo';
 
+/**
+ * Sanitize the ``?next=`` redirect target so a crafted link can't be used to
+ * bounce an authenticated user to an attacker-controlled host.
+ *
+ * Only same-origin relative paths are allowed. Anything that looks like an
+ * absolute URL (``http://``, ``//evil.com``), a JS scheme, or a path that
+ * doesn't start with a single ``/`` is replaced with the dashboard default.
+ */
+function sanitizeNext(raw: string | null | undefined): string {
+  const fallback = '/dashboard';
+  if (!raw) return fallback;
+  // Reject protocol-relative URLs (//evil.com) and backslash variants
+  // (some browsers normalize \\ to //).
+  if (raw.startsWith('//') || raw.startsWith('\\\\')) return fallback;
+  // Require a single leading slash. This rejects ``http://...``,
+  // ``javascript:...``, ``data:...``, ``mailto:...``, and bare paths
+  // like ``dashboard`` (which would resolve relative to the current URL).
+  if (!raw.startsWith('/')) return fallback;
+  // Reject ``/\evil.com`` style tricks.
+  if (raw.startsWith('/\\')) return fallback;
+  return raw;
+}
+
 function LoginInner() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search?.get('next') || '/dashboard';
+  const next = sanitizeNext(search?.get('next'));
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

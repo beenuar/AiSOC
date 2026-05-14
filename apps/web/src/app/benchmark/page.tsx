@@ -11,7 +11,7 @@ import { KpiBar } from '@/components/benchmark/KpiBar';
 import { CommunitySubmissions } from '@/components/benchmark/CommunitySubmissions';
 
 export const metadata: Metadata = {
-  title: 'Public benchmark scoreboard — AiSOC',
+  title: 'Public benchmark scoreboard',
   description:
     'A reproducible regression harness over the AiSOC substrate. Four CI gates over a 200-incident synthetic dataset (MITRE / completeness / response quality) plus a 1,000-alert noisy stream (alert reduction). Per-template macros, per-case means, alert-reduction %, the 2026 KPI bar, and a fixed-dataset community leaderboard. The page documents what each metric measures and what it does not.',
   alternates: { canonical: '/benchmark' },

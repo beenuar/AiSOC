@@ -30,7 +30,13 @@ from .ssrf_guard import SSRFError, validate_outbound_url
 logger = logging.getLogger("aisoc.playbook.engine")
 
 _REALTIME_URL = os.getenv("REALTIME_URL", "http://realtime:3001")
-_INTERNAL_TOKEN = os.getenv("REALTIME_INTERNAL_TOKEN", "changeme")
+# Internal token used to authenticate the agents service to the realtime
+# service. Previously this defaulted to the literal string ``"changeme"``,
+# which meant an operator who forgot to wire the secret would silently ship a
+# well-known token. We now default to empty and let the call sites treat an
+# empty token as "no internal auth" (skip the header) so a misconfigured
+# deployment fails closed instead of inheriting a public default.
+_INTERNAL_TOKEN = os.getenv("REALTIME_INTERNAL_TOKEN", "")
 _API_URL = os.getenv("API_URL", "http://api:8000")
 
 
@@ -515,10 +521,17 @@ _HANDLERS = {
 
 async def _emit(run_id: str, event_type: str, payload: dict, http: httpx.AsyncClient) -> None:
     try:
+        headers: dict[str, str] = {}
+        # Only include the internal-auth header when an operator has actually
+        # configured a token. Sending a literal "changeme" used to make a
+        # misconfigured deployment look authenticated to anything that
+        # whitelisted the same string.
+        if _INTERNAL_TOKEN:
+            headers["x-internal-token"] = _INTERNAL_TOKEN
         await http.post(
             f"{_REALTIME_URL}/internal/agent-event",
             json={"channel": f"playbook:{run_id}", "type": event_type, "data": payload},
-            headers={"x-internal-token": _INTERNAL_TOKEN},
+            headers=headers,
             timeout=3,
         )
     except Exception:

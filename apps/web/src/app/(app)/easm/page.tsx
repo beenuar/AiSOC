@@ -1,6 +1,6 @@
 import { EASMView } from '@/components/easm/EASMView';
 
-export const metadata = { title: 'EASM — AiSOC' };
+export const metadata = { title: 'EASM' };
 
 export default function EASMPage() {
   return (

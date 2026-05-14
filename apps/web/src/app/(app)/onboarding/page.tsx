@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { OnboardingView } from '@/components/onboarding/OnboardingView';
 
 export const metadata = {
-  title: 'Get started | AiSOC',
+  title: 'Get started',
 };
 
 // Onboarding has no static data — the catalog and any existing connectors

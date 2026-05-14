@@ -25,6 +25,7 @@ cross-tenant data leakage during the rollout window.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from datetime import UTC, datetime
@@ -36,6 +37,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hunts", tags=["hunts"])
 
@@ -232,7 +235,8 @@ async def list_hunts(
         rows = (await db.execute(q)).fetchall()
         return [_row_to_hunt(r) for r in rows]
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in hunts endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.post("", response_model=HuntResponse, status_code=status.HTTP_201_CREATED, summary="Create hunt hypothesis")
@@ -273,7 +277,8 @@ async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) ->
         return _row_to_hunt(row)
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in hunts endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/{hunt_id}", response_model=HuntResponse, summary="Get hunt")
@@ -344,7 +349,8 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
         raise
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in hunts endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.post("/{hunt_id}/run", response_model=HuntRunResponse, status_code=status.HTTP_200_OK, summary="Execute hunt query")
@@ -430,7 +436,8 @@ async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user
         )
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in hunts endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/{hunt_id}/runs", response_model=list[HuntRunResponse], summary="List hunt runs")
@@ -506,4 +513,5 @@ async def add_findings(hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSessi
         raise
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in hunts endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc

@@ -1,6 +1,6 @@
 import { SLADashboard } from '@/components/sla/SLADashboard';
 
-export const metadata = { title: 'SLA Tracking — AiSOC' };
+export const metadata = { title: 'SLA Tracking' };
 
 export default function SLAPage() {
   return (

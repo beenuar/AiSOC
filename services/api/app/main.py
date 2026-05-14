@@ -246,6 +246,29 @@ async def api_version_middleware(request: Request, call_next) -> Response:
     return response
 
 
+def _metrics_endpoint_label(request: Request) -> str:
+    """Pick a low-cardinality label for the request's route.
+
+    Using ``request.url.path`` directly is dangerous: any unmatched path
+    (think ``/api/v1/cases/<uuid>``, ``/static/<sha>``, or attacker-supplied
+    junk like ``/.git/config``) becomes its own Prometheus time series.
+    Over time this blows up the metrics backend and turns the ``/metrics``
+    endpoint into an outage vector.
+
+    FastAPI/Starlette resolves the matched route into ``request.scope["route"]``
+    once routing has run. We use ``route.path`` (the parameterized template,
+    e.g. ``/api/v1/cases/{case_id}``) when available, and fall back to a
+    single ``__unmatched__`` bucket for 404s. This caps cardinality at
+    "number of declared routes" instead of "number of distinct URLs ever
+    requested".
+    """
+    route = request.scope.get("route") if request.scope else None
+    template = getattr(route, "path", None)
+    if isinstance(template, str) and template:
+        return template
+    return "__unmatched__"
+
+
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next) -> Response:
     """Collect Prometheus metrics for each request."""
@@ -253,7 +276,7 @@ async def metrics_middleware(request: Request, call_next) -> Response:
     response = await call_next(request)
     duration = time.time() - start_time
 
-    endpoint = request.url.path
+    endpoint = _metrics_endpoint_label(request)
     REQUEST_COUNT.labels(request.method, endpoint, response.status_code).inc()
     REQUEST_LATENCY.labels(request.method, endpoint).observe(duration)
 

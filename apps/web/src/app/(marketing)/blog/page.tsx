@@ -15,7 +15,7 @@ import { formatPostDate, listPosts } from '@/lib/blog';
  */
 
 export const metadata: Metadata = {
-  title: 'Engineering blog — AiSOC',
+  title: 'Engineering blog',
   description:
     'Long-form, technical writing from the team building AiSOC: graph-at-ingest, sub-minute investigation latency, the L0–L4 SOC automation maturity model.',
   alternates: { canonical: '/blog' },

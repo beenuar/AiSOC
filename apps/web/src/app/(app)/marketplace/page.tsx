@@ -1,7 +1,7 @@
 import { MarketplaceView } from '@/components/marketplace/MarketplaceView';
 
 export const metadata = {
-  title: 'Marketplace | AiSOC',
+  title: 'Marketplace',
 };
 
 export default function MarketplacePage() {

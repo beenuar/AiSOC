@@ -1,7 +1,7 @@
 import { CopilotView } from '@/components/copilot/CopilotView';
 
 export const metadata = {
-  title: 'AI Copilot | AiSOC',
+  title: 'AI Copilot',
 };
 
 export default function CopilotPage() {

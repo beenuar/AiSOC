@@ -15,6 +15,7 @@ Endpoints
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from datetime import UTC, datetime
@@ -27,6 +28,8 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/phishing", tags=["phishing"])
 
@@ -221,7 +224,8 @@ async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> Submissi
         return _row_to_submission(row)
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in phishing endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/submissions", response_model=list[SubmissionResponse], summary="List phishing submissions")
@@ -244,7 +248,8 @@ async def list_submissions(
         rows = (await db.execute(q)).fetchall()
         return [_row_to_submission(r) for r in rows]
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in phishing endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
 
 
 @router.get("/{submission_id}", response_model=SubmissionResponse, summary="Get submission")
@@ -288,4 +293,5 @@ async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> S
         return _row_to_submission(row)
     except Exception as exc:
         await db.rollback()
-        raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc
+        logger.exception("Database error in phishing endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc

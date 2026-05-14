@@ -7,9 +7,14 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"
 
-    # Webhook alerting
+    # Webhook alerting. ``alert_webhook_secret`` previously defaulted to the
+    # literal string ``"changeme"`` — anyone running this service with the
+    # defaults would sign every outbound honeytoken alert with a public secret,
+    # so a downstream verifier couldn't distinguish a real trigger from a
+    # forged one. We now default to empty and require operators to wire a
+    # real HMAC secret before alerts will be signed.
     alert_webhook_url: str = ""
-    alert_webhook_secret: str = "changeme"
+    alert_webhook_secret: str = ""
 
     # Token defaults
     token_ttl_days: int = 365

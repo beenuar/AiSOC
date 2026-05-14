@@ -1,7 +1,7 @@
 import { RBACView } from '@/components/settings/RBACView';
 
 export const metadata = {
-  title: 'Roles & Permissions | AiSOC',
+  title: 'Roles & Permissions',
 };
 
 export default function RBACPage() {

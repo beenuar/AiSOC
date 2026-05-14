@@ -1,6 +1,6 @@
 import { ExecutiveDigest } from '@/components/reports/ExecutiveDigest';
 
-export const metadata = { title: 'Executive Digest — AiSOC' };
+export const metadata = { title: 'Executive Digest' };
 
 export default function ExecutiveDigestPage() {
   return (

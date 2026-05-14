@@ -1,6 +1,6 @@
 import { TeamAnalyticsView } from '@/components/analytics/TeamAnalyticsView';
 
-export const metadata = { title: 'Team Analytics — AiSOC' };
+export const metadata = { title: 'Team Analytics' };
 
 export default function TeamAnalyticsPage() {
   return (

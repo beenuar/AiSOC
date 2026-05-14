@@ -1,7 +1,7 @@
 import { DashboardView } from '@/components/dashboard/DashboardView';
 
 export const metadata = {
-  title: 'Dashboard | AiSOC',
+  title: 'Dashboard',
 };
 
 export default function DashboardPage() {

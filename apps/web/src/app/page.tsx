@@ -20,7 +20,11 @@ import { StartHero } from '@/components/onboarding/StartHero';
  */
 
 export const metadata: Metadata = {
-  title: 'AiSOC — open-source AI Security Operations Center',
+  // Use `absolute` so the root layout's `template: '%s | AiSOC'` doesn't
+  // append a redundant " | AiSOC" to a title that already leads with the
+  // brand. Without this, the homepage tab renders
+  // `AiSOC — open-source AI Security Operations Center | AiSOC`.
+  title: { absolute: 'AiSOC — open-source AI Security Operations Center' },
   description:
     'Open-source AI SOC: 200-incident eval harness, 26 click-and-connect security sources, MITRE ATT&CK-mapped autonomous investigation. Try the live demo or self-host in under 5 minutes.',
   alternates: { canonical: '/' },

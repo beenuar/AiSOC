@@ -7,7 +7,7 @@ interface CasePageProps {
 }
 
 export const metadata = {
-  title: 'Case workspace | AiSOC',
+  title: 'Case workspace',
 };
 
 export default async function CaseDetailPage({ params }: CasePageProps) {

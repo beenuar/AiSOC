@@ -1,7 +1,7 @@
 import { PlaybooksView } from '@/components/playbooks/PlaybooksView';
 
 export const metadata = {
-  title: 'Playbooks | AiSOC',
+  title: 'Playbooks',
 };
 
 export default function PlaybooksPage() {

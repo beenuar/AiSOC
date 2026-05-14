@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Alert Noise Tuning | AiSOC' };
+export const metadata = { title: 'Alert Noise Tuning' };
 
 /**
  * Back-compat redirect. The legacy `/noise-tuning` prototype has been
