@@ -64,8 +64,28 @@ function estimateReadingMinutes(body: string): number {
   return Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 }
 
+// Slugs are derived from filenames on disk and flow into both URL paths
+// (`/blog/${slug}`) and HTML attributes (`<Link href>`). Even though only
+// maintainers can add files to `content/blog/`, we enforce a strict
+// kebab-case alphanumeric shape so a malicious or typo'd filename can
+// never produce HTML/JS-injecting URL segments. Doubles as a CodeQL
+// sanitizer for the `js/stored-xss` taint flow.
+const SAFE_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
+
+function assertSafeSlug(slug: string, filename: string): void {
+  if (!SAFE_SLUG.test(slug)) {
+    throw new Error(
+      `Blog post filename "${filename}" produces an unsafe slug "${slug}". ` +
+        `Slugs must match ${SAFE_SLUG.source}.`,
+    );
+  }
+}
+
 function parseFile(filename: string): BlogPost {
-  const slug = filename.replace(/\.(mdx|md)$/u, '');
+  const rawSlug = filename.replace(/\.(mdx|md)$/u, '');
+  assertSafeSlug(rawSlug, filename);
+  // After validation, ``slug`` is known to be safe URL-segment text.
+  const slug: string = rawSlug;
   const raw = fs.readFileSync(path.join(CONTENT_DIR, filename), 'utf8');
   const { data, content } = matter(raw);
   const fm = data as BlogFrontmatter;

@@ -37,12 +37,9 @@ marks the step as failed via the normal exception path.
 from __future__ import annotations
 
 import ipaddress
-import logging
 import os
 import socket
 from urllib.parse import urlsplit
-
-logger = logging.getLogger("aisoc.playbook.ssrf_guard")
 
 
 class SSRFError(ValueError):

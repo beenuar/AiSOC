@@ -74,8 +74,27 @@ function readDir(): string[] {
     .filter((name) => name.endsWith('.mdx') || name.endsWith('.md'));
 }
 
+// Slugs flow from filenames into `/customers/${slug}` URLs and `<Link href>`
+// attributes. Even though only maintainers can land files in
+// `content/customers/`, we enforce a strict kebab-case alphanumeric shape
+// so a malicious or typo'd filename can never produce
+// HTML/JS-injecting URL segments. Doubles as a CodeQL sanitizer for the
+// `js/stored-xss` taint flow.
+const SAFE_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
+
+function assertSafeSlug(slug: string, filename: string): void {
+  if (!SAFE_SLUG.test(slug)) {
+    throw new Error(
+      `Customer study filename "${filename}" produces an unsafe slug "${slug}". ` +
+        `Slugs must match ${SAFE_SLUG.source}.`,
+    );
+  }
+}
+
 function parseFile(filename: string): CustomerStudy {
-  const slug = filename.replace(/\.(mdx|md)$/u, '');
+  const rawSlug = filename.replace(/\.(mdx|md)$/u, '');
+  assertSafeSlug(rawSlug, filename);
+  const slug: string = rawSlug;
   const raw = fs.readFileSync(path.join(CONTENT_DIR, filename), 'utf8');
   const { data, content } = matter(raw);
   // gray-matter returns `data` as a generic object; we trust the file author

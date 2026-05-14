@@ -48,6 +48,21 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 _IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")
 
 
+def _log_safe(value: str | None) -> str | None:
+    """Strip CR/LF from a user-supplied string before it enters a log record.
+
+    The idempotency key and ``connector_type`` are validated upstream
+    (regex / Pydantic) and cannot in practice contain newlines, but static
+    analysis (CodeQL ``py/log-injection``) does not recognise the regex as
+    a sanitiser. This helper makes the cleansing explicit so the taint
+    tracker treats the value as safe, while remaining a no-op for any
+    well-formed input.
+    """
+    if value is None:
+        return None
+    return value.replace("\r", "").replace("\n", " ")
+
+
 class AlertResponse(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
@@ -451,8 +466,17 @@ async def submit_alert(
     # Validate Idempotency-Key shape early so a bad header fails fast
     # and never costs us a DB round-trip. We only enforce the regex when
     # the client *supplied* a key — the column itself remains nullable.
+    #
+    # We also strip CR/LF immediately after the regex passes. The regex
+    # already forbids those characters (the charset is [A-Za-z0-9._:-]),
+    # so this is a no-op for any well-formed key, but it makes the
+    # sanitisation explicit at the source. CodeQL's ``py/log-injection``
+    # taint analysis does not understand regex-based validation, so
+    # without this explicit ``.replace`` it keeps flagging every
+    # downstream ``logger.*(extra={"idempotency_key": idempotency_key})``
+    # call as a log-injection sink.
     if idempotency_key is not None:
-        idempotency_key = idempotency_key.strip()
+        idempotency_key = idempotency_key.strip().replace("\r", "").replace("\n", " ")
         if not _IDEMPOTENCY_KEY_RE.match(idempotency_key):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -579,7 +603,7 @@ async def submit_alert(
             "tenant_id": str(alert.tenant_id),
             "severity": alert.severity,
             "events": len(sanitised_events),
-            "connector_type": payload.connector_type,
+            "connector_type": _log_safe(payload.connector_type),
             "idempotency_key": idempotency_key,
             "timestamps_clamped": "ts-clamped" in (alert.tags or []),
             "redacted_keys": sanitise_stats.get("redacted", 0),

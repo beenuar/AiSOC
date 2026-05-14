@@ -24,7 +24,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { QueueItem, QueueResponse } from '@/lib/api';
 

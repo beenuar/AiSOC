@@ -965,8 +965,9 @@ def _fake_oras(populate=None, *, returncode: int = 0, stderr: str = ""):
 def _stub_oras_pull(monkeypatch, fake):
     """Replace ``subprocess.run`` *inside* the plugin_manager module so
     ``install_from_oci`` exercises our fake without touching the real CLI."""
-    import app.services.plugin_manager as pm  # noqa: PLC0415
+    import sys  # noqa: PLC0415
 
+    pm = sys.modules["app.services.plugin_manager"]
     monkeypatch.setattr(pm.subprocess, "run", fake)
 
 
