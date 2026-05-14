@@ -75,6 +75,7 @@ async def test_fetch_alerts_uses_pagination(fixture):
     # Pad page-1 to exactly _PER_PAGE=100 to force a second iteration via
     # the cursor branch. _PER_PAGE is the connector's internal pagination size.
     from app.connectors.sysdig import _PER_PAGE
+
     fat_page = (fixture * 50)[:_PER_PAGE]
     page1 = {"data": fat_page, "page": {"next": "cursor-2"}}
     page2 = {"data": fixture[:1], "page": {}}

@@ -105,9 +105,7 @@ async def handle_card_action(
         return CallbackResult(
             decision="rejected_unknown_verb",
             ok=False,
-            card=decision_card(
-                decision="rejected", action_id=action_id, decided_by=approver_id
-            ),
+            card=decision_card(decision="rejected", action_id=action_id, decided_by=approver_id),
             error=f"unknown verb {verb!r}",
         )
 
@@ -157,9 +155,7 @@ async def handle_card_action(
             decision=decision_label,
             ok=False,
             error=str(exc),
-            card=decision_card(
-                decision=decision_label, action_id=action_id, decided_by=approver_id
-            ),
+            card=decision_card(decision=decision_label, action_id=action_id, decided_by=approver_id),
         )
 
     if audit_sink is not None:
@@ -176,9 +172,7 @@ async def handle_card_action(
     return CallbackResult(
         decision=decision_label,
         ok=True,
-        card=decision_card(
-            decision=decision_label, action_id=action_id, decided_by=approver_id
-        ),
+        card=decision_card(decision=decision_label, action_id=action_id, decided_by=approver_id),
     )
 
 

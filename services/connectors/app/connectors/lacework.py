@@ -168,9 +168,7 @@ class LaceworkConnector(BaseConnector):
                             "startTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                             "endTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
                         },
-                        "filters": [
-                            {"field": "status", "expression": "eq", "value": "NonCompliant"}
-                        ],
+                        "filters": [{"field": "status", "expression": "eq", "value": "NonCompliant"}],
                     },
                 )
                 if ce_resp.status_code == 200:

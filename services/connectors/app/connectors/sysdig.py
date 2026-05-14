@@ -76,10 +76,7 @@ class SysdigConnector(BaseConnector):
                     "api_token",
                     "secret",
                     "API Token",
-                    help_text=(
-                        "Sysdig Secure API token. Settings → API → Tokens. "
-                        "Needs read access to Secure Events."
-                    ),
+                    help_text=("Sysdig Secure API token. Settings → API → Tokens. Needs read access to Secure Events."),
                 ),
             ],
         )

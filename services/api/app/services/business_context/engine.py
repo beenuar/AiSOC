@@ -217,12 +217,8 @@ class EngineSnapshot:
         return tuple(r for r in self.rules if r.enabled)
 
 
-def _compile_snapshot(
-    tenant_id: UUID, version: int, rules: Iterable[BusinessContextRule]
-) -> EngineSnapshot:
-    sorted_rules = tuple(
-        sorted(rules, key=lambda r: (r.priority, r.id))
-    )
+def _compile_snapshot(tenant_id: UUID, version: int, rules: Iterable[BusinessContextRule]) -> EngineSnapshot:
+    sorted_rules = tuple(sorted(rules, key=lambda r: (r.priority, r.id)))
     idx: dict[str, list[str]] = {}
     for r in sorted_rules:
         for f in r.when.fields_referenced():

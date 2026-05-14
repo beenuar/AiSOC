@@ -133,9 +133,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     hunt_scheduler_task: asyncio.Task | None = None
     if settings.HUNT_SCHEDULER_ENABLED:
         try:
-            hunt_scheduler_task = asyncio.create_task(
-                run_hunt_scheduler(), name="hunt_scheduler_worker"
-            )
+            hunt_scheduler_task = asyncio.create_task(run_hunt_scheduler(), name="hunt_scheduler_worker")
             logger.info("hunt_scheduler worker started")
         except Exception as exc:
             logger.warning("hunt_scheduler worker failed to start", error=str(exc))

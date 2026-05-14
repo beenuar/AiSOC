@@ -39,11 +39,8 @@ import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import HTTPException, Request, Response
-
 from app.api.v1.endpoints import waitlist as endpoint
 from app.models.waitlist import (
     WAITLIST_STATUS_CONTACTED,
@@ -57,7 +54,7 @@ from app.services.waitlist import (
     SlackNotifier,
     build_signup_message,
 )
-
+from fastapi import HTTPException, Request, Response
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -134,7 +131,7 @@ class _MockSession:
         rows = list(self.rows.values())
 
         # WHERE id = :id
-        for clause in getattr(stmt, "whereclause", None) and [stmt.whereclause] or []:
+        for _clause in getattr(stmt, "whereclause", None) and [stmt.whereclause] or []:
             pass  # SQLAlchemy compiled expressions don't easily yield bind values
         # Easier: walk the stmt._where_criteria.
         # We'll just inspect the compiled clause string.
@@ -187,7 +184,7 @@ class _MockExecuteResult:
     def scalar_one_or_none(self) -> WaitlistEntry | None:
         return self._rows[0] if self._rows else None
 
-    def scalars(self) -> "_MockExecuteResult":
+    def scalars(self) -> _MockExecuteResult:
         return self
 
     def all(self) -> list[WaitlistEntry]:
@@ -229,7 +226,7 @@ class TestSignupRequestValidation:
         assert payload.role == "SOC Manager"
 
     def test_invalid_email_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError surface
             endpoint.WaitlistSignupRequest(
                 email="not-an-email",
                 company="Acme",
@@ -258,7 +255,7 @@ class TestSignupRequestValidation:
         assert len(payload.soc_stack) <= 20
 
     def test_blank_motivation_rejected(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError surface
             endpoint.WaitlistSignupRequest(
                 email="c@acme.io",
                 company="Acme",
@@ -591,7 +588,7 @@ class TestAdminPatchEndpoint:
         assert exc_info.value.status_code == 404
 
     def test_patch_invalid_status_rejected_at_payload_layer(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError surface
             endpoint.WaitlistPatchRequest(status="nope")
 
 

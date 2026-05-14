@@ -17,8 +17,8 @@ from __future__ import annotations
 from app.services.tenant_provision.provisioner import (
     AdminInvite,
     InitialAdminUser,
-    ProvisionResult,
     ProvisioningError,
+    ProvisionResult,
     SlugCollisionError,
     WaitlistEntryNotFoundError,
     WaitlistEntryNotPromotableError,
