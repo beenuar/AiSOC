@@ -297,9 +297,7 @@ def patch_handlers():
 
 class TestEngineContextFlattening:
     @pytest.mark.asyncio
-    async def test_later_step_can_override_earlier_flattened_value(
-        self, patch_handlers
-    ) -> None:
+    async def test_later_step_can_override_earlier_flattened_value(self, patch_handlers) -> None:
         """An enrichment step should be able to refine a placeholder value set
         by an earlier step. Pre-fix, ``setdefault`` froze the first writer."""
 
@@ -341,9 +339,7 @@ class TestEngineContextFlattening:
 
         patch_handlers({StepType.HTTP: handler})
 
-        pb = _make_playbook(
-            [PlaybookStep(id="s1", name="h", type=StepType.HTTP)]
-        )
+        pb = _make_playbook([PlaybookStep(id="s1", name="h", type=StepType.HTTP)])
         run = await PlaybookEngine().run(pb, trigger_context={})
 
         assert run.context["public"] == "yes"
@@ -357,9 +353,7 @@ class TestEngineConditionGate:
     passed)."""
 
     @pytest.mark.asyncio
-    async def test_expression_condition_skips_step_when_false(
-        self, patch_handlers
-    ) -> None:
+    async def test_expression_condition_skips_step_when_false(self, patch_handlers) -> None:
         called = {"hit": False}
 
         async def handler(step: PlaybookStep, ctx: dict, http: Any) -> dict:
@@ -385,9 +379,7 @@ class TestEngineConditionGate:
         assert run.step_results[0]["status"] == StepStatus.SKIPPED
 
     @pytest.mark.asyncio
-    async def test_expression_condition_runs_step_when_true(
-        self, patch_handlers
-    ) -> None:
+    async def test_expression_condition_runs_step_when_true(self, patch_handlers) -> None:
         called = {"hit": False}
 
         async def handler(step: PlaybookStep, ctx: dict, http: Any) -> dict:
