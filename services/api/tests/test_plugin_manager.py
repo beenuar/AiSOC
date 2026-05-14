@@ -996,9 +996,7 @@ class TestInstallFromOciHardening:
 
         mgr = PluginManager(plugins_dir=tmp_path / "plugins")
         with pytest.raises(PluginError, match="invalid plugin id"):
-            await mgr.install_from_oci(
-                "ghcr.io/owner/plugin:v1", plugin_id_hint="../escape"
-            )
+            await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="../escape")
         assert fake.calls == []  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
@@ -1049,9 +1047,7 @@ class TestInstallFromOciHardening:
         _stub_oras_pull(monkeypatch, fake)
 
         mgr = PluginManager(plugins_dir=tmp_path / "plugins")
-        await mgr.install_from_oci(
-            "ghcr.io/owner/plugin:v1", plugin_id_hint="test.argv-shape"
-        )
+        await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="test.argv-shape")
 
         assert len(fake.calls) == 1  # type: ignore[attr-defined]
         argv = fake.calls[0]  # type: ignore[attr-defined]
@@ -1102,9 +1098,7 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError, match="does not match plugin_id_hint"):
-            await mgr.install_from_oci(
-                "ghcr.io/owner/plugin:v1", plugin_id_hint="test.wrong-id"
-            )
+            await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="test.wrong-id")
 
         # Mismatch fails AFTER pull but BEFORE copy.
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []
@@ -1141,9 +1135,7 @@ class TestInstallFromOciHardening:
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []
 
     @pytest.mark.asyncio
-    async def test_strict_mode_refuses_unsigned_and_installs_nothing(
-        self, tmp_path, trusted_keys_dir, monkeypatch
-    ):
+    async def test_strict_mode_refuses_unsigned_and_installs_nothing(self, tmp_path, trusted_keys_dir, monkeypatch):
         """In strict trust mode an unsigned image must be rejected
         *before* any file lands in PLUGINS_DIR. This is the headline
         guarantee of the H-3 hardening — signature gate before copy."""
@@ -1209,9 +1201,7 @@ class TestInstallFromOciHardening:
 
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
-        loaded_id = await mgr.install_from_oci(
-            "ghcr.io/owner/plugin:v1", plugin_id_hint="test.real-plugin"
-        )
+        loaded_id = await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="test.real-plugin")
 
         assert loaded_id == "test.real-plugin"
         assert (plugins_dir / "test.real-plugin" / "plugin.py").exists()

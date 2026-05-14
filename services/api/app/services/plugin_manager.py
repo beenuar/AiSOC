@@ -205,11 +205,7 @@ def _select_extracted_plugin_dir(tmp_path: Path) -> Path:
     if not subdirs:
         return tmp_path
 
-    candidates = [
-        d
-        for d in subdirs
-        if (d / _MANIFEST_YAML).exists() or (d / _MANIFEST_JSON).exists()
-    ]
+    candidates = [d for d in subdirs if (d / _MANIFEST_YAML).exists() or (d / _MANIFEST_JSON).exists()]
     if len(candidates) == 1:
         return candidates[0]
     if len(candidates) > 1:
