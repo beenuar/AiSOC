@@ -436,6 +436,9 @@ def _stub_ledger(monkeypatch: pytest.MonkeyPatch, pool: MagicMock | None) -> Non
         pkg = ModuleType(pkg_name)
         pkg.__path__ = [str(_AGENTS_ROOT / "app" / "investigator")]
         monkeypatch.setitem(sys.modules, pkg_name, pkg)
+        import app as _app_pkg  # noqa: PLC0415
+
+        monkeypatch.setattr(_app_pkg, "investigator", pkg, raising=False)
 
     ledger = ModuleType(ledger_name)
     if pool is None:
@@ -447,6 +450,14 @@ def _stub_ledger(monkeypatch: pytest.MonkeyPatch, pool: MagicMock | None) -> Non
     else:
         ledger.get_pool = AsyncMock(return_value=pool)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, ledger_name, ledger)
+    # ``from app.investigator import ledger`` resolves via attribute lookup once
+    # the parent package has been touched. If another test already populated
+    # ``app.investigator.ledger`` (the real module), ``setitem`` on sys.modules
+    # alone is not enough — also rebind the attribute on the parent package so
+    # the lazy import inside ``resolve_llm_config`` lands on the stub.
+    parent = sys.modules.get(pkg_name)
+    if parent is not None:
+        monkeypatch.setattr(parent, "ledger", ledger, raising=False)
 
 
 class TestResolveWithTenant:

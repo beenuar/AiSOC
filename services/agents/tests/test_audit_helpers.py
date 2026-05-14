@@ -25,10 +25,21 @@ if str(_AGENTS_ROOT) not in sys.path:
 # Provide a hollow ``app.investigator`` package so importing
 # ``app.investigator.state`` does not execute the real package __init__,
 # which transitively imports langgraph / openai.
+#
+# We MUST also bind the stub on the parent ``app`` module's namespace —
+# inserting into ``sys.modules`` alone leaves ``app.investigator`` invisible
+# to attribute-walking helpers like ``pytest.MonkeyPatch.setattr("app.investigator.X.Y")``
+# (which calls ``getattr(app, "investigator")``). Skipping that step caused
+# later test modules (``test_four_agent_facade``) to fail with
+# ``AttributeError: 'module' object at app.investigator has no attribute 'investigator'``
+# whenever this module loaded first in collection order.
 if "app.investigator" not in sys.modules:
     pkg = types.ModuleType("app.investigator")
     pkg.__path__ = [str(_AGENTS_ROOT / "app" / "investigator")]
     sys.modules["app.investigator"] = pkg
+    import app as _app_pkg  # noqa: PLC0415
+
+    _app_pkg.investigator = pkg  # type: ignore[attr-defined]
 
 state_module = importlib.import_module("app.investigator.state")
 
