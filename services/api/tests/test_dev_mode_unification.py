@@ -308,9 +308,7 @@ def test_reconcile_both_set_and_agree_no_warning():
         assert s.ENV == "production"
         assert s.ENVIRONMENT == "production"
         # No reconciliation warning should have fired.
-        assert not any(
-            "disagree" in str(w.message) for w in caught
-        ), [str(w.message) for w in caught]
+        assert not any("disagree" in str(w.message) for w in caught), [str(w.message) for w in caught]
 
 
 def test_reconcile_disagreement_prefers_environment_and_warns():

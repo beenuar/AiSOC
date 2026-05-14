@@ -56,12 +56,8 @@ INSECURE_SECRET_KEY_DEFAULTS: frozenset[str] = frozenset(
 #                                handed admin-on-the-demo-tenant — that
 #                                used to mask real auth regressions.
 # ------------------------------------------------------------------
-DEV_ENVIRONMENTS: Final[frozenset[str]] = frozenset(
-    {"development", "dev", "local", "demo", "test"}
-)
-AUTH_BYPASS_ENVIRONMENTS: Final[frozenset[str]] = frozenset(
-    {"development", "dev", "local", "demo"}
-)
+DEV_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"development", "dev", "local", "demo", "test"})
+AUTH_BYPASS_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"development", "dev", "local", "demo"})
 
 
 def _normalize_env(value: str | None) -> str:
@@ -547,11 +543,7 @@ class Settings(BaseSettings):
         elif environment_is_default and not env_is_default:
             # Operator set ENV but not ENVIRONMENT — mirror.
             object.__setattr__(self, "ENVIRONMENT", env_raw)
-        elif (
-            not env_is_default
-            and not environment_is_default
-            and _normalize_env(env_raw) != _normalize_env(environment_raw)
-        ):
+        elif not env_is_default and not environment_is_default and _normalize_env(env_raw) != _normalize_env(environment_raw):
             # Both set and disagree: prefer ENVIRONMENT, warn loudly so
             # ops collapses to one canonical name.
             warnings.warn(
