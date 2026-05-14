@@ -12,6 +12,8 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { SWRConfig } from 'swr';
+import type { ReactNode } from 'react';
 
 vi.mock('@/lib/api', () => ({
   insightsApi: {
@@ -32,6 +34,16 @@ vi.mock('@/lib/realtime', () => ({
 import { insightsApi, type SOCInsightsResponse } from '@/lib/api';
 import { SOCInsightsView } from './SOCInsightsView';
 import { pointsToPath } from './Sparkline';
+
+// SWR keeps a single global cache by default, which means the first test's
+// pending-forever promise survives into subsequent tests and pins them in
+// the loading state. Wrap each render in a fresh provider so every test
+// gets its own clean Map cache.
+function renderWithFreshSWR(node: ReactNode) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map() }}>{node}</SWRConfig>,
+  );
+}
 
 const sampleResponse: SOCInsightsResponse = {
   window: '24h',
@@ -116,7 +128,7 @@ describe('SOCInsightsView', () => {
       new Promise(() => {}),
     );
 
-    render(<SOCInsightsView />);
+    renderWithFreshSWR(<SOCInsightsView />);
 
     expect(screen.getByLabelText(/loading soc insights/i)).toBeInTheDocument();
   });
@@ -126,7 +138,7 @@ describe('SOCInsightsView', () => {
       sampleResponse,
     );
 
-    render(<SOCInsightsView />);
+    renderWithFreshSWR(<SOCInsightsView />);
 
     // Wait for at least one tile to land — proves the SWR cycle
     // completed without re-rendering into the error/loading branch.
@@ -150,7 +162,7 @@ describe('SOCInsightsView', () => {
       new Error('500 boom'),
     );
 
-    render(<SOCInsightsView />);
+    renderWithFreshSWR(<SOCInsightsView />);
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toBeInTheDocument(),
