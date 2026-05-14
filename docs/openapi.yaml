@@ -258,6 +258,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/submit:
+    post:
+      tags:
+      - alerts
+      summary: Submit Alert
+      description: 'Submit one alert directly from an OCSF event batch.
+
+
+        This is the destination for `aisoc submit <file>` and the local-dev fast
+
+        path documented in the quickstart. We deliberately bypass the Kafka
+
+        detect/correlate/fuse pipeline (which fresh clones don''t run by default)
+
+        so that a hand-crafted fixture lands in the database — and therefore in
+
+        ``GET /api/v1/alerts`` and the web console — within the same second.
+
+
+        Authorisation: requires ``alerts:write``. In development mode the
+
+        auth bypass in :mod:`app.api.v1.deps` resolves to the deterministic
+
+        demo tenant, so the documented ``aisoc submit`` CLI works against a
+
+        fresh clone with no token plumbing.'
+      operationId: submit_alert_api_v1_alerts_submit_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertSubmitRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/alerts:
     get:
       tags:
@@ -12978,6 +13026,65 @@ components:
       - new_last_24h
       - critical_open
       title: AlertStatsResponse
+    AlertSubmitRequest:
+      properties:
+        events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Events
+          default: []
+        connector_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Id
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        source_format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Format
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+      type: object
+      title: AlertSubmitRequest
+      description: "Direct-write alert submission payload.\n\nThe founder-flow demo\
+        \ (`aisoc submit <file>`) and any operator who wants\nto land a hand-crafted\
+        \ alert on the local dev stack without a connector\nPOST one of these. The\
+        \ body intentionally mirrors the ingest envelope\nused by real connectors\
+        \ so the same fixture works against either path:\n\n    { connector_id, connector_type,\
+        \ source_format, events: [...] }\n\nThe single payload synthesises one ``Alert``\
+        \ row, written directly into\nthe tenant's database, so the result is visible\
+        \ in\n``GET /api/v1/alerts`` and the web console within the same second.\n\
+        This deliberately bypasses the Kafka detection/correlation pipeline\n(which\
+        \ fresh clones don't run by default) so the documented \"alert in\nseconds\"\
+        \ promise in the quickstart actually holds."
     AlertUpdateRequest:
       properties:
         status:
