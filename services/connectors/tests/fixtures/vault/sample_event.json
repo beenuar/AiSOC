@@ -1,0 +1,66 @@
+[
+  {
+    "type": "request",
+    "request_id": "req-001",
+    "time": "2026-05-13T18:30:00Z",
+    "auth": {
+      "display_name": "alice",
+      "policies": ["default", "readonly"],
+      "entity_id": "ent-1"
+    },
+    "request": {
+      "id": "req-001",
+      "operation": "read",
+      "path": "secret/data/app/config",
+      "remote_address": "10.0.1.5"
+    }
+  },
+  {
+    "type": "request",
+    "request_id": "req-002",
+    "time": "2026-05-13T18:30:05Z",
+    "auth": {
+      "display_name": "bob",
+      "policies": ["admin"],
+      "entity_id": "ent-2"
+    },
+    "request": {
+      "id": "req-002",
+      "operation": "delete",
+      "path": "sys/policies/acl/dev-team",
+      "remote_address": "10.0.1.6"
+    }
+  },
+  {
+    "type": "request",
+    "request_id": "req-003",
+    "time": "2026-05-13T18:30:10Z",
+    "auth": {
+      "display_name": "root-token",
+      "policies": ["root"],
+      "entity_id": "root"
+    },
+    "request": {
+      "id": "req-003",
+      "operation": "update",
+      "path": "auth/token/root",
+      "remote_address": "10.0.1.7"
+    }
+  },
+  {
+    "type": "request",
+    "request_id": "req-004",
+    "time": "2026-05-13T18:30:15Z",
+    "auth": {
+      "display_name": "carol",
+      "policies": ["default"]
+    },
+    "request": {
+      "id": "req-004",
+      "operation": "rotate",
+      "path": "transit/keys/payments",
+      "remote_address": "10.0.1.8"
+    },
+    "error": "permission denied"
+  }
+]
