@@ -121,6 +121,16 @@ def test_lifespan_builds_and_closes_clients(monkeypatch):
         async def aclose(self) -> None:
             closed.append("actions")
 
+        # The lifespan handler now hands these two coroutines to the
+        # ``ApprovalTimeoutScheduler`` at startup (T3.6 ChatOps timeout
+        # path), so the mock has to expose them — no actual call is
+        # made during the lifespan, but ``getattr`` is.
+        async def approve_action(self, action_id: str) -> dict[str, Any]:
+            return {"id": action_id, "status": "approved"}
+
+        async def reject_action(self, action_id: str) -> dict[str, Any]:
+            return {"id": action_id, "status": "rejected"}
+
     monkeypatch.setattr(main_module, "AisocApiClient", _RecordingApiClient)
     monkeypatch.setattr(main_module, "AisocActionsClient", _RecordingActionsClient)
 
