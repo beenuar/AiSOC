@@ -206,9 +206,17 @@ class SysdigConnector(BaseConnector):
         else:
             sev = self._FALCO_NAME_SEVERITY.get(str(sev_raw or "").lower(), "info")
         rule = raw.get("ruleName") or raw.get("rule") or labels.get("rule") or "policy"
-        # Anomalous-process / drift policies escalate to high even when the
-        # rule's own severity is warning — they're never benign.
-        if "drift" in rule.lower() or "tampering" in rule.lower():
+        # Anomalous-process / drift / interactive-shell policies escalate to
+        # high even when the rule's own severity is warning — these are the
+        # canonical Falco "you do not want to see this in prod" signals and
+        # are never benign once they fire.
+        rule_lower = rule.lower()
+        if (
+            "drift" in rule_lower
+            or "tampering" in rule_lower
+            or "terminal shell" in rule_lower
+            or "shell in container" in rule_lower
+        ):
             sev = "high"
         host = labels.get("host.hostname") or labels.get("kubernetes.node.name") or raw.get("hostname")
         ns = labels.get("kubernetes.namespace.name")
