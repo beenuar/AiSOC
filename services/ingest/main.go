@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	configsnap "github.com/beenuar/aisoc/services/ingest/internal/config_snapshot"
 	"github.com/beenuar/aisoc/services/ingest/internal/graph"
 	"github.com/beenuar/aisoc/services/ingest/internal/handler"
 	"github.com/beenuar/aisoc/services/ingest/internal/inbox"
@@ -81,6 +82,49 @@ func main() {
 				Int("flush_ms", cfg.GraphFlushIntervalMs).
 				Str("updates_topic", cfg.GraphUpdatesTopic).
 				Msg("graph: ingest-side writer enabled")
+
+			// T1.2 (v8.0) — config snapshots. Wired only when both the
+			// graph writer is up *and* the operator opts in. Falls back
+			// to in-memory cache when Redis is unhealthy; falls back to
+			// HTTPProvider against the connectors service when configured,
+			// otherwise NoopProvider (every snapshot returns
+			// ErrNotImplemented and we log skips). Failures NEVER block
+			// fusion ingest — same contract as T1.1.
+			if cfg.SnapshotEnabled {
+				ttl := time.Duration(cfg.SnapshotCacheTTLSecs) * time.Second
+				cacheCtx, cacheCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				cache := configsnap.NewRedisCache(cacheCtx, configsnap.RedisConfig{
+					Addr: cfg.RedisAddr,
+					TTL:  ttl,
+				})
+				cacheCancel()
+				var provider configsnap.Provider
+				if cfg.SnapshotProviderURL != "" {
+					provider = configsnap.NewHTTPProvider(
+						cfg.SnapshotProviderURL,
+						time.Duration(cfg.SnapshotProviderTimeoutMs)*time.Millisecond,
+					)
+				} else {
+					provider = configsnap.NoopProvider{}
+				}
+				snapper, err := configsnap.New(configsnap.Config{
+					Provider: provider,
+					Cache:    cache,
+					TTL:      ttl,
+				})
+				if err != nil {
+					log.Warn().Err(err).Msg("snapshot: disabled (constructor failed)")
+				} else {
+					defer func() { _ = snapper.Close() }()
+					h.SetSnapshotApplier(snapper)
+					log.Info().
+						Str("provider_url", cfg.SnapshotProviderURL).
+						Dur("cache_ttl", ttl).
+						Msg("snapshot: T1.2 config snapshots enabled")
+				}
+			} else {
+				log.Info().Msg("snapshot: disabled (AISOC_SNAPSHOT_ENABLED!=true)")
+			}
 		}
 	} else {
 		log.Info().Msg("graph: writer disabled (AISOC_GRAPH_ENABLED!=true)")

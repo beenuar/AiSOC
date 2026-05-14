@@ -147,3 +147,68 @@ class OktaConnector(BaseConnector):
             "raw_event": raw,
             "created_at": raw.get("published"),
         }
+
+    # T1.2 — config snapshots
+    #
+    # Okta exposes group, app, and policy versions via the "list policies"
+    # / "get group" / "get app" endpoints. There's no first-class history
+    # API so we return the *current* config and tag the response with
+    # ``snapshot_freshness="live"`` so downstream consumers know the
+    # snapshot was taken at lookup time, not at event time.
+    #
+    # ``resource_id`` is the Okta entity id; we infer the entity type from
+    # the prefix (the audit log uses canonical id prefixes:
+    # ``00g*`` group, ``0oa*`` app, ``00p*`` policy, ``00u*`` user).
+    async def get_resource_config(self, resource_id: str, ts: str) -> dict[str, Any]:
+        if not resource_id:
+            return {}
+        prefix = resource_id[:3]
+        path = None
+        if prefix == "00g":
+            path = f"/api/v1/groups/{resource_id}"
+        elif prefix == "0oa":
+            path = f"/api/v1/apps/{resource_id}"
+        elif prefix == "00p":
+            path = f"/api/v1/policies/{resource_id}"
+        elif prefix == "00u":
+            path = f"/api/v1/users/{resource_id}"
+        else:
+            return {"error": f"unsupported resource id prefix '{prefix}'"}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                resp = await client.get(
+                    f"{self._domain}{path}",
+                    headers=self._headers(),
+                )
+                if resp.status_code != 200:
+                    return {
+                        "error": f"HTTP {resp.status_code}",
+                        "snapshot_freshness": "unavailable",
+                    }
+                payload = resp.json()
+            except Exception as exc:  # noqa: BLE001
+                return {"error": str(exc), "snapshot_freshness": "unavailable"}
+
+        # Map Okta's nested shape into a stable v1.0 schema for the graph
+        # writer. The raw payload lives under ``raw`` for forensic depth;
+        # the top-level fields are what most queries will hit.
+        kind = {
+            "00g": "okta.Group",
+            "0oa": "okta.Application",
+            "00p": "okta.Policy",
+            "00u": "okta.User",
+        }[prefix]
+        return {
+            "resource_type": kind,
+            "resource_id": resource_id,
+            "name": payload.get("name") or payload.get("label") or payload.get("profile", {}).get("login"),
+            "status": payload.get("status"),
+            "settings": payload.get("settings"),
+            "policy_type": payload.get("type"),
+            "version": payload.get("version"),
+            "last_updated": payload.get("lastUpdated"),
+            "snapshot_freshness": "live",
+            "snapshot_taken_at": ts,
+            "raw": payload,
+        }

@@ -353,3 +353,79 @@ class GitHubConnector(BaseConnector):
         if stream == "code_scanning":
             return self._normalize_code_scanning(raw)
         return self._normalize_audit(raw)
+
+    # T1.2 — config snapshots
+    #
+    # GitHub repo configuration spans three high-signal surfaces:
+    #
+    #   1. ``GET /repos/{owner}/{repo}`` — visibility, default branch,
+    #      archive state, fork policy, secret-scanning toggles
+    #   2. ``GET /repos/{owner}/{repo}/branches/{branch}/protection``
+    #      on the default branch — required reviewers, status checks,
+    #      enforce-admins, force-push policy
+    #   3. ``GET /repos/{owner}/{repo}/actions/permissions`` — Actions
+    #      enabled / allowed-actions policy
+    #
+    # We bundle all three into a single dict so the graph writer's
+    # :Configuration node carries everything the operator needs in one
+    # MERGE. ``ts`` is informational — GitHub's REST API doesn't expose
+    # a point-in-time view, so we tag the response ``snapshot_freshness="live"``.
+    async def get_resource_config(self, resource_id: str, ts: str) -> dict[str, Any]:
+        if not resource_id or "/" not in resource_id:
+            return {"error": "resource_id must be 'owner/repo'"}
+        owner_repo = resource_id
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                repo_resp = await client.get(
+                    f"{_BASE}/repos/{owner_repo}", headers=self._headers()
+                )
+            except Exception as exc:  # noqa: BLE001
+                return {"error": str(exc), "snapshot_freshness": "unavailable"}
+            if repo_resp.status_code != 200:
+                return {
+                    "error": f"HTTP {repo_resp.status_code}",
+                    "snapshot_freshness": "unavailable",
+                }
+            repo = repo_resp.json()
+            default_branch = repo.get("default_branch") or "main"
+
+            protection: dict[str, Any] | None = None
+            try:
+                prot_resp = await client.get(
+                    f"{_BASE}/repos/{owner_repo}/branches/{default_branch}/protection",
+                    headers=self._headers(),
+                )
+                if prot_resp.status_code == 200:
+                    protection = prot_resp.json()
+                elif prot_resp.status_code == 404:
+                    protection = {"_unprotected": True}
+            except Exception:  # noqa: BLE001
+                protection = None
+
+            actions_perms: dict[str, Any] | None = None
+            try:
+                ap_resp = await client.get(
+                    f"{_BASE}/repos/{owner_repo}/actions/permissions",
+                    headers=self._headers(),
+                )
+                if ap_resp.status_code == 200:
+                    actions_perms = ap_resp.json()
+            except Exception:  # noqa: BLE001
+                actions_perms = None
+
+        return {
+            "resource_type": "github.Repository",
+            "resource_id": owner_repo,
+            "visibility": repo.get("visibility") or ("private" if repo.get("private") else "public"),
+            "default_branch": default_branch,
+            "archived": repo.get("archived"),
+            "disabled": repo.get("disabled"),
+            "fork": repo.get("fork"),
+            "allow_forking": repo.get("allow_forking"),
+            "security_and_analysis": repo.get("security_and_analysis"),
+            "branch_protection": protection,
+            "actions_permissions": actions_perms,
+            "snapshot_freshness": "live",
+            "snapshot_taken_at": ts,
+        }

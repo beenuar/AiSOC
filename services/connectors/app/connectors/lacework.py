@@ -132,8 +132,10 @@ class LaceworkConnector(BaseConnector):
             return []
         end = datetime.now(UTC)
         start = end - timedelta(seconds=since_seconds)
+        items: list[dict[str, Any]] = []
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
+                # Stream 1: Lacework Alerts (compose pre-existing).
                 resp = await client.get(
                     f"{self._base}/api/v2/Alerts",
                     headers=self._headers(token),
@@ -142,20 +144,61 @@ class LaceworkConnector(BaseConnector):
                         "endTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     },
                 )
-                if resp.status_code != 200:
+                if resp.status_code == 200:
+                    for it in (resp.json() or {}).get("data") or []:
+                        items.append({"_kind": "alert", **it})
+                else:
                     logger.warning(
                         "lacework.fetch_failed",
                         status=resp.status_code,
                         body=resp.text[:300],
                     )
-                    return []
-                items = (resp.json() or {}).get("data") or []
-                return [self.normalize(i) for i in items]
+
+                # Stream 2 (T4.6 wave-2): policy-violations.
+                # ``POST /api/v2/Configs/ComplianceEvaluations/search`` returns
+                # the most recent compliance / policy evaluations, including
+                # which policies failed and on which resource. We surface the
+                # *failing* ones as alerts so config-drift shows up alongside
+                # runtime detections in the same queue.
+                ce_resp = await client.post(
+                    f"{self._base}/api/v2/Configs/ComplianceEvaluations/search",
+                    headers=self._headers(token),
+                    json={
+                        "timeFilter": {
+                            "startTime": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "endTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        },
+                        "filters": [
+                            {"field": "status", "expression": "eq", "value": "NonCompliant"}
+                        ],
+                    },
+                )
+                if ce_resp.status_code == 200:
+                    for it in (ce_resp.json() or {}).get("data") or []:
+                        items.append({"_kind": "policy", **it})
+                else:
+                    logger.debug(
+                        "lacework.policy_fetch_skipped",
+                        status=ce_resp.status_code,
+                    )
         except Exception as exc:
             logger.warning("lacework.fetch_exception", error=str(exc))
-            return []
+        return [self.normalize(i) for i in items]
+
+    _LACEWORK_POLICY_HIGH_RESOURCE_TYPES = (
+        "AwsIamUser",
+        "AwsIamRole",
+        "AwsKmsKey",
+        "AwsS3Bucket",
+        "AzureKeyVaultKey",
+        "GcpIamServiceAccount",
+        "GcpKmsKey",
+    )
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        kind = raw.get("_kind", "alert")
+        if kind == "policy":
+            return self._normalize_policy(raw)
         sev_raw = (raw.get("severity") or "").lower()
         if sev_raw in ("critical",):
             sev = "high"
@@ -171,5 +214,34 @@ class LaceworkConnector(BaseConnector):
             "description": raw.get("alertInfo", {}).get("description") if isinstance(raw.get("alertInfo"), dict) else None,
             "alert_id": raw.get("alertId") or raw.get("id"),
             "host": None,
+            "stream": "alerts",
+            "raw": raw,
+        }
+
+    def _normalize_policy(self, raw: dict[str, Any]) -> dict[str, Any]:
+        sev_raw = (raw.get("severity") or "").lower()
+        if sev_raw in ("critical",):
+            sev = "high"
+        elif sev_raw in ("info", "low", "medium", "high"):
+            sev = sev_raw
+        else:
+            sev = "medium"
+        if raw.get("resourceType") in self._LACEWORK_POLICY_HIGH_RESOURCE_TYPES and sev != "high":
+            sev = "medium" if sev == "info" else sev
+        return {
+            "source": "lacework",
+            "category": "cloud",
+            "severity": sev,
+            "title": raw.get("policyTitle") or raw.get("policyId") or "Lacework policy violation",
+            "description": (
+                f"resource={raw.get('resourceType')}/{raw.get('resourceId')}; "
+                f"account={raw.get('accountAlias') or raw.get('account')}; "
+                f"policy={raw.get('policyId')}"
+            ),
+            "alert_id": raw.get("evaluationId") or raw.get("id"),
+            "stream": "policy_violations",
+            "policy_id": raw.get("policyId"),
+            "resource_id": raw.get("resourceId"),
+            "resource_type": raw.get("resourceType"),
             "raw": raw,
         }

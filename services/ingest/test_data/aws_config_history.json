@@ -1,0 +1,69 @@
+{
+  "_comment": "T1.2 fixture — AWS Config-style configuration history. Used by services/ingest/internal/config_snapshot to assert the (:Alert)-[:OCCURRED_ON]->(:Resource)-[:CONFIGURED_AS {ts}]->(:Configuration) path returns the right snapshot at alert time. The :CloudTrail trail entry mirrors what the AWS CloudTrail connector would return from describe_trails + IAM get_policy_version. The :S3 bucket entry exercises the time-travel correctness story: bucket was public during the exfil window (10:00-12:00 UTC) but was reverted to private at 12:00.",
+  "connector_id": "aws_security_hub",
+  "resources": {
+    "arn:aws:s3:::aisoc-demo-bucket": [
+      {
+        "recorded": "2026-04-15T10:00:00Z",
+        "config": {
+          "resource_type": "AWS::S3::Bucket",
+          "bucket_name": "aisoc-demo-bucket",
+          "region": "us-east-1",
+          "public": true,
+          "owner": "alice",
+          "acl_grants": [
+            { "grantee": "AllUsers", "permission": "READ" }
+          ],
+          "versioning": "Enabled",
+          "encryption": {
+            "sse_algorithm": "AES256",
+            "kms_key_id": null
+          },
+          "policy_version": "v1",
+          "tags": {
+            "env": "demo",
+            "owner": "platform-team"
+          }
+        }
+      },
+      {
+        "recorded": "2026-04-15T12:00:00Z",
+        "config": {
+          "resource_type": "AWS::S3::Bucket",
+          "bucket_name": "aisoc-demo-bucket",
+          "region": "us-east-1",
+          "public": false,
+          "owner": "alice",
+          "acl_grants": [],
+          "versioning": "Enabled",
+          "encryption": {
+            "sse_algorithm": "AES256",
+            "kms_key_id": null
+          },
+          "policy_version": "v2",
+          "tags": {
+            "env": "demo",
+            "owner": "platform-team"
+          }
+        }
+      }
+    ],
+    "arn:aws:cloudtrail:us-east-1:123456789012:trail/audit-trail": [
+      {
+        "recorded": "2026-04-15T08:00:00Z",
+        "config": {
+          "resource_type": "AWS::CloudTrail::Trail",
+          "name": "audit-trail",
+          "is_multi_region_trail": true,
+          "include_global_service_events": true,
+          "log_file_validation_enabled": true,
+          "kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/abcd1234-aaaa-bbbb-cccc-deadbeefcafe",
+          "s3_bucket_name": "aisoc-cloudtrail-logs",
+          "event_selectors": [
+            { "read_write_type": "All", "include_management_events": true }
+          ]
+        }
+      }
+    ]
+  }
+}

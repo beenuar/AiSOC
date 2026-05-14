@@ -378,6 +378,68 @@ class BaseConnector(ABC):
         """Normalize a raw event to a common AiSOC alert schema."""
         return raw
 
+    # ----------------------------- T1.2 config snapshots ---------------------
+    #
+    # ``get_resource_config`` is the connector-side hook the ingest-side graph
+    # writer (T1.1 + T1.2) calls when an event references a resource. The
+    # connector returns the resource's *configuration at event time*. The
+    # ingest writer then attaches the result as a ``:Configuration`` node
+    # connected via ``:CONFIGURED_AS {ts}``, and the path
+    #
+    #     (:Alert)-[:OCCURRED_ON]->(:Resource)-[:CONFIGURED_AS {ts}]->(:Configuration)
+    #
+    # becomes queryable for the "what did this S3 bucket / IAM policy /
+    # GitHub repo look like the moment the alert fired" story that drives
+    # most agentic investigation.
+    #
+    # The default implementation raises ``NotImplementedError`` so the
+    # ingest snapshotter can detect "this connector doesn't support config
+    # snapshots" with no log spam — it logs once and skips. Connectors
+    # that *do* support snapshots return a JSON-serialisable ``dict``.
+    #
+    # Implementation guidance:
+    #   - Calls SHOULD be cheap. The ingest writer caches results, but a
+    #     slow ``describe_*`` API will still chew at p95.
+    #   - Calls MUST NOT mutate state. They are read-only by contract.
+    #   - Calls SHOULD be deterministic for a given (resource_id, ts).
+    #     For sources that don't expose history (e.g. live ``describe_*``
+    #     APIs), returning the *current* config is acceptable — record
+    #     the limitation in the connector's docstring so the operator
+    #     understands the freshness window.
+    #   - Errors should propagate as exceptions; the snapshotter will
+    #     log + skip without stalling ingest.
+
+    async def get_resource_config(
+        self, resource_id: str, ts: str
+    ) -> dict[str, Any]:
+        """Return the resource's configuration that was effective at ``ts``.
+
+        Args:
+            resource_id: Connector-native identifier (ARN for AWS, full
+                repo name for GitHub, app id for Okta, resource id for
+                Azure, asset name for GCP). The ingest writer pulls this
+                from the same property the T1.1 extractor stamped on the
+                ``:Resource`` / ``:Repo`` / ``:SaaSApp`` node.
+            ts: RFC3339 timestamp in UTC. Connectors that expose
+                configuration history (AWS Config, Azure Activity Log,
+                GitHub branch protection diffs) MUST return the snapshot
+                effective at this time. Connectors that expose only the
+                current config MAY ignore ``ts`` and return live state.
+
+        Returns:
+            JSON-serialisable dict with the configuration payload. Shape
+            is connector-defined; the ingest writer doesn't introspect
+            it. Empty dict means "no config available" — the snapshotter
+            treats that as a soft skip.
+
+        Raises:
+            NotImplementedError: connector does not implement T1.2 config
+                snapshots. Default for the base class.
+        """
+        raise NotImplementedError(
+            f"connector '{self.connector_id}' does not implement get_resource_config"
+        )
+
     # ----------------------------- federated search --------------------------
 
     # Connectors that opt into federated search override ``supports_federated_search``
@@ -458,3 +520,34 @@ class BaseConnector(ABC):
             NotImplementedError: connector did not declare ``Capability.PUSH_STATUS``.
         """
         raise NotImplementedError(f"connector '{self.connector_id}' does not implement push_status_change")
+
+    # ----------------------------- resource snapshots (T1.2) ----------------
+    #
+    # ``get_resource_config(resource_id, at_ts)`` is the read path for the
+    # "config drift / time-travel" feature: given an external resource
+    # identifier (an AWS ARN, an Azure resource ID, a GCP self_link, an Okta
+    # user id, a GitHub repo full_name) and an ISO-8601 timestamp, return the
+    # resource's recorded configuration *as of that moment*. The default raises
+    # so every connector starts as a deliberate opt-in. T1.2 fills this in for
+    # AWS / Azure / GCP / Okta / GitHub specifically; the rest stay as
+    # not-implemented and the calling code falls back to "no historical state
+    # available".
+
+    async def get_resource_config(
+        self,
+        resource_id: str,
+        at_ts: str | None = None,
+    ) -> dict[str, Any]:
+        """Return the recorded config of ``resource_id`` as of ``at_ts``.
+
+        ``at_ts`` is an ISO-8601 UTC timestamp ("2026-05-13T18:00:00Z"); ``None``
+        means "latest known". Implementations should return a JSON-serialisable
+        dict; the caller is responsible for diffing successive snapshots.
+
+        Default raises ``NotImplementedError`` so connectors that don't model a
+        config plane fail loudly rather than silently returning ``{}``.
+        """
+        raise NotImplementedError(
+            f"connector '{self.connector_id}' does not implement get_resource_config "
+            "(T1.2 wires AWS / Azure / GCP / Okta / GitHub specifically)"
+        )

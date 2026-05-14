@@ -23,12 +23,21 @@ type GraphWriter interface {
 	WriteEvent(ctx context.Context, ev *graph.Event) error
 }
 
+// SnapshotApplier mirrors *config_snapshot.Snapshotter.Apply. Defined as
+// an interface so the handler can be unit-tested without standing up a
+// real provider/cache pair, and so a nil applier is a clean "T1.2
+// disabled" signal.
+type SnapshotApplier interface {
+	Apply(ctx context.Context, ev *graph.Event)
+}
+
 // Handler holds handler dependencies
 type Handler struct {
-	norm  *normalizer.Normalizer
-	pub   *publisher.Publisher
-	graph GraphWriter
-	cfg   *config.Config
+	norm     *normalizer.Normalizer
+	pub      *publisher.Publisher
+	graph    GraphWriter
+	snapshot SnapshotApplier
+	cfg      *config.Config
 }
 
 // New creates a new Handler
@@ -44,6 +53,13 @@ func New(norm *normalizer.Normalizer, pub *publisher.Publisher, cfg *config.Conf
 // block the fusion path (T1.1 acceptance criterion).
 func (h *Handler) SetGraphWriter(g GraphWriter) {
 	h.graph = g
+}
+
+// SetSnapshotApplier wires in the T1.2 config-snapshot applier. nil leaves
+// graph projections without :Configuration nodes — the writer still upserts
+// every other node and edge, so disabling snapshots NEVER stalls ingest.
+func (h *Handler) SetSnapshotApplier(s SnapshotApplier) {
+	h.snapshot = s
 }
 
 // IngestRequest is the API payload for submitting events
@@ -127,6 +143,13 @@ func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
 				gev := graph.ExtractFromOCSF(ev.ID, ev.TenantID, req.ConnectorType, ev.OcsfEvent)
 				if gev == nil {
 					continue
+				}
+				// T1.2 — attach :Configuration nodes + :CONFIGURED_AS
+				// edges. Apply is best-effort: any provider failure is
+				// logged + skipped; the rest of the projection still
+				// flushes through WriteEvent below.
+				if h.snapshot != nil {
+					h.snapshot.Apply(r.Context(), gev)
 				}
 				// WriteEvent is non-blocking; ctx is only used to honor
 				// shutdown. We deliberately don't wait on it.

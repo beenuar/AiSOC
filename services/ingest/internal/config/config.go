@@ -82,6 +82,32 @@ type Config struct {
 	// GraphUpdatesTopic is the Kafka topic consumed by the realtime service
 	// (T1.4) for live graph-update streaming. Empty means "don't publish".
 	GraphUpdatesTopic string
+
+	// Config snapshots (T1.2 — v8.0).
+	//
+	// SnapshotEnabled toggles the per-event resource config snapshotter.
+	// When on, every event referencing a resource triggers a (cached)
+	// ``get_resource_config`` call on the relevant connector and the
+	// result lands as a versioned :Configuration node connected via
+	// ``:CONFIGURED_AS {ts}``. Off by default — the writer still runs,
+	// it just skips the snapshot lookup until the operator opts in.
+	SnapshotEnabled bool
+	// SnapshotCacheTTLSecs is the TTL for the Redis-backed config cache.
+	// Hot resources (the same EC2 instance referenced by 200 events in a
+	// minute) only do one round-trip to the connector per TTL window.
+	SnapshotCacheTTLSecs int
+	// SnapshotProviderURL is the HTTP base URL of the connectors service
+	// that serves ``GET /v1/connectors/{id}/resource-config``. The
+	// snapshotter calls this in lieu of importing the connector code
+	// directly (the connectors live in Python; the writer is Go).
+	// Empty disables remote lookups — the snapshotter then only emits
+	// cache-hit configurations or whatever the in-process provider
+	// (used in tests) returns.
+	SnapshotProviderURL string
+	// SnapshotProviderTimeoutMs caps each connector round-trip. Tight by
+	// design: the snapshotter is on the graph-flush path, not the
+	// fusion-publish path, so a slow connector must NEVER block ingest.
+	SnapshotProviderTimeoutMs int
 }
 
 // Load reads configuration from environment variables
@@ -132,6 +158,14 @@ func Load() (*Config, error) {
 		GraphFlushIntervalMs: mustGetEnvInt("AISOC_GRAPH_FLUSH_INTERVAL_MS", 100),
 		GraphQueueSize:       mustGetEnvInt("AISOC_GRAPH_QUEUE_SIZE", 2048),
 		GraphUpdatesTopic:    getEnv("AISOC_GRAPH_UPDATES_TOPIC", "security.graph_updates"),
+
+		// Config snapshots (T1.2, v8.0). Disabled by default — operators
+		// flip AISOC_SNAPSHOT_ENABLED=true once the connectors service
+		// exposes the resource-config endpoint.
+		SnapshotEnabled:           getEnv("AISOC_SNAPSHOT_ENABLED", "false") == "true",
+		SnapshotCacheTTLSecs:      mustGetEnvInt("AISOC_SNAPSHOT_CACHE_TTL_SECS", 600),
+		SnapshotProviderURL:       getEnv("AISOC_SNAPSHOT_PROVIDER_URL", ""),
+		SnapshotProviderTimeoutMs: mustGetEnvInt("AISOC_SNAPSHOT_PROVIDER_TIMEOUT_MS", 1500),
 	}
 
 	if cfg.JWTSecret == "" && os.Getenv("ENV") != "development" {
