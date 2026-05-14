@@ -33,7 +33,7 @@ from pathlib import Path
 
 import pytest
 
-from services.agents.tests.fidelity import cicids_loader, ctu13_loader, runner
+from tests.fidelity import cicids_loader, ctu13_loader, runner
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MICRO_FIXTURE = (
