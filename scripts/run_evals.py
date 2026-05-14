@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -66,6 +67,12 @@ from eval_telemetry import (  # type: ignore  # noqa: E402
     DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
     compute_per_investigation_telemetry,
 )
+
+# Wet-eval shim (T5.5). Dry-run path is stdlib-only; live path imports the
+# agent stack lazily and degrades cleanly if it isn't available. Lives in
+# ``scripts/wet_eval.py`` to keep the wet-eval shape decoupled from the
+# substrate-suite plumbing below.
+from wet_eval import compute_wet_eval  # type: ignore  # noqa: E402
 
 # The substrate-suite imports below pull in the agent runtime (pydantic etc).
 # Wrap them in a try/except so ``--telemetry-only`` can still run on a bare
@@ -776,7 +783,108 @@ def main() -> None:
             "Aggregate + per-template stats are always kept."
         ),
     )
+    parser.add_argument(
+        "--wet",
+        action="store_true",
+        help=(
+            "Run the live-LLM wet-eval harness (T5.5) over the 200-incident "
+            "corpus. Requires WET_EVAL_OPENAI_KEY in the environment. The "
+            "weekly cron in ``.github/workflows/wet-eval.yml`` is the only "
+            "place this should run unattended; the preflight in "
+            "``scripts/wet_eval_check.py`` no-ops the workflow on forks "
+            "where the secret isn't set."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Only meaningful with --wet. Synthesise the wet-eval JSON shape "
+            "from the deterministic substrate budget projection (no live "
+            "LLM calls). Used by CI to validate the report shape on every "
+            "push and by the test suite."
+        ),
+    )
+    parser.add_argument(
+        "--wet-out",
+        type=Path,
+        default=None,
+        help=(
+            "Write the wet-eval block to this path in addition to the main "
+            "--out report. The weekly workflow uses this to feed "
+            "``scripts/wet_eval_update_benchmark.py`` without re-parsing "
+            "the substrate suites."
+        ),
+    )
     args = parser.parse_args()
+
+    # Wet-eval mode short-circuits the substrate gates entirely (T5.5).
+    # ``--wet --dry-run`` is the path the test and the workflow's
+    # PR-time validation step exercise; ``--wet`` without ``--dry-run``
+    # is the weekly cron job's path and refuses to start without the
+    # API key (the preflight should have caught it earlier, but we
+    # belt-and-braces here so a manual ``run_evals.py --wet`` invocation
+    # never silently degrades).
+    if args.wet:
+        wet_mode = "dry_run" if args.dry_run else "live"
+        if wet_mode == "live" and not os.environ.get("WET_EVAL_OPENAI_KEY"):
+            print(
+                "[run_evals] --wet requires WET_EVAL_OPENAI_KEY in the "
+                "environment. Pass --dry-run for the no-API-call shape "
+                "check, or run scripts/wet_eval_check.py first.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        wet_report = compute_wet_eval(
+            mode=wet_mode,
+            harness_version=f"scripts/run_evals.py @ {os.environ.get('GITHUB_SHA', 'local')}",
+        )
+        wet_block = wet_report.to_dict(include_records=False)
+        summary = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "dataset": "synthetic_incidents.json (200 cases, deterministic)",
+            "wet_eval": wet_block,
+            "all_passed": True,  # wet-eval reports performance, not pass/fail.
+        }
+        args.out.write_text(json.dumps(summary, indent=2))
+        if args.wet_out is not None:
+            args.wet_out.parent.mkdir(parents=True, exist_ok=True)
+            args.wet_out.write_text(json.dumps(wet_block, indent=2))
+        if args.json:
+            print(json.dumps(summary, indent=2))
+        else:
+            print()
+            print("=" * 78)
+            label = "DRY RUN" if wet_mode == "dry_run" else "LIVE"
+            print(f"  AiSOC wet-eval ({label}) — 200-incident synthetic corpus")
+            print("=" * 78)
+            print(f"  Mode:           {wet_block['mode']}")
+            print(f"  Model:          {wet_block['model']}")
+            print(f"  Incidents:      {wet_block['incidents']}")
+            print(f"  Templates:      {wet_block['templates']}")
+            lat = wet_block["latency_seconds"]
+            print(
+                f"  Latency (s):    p50={lat['p50']:.2f}  p95={lat['p95']:.2f}  "
+                f"p99={lat['p99']:.2f}  mean={lat['mean']:.2f}"
+            )
+            tot = wet_block["tokens"]["total"]
+            print(
+                f"  Tokens / inv:   mean={tot['mean']:.0f}  median={tot['median']:.0f}  "
+                f"p95={tot['p95']:.0f}  p99={tot['p99']:.0f}"
+            )
+            usd = wet_block["usd"]
+            print(
+                f"  USD / inv:      mean=${usd['mean']:.5f}  median=${usd['median']:.5f}  "
+                f"p95=${usd['p95']:.5f}  p99=${usd['p99']:.5f}"
+            )
+            print(f"  MITRE accuracy: {wet_block['mitre_accuracy']:.4f}")
+            if wet_block.get("warnings"):
+                print("-" * 78)
+                print("  Warnings:")
+                for w in wet_block["warnings"]:
+                    print(f"    - {w}")
+            print("=" * 78)
+        sys.exit(0)
 
     if not args.telemetry_only and not _SUBSTRATE_AVAILABLE:
         # Substrate suites need pydantic / langchain etc. If they're not

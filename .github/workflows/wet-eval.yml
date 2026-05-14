@@ -1,0 +1,245 @@
+# ──────────────────────────────────────────────
+# Weekly wet-eval CI job (T5.5)
+# ──────────────────────────────────────────────
+# Once a week (Monday 07:00 UTC), dispatch the 200-incident synthetic
+# corpus through the live LangGraph agent (real LLM calls), capture
+# token + USD + latency + MITRE accuracy, rewrite the wet-eval cells
+# in `apps/docs/docs/benchmark.md`, and open a PR titled
+# `chore(bench): weekly wet-eval YYYY-MM-DD` so a human reviewer can
+# eyeball the run before it lands.
+#
+# Two safety rails:
+#
+#   1. `scripts/wet_eval_check.py` runs first. If `WET_EVAL_OPENAI_KEY`
+#      is missing (forks, fresh clones, anyone who hasn't rotated the
+#      bench bot's PAT in yet) the workflow exits cleanly with a
+#      "skipping live run" message — never with a stack trace.
+#
+#   2. `concurrency` blocks two weekly runs from ever overlapping. A
+#      manual `workflow_dispatch` while the cron is mid-flight cancels
+#      the manual one rather than racing.
+#
+# Secrets the workflow consumes (document-only here; configure in
+# `Settings → Secrets and variables → Actions`, see
+# `apps/docs/docs/operations/secrets.md`):
+#
+#   • WET_EVAL_OPENAI_KEY    — LLM provider key (project-funded).
+#   • AISOC_BENCH_BOT_TOKEN  — fine-grained PAT for the
+#                              `aisoc-bench-bot` GitHub account; opens
+#                              the weekly PR.
+
+name: Wet eval (weekly)
+
+on:
+  # Mondays at 07:00 UTC. Cron expression syntax:
+  #   minute hour day-of-month month day-of-week
+  #   0     7    *            *     1
+  schedule:
+    - cron: '0 7 * * 1'
+  # Manual trigger for re-runs / forensic replays. Maintainers only —
+  # the live-run gate inside `wet_eval_check.py` still applies.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Force --dry-run (no live LLM calls)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+# Two wet-eval runs must never overlap — they hit the same LLM provider
+# key and would race on the eval-results branch / PR opener. The cron
+# trigger always wins; manual dispatches that arrive mid-cron are
+# cancelled.
+concurrency:
+  group: wet-eval-weekly
+  cancel-in-progress: false
+
+jobs:
+  wet-eval:
+    name: Wet eval — weekly LLM benchmark
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # We open a PR back to this repo, so we need a fetchable
+          # history. Shallow is fine — the PR is created from a fresh
+          # branch off `main`, no rebase required.
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # ──────────────────────────────────────────────
+      # Step 1 — preflight gate. Always exits 0; the JSON status file
+      # tells subsequent steps whether to dispatch the live eval. On
+      # forks where `WET_EVAL_OPENAI_KEY` was never configured, the
+      # workflow short-circuits here cleanly instead of crashing on
+      # an `OPENAI_API_KEY not set` import error inside the agent.
+      # ──────────────────────────────────────────────
+      - name: Preflight — verify wet-eval secrets
+        id: preflight
+        env:
+          WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
+          AISOC_BENCH_BOT_TOKEN: ${{ secrets.AISOC_BENCH_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wet-eval
+          python3 scripts/wet_eval_check.py \
+            --status-out /tmp/wet-eval/preflight.json
+          # Surface `should_run` as a step output so subsequent steps
+          # can `if:` on it without re-parsing the JSON.
+          should_run=$(python3 -c "import json,sys; print(json.load(open('/tmp/wet-eval/preflight.json'))['should_run'])")
+          echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
+          echo "Preflight: should_run=${should_run}"
+
+      - name: Skip notice (no live secrets configured)
+        if: steps.preflight.outputs.should_run != 'True'
+        run: |
+          echo "::notice title=Wet eval skipped::No live LLM secret configured for this repo. See apps/docs/docs/operations/secrets.md for setup."
+          echo "Preflight status:" && cat /tmp/wet-eval/preflight.json
+
+      # ──────────────────────────────────────────────
+      # Step 2 — install dependencies.
+      # The wet-eval shim is stdlib-only on the dry-run path, but the
+      # live path needs the full agent stack (langchain, langgraph,
+      # pydantic, openai). Pin to the same versions the API service
+      # uses in `ci.yml` so the wet eval runs against a known-good
+      # frozen agent surface.
+      # ──────────────────────────────────────────────
+      - name: Install agent dependencies
+        if: steps.preflight.outputs.should_run == 'True'
+        run: |
+          set -euo pipefail
+          pip install --quiet \
+            "fastapi" "pydantic[email]" "pydantic-settings" \
+            "sqlalchemy[asyncio]" "asyncpg" "structlog" \
+            "python-jose[cryptography]" "passlib[bcrypt]" \
+            "tenacity" "pyyaml" "prometheus-client" \
+            "neo4j" "redis" "celery" "httpx" "aiofiles" \
+            "email-validator" "PyJWT" "aiosqlite" \
+            "langchain>=0.3" "langchain-openai>=0.2" \
+            "langgraph>=0.2" "openai>=1.40" \
+            "pytest" "pytest-asyncio"
+
+      # ──────────────────────────────────────────────
+      # Step 3 — run the wet eval.
+      # `--wet` (no `--dry-run`) dispatches every incident through the
+      # live agent. `--wet-out` writes a separate JSON copy of just
+      # the wet_eval block so the markdown writer doesn't have to
+      # re-parse the full report.
+      # ──────────────────────────────────────────────
+      - name: Run wet eval
+        if: steps.preflight.outputs.should_run == 'True'
+        env:
+          WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
+          # The agent's default LLM resolver reads OPENAI_API_KEY. We
+          # mirror the wet-eval key into it for the duration of this
+          # step only — never persisted, never echoed.
+          OPENAI_API_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Manual dispatches with `dry_run=true` get the deterministic
+          # shape; cron + manual without override get the live run.
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+            echo "::notice::Manual dispatch with dry_run=true; no live LLM calls."
+          fi
+          python3 scripts/run_evals.py --wet ${DRY_RUN_FLAG} \
+            --out /tmp/wet-eval/report.json \
+            --wet-out /tmp/wet-eval/wet-block.json
+
+      # ──────────────────────────────────────────────
+      # Step 4 — rewrite the wet-eval tables in benchmark.md.
+      # The `--check` flag fails the step if the markdown scaffold
+      # has drifted from the wet-eval JSON shape (i.e. somebody added
+      # a new family but didn't update the docs). That regression is
+      # silent without this gate.
+      # ──────────────────────────────────────────────
+      - name: Rewrite benchmark.md tables
+        if: steps.preflight.outputs.should_run == 'True'
+        run: |
+          set -euo pipefail
+          python3 scripts/wet_eval_update_benchmark.py \
+            --wet-block /tmp/wet-eval/wet-block.json \
+            --benchmark-md apps/docs/docs/benchmark.md \
+            --check --print-summary
+
+      # ──────────────────────────────────────────────
+      # Step 5 — open a PR with the docs update + the JSON snapshot.
+      # The bench bot identity is documented in
+      # `apps/docs/docs/operations/secrets.md`. We never commit the
+      # raw `eval_report.json` to `main` here — the file is uploaded
+      # as an artifact, and a copy lands in the PR branch under
+      # `apps/docs/static/wet-eval/<run>.json` so docs CI can render
+      # historical runs.
+      # ──────────────────────────────────────────────
+      - name: Open PR with refreshed wet-eval numbers
+        if: steps.preflight.outputs.should_run == 'True'
+        env:
+          GH_TOKEN: ${{ secrets.AISOC_BENCH_BOT_TOKEN }}
+          RUN_DATE: ${{ github.event.schedule && '' || '' }}
+        run: |
+          set -euo pipefail
+          # YYYY-MM-DD date for the PR title and the snapshot filename.
+          DATE_STR=$(date -u +%F)
+          BRANCH="bench/wet-eval-${DATE_STR}"
+
+          # Snapshot the wet-eval block into the docs static path so a
+          # PR reviewer can diff JSON-vs-markdown side by side.
+          mkdir -p apps/docs/static/wet-eval
+          cp /tmp/wet-eval/wet-block.json \
+            "apps/docs/static/wet-eval/${DATE_STR}.json"
+
+          # Bench-bot identity. Documented in
+          # `apps/docs/docs/operations/secrets.md` so this isn't a
+          # surprise the first time a contributor sees it in
+          # `git log`.
+          git config user.email "aisoc-bench-bot@users.noreply.github.com"
+          git config user.name "aisoc-bench-bot"
+
+          git checkout -b "${BRANCH}"
+          # Explicit paths only — never `git add -A` / `.` here so a
+          # contaminated runner can't sneak unrelated files into the PR.
+          git add \
+            apps/docs/docs/benchmark.md \
+            "apps/docs/static/wet-eval/${DATE_STR}.json"
+          git commit -S -m "chore(bench): weekly wet-eval ${DATE_STR}" \
+            -m "Auto-generated by .github/workflows/wet-eval.yml. See apps/docs/docs/operations/secrets.md for the bot identity model." \
+            -m "Signed-off-by: aisoc-bench-bot <aisoc-bench-bot@users.noreply.github.com>" \
+            || { echo "Nothing to commit — wet-eval numbers unchanged."; exit 0; }
+
+          git push origin "${BRANCH}"
+
+          gh pr create \
+            --title "chore(bench): weekly wet-eval ${DATE_STR}" \
+            --body "Weekly wet-eval refresh from \`.github/workflows/wet-eval.yml\`.\n\n- Live agent dispatch over the 200-incident corpus.\n- Numbers in \`apps/docs/docs/benchmark.md\` are rewritten by \`scripts/wet_eval_update_benchmark.py\`.\n- Full JSON snapshot at \`apps/docs/static/wet-eval/${DATE_STR}.json\`.\n\nMerge if: latency p95 ≤ 120 s and MITRE accuracy didn't drop > 5 pp vs the previous week.\n\nDo not merge if: any sub-suite warning is surfaced under \`wet_eval.warnings\`. Open an issue and re-run with \`workflow_dispatch\` once the underlying problem is fixed." \
+            --base main \
+            --head "${BRANCH}" \
+            --label "wet-eval" \
+            --label "automated"
+
+      # ──────────────────────────────────────────────
+      # Step 6 — always upload the wet-eval JSON as a CI artifact, even
+      # on skipped runs. Lets reviewers grab the report without merging
+      # the PR.
+      # ──────────────────────────────────────────────
+      - name: Upload wet-eval artifact
+        if: always() && steps.preflight.outputs.should_run == 'True'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wet-eval-report
+          path: |
+            /tmp/wet-eval/report.json
+            /tmp/wet-eval/wet-block.json
+            /tmp/wet-eval/preflight.json
+          retention-days: 30
