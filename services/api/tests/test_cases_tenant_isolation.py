@@ -46,7 +46,6 @@ from app.api.v1.endpoints.cases import (
 )
 from fastapi import HTTPException
 
-
 # ────────────────────────────────────────────────────────────────────────────
 # Fixtures / helpers
 # ────────────────────────────────────────────────────────────────────────────
@@ -171,9 +170,7 @@ def _assert_tenant_scoped(executed: list[tuple[str, dict[str, Any]]], tenant_id:
         if any(table in normalized for table in _TENANT_TABLES):
             assert "tenant_id" in normalized, f"tenant_id missing from SQL: {sql}"
             assert "tenant_id" in params, f"tenant_id not bound for SQL: {sql}"
-            assert params["tenant_id"] == tenant_id, (
-                f"wrong tenant bound: {params['tenant_id']} != {tenant_id}"
-            )
+            assert params["tenant_id"] == tenant_id, f"wrong tenant bound: {params['tenant_id']} != {tenant_id}"
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -451,11 +448,13 @@ async def test_case_timeline_scopes_comments_and_tasks() -> None:
     user = _user()
     cid = uuid.uuid4()
     # Sequence: case row → comments → (no alerts loop) → tasks
-    db = _mk_db([
-        _case_row(id=cid),
-        [_comment_row(case_id=cid)],
-        [_task_row()],
-    ])
+    db = _mk_db(
+        [
+            _case_row(id=cid),
+            [_comment_row(case_id=cid)],
+            [_task_row()],
+        ]
+    )
     await case_timeline(case_id=str(cid), db=db, user=user)
     _assert_tenant_scoped(db.executed, user.tenant_id)
     # Verify both the comments and tasks queries reference their tenant column.

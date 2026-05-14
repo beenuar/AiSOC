@@ -376,9 +376,7 @@ async def _resolve_case_id(case_id: str, db: Any, tenant_id: uuid.UUID) -> uuid.
     row = (
         await db.execute(
             text(
-                "SELECT id FROM aisoc_cases "
-                "WHERE tenant_id = :tenant_id AND case_number = :case_number "
-                "ORDER BY created_at DESC LIMIT 1"
+                "SELECT id FROM aisoc_cases WHERE tenant_id = :tenant_id AND case_number = :case_number ORDER BY created_at DESC LIMIT 1"
             ).bindparams(tenant_id=tenant_id, case_number=case_id)
         )
     ).fetchone()
@@ -513,10 +511,7 @@ async def get_case(case_id: str, db: DBSession, user: AuthUser) -> CaseResponse:
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     row = (
         await db.execute(
-            text(
-                "SELECT * FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not row:
@@ -531,10 +526,7 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     existing = (
         await db.execute(
-            text(
-                "SELECT status FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT status FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not existing:
@@ -588,10 +580,7 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
         if ts_col:
             sets.append(f"{ts_col} = :now")
 
-    q = text(
-        f"UPDATE aisoc_cases SET {', '.join(sets)} "
-        "WHERE id = :id AND tenant_id = :tenant_id RETURNING *"
-    ).bindparams(**params)
+    q = text(f"UPDATE aisoc_cases SET {', '.join(sets)} WHERE id = :id AND tenant_id = :tenant_id RETURNING *").bindparams(**params)
     try:
         row = (await db.execute(q)).fetchone()
         if row is None:
@@ -676,10 +665,9 @@ async def update_observables(case_id: str, body: UpdateObservablesRequest, db: D
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     existing = (
         await db.execute(
-            text(
-                "SELECT observable_graph FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT observable_graph FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not existing:
@@ -720,10 +708,7 @@ async def add_comment(case_id: str, body: AddCommentRequest, db: DBSession, user
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     exists = (
         await db.execute(
-            text(
-                "SELECT 1 FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not exists:
@@ -771,11 +756,9 @@ async def list_comments(case_id: str, db: DBSession, user: AuthUser) -> list[Com
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     rows = (
         await db.execute(
-            text(
-                "SELECT * FROM aisoc_case_comments "
-                "WHERE case_id = :id AND tenant_id = :tenant_id "
-                "ORDER BY created_at"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_case_comments WHERE case_id = :id AND tenant_id = :tenant_id ORDER BY created_at").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
         )
     ).fetchall()
     return [
@@ -803,10 +786,7 @@ async def evidence_report(case_id: str, db: DBSession, user: AuthUser) -> Eviden
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     row = (
         await db.execute(
-            text(
-                "SELECT * FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not row:
@@ -839,10 +819,7 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     case_row = (
         await db.execute(
-            text(
-                "SELECT * FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not case_row:
@@ -959,10 +936,7 @@ async def list_tasks(case_id: str, db: DBSession, user: AuthUser) -> list[TaskRe
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     exists = (
         await db.execute(
-            text(
-                "SELECT 1 FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not exists:
@@ -990,10 +964,7 @@ async def create_task(
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     exists = (
         await db.execute(
-            text(
-                "SELECT 1 FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not exists:
@@ -1128,10 +1099,7 @@ async def case_investigate(
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     exists = (
         await db.execute(
-            text(
-                "SELECT 1 FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
     if not exists:
@@ -1365,10 +1333,9 @@ async def list_related_cases(
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     row = (
         await db.execute(
-            text(
-                "SELECT alert_ids, observable_graph FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT alert_ids, observable_graph FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not row:
