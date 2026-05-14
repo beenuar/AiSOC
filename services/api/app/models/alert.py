@@ -88,6 +88,15 @@ class Alert(Base):
     enrichment_data: Mapped[dict] = mapped_column(JSONB, default=dict)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
 
+    # Client-supplied idempotency key for the direct-write submit path
+    # (POST /alerts/submit, used by the `aisoc submit` CLI and at-least-once
+    # connector retries). Scoped per-tenant via a partial unique index so a
+    # retry of the same logical alert resolves to the existing row instead
+    # of creating a duplicate. NULL for rows produced by the Kafka detect/
+    # correlate/fuse pipeline, which de-duplicates on its own. See
+    # migration 044_alerts_idempotency_key.sql for the index definition.
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     # Timestamps
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

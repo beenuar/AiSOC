@@ -354,6 +354,32 @@ moment works on a fresh clone today. Production deployments still flow
 events through `services/ingest` → Kafka → fusion → detection; this
 endpoint is for fixtures and tabletop exercises.
 
+#### Hardening / limits on `POST /api/v1/alerts/submit`
+
+The submit endpoint enforces five guard-rails so it's safe to expose to
+connectors and the CLI in production:
+
+- **Payload caps** (tunable via env vars):
+  - `AISOC_SUBMIT_MAX_EVENTS` (default `1000`) — max events per batch.
+  - `AISOC_SUBMIT_MAX_EVENT_BYTES` (default `262144` — 256 KiB) — max
+    serialised size per event.
+  - `AISOC_SUBMIT_MAX_TOTAL_BYTES` (default `8388608` — 8 MiB) — max total
+    batch size. Over-cap requests return HTTP 413 with the limit that fired.
+- **Idempotency** — set the `Idempotency-Key` header (1–128 chars,
+  `^[A-Za-z0-9._:/-]+$`) and retries with the same key return the original
+  `alert_id` instead of creating duplicates. Scoped per tenant — different
+  tenants can reuse the same key.
+- **`raw_event` redaction** — values for keys matching a recursive
+  case-insensitive blocklist (`password`, `token`, `secret`, `api_key`,
+  `authorization`, `cookie`, `client_secret`, `private_key`, `bearer`,
+  `session_id`, `csrf`, `x-api-key`) are replaced with `"[REDACTED]"`
+  before storage. Stats are emitted to structured logs so SOC operators
+  can spot leaky connectors.
+- **Timestamp bounds** — event timestamps are clamped to
+  `[now - AISOC_SUBMIT_MAX_TIMESTAMP_AGE_DAYS, now + AISOC_SUBMIT_MAX_FUTURE_SECONDS]`
+  (defaults 90 days and 300 s). Clamped events still ingest; the alert's
+  `metadata.timestamp_clamped` counter records how many were rewritten.
+
 ### 5. Watch the alert land in the console
 
 ```bash

@@ -214,40 +214,89 @@ class TestMaxSeverity:
 
 
 class TestCoercePublished:
-    """``_coerce_published`` accepts Okta ``published``, OCSF ``time``, et al."""
+    """``_coerce_published`` accepts Okta ``published``, OCSF ``time``, et al.
+
+    Post Batch-8 (H-5) the helper returns a ``(datetime | None, was_clamped)``
+    tuple instead of a bare datetime — out-of-window timestamps are clamped
+    to the configured ``MIN_AGE``/``MAX_FUTURE`` boundary and the second
+    tuple element flags whether clamping happened. The fixture timestamps
+    here all land inside the default 90-day window centred on "now=2026"
+    so ``was_clamped`` is always ``False`` for these cases. Boundary
+    clamping itself is covered by ``test_timestamp_bounds.py``.
+    """
 
     def test_parses_okta_published_iso_string(self) -> None:
-        result = _coerce_published({"published": "2026-05-14T09:30:14.123Z"})
+        # Pin ``now`` so the 2026-05-14 fixture stays inside the 90-day
+        # window regardless of when the suite runs.
+        now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
+        result, clamped = _coerce_published({"published": "2026-05-14T09:30:14.123Z"}, now=now)
         assert result is not None
+        assert clamped is False
         assert result.tzinfo is not None
         assert result.year == 2026
         assert result.month == 5
         assert result.day == 14
 
     def test_parses_ocsf_time_field(self) -> None:
-        result = _coerce_published({"time": "2026-05-14T09:30:00+00:00"})
+        now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
+        result, clamped = _coerce_published({"time": "2026-05-14T09:30:00+00:00"}, now=now)
         assert result is not None
+        assert clamped is False
         assert result.hour == 9
 
     def test_parses_at_timestamp_field(self) -> None:
-        result = _coerce_published({"@timestamp": "2026-05-14T10:00:00Z"})
+        now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
+        result, clamped = _coerce_published({"@timestamp": "2026-05-14T10:00:00Z"}, now=now)
         assert result is not None
+        assert clamped is False
         assert result.hour == 10
 
     def test_returns_none_when_no_timestamp(self) -> None:
-        assert _coerce_published({"unrelated": "field"}) is None
+        result, clamped = _coerce_published({"unrelated": "field"})
+        assert result is None
+        assert clamped is False
 
     def test_returns_none_on_unparseable_string(self) -> None:
         """A garbage timestamp must not crash the endpoint."""
-        assert _coerce_published({"published": "not-a-date"}) is None
+        result, clamped = _coerce_published({"published": "not-a-date"})
+        assert result is None
+        # Unparseable input is "no timestamp", not "clamped" — we want
+        # the caller to fall back to ``now`` without flagging a misbehaving
+        # connector (the connector might just not emit one).
+        assert clamped is False
 
     def test_accepts_datetime_objects_directly(self) -> None:
         """If a connector passes a real datetime, we use it."""
+        now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
         naive = datetime(2026, 5, 14, 9, 30, 14)
-        result = _coerce_published({"published": naive})
+        result, clamped = _coerce_published({"published": naive}, now=now)
         assert result is not None
+        assert clamped is False
         # Naive datetimes get UTC pinned on so downstream comparisons work.
         assert result.tzinfo is not None
+
+    def test_ancient_timestamp_is_clamped_to_min_age(self) -> None:
+        """A 1970 epoch from a broken connector is pinned to the boundary
+        and flagged as clamped — H-5 contract."""
+        now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
+        result, clamped = _coerce_published(
+            {"published": "1970-01-01T00:00:00Z"}, now=now
+        )
+        assert result is not None
+        assert clamped is True
+        # Default max_age is 90 days, so the boundary lands at now - 90d.
+        assert result == now - timedelta(days=90)
+
+    def test_far_future_timestamp_is_clamped_to_max_future(self) -> None:
+        """A 2099 timestamp from a misconfigured device is clamped to the
+        future boundary (default = now + 5 minutes)."""
+        now = datetime(2026, 5, 14, 12, 0, 0, tzinfo=UTC)
+        result, clamped = _coerce_published(
+            {"published": "2099-12-31T23:59:59Z"}, now=now
+        )
+        assert result is not None
+        assert clamped is True
+        assert result == now + timedelta(seconds=300)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -346,8 +395,22 @@ class TestSynthesiseAlertFromEvents:
         assert alert.affected_users == ["alice@example.com", "bob@example.com"]
         assert alert.affected_ips == ["203.0.113.42", "203.0.113.99"]
 
-    def test_timestamps_pin_to_earliest_and_latest_event(self) -> None:
-        """``first_seen`` / ``last_seen`` are the batch envelope."""
+    def test_timestamps_pin_to_earliest_and_latest_event(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``first_seen`` / ``last_seen`` are the batch envelope.
+
+        The submit path bounds event timestamps against ``now_utc()`` (see
+        ``services/api/app/services/timestamp_bounds.py``) — events too far in
+        the past or future get clamped. To keep this test stable regardless of
+        when CI runs, we pin ``now_utc`` inside the alerts endpoint module to
+        a value just after the fixture window so all three events fall inside
+        the valid range and no clamping occurs.
+        """
+        pinned_now = datetime(2026, 5, 14, 10, 0, 0, tzinfo=UTC)
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.alerts.now_utc", lambda: pinned_now
+        )
         events = [
             _okta_event(published="2026-05-14T09:30:14Z"),
             _okta_event(published="2026-05-14T09:45:00Z"),

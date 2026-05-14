@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security hardening — Batch 8: `POST /api/v1/alerts/submit`
+
+The `/alerts/submit` ingestion path was a wide-open seam — any caller with
+a valid (or in dev mode, missing) token could POST arbitrary-sized batches
+of events with arbitrary timestamps and unbounded `raw_event` payloads,
+and re-submit the same batch repeatedly to create duplicate alerts. Five
+defences ship together so the path is safe to expose to connectors and the
+`aisoc submit` CLI in production:
+
+- **Payload caps** — three new environment variables bound the request:
+  `AISOC_SUBMIT_MAX_EVENTS` (default 1 000 events), `AISOC_SUBMIT_MAX_EVENT_BYTES`
+  (default 256 KiB per event after JSON-encoding), and
+  `AISOC_SUBMIT_MAX_TOTAL_BYTES` (default 8 MiB for the whole batch). Each
+  is enforced before any DB work; over-cap requests return HTTP 413 with the
+  exact limit that fired.
+- **Idempotency** — clients can pass an `Idempotency-Key` header (1–128 chars,
+  `^[A-Za-z0-9._:/-]+$`); the resulting alert stores it in a new
+  `alerts.idempotency_key` column with a partial unique index scoped per
+  tenant. A retry with the same key returns the original alert ID (HTTP 200)
+  instead of creating a duplicate. Missing header preserves prior behaviour.
+  Migration `044_alerts_idempotency_key.sql` adds the column + index.
+- **`raw_event` redaction** — new module `app/services/event_sanitiser.py`
+  walks each event and replaces values for keys matching a recursive
+  case-insensitive blocklist (`password`, `token`, `secret`, `api_key`,
+  `authorization`, `cookie`, `set-cookie`, `client_secret`, `private_key`,
+  `bearer`, `session_id`, `csrf`, `x-api-key`) with the string `"[REDACTED]"`.
+  Stats (number of redactions, bytes dropped) are emitted to structured logs
+  so SOC operators can see whether their connectors are leaking credentials.
+- **Timestamp bounds** — new module `app/services/timestamp_bounds.py` clamps
+  every event timestamp to `[now - AISOC_SUBMIT_MAX_TIMESTAMP_AGE_DAYS,
+  now + AISOC_SUBMIT_MAX_FUTURE_SECONDS]` (defaults 90 days and 300 s),
+  so connectors cannot back-date alerts past retention or future-date them
+  past the SLA clock. Clamped events still ingest, but the alert's
+  `metadata.timestamp_clamped` counter records how many were rewritten.
+- **Test stability** — `_synthesise_alert_from_events` now calls
+  `timestamp_bounds.now_utc()` for clamping, which makes any test using fixed
+  fixture timestamps wall-clock dependent. `test_alerts_submit.py` now
+  monkeypatches `now_utc` to a pinned `datetime` so CI runs deterministically
+  regardless of the current date.
+
+124 new tests across `tests/test_event_sanitiser.py`,
+`tests/test_timestamp_bounds.py`, and the integration coverage in
+`tests/api/v1/endpoints/test_alerts_submit.py` lock the new behaviour in.
+Full suite remains green: 1 279 tests pass with zero regressions.
+
 ## [7.3.1] — 2026-05-14
 
 ### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone

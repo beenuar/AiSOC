@@ -1,13 +1,15 @@
 """Alert management endpoints."""
 
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
@@ -25,12 +27,25 @@ from app.services.alert_rail import (
     RelatedEntity,
     build_rail_envelope,
 )
+from app.services.event_sanitiser import (
+    SubmitPayloadTooLarge,
+    sanitise_event_batch,
+)
 from app.services.narrative_loader import build_narrative
 from app.services.narrative_projection import project_alert_to_narrative_inputs
+from app.services.timestamp_bounds import coerce_with_bounds, now_utc
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+
+# ─── idempotency-key validation ─────────────────────────────────────────────
+# Per RFC draft "The Idempotency-Key HTTP Header Field", clients pick an
+# opaque key. We restrict the alphabet so the key can be stored as TEXT
+# without breaking the DB column (128 chars, ASCII-safe, no whitespace).
+# Anything else is a 400 — better to reject early than mint a partial
+# row that can't be looked up on retry.
+_IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")
 
 
 class AlertResponse(BaseModel):
@@ -204,28 +219,23 @@ def _max_severity(values: list[str]) -> str:
     return best
 
 
-def _coerce_published(event: dict) -> datetime | None:
-    """Extract an event timestamp from an OCSF / Okta-shaped dict.
+def _coerce_published(event: dict, now: datetime | None = None) -> tuple[datetime | None, bool]:
+    """Extract a bounded event timestamp from an OCSF / Okta-shaped dict.
 
-    Accepts ``published`` (Okta), ``time`` (OCSF), or ``@timestamp``. Returns
-    ``None`` when the field is missing or unparseable so the caller can fall
-    back to ``datetime.now(UTC)``.
+    Thin wrapper around :func:`app.services.timestamp_bounds.coerce_with_bounds`
+    that gives the rest of this module a stable, locally-named helper. The
+    underlying function scans the canonical timestamp fields
+    (``published`` / ``time`` / ``@timestamp`` / ``timestamp`` / ``eventTime``),
+    parses strings, ``datetime`` objects, and Unix epochs (seconds **or**
+    milliseconds), and clamps out-of-window values to the configured
+    ``MIN_AGE`` / ``MAX_FUTURE`` window so a broken connector can't poison
+    SLA timers with a 1970 or 2099 timestamp.
+
+    Returns ``(datetime | None, was_clamped)`` — ``was_clamped`` is ``True``
+    iff the parsed timestamp had to be pinned to a boundary, useful so the
+    caller can audit-tag the resulting alert.
     """
-    for key in ("published", "time", "@timestamp", "event_time"):
-        value = event.get(key)
-        if not value:
-            continue
-        if isinstance(value, datetime):
-            return value if value.tzinfo else value.replace(tzinfo=UTC)
-        if isinstance(value, str):
-            try:
-                # Tolerate trailing 'Z' which fromisoformat handles natively
-                # on Python 3.11+ but not in some older variants.
-                normalized = value.rstrip("Z") + "+00:00" if value.endswith("Z") else value
-                return datetime.fromisoformat(normalized)
-            except ValueError:
-                continue
-    return None
+    return coerce_with_bounds(event, now=now)
 
 
 def _synthesise_alert_from_events(
@@ -237,6 +247,7 @@ def _synthesise_alert_from_events(
     override_description: str | None,
     override_severity: str | None,
     override_tags: list[str] | None,
+    idempotency_key: str | None = None,
 ) -> Alert:
     """Build a single ``Alert`` row that represents the submitted event batch.
 
@@ -244,6 +255,17 @@ def _synthesise_alert_from_events(
     OCSF, Okta system-log entries, or any dict with the usual suspects
     (``displayMessage``, ``severity``, ``actor``, ``client``, ``published``).
     The function extracts what it can and falls back to safe defaults.
+
+    Callers should hand us **already sanitised** events
+    (:func:`app.services.event_sanitiser.sanitise_event_batch`) so that
+    bearer tokens / API keys / passwords embedded in connector payloads
+    never reach ``alerts.raw_event``. We do **not** redact in here because
+    we still want to surface the raw shape for diagnostics — sanitisation
+    is the endpoint's responsibility, this function trusts its input.
+
+    ``idempotency_key`` is plumbed through to the resulting ORM instance
+    so the caller can persist it atomically with the row. The synthesise
+    function itself does no lookup — that's the endpoint's job.
     """
     first = events[0] if events else {}
 
@@ -264,6 +286,13 @@ def _synthesise_alert_from_events(
     affected_users: list[str] = []
     earliest: datetime | None = None
     latest: datetime | None = None
+    # We need a single ``now`` reference so every timestamp in the batch
+    # is clamped against the same window — otherwise a batch that takes
+    # 50ms to process could clamp the first event's "max future" to one
+    # value and the last event's to another, which would be confusing
+    # to debug and arguably wrong.
+    now = now_utc()
+    any_clamped = False
 
     for event in events:
         actor = event.get("actor") or {}
@@ -290,25 +319,33 @@ def _synthesise_alert_from_events(
         if isinstance(host_hint, str) and host_hint and host_hint not in affected_hosts:
             affected_hosts.append(host_hint)
 
-        # Timestamps
-        ts = _coerce_published(event)
+        # Timestamps — bounded against MIN_AGE / MAX_FUTURE so a broken
+        # connector emitting 1970-01-01 or 2099-12-31 doesn't poison the
+        # SLA timers or push the alert outside the retention window.
+        ts, clamped = _coerce_published(event, now=now)
+        if clamped:
+            any_clamped = True
         if ts is not None:
             if earliest is None or ts < earliest:
                 earliest = ts
             if latest is None or ts > latest:
                 latest = ts
 
-    now = datetime.now(UTC)
     event_time = latest or earliest or now
     first_seen = earliest or now
     last_seen = latest or now
 
-    # Tags: combine override + a marker so demo alerts are recognisable
+    # Tags: combine override + a marker so demo alerts are recognisable.
+    # When *any* event in the batch had its timestamp clamped, drop an
+    # ``ts-clamped`` tag so analysts (and the audit log) can spot a
+    # source-side timestamp problem without re-running the math.
     tags = list(override_tags or [])
     if "submitted" not in tags:
         tags.append("submitted")
     if connector_type and connector_type not in tags:
         tags.append(connector_type)
+    if any_clamped and "ts-clamped" not in tags:
+        tags.append("ts-clamped")
 
     return Alert(
         tenant_id=tenant_id,
@@ -334,12 +371,14 @@ def _synthesise_alert_from_events(
             "events": events,
             "connector_type": connector_type,
             "source": "aisoc-submit-api",
+            "timestamps_clamped": any_clamped,
         },
         event_time=event_time,
         first_seen=first_seen,
         last_seen=last_seen,
         created_at=now,
         updated_at=now,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -352,6 +391,18 @@ async def submit_alert(
     payload: AlertSubmitRequest,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
     db: TenantDBSession,
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            alias="Idempotency-Key",
+            description=(
+                "Optional opaque client-supplied key (8–128 chars, "
+                "[A-Za-z0-9._:-]). When supplied, a retry of the same key "
+                "for the same tenant returns the existing alert with HTTP "
+                "200 instead of creating a duplicate."
+            ),
+        ),
+    ] = None,
 ) -> AlertResponse:
     """Submit one alert directly from an OCSF event batch.
 
@@ -360,6 +411,31 @@ async def submit_alert(
     detect/correlate/fuse pipeline (which fresh clones don't run by default)
     so that a hand-crafted fixture lands in the database — and therefore in
     ``GET /api/v1/alerts`` and the web console — within the same second.
+
+    **Hardening (Batch 8 / H-5)**:
+
+    * **Payload caps** — events are first run through
+      :func:`app.services.event_sanitiser.sanitise_event_batch`, which
+      enforces ``AISOC_SUBMIT_MAX_EVENTS`` (default 200), per-event size
+      ``AISOC_SUBMIT_MAX_EVENT_BYTES`` (default 64 KiB), and total batch
+      size ``AISOC_SUBMIT_MAX_TOTAL_BYTES`` (default 1 MiB). Violations
+      return ``413 Payload Too Large`` rather than the 200 OK + truncated
+      alert we used to silently emit.
+    * **Secret redaction** — the sanitiser also redacts keys matching
+      common secret patterns (``password``, ``token``, ``api_key``, …)
+      *before* the payload is persisted to ``alerts.raw_event``, so a
+      leaky connector cannot smuggle bearer tokens into the alert table
+      where they would be visible to every analyst with ``alerts:read``.
+    * **Idempotency** — when the client supplies an ``Idempotency-Key``
+      header, the resulting alert is keyed ``(tenant_id, idempotency_key)``
+      via a partial unique index (migration ``044``). A retry of the
+      same key resolves to the existing row and returns HTTP ``200``
+      instead of creating a duplicate, so at-least-once connectors and
+      the ``aisoc submit`` CLI can retry safely on network blips.
+    * **Timestamp bounds** — event timestamps outside the configured
+      retention window are clamped (see
+      :mod:`app.services.timestamp_bounds`); the resulting alert is
+      tagged ``ts-clamped`` so analysts can see the connector misbehaved.
 
     Authorisation: requires ``alerts:write``. In development mode the
     auth bypass in :mod:`app.api.v1.deps` resolves to the deterministic
@@ -372,18 +448,131 @@ async def submit_alert(
             detail="events must be a non-empty list",
         )
 
+    # Validate Idempotency-Key shape early so a bad header fails fast
+    # and never costs us a DB round-trip. We only enforce the regex when
+    # the client *supplied* a key — the column itself remains nullable.
+    if idempotency_key is not None:
+        idempotency_key = idempotency_key.strip()
+        if not _IDEMPOTENCY_KEY_RE.match(idempotency_key):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Idempotency-Key must be 8–128 ASCII chars matching "
+                    "[A-Za-z0-9._:-]"
+                ),
+            )
+
+        # Cheap check first — if a row with this (tenant, key) already
+        # exists, return it without doing any sanitisation/synthesis
+        # work. This is the hot path for connector retries.
+        existing = await db.execute(
+            select(Alert).where(
+                and_(
+                    Alert.tenant_id == current_user.tenant_id,
+                    Alert.idempotency_key == idempotency_key,
+                )
+            )
+        )
+        cached = existing.scalar_one_or_none()
+        if cached is not None:
+            logger.info(
+                "alert.submitted.idempotent_hit",
+                extra={
+                    "alert_id": str(cached.id),
+                    "tenant_id": str(cached.tenant_id),
+                    "idempotency_key": idempotency_key,
+                },
+            )
+            return AlertResponse.model_validate(cached)
+
+    # Sanitise the batch: redact secrets and enforce size caps. Only the
+    # *batch-length* cap raises ``SubmitPayloadTooLarge`` (translated to
+    # HTTP 413) — per-event and total-bytes overruns are handled inline
+    # by the sanitiser by replacing oversized payloads with a small
+    # truncation marker, so one rogue event doesn't drop the rest of the
+    # batch. The ``stats`` dict gives us a one-line audit summary of what
+    # was redacted/truncated.
+    try:
+        sanitised_events, sanitise_stats = sanitise_event_batch(payload.events)
+    except SubmitPayloadTooLarge as exc:
+        logger.warning(
+            "alert.submit.payload_too_large",
+            extra={
+                "tenant_id": str(current_user.tenant_id),
+                "reason": str(exc),
+                "raw_event_count": len(payload.events),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
+
     alert = _synthesise_alert_from_events(
         tenant_id=current_user.tenant_id,
-        events=payload.events,
+        events=sanitised_events,
         connector_type=payload.connector_type,
         override_title=payload.title,
         override_description=payload.description,
         override_severity=payload.severity,
         override_tags=payload.tags,
+        idempotency_key=idempotency_key,
     )
 
     db.add(alert)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        # Race condition: another concurrent request landed the same
+        # (tenant_id, idempotency_key) between our SELECT above and our
+        # INSERT. The partial unique index from migration 044 catches
+        # this — rather than 500ing, roll back and return whichever row
+        # actually won the race, preserving the idempotency contract.
+        await db.rollback()
+        if idempotency_key is None:
+            # Not an idempotency race — re-raise as a generic 500 so
+            # the operator sees the real issue (e.g. NOT NULL violation
+            # on a column we forgot to populate).
+            logger.exception("alert.submit.integrity_error")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="failed to persist alert",
+            ) from exc
+
+        existing = await db.execute(
+            select(Alert).where(
+                and_(
+                    Alert.tenant_id == current_user.tenant_id,
+                    Alert.idempotency_key == idempotency_key,
+                )
+            )
+        )
+        cached = existing.scalar_one_or_none()
+        if cached is None:
+            # The unique index complained but no row is visible — this
+            # really is a 500. Don't pretend it succeeded.
+            logger.exception(
+                "alert.submit.idempotency_race_no_row",
+                extra={
+                    "tenant_id": str(current_user.tenant_id),
+                    "idempotency_key": idempotency_key,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="failed to persist alert",
+            ) from exc
+
+        logger.info(
+            "alert.submitted.idempotent_race_resolved",
+            extra={
+                "alert_id": str(cached.id),
+                "tenant_id": str(cached.tenant_id),
+                "idempotency_key": idempotency_key,
+            },
+        )
+        return AlertResponse.model_validate(cached)
+
     await db.refresh(alert)
 
     logger.info(
@@ -392,8 +581,12 @@ async def submit_alert(
             "alert_id": str(alert.id),
             "tenant_id": str(alert.tenant_id),
             "severity": alert.severity,
-            "events": len(payload.events),
+            "events": len(sanitised_events),
             "connector_type": payload.connector_type,
+            "idempotency_key": idempotency_key,
+            "timestamps_clamped": "ts-clamped" in (alert.tags or []),
+            "redacted_keys": sanitise_stats.get("redacted", 0),
+            "truncated_events": sanitise_stats.get("truncated", 0),
         },
     )
 
