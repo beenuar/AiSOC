@@ -214,12 +214,13 @@ class CloudflareZTConnector(BaseConnector):
                 for ev in events:
                     out.append(self.normalize(ev))
                 # Cloudflare returns ``result_info.cursor`` for keyset paging
-                # on the new security events endpoint, and a classic page
-                # counter for older endpoints. Both terminate when the cursor
-                # disappears or the page is short.
+                # on the new security events endpoint. When the cursor is
+                # present the server is telling us there is more — trust it
+                # even if this page came back short. The cursor going empty
+                # is the authoritative end-of-stream signal.
                 info = body.get("result_info") or {}
                 cursor = info.get("cursor") or info.get("next_cursor")
-                if not cursor or len(events) < _PER_PAGE:
+                if not cursor:
                     break
         return out
 
