@@ -54,9 +54,7 @@ def _row(
     """Build a row dict + its computed ``entry_hash`` for chain replay."""
     rid = row_id or uuid.UUID("11111111-1111-1111-1111-111111111111")
     tid = tenant_id or uuid.UUID("22222222-2222-2222-2222-222222222222")
-    aid = actor_id if actor_id is not None else uuid.UUID(
-        "33333333-3333-3333-3333-333333333333"
-    )
+    aid = actor_id if actor_id is not None else uuid.UUID("33333333-3333-3333-3333-333333333333")
     ts = created_at or _ts(0)
     digest = compute_entry_hash(
         prev_hash=prev_hash,
@@ -169,10 +167,7 @@ class TestComputeEntryHash:
         mutated = dict(base)
         mutated[field] = new_value
         h_after = compute_entry_hash(**mutated)
-        assert h_before != h_after, (
-            f"changing {field} must change the chain digest; "
-            "otherwise a forgery would pass verification"
-        )
+        assert h_before != h_after, f"changing {field} must change the chain digest; otherwise a forgery would pass verification"
 
     def test_changing_created_at_changes_digest(self):
         base = {

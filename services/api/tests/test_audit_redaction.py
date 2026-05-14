@@ -71,9 +71,7 @@ class TestSensitiveKeyMatching:
     def test_top_level_sensitive_key_redacted(self, key: str):
         out = redact_changes({key: "super-sensitive-value"})
         assert out is not None
-        assert _is_redacted(out[key]), (
-            f"key {key!r} should have been masked but was {out[key]!r}"
-        )
+        assert _is_redacted(out[key]), f"key {key!r} should have been masked but was {out[key]!r}"
 
     def test_non_sensitive_keys_pass_through(self):
         """Innocuous keys must NOT be touched — false positives erode trust."""

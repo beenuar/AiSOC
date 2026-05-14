@@ -130,18 +130,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 try:
                     actor_ip = resolve_client_ip(request)
                 except Exception:  # noqa: BLE001
-                    logger.warning(
-                        "audit-middleware: failed to resolve client IP", exc_info=True
-                    )
+                    logger.warning("audit-middleware: failed to resolve client IP", exc_info=True)
                     actor_ip = None
 
                 meta: dict = {}
                 ua = _truncate(request.headers.get("user-agent"), _MAX_UA_LEN)
                 if ua:
                     meta["user_agent"] = ua
-                rid = _truncate(
-                    request.headers.get("x-request-id"), _MAX_REQUEST_ID_LEN
-                )
+                rid = _truncate(request.headers.get("x-request-id"), _MAX_REQUEST_ID_LEN)
                 if rid:
                     meta["request_id"] = rid
                 meta["status_code"] = response.status_code

@@ -31,7 +31,6 @@ from app.core.trusted_proxy import (
     resolve_client_ip,
 )
 
-
 # ---------------------------------------------------------------------------
 # Minimal Request stub. We avoid pulling in starlette TestClient because we
 # only need ``.client.host`` and ``.headers.get``.
