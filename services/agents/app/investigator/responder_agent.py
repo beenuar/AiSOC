@@ -61,16 +61,10 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
     # the timeline blob in <UNTRUSTED_DATA> so the system prompt stays
     # authoritative.
     safe_alert = sanitize_text(state.alert_summary, max_len=2_000)
-    safe_root_cause = sanitize_text(
-        state.forensic.root_cause_hypothesis, max_len=1_000
-    )
+    safe_root_cause = sanitize_text(state.forensic.root_cause_hypothesis, max_len=1_000)
     safe_blast = sanitize_text(state.forensic.blast_radius, max_len=1_000)
-    safe_mitre = sanitize_iterable_of_strings(
-        state.recon.mitre_techniques, max_item_len=64, max_items=25
-    )
-    safe_actors = sanitize_iterable_of_strings(
-        state.recon.threat_actors, max_item_len=128, max_items=25
-    )
+    safe_mitre = sanitize_iterable_of_strings(state.recon.mitre_techniques, max_item_len=64, max_items=25)
+    safe_actors = sanitize_iterable_of_strings(state.recon.threat_actors, max_item_len=128, max_items=25)
     timeline_blob = sanitize_for_prompt(
         state.forensic.timeline[-5:],
         label="timeline_tail",

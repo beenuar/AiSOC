@@ -63,9 +63,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
     # explicit <UNTRUSTED_DATA> envelope so the system prompt stays trusted.
     safe_summary = sanitize_text(state.alert_summary, max_len=2_000)
     safe_recon = sanitize_text(state.recon.summary, max_len=2_000)
-    safe_mitre = sanitize_iterable_of_strings(
-        state.recon.mitre_techniques, max_item_len=64, max_items=25
-    )
+    safe_mitre = sanitize_iterable_of_strings(state.recon.mitre_techniques, max_item_len=64, max_items=25)
     enrichment_blob = sanitize_for_prompt(
         dict(list(state.enrichment_cache.items())[:10]),
         label="enrichment_cache",

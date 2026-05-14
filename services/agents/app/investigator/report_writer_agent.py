@@ -64,34 +64,18 @@ def _build_context(state: InvestigatorState) -> str:
     safe_recon_summary = sanitize_text(state.recon.summary, max_len=2_500)
     safe_forensic_summary = sanitize_text(state.forensic.summary, max_len=2_500)
     safe_responder_summary = sanitize_text(state.responder.summary, max_len=2_000)
-    safe_root_cause = sanitize_text(
-        state.forensic.root_cause_hypothesis, max_len=1_000
-    )
+    safe_root_cause = sanitize_text(state.forensic.root_cause_hypothesis, max_len=1_000)
     safe_blast = sanitize_text(state.forensic.blast_radius, max_len=1_000)
     safe_risk_level = sanitize_text(state.responder.risk_level, max_len=32)
 
-    safe_mitre = sanitize_iterable_of_strings(
-        state.recon.mitre_techniques, max_item_len=64, max_items=25
-    )
-    safe_actors = sanitize_iterable_of_strings(
-        state.recon.threat_actors, max_item_len=128, max_items=25
-    )
-    safe_artefacts = sanitize_iterable_of_strings(
-        state.forensic.artefacts[:10], max_item_len=256, max_items=10
-    )
-    safe_containment = sanitize_iterable_of_strings(
-        state.responder.containment_steps[:5], max_item_len=400, max_items=5
-    )
-    safe_eradication = sanitize_iterable_of_strings(
-        state.responder.eradication_steps[:5], max_item_len=400, max_items=5
-    )
-    safe_recovery = sanitize_iterable_of_strings(
-        state.responder.recovery_steps[:5], max_item_len=400, max_items=5
-    )
+    safe_mitre = sanitize_iterable_of_strings(state.recon.mitre_techniques, max_item_len=64, max_items=25)
+    safe_actors = sanitize_iterable_of_strings(state.recon.threat_actors, max_item_len=128, max_items=25)
+    safe_artefacts = sanitize_iterable_of_strings(state.forensic.artefacts[:10], max_item_len=256, max_items=10)
+    safe_containment = sanitize_iterable_of_strings(state.responder.containment_steps[:5], max_item_len=400, max_items=5)
+    safe_eradication = sanitize_iterable_of_strings(state.responder.eradication_steps[:5], max_item_len=400, max_items=5)
+    safe_recovery = sanitize_iterable_of_strings(state.responder.recovery_steps[:5], max_item_len=400, max_items=5)
 
-    iocs_blob = sanitize_for_prompt(
-        state.recon.iocs, label="iocs", max_blob_len=2_500
-    )
+    iocs_blob = sanitize_for_prompt(state.recon.iocs, label="iocs", max_blob_len=2_500)
     enrichment_blob = sanitize_for_prompt(
         dict(list(state.enrichment_cache.items())[:5]),
         label="enrichment_sample",

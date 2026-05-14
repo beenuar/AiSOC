@@ -35,7 +35,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 __all__ = [
     "DEFAULT_MAX_FIELD_LEN",
@@ -247,11 +248,7 @@ def sanitize_for_prompt(
 def wrap_untrusted(body: str, *, label: str = "untrusted") -> str:
     """Wrap a pre-sanitised string in explicit untrusted-data delimiters."""
     safe_label = re.sub(r"[^a-zA-Z0-9_\-]", "_", label or "untrusted")[:32] or "untrusted"
-    return (
-        f"<UNTRUSTED_DATA source=\"{safe_label}\">\n"
-        f"{body}\n"
-        f"</UNTRUSTED_DATA>"
-    )
+    return f'<UNTRUSTED_DATA source="{safe_label}">\n{body}\n</UNTRUSTED_DATA>'
 
 
 def sanitize_iterable_of_strings(

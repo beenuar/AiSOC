@@ -68,10 +68,7 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
         label="raw_alert",
         max_blob_len=3_000,
     )
-    prompt = (
-        f"Alert summary:\n{safe_summary}\n\n"
-        f"Raw alert data:\n{raw_alert_blob}"
-    )
+    prompt = f"Alert summary:\n{safe_summary}\n\nRaw alert data:\n{raw_alert_blob}"
 
     messages = [
         SystemMessage(content=_SYSTEM_PROMPT),
