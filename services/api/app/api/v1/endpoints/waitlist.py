@@ -200,22 +200,6 @@ class WaitlistPatchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _log_safe(value: str | None) -> str | None:
-    """Strip CR/LF from a user-supplied string before it enters a log record.
-
-    The waitlist status fields are validated upstream (Pydantic
-    ``field_validator`` against ``ALLOWED_WAITLIST_STATUSES``) and cannot in
-    practice contain newlines, but static analysis (CodeQL
-    ``py/log-injection``) does not recognise the validator as a sanitiser.
-    This helper makes the cleansing explicit so the taint tracker treats the
-    value as safe, while remaining a no-op for any well-formed input.
-    """
-
-    if value is None:
-        return None
-    return value.replace("\r", "").replace("\n", " ")
-
-
 def _client_ip(request: Request) -> str:
     """Resolve the source IP, trusting the proxy chain in front of us.
 
@@ -436,12 +420,19 @@ async def patch_entry(
             detail="Could not update waitlist entry.",
         ) from exc
 
+    # CodeQL py/log-injection: sanitise inline so the taint tracker
+    # sees the .replace() chain directly at the call site. Both values
+    # are also Pydantic-validated against ``ALLOWED_WAITLIST_STATUSES``
+    # so they can only ever be short safe identifiers, but the inline
+    # sanitisation makes the property explicit for static analysis.
+    safe_previous = (previous or "").replace("\r", "").replace("\n", " ")[:32]
+    safe_next = (payload.status or "").replace("\r", "").replace("\n", " ")[:32]
     logger.info(
         "waitlist_status_transition",
         extra={
             "entry_id": str(entry_id),
-            "previous": _log_safe(previous),
-            "next": _log_safe(payload.status),
+            "previous": safe_previous,
+            "next": safe_next,
             "actor": str(user.user_id),
         },
     )

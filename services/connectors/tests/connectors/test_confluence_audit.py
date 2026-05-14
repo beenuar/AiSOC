@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import app.connectors.confluence_audit as confluence_audit_module
 import httpx
 import pytest
 import respx
@@ -78,7 +77,10 @@ def test_normalize_creation_date_ms_to_iso(fixture):
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_alerts_uses_pagination(fixture):
+async def test_fetch_alerts_uses_pagination(
+    fixture: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -94,15 +96,12 @@ async def test_fetch_alerts_uses_pagination(fixture):
     respx.get(f"{_SITE}/wiki/rest/api/audit").mock(side_effect=handler)
 
     connector = ConfluenceAuditConnector(_SITE, _EMAIL, _TOKEN)
-    # Lower the page size to match the fixture. We reuse the module-level
-    # ``confluence_audit_module`` alias rather than re-importing inline so
-    # CodeQL (``py/import-and-import-from``) sees a single import style.
-    monkey_orig = confluence_audit_module._PAGE_SIZE  # noqa: SLF001
-    try:
-        confluence_audit_module._PAGE_SIZE = 4  # type: ignore[assignment]
-        events = await connector.fetch_alerts(since_seconds=10**9)
-    finally:
-        confluence_audit_module._PAGE_SIZE = monkey_orig  # type: ignore[assignment]
+    # Lower the page size to match the fixture. ``monkeypatch`` rewrites the
+    # module attribute and restores it automatically at teardown, so we keep
+    # a single import style for the connector module (CodeQL
+    # ``py/import-and-import-from``).
+    monkeypatch.setattr("app.connectors.confluence_audit._PAGE_SIZE", 4)
+    events = await connector.fetch_alerts(since_seconds=10**9)
 
     # First page returned 4 items, second page returned []; pagination
     # terminated cleanly.
