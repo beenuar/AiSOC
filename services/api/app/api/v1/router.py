@@ -10,9 +10,11 @@ from app.api.v1.endpoints import (
     api_keys,
     approvals,
     assets,
+    attack_chain,
     audit,
     auth,
     autonomy_policy,
+    business_context,
     cases,
     community,
     compliance,
@@ -24,6 +26,7 @@ from app.api.v1.endpoints import (
     detection_proposals,
     detection_rules,
     easm,
+    effective_permissions,
     federated,
     feedback,
     fusion,
@@ -75,6 +78,12 @@ api_router.include_router(alerts.router)
 # JSON envelope counterpart to the agent service's NDJSON stream.
 api_router.include_router(alert_explain.router)
 api_router.include_router(cases.router)
+# Attack-chain timeline (T3.3 — v8.0 parallel team plan).
+# Backs apps/web/src/app/(app)/cases/[id]/attack-chain/page.tsx with a
+# ranked timeline (graph-distance + temporal proximity + risk overlap)
+# of every alert that shares an entity with the case's seed alert,
+# plus the side-by-side entity graph the right column renders.
+api_router.include_router(attack_chain.router)
 api_router.include_router(connectors.router)
 # Hosted OAuth one-click for connectors (Workstream 2 of AI Stack plan).
 # /oauth/start mints a state nonce + 302 to the provider; /oauth/callback
@@ -103,6 +112,11 @@ api_router.include_router(metrics.router)
 api_router.include_router(insights.router)
 api_router.include_router(sla.router)
 api_router.include_router(investigations.router)
+# Effective permissions resolver (T3.2 — v8.0 parallel team plan).
+# Resolves "what can principal X actually do?" across AWS / Azure / GCP /
+# Okta / Google Workspace and caches the result as :EFFECTIVE_PERMISSION
+# edges in Neo4j. Backs apps/web/src/app/(app)/identity/permissions.
+api_router.include_router(effective_permissions.router)
 
 # Cost dashboard — WS-H1 (buyer-value plan).
 # Aggregates LLM spend / token volume from aisoc_run_costs joined with
@@ -133,6 +147,12 @@ api_router.include_router(feedback.router)
 
 # Configurable autonomy guardrails — three-tier per-action confidence (Tier 1.3)
 api_router.include_router(autonomy_policy.router)
+
+# Business Context Rules — Track 3, T3.5 (v8.0 parallel team plan).
+# YAML rule engine that mutates fused alerts (severity bump, route, suppress,
+# tag) before they reach the triage agent. Backs the
+# /settings/business-context Monaco editor with a dry-run preview API.
+api_router.include_router(business_context.router)
 
 # NL detection authoring (Tier 2)
 api_router.include_router(nl_detection.router)
