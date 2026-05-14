@@ -1,8 +1,15 @@
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        populate_by_name=True,
+        extra="ignore",
+    )
+
     # Service
     service_name: str = "aisoc-fusion"
     http_port: int = Field(default=8003, alias="HTTP_PORT")
@@ -57,10 +64,6 @@ class Settings(BaseSettings):
 
     # Enrichment service
     enrichment_service_url: str = Field(default="http://localhost:8082", alias="ENRICHMENT_SERVICE_URL")
-
-    class Config:
-        env_file = ".env"
-        populate_by_name = True
 
 
 settings = Settings()

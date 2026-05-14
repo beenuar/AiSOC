@@ -94,7 +94,7 @@ to that subaccount.
 
 ## Live actions
 
-The Lacework connector is **read-only** in v7.1.0. Containment for cloud
+The Lacework connector is **read-only** as of v7.3.1. Containment for cloud
 findings flows through the [AWS Security Hub](/docs/connectors/aws-security-hub),
 [Cloudflare](/docs/connectors/cloudflare), or
 [GCP Cloud Audit](/docs/connectors/gcp-cloud-audit) connectors.

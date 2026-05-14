@@ -105,7 +105,7 @@ If a module isn't licensed on the tenant, no alerts of that type appear
 
 ## Live actions
 
-The Orca connector is **read-only** in v7.1.0. Containment for cloud
+The Orca connector is **read-only** as of v7.3.1. Containment for cloud
 findings flows through the
 [AWS Security Hub](/docs/connectors/aws-security-hub),
 [AWS GuardDuty](/docs/connectors/aws-guardduty),

@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, require_permission
@@ -46,8 +46,7 @@ class SLAConfigOut(BaseModel):
     mttc_target: int
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SLAConfigUpdate(BaseModel):
@@ -72,8 +71,7 @@ class SLAEventOut(BaseModel):
     occurred_at: datetime
     metadata: dict
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class KpiBarTargetsOut(BaseModel):

@@ -156,8 +156,12 @@ class EvalAttachRequest(BaseModel):
     max_regression_pp: float = Field(
         default=1.0,
         ge=0.0,
-        le=100.0,
-        description="Allowed MITRE accuracy regression vs baseline, in pp.",
+        le=50.0,
+        description=(
+            "Allowed MITRE accuracy regression vs baseline, in pp. Hard-capped "
+            "at 50 — anything above that is indistinguishable from disabling "
+            "the regression gate entirely."
+        ),
     )
 
 
@@ -185,14 +189,22 @@ class RunEvalRequest(BaseModel):
     max_regression_pp: float = Field(
         default=1.0,
         ge=0.0,
-        le=100.0,
-        description=("Allowed MITRE accuracy regression vs the active baseline, in percentage points. Forwarded to run_evals.py."),
+        le=50.0,
+        description=(
+            "Allowed MITRE accuracy regression vs the active baseline, in "
+            "percentage points. Forwarded to run_evals.py. Hard-capped at 50 "
+            "to keep the regression gate meaningful."
+        ),
     )
     timeout_seconds: int = Field(
         default=180,
         ge=10,
-        le=900,
-        description="Hard timeout for the eval subprocess.",
+        le=600,
+        description=(
+            "Hard timeout for the eval subprocess. Capped at 10 minutes — the "
+            "synthetic benchmark completes in under 60s on commodity hardware "
+            "so anything longer is almost certainly a stuck process."
+        ),
     )
 
 

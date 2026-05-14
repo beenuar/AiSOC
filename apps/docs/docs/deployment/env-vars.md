@@ -113,6 +113,8 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 | `MAX_TENANTS` | `1000` | Hard cap for multi-tenant deployments |
 | `DEFAULT_TENANT_PLAN` | `starter` | Default plan for newly provisioned tenants |
 | `AISOC_PLUGINS_DIR` | `/opt/aisoc/plugins` | Filesystem path the plugin loader scans |
+| `PLUGIN_TRUST_MODE` | `warn` | `disabled` skips signature checks, `warn` records `signature_status` but loads anyway, `strict` rejects unsigned/invalid plugins (including OCI installs). See [Operations → Security → OCI install hardening](../operations/security#oci-install-hardening-h-3). |
+| `PLUGIN_TRUSTED_KEYS_DIR` | `/etc/aisoc/plugin-keys` | Directory of Ed25519 public keys (`*.pem`/`*.pub`) that are allowed to sign plugins. |
 | `AISOC_DEMO_MODE` | `false` | When `true`, mutating requests outside the demo tenant return 403 |
 | `AISOC_DEMO_TENANT` | `demo` | Tenant slug allowed to write in demo mode |
 | `AISOC_DEMO_BANNER` | `Demo data resets daily at 00:00 UTC. All write actions are disabled.` | Banner text rendered by the web app |
@@ -142,6 +144,9 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `JAEGER_HOST` / `JAEGER_PORT` | `localhost` / `6831` | Jaeger agent endpoint (used when `OTEL_EXPORTER=jaeger`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP collector endpoint |
 | `OTEL_EXPORTER` | `otlp` | One of `otlp`, `jaeger`, `console` |
+| `AISOC_SSRF_ALLOWED_SCHEMES` | `http,https` | Comma-separated list of URL schemes allowed for outbound `http_request` and `notify` playbook steps. Anything else is rejected. |
+| `AISOC_SSRF_ALLOW_PRIVATE` | `false` | When `true`, lets playbook steps reach loopback / RFC1918 / link-local destinations. Leave off in production; enable only for self-hosted webhooks on a private network. |
+| `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
 
 ---
 

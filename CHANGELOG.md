@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security — bounded eval / playbook timeouts (H-7, batch 10)
+
+- **`POST /detection-proposals/run-eval`** — tightened Pydantic bounds on
+  `RunEvalRequest.timeout_seconds` (`le=900` → `le=600`) and
+  `max_regression_pp` (`le=100` → `le=50`). The synthetic benchmark completes
+  in under 60s on commodity hardware; a 15-minute cap was indistinguishable
+  from "no cap" from a DoS standpoint. 50pp regression tolerance is already
+  generous — anything higher silently disables the gate. `EvalAttachRequest`
+  receives the same `max_regression_pp` cap.
+- **Playbook step bounds** — added strict Pydantic validation to
+  `PlaybookStep.timeout_seconds` (`1 ≤ x ≤ 3600s`) and `retry_max` (`0 ≤ x ≤ 25`)
+  in `services/agents/app/playbook/models.py`. The 1-hour ceiling
+  accommodates human-approval steps; everything else is bounded at runtime.
+- **Runtime parameter clamp** — new module
+  `services/agents/app/playbook/bounds.py` centralises `clamp_timeout()` and
+  `clamp_retries()` helpers. `_handle_osquery_live_query()` and other
+  handlers that read `step.params["timeout_seconds"]` (an untyped dict that
+  bypasses Pydantic) now clamp at runtime against
+  `ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS = 900s`. This is the layered defence:
+  field validators cap the typed model, runtime clamps cap the dynamic
+  params. Operator overrides via `AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS` /
+  `AISOC_PLAYBOOK_MAX_RETRIES` are themselves bounded by the absolute
+  ceilings so a typo can't disable the cap entirely.
+- 67 new tests in `services/agents/tests/test_playbook_bounds.py`,
+  `test_playbook_models_bounds.py`, and `test_osquery_live_query_step.py`
+  exercise pathological values (86 400s, negatives, `True`, numeric strings,
+  env-var overrides). 22 new tests in
+  `services/api/tests/api/v1/endpoints/test_detection_proposals_request_bounds.py`
+  pin the API-side caps.
+
+### Pydantic v2 configuration migration (H-6)
+
+Eliminates the 63+ `PydanticDeprecatedSince20: Support for class-based
+`config` is deprecated, use ConfigDict instead` warnings that were
+emitted on every API/service boot and during every test run.
+
+- **`BaseSettings` → `SettingsConfigDict`** —
+  `services/fusion/app/core/config.py` and
+  `services/threatintel/app/config.py` now declare `model_config =
+  SettingsConfigDict(env_file=…, extra="ignore")` instead of the
+  v1-style `class Config: env_file = …` inner class. Behaviour is
+  identical; the migration is purely an API surface fix that prevents
+  pydantic-settings from emitting a runtime deprecation each time the
+  service starts.
+- **`BaseModel` → `ConfigDict`** — every FastAPI endpoint that exposes
+  a Pydantic response model with `from_attributes = True` (so SQLAlchemy
+  rows can be returned directly) has been migrated to
+  `model_config = ConfigDict(from_attributes=True)`. Touches:
+  `services/api/app/api/v1/endpoints/{sla,threat_intel,reports,mssp,remediation,identity_graph,insider_threat,assets,posture}.py`
+  and `services/ueba/app/api/routes.py`. No schema or wire-format
+  changes — `model_dump()`/`from_orm` continue to work as before.
+- **No more silent warnings in CI** — pytest under
+  `-W error::DeprecationWarning` (pydantic only) now imports the full
+  API surface clean.
+
 ## [7.3.1] — 2026-05-14
 
 ### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone
