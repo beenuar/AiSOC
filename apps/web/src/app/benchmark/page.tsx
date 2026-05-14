@@ -164,6 +164,20 @@ export default async function BenchmarkPage() {
               </svg>
             </a>
           </div>
+          <p className="mt-4 text-xs text-gray-500">
+            This page is the live snapshot of the latest CI run. For the
+            append-only weekly history (substrate and wet-eval rows side-by-side
+            with a MITRE-accuracy trend chart), see the{' '}
+            <a
+              href="https://docs.tryaisoc.com/docs/benchmark-scoreboard"
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-dotted hover:text-gray-300"
+            >
+              public scoreboard
+            </a>{' '}
+            in the docs.
+          </p>
         </div>
       </section>
 

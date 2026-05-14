@@ -1,0 +1,28 @@
+{
+  "$schema": "./scoreboard.schema.json",
+  "_readme": "Append-only public benchmark scoreboard. Each row is one eval run. Substrate rows (no LLM, deterministic) are marked substrate:true and MUST NOT be quoted as live agent performance. Wet-eval rows (substrate:false) are appended by the T5.5 weekly CI workflow once it lands. Newest row first.",
+  "rows": [
+    {
+      "date": "2026-05-13",
+      "agent_version": "v1.4.1",
+      "commit_sha": "4ff1b7f4",
+      "substrate": true,
+      "eval_mode": "substrate-only",
+      "mitre_accuracy": 0.970,
+      "mitre_accuracy_per_template": 0.964,
+      "alert_reduction": 0.753,
+      "investigation_completeness": 0.942,
+      "response_quality": 1.000,
+      "playbook_completion_rate": 0.505,
+      "mtc_p50_seconds": null,
+      "mtc_p95_seconds": null,
+      "tokens_total": 437200,
+      "usd_total": 2.9384,
+      "tokens_mean_per_investigation": 2186,
+      "usd_mean_per_investigation": 0.01469,
+      "rate_card_model": "gpt-4o",
+      "rate_card_dated": "2026-05",
+      "notes": "v1.4 substrate snapshot — deterministic CI gate, no LLM call. tokens / USD are projected by scripts/eval_telemetry.py from the 4-chars/token estimator and the illustrative 2026-05 public rate card; treat as an upper-bound budget, not a real bill. mtc fields are null because substrate runs in milliseconds and is not a meaningful end-to-end timing. Wet-eval rows from the T5.5 weekly job will replace these placeholders for live MTC."
+    }
+  ]
+}

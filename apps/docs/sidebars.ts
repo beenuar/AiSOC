@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
         "architecture",
         "benchmark",
         "benchmark-methodology",
+        "benchmark-scoreboard",
       ],
     },
     {
@@ -95,6 +96,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "operations/security",
         "operations/credentials",
+        "operations/secrets",
         "operations/airgap",
         "operations/air-gapped",
         "operations/theming",

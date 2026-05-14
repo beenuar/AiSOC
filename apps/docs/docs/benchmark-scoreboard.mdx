@@ -1,0 +1,116 @@
+---
+sidebar_position: 6
+title: Public Scoreboard
+description: Auto-updated weekly scoreboard of AiSOC eval runs — date, agent version, MITRE accuracy, MTC p50/p95, total USD cost, total tokens. Substrate rows are deterministic CI gates (clearly labelled); wet-eval rows are appended by the T5.5 weekly job. Reproducible, append-only, public.
+---
+
+import Scoreboard from '@site/src/components/Scoreboard';
+
+# Public benchmark scoreboard
+
+Append-only weekly history of every published AiSOC eval run. Each row is one
+end-to-end run of [`scripts/run_evals.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/run_evals.py)
+against the [200-incident corpus](./benchmark-methodology.md#2-dataset),
+labelled with the agent version, the commit SHA, and whether it was a
+deterministic substrate run or a real wet-eval against a live LLM.
+
+:::warning Substrate rows ≠ live agent performance
+Rows tagged `substrate` are the deterministic CI gate — they execute in
+microseconds with no LLM call, no money. Their token and USD figures are
+**budget projections** computed from the [4-chars/token estimator and the
+illustrative public rate card](./benchmark-methodology.md#rate-card),
+not real bills. Wet-eval rows (real agent, real LLM) start arriving the
+moment the [T5.5 weekly job](./benchmark-methodology.md#3-substrate-vs-wet-eval)
+lands in CI. The two row types share the same columns so the table reads
+uniformly, but **never quote a substrate row as live agent performance**.
+:::
+
+<Scoreboard />
+
+## How this page is updated
+
+The scoreboard is sourced from a single checked-in JSON file at
+[`apps/docs/static/data/scoreboard.json`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/static/data/scoreboard.json),
+validated against
+[`scoreboard.schema.json`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/static/data/scoreboard.schema.json)
+on every docs build via `pnpm --filter @aisoc/docs scoreboard:check`.
+
+There are two ways a row reaches that file:
+
+1. **Substrate rows (per-PR CI gate).** A row is appended whenever the
+   substrate snapshot drifts enough to publish — captured during release
+   tagging and committed by hand under `feat(eval): scoreboard substrate row
+   for v<X.Y.Z>`.
+2. **Wet-eval rows (T5.5 weekly job).** The
+   [`wet-eval-weekly.yml`](./benchmark-methodology.md#3-substrate-vs-wet-eval)
+   GitHub Action runs the live agent against the same 200-incident corpus
+   on a Sunday cadence, captures real latency / token / USD telemetry,
+   and opens an auto-PR appending one row to `scoreboard.json`. Wet-eval
+   rows show up at the top of the table and on the trend chart.
+
+This append-only contract is deliberate: the scoreboard becomes more
+informative the longer it runs. We never silently rewrite history; if a
+historic row turns out to be wrong we add a follow-up row with the
+correction in `notes` and link the issue.
+
+## Reproducing any single row
+
+Every row in the table can be reproduced from a fresh clone:
+
+```bash
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC
+git checkout <commit_sha>     # the value in the "Commit" column
+pnpm install
+pnpm eval:public               # writes eval_report.json + eval/charts/
+```
+
+For wet-eval rows you additionally need an `OPENAI_API_KEY` (or another
+provider exposed via the same `--telemetry-model` flag) and access to the
+weekly workflow inputs documented in
+[benchmark-methodology.md → How to reproduce](./benchmark-methodology.md#how-to-reproduce).
+
+## Schema and column reference
+
+| Column | JSON field | Notes |
+|--------|------------|-------|
+| Date | `date` | ISO date of the eval run. |
+| Agent | `agent_version` | Tagged release of `services/agents` (e.g. `v1.4.1`). |
+| Commit | `commit_sha` | Short or full git SHA the run was produced against. |
+| Mode | `eval_mode` + `substrate` | `substrate-only` (no LLM) or `wet-eval-*` (live agent). The badge colour repeats this distinction. |
+| MITRE acc. | `mitre_accuracy` | Per-case accuracy on the 200-incident corpus. |
+| MTC p50 | `mtc_p50_seconds` | Mean time to closure, p50, end-to-end. `n/a` on substrate rows because the substrate runs in microseconds — not a meaningful end-to-end timing. |
+| MTC p95 | `mtc_p95_seconds` | Same, p95. |
+| USD total | `usd_total` | On wet-eval rows, real spend. On substrate rows, `budget` projection from the rate card. |
+| Tokens total | `tokens_total` | Total tokens across the 200 investigations. |
+
+The full per-suite breakdown (`alert_reduction`,
+`investigation_completeness`, `response_quality`, `playbook_completion_rate`,
+per-template macros) lives in [`scoreboard.json`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/static/data/scoreboard.json)
+and is rendered on the [main benchmark page](./benchmark.md) for the latest
+run; the scoreboard table keeps a tight five-number summary so the trend
+remains scannable.
+
+## Comparing your own runs
+
+If you reproduce one of the rows on your own laptop and the numbers move,
+that's a signal worth filing — either the harness is non-deterministic on
+your platform (a bug we want to know about) or your fork has diverged. Open
+an issue on
+[github.com/beenuar/AiSOC/issues](https://github.com/beenuar/AiSOC/issues)
+with the JSON output of `pnpm eval:public` attached and the AiSOC team will
+investigate.
+
+If you reproduce against a different model or rate card and want your row
+on the public scoreboard, see
+[community submissions](./benchmark-methodology.md#how-to-compare).
+
+## Provenance
+
+- Data file: [`apps/docs/static/data/scoreboard.json`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/static/data/scoreboard.json)
+- JSON Schema: [`apps/docs/static/data/scoreboard.schema.json`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/static/data/scoreboard.schema.json)
+- Renderer: [`apps/docs/src/components/Scoreboard/index.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/src/components/Scoreboard/index.tsx)
+- Validator: `pnpm --filter @aisoc/docs scoreboard:check` →
+  [`apps/docs/scripts/validate-scoreboard.mjs`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/scripts/validate-scoreboard.mjs)
+- Methodology: [Benchmark methodology](./benchmark-methodology.md)
+- Latest snapshot tables: [Benchmark](./benchmark.md)

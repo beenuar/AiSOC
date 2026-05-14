@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Public weekly benchmark scoreboard at /docs/benchmark-scoreboard
+
+Public, append-only weekly scoreboard now lives at
+[`/docs/benchmark-scoreboard`](https://docs.tryaisoc.com/docs/benchmark-scoreboard).
+One row per published eval run — date, agent version, commit SHA, MITRE
+accuracy, MTC p50/p95, total USD, total tokens — sourced from a
+checked-in JSON file at `apps/docs/static/data/scoreboard.json` and
+validated against `scoreboard.schema.json` on every docs build via the new
+`pnpm --filter @aisoc/docs scoreboard:check` script. Substrate rows
+(deterministic CI gate, no LLM) are visually separated from wet-eval rows
+(real LangGraph agent, real LLM, real cost), so substrate numbers can
+never be quoted as live agent performance. Includes an inline SSR-rendered
+SVG sparkline of MITRE accuracy over time, no Recharts/client JS bundle
+hit. The marketing `/benchmark` page now cross-links to the scoreboard for
+the full weekly history. Wet-eval rows arrive automatically once the T5.5
+weekly CI workflow lands.
+
 ### Connectors — Wazuh Indexer ingest (Stage 2)
 
 New first-class endpoint connector for Wazuh deployments. AiSOC now polls the

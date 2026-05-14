@@ -131,6 +131,13 @@ every PR targeting `main` or `develop`.
 These numbers move with the codebase. The current snapshot lives at
 [`eval-results/eval/results/latest.json`](https://github.com/beenuar/AiSOC/blob/eval-results/eval/results/latest.json).
 
+> **Weekly history:** the row above is the latest snapshot only. The full
+> append-only weekly history (date, agent version, MITRE accuracy, MTC
+> p50/p95, total USD, total tokens — substrate and wet-eval rows visually
+> separated) lives on the [public scoreboard](./benchmark-scoreboard.mdx).
+> The T5.5 weekly job appends one row to that scoreboard every Sunday once
+> wet-eval CI lands.
+
 ## Performance, tokens, and cost
 
 <!-- BEGIN: T5.1 scaffolding for T2.4 wet-eval telemetry.
@@ -233,11 +240,23 @@ will dominate end-to-end latency too.
 :::warning Wet-eval, not substrate
 The three tables in the next subsection are a **wet eval** measurement
 — they require the live `services/agents` LangGraph orchestrator and
-real LLM calls, which is populated by the weekly wet-eval CI job (T5.5).
-T2.4's deterministic-substrate budget projection lives directly above
-and in the JSON report, but is **not** substituted into the wet-eval
-tables below because substrate timings would not be honest
+real LLM calls, which is populated by the weekly wet-eval CI job
+([`.github/workflows/wet-eval.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/wet-eval.yml),
+landed by T5.5). T2.4's deterministic-substrate budget projection lives
+directly above and in the JSON report, but is **not** substituted into
+the wet-eval tables below because substrate timings would not be honest
 representations of agent performance.
+
+The workflow runs every Monday at 07:00 UTC, dispatches the
+200-incident corpus through the live agent, captures real token /
+USD / latency metrics from the LLM provider's response metadata, then
+opens a PR titled `chore(bench): weekly wet-eval YYYY-MM-DD` with the
+refreshed numbers. Forks without billing configured see a clean
+no-op via the [preflight check](https://github.com/beenuar/AiSOC/blob/main/scripts/wet_eval_check.py).
+The two CI secrets that drive it (`WET_EVAL_OPENAI_KEY` and
+`AISOC_BENCH_BOT_TOKEN`) are documented on the
+[Secrets and CI tokens](./operations/secrets.md) page; setup is a
+one-time configuration in the GitHub repo settings.
 :::
 
 ### Wet eval — Table 1 — Latency per investigation

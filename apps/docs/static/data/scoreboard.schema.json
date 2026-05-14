@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://docs.tryaisoc.com/data/scoreboard.schema.json",
+  "title": "AiSOC public benchmark scoreboard",
+  "description": "Append-only weekly eval results. Substrate rows are deterministic CI gates (no LLM); wet-eval rows are live LangGraph agent runs from the T5.5 weekly job. Both shapes share the same fields so the scoreboard table renders uniformly; substrate:true is the explicit marker that prevents substrate numbers from being quoted as live agent performance.",
+  "type": "object",
+  "required": ["rows"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "_readme": { "type": "string" },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "date",
+          "agent_version",
+          "commit_sha",
+          "substrate",
+          "eval_mode",
+          "mitre_accuracy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "ISO date (YYYY-MM-DD) of the eval run."
+          },
+          "agent_version": {
+            "type": "string",
+            "pattern": "^v[0-9]+\\.[0-9]+(\\.[0-9]+)?(-[A-Za-z0-9.+-]+)?$",
+            "description": "Tagged release of services/agents at the time of the run (e.g. v1.4.1)."
+          },
+          "commit_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$",
+            "description": "Short or long git SHA of the commit the run was produced against."
+          },
+          "substrate": {
+            "type": "boolean",
+            "description": "true = deterministic substrate run (no LLM, no money). false = wet eval (real agent, real LLM, real cost). MUST be present on every row."
+          },
+          "eval_mode": {
+            "type": "string",
+            "enum": ["substrate-only", "wet-eval-llm-judge", "wet-eval-keyword-judge"],
+            "description": "Which harness mode produced this row. substrate-only is the per-PR CI gate; wet-eval-* are the T5.5 weekly variants."
+          },
+          "mitre_accuracy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "mitre_accuracy_per_template": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "alert_reduction": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "investigation_completeness": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "response_quality": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "playbook_completion_rate": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "mtc_p50_seconds": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "Mean Time to Closure, p50, end-to-end. null on substrate-only rows (substrate runs in microseconds — not a meaningful end-to-end timing)."
+          },
+          "mtc_p95_seconds": {
+            "type": ["number", "null"],
+            "minimum": 0
+          },
+          "tokens_total": {
+            "type": ["number", "null"],
+            "minimum": 0
+          },
+          "usd_total": {
+            "type": ["number", "null"],
+            "minimum": 0
+          },
+          "tokens_mean_per_investigation": {
+            "type": ["number", "null"],
+            "minimum": 0
+          },
+          "usd_mean_per_investigation": {
+            "type": ["number", "null"],
+            "minimum": 0
+          },
+          "rate_card_model": {
+            "type": ["string", "null"]
+          },
+          "rate_card_dated": {
+            "type": ["string", "null"]
+          },
+          "notes": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    }
+  }
+}
