@@ -20,11 +20,11 @@ Work lands on the fork; the integration PR is raised against `upstream/main`.
 PR compare URL (click to finalise on GitHub):
 `https://github.com/beenuar/AiSOC/compare/main...prince30121:AiSOC:v8.0/parallel-team-kickoff?expand=1`
 
-PR title: `v8.0 wave-1: graph at ingest, four-agent rebrand, /hunt, 6 connectors, public benchmark, GTM surface`
+PR title: `v8.0 wave-1 + wave-2 (in progress): graph at ingest, four-agent rebrand, /hunt, 6 connectors + wave-2 expansion`
 
 PR body: see `.pr-body-wave1.md` (gitignored — local working copy). Paste the full contents into the GitHub web UI when opening the PR.
 
-Status: branch pushed to fork on 2026-05-13; PR ready to open. `gh` CLI is unauthenticated on this workstation, so the PR is finalised via the compare URL.
+Status (refreshed 2026-05-14): branch pushed to fork; HEAD `4ff1b7f4` includes the first wave-2 schema commit (T3.2 EFFECTIVE_PERMISSION edge). `gh` CLI is unauthenticated on this workstation, so the PR is **pending — paste the compare URL above into the browser** (PR body is in `.pr-body-wave1.md`). Several other wave-2 subagents are still in flight on the working tree; their commits will land in follow-on PRs.
 
 ### Commit signing
 
