@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,8 +66,7 @@ class IOCOut(IOCCreate):
     last_seen: str
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ThreatActorCreate(BaseModel):
@@ -90,8 +89,7 @@ class ThreatActorOut(ThreatActorCreate):
     is_active: bool
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FeedCreate(BaseModel):
@@ -110,8 +108,7 @@ class FeedOut(FeedCreate):
     last_polled_at: str | None = None
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------

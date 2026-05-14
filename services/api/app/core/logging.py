@@ -5,7 +5,7 @@ import sys
 
 import structlog
 
-from app.core.config import settings
+from app.core.config import is_dev_env, settings
 
 
 def configure_logging() -> None:
@@ -20,7 +20,12 @@ def configure_logging() -> None:
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
-    if settings.ENV == "development":
+    # Previously this used ``settings.ENV == "development"`` — an exact-match
+    # string compare that silently skipped the console renderer for the other
+    # dev aliases (``dev``, ``local``, ``demo``, ``test``). Routing to
+    # ``is_dev_env`` keeps a single source of truth for what "this is a
+    # development-class environment" means across the service.
+    if is_dev_env(settings.ENV):
         renderer: structlog.types.Processor = structlog.dev.ConsoleRenderer()
     else:
         renderer = structlog.processors.JSONRenderer()

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,8 +42,7 @@ class NodeOut(NodeCreate):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EdgeCreate(BaseModel):
@@ -61,8 +60,7 @@ class EdgeOut(EdgeCreate):
     valid_from: str
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AlertLinkCreate(BaseModel):
@@ -77,8 +75,7 @@ class AlertLinkOut(AlertLinkCreate):
     tenant_id: uuid.UUID
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------

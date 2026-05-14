@@ -146,19 +146,171 @@ def _eval_sigma_detection(detection: dict, flat_event: dict[str, Any]) -> bool:
 
 
 def _eval_condition(condition: str, selections: dict[str, bool]) -> bool:
-    """Evaluate a Sigma condition string."""
+    """Evaluate a Sigma condition string using a safe boolean AST parser.
+
+    SECURITY: Earlier revisions used `eval()` here, which allowed arbitrary
+    Python expressions inside the Sigma `condition` field to execute in the
+    API process. The condition is user-controlled (Sigma rule body) and
+    therefore must be parsed, not evaluated.
+
+    Supported grammar:
+        - boolean literals (case-insensitive): true | false
+        - selection name references (must be present in `selections` mapping)
+        - unary operator:   not <expr>
+        - binary operators: <expr> and <expr> | <expr> or <expr>
+        - parentheses:      ( <expr> )
+        - Sigma quantifiers (subset): "1 of selection*" / "all of selection*"
+
+    Anything else short-circuits to the safe default of ANDing all selections.
+    """
     expr = condition.strip()
-    # Replace selection names with their bool values
-    for name, val in selections.items():
-        expr = expr.replace(name, str(val))
-    # Simple evaluation
     try:
-        expr = expr.replace("and", " and ").replace("or", " or ").replace("not", " not ")
-        # Safe eval with only booleans
-        return bool(eval(expr, {"__builtins__": {}}, {"True": True, "False": False}))  # noqa: S307
-    except Exception:
-        # Default: AND all selections
-        return all(selections.values())
+        return _SigmaConditionParser(expr, selections).parse()
+    except Exception as exc:  # noqa: BLE001 — keep behaviour identical to legacy fallback
+        logger.debug("Sigma condition parse error (%r): %s", condition, exc)
+        return all(selections.values()) if selections else False
+
+
+class _SigmaConditionParser:
+    """Tiny recursive-descent parser for Sigma condition expressions.
+
+    The grammar accepted is a strict subset of the Sigma spec, sufficient to
+    cover every shipped detection rule in `detections/` while refusing
+    anything that could lead to code execution.
+    """
+
+    _TOKEN_RE = re.compile(
+        # Token alternatives: opening paren, closing paren, or a "word" that
+        # may start with a digit (for the `1 of …` quantifier) or a letter /
+        # underscore. The leading `\s*` is consumed by the caller via lstrip
+        # so that trailing whitespace doesn't break the match loop.
+        r"(?P<lparen>\()|(?P<rparen>\))|(?P<word>[A-Za-z0-9_][A-Za-z0-9_*]*)",
+    )
+
+    def __init__(self, expr: str, selections: dict[str, bool]) -> None:
+        self._expr = expr
+        self._selections = selections
+        self._tokens = self._tokenize(expr)
+        self._pos = 0
+
+    def parse(self) -> bool:
+        result = self._parse_or()
+        if self._pos != len(self._tokens):
+            raise ValueError(f"unexpected trailing token: {self._tokens[self._pos]!r}")
+        return result
+
+    # ── tokenizer ────────────────────────────────────────────────────────────
+    def _tokenize(self, expr: str) -> list[str]:
+        tokens: list[str] = []
+        pos = 0
+        n = len(expr)
+        while pos < n:
+            # Skip any inter-token whitespace.
+            while pos < n and expr[pos].isspace():
+                pos += 1
+            if pos >= n:
+                break
+            m = self._TOKEN_RE.match(expr, pos)
+            if not m:
+                raise ValueError(f"invalid character at position {pos}: {expr[pos]!r}")
+            if m.group("lparen"):
+                tokens.append("(")
+            elif m.group("rparen"):
+                tokens.append(")")
+            else:
+                tokens.append(m.group("word"))
+            pos = m.end()
+        return tokens
+
+    # ── grammar ──────────────────────────────────────────────────────────────
+    def _peek(self) -> str | None:
+        return self._tokens[self._pos] if self._pos < len(self._tokens) else None
+
+    def _consume(self) -> str:
+        tok = self._tokens[self._pos]
+        self._pos += 1
+        return tok
+
+    def _match(self, *expected: str) -> bool:
+        tok = self._peek()
+        if tok is None:
+            return False
+        if tok.lower() in expected:
+            self._consume()
+            return True
+        return False
+
+    def _parse_or(self) -> bool:
+        left = self._parse_and()
+        while self._match("or"):
+            right = self._parse_and()
+            left = left or right
+        return left
+
+    def _parse_and(self) -> bool:
+        left = self._parse_not()
+        while self._match("and"):
+            right = self._parse_not()
+            left = left and right
+        return left
+
+    def _parse_not(self) -> bool:
+        if self._match("not"):
+            return not self._parse_not()
+        return self._parse_atom()
+
+    def _parse_atom(self) -> bool:
+        tok = self._peek()
+        if tok is None:
+            raise ValueError("unexpected end of condition")
+
+        if tok == "(":
+            self._consume()
+            value = self._parse_or()
+            if not self._match(")"):
+                raise ValueError("missing closing parenthesis")
+            return value
+
+        # Quantifier forms: "1 of <pattern>" / "all of <pattern>"
+        lowered = tok.lower()
+        if lowered in {"1", "all"} and (self._pos + 2) <= len(self._tokens):
+            next_tok = self._tokens[self._pos + 1] if self._pos + 1 < len(self._tokens) else None
+            if next_tok and next_tok.lower() == "of":
+                self._consume()  # quantifier
+                self._consume()  # 'of'
+                pattern_tok = self._peek()
+                if pattern_tok is None or pattern_tok in {"(", ")"}:
+                    raise ValueError("quantifier missing pattern")
+                self._consume()
+                return self._evaluate_quantifier(lowered, pattern_tok)
+
+        # Bare identifier / literal.
+        self._consume()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+        if tok in self._selections:
+            return bool(self._selections[tok])
+        # Unknown selection name → treat as missing (False) rather than raising
+        # so that legacy rules referring to absent selections still produce a
+        # deterministic result.
+        return False
+
+    def _evaluate_quantifier(self, quantifier: str, pattern: str) -> bool:
+        if pattern == "them":
+            values = list(self._selections.values())
+        elif "*" in pattern:
+            regex = re.compile("^" + re.escape(pattern).replace(r"\*", ".*") + "$")
+            values = [v for name, v in self._selections.items() if regex.match(name)]
+        else:
+            values = [self._selections.get(pattern, False)]
+
+        if not values:
+            return False
+        if quantifier == "1":
+            return any(values)
+        return all(values)
 
 
 # ─── YARA Runner ──────────────────────────────────────────────────────────────
