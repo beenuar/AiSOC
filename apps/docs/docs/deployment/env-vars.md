@@ -141,6 +141,9 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `JAEGER_HOST` / `JAEGER_PORT` | `localhost` / `6831` | Jaeger agent endpoint (used when `OTEL_EXPORTER=jaeger`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP collector endpoint |
 | `OTEL_EXPORTER` | `otlp` | One of `otlp`, `jaeger`, `console` |
+| `AISOC_SSRF_ALLOWED_SCHEMES` | `http,https` | Comma-separated list of URL schemes allowed for outbound `http_request` and `notify` playbook steps. Anything else is rejected. |
+| `AISOC_SSRF_ALLOW_PRIVATE` | `false` | When `true`, lets playbook steps reach loopback / RFC1918 / link-local destinations. Leave off in production; enable only for self-hosted webhooks on a private network. |
+| `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
 
 ---
 

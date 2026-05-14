@@ -24,6 +24,7 @@ from typing import Any
 import httpx
 
 from .models import Playbook, PlaybookStep, StepCondition, StepType
+from .ssrf_guard import SSRFError, validate_outbound_url
 
 logger = logging.getLogger("aisoc.playbook.engine")
 
@@ -169,6 +170,12 @@ async def _handle_notify(step: PlaybookStep, context: dict[str, Any], http: http
         message = message.replace(f"{{{{{k}}}}}", str(v))
 
     if channel == "webhook" and url:
+        # SSRF guard: webhook URLs are author-controlled; reject loopback,
+        # cloud-metadata, and other unsafe destinations before dispatching.
+        try:
+            validate_outbound_url(url)
+        except SSRFError as exc:
+            raise SSRFError(f"notify step rejected: {exc}") from exc
         r = await http.post(url, json={"text": message}, timeout=step.timeout_seconds)
         return {"status": r.status_code}
     return {"channel": channel, "message": message, "delivered": False, "reason": "no url"}
@@ -179,6 +186,12 @@ async def _handle_http(step: PlaybookStep, context: dict[str, Any], http: httpx.
     url = step.params.get("url", "")
     body = step.params.get("body", {})
     headers = step.params.get("headers", {})
+    # SSRF guard: arbitrary HTTP calls from playbooks must not reach
+    # loopback, RFC1918, link-local, or cloud-metadata endpoints by default.
+    try:
+        validate_outbound_url(url)
+    except SSRFError as exc:
+        raise SSRFError(f"http step rejected: {exc}") from exc
     r = await http.request(method, url, json=body, headers=headers, timeout=step.timeout_seconds)
     return {"status": r.status_code, "body": r.text[:500]}
 

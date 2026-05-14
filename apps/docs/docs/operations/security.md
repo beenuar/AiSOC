@@ -161,6 +161,20 @@ For service-to-service traffic between the API, ingest, fusion, and agents, mTLS
 
 The ingest service exposes the public `/v1/ingest/batch` endpoint that connectors push into. It requires either a connector-scoped API key or a signed JWT with the `connector` role; raw events from unauthenticated callers are rejected at the gateway.
 
+## Playbook outbound traffic — SSRF guard
+
+Playbook `http_request` and `notify` steps run inside the agents service and can reach arbitrary URLs supplied by playbook authors. To keep this from being abused as a metadata-service or internal-network pivot, every outbound URL is validated by the SSRF guard before any socket is opened:
+
+- Only `http://` and `https://` are allowed by default (override with `AISOC_SSRF_ALLOWED_SCHEMES` if you genuinely need `https` only or an additional scheme).
+- URLs that embed credentials (`https://user:pass@host`) are rejected outright.
+- The hostname is resolved through `socket.getaddrinfo`; every resolved IP must be a global-unicast address. Loopback (`127.0.0.0/8`, `::1`), RFC1918 ranges, link-local, multicast, and the IETF reserved blocks are blocked.
+- Cloud metadata endpoints — `169.254.169.254`, `fd00:ec2::254`, `metadata.google.internal`, `metadata.azure.com`, `metadata`, `metadata.aws` — are blocked even if `AISOC_SSRF_ALLOW_PRIVATE=true`.
+- Operators can extend the deny list with `AISOC_SSRF_EXTRA_BLOCKED_HOSTS=internal-only.example.com,10.0.0.5`.
+
+If a playbook needs to reach a private webhook (Slack on a private network, an internal Jira, etc.), set `AISOC_SSRF_ALLOW_PRIVATE=true` **only** on the agents service and keep network-level egress controls in place. The metadata block list always applies.
+
+The guard is a single chokepoint at `services/agents/app/playbook/ssrf_guard.py`; both `_handle_http` and `_handle_notify` call it before the HTTP client makes any request. New action handlers that perform outbound HTTP should call `validate_outbound_url` first.
+
 ## Hardening checklist
 
 When you move from `pnpm aisoc:demo` to a production deployment, walk through this list:
