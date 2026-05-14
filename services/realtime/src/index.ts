@@ -75,12 +75,14 @@ log.info(
 
 // Build a single header value for /sse so we mirror the request's Origin only
 // when it's on the allow-list. Browsers reject `Access-Control-Allow-Origin: *`
-// when a cookie or `Authorization` header is in flight, so we can't blanket
-// star the SSE response anymore.
+// when a cookie or `Authorization` header is in flight, so we never echo `*`
+// from the SSE response — we always reflect the request's specific Origin
+// (or omit the header entirely if it's not allow-listed). The wildcard config
+// is dev-only and we refuse to boot in production with it (see above).
 function pickAllowedOrigin(req: express.Request): string | null {
   const origin = (req.headers.origin as string | undefined) || '';
   if (!origin) return null;
-  if (CORS_ORIGINS.includes('*')) return '*';
+  if (CORS_ORIGINS.includes('*')) return origin;
   return CORS_ORIGINS.includes(origin) ? origin : null;
 }
 
@@ -265,15 +267,15 @@ app.get('/sse', sseRateLimit, (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   // SSE responses bypass the cors() middleware for the streamed write path,
   // so mirror the request's Origin ourselves — but only if it's on the
-  // configured allow-list. Browsers reject `*` when a cookie is attached.
+  // configured allow-list. `pickAllowedOrigin` never returns `*`, so this
+  // header always names a specific origin and is safe to combine with
+  // `Access-Control-Allow-Credentials: true` when credentials are enabled.
   const allowedOrigin = pickAllowedOrigin(req);
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    if (allowedOrigin !== '*') {
-      res.setHeader('Vary', 'Origin');
-      if (CORS_ALLOW_CREDENTIALS) {
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
+    res.setHeader('Vary', 'Origin');
+    if (CORS_ALLOW_CREDENTIALS) {
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
   }
   res.flushHeaders();
