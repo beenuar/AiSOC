@@ -22,7 +22,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-
 from app.playbook import engine as engine_mod
 from app.playbook.engine import (
     PlaybookEngine,
@@ -34,7 +33,6 @@ from app.playbook.engine import (
     _to_float,
 )
 from app.playbook.models import Playbook, PlaybookStep, StepCondition, StepType
-
 
 # ---------------------------------------------------------------------------
 # _resolve_field
