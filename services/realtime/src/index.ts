@@ -73,16 +73,21 @@ log.info(
   'CORS configured',
 );
 
-// Build a single header value for /sse so we mirror the request's Origin only
-// when it's on the allow-list. Browsers reject `Access-Control-Allow-Origin: *`
-// when a cookie or `Authorization` header is in flight, so we never echo `*`
-// from the SSE response — we always reflect the request's specific Origin
-// (or omit the header entirely if it's not allow-listed). The wildcard config
-// is dev-only and we refuse to boot in production with it (see above).
+// Build a single header value for /sse. Two safe shapes only:
+//   - Allow-list match: reflect the request's specific Origin (and we may
+//     pair it with `Access-Control-Allow-Credentials: true` because the
+//     Origin came from a hardcoded allow-list, not from request headers).
+//   - Dev wildcard: emit the literal '*'. CORS_ALLOW_CREDENTIALS is false
+//     in this branch (see above), so browsers do not attach the auth
+//     cookie and `*` is safe.
+// We deliberately never reflect a user-supplied Origin from the wildcard
+// branch — doing so would be the canonical "CORS misconfiguration for
+// credentials transfer" sink that CodeQL flags, and depends on a runtime
+// boolean invariant that static analysis can't follow.
 function pickAllowedOrigin(req: express.Request): string | null {
+  if (CORS_ORIGINS.includes('*')) return '*';
   const origin = (req.headers.origin as string | undefined) || '';
   if (!origin) return null;
-  if (CORS_ORIGINS.includes('*')) return origin;
   return CORS_ORIGINS.includes(origin) ? origin : null;
 }
 
@@ -266,16 +271,19 @@ app.get('/sse', sseRateLimit, (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   // SSE responses bypass the cors() middleware for the streamed write path,
-  // so mirror the request's Origin ourselves — but only if it's on the
-  // configured allow-list. `pickAllowedOrigin` never returns `*`, so this
-  // header always names a specific origin and is safe to combine with
-  // `Access-Control-Allow-Credentials: true` when credentials are enabled.
+  // so set the CORS headers ourselves. `pickAllowedOrigin` returns either
+  // the literal '*' (dev wildcard, credentials always off) or an Origin
+  // value that already passed the hardcoded allow-list check — never a
+  // raw user-supplied Origin from the wildcard branch. That makes it safe
+  // to pair the reflected Origin with `Access-Control-Allow-Credentials`.
   const allowedOrigin = pickAllowedOrigin(req);
   if (allowedOrigin) {
     res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Vary', 'Origin');
-    if (CORS_ALLOW_CREDENTIALS) {
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    if (allowedOrigin !== '*') {
+      res.setHeader('Vary', 'Origin');
+      if (CORS_ALLOW_CREDENTIALS) {
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
     }
   }
   res.flushHeaders();
