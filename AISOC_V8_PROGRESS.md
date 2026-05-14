@@ -4,7 +4,7 @@
 > `AI_STACK_PLAN_PROGRESS.md`: `[ ]` → `[~]` (in flight) → `[x]` (shipped).
 > Each task tag (`T1.1` etc.) maps to the v8.0 plan handed to the eng team.
 
-**Branch**: `v8.0/agentic-soc-foundation`
+**Branch**: `v8.0/agentic-soc-foundation` (renamed mid-session from `v8.0/parallel-team-kickoff`; rename commit is `20bbb749`)
 **Started**: 2026-05-13
 **Coordinator**: parent agent (this conversation)
 **Mode**: 7-track parallel team, kicked off via background subagents
@@ -24,7 +24,7 @@ PR title: `v8.0 wave-1 shipped + wave-2 checkpoint`
 
 PR body: see `.pr-body-wave1.md` (gitignored — local working copy). Paste the full contents into the GitHub web UI when opening the PR.
 
-Status (refreshed 2026-05-14, 11:30 IST): wave-2 worker subagents errored mid-task; their checkpoint output committed as 11 per-track wip commits on top of the wave-1 base. Branch is now 12 commits ahead of `origin` after the previous push of `cd8e610c`. `gh` CLI is unauthenticated on this workstation, so the PR is **pending — paste the compare URL above into the browser** (PR body is in `.pr-body-wave1.md`).
+Status (refreshed 2026-05-14, 11:35 IST): wave-2 worker subagents errored mid-task; their checkpoint output is now committed as 11 per-track `(wip)` commits + 2 progress-doc commits on top of the wave-1 base. Branch was renamed to `v8.0/agentic-soc-foundation` mid-session and pushed to fork at HEAD `7c822a5f` (44 commits ahead of `upstream/main`). `gh` CLI is unauthenticated on this workstation, so the PR is **pending — paste the compare URL above into the browser** with the body from `.pr-body-wave1.md`.
 
 Wave-2 commits (most recent first, all SSH-signed, attributed Prince Sinha):
 - `ecf2ffe1` T7.3 three anchor blog posts (graph, latency, L0–L4) (wip)
