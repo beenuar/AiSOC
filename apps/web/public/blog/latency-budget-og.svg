@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="AiSOC blog: Latency budget for sub-minute investigation">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0d14"/>
+      <stop offset="1" stop-color="#0d1320"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.7" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <style>
+      .title { font: 700 60px/1.05 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ffffff; }
+      .titleAccent { fill: #93c5fd; }
+      .sub { font: 500 26px/1.4 ui-sans-serif, system-ui, sans-serif; fill: #94a3b8; }
+      .pill { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #93c5fd; letter-spacing: 0.08em; text-transform: uppercase; }
+      .author { font: 500 18px ui-sans-serif, system-ui, sans-serif; fill: #cbd5e1; }
+      .brand { font: 700 20px ui-sans-serif, system-ui, sans-serif; fill: #ffffff; letter-spacing: 0.04em; }
+      .laneLabel { font: 600 18px ui-sans-serif, system-ui, sans-serif; fill: #ffffff; text-anchor: middle; }
+      .laneTime { font: 500 15px ui-monospace, monospace; fill: #cbd5e1; text-anchor: middle; }
+      .axisLabel { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #64748b; text-anchor: middle; }
+      .target { font: 600 14px ui-sans-serif, system-ui, sans-serif; fill: #f59e0b; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <g transform="translate(80,80)">
+    <text class="brand">AiSOC · ENGINEERING BLOG</text>
+    <line x1="0" y1="20" x2="80" y2="20" stroke="#3b82f6" stroke-width="2"/>
+  </g>
+
+  <g transform="translate(80,170)">
+    <text class="pill">Architecture · Latency · Agents</text>
+  </g>
+
+  <g transform="translate(80,220)">
+    <text class="title" x="0" y="60">Latency budget for</text>
+    <text class="title" x="0" y="125">a <tspan class="titleAccent">sub-minute</tspan></text>
+    <text class="title" x="0" y="190">investigation.</text>
+  </g>
+
+  <g transform="translate(80,470)">
+    <text class="sub">5s context · 5s parallel · 10s LLM · 10s buffer.</text>
+  </g>
+
+  <g transform="translate(80,540)">
+    <text class="author">Prince Sinha · Senior Director, Innovations at Cyble</text>
+  </g>
+
+  <g transform="translate(660,160)">
+    <text x="220" y="0" class="laneLabel">30s p50 budget</text>
+
+    <g transform="translate(0,40)">
+      <rect x="0" y="0" width="440" height="160" rx="12" fill="#0a0d14" stroke="#1e293b" stroke-width="1"/>
+
+      <rect x="0" y="0" width="73" height="160" rx="12" fill="#1e3a8a" opacity="0.85"/>
+      <rect x="73" y="0" width="73" height="160" fill="#1d4ed8" opacity="0.85"/>
+      <rect x="146" y="0" width="147" height="160" fill="#2563eb" opacity="0.85"/>
+      <rect x="293" y="0" width="147" height="160" rx="12" fill="#3b82f6" opacity="0.55"/>
+
+      <text x="36" y="72" class="laneLabel">Context</text>
+      <text x="36" y="95" class="laneTime">5s</text>
+
+      <text x="109" y="72" class="laneLabel">Parallel</text>
+      <text x="109" y="95" class="laneTime">5s</text>
+
+      <text x="220" y="72" class="laneLabel">LLM reasoning</text>
+      <text x="220" y="95" class="laneTime">10s</text>
+
+      <text x="367" y="72" class="laneLabel">Buffer</text>
+      <text x="367" y="95" class="laneTime">10s</text>
+    </g>
+
+    <g transform="translate(0,220)">
+      <line x1="0" y1="0" x2="440" y2="0" stroke="#334155" stroke-width="1"/>
+      <text x="0" y="22" class="axisLabel" text-anchor="start">0s</text>
+      <text x="73" y="22" class="axisLabel">5</text>
+      <text x="146" y="22" class="axisLabel">10</text>
+      <text x="293" y="22" class="axisLabel">20</text>
+      <text x="440" y="22" class="axisLabel" text-anchor="end">30s</text>
+    </g>
+
+    <g transform="translate(0,275)">
+      <line x1="0" y1="6" x2="14" y2="6" stroke="#3b82f6" stroke-width="3"/>
+      <text x="22" y="11" class="target">north star: p50 sub-minute · p95 sub-2-min</text>
+    </g>
+  </g>
+</svg>

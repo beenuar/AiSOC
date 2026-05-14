@@ -1,0 +1,350 @@
+---
+title: "Latency budget for sub-minute investigation"
+slug: "latency-budget"
+date: "2026-05-13"
+author: "Prince Sinha, Senior Director, Innovations at Cyble"
+tags:
+  - architecture
+  - latency
+  - agents
+description: "Sub-minute end-to-end means a 30-second p50 budget split four ways: 5s context bundle, 5s parallel sub-agents, 10s LLM reasoning, 10s buffer. Here is how the AiSOC orchestrator spends it, what blows through it, and the substrate-level numbers behind the published north-star target."
+og_image: "/blog/latency-budget-og.svg"
+---
+
+The operator's question we get most often, after they've watched a demo,
+is one number: _how long?_ Not "how good", not "how autonomous", not
+"how much per investigation". How long, from alert ingest to verdict
+out, including the part where the LLM stops thinking and the response
+plane starts queuing.
+
+Our public north-star is **p50 sub-minute, p95 sub-two-minute** on the
+200-incident eval. That target is on the
+[benchmark page](/benchmark) under the live-eval (wet) section, with
+the provenance footer that pins it to a commit SHA and a dataset SHA.
+This post is the architecture story behind that number: how the
+30-second median budget is allocated, where it goes, what blows through
+it, and which parts are still in flight as of v8.0.
+
+Quick framing first. There are two latencies that get conflated in
+agentic-SOC marketing:
+
+- **Time-to-notify.** Alert lands → first Slack message in the
+  on-call channel. That's a sub-second target on most platforms; it
+  doesn't require an agent at all.
+- **Time-to-verdict.** Alert lands → agent has reached a defended
+  conclusion (true positive / false positive / escalate / contain),
+  with reasoning traceable in the investigation ledger and at least
+  one queued or fired action.
+
+This post is about time-to-verdict. Time-to-notify is a metric for
+the connector layer, not the agent. Conflating them is the second-most
+common mistake I see in vendor numbers; the first is reporting
+substrate self-checks as live-agent latency, and we've written about
+that in
+[the previous post in this series](/blog/graph-at-ingest#the-substrate-eval--how-we-measure-the-layer-beneath-the-agent).
+
+## The 30-second budget, drawn
+
+The budget is four blocks. They are not strict — some investigations
+will spend more on the LLM and less on the bundle, and vice versa —
+but the block sizes are the engineering targets we built each
+subsystem to.
+
+<div className="rounded-2xl border border-white/10 bg-[#0d1320] p-4 md:p-6">
+  <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="30-second investigation budget split four ways">
+    <defs>
+      <style>
+        {`.lane { fill: #0a0d14; stroke: #60a5fa; stroke-width: 1; opacity: 0.95; }
+          .laneCtx { fill: #1e3a8a; }
+          .laneSub { fill: #1d4ed8; }
+          .laneLLM { fill: #2563eb; }
+          .laneBuf { fill: #3b82f6; opacity: 0.55; }
+          .label { fill: #e2e8f0; font: 12px ui-sans-serif, system-ui; }
+          .labelMono { fill: #93c5fd; font: 11px ui-monospace; }
+          .axisTick { stroke: #334155; stroke-width: 1; }
+          .axisLabel { fill: #64748b; font: 10px ui-sans-serif; text-anchor: middle; }
+          .legend { fill: #94a3b8; font: 11px ui-sans-serif; }
+          .target { stroke: #f59e0b; stroke-width: 1; stroke-dasharray: 4 3; fill: none; }`}
+      </style>
+    </defs>
+
+    {/* axis */}
+    <line x1="40" y1="160" x2="700" y2="160" className="axisTick" />
+    {[0, 5, 10, 15, 20, 25, 30].map((s, i) => (
+      <g key={i}>
+        <line x1={40 + (s / 30) * 660} y1="155" x2={40 + (s / 30) * 660} y2="165" className="axisTick" />
+        <text x={40 + (s / 30) * 660} y="180" className="axisLabel">{s}s</text>
+      </g>
+    ))}
+    <text x="370" y="205" className="legend" textAnchor="middle">end-to-end p50 budget · alert ingest → defended verdict</text>
+
+    {/* lanes */}
+    <rect x="40" y="60" width={(5 / 30) * 660} height="80" className="lane laneCtx" />
+    <text x={40 + ((5 / 30) * 660) / 2} y="100" className="label" textAnchor="middle">ContextBundle</text>
+    <text x={40 + ((5 / 30) * 660) / 2} y="118" className="labelMono" textAnchor="middle">5s · 1 query</text>
+    <text x={40 + ((5 / 30) * 660) / 2} y="50" className="legend" textAnchor="middle">T2.1</text>
+
+    <rect x={40 + (5 / 30) * 660} y="60" width={(5 / 30) * 660} height="80" className="lane laneSub" />
+    <text x={40 + (5 / 30) * 660 + ((5 / 30) * 660) / 2} y="100" className="label" textAnchor="middle">Parallel sub-agents</text>
+    <text x={40 + (5 / 30) * 660 + ((5 / 30) * 660) / 2} y="118" className="labelMono" textAnchor="middle">5s · 4 in flight</text>
+    <text x={40 + (5 / 30) * 660 + ((5 / 30) * 660) / 2} y="50" className="legend" textAnchor="middle">T2.2</text>
+
+    <rect x={40 + (10 / 30) * 660} y="60" width={(10 / 30) * 660} height="80" className="lane laneLLM" />
+    <text x={40 + (10 / 30) * 660 + ((10 / 30) * 660) / 2} y="100" className="label" textAnchor="middle">LLM reasoning</text>
+    <text x={40 + (10 / 30) * 660 + ((10 / 30) * 660) / 2} y="118" className="labelMono" textAnchor="middle">10s · ≤6k tokens</text>
+    <text x={40 + (10 / 30) * 660 + ((10 / 30) * 660) / 2} y="50" className="legend" textAnchor="middle">T2.3</text>
+
+    <rect x={40 + (20 / 30) * 660} y="60" width={(10 / 30) * 660} height="80" className="lane laneBuf" />
+    <text x={40 + (20 / 30) * 660 + ((10 / 30) * 660) / 2} y="100" className="label" textAnchor="middle">Buffer</text>
+    <text x={40 + (20 / 30) * 660 + ((10 / 30) * 660) / 2} y="118" className="labelMono" textAnchor="middle">10s · network · DB · gate</text>
+
+    {/* target line */}
+    <line x1={40 + (30 / 30) * 660} y1="40" x2={40 + (30 / 30) * 660} y2="160" className="target" />
+    <text x={40 + (30 / 30) * 660 - 6} y="36" className="legend" textAnchor="end">p50 target · 30s</text>
+  </svg>
+</div>
+
+Five seconds of context. Five seconds of parallel sub-agent fan-out.
+Ten seconds of LLM reasoning. Ten seconds of buffer for everything
+that isn't the model — the gate, the action queue, the network round
+trips, the DB writes, the WebSocket update to the analyst console.
+Total: thirty seconds at p50.
+
+The next four sections are one block each.
+
+## Block 1 — ContextBundle (5s, T2.1)
+
+The single most expensive thing an agent does, on a row-store SIEM, is
+the first round of context-gathering. Six queries, six round trips,
+six LLM read-and-decide cycles before the model has its hands on a
+coherent view of what's around the alert. We covered the
+graph-at-ingest case for this in the
+[previous post](/blog/graph-at-ingest#what-the-graph-enables-for-the-agent);
+here it pays off in latency.
+
+T2.1 is the **ContextBundle** — a single Cypher call that returns a
+typed subgraph around the alert. The interface is small on purpose:
+
+```
+ContextBundle(alert_id, depth=2, ttl_seconds=300)
+  → {
+      alert: Alert,
+      subjects: [Identity | Host | Resource],
+      neighbours_by_type: Map<Label, [Node]>,
+      recent_events_30m: [Event],
+      open_incidents_in_neighbourhood: [Incident],
+      action_history_for_subjects: [Action]
+    }
+```
+
+The 5-second target is the wall-clock from the agent invoking the
+bundle to the bundle being shaped, ranked, and serialised onto the
+agent's working buffer. Inside that 5s the breakdown is roughly:
+
+- **Cypher round-trip** to Neo4j with the typed traversal: median 80–
+  200 ms, p95 below 500 ms on a warm cache. The graph schema is
+  small enough (17 labels, 14 edges — covered in the
+  [graph post](/blog/graph-at-ingest#the-schema-drawn)) that the
+  query planner picks the obvious join order without help.
+- **Ranking**. The bundle ships with a ranker that drops nodes the
+  agent provably won't read this turn — stale logins outside the
+  observation window, identities with zero recent activity, hosts
+  outside the asserted blast zone. The ranker is deterministic and
+  runs in process; budget here is sub-100 ms.
+- **Serialisation** into the agent's input contract (see Block 3) —
+  measured in tens of milliseconds.
+
+The remaining headroom in the 5-second block is for retry budget on
+cold-cache misses, for Neo4j read-replica failover when we run multi-
+zone, and for the rare case where the bundle's first hop returns a
+giant fan-out and the ranker has more work to do.
+
+Substrate eval observation: on the published 200-incident harness, the
+in-harness fusion grouper assembles the equivalent `(node, edge)`
+neighbourhood in a median 0.8 ms per incident. **That number is a
+substrate self-check**, not a wet-eval ContextBundle latency — see the
+benchmark page for the wet-eval p50/p95 we publish for the live agent.
+The substrate number is included here because it bounds the
+algorithmic floor: the deterministic part of the bundle is not where
+the budget goes.
+
+## Block 2 — Parallel sub-agents (5s, T2.2)
+
+With the ContextBundle on the working buffer, the orchestrator
+fans out to the sub-capabilities of `TriageAgent`. The four AiSOC
+agents — Detect, Triage, Hunt, Respond — are documented in the
+[four-agent reference](/architecture/agents) (covered in the
+[architecture doc](https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/architecture/agents.md));
+Triage is the first agent every alert meets, and inside it the
+phishing, identity, cloud, and insider-threat capabilities run in
+parallel where the ContextBundle's typed shape allows.
+
+Parallel doesn't mean "four LLM calls in flight"; it means "four
+deterministic enrichers in flight, then one model call in Block 3
+that reads all four results". The work in Block 2 is mostly:
+
+- **IOC enrichment.** Hit the threat-intel cache for any
+  IPs/domains/hashes in the bundle. Sub-100 ms per hit, parallelised
+  per IOC. Cache hits dominate; cold-cache fetches are budgeted
+  against the 5-second block.
+- **Identity context fetch.** Group memberships, role assignments,
+  recent privileged actions for the subject identity. Read-only
+  Cypher on the same graph; sub-200 ms.
+- **Asset posture fetch.** EDR posture, recent CVE matches, asset
+  criticality from the inventory connector if one is wired. This is
+  the slowest of the four because the inventory connector is often
+  off-system; it's the one we budget the most retry against.
+- **Playbook history**. Has a similar `(action, target)` been fired
+  before? Was it correct? This is a graph walk from the
+  `Incident` node back through historical `Action` nodes; sub-100 ms.
+
+The point of doing these four in parallel is not the wall-clock
+saving in the deterministic layer — that's already small. The point
+is to get all four results onto the agent's working buffer
+**before** the first LLM call, so the model can reason once over a
+complete picture instead of asking the orchestrator for a follow-up.
+The follow-up is what destroys the budget; the parallel fan-out is
+how we remove it.
+
+T2.2 — the LangGraph parallel topology — is the part of the
+orchestrator that makes this fan-out a single graph node rather than
+a hand-rolled `asyncio.gather`. As of v8.0 it's wired for Triage's
+four sub-capabilities and is the topology Detect/Hunt/Respond will
+adopt as their internal capability surface grows.
+
+## Block 3 — LLM reasoning (10s, T2.3)
+
+The LLM call is the only part of the budget where we are not in
+control of the wall clock. We are, however, in control of the input
+shape and the output shape, and that's what T2.3 — the **LLM-input
+contract** — exists for.
+
+The input contract is a typed structure built from the
+ContextBundle plus the four parallel enrichments. The shape is:
+
+```
+LLMInput(
+  alert: AlertSummary,
+  evidence: EvidenceTable,           # ranked, capped
+  open_questions: [Question],        # from prior turn, if any
+  prior_verdict: Verdict | null,
+  blast_radius_table: BlastRadius,
+  available_actions: [ActionOption], # gated by tier (see post 3)
+)
+```
+
+Three things matter about this contract:
+
+1. **It is bounded.** The total input is capped at ~6,000 tokens
+   regardless of how much context the bundle returned. The cap is
+   enforced by the ranker — on the rare case where the bundle returns
+   more than the cap, the ranker drops the lowest-signal evidence
+   and adds a structured `truncation_note` to the input. The model
+   sees an honest representation of "we cut N entries"; it doesn't
+   silently get a clipped buffer.
+2. **It is typed.** Every field has a Pydantic schema. The schema is
+   regenerated and gated in CI exactly the same way the
+   [graph schema is gated](/blog/graph-at-ingest#what-graph-at-ingest-actually-means).
+   A breaking change to the input contract fails the build.
+3. **The output contract is just as rigid.** The model returns a
+   `LLMOutput` with a verdict, a confidence score, a list of
+   recommended actions (each tagged with a blast-radius class for
+   the gate to evaluate), and a structured `reasoning_trace` that
+   lands in the investigation ledger.
+
+Within the 10-second block, the wall-clock split is roughly:
+1–2s of orchestrator-side serialisation and validation, 5–8s of
+provider call, 1–2s of output-side validation and write to the
+ledger. We budget for 10s and report against the published
+north-star — the wet-eval p50/p95 latency and the per-investigation
+token + USD numbers are on the
+[benchmark page](/benchmark#performance-tokens-and-cost), with the
+provenance commit SHA and dataset SHA pinned in the footer.
+
+## Block 4 — Buffer (10s, everything else)
+
+The remaining 10s buys us margin against the things you can't
+optimise away: a slow connector network call, a transient
+read-replica failover, a brief queue back-up at the gate, an
+analyst console WebSocket reconnect. We measure the buffer as a
+distribution rather than a point: on a clean run the buffer is
+sub-second, but at p95 it's where the unfair-trial events happen and
+we want the budget to absorb them without breaking the published
+wet-eval target.
+
+The most common consumer of buffer is the **gate evaluation** itself,
+covered in the
+[L0–L4 maturity post](/blog/automation-maturity#how-the-gate-evaluates-an-action).
+The gate is a single function call — sub-millisecond on warm caches —
+but the actions queued through it can spend seconds on the connector
+side (the firewall, the IdP, the EDR), and those spend the buffer.
+That's by design; the gate's job is to be fast and predictable, not
+to wait for the side effect to land.
+
+## What blows the budget
+
+In production, three things break the budget more often than the
+LLM does:
+
+1. **Cold-cache ContextBundle.** If the alert is on an asset the
+   graph has never seen before, the bundle's first hop is a cold
+   read and the ranker has nothing to cut. p99 here is 8–12 seconds.
+   The mitigation is to warm the cache from the
+   `services/ingest` layer when a new asset shows up; that work is
+   ongoing.
+2. **Off-system inventory connector.** The asset-posture fetch in
+   Block 2 calls the inventory connector synchronously. If the
+   inventory is on a slow tenant network, the parallel block stalls
+   until the slowest call returns. The mitigation — a per-call timeout
+   that surfaces a `partial_evidence` flag to the model — is in
+   place; the model is trained (via the input contract) to reason
+   over partial evidence rather than ask a follow-up.
+3. **LLM provider tail latency.** Every provider has a long tail. We
+   measure the wet-eval p99 honestly on the benchmark page and we
+   route to a fallback provider if the primary's p99 climbs above
+   the SLA budget. The fallback is configurable per tenant; the
+   sovereign-deployment story for that lives on the
+   [/sovereign page](/sovereign) and includes the local-Ollama path
+   for tenants that want zero external calls.
+
+The thing that doesn't blow the budget, in our measurements, is the
+gate. It's the easiest part of the loop to make fast — a function
+call against a small in-memory tier table — and it's the one where
+the value of being fast is the most operationally important.
+Operators want a deterministic answer to "what is the agent allowed
+to do right now"; the gate gives them that in microseconds.
+
+## How to measure your own
+
+If you're building toward a sub-minute agentic SOC, two
+practitioner notes:
+
+- **Pick a substrate before you pick a model.** Latency budgets are
+  bounded by the substrate, not by the model. The fastest model in
+  the world won't save you from a six-query context-gathering pass;
+  the substrate decision in the
+  [graph-at-ingest post](/blog/graph-at-ingest) is upstream of every
+  number in this post.
+- **Publish substrate vs wet separately.** The temptation, when the
+  numbers are good, is to pick the prettier of the two and lead
+  with it. Don't. Operators will figure out within a quarter that
+  the number they were sold doesn't match the number they
+  measure, and the trust falls off a cliff. The
+  [benchmark page](/benchmark#whats-substrate-vs-wet) is the AiSOC
+  position on this — substrate self-checks for the engineering team,
+  wet-eval numbers for the operator, never mixed.
+
+The next post in this series — **[L0 → L4 SOC automation
+maturity](/blog/automation-maturity)** — is the post-verdict story:
+the agent has a defended conclusion in 30 seconds, what is it allowed
+to do at the end? That's where the latency budget meets the trust
+model, and where most of the operator-facing decisions about
+autonomous response actually live.
+
+The architecture reference for the four-agent surface is at
+[`apps/docs/docs/architecture/agents.md`](https://github.com/beenuar/AiSOC/blob/main/apps/docs/docs/architecture/agents.md).
+The orchestrator code path that implements the budget lives in
+`services/agents/app/orchestrator/`; pull requests against the
+ContextBundle ranker, the parallel topology, or the input contract
+are very welcome — those three pieces are where the next
+order-of-magnitude wall-clock improvement lives.
