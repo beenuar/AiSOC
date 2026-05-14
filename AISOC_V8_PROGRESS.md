@@ -4,7 +4,7 @@
 > `AI_STACK_PLAN_PROGRESS.md`: `[ ]` → `[~]` (in flight) → `[x]` (shipped).
 > Each task tag (`T1.1` etc.) maps to the v8.0 plan handed to the eng team.
 
-**Branch**: `v8.0/parallel-team-kickoff`
+**Branch**: `v8.0/agentic-soc-foundation`
 **Started**: 2026-05-13
 **Coordinator**: parent agent (this conversation)
 **Mode**: 7-track parallel team, kicked off via background subagents
@@ -18,13 +18,27 @@
 Work lands on the fork; the integration PR is raised against `upstream/main`.
 
 PR compare URL (click to finalise on GitHub):
-`https://github.com/beenuar/AiSOC/compare/main...prince30121:AiSOC:v8.0/parallel-team-kickoff?expand=1`
+`https://github.com/beenuar/AiSOC/compare/main...prince30121:AiSOC:v8.0/agentic-soc-foundation?expand=1`
 
-PR title: `v8.0 wave-1 + wave-2 (in progress): graph at ingest, four-agent rebrand, /hunt, 6 connectors + wave-2 expansion`
+PR title: `v8.0 wave-1 shipped + wave-2 checkpoint`
 
 PR body: see `.pr-body-wave1.md` (gitignored — local working copy). Paste the full contents into the GitHub web UI when opening the PR.
 
-Status (refreshed 2026-05-14): branch pushed to fork; HEAD `4ff1b7f4` includes the first wave-2 schema commit (T3.2 EFFECTIVE_PERMISSION edge). `gh` CLI is unauthenticated on this workstation, so the PR is **pending — paste the compare URL above into the browser** (PR body is in `.pr-body-wave1.md`). Several other wave-2 subagents are still in flight on the working tree; their commits will land in follow-on PRs.
+Status (refreshed 2026-05-14, 11:30 IST): wave-2 worker subagents errored mid-task; their checkpoint output committed as 11 per-track wip commits on top of the wave-1 base. Branch is now 12 commits ahead of `origin` after the previous push of `cd8e610c`. `gh` CLI is unauthenticated on this workstation, so the PR is **pending — paste the compare URL above into the browser** (PR body is in `.pr-body-wave1.md`).
+
+Wave-2 commits (most recent first, all SSH-signed, attributed Prince Sinha):
+- `ecf2ffe1` T7.3 three anchor blog posts (graph, latency, L0–L4) (wip)
+- `6dba7234` T5.4 public benchmark scoreboard + bench page polish (wip)
+- `700a9452` T5.5 wet-eval weekly CI workflow + secrets doc (wip)
+- `23d92541` T5.3 fidelity benchmark on public datasets (wip)
+- `ee52d642` T4 wave-2 — Cloudflare ZT, Sysdig, Vault, Snowflake, OCI, Sublime, Abnormal, Box, Dropbox, Datadog (wip)
+- `57f93a98` T3.6 Block Kit + Adaptive Cards + email fallback (wip)
+- `0efe3da5` T3.5 business-context rule engine + Monaco editor (wip)
+- `8df637b9` T3.3 attack-chain timeline + ranking (wip)
+- `a6ce3342` T3.2 effective permissions resolver (AWS done, others scaffolded) (wip)
+- `87c151a7` T2.3 LLM input contract — fail-closed validator (wip)
+- `5a0d179f` T1.2 config snapshots — :CONFIGURED_AS {ts} edges (wip)
+- `2c7a66c1` T2.1 pre-fetched ContextBundle
 
 ### Commit signing
 
@@ -40,26 +54,26 @@ Status (refreshed 2026-05-14): branch pushed to fork; HEAD `4ff1b7f4` includes t
 
 ### Track 1 — Graph at ingest
 - [~] T1.1 Ingest-side graph writer (P0, L) — scaffold landed: schema v1.0 + Neo4j writer + extractors for `aws_security_hub` / `github_audit` / `okta_system_log` / `kubernetes_audit` + generic fallback for the other 10 source types + `security.graph_updates` Kafka topic + fan-out wiring (failures NEVER block fusion); 16 Go unit tests green; Python integration test stubbed (`services/agents/tests/test_graph_freshness.py`, `pytest -m integration`). 360-event corpus + remaining connector mappings deferred to T1.2 / T4 wave.
-- [~] T1.2 Config snapshots (P0, M) → T1.1
+- [~] T1.2 Config snapshots (P0, M) → T1.1 — partial / wip — `5a0d179f` (`:CONFIGURED_AS {ts}` edges + connector overrides for AWS / GitHub / Okta; Azure + GCP overrides pending)
 - [x] T1.3 Publish graph schema (P0, S) → T1.1
 - [ ] T1.4 Real-time graph-update WebSocket (P1, S) → T1.1
 
 ### Track 2 — Agent reasoning: latency + cost
-- [~] T2.1 Pre-fetched context bundle (P0, M) → T1.1
+- [~] T2.1 Pre-fetched context bundle (P0, M) → T1.1 — partial / wip — `2c7a66c1` (ContextBundle dataclass + parallel pre-fetch from graph/RAG/threat-intel; integration into LangGraph pending T2.2)
 - [ ] T2.2 LangGraph parallel topology (P0, M) → T2.1
-- [~] T2.3 LLM-input contract (P0, M) → T2.1
+- [~] T2.3 LLM-input contract (P0, M) → T2.1 — partial / wip — `87c151a7` (fail-closed Pydantic validator on tool input/output; wiring into all agents pending)
 - [x] T2.4 Token + USD eval telemetry (P0, S)
 - [x] T2.5 Four-agent brand consolidation (P0, S)
 
 ### Track 3 — UI
 - [x] T3.1 SOC Insights dashboard (P1, M) → T2.4
-- [~] T3.2 Effective Permissions (P0, L) → T1.1
-- [~] T3.3 Attack Chains (P0, L) → T1.1
+- [~] T3.2 Effective Permissions (P0, L) → T1.1 — partial / wip — `4ff1b7f4` (graph schema edge) + `a6ce3342` (resolver — AWS done, Azure / GCP / Okta / Google Workspace scaffolded; Cytoscape UI pending)
+- [~] T3.3 Attack Chains (P0, L) → T1.1 — partial / wip — `8df637b9` (timeline ranking service + `041_attack_chains.sql` migration + `/v1/cases/{id}/attack-chain` endpoint; UI pending)
 - [~] T3.4 /hunt NL surface (P0, S-M) — endpoints/UI/redirect shipped; scheduler is feature-flagged off by default (`AISOC_HUNT_SCHEDULER_ENABLED=0`) with execution stub pending real ES|QL runner wiring
-- [~] T3.5 Business Context Rules (P1, M)
-- [~] T3.6 Slack/Teams Block Kit approvals (P1, M)
-- [ ] T3.7 NL → playbook generator (P1, M) → T3.4
-- [ ] T3.8 Design system v2 + Storybook (P1, M)
+- [~] T3.5 Business Context Rules (P1, M) — partial / wip — `0efe3da5` (rule engine + Monaco editor scaffold; eval engine + persistence pending)
+- [~] T3.6 Slack/Teams Block Kit approvals (P1, M) — partial / wip — `57f93a98` (Block Kit + Adaptive Cards + email fallback + HMAC verify + audit/timeout services)
+- [~] T3.7 NL → playbook generator (P1, M) → T3.4 — partial / wip (covered alongside T3.5 in `0efe3da5`; schema-validation retry loop pending)
+- [~] T3.8 Design system v2 + Storybook (P1, M) — partial / wip (Storybook scaffold landed with T3.6 commit; full token sweep pending)
 
 ### Track 4 — Connector wave (15 new)
 - [~] T4.1 Cloudflare WAF + Zero Trust (M)
@@ -67,7 +81,7 @@ Status (refreshed 2026-05-14): branch pushed to fork; HEAD `4ff1b7f4` includes t
 - [x] T4.3 Torq (S)
 - [~] T4.4 Sublime Security (M)
 - [~] T4.5 Abnormal Security (M)
-- [ ] T4.6 Lacework — policy violations stream (S, extend)
+- [~] T4.6 Lacework — policy violations stream (S, extend) — partial / wip — extension landed in `ee52d642` (`_normalize_policy` for policy-violation events)
 - [~] T4.7 Sysdig (M)
 - [x] T4.8 Falco (S)
 - [~] T4.9 HashiCorp Vault audit (M)
@@ -118,7 +132,7 @@ These independent tasks fire concurrently as background subagents:
 
 ## Coordination notes
 
-- **Branch model**: every subagent commits to `v8.0/parallel-team-kickoff`. Conflicts resolved by the coordinator at merge time.
+- **Branch model**: every subagent commits to `v8.0/agentic-soc-foundation`. Conflicts resolved by the coordinator at merge time.
 - **Push target**: `origin` (fork at `prince30121/AiSOC`).
 - **PR target**: `upstream/main` (`beenuar/AiSOC:main`).
 - **No secrets**: no API keys, tokens, or credentials committed (workspace rule).
@@ -129,7 +143,7 @@ These independent tasks fire concurrently as background subagents:
 
 ## Wave-1 summary
 
-- **29 commits** on `v8.0/parallel-team-kickoff` since `upstream/main`
+- **29 commits** on `v8.0/agentic-soc-foundation` since `upstream/main`
 - **12 of 12** subagents finished (10 `[x]` shipped, 2 `[~]` scaffold-landed: T1.1 graph writer foundation, T7.1 IDE extension scaffold)
 - **0 secrets** committed (workspace rule)
 - **0 competitor names** introduced (workspace rule)
