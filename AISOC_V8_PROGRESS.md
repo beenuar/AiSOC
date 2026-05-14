@@ -40,50 +40,50 @@ Status (refreshed 2026-05-14): branch pushed to fork; HEAD `4ff1b7f4` includes t
 
 ### Track 1 — Graph at ingest
 - [~] T1.1 Ingest-side graph writer (P0, L) — scaffold landed: schema v1.0 + Neo4j writer + extractors for `aws_security_hub` / `github_audit` / `okta_system_log` / `kubernetes_audit` + generic fallback for the other 10 source types + `security.graph_updates` Kafka topic + fan-out wiring (failures NEVER block fusion); 16 Go unit tests green; Python integration test stubbed (`services/agents/tests/test_graph_freshness.py`, `pytest -m integration`). 360-event corpus + remaining connector mappings deferred to T1.2 / T4 wave.
-- [ ] T1.2 Config snapshots (P0, M) → T1.1
+- [~] T1.2 Config snapshots (P0, M) → T1.1
 - [x] T1.3 Publish graph schema (P0, S) → T1.1
 - [ ] T1.4 Real-time graph-update WebSocket (P1, S) → T1.1
 
 ### Track 2 — Agent reasoning: latency + cost
-- [ ] T2.1 Pre-fetched context bundle (P0, M) → T1.1
+- [~] T2.1 Pre-fetched context bundle (P0, M) → T1.1
 - [ ] T2.2 LangGraph parallel topology (P0, M) → T2.1
-- [ ] T2.3 LLM-input contract (P0, M) → T2.1
+- [~] T2.3 LLM-input contract (P0, M) → T2.1
 - [x] T2.4 Token + USD eval telemetry (P0, S)
 - [x] T2.5 Four-agent brand consolidation (P0, S)
 
 ### Track 3 — UI
 - [x] T3.1 SOC Insights dashboard (P1, M) → T2.4
-- [ ] T3.2 Effective Permissions (P0, L) → T1.1
-- [ ] T3.3 Attack Chains (P0, L) → T1.1
+- [~] T3.2 Effective Permissions (P0, L) → T1.1
+- [~] T3.3 Attack Chains (P0, L) → T1.1
 - [~] T3.4 /hunt NL surface (P0, S-M) — endpoints/UI/redirect shipped; scheduler is feature-flagged off by default (`AISOC_HUNT_SCHEDULER_ENABLED=0`) with execution stub pending real ES|QL runner wiring
-- [ ] T3.5 Business Context Rules (P1, M)
-- [ ] T3.6 Slack/Teams Block Kit approvals (P1, M)
+- [~] T3.5 Business Context Rules (P1, M)
+- [~] T3.6 Slack/Teams Block Kit approvals (P1, M)
 - [ ] T3.7 NL → playbook generator (P1, M) → T3.4
 - [ ] T3.8 Design system v2 + Storybook (P1, M)
 
 ### Track 4 — Connector wave (15 new)
-- [ ] T4.1 Cloudflare WAF + Zero Trust (M)
+- [~] T4.1 Cloudflare WAF + Zero Trust (M)
 - [x] T4.2 Tines (S)
 - [x] T4.3 Torq (S)
-- [ ] T4.4 Sublime Security (M)
-- [ ] T4.5 Abnormal Security (M)
+- [~] T4.4 Sublime Security (M)
+- [~] T4.5 Abnormal Security (M)
 - [ ] T4.6 Lacework — policy violations stream (S, extend)
-- [ ] T4.7 Sysdig (M)
+- [~] T4.7 Sysdig (M)
 - [x] T4.8 Falco (S)
-- [ ] T4.9 HashiCorp Vault audit (M)
+- [~] T4.9 HashiCorp Vault audit (M)
 - [x] T4.10 PagerDuty / Opsgenie (S)
 - [x] T4.11 Atlassian Confluence audit (S)
-- [ ] T4.12 Box / Dropbox audit (M)
-- [ ] T4.13 Datadog logs + APM (M)
-- [ ] T4.14 Snowflake audit (M)
-- [ ] T4.15 OCI (Oracle Cloud) (M)
+- [~] T4.12 Box / Dropbox audit (M)
+- [~] T4.13 Datadog logs + APM (M)
+- [~] T4.14 Snowflake audit (M)
+- [~] T4.15 OCI (Oracle Cloud) (M)
 
 ### Track 5 — Public benchmark + eval extensions
 - [x] T5.1 Speed + token + USD published (P0, S) → T2.4
 - [x] T5.2 Methodology page (P0, S) → T5.1
-- [ ] T5.3 Public-dataset fidelity benchmark (P1, M)
-- [ ] T5.4 Public scoreboard page (P1, M) → T5.1
-- [ ] T5.5 Wet-eval weekly CI job (P1, S) → T2.4
+- [~] T5.3 Public-dataset fidelity benchmark (P1, M)
+- [~] T5.4 Public scoreboard page (P1, M) → T5.1
+- [~] T5.5 Wet-eval weekly CI job (P1, S) → T2.4
 
 ### Track 6 — Hosted SaaS + GTM surface
 - [ ] T6.1 app.aisoc.dev managed waitlist (P0, L) → T1.1, T2.2, T3.2, T3.3
@@ -94,7 +94,7 @@ Status (refreshed 2026-05-14): branch pushed to fork; HEAD `4ff1b7f4` includes t
 ### Track 7 — Narrative + IDE-driven SOC
 - [~] T7.1 Cursor extension (P0, M) — scaffold landed at `services/mcp/cursor-extension/`; marketplace publish deferred
 - [x] T7.2 L0–L4 white paper (P1, S)
-- [ ] T7.3 Three anchor blog posts (P1, S) → T5.1, T7.1
+- [~] T7.3 Three anchor blog posts (P1, S) → T5.1, T7.1
 
 ---
 
