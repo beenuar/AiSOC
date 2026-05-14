@@ -56,9 +56,12 @@ from app.core.logging import configure_logging
 from app.interactions import (
     APPROVE_ACTION_ID,
     DENY_ACTION_ID,
+    NEED_INFO_ACTION_ID,
     handle_action_decision,
 )
 from app.services.aisoc_clients import AisocActionsClient, AisocApiClient
+from app.services.approval_audit import StructlogAuditSink
+from app.services.approval_timeout import ApprovalTimeoutScheduler
 
 # Configure structlog before anything else so module-level loggers
 # (httpx, slack_bolt, …) inherit the JSON renderer.
@@ -156,6 +159,17 @@ def _build_bolt_app(api_client: AisocApiClient, actions_client: AisocActionsClie
             actions_client=actions_client,
         )
 
+    # ── Interactive: need-info -----------------------------------------------
+    @bolt.action(NEED_INFO_ACTION_ID)
+    async def _on_need_info(ack, body, respond):
+        await ack()
+        await _route_action_decision(
+            event_action_id=NEED_INFO_ACTION_ID,
+            body=body,
+            respond=respond,
+            actions_client=actions_client,
+        )
+
     # ── Interactive: open-case link ------------------------------------------
     # Pure URL buttons still emit a block_actions payload that Bolt would
     # otherwise log a "no listener" warning for. Acking quietly keeps
@@ -191,6 +205,7 @@ async def _route_action_decision(
     payload) so handlers can never raise back into Bolt.
     """
     user_id = (body.get("user") or {}).get("id") or "unknown"
+    channel_id = (body.get("channel") or {}).get("id") or None
     actions = body.get("actions") or []
     button_value = ""
     if actions and isinstance(actions, list):
@@ -203,6 +218,9 @@ async def _route_action_decision(
             button_value=button_value,
             user_id=user_id,
             actions_client=actions_client,
+            audit_sink=StructlogAuditSink(),
+            channel_id=channel_id,
+            actor_ip=None,
         )
     except Exception as exc:  # noqa: BLE001 — last-resort guard
         logger.error("action_decision_unhandled_exception", error=str(exc))
@@ -231,10 +249,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     actions_client = AisocActionsClient.from_settings()
     bolt_app = _build_bolt_app(api_client, actions_client)
 
+    # The timeout scheduler is shared across the process — one task per
+    # pending approval so a forgotten Approve/Deny can't leave the action
+    # in awaiting_approval forever. See app/services/approval_timeout.py.
+    timeout_scheduler = ApprovalTimeoutScheduler(
+        approve_fn=actions_client.approve_action,
+        reject_fn=actions_client.reject_action,
+        audit_sink=StructlogAuditSink(),
+    )
+
     app.state.api_client = api_client
     app.state.actions_client = actions_client
     app.state.bolt_app = bolt_app
     app.state.bolt_handler = AsyncSlackRequestHandler(bolt_app)
+    app.state.timeout_scheduler = timeout_scheduler
 
     logger.info(
         "slack_bot_started",
@@ -244,6 +272,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        await timeout_scheduler.aclose()
         await api_client.aclose()
         await actions_client.aclose()
         logger.info("slack_bot_stopped")

@@ -39,6 +39,7 @@ from typing import Any
 
 from app.blocks import action_decision_blocks, error_blocks
 from app.services.aisoc_clients import AisocActionsClient, AisocClientError
+from app.services.approval_audit import ApprovalAuditEvent, ApprovalAuditSink, NullAuditSink
 
 #: Action id emitted by the *Approve* button on the approval card.
 APPROVE_ACTION_ID = "aisoc_action_approve"
@@ -46,10 +47,14 @@ APPROVE_ACTION_ID = "aisoc_action_approve"
 #: Action id emitted by the *Deny* button on the approval card.
 DENY_ACTION_ID = "aisoc_action_deny"
 
+#: Action id emitted by the *Need info* button (Block Kit v2 — T3.6).
+NEED_INFO_ACTION_ID = "aisoc_action_need_info"
+
 #: Decision strings we send back to ``services/actions``. Kept in a constant
 #: so a typo can't slip into the network payload.
 _DECISION_APPROVE = "approved"
 _DECISION_REJECT = "rejected"
+_DECISION_NEED_INFO = "need_info"
 
 
 def _decode_routing_value(value: str) -> tuple[str, str]:
@@ -111,15 +116,19 @@ async def handle_action_decision(
     button_value: str,
     user_id: str,
     actions_client: AisocActionsClient,
+    audit_sink: ApprovalAuditSink | None = None,
+    channel_id: str | None = None,
+    actor_ip: str | None = None,
 ) -> dict[str, Any]:
     """
-    Resolve an approve/deny click into a Slack response payload.
+    Resolve an approve / deny / need-info click into a Slack response payload.
 
     Parameters
     ----------
     action_id_event
         The Slack ``action_id`` of the button — one of
-        :data:`APPROVE_ACTION_ID` or :data:`DENY_ACTION_ID`.
+        :data:`APPROVE_ACTION_ID`, :data:`DENY_ACTION_ID`, or
+        :data:`NEED_INFO_ACTION_ID`.
     button_value
         The button's ``value`` field, encoded by
         :func:`app.blocks.approval_card_blocks` as
@@ -130,6 +139,13 @@ async def handle_action_decision(
         case timeline.
     actions_client
         Client for ``services/actions``.
+    audit_sink
+        Optional structured audit sink. When supplied the function emits a
+        :class:`ApprovalAuditEvent` for every terminal decision (including
+        upstream failures so the timeline can show the attempted call).
+    channel_id, actor_ip
+        Forwarded onto the audit event so the trail captures *where* the
+        decision was made.
 
     Returns
     -------
@@ -137,45 +153,86 @@ async def handle_action_decision(
         A Slack response payload. Successful decisions use
         ``replace_original=True`` to swap the approval card with an
         audit-trail line so the buttons can't be clicked again.
-
-    Notes
-    -----
-    The function never raises — every failure path is converted into an
-    ephemeral error block so the analyst always gets actionable feedback
-    in Slack and we never leak a stack trace.
     """
-    if action_id_event not in {APPROVE_ACTION_ID, DENY_ACTION_ID}:
-        # Defensive: Bolt should never route an unrelated action here, but
-        # keep the surface honest if a future refactor changes the wiring.
+    sink: ApprovalAuditSink = audit_sink or NullAuditSink()
+    valid = {APPROVE_ACTION_ID, DENY_ACTION_ID, NEED_INFO_ACTION_ID}
+    if action_id_event not in valid:
         return _ephemeral(
             error_blocks(f"Unknown interactive action `{action_id_event}`"),
             fallback="Unknown interactive action",
         )
 
     try:
-        action_id, _case_id = _decode_routing_value(button_value)
+        action_id, case_id = _decode_routing_value(button_value)
     except ValueError as exc:
         return _ephemeral(
             error_blocks(f"Couldn't decode the approval button: {exc}"),
             fallback="Bad approval payload",
         )
 
-    is_approve = action_id_event == APPROVE_ACTION_ID
-    decision_label = _DECISION_APPROVE if is_approve else _DECISION_REJECT
+    decision_map = {
+        APPROVE_ACTION_ID: _DECISION_APPROVE,
+        DENY_ACTION_ID: _DECISION_REJECT,
+        NEED_INFO_ACTION_ID: _DECISION_NEED_INFO,
+    }
+    decision_label = decision_map[action_id_event]
 
+    # Need-info is non-terminal — it doesn't change the action state, it
+    # just records that the approver bounced the request back for context.
+    if action_id_event == NEED_INFO_ACTION_ID:
+        await sink.record(
+            ApprovalAuditEvent(
+                case_id=case_id,
+                action_id=action_id,
+                approver_id=user_id,
+                decision=decision_label,
+                channel=channel_id,
+                actor_ip=actor_ip,
+                source="slack",
+            )
+        )
+        blocks = action_decision_blocks(
+            decision=decision_label,
+            action={"id": action_id},
+            decided_by_slack_id=user_id,
+        )
+        return _ephemeral(blocks, fallback=f"Need-info recorded by <@{user_id}>")
+
+    is_approve = action_id_event == APPROVE_ACTION_ID
     try:
         action = await actions_client.approve_action(action_id) if is_approve else await actions_client.reject_action(action_id)
     except AisocClientError as exc:
+        await sink.record(
+            ApprovalAuditEvent(
+                case_id=case_id,
+                action_id=action_id,
+                approver_id=user_id,
+                decision=decision_label,
+                channel=channel_id,
+                actor_ip=actor_ip,
+                source="slack",
+                error=str(exc),
+            )
+        )
         return _ephemeral(
             error_blocks(f"Could not record decision for action `{action_id}`: {exc}"),
             fallback="Decision failed",
         )
 
-    # Make sure the audit-trail line shows the action context even if the
-    # backend response is sparse. Falling back to the routing-decoded id
-    # guarantees we always show *something* useful.
     if not action.get("id") and not action.get("action_id"):
         action = {**action, "id": action_id}
+
+    await sink.record(
+        ApprovalAuditEvent(
+            case_id=case_id,
+            action_id=action_id,
+            approver_id=user_id,
+            decision=decision_label,
+            channel=channel_id,
+            actor_ip=actor_ip,
+            source="slack",
+        )
+    )
 
     blocks = action_decision_blocks(
         decision=decision_label,

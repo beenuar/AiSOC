@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "aisoc-teams-bot"
+version = "0.1.0"
+description = "AiSOC Teams bot — Adaptive Card approval flows for ChatOps-driven SOC operations"
+authors = ["AiSOC Contributors <hello@tryaisoc.com>"]
+license = "MIT"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = ">=0.109,<0.137"
+uvicorn = { extras = ["standard"], version = "^0.27.0" }
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+httpx = ">=0.27,<0.29"
+structlog = ">=24.1,<26.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.23.0"
+respx = "^0.21.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

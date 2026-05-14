@@ -27,6 +27,7 @@ from app.blocks import (
     error_blocks,
     help_blocks,
     investigation_started_blocks,
+    rich_approval_card_blocks,
 )
 
 WEB_BASE = "https://app.aisoc.test"
@@ -258,3 +259,78 @@ def test_error_blocks_truncate_and_carry_x_emoji():
     assert text.startswith("❌")
     # ensure truncation happened
     assert text.count("z") < 1000
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# T3.6 — Block Kit v2: Need-Info button, timeout footer, rich card
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _action_ids(blocks: list[dict[str, Any]]) -> set[str]:
+    actions = next((b for b in blocks if b.get("type") == "actions"), None)
+    if not actions:
+        return set()
+    return {el.get("action_id") for el in actions.get("elements", []) if "action_id" in el}
+
+
+def test_approval_card_includes_need_info_button_alongside_approve_deny():
+    blocks = approval_card_blocks(
+        action={"id": "act-X", "action_type": "isolate_host", "target": "h-1"},
+        case={"id": "case-X"},
+        requested_by_slack_id="U777",
+        web_base=WEB_BASE,
+    )
+    ids = _action_ids(blocks)
+    assert {"aisoc_action_approve", "aisoc_action_deny", "aisoc_action_need_info"} <= ids
+
+
+def test_approval_card_timeout_footer_appears_when_timeout_supplied():
+    blocks = approval_card_blocks(
+        action={"id": "act-X", "action_type": "isolate_host", "target": "h-1"},
+        case={"id": "case-X"},
+        requested_by_slack_id="U777",
+        web_base=WEB_BASE,
+        timeout_seconds=600,
+        safe_default="rejected",
+    )
+    rendered = str(blocks)
+    assert "Auto-denied" in rendered or "Auto-rejected" in rendered
+    assert "10 min" in rendered
+
+
+def test_approval_card_no_timeout_footer_when_zero_timeout():
+    blocks = approval_card_blocks(
+        action={"id": "act-X", "action_type": "isolate_host", "target": "h-1"},
+        case={"id": "case-X"},
+        requested_by_slack_id="U777",
+        web_base=WEB_BASE,
+        timeout_seconds=0,
+    )
+    assert "Auto-" not in str(blocks)
+
+
+def test_rich_approval_card_includes_related_alerts_and_why_this_matters():
+    alerts = [
+        {"id": "a1", "rule_name": "Suspicious PowerShell", "severity": "high"},
+        {"id": "a2", "rule_name": "Lateral movement attempt", "severity": "critical"},
+    ]
+    blocks = rich_approval_card_blocks(
+        action={"id": "act-X", "action_type": "isolate_host", "target": "h-1"},
+        case={
+            "id": "case-X",
+            "case_number": "CASE-0001",
+            "description": "Endpoint EDR flagged a credential dumping attempt.",
+        },
+        requested_by_slack_id="U777",
+        web_base=WEB_BASE,
+        related_alerts=alerts,
+    )
+    rendered = str(blocks)
+    assert "Why this matters" in rendered
+    assert "credential dumping" in rendered
+    assert "Related alerts" in rendered
+    assert "Suspicious PowerShell" in rendered
+    assert "Lateral movement" in rendered
+    # Still carries all three action buttons.
+    ids = _action_ids(blocks)
+    assert {"aisoc_action_approve", "aisoc_action_deny", "aisoc_action_need_info"} <= ids

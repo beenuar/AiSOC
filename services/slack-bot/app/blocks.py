@@ -279,13 +279,17 @@ def approval_card_blocks(
     case: dict[str, Any],
     requested_by_slack_id: str,
     web_base: str,
+    timeout_seconds: int | None = None,
+    safe_default: str = "rejected",
 ) -> list[dict[str, Any]]:
     """
     Render an approval prompt for an awaiting-approval response action.
 
     The ``action_id`` and ``case_id`` are stuffed into the button's ``value``
     field so the interactive handler can route the approval without a
-    round-trip to the database.
+    round-trip to the database. When ``timeout_seconds`` is set we surface a
+    contextual footer so analysts know the safe-default fires automatically
+    if no one decides in time (T3.6 — Block Kit v2).
     """
     action_id = str(action.get("id") or action.get("action_id") or "")
     action_type = action.get("action_type") or "unknown"
@@ -302,7 +306,7 @@ def approval_card_blocks(
         f"⚠️ *Approval required* — `{action_type}` on `{target}`\nCase: <{case_url}|{case_number}> · Requested by <@{requested_by_slack_id}>"
     )
 
-    return [
+    blocks: list[dict[str, Any]] = [
         {"type": "section", "text": {"type": "mrkdwn", "text": headline}},
         {
             "type": "section",
@@ -349,6 +353,12 @@ def approval_card_blocks(
                 },
                 {
                     "type": "button",
+                    "text": {"type": "plain_text", "text": "Need info"},
+                    "action_id": "aisoc_action_need_info",
+                    "value": button_value,
+                },
+                {
+                    "type": "button",
                     "text": {"type": "plain_text", "text": "Open case"},
                     "url": case_url,
                     "action_id": "aisoc_action_open_case",
@@ -356,6 +366,86 @@ def approval_card_blocks(
             ],
         },
     ]
+
+    if timeout_seconds and timeout_seconds > 0:
+        verb = "denied" if safe_default == "rejected" else safe_default
+        minutes = max(1, timeout_seconds // 60)
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": (f"⏱️ Auto-{verb} in *{minutes} min* if no human decides. Safe-default: `{safe_default}`."),
+                    }
+                ],
+            }
+        )
+
+    return blocks
+
+
+def rich_approval_card_blocks(
+    *,
+    action: dict[str, Any],
+    case: dict[str, Any],
+    requested_by_slack_id: str,
+    web_base: str,
+    timeout_seconds: int | None = None,
+    safe_default: str = "rejected",
+    related_alerts: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Block Kit v2 approval card with full case context.
+
+    Renders the standard approval card plus a contextual *Related alerts*
+    bullet list and a *Why this matters* section pulled from the case
+    description / fields. Used for high-blast-radius actions where the
+    approver needs the surrounding signal to decide.
+
+    The Approve / Deny / Need-Info routing tokens are identical to
+    :func:`approval_card_blocks` so the same Bolt handlers can dispatch
+    on either card shape — callers swap factories without rewiring
+    interactions.
+    """
+    base = approval_card_blocks(
+        action=action,
+        case=case,
+        requested_by_slack_id=requested_by_slack_id,
+        web_base=web_base,
+        timeout_seconds=timeout_seconds,
+        safe_default=safe_default,
+    )
+
+    description = _truncate(case.get("description") or case.get("narrative") or "", limit=600)
+    enriched: list[dict[str, Any]] = list(base)
+    if description:
+        enriched.insert(
+            3,
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Why this matters*\n{description}"},
+            },
+        )
+
+    alerts = related_alerts or case.get("alerts") or []
+    if isinstance(alerts, list) and alerts:
+        bullets = "\n".join(
+            f"• `{_truncate(str(a.get('rule_name') or a.get('title') or a.get('id') or 'alert'), limit=120)}`"
+            f"  {_sev_label(a.get('severity'))}"
+            for a in alerts[:6]
+            if isinstance(a, dict)
+        )
+        if bullets:
+            enriched.insert(
+                4 if description else 3,
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*Related alerts*\n{bullets}"},
+                },
+            )
+
+    return enriched
 
 
 def action_decision_blocks(
