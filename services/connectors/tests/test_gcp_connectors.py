@@ -189,7 +189,10 @@ def test_cloud_audit_normalize_critical_log_severity_is_high(fake_sa_json):
 # ---------------------------------------------------------------------------
 
 
-def test_scc_normalize_critical_collapses_to_high(fake_sa_json):
+def test_scc_normalize_critical_preserves_critical(fake_sa_json):
+    # SCC CRITICAL findings mirror directly into AiSOC's ``critical``
+    # tier (P1, 15-minute MTTD SLA) — the highest-impact GCP findings
+    # must not be silently downgraded.
     connector = GCPSCCConnector(_ORG, fake_sa_json)
     raw = {
         "finding": {
@@ -207,7 +210,7 @@ def test_scc_normalize_critical_collapses_to_high(fake_sa_json):
     }
     out = connector.normalize(raw)
     assert out["source"] == "gcp_scc"
-    assert out["severity"] == "high", "SCC CRITICAL collapses to AiSOC 'high' since downstream pipelines expect that vocabulary"
+    assert out["severity"] == "critical"
     assert out["title"] == "MALWARE_BAD_DOMAIN"
     assert out["actor_email"] == "compromised@example.com"
     assert out["resource_type"] == "google.compute.Instance"

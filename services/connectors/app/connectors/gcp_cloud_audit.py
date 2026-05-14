@@ -287,17 +287,24 @@ class GCPCloudAuditConnector(BaseConnector):
         status = proto.get("status", {}) or {}
         succeeded = "code" not in status or status.get("code", 0) == 0
 
-        # Severity heuristic: high-blast-radius IAM/KMS operations land at
-        # ``high``; failed control-plane writes at ``medium``; everything
-        # else at ``info``. SOC analysts will tune this with detections.
+        # Severity heuristic against AiSOC's 5-tier ladder
+        # (info | low | medium | high | critical):
+        #   - high-blast-radius IAM/KMS operations -> ``high``
+        #   - failed control-plane writes          -> ``medium``
+        #   - everything else                      -> ``info``
+        # Cloud Logging ``ALERT``/``EMERGENCY`` upgrade the result to
+        # ``critical`` so paged-out audit anomalies stay on the P1 SLA;
+        # ``ERROR``/``CRITICAL`` raise to ``high``. SOC analysts will tune
+        # this further with detections.
         severity = "info"
         if any(m in method for m in self._HIGH_BLAST_METHODS):
             severity = "high"
         elif not succeeded:
             severity = "medium"
-        # Cloud Logging severity is also a useful hint when present.
         log_severity = (raw.get("severity") or "").upper()
-        if log_severity in ("ERROR", "CRITICAL", "ALERT", "EMERGENCY"):
+        if log_severity in ("ALERT", "EMERGENCY"):
+            severity = "critical"
+        elif log_severity in ("ERROR", "CRITICAL"):
             severity = "high"
         elif log_severity == "WARNING" and severity == "info":
             severity = "low"

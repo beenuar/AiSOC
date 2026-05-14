@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import router
 from app.db.engine import dispose_engine
 from app.scheduler import ConnectorScheduler, scheduler_disabled
+from app.security.cors import build_cors_kwargs
 
 logger = logging.getLogger("aisoc.connectors.main")
 
@@ -72,12 +73,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Before P2-A1 this service combined ``allow_origins=["*"]`` with
+# ``allow_credentials=True`` — the canonical CORS misconfiguration that lets
+# any origin make cookie/Authorization-bearing requests once the browser-side
+# wildcard rule is bypassed. The shared helper now refuses to start with that
+# combo in production (raises CORSConfigurationError) and auto-disables
+# credentials with a warning in dev.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **build_cors_kwargs(service_name="connectors", allow_credentials=True),
 )
 
 app.include_router(router, prefix="/api/v1")

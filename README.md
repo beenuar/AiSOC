@@ -9,7 +9,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
-[![Version](https://img.shields.io/badge/version-7.1.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.3.1-f59e0b?style=flat-square)](CHANGELOG.md)
 [![Live demo on Fly.io (v8.0 launch)](https://img.shields.io/badge/Live%20demo-Fly.io-7b2bbe?style=flat-square&logo=fly-dot-io&logoColor=white)](https://demo.aisoc.dev)
 [![Render demo (one-click)](https://img.shields.io/badge/Render%20demo-one%20click-46e3b7?style=flat-square&logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC)
 
@@ -359,15 +359,17 @@ flowchart LR
     MCP --> API
 ```
 
+**v1.5 console:** On `/alerts/[id]`, the **Investigation Rail** surfaces fusion correlation narrative, evidence chips, and Deep Explain (LLM) with audit logging. See [Investigation Rail](apps/docs/docs/console/investigation-rail.md) in the docs site.
+
 ### Service map
 
 | Service | Lang | Port | Role |
 |---|---|---|---|
-| `web` | Next.js 14 + React | 3000 | SOC console, benchmark scoreboard, marketing landing |
-| `api` | Python · FastAPI | 8000 | Alerts, cases, RBAC, graph, rules, audit, compliance, detection proposals (DAC), federated search fan-out, SLA tracking |
+| `web` | Next.js 14 + React | 3000 | SOC console (alerts detail + Investigation Rail), benchmark scoreboard, marketing landing |
+| `api` | Python · FastAPI | 8000 | Alerts (detail envelope + correlation narrative), cases, RBAC, graph, rules, audit, compliance, detection proposals (DAC), federated search fan-out, SLA tracking |
 | `realtime` | Node.js · `ws` | 8086 | Per-channel WebSocket fan-out + VAPID Web Push |
 | `agents` | Python · LangGraph | 8001 | Multi-agent reasoning + Qdrant RAG + Hunt-as-Code engine & scheduler |
-| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest), alert confidence, entity risk / RBA |
+| `fusion` | Python | 8003 | Dedup + ML scoring (LightGBM, IsoForest), alert confidence, entity risk / RBA, correlation narrative projection for API |
 | `actions` | Python | 8002 | SOAR with blast-radius gating + ChatOps verification |
 | `connectors` | Python | — | Connector polling (APScheduler), credential vault, federated query translators |
 | `threatintel` | Python | 8005 | TAXII / MISP / OTX / KEV polling |
@@ -766,7 +768,7 @@ The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](docs/openapi.yaml). End
 | Tag | Prefix | Notes |
 |---|---|---|
 | `auth` | `/api/v1/auth/` | JWT login, SAML ACS, OIDC callback |
-| `alerts` | `/api/v1/alerts/` | CRUD, bulk status, timeline |
+| `alerts` | `/api/v1/alerts/` | CRUD, bulk status, timeline, detail envelope (`investigation_rail`, `correlation_narrative`, `deep_explain`) |
 | `cases` | `/api/v1/cases/` | Create, link alerts, evidence |
 | `rules` | `/api/v1/rules/` | Sigma / YARA / KQL CRUD + test |
 | `detections` | `/api/v1/detections/` | Catalog browse + install |
@@ -929,12 +931,14 @@ terraform apply
 
 ## Roadmap
 
-The public roadmap lives in [ROADMAP.md](ROADMAP.md). All releases through **v7.1.0** have shipped, including:
+The public roadmap lives in [ROADMAP.md](ROADMAP.md). All releases through **v7.3.1** have shipped, including:
 
 - **v6.0 / v6.1** — Investigation Ledger, Ambient Copilot, Responder PWA, public eval harness, MCP server, one-shot demo, autonomous triage agents, investigation chat, coverage advisor, shifts, EASM, MSSP dashboard, STIX/TAXII publishing, automated compliance evidence, AI-generated incident reports.
 - **v7.0** — v1.0 buyer-value plan (16 workstreams): SBOM/SLSA supply chain, threat-intel attribution, executive digest PDF, BYOK per-tenant LLM credentials, air-gap appliance, WCAG 2.2 AA accessibility, ChatOps, telemetry/analytics opt-in, one-click Render deploy.
 - **v7.0.1 — v7.0.3** — Endpoint telemetry wave: `osctrl` and `FleetDM` connectors, `aisoc-osquery-tls` FastAPI service, `aisoc-direct` agent connector, 16 native osquery detections (`det-endpoint-281..296`), live-query playbook step, osquery packs + FIM pipeline, 5 custom osquery virtual tables; plus 42 CodeQL alert resolutions and the `ClientOnly`/font-preload hydration fixes.
 - **v7.1.0** — Cloud Security Coverage Wave: documentation backfill for Wiz, AWS Security Hub, and Lacework; two new CNAPP connectors (Prisma Cloud, Orca); three native AWS connectors (GuardDuty, CloudTrail, VPC Flow Logs); dual-mode Kubernetes audit log connector (apiserver webhook + file_tail) with a new `k8s-audit` ingest template.
+- **v7.3.0** — Founder-flow series (PR1–PR7): `docker-compose.dev.yml` alias, `.env.example` cleanup with a pre-filled `AISOC_CREDENTIAL_KEY`, `scripts/run_evals.py --suite` CLI contract, `aisoc serve` / `aisoc db upgrade` / `aisoc mcp serve|install`, the `aisoc submit` CLI command + canonical `examples/alerts/lateral-movement.json` fixture, and the Path C founder-style CLI walkthrough in [`apps/docs/docs/quickstart.md`](apps/docs/docs/quickstart.md). The recorded "fresh-clone to first alert" demo now runs verbatim on `main`.
+- **v7.3.1** — Smoke-test hotfix: idempotent migrations (`005_compliance.sql`, `025_connectors_click_and_connect.sql`, new `042_alerts_schema_drift_fix.sql` adding eleven missing `alerts` columns), and a new `POST /api/v1/alerts/submit` endpoint that synthesises an `Alert` row directly from a batch of OCSF events. `aisoc submit` now targets the new endpoint, so the web console at `/alerts` lights up immediately on a fresh clone without Kafka / Fusion in the loop.
 
 Next (**v8.0** — see [ROADMAP.md](ROADMAP.md)):
 

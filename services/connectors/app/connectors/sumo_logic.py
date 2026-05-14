@@ -143,8 +143,11 @@ class SumoLogicConnector(BaseConnector):
             return []
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        # Sumo Logic Cloud SIEM insights carry severity {info, low, medium,
+        # high, critical}. Accept critical so genuine critical insights
+        # survive AiSOC's five-tier severity ladder.
         sev_raw = (raw.get("severity") or "").lower()
-        sev = sev_raw if sev_raw in ("info", "low", "medium", "high") else "medium"
+        sev = sev_raw if sev_raw in ("info", "low", "medium", "high", "critical") else "medium"
         return {
             "source": "sumo_logic",
             "category": "siem",

@@ -26,8 +26,13 @@ class TenantSLAConfig(Base):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "severity", name="uq_sla_config_tenant_severity"),
+        # Mirrors the constraint we install in migration 040. We keep the
+        # ORM-level name distinct from the live DB constraint name so this
+        # stays drop-in compatible with existing deployments that still have
+        # the original 4-tier `ck_sla_config_severity` constraint until
+        # migration 040 swaps it for `ck_tenant_sla_config_severity_v2`.
         CheckConstraint(
-            "severity IN ('critical','high','medium','low')",
+            "severity IN ('critical','high','medium','low','info')",
             name="ck_sla_config_severity",
         ),
     )

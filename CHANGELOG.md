@@ -24,6 +24,274 @@ hit. The marketing `/benchmark` page now cross-links to the scoreboard for
 the full weekly history. Wet-eval rows arrive automatically once the T5.5
 weekly CI workflow lands.
 
+### Security hardening — Batch 8: `POST /api/v1/alerts/submit`
+
+The `/alerts/submit` ingestion path was a wide-open seam — any caller with
+a valid (or in dev mode, missing) token could POST arbitrary-sized batches
+of events with arbitrary timestamps and unbounded `raw_event` payloads,
+and re-submit the same batch repeatedly to create duplicate alerts. Five
+defences ship together so the path is safe to expose to connectors and the
+`aisoc submit` CLI in production:
+
+- **Payload caps** — three new environment variables bound the request:
+  `AISOC_SUBMIT_MAX_EVENTS` (default 1 000 events), `AISOC_SUBMIT_MAX_EVENT_BYTES`
+  (default 256 KiB per event after JSON-encoding), and
+  `AISOC_SUBMIT_MAX_TOTAL_BYTES` (default 8 MiB for the whole batch). Each
+  is enforced before any DB work; over-cap requests return HTTP 413 with the
+  exact limit that fired.
+- **Idempotency** — clients can pass an `Idempotency-Key` header (1–128 chars,
+  `^[A-Za-z0-9._:/-]+$`); the resulting alert stores it in a new
+  `alerts.idempotency_key` column with a partial unique index scoped per
+  tenant. A retry with the same key returns the original alert ID (HTTP 200)
+  instead of creating a duplicate. Missing header preserves prior behaviour.
+  Migration `044_alerts_idempotency_key.sql` adds the column + index.
+- **`raw_event` redaction** — new module `app/services/event_sanitiser.py`
+  walks each event and replaces values for keys matching a recursive
+  case-insensitive blocklist (`password`, `token`, `secret`, `api_key`,
+  `authorization`, `cookie`, `set-cookie`, `client_secret`, `private_key`,
+  `bearer`, `session_id`, `csrf`, `x-api-key`) with the string `"[REDACTED]"`.
+  Stats (number of redactions, bytes dropped) are emitted to structured logs
+  so SOC operators can see whether their connectors are leaking credentials.
+- **Timestamp bounds** — new module `app/services/timestamp_bounds.py` clamps
+  every event timestamp to `[now - AISOC_SUBMIT_MAX_TIMESTAMP_AGE_DAYS,
+  now + AISOC_SUBMIT_MAX_FUTURE_SECONDS]` (defaults 90 days and 300 s),
+  so connectors cannot back-date alerts past retention or future-date them
+  past the SLA clock. Clamped events still ingest, but the alert's
+  `metadata.timestamp_clamped` counter records how many were rewritten.
+- **Test stability** — `_synthesise_alert_from_events` now calls
+  `timestamp_bounds.now_utc()` for clamping, which makes any test using fixed
+  fixture timestamps wall-clock dependent. `test_alerts_submit.py` now
+  monkeypatches `now_utc` to a pinned `datetime` so CI runs deterministically
+  regardless of the current date.
+
+124 new tests across `tests/test_event_sanitiser.py`,
+`tests/test_timestamp_bounds.py`, and the integration coverage in
+`tests/api/v1/endpoints/test_alerts_submit.py` lock the new behaviour in.
+Full suite remains green: 1 279 tests pass with zero regressions.
+
+### Security — audit log integrity (H-4 + M-12)
+
+Hardens the immutable audit log against three distinct trust-boundary
+failures discovered during the bugfix sweep:
+
+- **Spoofable `actor_ip`.** Previous releases lifted `actor_ip` from
+  `X-Forwarded-For` unconditionally. Any client able to reach the API
+  without a stripping ingress could attach their own header and write an
+  arbitrary source IP into compliance-grade audit rows. The new
+  `services/api/app/core/trusted_proxy.py` resolves IPs through an
+  explicit operator-configured allow-list (`AISOC_TRUSTED_PROXIES`,
+  empty by default). When the env var is empty the header is ignored and
+  the direct TCP peer is recorded; when set, only requests whose
+  immediate peer falls inside the configured CIDR list consult the
+  header, and the chain is walked right-to-left to return the closest
+  untrusted hop. Both the `emit_audit()` helper
+  (`services/api/app/services/audit.py`) and the auto-audit middleware
+  (`services/api/app/middleware/audit_middleware.py`) route through this
+  resolver.
+- **Secrets leaking into `changes`.** The `changes` payload is now
+  passed through `redact_changes()`
+  (`services/api/app/services/audit_redaction.py`) before persistence.
+  Keys matching case-insensitive sensitive patterns (`password`,
+  `secret`, `token`, `api_key`, `private_key`, `*credential*`,
+  `authorization`, `bearer`, `cookie`, `session`, `client_secret`, `*_seed`,
+  …) are replaced with `***REDACTED***` recursively across dicts, lists
+  and tuples. Serialized payloads larger than
+  `AISOC_AUDIT_MAX_CHANGES_BYTES` (default 65,536) are substituted with a
+  `{ "_truncated": true, "_size": <bytes> }` marker so a single bad
+  caller can't balloon the table. Recursion depth and node count are
+  capped to prevent DOS via pathological input.
+- **Trigger-bypass tampering.** The append-only trigger on `audit_log`
+  doesn't defend against SQL-level access (disabling triggers,
+  `TRUNCATE`, credential theft). Migration
+  `043_audit_log_hash_chain.sql` adds `prev_hash` / `entry_hash` columns
+  (per-tenant SHA-256 chain), and
+  `services/api/app/services/audit_hash.py` provides a pure
+  `compute_entry_hash()` + `verify_chain()` pair. Both `emit_audit()`
+  and the middleware now stamp every new row with the hash of the
+  previous tenant row, so any deletion, reorder, or rewrite is
+  detectable at audit time. The verifier accepts plain row dicts (e.g.
+  from a CSV export) so internal or external auditors can replay the
+  chain without DB access. Legacy unchained rows are tolerated at the
+  head of a tenant's history; gaps after the chain has started are
+  treated as forgery signals.
+
+New env vars (see `apps/docs/docs/deployment/env-vars.md`):
+
+- `AISOC_TRUSTED_PROXIES` — comma-separated CIDR list. Empty by default.
+- `AISOC_AUDIT_MAX_CHANGES_BYTES` — `65536` by default.
+
+80 new unit tests cover the resolver, redactor, and hash chain
+(`test_trusted_proxy.py`, `test_audit_redaction.py`, `test_audit_hash.py`),
+including tamper-detection scenarios (rewritten row, deleted row,
+reordered rows, `prev_hash` / `entry_hash` tampering) and robustness
+under malformed input. No regressions across the existing 1,283-test
+suite.
+
+### Security — bounded eval / playbook timeouts (H-7, batch 10)
+
+- **`POST /detection-proposals/run-eval`** — tightened Pydantic bounds on
+  `RunEvalRequest.timeout_seconds` (`le=900` → `le=600`) and
+  `max_regression_pp` (`le=100` → `le=50`). The synthetic benchmark completes
+  in under 60s on commodity hardware; a 15-minute cap was indistinguishable
+  from "no cap" from a DoS standpoint. 50pp regression tolerance is already
+  generous — anything higher silently disables the gate. `EvalAttachRequest`
+  receives the same `max_regression_pp` cap.
+- **Playbook step bounds** — added strict Pydantic validation to
+  `PlaybookStep.timeout_seconds` (`1 ≤ x ≤ 3600s`) and `retry_max` (`0 ≤ x ≤ 25`)
+  in `services/agents/app/playbook/models.py`. The 1-hour ceiling
+  accommodates human-approval steps; everything else is bounded at runtime.
+- **Runtime parameter clamp** — new module
+  `services/agents/app/playbook/bounds.py` centralises `clamp_timeout()` and
+  `clamp_retries()` helpers. `_handle_osquery_live_query()` and other
+  handlers that read `step.params["timeout_seconds"]` (an untyped dict that
+  bypasses Pydantic) now clamp at runtime against
+  `ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS = 900s`. This is the layered defence:
+  field validators cap the typed model, runtime clamps cap the dynamic
+  params. Operator overrides via `AISOC_PLAYBOOK_MAX_TIMEOUT_SECONDS` /
+  `AISOC_PLAYBOOK_MAX_RETRIES` are themselves bounded by the absolute
+  ceilings so a typo can't disable the cap entirely.
+- 67 new tests in `services/agents/tests/test_playbook_bounds.py`,
+  `test_playbook_models_bounds.py`, and `test_osquery_live_query_step.py`
+  exercise pathological values (86 400s, negatives, `True`, numeric strings,
+  env-var overrides). 22 new tests in
+  `services/api/tests/api/v1/endpoints/test_detection_proposals_request_bounds.py`
+  pin the API-side caps.
+
+### Pydantic v2 configuration migration (H-6)
+
+Eliminates the 63+ `PydanticDeprecatedSince20: Support for class-based
+`config` is deprecated, use ConfigDict instead` warnings that were
+emitted on every API/service boot and during every test run.
+
+- **`BaseSettings` → `SettingsConfigDict`** —
+  `services/fusion/app/core/config.py` and
+  `services/threatintel/app/config.py` now declare `model_config =
+  SettingsConfigDict(env_file=…, extra="ignore")` instead of the
+  v1-style `class Config: env_file = …` inner class. Behaviour is
+  identical; the migration is purely an API surface fix that prevents
+  pydantic-settings from emitting a runtime deprecation each time the
+  service starts.
+- **`BaseModel` → `ConfigDict`** — every FastAPI endpoint that exposes
+  a Pydantic response model with `from_attributes = True` (so SQLAlchemy
+  rows can be returned directly) has been migrated to
+  `model_config = ConfigDict(from_attributes=True)`. Touches:
+  `services/api/app/api/v1/endpoints/{sla,threat_intel,reports,mssp,remediation,identity_graph,insider_threat,assets,posture}.py`
+  and `services/ueba/app/api/routes.py`. No schema or wire-format
+  changes — `model_dump()`/`from_orm` continue to work as before.
+- **No more silent warnings in CI** — pytest under
+  `-W error::DeprecationWarning` (pydantic only) now imports the full
+  API surface clean.
+
+## [7.3.1] — 2026-05-14
+
+### Smoke-test hotfix — `/api/v1/alerts` works on a fresh clone
+
+Tail end of the v7.3.0 founder-flow smoke test on a clean machine revealed
+three latent issues that broke the "open the console, see your alert"
+moment in the demo. This patch closes all three.
+
+- **Alerts table schema drift** — the `Alert` ORM model
+  (`services/api/app/models/alert.py`) declared eleven columns that no
+  migration had ever added to the database: `affected_ips`,
+  `affected_hosts`, `affected_users`, `affected_assets`,
+  `parent_alert_id`, `child_alert_ids`, `is_merged`, `assigned_to_id`,
+  `assigned_at`, `enrichment_data`, `tags`. Result: a fresh stack
+  returned HTTP 500 from `GET /api/v1/alerts` with
+  `column alerts.affected_ips does not exist`. New idempotent migration
+  `042_alerts_schema_drift_fix.sql` adds all eleven with sensible
+  defaults (`'[]'::jsonb`, `'{}'::jsonb`, `FALSE`, `NULL`).
+- **Migration idempotency** — `005_compliance.sql` and
+  `025_connectors_click_and_connect.sql` failed re-application on
+  partially-migrated DBs (a `CREATE POLICY` that didn't check for
+  existence, and a chain of `ALTER TABLE … RENAME COLUMN` calls that
+  threw when the source columns were already renamed). Both now wrap
+  the offending statements in `DO $$ … END $$` blocks gated on
+  `pg_policies` / `information_schema.columns` lookups, so
+  `aisoc db upgrade` is fully idempotent.
+- **`aisoc submit` → console wiring** — the v7.3.0 CLI POSTed to
+  `services/ingest`'s `/v1/ingest/batch`, which only emits to Kafka. With
+  the detection / correlation pipeline still wiring up in the demo
+  environment, accepted events never became `Alert` rows, so the web
+  console stayed empty. New endpoint
+  `POST /api/v1/alerts/submit` in `services/api/app/api/v1/endpoints/alerts.py`
+  synthesises one `Alert` row directly from the event batch (severity
+  normalised across the canonical five-tier ladder, MITRE / affected
+  entities derived from the OCSF payload) and persists it. The CLI
+  (`packages/aisoc-cli/src/aisoc_cli/main.py`) now targets that endpoint,
+  with the same `--tenant` / `--connector-id` / `--source-format`
+  overrides, plus dev-mode auth bypass when no `Authorization` header is
+  supplied. 16 CLI tests + 48 API tests cover request shape, severity
+  mapping, timestamp coercion (`@timestamp` / `time` / Okta `published`),
+  affected-user deduplication, and JSONB column defaults.
+
+After this hotfix, the recorded demo runs end-to-end on a fresh clone:
+`docker compose up`, `aisoc db upgrade` (clean — no failures),
+`aisoc submit examples/alerts/lateral-movement.json` (201, `alert_id`
+returned), and the Web console at `http://127.0.0.1:3000/alerts` lists
+the new alert with no 500s.
+
+## [7.3.0] — 2026-05-14
+
+### Founder-flow series — codebase aligned to the screen-recording demo (PR1–PR7)
+
+The recorded "fresh-clone to first alert" demo now runs verbatim on `main`.
+Seven dependency-ordered PRs landed the missing surface area the script
+walked through, plus the docs path that mirrors it.
+
+- **PR1 — `docker-compose.dev.yml`** (`docker-compose.dev.yml`): new alias
+  file that `include`s `docker-compose.yml` via the Compose Spec, so the
+  `docker compose -f docker-compose.dev.yml up -d` step in the demo no
+  longer 404s on a fresh clone.
+- **PR2 — `.env.example` cleanup** (`.env.example`, `docker-compose.yml`,
+  `services/api/app/core/config.py`): standalone `POSTGRES_PASSWORD`,
+  pre-filled `AISOC_CREDENTIAL_KEY` (Fernet), explicit required-vars
+  header. `DATABASE_URL` and the Postgres service now share the same
+  default secret so first-run no longer hits a password mismatch.
+- **PR3 — `scripts/run_evals.py` CLI contract** (`scripts/run_evals.py`,
+  `scripts/tests/test_run_evals_cli.py`): real `--suite` flag with
+  per-suite runners, `PASS/FAIL` banners, and a graceful `ImportError`
+  hint when the eval substrate isn't installed. The video step
+  `python scripts/run_evals.py --suite all` now does what the voice-over
+  claims.
+- **PR4 — `aisoc serve` / `aisoc db upgrade` / `aisoc mcp serve` /
+  `aisoc mcp install`** (`packages/aisoc-cli/src/aisoc_cli/main.py`,
+  `packages/aisoc-cli/tests/test_ops_commands.py`): four new operator
+  subcommands that wrap `docker compose`, the SQL migration runner, and
+  the MCP Node entrypoint. `aisoc mcp install` writes the right config
+  block for `cursor`, `claude`, or `continue`. 12 CLI surface tests
+  cover argv construction, exit-code propagation, missing-Docker handling,
+  local-`dist` vs. `npx @aisoc/mcp` fallback, and host-choice validation.
+- **PR5 — `aisoc submit` + lateral-movement fixture**
+  (`packages/aisoc-cli/src/aisoc_cli/main.py`,
+  `packages/aisoc-cli/tests/test_submit_command.py`,
+  `examples/alerts/lateral-movement.json`): POSTs a JSON fixture to the
+  ingest service's `/v1/ingest/batch` with the `X-Tenant-ID` header that
+  `services/ingest/internal/handler/handler.go` requires. Fixture-level
+  `connector_id` / `connector_type` / `source_format` overrides are
+  honored; CLI flags + env vars (`AISOC_INGEST_URL`, `AISOC_TENANT_ID`)
+  override the fixture. The shipped fixture is an Okta System Log
+  impossible-travel scenario (NYC → St. Petersburg, 8 minutes apart) that
+  routes through the `okta_system_log` profile (OCSF class_uid 3002).
+  14 CLI tests use `httpx.MockTransport` for the full request/response
+  matrix including 400/500, transport errors, and malformed JSON.
+- **PR6 — quickstart Path C** (`apps/docs/docs/quickstart.md`): the
+  founder-style CLI walkthrough the demo follows, with a single-screen
+  cheat sheet. Path A (`pnpm aisoc:demo`) and Path B (raw `docker compose`)
+  are unchanged.
+- **PR7 — version bump** (this commit): `VERSION` file at repo root +
+  `apps/web/package.json` bumped 7.2.0 → 7.3.0. CHANGELOG section
+  promoted from `[Unreleased]` to `[7.3.0]`.
+
+### Alerts console — Investigation Rail & correlation narrative (v1.5 W6 / PR-4)
+
+The `/alerts` queue is now a two-pane workbench: the existing queue on the left and an **Investigation Rail** on the right. Selecting a row hydrates narrative, related entities (with pivot links), a six-event mini-timeline, and structured recommended actions — no drawer hop for first-pass triage.
+
+- **`services/fusion`** — `fusion_engine` emits a deterministic **correlation narrative** at fuse time; `narrative.py` mirrors the vendored builder shared with the API.
+- **`services/api`** — `alert_rail.py` builds the rail payload; `narrative_projection.py` + `narrative_loader.py` back-fill legacy alerts on first `GET /api/v1/alerts/{id}`; migration `041_alert_correlation_narrative.sql` stores cached narrative on the alert row; OpenAPI + tests extended for the detail envelope.
+- **`apps/web`** — `InvestigationRail.tsx` + `AlertsView.tsx` integration; Vitest coverage in `InvestigationRail.test.tsx`.
+- **`apps/docs/docs/console/investigation-rail.md`** — operator/analyst guide; sidebar entry under Console.
+- **`scripts/sync_vendored_narrative.py`** — keeps `services/api/app/_vendor/narrative.py` aligned with fusion.
+
 ### Connectors — Wazuh Indexer ingest (Stage 2)
 
 New first-class endpoint connector for Wazuh deployments. AiSOC now polls the

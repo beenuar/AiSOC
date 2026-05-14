@@ -4,6 +4,8 @@ import { SWRConfig } from 'swr';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { CommandPalette } from './CommandPalette';
+import { TimeWindowProvider } from './TimeWindowProvider';
+import { TenantProvider } from './TenantProvider';
 import { CopilotDock } from '@/components/copilot/CopilotDock';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import { DemoAutoLogin } from '@/components/demo/DemoAutoLogin';
@@ -37,7 +39,17 @@ export function AppShell({ children }: AppShellProps) {
         No-ops outside demo mode.
       */}
       <DemoAutoLogin />
-      <div className="min-h-screen bg-surface-base">
+      {/*
+        v1.5 (W4 + W5): TimeWindow + Tenant contexts mount once at the shell
+        boundary so every page (and the TopBar) reads from the same source of
+        truth. They sit *inside* SWRConfig so the tenant switcher's
+        `aisoc:tenant-switched` cache-bust reaches the shared cache, and
+        *outside* the visible chrome so a context error doesn't blank the
+        entire app shell.
+      */}
+      <TimeWindowProvider>
+        <TenantProvider>
+          <div className="min-h-screen bg-surface-base">
         {/*
           DemoBanner reads `NEXT_PUBLIC_DEMO_MODE`, a build-time env var.
           In development the client bundle can have a stale inlined value that
@@ -68,7 +80,9 @@ export function AppShell({ children }: AppShellProps) {
         <ClientOnly>
           <CommandPalette />
         </ClientOnly>
-      </div>
+          </div>
+        </TenantProvider>
+      </TimeWindowProvider>
     </SWRConfig>
   );
 }

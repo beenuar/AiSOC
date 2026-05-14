@@ -212,15 +212,24 @@ class AzureActivityConnector(BaseConnector):
         level = (raw.get("level") or "").lower()
         caller = raw.get("caller", "")
 
+        # Azure Activity Log severity heuristic against AiSOC's 5-tier ladder
+        # (info | low | medium | high | critical):
+        #   - ``level=critical`` -> ``critical`` (Azure's hardest hint)
+        #   - ``level=error``    -> ``high``
+        #   - ``level=warning``  -> ``medium``
+        #   - failed status      -> at least ``medium``
+        #   - high-blast-radius IAM/role/policy/firewall ops -> ``high``
         op_lower = op_name.lower()
         severity = "info"
-        if level in ("error", "critical"):
+        if level == "critical":
+            severity = "critical"
+        elif level == "error":
             severity = "high"
         elif level == "warning":
             severity = "medium"
         if status.lower() == "failed":
             severity = "medium" if severity == "info" else severity
-        if any(verb in op_lower for verb in _HIGH_BLAST_RADIUS_VERBS):
+        if any(verb in op_lower for verb in _HIGH_BLAST_RADIUS_VERBS) and severity != "critical":
             severity = "high"
 
         resource_id = raw.get("resourceId") or ""

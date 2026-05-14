@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
@@ -16,6 +18,37 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 )
+
+// resolveCORSOrigins mirrors the shared Python helper in services/api/app/core/cors.py:
+// it reads “AISOC_CORS_ORIGINS“ (canonical) and falls back to “CORS_ORIGINS“
+// (legacy). When both are empty the default list keeps local dev usable. We do not
+// allow wildcard “*“ combined with credentials here because /v1/ingest doesn't
+// carry browser cookies, but operators can still tighten the allow-list per deploy
+// without touching code by setting AISOC_CORS_ORIGINS.
+func resolveCORSOrigins() []string {
+	for _, env := range []string{"AISOC_CORS_ORIGINS", "CORS_ORIGINS"} {
+		if v := strings.TrimSpace(os.Getenv(env)); v != "" {
+			parts := strings.Split(v, ",")
+			out := make([]string, 0, len(parts))
+			for _, p := range parts {
+				if s := strings.TrimSpace(p); s != "" {
+					out = append(out, s)
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+	return []string{
+		"http://localhost:3000",
+		"http://localhost:3001",
+		"http://127.0.0.1:3000",
+		"http://127.0.0.1:3001",
+		"https://tryaisoc.com",
+		"https://www.tryaisoc.com",
+	}
+}
 
 // Server wraps the HTTP server
 type Server struct {
@@ -37,8 +70,14 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler) *S
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+	// Allow-list is resolved from AISOC_CORS_ORIGINS (canonical) / CORS_ORIGINS
+	// (legacy) with a safe default for local dev + the tryaisoc.com console.
+	// AllowCredentials stays false here — /v1/ingest is token-authenticated
+	// per request, not session-cookie-authenticated, so we don't need the
+	// browser to attach cookies cross-origin and we keep the spec-mandated
+	// rejection of "*"+credentials safely impossible.
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   resolveCORSOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Tenant-ID", "X-Inbox-Token", "X-Splunk-Token", "X-Signature", "X-Hub-Signature-256", "X-AiSOC-K8s-Token"},
 		AllowCredentials: false,

@@ -66,23 +66,36 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 logger = structlog.get_logger()
 
 
-# High-severity events: trail/detection tamper, KMS destruction, root
-# account use, org-level tampering. These are almost always incidents.
+# Critical-severity events: irreversible-or-incident-grade actions
+# that almost always represent active tamper / take-over. These map
+# straight to AiSOC's ``critical`` tier so they fire the P1 SLA.
+_CRITICAL_SEVERITY_EVENTS = frozenset(
+    {
+        # Visibility kill switches — silencing the audit trail itself.
+        "DeleteTrail",
+        "DeleteDetector",  # GuardDuty detector deletion
+        "DisableSecurityHub",
+        "StopLogging",  # CloudTrail
+        "StopConfigurationRecorder",  # AWS Config
+        # Irreversible account / org takeover primitives.
+        "LeaveOrganization",
+        "RemoveAccountFromOrganization",
+        "TransferDomainToAnotherAwsAccount",
+        # Crypto destruction — pending unrecoverable data loss.
+        "ScheduleKeyDeletion",
+        "DisableKey",
+    }
+)
+
+
+# High-severity events: trail/detection tamper, KMS destruction
+# (recoverable), root account use, and other org-level changes that
+# warrant analyst eyes but aren't standalone P1 incidents on their own.
 _HIGH_SEVERITY_EVENTS = frozenset(
     {
         "ChangeRootMail",
-        "DeleteDetector",
         "DeleteFlowLogs",
-        "DeleteTrail",
-        "DisableKey",
-        "DisableSecurityHub",
-        "LeaveOrganization",
         "PutEventSelectors",
-        "RemoveAccountFromOrganization",
-        "ScheduleKeyDeletion",
-        "StopConfigurationRecorder",
-        "StopLogging",
-        "TransferDomainToAnotherAwsAccount",
         "UpdateTrail",
     }
 )
@@ -188,11 +201,13 @@ DEFAULT_EVENT_NAMES: tuple[str, ...] = (
 
 
 def _event_severity(event_name: str, error_code: str | None) -> str:
-    """Bucket a CloudTrail event into AiSOC's 4-tier severity ladder.
+    """Bucket a CloudTrail event into AiSOC's 5-tier severity ladder.
 
     Heuristic:
+        - CRITICAL if it's in ``_CRITICAL_SEVERITY_EVENTS`` (visibility
+          kill switches, org take-over, KMS destruction).
         - HIGH if it's in ``_HIGH_SEVERITY_EVENTS`` (trail tamper,
-          KMS destruction, org-level changes, etc).
+          root mail change, etc).
         - LOW if it's a known read-only recon call.
         - MEDIUM for everything else (the default for mutating events).
 
@@ -200,7 +215,9 @@ def _event_severity(event_name: str, error_code: str | None) -> str:
     the theory that a denied destructive action is often the loudest
     signal we have in the account.
     """
-    if event_name in _HIGH_SEVERITY_EVENTS:
+    if event_name in _CRITICAL_SEVERITY_EVENTS:
+        base = "critical"
+    elif event_name in _HIGH_SEVERITY_EVENTS:
         base = "high"
     elif event_name in _LOW_SEVERITY_EVENTS:
         base = "low"

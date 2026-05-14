@@ -74,13 +74,14 @@ interface SLAConfig {
   mttc_target: number;
 }
 
-const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
+const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'text-red-400',
   high:     'text-orange-400',
   medium:   'text-yellow-400',
   low:      'text-blue-400',
+  info:     'text-slate-400',
 };
 
 const SEVERITY_BG: Record<string, string> = {
@@ -88,6 +89,7 @@ const SEVERITY_BG: Record<string, string> = {
   high:     'bg-orange-900/30 border-orange-700',
   medium:   'bg-yellow-900/30 border-yellow-700',
   low:      'bg-blue-900/30 border-blue-700',
+  info:     'bg-slate-900/30 border-slate-700',
 };
 
 function fmtMinutes(min: number | null): string {

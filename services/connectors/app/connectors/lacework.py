@@ -199,10 +199,11 @@ class LaceworkConnector(BaseConnector):
         kind = raw.get("_kind", "alert")
         if kind == "policy":
             return self._normalize_policy(raw)
+        # Lacework alerts expose info/low/medium/high/critical. Mirror
+        # all five tiers (including ``critical``) into AiSOC's ladder
+        # rather than collapsing critical to high.
         sev_raw = (raw.get("severity") or "").lower()
-        if sev_raw in ("critical",):
-            sev = "high"
-        elif sev_raw in ("info", "low", "medium", "high"):
+        if sev_raw in ("info", "low", "medium", "high", "critical"):
             sev = sev_raw
         else:
             sev = "medium"

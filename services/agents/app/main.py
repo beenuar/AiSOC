@@ -101,19 +101,16 @@ app = FastAPI(
 
 # CORS — the web console talks to this service directly (it does not go through
 # the Next.js rewrite layer for agent endpoints because we want to stream
-# NDJSON without buffering through the proxy). Origins are comma-separated via
-# the CORS_ORIGINS env var; default keeps localhost dev usable out of the box.
-_cors_origins_raw = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,https://tryaisoc.com,https://www.tryaisoc.com",
-)
-_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+# NDJSON without buffering through the proxy). Origins are resolved via the
+# shared ``build_cors_kwargs`` helper which reads AISOC_CORS_ORIGINS (canonical)
+# / CORS_ORIGINS (legacy) and enforces the "no wildcard with credentials in
+# production" invariant so a careless ``export CORS_ORIGINS=*`` can't ship
+# CSRF to prod.
+from app.core.cors import build_cors_kwargs  # noqa: E402
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **build_cors_kwargs(service_name="agents", allow_credentials=True),
 )
 
 # OpenTelemetry auto-instrumentation (FastAPI + httpx)

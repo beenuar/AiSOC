@@ -90,6 +90,53 @@ export const API_BASES = {
 
 export const DEFAULT_TENANT_ID = TENANT_ID;
 
+// ─── Active tenant (W5 — tenant switcher) ───────────────────────────────────
+//
+// The console used to ship every request with the env-derived TENANT_ID. With
+// the tenant switcher, MSSP parents and analysts who carry credentials for
+// multiple tenants need a way to flip the `X-Tenant-Id` header at runtime.
+// We expose three building blocks the TenantContext + switcher consume:
+//
+//   - ACTIVE_TENANT_KEY:    localStorage key for the override
+//   - getActiveTenantId():  read precedence — override → cached user → env
+//   - setActiveTenantId():  persist (or clear) the override
+//
+// `request()` calls `getActiveTenantId()` on every call so a tenant flip
+// applies to the very next fetch without needing a page reload. The env var
+// `NEXT_PUBLIC_TENANT_ID` remains the floor so demo and SSR contexts keep
+// working when no user is logged in.
+
+export const ACTIVE_TENANT_KEY = 'aisoc.activeTenantId';
+
+export function getActiveTenantId(): string {
+  if (typeof window === 'undefined') return TENANT_ID;
+  try {
+    const override = window.localStorage.getItem(ACTIVE_TENANT_KEY);
+    if (override) return override;
+    const raw = window.localStorage.getItem(AUTH_USER_KEY);
+    if (raw) {
+      const user = JSON.parse(raw) as { tenant_id?: string };
+      if (user.tenant_id) return user.tenant_id;
+    }
+  } catch {
+    /* localStorage unavailable / malformed payload — fall through */
+  }
+  return TENANT_ID;
+}
+
+export function setActiveTenantId(tenantId: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (tenantId) {
+      window.localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
+    } else {
+      window.localStorage.removeItem(ACTIVE_TENANT_KEY);
+    }
+  } catch {
+    /* private-mode quota errors — surface choice is in-memory only */
+  }
+}
+
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
   baseUrl?: string;
@@ -124,7 +171,9 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'X-Tenant-Id': TENANT_ID,
+    // Resolve at call-time so the tenant switcher takes effect on the very
+    // next fetch (no full page reload needed).
+    'X-Tenant-Id': getActiveTenantId(),
     ...fetchOptions.headers,
   };
 
@@ -299,6 +348,55 @@ export const authApi = {
   },
 };
 
+// ─── Tenants & MSSP ─────────────────────────────────────────────────────────
+//
+// The W5 tenant switcher needs to know:
+//   - which tenant the user is currently authenticated against
+//     (`tenants/me` — single canonical source of truth, includes display name)
+//   - what other tenants they can flip to
+//     (`mssp/children` for MSSP parents — returns *real* child tenants from
+//      the DB, not the mock list used by the parent dashboard)
+//
+// Failures are caught by the caller — the switcher gracefully degrades to a
+// single-tenant role badge when these endpoints 401/404 (e.g. a tenant user
+// who isn't an MSSP parent will not have any children but still has /me).
+
+export interface MyTenant {
+  id: string;
+  name: string;
+  // mssp_role and parent_tenant_id come from the lightweight identity
+  // endpoint and are present for any tenant (null for standalone tenants).
+  mssp_role?: 'parent' | 'child' | null;
+  parent_tenant_id?: string | null;
+}
+
+export interface ChildTenant {
+  id: string;
+  name: string;
+  mssp_role: string;
+  created_at?: string;
+}
+
+export const tenantsApi = {
+  /**
+   * Lightweight tenant identity for the SOC console TopBar.
+   *
+   * Uses `/api/v1/tenants/me/identity` (any authenticated user) instead of
+   * `/api/v1/tenants/me` (requires `settings:read`) so analyst/viewer roles
+   * can render the tenant pill and role badge without leaking plan or
+   * settings configuration.
+   */
+  async me(): Promise<MyTenant> {
+    return request<MyTenant>('/api/v1/tenants/me/identity');
+  },
+};
+
+export const msspApi = {
+  async listChildren(): Promise<ChildTenant[]> {
+    return request<ChildTenant[]>('/api/v1/mssp/children');
+  },
+};
+
 // ─── Alerts ─────────────────────────────────────────────────────────────────
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -331,6 +429,57 @@ export interface ConfidenceFactor {
   weight: number;
 }
 
+/**
+ * One pivotable entity from the Investigation Rail (W6).
+ *
+ * The API groups these by ``kind`` — *principal* (user, host, asset),
+ * *network* (ip, domain, fqdn), *workflow* (case_id, run_id, ledger),
+ * *tenant* (tenant_id) — so the rail can render each group with its
+ * own affordances. ``value`` is always renderable as text; ``label``
+ * is an optional human-friendly override. ``pivotPath`` is an
+ * internal href (e.g. ``/graph?node=ip:10.0.0.1``) when the entity
+ * can be opened in the AttackGraphView.
+ */
+export interface RelatedEntity {
+  kind: 'principal' | 'network' | 'workflow' | 'tenant';
+  type: string;
+  value: string;
+  label?: string | null;
+  pivotPath?: string | null;
+}
+
+/**
+ * One row in the Investigation Rail's mini-timeline (W6).
+ *
+ * Reuses the shape of ``InvestigationLedger`` so the existing
+ * renderer can be lifted. Sourced from the case timeline and audit
+ * log; capped at the six most recent events on the server.
+ */
+export interface MiniTimelineEvent {
+  id: string;
+  timestamp: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  actor?: string | null;
+  /** ``case_timeline`` or ``audit_log`` — surfaced as a small badge. */
+  source: 'case_timeline' | 'audit_log';
+}
+
+/**
+ * One row in the rail's "Recommended actions" list (W6).
+ *
+ * Generated by the ResponderAgent and normalised server-side so the
+ * UI can render legacy list-of-strings payloads and the structured
+ * shape uniformly.
+ */
+export interface RecommendedAction {
+  priority: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  action: string;
+  rationale?: string | null;
+  risk?: string | null;
+}
+
 export interface Alert {
   id: string;
   title: string;
@@ -356,6 +505,201 @@ export interface Alert {
   ledgerRunId?: string;
   /** Analyst-corrected verdict (Tier 1.5 override loop). */
   disposition?: 'true_positive' | 'false_positive' | 'benign' | 'escalate' | null;
+  // ─── Investigation Rail envelope (W6) ─────────────────────────────────────
+  //
+  // The list endpoint never populates these — they're only present
+  // on ``GET /api/v1/alerts/{id}``. The rail component checks for
+  // their presence before rendering each section, so it degrades
+  // gracefully when the backend predates v1.5.
+  narrative?: string | null;
+  relatedEntities?: RelatedEntity[];
+  miniTimeline?: MiniTimelineEvent[];
+  recommendedActions?: RecommendedAction[];
+}
+
+/**
+ * Normalize an alert payload coming back from the API.
+ *
+ * The Postgres-backed API speaks ``snake_case`` (``tenant_id``,
+ * ``risk_score``, ``confidence_label``, …) while the web console's
+ * ``Alert`` type uses ``camelCase``. We map the keys explicitly so
+ * the UI can rely on the documented shape and the new Investigation
+ * Rail fields (W6 — ``narrative``, ``related_entities``,
+ * ``mini_timeline``, ``recommended_actions``) flow through one
+ * predictable boundary.
+ *
+ * Unknown / missing keys are tolerated — older API builds simply
+ * don't carry the new fields and the rail renders empty sections.
+ */
+function normalizeAlert(raw: unknown): Alert {
+  const r = (raw ?? {}) as Record<string, unknown>;
+
+  const pickStr = (snake: string, camel: string): string | undefined => {
+    const v = r[snake] ?? r[camel];
+    return typeof v === 'string' ? v : undefined;
+  };
+  const pickNum = (snake: string, camel: string): number | undefined => {
+    const v = r[snake] ?? r[camel];
+    return typeof v === 'number' ? v : undefined;
+  };
+  const pickArr = <T = unknown>(snake: string, camel: string): T[] | undefined => {
+    const v = r[snake] ?? r[camel];
+    return Array.isArray(v) ? (v as T[]) : undefined;
+  };
+
+  // Tags arrive either as a bare array (legacy) or as the JSONB
+  // ``{labels: [...]}`` shape the cases endpoint uses. Normalise to
+  // a plain string[] so the rail and grid can map without a guard.
+  const tagsRaw = r.tags;
+  let tags: string[] | undefined;
+  if (Array.isArray(tagsRaw)) {
+    tags = tagsRaw.map((t) => String(t));
+  } else if (
+    tagsRaw &&
+    typeof tagsRaw === 'object' &&
+    Array.isArray((tagsRaw as Record<string, unknown>).labels)
+  ) {
+    tags = ((tagsRaw as Record<string, unknown>).labels as unknown[]).map((t) =>
+      String(t),
+    );
+  }
+
+  // MITRE: the API can return either ``mitre_attack`` (already
+  // structured) or the split ``mitre_tactics`` / ``mitre_techniques``
+  // arrays. Prefer structured; otherwise zip the two parallel lists.
+  let mitreAttack: MitreAttack[] | undefined;
+  const mitreStructured = r.mitre_attack ?? r.mitreAttack;
+  if (Array.isArray(mitreStructured)) {
+    mitreAttack = (mitreStructured as Array<Record<string, unknown>>).map((m) => ({
+      tactic: String(m.tactic ?? ''),
+      technique: String(m.technique ?? ''),
+      techniqueId: String(m.technique_id ?? m.techniqueId ?? ''),
+    }));
+  } else {
+    const techniques = pickArr<string>('mitre_techniques', 'mitreTechniques');
+    const tactics = pickArr<string>('mitre_tactics', 'mitreTactics');
+    if (techniques && techniques.length > 0) {
+      mitreAttack = techniques.map((t, i) => ({
+        tactic: tactics?.[i] ? String(tactics[i]) : '',
+        technique: String(t),
+        techniqueId: String(t),
+      }));
+    }
+  }
+
+  const rationaleRaw = r.confidence_rationale ?? r.confidenceRationale;
+  const confidenceRationale = Array.isArray(rationaleRaw)
+    ? (rationaleRaw as Array<Record<string, unknown>>).map((f) => ({
+        factor: String(f.factor ?? ''),
+        label: String(f.label ?? ''),
+        value: Number(f.value ?? 0),
+        contribution: Number(f.contribution ?? 0),
+        weight: Number(f.weight ?? 0),
+      }))
+    : undefined;
+
+  // ── Investigation Rail envelope (W6) ────────────────────────────────────
+  const relatedRaw = r.related_entities ?? r.relatedEntities;
+  const relatedEntities = Array.isArray(relatedRaw)
+    ? (relatedRaw as Array<Record<string, unknown>>).map((e) => ({
+        kind: (e.kind ?? 'principal') as RelatedEntity['kind'],
+        type: String(e.type ?? ''),
+        value: String(e.value ?? ''),
+        label: (e.label as string | null | undefined) ?? null,
+        pivotPath:
+          (e.pivot_path as string | null | undefined) ??
+          (e.pivotPath as string | null | undefined) ??
+          null,
+      }))
+    : undefined;
+
+  const timelineRaw = r.mini_timeline ?? r.miniTimeline;
+  const miniTimeline = Array.isArray(timelineRaw)
+    ? (timelineRaw as Array<Record<string, unknown>>).map((e) => ({
+        id: String(e.id ?? ''),
+        timestamp: String(e.timestamp ?? ''),
+        type: String(e.type ?? ''),
+        title: String(e.title ?? ''),
+        description: (e.description as string | null | undefined) ?? null,
+        actor: (e.actor as string | null | undefined) ?? null,
+        source: (e.source ?? 'audit_log') as MiniTimelineEvent['source'],
+      }))
+    : undefined;
+
+  const recommendedRaw =
+    r.recommended_actions ??
+    r.recommendedActions ??
+    r.ai_recommendations ??
+    r.aiRecommendations;
+  let recommendedActions: RecommendedAction[] | undefined;
+  if (Array.isArray(recommendedRaw)) {
+    recommendedActions = (recommendedRaw as unknown[]).map((item) => {
+      if (typeof item === 'string') {
+        return { priority: 'medium', action: item };
+      }
+      const o = (item ?? {}) as Record<string, unknown>;
+      return {
+        priority: (o.priority ?? 'medium') as RecommendedAction['priority'],
+        action: String(o.action ?? ''),
+        rationale: (o.rationale as string | null | undefined) ?? null,
+        risk: (o.risk as string | null | undefined) ?? null,
+      };
+    });
+  }
+
+  // ``risk_score`` legacy fallback: fusion sometimes only ships
+  // ``confidence`` (0-100) and not the older ``risk_score``. Prefer
+  // the explicit field, fall back to confidence as a soft signal.
+  const riskScore =
+    pickNum('risk_score', 'riskScore') ??
+    pickNum('ai_score', 'aiScore') ??
+    pickNum('confidence', 'confidence') ??
+    0;
+
+  return {
+    id: String(r.id ?? ''),
+    title: String(r.title ?? ''),
+    description: String(r.description ?? ''),
+    severity: ((r.severity as string) ?? 'medium') as AlertSeverity,
+    status: ((r.status as string) ?? 'new') as AlertStatus,
+    source:
+      pickStr('source', 'source') ??
+      pickStr('connector_type', 'connectorType') ??
+      'unknown',
+    sourceRef: pickStr('source_ref', 'sourceRef'),
+    tenantId: pickStr('tenant_id', 'tenantId') ?? '',
+    riskScore,
+    mitreAttack,
+    iocs: pickArr<AlertIOC>('iocs', 'iocs'),
+    rawEvent:
+      (r.raw_event as Record<string, unknown> | undefined) ??
+      (r.rawEvent as Record<string, unknown> | undefined),
+    assignee: pickStr('assignee', 'assignee'),
+    caseId: pickStr('case_id', 'caseId'),
+    tags,
+    createdAt:
+      pickStr('created_at', 'createdAt') ??
+      pickStr('first_seen', 'firstSeen') ??
+      new Date().toISOString(),
+    updatedAt:
+      pickStr('updated_at', 'updatedAt') ??
+      pickStr('last_seen', 'lastSeen') ??
+      new Date().toISOString(),
+    resolvedAt: pickStr('resolved_at', 'resolvedAt'),
+    confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as
+      | ConfidenceLabel
+      | undefined,
+    confidenceScore:
+      pickNum('confidence_score', 'confidenceScore') ??
+      pickNum('confidence', 'confidence'),
+    confidenceRationale,
+    ledgerRunId: pickStr('ledger_run_id', 'ledgerRunId'),
+    disposition: (r.disposition ?? null) as Alert['disposition'],
+    narrative: (r.narrative as string | null | undefined) ?? null,
+    relatedEntities,
+    miniTimeline,
+    recommendedActions,
+  };
 }
 
 export interface AlertsResponse {
@@ -379,18 +723,41 @@ export interface AlertFilters {
 }
 
 export const alertsApi = {
-  list: (filters: AlertFilters = {}) =>
-    request<AlertsResponse>('/api/v1/alerts', {
+  list: async (filters: AlertFilters = {}) => {
+    const raw = await request<{
+      alerts?: unknown[];
+      total?: number;
+      page?: number;
+      page_size?: number;
+      pageSize?: number;
+    }>('/api/v1/alerts', {
       params: filters as Record<string, string>,
-    }),
+    });
+    return {
+      alerts: Array.isArray(raw.alerts) ? raw.alerts.map(normalizeAlert) : [],
+      total: typeof raw.total === 'number' ? raw.total : 0,
+      page: typeof raw.page === 'number' ? raw.page : 1,
+      pageSize:
+        typeof raw.pageSize === 'number'
+          ? raw.pageSize
+          : typeof raw.page_size === 'number'
+            ? raw.page_size
+            : 50,
+    } satisfies AlertsResponse;
+  },
 
-  get: (id: string) => request<Alert>(`/api/v1/alerts/${id}`),
+  get: async (id: string) => {
+    const raw = await request<unknown>(`/api/v1/alerts/${id}`);
+    return normalizeAlert(raw);
+  },
 
-  update: (id: string, data: Partial<Alert>) =>
-    request<Alert>(`/api/v1/alerts/${id}`, {
+  update: async (id: string, data: Partial<Alert>) => {
+    const raw = await request<unknown>(`/api/v1/alerts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
-    }),
+    });
+    return normalizeAlert(raw);
+  },
 
   bulkAction: (
     ids: string[],
@@ -434,6 +801,147 @@ export const alertsApi = {
     request<AlertExplanation>(`/api/v1/alerts/${alertId}/explain`, {
       method: 'POST',
       signal,
+    }),
+};
+
+// ─── Investigation Queue (W7) ───────────────────────────────────────────────
+//
+// The Investigation Queue is the analyst's working surface: one ranked list
+// of "what should I work on next?" sourced from the canonical alerts table.
+// The backend computes a virtual ``sla_due_at`` per row (``first_seen +
+// mttd_target`` for the alert's severity) and orders the queue by
+//
+//   1. assignment bucket (mine before unassigned), and
+//   2. ``sla_due_at`` ascending within each bucket.
+//
+// Snoozed and closed alerts are excluded server-side. Unassigned ``medium``
+// and below are also excluded — those are triaged in bulk on /alerts, not
+// one-by-one on the queue. See ``services/api/app/services/alert_queue.py``
+// for the full contract.
+
+export type QueueOwner = 'me' | 'unassigned' | 'all';
+export type QueuePeriod = '24h' | '7d' | '30d' | 'all';
+export type QueueBucket = 'mine' | 'unassigned';
+export type QueueRisk = 'low' | 'medium' | 'high';
+
+export interface QueueAsset {
+  /** ``host`` | ``user`` | ``ip`` | ``asset`` — chosen by the backend. */
+  kind: string;
+  value: string;
+  label?: string | null;
+}
+
+export interface QueueAction {
+  /** 1-indexed priority; lower is more urgent. */
+  priority: number;
+  action: string;
+  risk: QueueRisk;
+}
+
+export interface QueueItem {
+  id: string;
+  tenant_id: string;
+  title: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  priority: number;
+  category?: string | null;
+  connector_type?: string | null;
+
+  assigned_to_id?: string | null;
+  case_id?: string | null;
+
+  first_seen: string;
+  sla_due_at: string;
+  /** Seconds until ``sla_due_at`` — negative once breached. */
+  sla_remaining_seconds: number;
+  sla_breached: boolean;
+  age_seconds: number;
+
+  asset?: QueueAsset | null;
+  suggested_action?: QueueAction | null;
+
+  bucket: QueueBucket;
+}
+
+export interface QueueCounts {
+  mine: number;
+  unassigned: number;
+  all: number;
+}
+
+export interface QueueResponse {
+  items: QueueItem[];
+  total: number;
+  counts: QueueCounts;
+  period: QueuePeriod;
+  owner: QueueOwner;
+  page: number;
+  page_size: number;
+  pages: number;
+  /** Server's authoritative ``now`` — the UI drifts its countdowns from this. */
+  generated_at: string;
+}
+
+export interface QueueFilters {
+  owner?: QueueOwner;
+  period?: QueuePeriod;
+  page?: number;
+  page_size?: number;
+}
+
+export const queueApi = {
+  /**
+   * Fetch the Investigation Queue.
+   *
+   * Returns up to ``page_size`` items (capped server-side at 200) plus
+   * the live ``counts`` for all buckets — that's what the sidebar badge
+   * polls. The endpoint is cheap because the server only projects the
+   * columns the queue actually renders; do *not* fan out to ``alertsApi.get``
+   * for every row.
+   */
+  list: (filters: QueueFilters = {}) =>
+    request<QueueResponse>('/api/v1/alerts/queue', {
+      params: filters as Record<string, string | number>,
+    }),
+
+  /**
+   * Atomically claim an unassigned alert for the current user.
+   *
+   * Returns ``409`` if another analyst grabbed the row first — the UI
+   * should surface that as "claimed by Sam · refresh" rather than a
+   * generic error. Idempotent if the caller already owns the alert.
+   */
+  claim: (alertId: string) =>
+    request<Alert>(`/api/v1/alerts/${alertId}/claim`, {
+      method: 'POST',
+    }),
+
+  /**
+   * Reassign or unassign an alert. Pass ``assignee = null`` to release.
+   *
+   * Reuses the existing ``PATCH /alerts/{id}`` endpoint — the server
+   * already accepts ``assignee`` updates. We add a thin wrapper here so
+   * the queue view doesn't have to re-derive the URL.
+   */
+  assign: (alertId: string, assignee: string | null) =>
+    request<Alert>(`/api/v1/alerts/${alertId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ assignee }),
+    }),
+
+  /**
+   * Snooze an alert for ``duration_minutes`` (1 → 43200 / 30d) or until
+   * a specific timestamp. The alert re-enters the queue automatically
+   * once ``snoozed_until`` passes.
+   */
+  snooze: (
+    alertId: string,
+    body: { duration_minutes?: number; until?: string; reason?: string },
+  ) =>
+    request<Alert>(`/api/v1/alerts/${alertId}/snooze`, {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
 };
 
@@ -1178,6 +1686,7 @@ export interface DashboardMetrics {
     high: number;
     medium: number;
     low: number;
+    info?: number;
     resolvedToday: number;
     mttr: number;
   };
@@ -1192,6 +1701,64 @@ export interface DashboardMetrics {
   threatsBySource: Array<{ source: string; count: number }>;
 }
 
+/**
+ * Funnel KPI metrics (PR-3 / W1).
+ *
+ * Mirrors ``FunnelMetrics`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/metrics.py``. Drives the
+ * ``FunnelKpiBar`` and ``EfficiencyReport`` widgets on the dashboard.
+ */
+export interface FunnelMetrics {
+  period: '1h' | '24h' | '7d' | '30d';
+  events_of_interest: number;
+  correlation_instances: number;
+  alerts_generated: number;
+  /** 0..1 ratio: 1 − (FP / total dispositioned alerts). */
+  signal_to_noise: number;
+  /** Mean time-to-detect in seconds (Alert.created_at → first_seen_at). */
+  mttd_seconds: number;
+  /** Active alerts owned by analysts (`status in new/triaging/in_progress`). */
+  analyst_queue_depth: number;
+  /** Alerts produced per correlation instance, clamped to [0, 1]. */
+  correlation_efficiency: number;
+  /** Alerts produced per event-of-interest, clamped to [0, 1]. */
+  alert_yield: number;
+  mitre_coverage: { covered: number; total: number; ratio: number };
+  /** Period-over-period deltas (fraction, e.g. 0.05 = +5%). */
+  deltas: {
+    events_of_interest: number;
+    correlation_instances: number;
+    alerts_generated: number;
+    signal_to_noise: number;
+    mttd_seconds: number;
+    analyst_queue_depth: number;
+  };
+  /** ISO-8601 server timestamp. */
+  generated_at: string;
+}
+
+/**
+ * Pipeline health (PR-3 / W9).
+ *
+ * Mirrors ``PipelineHealth`` Pydantic model. Drives the
+ * ``PipelineHealth`` strip on /dashboard.
+ */
+export interface PipelineStage {
+  stage: 'ingest' | 'normalize' | 'fuse' | 'correlate' | 'alert';
+  backlog: number;
+  p95_latency_ms: number;
+  error_rate: number;
+  status: 'unknown' | 'green' | 'yellow' | 'red';
+}
+
+export interface PipelineHealth {
+  /** Worst stage status, surfaced at the top of the pipeline rail. */
+  overall_status: 'unknown' | 'green' | 'yellow' | 'red';
+  stages: PipelineStage[];
+  /** ISO-8601 server timestamp. */
+  generated_at: string;
+}
+
 export const metricsApi = {
   getDashboard: () =>
     request<DashboardMetrics>('/api/v1/metrics/dashboard'),
@@ -1203,6 +1770,14 @@ export const metricsApi = {
         params: { period },
       },
     ),
+
+  /** Funnel KPIs (events → correlations → alerts) with deltas. */
+  getFunnel: (period: '1h' | '24h' | '7d' | '30d' = '24h') =>
+    request<FunnelMetrics>('/api/v1/metrics/funnel', { params: { period } }),
+
+  /** Per-stage pipeline health (ingest → normalize → fuse → correlate → alert). */
+  getPipelineHealth: () =>
+    request<PipelineHealth>('/api/v1/health/pipeline'),
 };
 
 // ─── SOC Insights (T3.1) ─────────────────────────────────────────────────────
@@ -2863,6 +3438,187 @@ export const detectionProposalsApi = {
     ),
 };
 
+// ─── Detection Rule Tuning Workbench (PR-6 / v1.5 §W8) ───────────────────────
+//
+// The tuning workbench replaces the static /noise-tuning prototype with a live
+// projection of ``DetectionRule`` rows into analyst-actionable suggestions.
+// The backend is intentionally cheap — every projection is derived from
+// already-materialised fields (``fp_rate``, ``total_hits``, ``confidence``,
+// ``last_triggered``, ``status``) so a tenant with thousands of imported Sigma
+// rules can still triage without hammering the alerts table.
+//
+// Three verbs ship here:
+//   • ``list`` / ``summary`` — read-only projection (``rules:read``).
+//   • ``apply`` — mechanically tighten a rule (``rules:write``), bumps version.
+//   • ``dismiss`` / ``autoTune`` — record analyst intent (``rules:write``).
+//
+// See ``services/api/app/services/rule_tuning.py`` for the authoritative
+// wire shape; the types below mirror its Pydantic models 1:1.
+
+export type TuningSuggestion =
+  | 'disable'
+  | 'add_suppression'
+  | 'raise_threshold'
+  | 'tune_confidence'
+  | 'review_stale'
+  | 'healthy';
+
+export type TuningAction =
+  | 'raise_threshold'
+  | 'add_suppression'
+  | 'disable'
+  | 'acknowledge';
+
+export interface TuningEntry {
+  rule_id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  severity: string;
+  status: string;
+  enabled: boolean;
+  confidence: number;
+  /** Materialised false-positive rate in ``[0, 1]``. */
+  fp_rate: number;
+  total_hits: number;
+  /** ISO-8601 timestamp of the rule's last hit; ``null`` if it has never fired. */
+  last_triggered_at: string | null;
+  tags: string[];
+  mitre_tactics: string[];
+  mitre_techniques: string[];
+  version: number;
+  updated_at: string;
+
+  suggestion: TuningSuggestion;
+  /** Server-side ordering weight — already sorted descending in ``entries``. */
+  score: number;
+  reasons: string[];
+  auto_tune: boolean;
+  /** Set when an analyst has dismissed the rule from the default view. */
+  dismissed_at: string | null;
+  /** Most recent tuning action applied to this rule (``raise_threshold`` …). */
+  last_action: string | null;
+  last_action_at: string | null;
+}
+
+export interface TuningSummary {
+  total_rules: number;
+  actionable: number;
+  healthy: number;
+  disable_count: number;
+  add_suppression_count: number;
+  raise_threshold_count: number;
+  tune_confidence_count: number;
+  review_stale_count: number;
+  auto_tune_enabled: number;
+  /** Average ``fp_rate`` across classified rules, ``[0, 1]``. */
+  average_fp_rate: number;
+  /** Count of rules whose ``fp_rate`` is at or above the noisy threshold. */
+  high_fp_count: number;
+}
+
+export interface TuningFilters {
+  severity: string | null;
+  suggestion: string | null;
+  search: string | null;
+  enabled_only: boolean;
+  include_dismissed: boolean;
+  page: number;
+  page_size: number;
+}
+
+export interface TuningResponse {
+  entries: TuningEntry[];
+  summary: TuningSummary;
+  /** Echo of the filters that built this response. */
+  filters: TuningFilters;
+  total: number;
+  generated_at: string;
+}
+
+export interface TuningListParams {
+  severity?: string;
+  suggestion?: TuningSuggestion;
+  search?: string;
+  enabled_only?: boolean;
+  include_dismissed?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ApplyTuningRequest {
+  action: TuningAction;
+  note?: string | null;
+  /** Override threshold to set when ``action === 'raise_threshold'``. */
+  threshold?: number | null;
+  /** Free-text reason recorded with the suppression placeholder. */
+  suppression_reason?: string | null;
+}
+
+export interface DismissTuningRequest {
+  reason?: string | null;
+}
+
+export interface AutoTuneRequest {
+  enabled: boolean;
+}
+
+export const tuningApi = {
+  /**
+   * Fetch the rule tuning workbench feed.
+   *
+   * The ``summary`` block is computed across the *entire classified
+   * population* (not the current page), so the header tiles stay stable
+   * as analysts paginate. Dismissed rules are excluded by default — pass
+   * ``include_dismissed: true`` when auditing what's been hidden.
+   */
+  list: (params: TuningListParams = {}) =>
+    request<TuningResponse>('/api/v1/detection/tuning', {
+      params: params as Record<string, string | number | boolean>,
+    }),
+
+  /**
+   * Cheap summary-only endpoint. Used by the sidebar badge and the
+   * upcoming /console dashboard tile so they don't have to fetch the
+   * full feed just to render counts.
+   */
+  summary: () => request<TuningSummary>('/api/v1/detection/tuning/summary'),
+
+  /**
+   * Mechanically apply a tuning suggestion. ``raise_threshold``,
+   * ``add_suppression``, and ``disable`` mutate the rule and bump
+   * ``DetectionRule.version``; ``acknowledge`` is a no-op + audit. The
+   * server returns the re-projected entry so the UI can refresh in place.
+   */
+  apply: (ruleId: string, body: ApplyTuningRequest) =>
+    request<TuningEntry>(`/api/v1/detection/tuning/${ruleId}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Hide a rule from the default workbench view without touching its
+   * semantics. Dismissed rules reappear with ``include_dismissed: true``.
+   */
+  dismiss: (ruleId: string, body: DismissTuningRequest = {}) =>
+    request<TuningEntry>(`/api/v1/detection/tuning/${ruleId}/dismiss`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Flip the per-rule ``auto_tune`` opt-in flag. Stored under
+   * ``suppression_config.auto_tune`` so future automated tuners know
+   * they're allowed to touch the rule. Flipping does *not* trigger any
+   * immediate mutation.
+   */
+  autoTune: (ruleId: string, enabled: boolean) =>
+    request<TuningEntry>(`/api/v1/detection/tuning/${ruleId}/auto_tune`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled } satisfies AutoTuneRequest),
+    }),
+};
+
 // ─── AI Copilot ──────────────────────────────────────────────────────────────
 
 export type CopilotRole = 'user' | 'assistant' | 'system';
@@ -4154,6 +4910,7 @@ export default {
   graph: graphApi,
   detection: detectionApi,
   detectionProposals: detectionProposalsApi,
+  tuning: tuningApi,
   copilot: copilotApi,
   contextual: contextualApi,
   ledger: ledgerApi,

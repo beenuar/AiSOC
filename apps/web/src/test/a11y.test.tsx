@@ -90,6 +90,14 @@ vi.mock('@/lib/api', () => ({
     sendMessage: vi.fn(),
     getHistory: vi.fn(() => Promise.resolve([])),
   },
+  tenantsApi: {
+    me: vi.fn(() => Promise.reject(new Error('unauthenticated'))),
+  },
+  msspApi: {
+    listChildren: vi.fn(() => Promise.resolve([])),
+  },
+  getActiveTenantId: vi.fn(() => ''),
+  setActiveTenantId: vi.fn(),
 }));
 
 // Sidebar reads version from package.json — mock it so the import doesn't
@@ -104,6 +112,8 @@ import { StartHero } from '../components/onboarding/StartHero';
 import { ThemeToggle } from '../components/theme/ThemeToggle';
 import { ThemeProvider } from '../components/theme/ThemeProvider';
 import { TopBar } from '../components/layout/TopBar';
+import { TimeWindowProvider } from '../components/layout/TimeWindowProvider';
+import { TenantProvider } from '../components/layout/TenantProvider';
 import { Sidebar } from '../components/layout/Sidebar';
 import { EmptyState } from '../components/ui/EmptyState';
 import { CopilotDock } from '../components/copilot/CopilotDock';
@@ -148,7 +158,11 @@ describe('WCAG 2.1 AA — high-traffic surfaces', () => {
     pathnameMock.mockReturnValue('/dashboard');
     const { container } = render(
       <ThemeProvider>
-        <TopBar />
+        <TimeWindowProvider>
+          <TenantProvider>
+            <TopBar />
+          </TenantProvider>
+        </TimeWindowProvider>
       </ThemeProvider>,
     );
     const results = await axe(container, axeOptions);

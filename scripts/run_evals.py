@@ -31,18 +31,22 @@ The runner also dumps the synthetic-telemetry coverage summary so connector
 and Sigma-rule PRs can pin against a stable corpus.
 
 Usage:
-    python3 scripts/run_evals.py                  # human-readable + writes report
-    python3 scripts/run_evals.py --json           # JSON to stdout
-    python3 scripts/run_evals.py --out path.json  # write to a custom path
-    python3 scripts/run_evals.py --ci             # exit non-zero on regression
+    python3 scripts/run_evals.py                       # human-readable + writes report
+    python3 scripts/run_evals.py --suite all           # run every suite (default)
+    python3 scripts/run_evals.py --suite mitre_accuracy
+                                                       # run a single suite by name
+    python3 scripts/run_evals.py --json                # JSON to stdout
+    python3 scripts/run_evals.py --out path.json       # write to a custom path
+    python3 scripts/run_evals.py --ci                  # exit non-zero on regression
     python3 scripts/run_evals.py \
         --baseline eval_baseline.json \
-        --max-regression-pp 1.0                   # gate against a saved baseline
+        --max-regression-pp 1.0                        # gate against a saved baseline
 
 Exit codes:
     0  All gates passed (or --ci not set)
     1  At least one suite below its target floor (only with --ci)
     2  MITRE accuracy regressed by ≥ --max-regression-pp vs baseline (w2-dac)
+    3  Eval substrate imports failed (services/agents deps not installed)
 """
 from __future__ import annotations
 
@@ -67,6 +71,32 @@ from eval_telemetry import (  # type: ignore  # noqa: E402
     DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
     compute_per_investigation_telemetry,
 )
+
+
+def _print_import_error_hint(exc: BaseException) -> None:
+    """Friendly message when ``services/agents`` deps aren't installed.
+
+    The quickstart video walks new contributors through a fresh clone, so
+    when ``run_evals.py`` fails on import we owe them the exact two-command
+    fix rather than a raw ``ModuleNotFoundError`` traceback.
+
+    H-7: When the substrate is required (i.e. ``--telemetry-only`` is not
+    set), the caller invokes ``sys.exit(3)`` after printing this hint so
+    CI surfaces the missing-deps state as a distinct exit code.
+    """
+    print(
+        "ERROR: run_evals.py could not import the AiSOC eval substrate.\n"
+        f"       Underlying cause: {exc.__class__.__name__}: {exc}\n"
+        "\n"
+        "       This usually means services/agents Python deps aren't\n"
+        "       installed in your current venv. Install them with:\n"
+        "\n"
+        "           python -m venv .venv && source .venv/bin/activate\n"
+        "           pip install -e services/agents\n"
+        "\n"
+        "       Then re-run `python scripts/run_evals.py --suite all`.",
+        file=sys.stderr,
+    )
 
 # Wet-eval shim (T5.5). Dry-run path is stdlib-only; live path imports the
 # agent stack lazily and degrades cleanly if it isn't available. Lives in
@@ -728,8 +758,36 @@ def _build_per_investigation_block(model: str, *, keep_records: bool) -> dict:
     return block
 
 
+# Ordered suite registry — keeps CLI --suite choices, the report layout,
+# and the human-readable summary in lockstep.
+_SUITE_RUNNERS: dict[str, callable] = {
+    "mitre_accuracy": _run_mitre,
+    "alert_reduction": _run_alert_reduction,
+    "investigation_completeness": _run_completeness,
+    "response_quality": _run_response_quality,
+    "hunt_corpus": _run_hunt_corpus,
+    "adversary_eval": _run_adversary,
+    "confidence_calibration": _run_confidence_calibration,
+    "memory_recall": _run_memory_recall,
+    "override_accuracy": _run_override_accuracy,
+    "playbook_completion_rate": _run_playbook_completion,
+    "detection_fp_rate": _run_detection_fp_rate,
+}
+_SUITE_NAMES = tuple(_SUITE_RUNNERS.keys())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AiSOC Pillar-1 unified evaluation runner.")
+    parser.add_argument(
+        "--suite",
+        choices=("all", *_SUITE_NAMES),
+        default="all",
+        help=(
+            "Which eval suite to run. 'all' (default) executes every suite; "
+            "pass a single suite name to run it in isolation. This is the "
+            "flag the AiSOC demo video uses (`--suite all`)."
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON report to stdout.")
     parser.add_argument(
         "--out",
@@ -887,16 +945,19 @@ def main() -> None:
         sys.exit(0)
 
     if not args.telemetry_only and not _SUBSTRATE_AVAILABLE:
-        # Substrate suites need pydantic / langchain etc. If they're not
-        # installed we can still emit the telemetry block — surface the
-        # original ImportError so operators know what to fix.
-        msg = (
-            "Substrate-suite imports failed (likely missing agent dev deps "
-            f"such as pydantic): {_SUBSTRATE_IMPORT_ERROR!r}. "
-            "Pass --telemetry-only to emit just the T2.4 token/USD/latency block."
-        )
-        print(msg, file=sys.stderr)
-        sys.exit(2)
+        # H-7: Substrate suites need pydantic / langchain etc. If they're not
+        # installed we can still emit the telemetry block — print the friendly
+        # hint and surface a distinct exit code (3) so CI / scripts can tell
+        # "missing deps" apart from "substrate failed".
+        if _SUBSTRATE_IMPORT_ERROR is not None:
+            _print_import_error_hint(_SUBSTRATE_IMPORT_ERROR)
+        else:
+            print(
+                "Substrate-suite imports failed. "
+                "Pass --telemetry-only to emit just the T2.4 token/USD/latency block.",
+                file=sys.stderr,
+            )
+        sys.exit(3)
 
     keep_records = not args.no_telemetry_records
     per_investigation = _build_per_investigation_block(
@@ -913,22 +974,14 @@ def main() -> None:
         }
         summary["all_passed"] = True  # telemetry-only never gates substrate
     else:
+        # Use the suite registry so ``--suite <name>`` can run a single suite.
+        selected = _SUITE_NAMES if args.suite == "all" else (args.suite,)
+        suites = {name: _SUITE_RUNNERS[name]() for name in selected}
         summary = {
             "generated_at": datetime.now(UTC).isoformat(),
             "dataset": "synthetic_incidents.json (200 cases, deterministic)",
-            "suites": {
-                "mitre_accuracy": _run_mitre(),
-                "alert_reduction": _run_alert_reduction(),
-                "investigation_completeness": _run_completeness(),
-                "response_quality": _run_response_quality(),
-                "hunt_corpus": _run_hunt_corpus(),
-                "adversary_eval": _run_adversary(),
-                "confidence_calibration": _run_confidence_calibration(),
-                "memory_recall": _run_memory_recall(),
-                "override_accuracy": _run_override_accuracy(),
-                "playbook_completion_rate": _run_playbook_completion(),
-                "detection_fp_rate": _run_detection_fp_rate(),
-            },
+            "suite_filter": args.suite,
+            "suites": suites,
             "telemetry": _summarise_telemetry(),
             "per_investigation": per_investigation,
         }
@@ -1080,7 +1133,18 @@ def main() -> None:
                 f"p99={lat.get('p99', 0):.4f} ms  (substrate path)"
             )
         print("=" * 78)
-        verdict = "ALL GATES PASSED" if summary["all_passed"] else "REGRESSION DETECTED"
+        if summary["all_passed"]:
+            verdict = (
+                "PASS — ALL GATES GREEN"
+                if args.suite == "all"
+                else f"PASS — {args.suite} green"
+            )
+        else:
+            verdict = (
+                "FAIL — REGRESSION DETECTED"
+                if args.suite == "all"
+                else f"FAIL — {args.suite} regressed"
+            )
         print(f"  {verdict}")
         cmp = summary.get("baseline_compare")
         if cmp and cmp.get("available"):

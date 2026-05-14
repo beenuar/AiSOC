@@ -38,6 +38,16 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Console",
+      items: [
+        "console/funnel-kpis",
+        "console/queue",
+        "console/rule-tuning",
+        "console/investigation-rail",
+      ],
+    },
+    {
+      type: "category",
       label: "Architecture",
       items: [
         "architecture/agents",

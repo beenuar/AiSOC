@@ -31,6 +31,7 @@ from app.api.v1.endpoints import (
     feedback,
     fusion,
     graph,
+    health,
     hunts,
     identity_graph,
     identity_timeline,
@@ -59,6 +60,7 @@ from app.api.v1.endpoints import (
     rbac,
     remediation,
     reports,
+    rule_tuning,
     saved_hunts,
     saved_views,
     shifts,
@@ -95,6 +97,12 @@ api_router.include_router(detection_rules.router)
 # Frontend-shape facade: /api/v1/detection/rules + /api/v1/detection/test
 api_router.include_router(detection_compat.router)
 api_router.include_router(detection_proposals.router)
+# Detection rule tuning workbench — PR-6 (W8) v1.5 console plan.
+# /detection/tuning projects every rule into actionable suggestions
+# (disable / suppress / raise_threshold / tune_confidence / review_stale)
+# scored from rule.fp_rate + total_hits + confidence + last_triggered.
+# Mutations stamp suppression_config and write detection.tuning.* audit log.
+api_router.include_router(rule_tuning.router)
 api_router.include_router(federated.router)
 api_router.include_router(graph.router)
 api_router.include_router(playbooks.router)
@@ -110,6 +118,11 @@ api_router.include_router(metrics.router)
 # single deterministic payload (7 tiles + sparklines + delta vs the
 # preceding window) so the dashboard can render in one round trip.
 api_router.include_router(insights.router)
+# v1.5 SOC Console parity — per-stage health strip for the operator
+# dashboard. Lives at /api/v1/health/pipeline and returns the
+# ingest → normalize → fuse → correlate → alert snapshot defined in
+# endpoints/health.py.
+api_router.include_router(health.router)
 api_router.include_router(sla.router)
 api_router.include_router(investigations.router)
 # Effective permissions resolver (T3.2 — v8.0 parallel team plan).

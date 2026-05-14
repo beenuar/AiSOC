@@ -1,0 +1,85 @@
+{
+  "_description": "Two-event lateral-movement scenario in Okta System Log format. The same user (alice@example.com) successfully authenticates from a New York corp IP at 09:30 UTC, then from a Saint Petersburg IP eight minutes later. Routes through the okta_system_log connector profile (OCSF class_uid 3002, Authentication) when posted to /v1/ingest/batch.",
+  "_usage": "aisoc submit examples/alerts/lateral-movement.json",
+  "events": [
+    {
+      "uuid": "11111111-1111-4111-8111-111111111111",
+      "published": "2026-05-14T09:30:14.123Z",
+      "eventType": "user.session.start",
+      "displayMessage": "User login to Okta",
+      "severity": "INFO",
+      "actor": {
+        "id": "00u1abc23xYZdEfgHi45",
+        "type": "User",
+        "alternateId": "alice@example.com",
+        "displayName": "Alice Carter"
+      },
+      "client": {
+        "ipAddress": "203.0.113.42",
+        "userAgent": {
+          "rawUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36",
+          "os": "Mac OS X",
+          "browser": "CHROME"
+        },
+        "device": "Computer",
+        "geographicalContext": {
+          "city": "New York",
+          "state": "New York",
+          "country": "United States",
+          "geolocation": {"lat": 40.7128, "lon": -74.006}
+        }
+      },
+      "outcome": {
+        "result": "SUCCESS",
+        "reason": "User authenticated"
+      },
+      "transaction": {"id": "txn-lat-mov-001"},
+      "authenticationContext": {
+        "authenticationProvider": "FACTOR_PROVIDER",
+        "credentialType": "PASSWORD"
+      }
+    },
+    {
+      "uuid": "22222222-2222-4222-8222-222222222222",
+      "published": "2026-05-14T09:38:02.987Z",
+      "eventType": "user.session.start",
+      "displayMessage": "User login to Okta",
+      "severity": "WARN",
+      "actor": {
+        "id": "00u1abc23xYZdEfgHi45",
+        "type": "User",
+        "alternateId": "alice@example.com",
+        "displayName": "Alice Carter"
+      },
+      "client": {
+        "ipAddress": "185.220.101.7",
+        "userAgent": {
+          "rawUserAgent": "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/126.0",
+          "os": "Linux",
+          "browser": "FIREFOX"
+        },
+        "device": "Unknown",
+        "geographicalContext": {
+          "city": "Saint Petersburg",
+          "country": "Russia",
+          "geolocation": {"lat": 59.9343, "lon": 30.3351}
+        }
+      },
+      "outcome": {
+        "result": "SUCCESS",
+        "reason": "User authenticated"
+      },
+      "transaction": {"id": "txn-lat-mov-002"},
+      "authenticationContext": {
+        "authenticationProvider": "FACTOR_PROVIDER",
+        "credentialType": "PASSWORD"
+      },
+      "debugContext": {
+        "debugData": {
+          "risk": "HIGH",
+          "behaviors": "New Geo-Location=POSITIVE, New IP=POSITIVE, Velocity=POSITIVE"
+        }
+      }
+    }
+  ]
+}

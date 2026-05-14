@@ -125,11 +125,16 @@ _MAX_TAIL_BYTES_PER_POLL = 8 * 1024 * 1024  # 8 MiB
 
 
 def _classify_severity(event: dict[str, Any]) -> str:
-    """Bucket a single audit event into AiSOC's 4-tier severity ladder.
+    """Bucket a single audit event into AiSOC's 5-tier severity ladder.
 
     Reads the standard ``audit.k8s.io/v1`` Event shape:
         objectRef.resource, objectRef.subresource, verb,
         responseStatus.code.
+
+    The ``critical`` tier is reserved for the three signals that map
+    directly to standalone P1 SOC incidents on a Kubernetes cluster:
+    interactive shell into a pod, ``impersonate`` privilege escalation,
+    and writes to the RBAC binding graph itself.
     """
     verb = (event.get("verb") or "").lower()
     obj_ref = event.get("objectRef") or {}
@@ -137,19 +142,22 @@ def _classify_severity(event: dict[str, Any]) -> str:
     subresource = (obj_ref.get("subresource") or "").lower()
     code = (event.get("responseStatus") or {}).get("code")
 
-    # Interactive shell into a pod is the loudest signal we have.
+    # Interactive shell into a pod is the loudest signal we have —
+    # treat it as a standalone critical incident worthy of the P1 SLA.
     if resource == "pods" and subresource in _INTERACTIVE_SUBRESOURCES:
-        return "high"
+        return "critical"
 
-    # Privilege-escalation primitives.
+    # Privilege-escalation primitives — direct hand-off of identity.
     if verb == "impersonate":
-        return "high"
+        return "critical"
 
-    # Writes against the RBAC graph itself.
+    # Writes against the RBAC graph itself — most common cluster
+    # take-over primitive after an initial foothold.
     if verb in _WRITE_VERBS and resource in {"clusterrolebindings", "rolebindings"}:
-        return "high"
+        return "critical"
 
-    # Writes against any other sensitive resource.
+    # Writes against any other sensitive resource (Secrets,
+    # ServiceAccounts, Roles, etc).
     if verb in _WRITE_VERBS and resource in _SENSITIVE_RESOURCES:
         return "high"
 

@@ -16,8 +16,13 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 
 logger = structlog.get_logger()
 
+# Jira ships a 5-tier priority ladder (Highest / High / Medium / Low /
+# Lowest). AiSOC's 5-tier severity ladder
+# (info | low | medium | high | critical) lines up 1:1 with that, so
+# ``Highest`` maps to ``critical`` and round-trips back to ``Highest``
+# without any collapse — P1 escalations to Jira stay P1.
 _PRIORITY_SEVERITY = {
-    "Highest": "high",
+    "Highest": "critical",
     "High": "high",
     "Medium": "medium",
     "Low": "low",
@@ -25,9 +30,7 @@ _PRIORITY_SEVERITY = {
 }
 
 # WS8: AiSOC severity → Jira priority. We invert ``_PRIORITY_SEVERITY``
-# but map ``critical`` → ``Highest`` because Jira doesn't have a separate
-# critical band and ``Highest`` is the highest tier available out of the
-# box. ``info`` collapses to ``Lowest`` for the same reason.
+# so the round-trip is lossless.
 _SEVERITY_TO_PRIORITY = {
     "critical": "Highest",
     "high": "High",

@@ -144,8 +144,8 @@ _MAX_EVENTS_PER_POLL = 50_000
 # critical by renaming it.
 
 _KEY_SEVERITY_PREFIXES: tuple[tuple[str, str], ...] = (
-    ("aisoc_critical_", "high"),
-    ("aisoc_priv_esc_", "medium"),
+    ("aisoc_critical_", "critical"),
+    ("aisoc_priv_esc_", "high"),
     ("aisoc_persistence_", "medium"),
     ("aisoc_exec", "medium"),
     ("aisoc_watch_", "low"),
@@ -175,7 +175,7 @@ _HIGH_RISK_EXEC_DIRS: tuple[str, ...] = (
 
 
 def _severity_from_event(event: dict[str, Any]) -> str:
-    """Bucket a reassembled auditd event into AiSOC's 4-tier ladder.
+    """Bucket a reassembled auditd event into AiSOC's 5-tier ladder.
 
     Priority order:
       1. AiSOC-profile key prefix match (``aisoc_critical_*`` etc.).

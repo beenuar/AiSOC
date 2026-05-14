@@ -217,10 +217,16 @@ class CarbonBlackConnector(BaseConnector):
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         stream = raw.get("_aisoc_stream", "alerts")
         if stream == "alerts":
+            # Carbon Black Cloud uses a 1-10 severity scale on alerts.
+            # 9-10 corresponds to confirmed/imminent threat activity,
+            # which we surface as ``critical`` rather than collapsing to
+            # ``high``.
             sev_score = int(raw.get("severity") or 0)
-            if sev_score >= 8:
+            if sev_score >= 9:
+                severity = "critical"
+            elif sev_score >= 7:
                 severity = "high"
-            elif sev_score >= 5:
+            elif sev_score >= 4:
                 severity = "medium"
             elif sev_score >= 1:
                 severity = "low"

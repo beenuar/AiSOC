@@ -4,11 +4,29 @@
 
 BEGIN;
 
--- Rename columns that changed semantics
-ALTER TABLE connectors RENAME COLUMN config          TO connector_config;
-ALTER TABLE connectors RENAME COLUMN credentials_enc TO auth_config;
-ALTER TABLE connectors RENAME COLUMN status          TO health_status;
-ALTER TABLE connectors RENAME COLUMN last_sync_at    TO last_sync;
+-- Rename columns that changed semantics. Each rename is wrapped in a DO block
+-- so the migration is idempotent — safe to re-run on a partially-migrated DB
+-- (e.g. one where a previous run of 025 succeeded but the migration ledger
+-- entry was lost, which happened during the v7.3.0 smoke test).
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'connectors' AND column_name = 'config') THEN
+        EXECUTE 'ALTER TABLE connectors RENAME COLUMN config TO connector_config';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'connectors' AND column_name = 'credentials_enc') THEN
+        EXECUTE 'ALTER TABLE connectors RENAME COLUMN credentials_enc TO auth_config';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'connectors' AND column_name = 'status') THEN
+        EXECUTE 'ALTER TABLE connectors RENAME COLUMN status TO health_status';
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'connectors' AND column_name = 'last_sync_at') THEN
+        EXECUTE 'ALTER TABLE connectors RENAME COLUMN last_sync_at TO last_sync';
+    END IF;
+END $$;
 
 -- Resize the health_status column to match the ORM (VARCHAR 20)
 ALTER TABLE connectors ALTER COLUMN health_status TYPE VARCHAR(20);

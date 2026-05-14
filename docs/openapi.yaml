@@ -258,12 +258,93 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/submit:
+    post:
+      tags:
+      - alerts
+      summary: Submit Alert
+      description: "Submit one alert directly from an OCSF event batch.\n\nThis is\
+        \ the destination for `aisoc submit <file>` and the local-dev fast\npath documented\
+        \ in the quickstart. We deliberately bypass the Kafka\ndetect/correlate/fuse\
+        \ pipeline (which fresh clones don't run by default)\nso that a hand-crafted\
+        \ fixture lands in the database — and therefore in\n``GET /api/v1/alerts``\
+        \ and the web console — within the same second.\n\n**Hardening (Batch 8 /\
+        \ H-5)**:\n\n* **Payload caps** — events are first run through\n  :func:`app.services.event_sanitiser.sanitise_event_batch`,\
+        \ which\n  enforces ``AISOC_SUBMIT_MAX_EVENTS`` (default 200), per-event size\n\
+        \  ``AISOC_SUBMIT_MAX_EVENT_BYTES`` (default 64 KiB), and total batch\n  size\
+        \ ``AISOC_SUBMIT_MAX_TOTAL_BYTES`` (default 1 MiB). Violations\n  return ``413\
+        \ Payload Too Large`` rather than the 200 OK + truncated\n  alert we used\
+        \ to silently emit.\n* **Secret redaction** — the sanitiser also redacts keys\
+        \ matching\n  common secret patterns (``password``, ``token``, ``api_key``,\
+        \ …)\n  *before* the payload is persisted to ``alerts.raw_event``, so a\n\
+        \  leaky connector cannot smuggle bearer tokens into the alert table\n  where\
+        \ they would be visible to every analyst with ``alerts:read``.\n* **Idempotency**\
+        \ — when the client supplies an ``Idempotency-Key``\n  header, the resulting\
+        \ alert is keyed ``(tenant_id, idempotency_key)``\n  via a partial unique\
+        \ index (migration ``044``). A retry of the\n  same key resolves to the existing\
+        \ row and returns HTTP ``200``\n  instead of creating a duplicate, so at-least-once\
+        \ connectors and\n  the ``aisoc submit`` CLI can retry safely on network blips.\n\
+        * **Timestamp bounds** — event timestamps outside the configured\n  retention\
+        \ window are clamped (see\n  :mod:`app.services.timestamp_bounds`); the resulting\
+        \ alert is\n  tagged ``ts-clamped`` so analysts can see the connector misbehaved.\n\
+        \nAuthorisation: requires ``alerts:write``. In development mode the\nauth\
+        \ bypass in :mod:`app.api.v1.deps` resolves to the deterministic\ndemo tenant,\
+        \ so the documented ``aisoc submit`` CLI works against a\nfresh clone with\
+        \ no token plumbing."
+      operationId: submit_alert_api_v1_alerts_submit_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional opaque client-supplied key (8–128 chars, [A-Za-z0-9._:-]).
+            When supplied, a retry of the same key for the same tenant returns the
+            existing alert with HTTP 200 instead of creating a duplicate.
+          title: Idempotency-Key
+        description: Optional opaque client-supplied key (8–128 chars, [A-Za-z0-9._:-]).
+          When supplied, a retry of the same key for the same tenant returns the existing
+          alert with HTTP 200 instead of creating a duplicate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertSubmitRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts:
     get:
       tags:
       - alerts
       summary: List Alerts
-      description: List alerts for the current tenant with filtering and pagination.
+      description: 'List alerts for the current tenant with filtering and pagination.
+
+
+        `min_confidence` / `confidence_label` let the queue workbench (PR-5) and
+
+        /alerts page filter on the fusion-emitted confidence signal (W3). Alerts
+
+        that pre-date the confidence column will have NULL and therefore won''t
+
+        match either filter — that''s intentional; analysts who care about
+
+        confidence should only see alerts that actually carry the signal.'
       operationId: list_alerts_api_v1_alerts_get
       security:
       - HTTPBearer: []
@@ -324,6 +405,24 @@ paths:
           - type: string
           - type: 'null'
           title: Search
+      - name: min_confidence
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 100
+            minimum: 0
+          - type: 'null'
+          title: Min Confidence
+      - name: confidence_label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confidence Label
       responses:
         '200':
           description: Successful Response
@@ -353,12 +452,96 @@ paths:
                 $ref: '#/components/schemas/AlertStatsResponse'
       security:
       - HTTPBearer: []
+  /api/v1/alerts/queue:
+    get:
+      tags:
+      - alerts
+      summary: Get Alert Queue
+      description: 'Investigation Queue workbench feed.
+
+
+        Returns the prioritised list of alerts the analyst should work on
+
+        next: alerts assigned to them, followed by unassigned
+
+        critical/high alerts, ordered by SLA due time.
+
+
+        The endpoint also returns ``counts`` for both buckets unconditionally
+
+        so the topbar badge and the workbench tabs can render without an
+
+        extra round-trip.'
+      operationId: get_alert_queue_api_v1_alerts_queue_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: owner
+        in: query
+        required: false
+        schema:
+          enum:
+          - me
+          - unassigned
+          - all
+          type: string
+          default: all
+          title: Owner
+      - name: period
+        in: query
+        required: false
+        schema:
+          enum:
+          - 24h
+          - 7d
+          - 30d
+          - all
+          type: string
+          default: all
+          title: Period
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts/{alert_id}:
     get:
       tags:
       - alerts
       summary: Get Alert
-      description: Get a single alert by ID.
+      description: "Get a single alert by ID, enriched with Investigation Rail data.\n\
+        \nThe endpoint returns the standard alert fields plus everything the\nrail\
+        \ needs to render in one shot:\n\n* a deterministic ``narrative`` (lazily\
+        \ filled and persisted if the\n  row was created before fusion started emitting\
+        \ it),\n* ``related_entities`` grouped for pivot,\n* a compact ``mini_timeline``,\n\
+        * normalised ``recommended_actions``.\n\nThe lazy-fill is best-effort: if\
+        \ the narrative builder ever raises\nwe log and return the alert with ``narrative=None``\
+        \ so the page\nkeeps rendering. The frontend already handles the null case."
       operationId: get_alert_api_v1_alerts__alert_id__get
       security:
       - HTTPBearer: []
@@ -376,7 +559,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AlertResponse'
+                $ref: '#/components/schemas/AlertDetailResponse'
         '422':
           description: Validation Error
           content:
@@ -425,6 +608,43 @@ paths:
       summary: Escalate Alert
       description: Escalate an alert (raises severity by one level).
       operationId: escalate_alert_api_v1_alerts__alert_id__escalate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/claim:
+    post:
+      tags:
+      - alerts
+      summary: Claim Alert Endpoint
+      description: 'Atomically claim an unassigned alert for the current user.
+
+
+        Returns ``409 Conflict`` if the alert is already assigned to someone
+
+        else — the claim is a compare-and-set on ``assigned_to_id``, so two
+
+        analysts racing for the same alert never both win.'
+      operationId: claim_alert_endpoint_api_v1_alerts__alert_id__claim_post
       security:
       - HTTPBearer: []
       parameters:
@@ -2006,12 +2226,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenants/me/identity:
+    get:
+      tags:
+      - tenants
+      summary: Get My Tenant Identity
+      description: 'Get minimal tenant identity for the current user.
+
+
+        Returns only `id`, `name`, `mssp_role`, and `parent_tenant_id`. This is
+
+        safe for **any** authenticated user (analyst, viewer, responder, etc.)
+
+        because it does not expose plan, settings, or limits. Used by the SOC
+
+        console TopBar to render the tenant switcher pill and role badge.'
+      operationId: get_my_tenant_identity_api_v1_tenants_me_identity_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantHeaderResponse'
+      security:
+      - HTTPBearer: []
   /api/v1/tenants/me:
     get:
       tags:
       - tenants
       summary: Get My Tenant
-      description: Get the current user's tenant details.
+      description: Get the current user's tenant details (full config — requires settings:read).
       operationId: get_my_tenant_api_v1_tenants_me_get
       responses:
         '200':
@@ -3022,6 +3267,253 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProposalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/detection/tuning:
+    get:
+      tags:
+      - detection
+      summary: Get Tuning Workbench
+      description: 'Project every rule the tenant can tune into a workbench feed.
+
+
+        The summary block is computed across the *entire classified population*
+
+        (not the current page), so the header tiles stay stable as analysts page.
+
+        Dismissed rules are excluded by default — pass ``include_dismissed=true``
+
+        when auditing what''s been hidden.'
+      operationId: get_tuning_workbench_api_v1_detection_tuning_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by rule severity (info/low/medium/high/critical).
+          title: Severity
+        description: Filter by rule severity (info/low/medium/high/critical).
+      - name: suggestion
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - disable
+            - add_suppression
+            - raise_threshold
+            - tune_confidence
+            - review_stale
+            - healthy
+            type: string
+          - type: 'null'
+          description: Filter to a single suggestion lane.
+          title: Suggestion
+        description: Filter to a single suggestion lane.
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          description: Substring match on name/description/category.
+          title: Search
+        description: Substring match on name/description/category.
+      - name: enabled_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Hide rules whose status != 'active'.
+          default: false
+          title: Enabled Only
+        description: Hide rules whose status != 'active'.
+      - name: include_dismissed
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Show rules previously dismissed from the workbench.
+          default: false
+          title: Include Dismissed
+        description: Show rules previously dismissed from the workbench.
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 50
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TuningResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/detection/tuning/summary:
+    get:
+      tags:
+      - detection
+      summary: Get Tuning Summary
+      description: 'Cheap summary-only endpoint for sidebar badges and the
+
+        /console dashboard tile.'
+      operationId: get_tuning_summary_api_v1_detection_tuning_summary_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TuningSummary'
+      security:
+      - HTTPBearer: []
+  /api/v1/detection/tuning/{rule_id}/apply:
+    post:
+      tags:
+      - detection
+      summary: Apply Tuning Endpoint
+      description: 'Mechanically apply a tuning suggestion to a single rule.
+
+
+        Supports ``raise_threshold``, ``add_suppression``, ``disable``, and
+
+        ``acknowledge`` (no-op + audit). Every mutation bumps
+
+        ``DetectionRule.version`` and writes a ``detection.tuning.apply`` audit
+
+        log entry. Returns the re-projected entry so the UI can refresh in place.'
+      operationId: apply_tuning_endpoint_api_v1_detection_tuning__rule_id__apply_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyTuningRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TuningEntry'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/detection/tuning/{rule_id}/dismiss:
+    post:
+      tags:
+      - detection
+      summary: Dismiss Tuning Endpoint
+      description: Hide a rule from the default workbench view without changing semantics.
+      operationId: dismiss_tuning_endpoint_api_v1_detection_tuning__rule_id__dismiss_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DismissTuningRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TuningEntry'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/detection/tuning/{rule_id}/auto_tune:
+    post:
+      tags:
+      - detection
+      summary: Set Auto Tune Endpoint
+      description: 'Flip the per-rule ``auto_tune`` opt-in flag.
+
+
+        The flag is stored under ``suppression_config.auto_tune`` and is read by
+
+        future automated tuners — flipping it does *not* trigger any immediate
+
+        rule mutation.'
+      operationId: set_auto_tune_endpoint_api_v1_detection_tuning__rule_id__auto_tune_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoTuneRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TuningEntry'
         '422':
           description: Validation Error
           content:
@@ -5396,6 +5888,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/metrics/funnel:
+    get:
+      tags:
+      - metrics
+      summary: Get Funnel Metrics
+      description: 'Return the live tenant funnel for the SOC Console (v1.5).
+
+
+        Funnel: events_of_interest → correlation_instances → alerts_generated →
+
+        analyst_queue_depth, plus efficiency ratios and MITRE coverage.
+
+
+        ``deltas`` compares the current window to the immediately preceding window
+
+        of the same length (e.g. for ``period=24h`` we compare to the 24h ending
+
+        24h ago). Values are percentage changes rounded to two decimals; a delta
+
+        of ``0.0`` means "no meaningful baseline" (the previous window was empty).'
+      operationId: get_funnel_metrics_api_v1_metrics_funnel_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(1h|24h|7d|30d)$
+          default: 24h
+          title: Period
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelMetrics'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/health/pipeline:
+    get:
+      tags:
+      - health
+      summary: Get Pipeline Health
+      description: 'Return a 5-stage health snapshot of the SOC pipeline for the tenant.
+
+
+        Stages: ``ingest → normalize → fuse → correlate → alert``. See the
+
+        module docstring for what each cell measures and why some columns
+
+        are intentionally ``0`` until deeper instrumentation lands.
+
+
+        The window for latency / backlog computations is the last hour.
+
+        The ``status`` ladder is ``unknown | green | yellow | red`` and
+
+        follows the same convention as
+
+        ``app.services.connector_freshness``.'
+      operationId: get_pipeline_health_api_v1_health_pipeline_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineHealth'
+      security:
+      - HTTPBearer: []
   /api/v1/sla/metrics:
     get:
       tags:
@@ -12084,6 +12653,202 @@ components:
       - threat_intel_age_hours
       - checks
       title: AirgapStatus
+    AlertDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        priority:
+          type: integer
+          title: Priority
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        mitre_tactics:
+          items: {}
+          type: array
+          title: Mitre Tactics
+        mitre_techniques:
+          items: {}
+          type: array
+          title: Mitre Techniques
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        ai_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ai Score
+        ai_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ai Summary
+        ai_recommendations:
+          items: {}
+          type: array
+          title: Ai Recommendations
+        confidence:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Confidence
+        confidence_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confidence Label
+        confidence_rationale:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Confidence Rationale
+        disposition:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Disposition
+        affected_ips:
+          items: {}
+          type: array
+          title: Affected Ips
+        affected_hosts:
+          items: {}
+          type: array
+          title: Affected Hosts
+        affected_users:
+          items: {}
+          type: array
+          title: Affected Users
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        tags:
+          items: {}
+          type: array
+          title: Tags
+        event_time:
+          type: string
+          format: date-time
+          title: Event Time
+        first_seen:
+          type: string
+          format: date-time
+          title: First Seen
+        last_seen:
+          type: string
+          format: date-time
+          title: Last Seen
+        snoozed_until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Snoozed Until
+        snoozed_by_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Snoozed By Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        narrative:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Narrative
+        related_entities:
+          items:
+            $ref: '#/components/schemas/RelatedEntity'
+          type: array
+          title: Related Entities
+          default: []
+        mini_timeline:
+          items:
+            $ref: '#/components/schemas/MiniTimelineEvent'
+          type: array
+          title: Mini Timeline
+          default: []
+        recommended_actions:
+          items:
+            $ref: '#/components/schemas/RecommendedAction'
+          type: array
+          title: Recommended Actions
+          default: []
+      type: object
+      required:
+      - id
+      - tenant_id
+      - title
+      - description
+      - severity
+      - status
+      - priority
+      - category
+      - mitre_tactics
+      - mitre_techniques
+      - connector_type
+      - ai_score
+      - ai_summary
+      - ai_recommendations
+      - affected_ips
+      - affected_hosts
+      - affected_users
+      - case_id
+      - tags
+      - event_time
+      - first_seen
+      - last_seen
+      - created_at
+      - updated_at
+      title: AlertDetailResponse
+      description: "Alert response enriched with everything the Investigation Rail\
+        \ needs.\n\nThe list endpoint stays on the smaller :class:`AlertResponse`\
+        \ shape\nto keep paginated payloads light. The detail endpoint promotes to\n\
+        this enriched shape so the rail renders without extra round-trips:\n\n* ``narrative``\
+        \ — deterministic correlation prose. Cached on the\n  ``Alert`` row by the\
+        \ fusion service; lazily filled by the\n  endpoint when missing (legacy rows).\
+        \ Always a string by the\n  time it leaves the API.\n* ``related_entities``\
+        \ — pivotable entities grouped by\n  principal / network / workflow / tenant.\n\
+        * ``mini_timeline`` — up to ``MAX_TIMELINE_EVENTS`` recent events\n  merged\
+        \ from the case timeline and the audit log.\n* ``recommended_actions`` — normalised\
+        \ structured actions from\n  the ResponderAgent (or the legacy list-of-strings\
+        \ shape)."
     AlertLinkCreate:
       properties:
         alert_id:
@@ -12320,6 +13085,22 @@ components:
           items: {}
           type: array
           title: Ai Recommendations
+        confidence:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Confidence
+        confidence_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confidence Label
+        confidence_rationale:
+          anyOf:
+          - items: {}
+            type: array
+          - type: 'null'
+          title: Confidence Rationale
         disposition:
           anyOf:
           - type: string
@@ -12456,6 +13237,65 @@ components:
       - new_last_24h
       - critical_open
       title: AlertStatsResponse
+    AlertSubmitRequest:
+      properties:
+        events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Events
+          default: []
+        connector_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Id
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        source_format:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Format
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+      type: object
+      title: AlertSubmitRequest
+      description: "Direct-write alert submission payload.\n\nThe founder-flow demo\
+        \ (`aisoc submit <file>`) and any operator who wants\nto land a hand-crafted\
+        \ alert on the local dev stack without a connector\nPOST one of these. The\
+        \ body intentionally mirrors the ingest envelope\nused by real connectors\
+        \ so the same fixture works against either path:\n\n    { connector_id, connector_type,\
+        \ source_format, events: [...] }\n\nThe single payload synthesises one ``Alert``\
+        \ row, written directly into\nthe tenant's database, so the result is visible\
+        \ in\n``GET /api/v1/alerts`` and the web console within the same second.\n\
+        This deliberately bypasses the Kafka detection/correlation pipeline\n(which\
+        \ fresh clones don't run by default) so the documented \"alert in\nseconds\"\
+        \ promise in the quickstart actually holds."
     AlertUpdateRequest:
       properties:
         status:
@@ -12536,6 +13376,41 @@ components:
       - last_used_at
       - created_at
       title: ApiKeyOut
+    ApplyTuningRequest:
+      properties:
+        action:
+          type: string
+          enum:
+          - raise_threshold
+          - add_suppression
+          - disable
+          - acknowledge
+          title: Action
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        threshold:
+          anyOf:
+          - type: integer
+            maximum: 1000000.0
+            minimum: 1.0
+          - type: 'null'
+          title: Threshold
+          description: Override threshold to set when action='raise_threshold'.
+        suppression_reason:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Suppression Reason
+          description: Free-text reason recorded with the suppression placeholder.
+      type: object
+      required:
+      - action
+      title: ApplyTuningRequest
+      description: Body for ``POST /detection/tuning/{rule_id}/apply``.
     ApprovalCreateRequest:
       properties:
         run_id:
@@ -13326,6 +14201,16 @@ components:
       - access_token
       - refresh_token
       title: AuthenticateFinishResponse
+    AutoTuneRequest:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+      type: object
+      required:
+      - enabled
+      title: AutoTuneRequest
+      description: Body for ``POST /detection/tuning/{rule_id}/auto_tune``.
     AutonomyPolicyResponse:
       properties:
         tenant_id:
@@ -15525,6 +16410,17 @@ components:
       required:
       - discovered
       title: DiscoverResponse
+    DismissTuningRequest:
+      properties:
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Reason
+      type: object
+      title: DismissTuningRequest
+      description: Body for ``POST /detection/tuning/{rule_id}/dismiss``.
     DriftEntry:
       properties:
         ruleId:
@@ -15833,10 +16729,12 @@ components:
             ... --max-regression-pp ...` for the candidate ruleset.
         max_regression_pp:
           type: number
-          maximum: 100.0
+          maximum: 50.0
           minimum: 0.0
           title: Max Regression Pp
-          description: Allowed MITRE accuracy regression vs baseline, in pp.
+          description: Allowed MITRE accuracy regression vs baseline, in pp. Hard-capped
+            at 50 — anything above that is indistinguishable from disabling the regression
+            gate entirely.
           default: 1.0
       type: object
       required:
@@ -16747,6 +17645,102 @@ components:
       - updatedAt
       title: FrontendDetectionRule
       description: Mirrors `DetectionRule` in apps/web/src/lib/api.ts.
+    FunnelDeltas:
+      properties:
+        events_of_interest:
+          type: number
+          title: Events Of Interest
+        correlation_instances:
+          type: number
+          title: Correlation Instances
+        alerts_generated:
+          type: number
+          title: Alerts Generated
+        signal_to_noise:
+          type: number
+          title: Signal To Noise
+        mttd_seconds:
+          type: number
+          title: Mttd Seconds
+        analyst_queue_depth:
+          type: number
+          title: Analyst Queue Depth
+      type: object
+      required:
+      - events_of_interest
+      - correlation_instances
+      - alerts_generated
+      - signal_to_noise
+      - mttd_seconds
+      - analyst_queue_depth
+      title: FunnelDeltas
+      description: Period-over-period percentage deltas for the funnel KPI bar.
+    FunnelMetrics:
+      properties:
+        period:
+          type: string
+          title: Period
+        events_of_interest:
+          type: integer
+          title: Events Of Interest
+        correlation_instances:
+          type: integer
+          title: Correlation Instances
+        alerts_generated:
+          type: integer
+          title: Alerts Generated
+        signal_to_noise:
+          type: number
+          title: Signal To Noise
+        mttd_seconds:
+          type: number
+          title: Mttd Seconds
+        analyst_queue_depth:
+          type: integer
+          title: Analyst Queue Depth
+        correlation_efficiency:
+          type: number
+          title: Correlation Efficiency
+        alert_yield:
+          type: number
+          title: Alert Yield
+        mitre_coverage:
+          $ref: '#/components/schemas/MitreCoverage'
+        deltas:
+          $ref: '#/components/schemas/FunnelDeltas'
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - period
+      - events_of_interest
+      - correlation_instances
+      - alerts_generated
+      - signal_to_noise
+      - mttd_seconds
+      - analyst_queue_depth
+      - correlation_efficiency
+      - alert_yield
+      - mitre_coverage
+      - deltas
+      - generated_at
+      title: FunnelMetrics
+      description: 'Tenant funnel + efficiency for the selected period.
+
+
+        All counts are absolute for ``period``. ``signal_to_noise`` is the
+
+        fraction of *resolved* alerts that ended in disposition ``true_positive``
+
+        (i.e. signal / (signal + noise)). ``mttd_seconds`` mirrors /metrics/soc''s
+
+        MTTD definition (Alert.created_at → Alert.first_seen_at) but expressed in
+
+        seconds for funnel-level precision. ``deltas`` compares this period to the
+
+        immediately preceding period of the same length.'
     GateLogOut:
       properties:
         id:
@@ -18506,6 +19500,57 @@ components:
       - connector_count
       - health_score
       title: MetricsOut
+    MiniTimelineEvent:
+      properties:
+        id:
+          type: string
+          title: Id
+        ts:
+          type: string
+          format: date-time
+          title: Ts
+        kind:
+          type: string
+          title: Kind
+          description: audit | case_comment | status_change | investigation | …
+        agent:
+          type: string
+          title: Agent
+          description: actor — system | analyst@… | agent-id
+        summary:
+          type: string
+          title: Summary
+          description: One-line description, plain text
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        duration_ms:
+          type: integer
+          title: Duration Ms
+          default: 0
+      type: object
+      required:
+      - id
+      - ts
+      - kind
+      - agent
+      - summary
+      title: MiniTimelineEvent
+      description: 'One event in the alert''s condensed timeline.
+
+
+        Modelled after ``LedgerEvent`` in the ledger UI so the rail can
+
+        reuse the same row renderer. Fields the rail doesn''t need
+
+        (``input_hash``/``output_hash``/``duration_ms``) are always
+
+        ``None``/``0`` for non-investigation events. The frontend knows
+
+        to hide those affordances when they''re empty.'
     MispDryRunRequest:
       properties:
         indicator:
@@ -18653,6 +19698,31 @@ components:
       - pushed
       title: MispPushResult
       description: Embedded in a STIX response when ``push_to_misp=true``.
+    MitreCoverage:
+      properties:
+        covered:
+          type: integer
+          title: Covered
+        total:
+          type: integer
+          title: Total
+        ratio:
+          type: number
+          title: Ratio
+      type: object
+      required:
+      - covered
+      - total
+      - ratio
+      title: MitreCoverage
+      description: "Slice of the MITRE ATT&CK landscape we have observable coverage\
+        \ for.\n\n``covered`` counts the distinct techniques observed via either:\n\
+        \  * a tenant alert in the selected window (``Alert.mitre_techniques``), or\n\
+        \  * an enabled tenant/platform detection rule\n    (``DetectionRule.mitre_techniques``\
+        \ where ``status == 'enabled'``).\n\n``total`` is configurable via ``AISOC_FUNNEL_MITRE_TOTAL``\
+        \ and defaults to\nthe MITRE ATT&CK Enterprise v17 technique count (201) so\
+        \ the ratio is\ninterpretable as \"% of ATT&CK we're watching for\". The ratio\
+        \ is clamped to\n``[0.0, 1.0]`` even if operators downsize the universe."
     MitreCoverageCell:
       properties:
         techniqueId:
@@ -19626,6 +20696,66 @@ components:
       - description
       - category
       title: PermissionOut
+    PipelineHealth:
+      properties:
+        overall_status:
+          type: string
+          title: Overall Status
+        stages:
+          items:
+            $ref: '#/components/schemas/PipelineStage'
+          type: array
+          title: Stages
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - overall_status
+      - stages
+      - generated_at
+      title: PipelineHealth
+      description: Top-level response for ``GET /health/pipeline``.
+    PipelineStage:
+      properties:
+        stage:
+          type: string
+          title: Stage
+        backlog:
+          type: integer
+          title: Backlog
+        p95_latency_ms:
+          type: number
+          title: P95 Latency Ms
+        error_rate:
+          type: number
+          title: Error Rate
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - stage
+      - backlog
+      - p95_latency_ms
+      - error_rate
+      - status
+      title: PipelineStage
+      description: 'One row in the pipeline health strip.
+
+
+        ``status`` follows the green/yellow/red/unknown ladder used by
+
+        ``app.services.connector_freshness``. ``backlog`` is the number of items
+
+        currently waiting at this stage (e.g. enabled-but-stale connectors for
+
+        ``ingest``, unacked alerts for ``alert``). ``p95_latency_ms`` is the 95th
+
+        percentile end-to-end latency for items that traversed this stage in the
+
+        last hour. ``error_rate`` is errors / processed in the same window.'
     PluginManifestOut:
       properties:
         id:
@@ -19966,6 +21096,224 @@ components:
       - rows
       - total_rows
       title: QueryResult
+    QueueAction:
+      properties:
+        priority:
+          type: integer
+          title: Priority
+        action:
+          type: string
+          title: Action
+        risk:
+          type: string
+          title: Risk
+          default: low
+      type: object
+      required:
+      - priority
+      - action
+      title: QueueAction
+      description: 'Top suggested next action for a queue row.
+
+
+        Sourced from ``Alert.ai_recommendations``. The lowest-priority
+
+        integer wins (1 = most urgent). String-only legacy values are
+
+        accepted and mapped to ``risk="low"`` with the array index as a
+
+        fallback priority.'
+    QueueAsset:
+      properties:
+        kind:
+          type: string
+          title: Kind
+          description: host | user | ip | asset
+        value:
+          type: string
+          title: Value
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+      type: object
+      required:
+      - kind
+      - value
+      title: QueueAsset
+      description: 'Lightweight asset descriptor for a queue row.
+
+
+        The queue surfaces *one* representative entity per alert so the
+
+        row is informative at a glance ("VPN brute force on `web-01`")
+
+        without enumerating every entity. The full pivotable list lives
+
+        on the Investigation Rail when the analyst opens the alert.'
+    QueueItem:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        title:
+          type: string
+          title: Title
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        priority:
+          type: integer
+          title: Priority
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        assigned_to_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Assigned To Id
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        first_seen:
+          type: string
+          format: date-time
+          title: First Seen
+        sla_due_at:
+          type: string
+          format: date-time
+          title: Sla Due At
+        sla_remaining_seconds:
+          type: integer
+          title: Sla Remaining Seconds
+        sla_breached:
+          type: boolean
+          title: Sla Breached
+        age_seconds:
+          type: integer
+          title: Age Seconds
+        asset:
+          anyOf:
+          - $ref: '#/components/schemas/QueueAsset'
+          - type: 'null'
+        suggested_action:
+          anyOf:
+          - $ref: '#/components/schemas/QueueAction'
+          - type: 'null'
+        bucket:
+          type: string
+          enum:
+          - mine
+          - unassigned
+          title: Bucket
+      type: object
+      required:
+      - id
+      - tenant_id
+      - title
+      - severity
+      - status
+      - priority
+      - first_seen
+      - sla_due_at
+      - sla_remaining_seconds
+      - sla_breached
+      - age_seconds
+      - bucket
+      title: QueueItem
+      description: 'One row in the Investigation Queue workbench.
+
+
+        Intentionally slimmer than ``AlertResponse``. The queue exists to
+
+        answer "what should I work on next?" — clicking a row navigates
+
+        to ``/alerts/{id}`` which loads full detail via the existing
+
+        detail endpoint (``GET /alerts/{id}``). Keeping this payload
+
+        small means a busy SOC with thousands of open alerts can refresh
+
+        the queue cheaply (the badge on the topbar polls it).'
+    QueueResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/QueueItem'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        counts:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Counts
+        period:
+          type: string
+          title: Period
+        owner:
+          type: string
+          title: Owner
+        page:
+          type: integer
+          title: Page
+        page_size:
+          type: integer
+          title: Page Size
+        pages:
+          type: integer
+          title: Pages
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - items
+      - total
+      - counts
+      - period
+      - owner
+      - page
+      - page_size
+      - pages
+      - generated_at
+      title: QueueResponse
+      description: 'Paginated queue response.
+
+
+        ``counts`` always reports both buckets so the workbench can
+
+        render the "mine / unassigned / all" tabs without re-fetching.
+
+        ``generated_at`` is the server-side ``now`` we used to compute
+
+        SLA remaining — the frontend can drift its own clock from this
+
+        so multiple analysts on different boxes see the same countdowns.'
     RatingIn:
       properties:
         score:
@@ -19982,6 +21330,39 @@ components:
       required:
       - score
       title: RatingIn
+    RecommendedAction:
+      properties:
+        priority:
+          type: integer
+          minimum: 1.0
+          title: Priority
+          default: 99
+        action:
+          type: string
+          title: Action
+        rationale:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rationale
+        risk:
+          type: string
+          title: Risk
+          description: low | medium | high
+          default: low
+      type: object
+      required:
+      - action
+      title: RecommendedAction
+      description: 'Structured action emitted by the ResponderAgent at investigation
+        close.
+
+
+        Tolerates the legacy list-of-strings shape that older demo seeds
+
+        used (string → ``action`` with priority ``99`` and risk ``"low"``).
+
+        The plan calls for the structured shape; this is a migration aid.'
     RedispositionApplyRequest:
       properties:
         alert_ids:
@@ -20059,6 +21440,51 @@ components:
           default: My phone
       type: object
       title: RegisterBeginRequest
+    RelatedEntity:
+      properties:
+        group:
+          type: string
+          title: Group
+          description: 'Rail column: principal | network | workflow | tenant'
+        kind:
+          type: string
+          title: Kind
+          description: 'Concrete entity type: host | ip | user | rule | mitre | …'
+        value:
+          type: string
+          title: Value
+          description: Canonical identifier rendered in the chip
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+          description: Optional human-friendly label
+        pivot:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pivot
+          description: Frontend route to deep-link into AttackGraphView (or another
+            workbench). When None the chip is informational only.
+      type: object
+      required:
+      - group
+      - kind
+      - value
+      title: RelatedEntity
+      description: 'One pivotable entity attached to an alert.
+
+
+        The ``kind`` field is the *concrete* entity type (``host``, ``ip``,
+
+        ``user``, ``rule``, …) — the frontend keys icons and pivot routes
+
+        off it. The ``group`` field is the rail column the entity renders
+
+        under (``principal``, ``network``, ``workflow``, ``tenant``). One
+
+        entity belongs to exactly one group; we don''t duplicate rows.'
     ReviewAction:
       properties:
         action:
@@ -20519,18 +21945,21 @@ components:
           default: true
         max_regression_pp:
           type: number
-          maximum: 100.0
+          maximum: 50.0
           minimum: 0.0
           title: Max Regression Pp
           description: Allowed MITRE accuracy regression vs the active baseline, in
-            percentage points. Forwarded to run_evals.py.
+            percentage points. Forwarded to run_evals.py. Hard-capped at 50 to keep
+            the regression gate meaningful.
           default: 1.0
         timeout_seconds:
           type: integer
-          maximum: 900.0
+          maximum: 600.0
           minimum: 10.0
           title: Timeout Seconds
-          description: Hard timeout for the eval subprocess.
+          description: Hard timeout for the eval subprocess. Capped at 10 minutes
+            — the synthetic benchmark completes in under 60s on commodity hardware
+            so anything longer is almost certainly a stuck process.
           default: 180
       type: object
       title: RunEvalRequest
@@ -21930,6 +23359,42 @@ components:
       - created_at
       - updated_at
       title: TemplateOut
+    TenantHeaderResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        mssp_role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mssp Role
+        parent_tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Tenant Id
+      type: object
+      required:
+      - id
+      - name
+      - mssp_role
+      - parent_tenant_id
+      title: TenantHeaderResponse
+      description: 'Minimal tenant identity payload — safe for *any* authenticated
+        user.
+
+
+        Used by the SOC console TopBar to render the tenant switcher and role
+
+        badge (Workstream 5). Intentionally excludes `plan`, `settings`, and
+
+        `limits` so it does not leak privileged config to viewer/analyst roles.'
     TenantNoteCreate:
       properties:
         child_id:
@@ -22005,6 +23470,17 @@ components:
           additionalProperties: true
           type: object
           title: Limits
+        mssp_role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mssp Role
+        parent_tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Tenant Id
         created_at:
           type: string
           format: date-time
@@ -22640,6 +24116,232 @@ components:
       - fix_steps
       title: TroubleshootResponse
       description: Structured guidance the wizard renders next to a failed test.
+    TuningEntry:
+      properties:
+        rule_id:
+          type: string
+          title: Rule Id
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        category:
+          type: string
+          title: Category
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        enabled:
+          type: boolean
+          title: Enabled
+        confidence:
+          type: integer
+          title: Confidence
+        fp_rate:
+          type: number
+          title: Fp Rate
+        total_hits:
+          type: integer
+          title: Total Hits
+        last_triggered_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Triggered At
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        mitre_tactics:
+          items:
+            type: string
+          type: array
+          title: Mitre Tactics
+        mitre_techniques:
+          items:
+            type: string
+          type: array
+          title: Mitre Techniques
+        version:
+          type: integer
+          title: Version
+        updated_at:
+          type: string
+          title: Updated At
+        suggestion:
+          type: string
+          enum:
+          - disable
+          - add_suppression
+          - raise_threshold
+          - tune_confidence
+          - review_stale
+          - healthy
+          title: Suggestion
+        score:
+          type: integer
+          title: Score
+        reasons:
+          items:
+            type: string
+          type: array
+          title: Reasons
+        auto_tune:
+          type: boolean
+          title: Auto Tune
+          default: false
+        dismissed_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dismissed At
+        last_action:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Action
+        last_action_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Action At
+      type: object
+      required:
+      - rule_id
+      - name
+      - category
+      - severity
+      - status
+      - enabled
+      - confidence
+      - fp_rate
+      - total_hits
+      - version
+      - updated_at
+      - suggestion
+      - score
+      title: TuningEntry
+      description: One row in the tuning workbench — what an analyst sees.
+    TuningFilters:
+      properties:
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        suggestion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suggestion
+        search:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+        enabled_only:
+          type: boolean
+          title: Enabled Only
+          default: false
+        include_dismissed:
+          type: boolean
+          title: Include Dismissed
+          default: false
+        page:
+          type: integer
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          title: Page Size
+          default: 50
+      type: object
+      title: TuningFilters
+      description: Echo of the filters that built this response (handy for the UI).
+    TuningResponse:
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/TuningEntry'
+          type: array
+          title: Entries
+        summary:
+          $ref: '#/components/schemas/TuningSummary'
+        filters:
+          $ref: '#/components/schemas/TuningFilters'
+        total:
+          type: integer
+          title: Total
+        generated_at:
+          type: string
+          title: Generated At
+      type: object
+      required:
+      - entries
+      - summary
+      - filters
+      - total
+      - generated_at
+      title: TuningResponse
+      description: Wire shape for ``GET /detection/tuning``.
+    TuningSummary:
+      properties:
+        total_rules:
+          type: integer
+          title: Total Rules
+        actionable:
+          type: integer
+          title: Actionable
+        healthy:
+          type: integer
+          title: Healthy
+        disable_count:
+          type: integer
+          title: Disable Count
+          default: 0
+        add_suppression_count:
+          type: integer
+          title: Add Suppression Count
+          default: 0
+        raise_threshold_count:
+          type: integer
+          title: Raise Threshold Count
+          default: 0
+        tune_confidence_count:
+          type: integer
+          title: Tune Confidence Count
+          default: 0
+        review_stale_count:
+          type: integer
+          title: Review Stale Count
+          default: 0
+        auto_tune_enabled:
+          type: integer
+          title: Auto Tune Enabled
+          default: 0
+        average_fp_rate:
+          type: number
+          title: Average Fp Rate
+          default: 0.0
+        high_fp_count:
+          type: integer
+          title: High Fp Count
+          default: 0
+      type: object
+      required:
+      - total_rules
+      - actionable
+      - healthy
+      title: TuningSummary
+      description: Top-line counts for the workbench header.
     UpdateApiKeyRequest:
       properties:
         name:

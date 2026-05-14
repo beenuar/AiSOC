@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import packageJson from '../../../package.json';
+import { LiveQueueBadge } from './LiveQueueBadge';
 
 const APP_VERSION = packageJson.version;
 
@@ -14,6 +15,13 @@ interface NavItem {
   icon: React.ReactNode;
   badge?: number;
   badgeColor?: string;
+  /**
+   * Optional live-data right slot. Renders in place of the static ``badge``
+   * pill when present, so nav items that need real-time counts (e.g. the
+   * Investigation Queue) can own their own polling without bloating this
+   * component.
+   */
+  liveBadge?: React.ReactNode;
 }
 
 interface NavSection {
@@ -104,6 +112,12 @@ const ClockIcon = () => (
   </svg>
 );
 
+const InboxIcon = () => (
+  <svg className="w-5 h-5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z" />
+  </svg>
+);
+
 const ScanIcon = () => (
   <svg className="w-5 h-5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -154,6 +168,12 @@ const navSections: NavSection[] = [
         badgeColor: 'bg-red-500',
       },
       {
+        label: 'Investigation Queue',
+        href: '/queue',
+        icon: <InboxIcon />,
+        liveBadge: <LiveQueueBadge />,
+      },
+      {
         label: 'Cases',
         href: '/cases',
         icon: <FolderIcon />,
@@ -176,6 +196,11 @@ const navSections: NavSection[] = [
       {
         label: 'MITRE Coverage',
         href: '/detection/coverage',
+        icon: <ChartBarIcon />,
+      },
+      {
+        label: 'Detection Tuning',
+        href: '/detection/tuning',
         icon: <ChartBarIcon />,
       },
       {
@@ -272,11 +297,6 @@ const navSections: NavSection[] = [
         label: 'Compliance',
         href: '/compliance',
         icon: <ShieldIcon />,
-      },
-      {
-        label: 'Noise Tuning',
-        href: '/noise-tuning',
-        icon: <ChartBarIcon />,
       },
       {
         label: 'MSSP Dashboard',
@@ -400,13 +420,15 @@ export function Sidebar() {
                     >
                       <span className={active ? 'text-brand-400' : 'text-fg-subtle'}>{item.icon}</span>
                       <span>{item.label}</span>
-                      {typeof item.badge === 'number' && item.badge > 0 && (
-                        <span
-                          className={`ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full text-white ${item.badgeColor ?? 'bg-gray-600'}`}
-                        >
-                          {item.badge > 99 ? '99+' : item.badge}
-                        </span>
-                      )}
+                      {item.liveBadge
+                        ? item.liveBadge
+                        : typeof item.badge === 'number' && item.badge > 0 && (
+                            <span
+                              className={`ml-auto text-xs font-bold px-1.5 py-0.5 rounded-full text-white ${item.badgeColor ?? 'bg-gray-600'}`}
+                            >
+                              {item.badge > 99 ? '99+' : item.badge}
+                            </span>
+                          )}
                     </Link>
                   </li>
                 );

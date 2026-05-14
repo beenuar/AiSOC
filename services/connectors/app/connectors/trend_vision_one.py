@@ -159,8 +159,14 @@ class TrendVisionOneConnector(BaseConnector):
         return [self.normalize(e) for e in events]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        # Trend Vision One workbench alerts and Observed Attack Techniques
+        # expose a 4- or 5-tier severity. Mirror critical → critical so the
+        # highest-impact detections survive into AiSOC's ladder instead of
+        # being downgraded to high.
         sev_raw = (raw.get("severity") or raw.get("riskLevel") or "").lower()
-        if sev_raw in ("critical", "high"):
+        if sev_raw == "critical":
+            severity = "critical"
+        elif sev_raw == "high":
             severity = "high"
         elif sev_raw == "medium":
             severity = "medium"

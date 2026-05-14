@@ -45,6 +45,8 @@ import importlib.util
 import inspect
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -80,6 +82,147 @@ TRUST_MODE_STRICT = "strict"
 TRUST_MODE_WARN = "warn"
 TRUST_MODE_DISABLED = "disabled"
 _VALID_TRUST_MODES = {TRUST_MODE_STRICT, TRUST_MODE_WARN, TRUST_MODE_DISABLED}
+
+# ── Hardening primitives (H-3) ────────────────────────────────────────────────
+#
+# Plugin IDs end up as path components beneath ``PLUGINS_DIR`` and as Python
+# module names; OCI references end up as argv to a CLI process. We constrain
+# both to safe, well-known shapes so a hostile manifest or operator-supplied
+# reference cannot pivot into path traversal, argv injection, or namespace
+# collisions with real Python packages.
+
+# Plugin id: lowercase alphanumerics + ``.``/``-``/``_``, must start with an
+# alphanumeric, 2–64 chars. This rules out ``..``, ``../escape``, absolute
+# paths, NULs, slashes, whitespace, and shell metacharacters. The regex is
+# intentionally narrower than what some manifests historically accepted —
+# new plugins MUST conform; ``discover()`` swallows the resulting
+# ``PluginError`` for legacy ids, so the user-visible impact is the
+# offending plugin being skipped with a loud log.
+_PLUGIN_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{1,63}$")
+
+# OCI reference: ``host[:port]/repo[:tag][@digest]`` with the usual character
+# set. We additionally forbid a leading ``-`` (which would be parsed as a
+# flag by ``oras``), whitespace, NULs, and shell metacharacters. The exact
+# OCI grammar is broader than this but every valid reference in the wild
+# satisfies the constraints below.
+_OCI_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$")
+
+# Cloud-metadata-style hosts that must never end up as the registry, even
+# if the regex above accepts them syntactically. ``install_from_oci`` is
+# operator-driven so this is mostly belt-and-braces, but plugins are
+# privileged enough that we keep the list.
+_OCI_FORBIDDEN_HOST_SUBSTRINGS = (
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata.azure.com",
+)
+
+
+def _validate_plugin_id(plugin_id: str) -> str:
+    """Return ``plugin_id`` if it is a safe path/module component.
+
+    Raises ``PluginError`` otherwise. Plugin ids are user-controlled via
+    manifests, so this is the canonical chokepoint before they touch the
+    filesystem or ``importlib``.
+    """
+    if not isinstance(plugin_id, str) or not _PLUGIN_ID_RE.match(plugin_id):
+        raise PluginError(
+            str(plugin_id),
+            "invalid plugin id; must match [A-Za-z0-9][A-Za-z0-9._-]{1,63}",
+        )
+    # Extra hardening: even if the regex says yes, paranoid path-component
+    # checks make path-traversal impossible.
+    if plugin_id in {".", ".."} or "/" in plugin_id or "\\" in plugin_id or "\x00" in plugin_id:
+        raise PluginError(plugin_id, "invalid plugin id; path separators or NUL not allowed")
+    return plugin_id
+
+
+def _validate_oci_ref(oci_ref: str) -> str:
+    """Return ``oci_ref`` if it is safe to pass as argv to ``oras pull``.
+
+    Rejects empty refs, leading ``-`` (flag injection), whitespace, NULs,
+    shell metacharacters, and the well-known metadata-service hosts that
+    have no business being a plugin registry.
+    """
+    if not isinstance(oci_ref, str) or not oci_ref:
+        raise PluginError("oci", "oci_ref must be a non-empty string")
+    if oci_ref.startswith("-"):
+        raise PluginError(oci_ref, "oci_ref must not start with '-' (argv injection guard)")
+    if not _OCI_REF_RE.match(oci_ref):
+        raise PluginError(
+            oci_ref,
+            "oci_ref contains characters that are not allowed; expected host[:port]/repo[:tag][@digest]",
+        )
+    lowered = oci_ref.lower()
+    if any(bad in lowered for bad in _OCI_FORBIDDEN_HOST_SUBSTRINGS):
+        raise PluginError(oci_ref, "oci_ref host is on the forbidden metadata-service deny list")
+    return oci_ref
+
+
+def _assert_no_symlinks(root: Path) -> None:
+    """Raise ``PluginError`` if ``root`` contains *any* symbolic link.
+
+    OCI layers can legally pack symlinks; for plugin payloads we treat any
+    symlink as hostile because they can point at ``/etc/passwd``, the
+    instance-metadata service over a network share, the ``PLUGINS_DIR``
+    of another tenant, or back into the temp dir to create a loop. The
+    plugin contract is "ordinary files only".
+    """
+    if root.is_symlink():
+        raise PluginError(root.name, f"refusing to ingest symlink: {root}")
+    for entry in root.rglob("*"):
+        if entry.is_symlink():
+            raise PluginError(
+                root.name,
+                f"plugin payload contains a symlink and is rejected: {entry.relative_to(root)}",
+            )
+
+
+def _safe_copytree(src: Path, dest: Path) -> None:
+    """Copy ``src`` to ``dest`` without following symlinks.
+
+    Callers must run :func:`_assert_no_symlinks` first; this helper is the
+    second line of defence in case the validation/copy steps ever drift
+    out of order.
+    """
+    shutil.copytree(src, dest, symlinks=True)
+
+
+def _select_extracted_plugin_dir(tmp_path: Path) -> Path:
+    """Pick the plugin root from a freshly-pulled OCI tree.
+
+    The historical behaviour of just ``subdirs[0]`` was order-dependent and
+    could silently install whichever directory happened to sort first when
+    a tarball packed multiple top-level dirs (e.g. a stray ``docs/``). We
+    instead prefer a subdir that actually contains a manifest, fall back to
+    the temp dir itself for flat pulls, and refuse to pick when more than
+    one candidate looks plugin-shaped.
+    """
+    if (tmp_path / _MANIFEST_YAML).exists() or (tmp_path / _MANIFEST_JSON).exists():
+        return tmp_path
+
+    subdirs = sorted(d for d in tmp_path.iterdir() if d.is_dir())
+    if not subdirs:
+        return tmp_path
+
+    candidates = [d for d in subdirs if (d / _MANIFEST_YAML).exists() or (d / _MANIFEST_JSON).exists()]
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        names = ", ".join(c.name for c in candidates)
+        raise PluginError(
+            "oci",
+            f"OCI image contains multiple plugin directories ({names}); expected exactly one",
+        )
+
+    # No manifest in any subdir — fall back to the single-subdir behaviour
+    # for legacy images, but only if there is exactly one candidate.
+    if len(subdirs) == 1:
+        return subdirs[0]
+    raise PluginError(
+        "oci",
+        "OCI image contains multiple top-level directories but no manifest; unable to pick plugin root",
+    )
 
 
 # ── Manifest model ────────────────────────────────────────────────────────────
@@ -391,6 +534,11 @@ class PluginManager:
         if missing:
             raise PluginError(plugin_dir.name, f"manifest missing fields: {missing}")
 
+        # Plugin ids end up as path components and synthesized module names.
+        # Reject anything that would let a hostile manifest pivot via
+        # ``../`` or shell metacharacters before we touch the filesystem.
+        _validate_plugin_id(str(raw["id"]))
+
         if raw["plugin_type"] not in VALID_PLUGIN_TYPES:
             raise PluginError(
                 raw.get("id", plugin_dir.name),
@@ -471,32 +619,60 @@ class PluginManager:
 
     async def install_from_oci(self, oci_ref: str, plugin_id_hint: str | None = None) -> str:
         """
-        Pull a plugin OCI image using the `oras` CLI and install it into PLUGINS_DIR.
+        Pull a plugin OCI image using the ``oras`` CLI and install it into PLUGINS_DIR.
 
         The OCI image must contain a single layer whose media type is
         ``application/vnd.aisoc.plugin.v1+tar`` or any tar/gzip layer.
         The extracted directory must contain a valid plugin manifest.
 
-        Prerequisites: `oras` CLI must be installed and on PATH.
+        Hardening (H-3):
+
+        * ``oci_ref`` and any caller-supplied ``plugin_id_hint`` are validated
+          before they reach ``argv`` so a hostile reference cannot inject a
+          flag (e.g. ``--config /etc/passwd``) or run a different binary.
+        * The freshly extracted tree is scanned for symbolic links; if any
+          are present the install is rejected outright. OCI tarballs can
+          legally pack symlinks but a plugin payload that does is treated
+          as adversarial — they trivially break out of ``PLUGINS_DIR``.
+        * Signature verification runs against the *temp* directory before
+          anything is copied into ``PLUGINS_DIR``. An attacker who can publish
+          an image but not the signing key never gets to write malicious
+          ``plugin.py`` to a place the runtime will later import.
+        * The final copy uses ``copytree`` with ``symlinks=True`` so links are
+          preserved as links rather than followed (defence in depth — the
+          symlink check above should have already failed the install).
+
+        Prerequisites: ``oras`` CLI must be installed and on PATH.
         Install: https://oras.land/docs/installation
 
         Returns the plugin_id after successful installation.
         """
+        # 1) Input validation — argv hygiene before any subprocess work.
+        _validate_oci_ref(oci_ref)
+        if plugin_id_hint is not None:
+            _validate_plugin_id(plugin_id_hint)
+
         self._plugins_dir.mkdir(parents=True, exist_ok=True)
 
         with tempfile.TemporaryDirectory(prefix="aisoc-oci-") as tmp:
             tmp_path = Path(tmp)
             logger.info("pulling OCI image", ref=oci_ref, tmp=str(tmp_path))
 
-            # oras pull into tmp directory
+            # 2) Pull. We pass argv as a list (no shell). The ref has already
+            #    been regex-validated, so a hostile ref cannot inject flags;
+            #    ``--`` is defence-in-depth and MUST come after the ``--output``
+            #    flag so oras parses ``--output`` as a flag and the ref as the
+            #    sole positional argument. Swapping the order silently breaks
+            #    ``oras pull`` at runtime ("unexpected positional argument").
             try:
                 proc = await asyncio.get_event_loop().run_in_executor(
                     None,
                     lambda: subprocess.run(
-                        ["oras", "pull", oci_ref, "--output", str(tmp_path)],
+                        ["oras", "pull", "--output", str(tmp_path), "--", oci_ref],
                         capture_output=True,
                         text=True,
                         timeout=120,
+                        check=False,
                     ),
                 )
             except FileNotFoundError as exc:
@@ -510,30 +686,50 @@ class PluginManager:
             if proc.returncode != 0:
                 raise PluginError(oci_ref, f"oras pull failed: {proc.stderr.strip()}")
 
-            # Determine extracted plugin directory
-            subdirs = [d for d in tmp_path.iterdir() if d.is_dir()]
-            if not subdirs:
-                # Flat pull — treat tmp itself as the plugin directory
-                extracted = tmp_path
-            else:
-                extracted = subdirs[0]
+            # 3) Reject symlinks at the temp-dir level before we even read
+            #    the manifest. A hostile ``plugin.yaml`` could be a symlink
+            #    into ``/etc`` and we don't want ``_read_manifest`` reading
+            #    arbitrary files.
+            _assert_no_symlinks(tmp_path)
 
-            # Read manifest to get the canonical id
+            # 4) Find the extracted plugin directory. Prefer a subdir that
+            #    actually contains a manifest; fall back to the temp dir
+            #    itself for "flat" pulls.
+            extracted = _select_extracted_plugin_dir(tmp_path)
+
+            # 5) Read manifest and bind the canonical plugin_id. The id
+            #    must satisfy the same shape rules as discovered plugins
+            #    so it cannot escape ``PLUGINS_DIR`` or shadow another id.
             raw = _read_manifest(extracted)
-            plugin_id = raw.get("id") or plugin_id_hint or extracted.name
+            plugin_id = str(raw.get("id") or plugin_id_hint or extracted.name)
+            _validate_plugin_id(plugin_id)
+            if plugin_id_hint is not None and raw.get("id") and raw["id"] != plugin_id_hint:
+                raise PluginError(
+                    plugin_id,
+                    f"manifest id '{raw['id']}' does not match plugin_id_hint '{plugin_id_hint}'",
+                )
 
+            # 6) Verify the signature against the *temp* directory, BEFORE
+            #    we copy anything into PLUGINS_DIR. In ``strict`` mode this
+            #    raises and the temp dir is cleaned up by the context
+            #    manager — nothing malicious ever lands on disk inside the
+            #    plugins root.
+            trust_mode, trusted_keys = self._trust_config()
+            _verify_plugin_signature(extracted, raw, trust_mode, trusted_keys)
+
+            # 7) Atomically install into PLUGINS_DIR. We use ``symlinks=True``
+            #    so links would be preserved-as-links rather than followed,
+            #    but ``_assert_no_symlinks`` above should already have made
+            #    that path unreachable.
             dest = self._plugins_dir / plugin_id
             if dest.exists():
-                import shutil
-
                 shutil.rmtree(dest)
-
-            import shutil
-
-            shutil.copytree(extracted, dest)
+            _safe_copytree(extracted, dest)
             logger.info("OCI plugin extracted", ref=oci_ref, dest=str(dest))
 
-        # Load the freshly extracted plugin
+        # 8) Load the freshly extracted plugin. ``_load_plugin`` re-runs the
+        #    signature gate against the final location, which is what
+        #    ``LoadedPlugin.signature_status`` ultimately reflects.
         loaded_id = await self._load_plugin(dest)
         logger.info("OCI plugin installed and loaded", plugin_id=loaded_id, ref=oci_ref)
         return loaded_id

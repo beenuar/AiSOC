@@ -45,6 +45,24 @@ class Alert(Base):
     ai_recommendations: Mapped[list] = mapped_column(JSONB, default=list)
     false_positive_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Fusion confidence — populated by services/fusion at correlate-time.
+    # `confidence` is the canonical 0-100 integer the API surfaces (W3 in
+    # the v1.5 SOC Console Parity plan); `confidence_label` is the band
+    # ('high' | 'medium' | 'low') and `confidence_rationale` is the list
+    # of contributing factors so analysts can see why we believe what we
+    # believe.
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_label: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    confidence_rationale: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    # Correlation narrative — deterministic, human-readable text cached on
+    # the alert at fusion-time (or lazily computed by the API on first read
+    # for legacy rows). Surfaced verbatim by the InvestigationRail (W6 in
+    # the v1.5 SOC Console Parity plan) so the right pane renders without
+    # an LLM round-trip. The streaming LLM explanation lives behind the
+    # rail's "Deep Explain" button via /api/v1/alerts/{id}/explain.
+    narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Entities (denormalized for fast querying)
     affected_ips: Mapped[list] = mapped_column(JSONB, default=list)
     affected_hosts: Mapped[list] = mapped_column(JSONB, default=list)
@@ -69,6 +87,15 @@ class Alert(Base):
     raw_event: Mapped[dict] = mapped_column(JSONB, default=dict)
     enrichment_data: Mapped[dict] = mapped_column(JSONB, default=dict)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
+
+    # Client-supplied idempotency key for the direct-write submit path
+    # (POST /alerts/submit, used by the `aisoc submit` CLI and at-least-once
+    # connector retries). Scoped per-tenant via a partial unique index so a
+    # retry of the same logical alert resolves to the existing row instead
+    # of creating a duplicate. NULL for rows produced by the Kafka detect/
+    # correlate/fuse pipeline, which de-duplicates on its own. See
+    # migration 044_alerts_idempotency_key.sql for the index definition.
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # Timestamps
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)

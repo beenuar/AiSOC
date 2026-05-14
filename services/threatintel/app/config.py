@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
     # Service
     APP_NAME: str = "AiSOC ThreatIntel"
     VERSION: str = "0.1.0"
@@ -79,10 +86,6 @@ class Settings(BaseSettings):
     # into zero-egress mode.
     AISOC_AIRGAPPED: bool = False
     AISOC_AIRGAP_ALLOWLIST: list[str] = []
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()

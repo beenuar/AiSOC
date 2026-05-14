@@ -28,6 +28,36 @@ DEFAULT_KPI_BAR_TARGETS: dict[str, float] = {
     "mitre_subtechnique_tagging_min_pct": 60.0,
 }
 
+# Default per-severity SLA targets (minutes) used as the fallback when a tenant
+# has not provided overrides via ``tenant_sla_config``. The queue's `sla_due_at`
+# expression also reads ``DEFAULT_SLA_TARGETS["info"]["mttd_target"]`` as a
+# catch-all for severities that fall outside the standard four-tier ladder.
+DEFAULT_SLA_TARGETS: dict[str, dict[str, int]] = {
+    "critical": {"mttd_target": 15, "mttr_target": 60, "mttc_target": 120},
+    "high": {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
+    "medium": {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
+    "low": {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
+    "info": {"mttd_target": 240, "mttr_target": 960, "mttc_target": 2880},
+}
+
+
+# Default per-severity SLA targets (minutes). These mirror the seed values
+# in migrations 007 (critical/high/medium/low) and 040 (info) — `critical`
+# carries the v1.5 P1 ≤15 min MTTD promise (W2 in the v1.5 SOC Console
+# Parity plan), and `info` is the widest band because info-tier alerts
+# are background context, not work items the analyst is on the clock for.
+#
+# Lifted to a module-level constant so it can be asserted against in
+# tests; the row is also the source of truth used by ``compute_sla_metrics``
+# when a tenant hasn't overridden it via ``tenant_sla_config``.
+DEFAULT_SLA_TARGETS: dict[str, dict[str, int]] = {
+    "critical": {"mttd_target": 15, "mttr_target": 60, "mttc_target": 120},
+    "high": {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
+    "medium": {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
+    "low": {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
+    "info": {"mttd_target": 480, "mttr_target": 1440, "mttc_target": 2880},
+}
+
 
 def merge_kpi_bar_dict(existing: dict | None, patch: dict[str, float]) -> dict[str, float]:
     """Merge ``patch`` into stored ``kpi_bar`` and coerce to the four known keys + defaults."""
@@ -243,16 +273,10 @@ async def compute_sla_metrics(
         buckets.setdefault(sev, []).append(d)
 
     per_severity: dict[str, dict[str, Any]] = {}
-    default_targets = {
-        "critical": {"mttd_target": 15, "mttr_target": 60, "mttc_target": 120},
-        "high": {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
-        "medium": {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
-        "low": {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
-    }
 
-    for sev in ["critical", "high", "medium", "low"]:
+    for sev in ["critical", "high", "medium", "low", "info"]:
         items = buckets.get(sev, [])
-        targets = configs.get(sev) or default_targets.get(sev, {})
+        targets = configs.get(sev) or DEFAULT_SLA_TARGETS.get(sev, {})
 
         mttd_vals = [i["mttd"] for i in items if i["mttd"] is not None]
         mttr_vals = [i["mttr"] for i in items if i["mttr"] is not None]

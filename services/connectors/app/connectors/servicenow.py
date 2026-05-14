@@ -19,20 +19,49 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 
 logger = structlog.get_logger()
 
+# ServiceNow's OOTB incident table exposes a 3-tier ``impact`` field
+# (1=High, 2=Medium, 3=Low) but a 5-tier *computed* ``priority`` field
+# (1=Critical, 2=High, 3=Moderate, 4=Low, 5=Planning). We prefer
+# ``priority`` for inbound normalisation because it round-trips AiSOC's
+# 5-tier ladder (info | low | medium | high | critical) losslessly; we
+# fall back to ``impact`` only when ``priority`` is missing.
+_PRIORITY_SEVERITY = {
+    "1": "critical",
+    "2": "high",
+    "3": "medium",
+    "4": "low",
+    "5": "info",
+}
+
 _IMPACT_SEVERITY = {
     "1": "high",
     "2": "medium",
     "3": "low",
 }
 
-# WS8: AiSOC severity → ServiceNow ``impact`` numeric code. ServiceNow
-# uses 1=High, 2=Medium, 3=Low. We collapse ``critical`` and ``high``
-# onto 1 because the OOTB incident table doesn't have a separate
-# critical band, and ``info`` collapses onto 3 (Low) — there's no
-# "informational" tier in the standard schema.
+# WS8: AiSOC severity → ServiceNow ``impact`` numeric code. ServiceNow's
+# ``impact`` field is 3-tier (1=High / 2=Medium / 3=Low), so we set
+# impact=1 + urgency=1 together — ServiceNow's calculated ``priority``
+# matrix turns ``impact=1 + urgency=1`` into priority 1 ("Critical"),
+# which preserves the P1 signal even though ``impact`` itself has no
+# separate critical band. ``info`` collapses to impact=3 / urgency=3,
+# which yields priority 5 ("Planning") — the closest analog ServiceNow
+# ships out of the box.
 _SEVERITY_TO_IMPACT = {
     "critical": "1",
     "high": "1",
+    "medium": "2",
+    "low": "3",
+    "info": "3",
+}
+
+# Urgency mirrors impact but pushes ``critical`` to 1 and ``high`` to 2
+# so the resulting priority matrix differentiates them:
+#   critical: impact=1 + urgency=1 → priority 1 (Critical)
+#   high    : impact=1 + urgency=2 → priority 2 (High)
+_SEVERITY_TO_URGENCY = {
+    "critical": "1",
+    "high": "2",
     "medium": "2",
     "low": "3",
     "info": "3",
@@ -132,16 +161,28 @@ class ServiceNowConnector(BaseConnector):
         return [self.normalize(i) for i in incidents]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
-        impact = str(raw.get("impact", "3"))
-        if isinstance(impact, dict):
-            impact = impact.get("value", "3")
+        # ServiceNow returns these fields as strings under
+        # ``sysparm_display_value=true``, but as nested dicts
+        # (``{"value": "1", "display_value": "Critical"}``) under
+        # ``sysparm_display_value=all``. Defend against both.
+        def _coerce(field: Any) -> str | None:
+            if isinstance(field, dict):
+                return str(field.get("value")) if field.get("value") is not None else None
+            return str(field) if field not in (None, "") else None
+
+        priority = _coerce(raw.get("priority"))
+        impact = _coerce(raw.get("impact")) or "3"
+
+        severity = _PRIORITY_SEVERITY.get(priority) if priority else None
+        if severity is None:
+            severity = _IMPACT_SEVERITY.get(impact, "low")
 
         return {
             "source": self.connector_id,
             "external_id": raw.get("sys_id", ""),
             "title": raw.get("short_description", "ServiceNow Incident"),
             "description": raw.get("description", "")[:500],
-            "severity": _IMPACT_SEVERITY.get(str(impact), "low"),
+            "severity": severity,
             "src_ip": None,
             "hostname": raw.get("cmdb_ci", {}).get("display_value") if isinstance(raw.get("cmdb_ci"), dict) else raw.get("cmdb_ci"),
             "actor": raw.get("opened_by", {}).get("display_value") if isinstance(raw.get("opened_by"), dict) else raw.get("opened_by"),
@@ -191,7 +232,7 @@ class ServiceNowConnector(BaseConnector):
             "short_description": title[:160],  # ServiceNow short_description cap.
             "description": description,
             "impact": _SEVERITY_TO_IMPACT.get(severity, "2"),
-            "urgency": _SEVERITY_TO_IMPACT.get(severity, "2"),
+            "urgency": _SEVERITY_TO_URGENCY.get(severity, "2"),
             # Round-trip the AiSOC case identifier in ``correlation_id``
             # so the inbound webhook can find us without a custom field.
             "correlation_id": f"aisoc:{case_id}",

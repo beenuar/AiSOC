@@ -88,45 +88,55 @@ def test_capabilities_advertises_pull_audit_and_alerts():
 # ---------------------------------------------------------------------------
 
 
-def test_severity_pod_exec_is_high():
+def test_severity_pod_exec_is_critical():
+    # Interactive shell into a pod is functionally equivalent to a
+    # P1 incident on that pod — map to AiSOC's ``critical`` tier.
     event = {
         "verb": "create",
         "objectRef": {"resource": "pods", "subresource": "exec"},
         "responseStatus": {"code": 101},
     }
-    assert _classify_severity(event) == "high"
+    assert _classify_severity(event) == "critical"
 
 
-def test_severity_pod_attach_is_high():
+def test_severity_pod_attach_is_critical():
+    # ``attach`` is the streaming-IO sibling of ``exec`` — same blast
+    # radius, same P1 critical tier.
     event = {
         "verb": "create",
         "objectRef": {"resource": "pods", "subresource": "attach"},
     }
-    assert _classify_severity(event) == "high"
+    assert _classify_severity(event) == "critical"
 
 
-def test_severity_pod_portforward_is_high():
+def test_severity_pod_portforward_is_critical():
+    # ``portforward`` punches a tunnel to a pod-local port — same
+    # P1 blast radius as ``exec`` / ``attach``.
     event = {
         "verb": "create",
         "objectRef": {"resource": "pods", "subresource": "portforward"},
     }
-    assert _classify_severity(event) == "high"
+    assert _classify_severity(event) == "critical"
 
 
-def test_severity_impersonate_is_high():
+def test_severity_impersonate_is_critical():
+    # ``impersonate`` is direct identity hand-off — anyone who can
+    # impersonate cluster-admin owns the cluster. Critical / P1.
     event = {
         "verb": "impersonate",
         "objectRef": {"resource": "users"},
     }
-    assert _classify_severity(event) == "high"
+    assert _classify_severity(event) == "critical"
 
 
-def test_severity_clusterrolebinding_create_is_high():
+def test_severity_clusterrolebinding_create_is_critical():
+    # Writes against the RBAC graph itself are the most common
+    # post-foothold takeover primitive — P1 critical.
     event = {
         "verb": "create",
         "objectRef": {"resource": "clusterrolebindings"},
     }
-    assert _classify_severity(event) == "high"
+    assert _classify_severity(event) == "critical"
 
 
 def test_severity_secret_create_is_high():
@@ -260,7 +270,9 @@ def test_normalize_extracts_canonical_fields():
     assert norm["severity"] == "low"
 
 
-def test_normalize_pod_exec_routes_to_high_severity_and_clear_title():
+def test_normalize_pod_exec_routes_to_critical_severity_and_clear_title():
+    # End-to-end: a pod ``exec`` event must surface as ``critical`` so
+    # it lands in the P1 lane (15-minute MTTD SLA).
     conn = _make_connector()
     raw = {
         "auditID": "exec-1",
@@ -277,7 +289,7 @@ def test_normalize_pod_exec_routes_to_high_severity_and_clear_title():
         "stageTimestamp": "2026-05-10T11:00:00Z",
     }
     norm = conn.normalize(raw)
-    assert norm["severity"] == "high"
+    assert norm["severity"] == "critical"
     assert norm["k8s_subresource"] == "exec"
     # The title should be obviously parseable by a human eyeballing
     # the inbox — verb, resource, subresource, target.

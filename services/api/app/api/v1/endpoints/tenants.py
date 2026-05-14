@@ -15,6 +15,22 @@ from app.models.tenant import Tenant, User
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
 
+class TenantHeaderResponse(BaseModel):
+    """Minimal tenant identity payload — safe for *any* authenticated user.
+
+    Used by the SOC console TopBar to render the tenant switcher and role
+    badge (Workstream 5). Intentionally excludes `plan`, `settings`, and
+    `limits` so it does not leak privileged config to viewer/analyst roles.
+    """
+
+    id: uuid.UUID
+    name: str
+    mssp_role: str | None
+    parent_tenant_id: uuid.UUID | None
+
+    model_config = {"from_attributes": True}
+
+
 class TenantResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -23,6 +39,8 @@ class TenantResponse(BaseModel):
     is_active: bool
     settings: dict
     limits: dict
+    mssp_role: str | None = None
+    parent_tenant_id: uuid.UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -58,12 +76,31 @@ class UpdateTenantSettingsRequest(BaseModel):
     settings: dict = {}
 
 
+@router.get("/me/identity", response_model=TenantHeaderResponse)
+async def get_my_tenant_identity(
+    current_user: AuthUser,
+    db: DBSession,
+) -> TenantHeaderResponse:
+    """Get minimal tenant identity for the current user.
+
+    Returns only `id`, `name`, `mssp_role`, and `parent_tenant_id`. This is
+    safe for **any** authenticated user (analyst, viewer, responder, etc.)
+    because it does not expose plan, settings, or limits. Used by the SOC
+    console TopBar to render the tenant switcher pill and role badge.
+    """
+    result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+    tenant = result.scalar_one_or_none()
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return TenantHeaderResponse.model_validate(tenant)
+
+
 @router.get("/me", response_model=TenantResponse)
 async def get_my_tenant(
     current_user: Annotated[AuthUser, Depends(require_permission("settings:read"))],
     db: DBSession,
 ) -> TenantResponse:
-    """Get the current user's tenant details."""
+    """Get the current user's tenant details (full config — requires settings:read)."""
     result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
     tenant = result.scalar_one_or_none()
     if tenant is None:

@@ -310,8 +310,11 @@ class GitHubConnector(BaseConnector):
     # GitHub uses ``security-severity`` (CVSS-style numeric) and a
     # categorical ``severity`` (note/warning/error/critical/high/medium/low).
     # We honor the categorical first since it's set on every result.
+    # AiSOC's 5-tier ladder (info | low | medium | high | critical) preserves
+    # GitHub's native ``critical`` tier end-to-end so P1 SAST/CodeQL findings
+    # keep their original priority.
     _CODE_SEVERITY_MAP = {
-        "critical": "high",  # collapse into AiSOC's 4-tier ladder
+        "critical": "critical",
         "high": "high",
         "error": "high",
         "medium": "medium",

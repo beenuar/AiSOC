@@ -33,8 +33,19 @@ CREATE INDEX IF NOT EXISTS idx_compliance_evidence_control ON compliance_evidenc
 -- RLS for evidence
 ALTER TABLE compliance_evidence ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY compliance_evidence_tenant_isolation ON compliance_evidence
-    USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = current_schema()
+          AND tablename = 'compliance_evidence'
+          AND policyname = 'compliance_evidence_tenant_isolation'
+    ) THEN
+        EXECUTE 'CREATE POLICY compliance_evidence_tenant_isolation ON compliance_evidence
+            USING (tenant_id = current_setting(''app.current_tenant_id'', true)::uuid)';
+    END IF;
+END $$;
 
 -- Seed SOC 2 Trust Services Criteria (CC controls)
 INSERT INTO compliance_controls (framework, control_id, category, title, description) VALUES

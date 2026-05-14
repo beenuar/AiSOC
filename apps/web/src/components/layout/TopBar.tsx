@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { TimeWindowSelector } from './TimeWindowSelector';
+import { TenantSwitcher } from './TenantSwitcher';
+import { RoleBadge } from './RoleBadge';
+import { useTenant } from './TenantProvider';
 
 // Order matters: longer/more specific paths first so startsWith() picks
 // the right label for nested routes (e.g. /detection/catalog before /detection).
@@ -42,6 +46,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
   const pathname = usePathname();
   const [now, setNow] = useState<Date | null>(null);
   const [shortcut, setShortcut] = useState<'⌘K' | 'Ctrl K'>('⌘K');
+  const { userRole } = useTenant();
 
   // Update the clock every second on the client only (avoids hydration drift).
   useEffect(() => {
@@ -151,8 +156,40 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
         </button>
       </div>
 
-      {/* Right: clock, theme toggle, notifications, user */}
-      <div className="flex items-center gap-4">
+      {/* Right: time window, tenant, role badge, clock, theme toggle, notifications, user */}
+      <div className="flex items-center gap-3">
+        {/*
+          v1.5 W4: Global time-window selector. Lives next to the tenant
+          switcher in the TopBar so every page reads from the same context.
+          Hidden on small screens to keep the bar from wrapping.
+        */}
+        <div className="hidden md:block">
+          <TimeWindowSelector />
+        </div>
+
+        {/*
+          v1.5 W5: Tenant switcher. For MSSP parents this is a dropdown of
+          tenants they can pivot into; for standalone tenants this collapses
+          into a read-only badge.
+        */}
+        <div className="hidden md:block">
+          <TenantSwitcher />
+        </div>
+
+        {/*
+          v1.5 W5: Role badge — surfaces the operator's effective role
+          (analyst / analyst-lead / admin / viewer / mssp-admin) so
+          permission boundaries are visible at a glance. The badge intentionally
+          renders even when userRole is null so the slot doesn't reflow as it
+          resolves.
+        */}
+        <div className="hidden lg:block">
+          <RoleBadge role={userRole} />
+        </div>
+
+        {/* Divider between v1.5 console context and existing top-bar chrome. */}
+        <div className="hidden lg:block h-6 w-px bg-surface-border" aria-hidden />
+
         {/* Clock */}
         <div className="text-right hidden lg:block">
           <p className="text-sm font-mono text-fg-secondary" suppressHydrationWarning>{timeStr}</p>

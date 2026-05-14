@@ -62,3 +62,41 @@ if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
   // @ts-expect-error — assigning a stub for the same reason as above.
   window.ResizeObserver = ResizeObserverStub;
 }
+
+// localStorage — the jsdom build wired up in this repo exposes `window.localStorage`
+// as an object but without `getItem`/`setItem` methods, which breaks any component
+// that persists user preferences (v1.5 W4 TimeWindowProvider, W5 TenantProvider,
+// WS-F1 theme, etc.). Install a small in-memory Storage shim so tests can read and
+// write keys exactly like real browser code. We also re-install it before every
+// test via the `afterEach` cleanup hook in case a test installs `vi.spyOn` mocks
+// on `Storage.prototype` and forgets to restore them.
+function installStorageShim() {
+  if (typeof window === 'undefined') return;
+  const store = new Map<string, string>();
+  const shim: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear: () => {
+      store.clear();
+    },
+    getItem: (key: string) => (store.has(key) ? (store.get(key) as string) : null),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+  };
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: shim,
+  });
+  Object.defineProperty(window, 'sessionStorage', {
+    configurable: true,
+    value: shim,
+  });
+}
+
+installStorageShim();

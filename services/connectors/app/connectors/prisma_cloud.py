@@ -30,12 +30,12 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 
 logger = structlog.get_logger()
 
-# Prisma Cloud uses a 4-tier severity ladder; map directly into AiSOC's
-# canonical 4-tier set. ``critical`` collapses into ``high`` because AiSOC
-# does not expose a separate critical band — playbooks that need the
-# original tier can read it back from ``raw_event.severity``.
+# Prisma Cloud ships a native ``critical`` tier on alerts. AiSOC's 5-tier
+# ladder (info | low | medium | high | critical) preserves it end-to-end so
+# P1 cloud findings keep their original priority rather than getting
+# downgraded into ``high``.
 _SEVERITY_MAP: dict[str, str] = {
-    "critical": "high",
+    "critical": "critical",
     "high": "high",
     "medium": "medium",
     "low": "low",

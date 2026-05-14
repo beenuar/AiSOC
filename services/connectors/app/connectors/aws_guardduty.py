@@ -17,17 +17,20 @@ Auth model:
       - Or supply a static IAM access-key pair scoped to read-only
         GuardDuty permissions.
 
-Severity collapse:
-    GuardDuty returns severity as a float in [1.0, 8.9]. AiSOC's
-    canonical ladder is ``info | low | medium | high``. We bucket using
-    AWS's published thresholds:
+Severity mapping:
+    GuardDuty publishes severity as a float roughly in [0.1, 10.0]. AiSOC's
+    canonical ladder is the 5-tier ``info | low | medium | high | critical``
+    set. We bucket using AWS's own published thresholds, preserving the
+    Critical tier so P1 GuardDuty findings keep their original priority:
 
+        0.1–0.9  --> info
         1.0–3.9  --> low
         4.0–6.9  --> medium
         7.0–8.9  --> high
+        9.0–10.0 --> critical
 
-    Anything < 1.0 (rare but possible for sample/test findings) collapses
-    to ``info``.
+    The original float is preserved on ``raw_event.Severity`` for callers
+    that need exact comparisons.
 """
 
 from __future__ import annotations
@@ -43,14 +46,16 @@ logger = structlog.get_logger()
 
 
 def _severity_label(score: float | int | None) -> str:
-    """Collapse GuardDuty's float severity into AiSOC's 4-tier ladder.
+    """Bucket GuardDuty's float severity into AiSOC's 5-tier ladder.
 
     GuardDuty publishes severity as a float roughly in [0.1, 10.0]. AWS's
     own console buckets that into Low (1.0-3.9), Medium (4.0-6.9),
-    High (7.0-8.9), and Critical (9.0-10.0). AiSOC's canonical ladder
-    has no ``critical`` tier, so anything 7.0+ collapses into ``high``
-    and the original float is preserved on ``raw_event.Severity`` for
-    callers that need exact comparisons.
+    High (7.0-8.9), and Critical (9.0-10.0). AiSOC's 5-tier ladder
+    (info | low | medium | high | critical) preserves the Critical tier
+    end-to-end so P1 findings keep their original priority rather than
+    getting silently downgraded into ``high``. The original float is
+    preserved on ``raw_event.Severity`` for callers that need exact
+    comparisons.
     """
     if score is None:
         return "medium"
@@ -64,7 +69,9 @@ def _severity_label(score: float | int | None) -> str:
         return "low"
     if s < 7.0:
         return "medium"
-    return "high"
+    if s < 9.0:
+        return "high"
+    return "critical"
 
 
 class AWSGuardDutyConnector(BaseConnector):

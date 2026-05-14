@@ -142,7 +142,7 @@ const jsonLd = {
         'Adversary simulation eval harness (200 incidents)',
         'SLA tracking, automated compliance evidence, and AI-generated incident reports',
         'MSSP multi-tenant support, shift-handoff dashboard, and team analytics',
-        'External Attack Surface Management (EASM) and noise-tuning dashboard',
+        'External Attack Surface Management (EASM) and detection tuning workbench',
         'STIX 2.1 / TAXII 2.1 publishing and air-gap deployment configuration',
         'Self-hosted deployment with Docker Compose',
       ],

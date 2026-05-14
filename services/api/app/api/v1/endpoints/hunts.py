@@ -12,6 +12,14 @@ Endpoints
 * ``POST /hunts/{id}/run``       Execute a hunt query (ES|QL live; SPL/KQL templated).
 * ``GET  /hunts/{id}/runs``      List run history for a hunt.
 * ``POST /hunts/{id}/findings``  Append finding entries to a hunt.
+
+Tenant isolation
+----------------
+Every query is scoped to ``user.tenant_id``. Rows whose ``tenant_id`` is NULL
+remain visible only to the tenant that created them once they are owned.
+Legacy rows created before migration 043 with ``tenant_id IS NULL`` are
+silently treated as orphans — they are *not* returned to anyone, ensuring no
+cross-tenant data leakage during the rollout window.
 """
 
 from __future__ import annotations
@@ -204,8 +212,12 @@ async def list_hunts(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[HuntResponse]:
-    wheres = ["1=1"]
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    wheres = ["tenant_id = :tenant_id"]
+    params: dict[str, Any] = {
+        "tenant_id": user.tenant_id,
+        "limit": limit,
+        "offset": offset,
+    }
     if hunt_status:
         wheres.append("status = :status")
         params["status"] = hunt_status
@@ -231,16 +243,17 @@ async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) ->
     now = datetime.now(UTC)
     q = text("""
         INSERT INTO aisoc_hunts (
-            id, title, hypothesis, mitre_tactic, mitre_technique,
+            id, tenant_id, title, hypothesis, mitre_tactic, mitre_technique,
             priority, assigned_to, tags, query_esql, query_spl, query_kql,
             created_at, updated_at, created_by
         ) VALUES (
-            :id, :title, :hypothesis, :tactic, :technique,
-            :priority, :assigned, :tags::text[], :esql, :spl, :kql,
+            :id, :tenant_id, :title, :hypothesis, :tactic, :technique,
+            :priority, :assigned, CAST(:tags AS TEXT[]), :esql, :spl, :kql,
             :now, :now, :user
         ) RETURNING *
     """).bindparams(
         id=hunt_id,
+        tenant_id=user.tenant_id,
         title=body.title,
         hypothesis=body.hypothesis,
         tactic=body.mitre_tactic,
@@ -252,7 +265,7 @@ async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) ->
         spl=queries.get("spl"),
         kql=queries.get("kql"),
         now=now,
-        user=str(user) if user else "system",
+        user=user.email or "system",
     )
     try:
         row = (await db.execute(q)).fetchone()
@@ -265,7 +278,11 @@ async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) ->
 
 @router.get("/{hunt_id}", response_model=HuntResponse, summary="Get hunt")
 async def get_hunt(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> HuntResponse:
-    row = (await db.execute(text("SELECT * FROM aisoc_hunts WHERE id = :id").bindparams(id=hunt_id))).fetchone()
+    row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Hunt not found.")
     return _row_to_hunt(row)
@@ -274,7 +291,11 @@ async def get_hunt(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> HuntRes
 @router.patch("/{hunt_id}", response_model=HuntResponse, summary="Update hunt")
 async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession, user: AuthUser) -> HuntResponse:
     sets = ["updated_at = :now"]
-    params: dict[str, Any] = {"id": hunt_id, "now": datetime.now(UTC)}
+    params: dict[str, Any] = {
+        "id": hunt_id,
+        "tenant_id": user.tenant_id,
+        "now": datetime.now(UTC),
+    }
 
     if body.title is not None:
         sets.append("title = :title")
@@ -309,10 +330,10 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
         sets.append("query_kql = :kql")
         params["kql"] = body.query_kql
     if body.tags is not None:
-        sets.append("tags = :tags::text[]")
+        sets.append("tags = CAST(:tags AS TEXT[])")
         params["tags"] = body.tags
 
-    q = text(f"UPDATE aisoc_hunts SET {', '.join(sets)} WHERE id = :id RETURNING *").bindparams(**params)
+    q = text(f"UPDATE aisoc_hunts SET {', '.join(sets)} WHERE id = :id AND tenant_id = :tenant_id RETURNING *").bindparams(**params)
     try:
         row = (await db.execute(q)).fetchone()
         if not row:
@@ -328,7 +349,11 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
 
 @router.post("/{hunt_id}/run", response_model=HuntRunResponse, status_code=status.HTTP_200_OK, summary="Execute hunt query")
 async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user: AuthUser) -> HuntRunResponse:
-    hunt_row = (await db.execute(text("SELECT * FROM aisoc_hunts WHERE id = :id").bindparams(id=hunt_id))).fetchone()
+    hunt_row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not hunt_row:
         raise HTTPException(status_code=404, detail="Hunt not found.")
 
@@ -370,10 +395,17 @@ async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user
     duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
     run_id = uuid.uuid4()
     q = text("""
-        INSERT INTO aisoc_hunt_runs (id, hunt_id, platform, query_used, hit_count, result_sample, duration_ms, error)
-        VALUES (:id, :hunt_id, :platform, :query, :hits, :sample::jsonb, :dur, :err) RETURNING *
+        INSERT INTO aisoc_hunt_runs (
+            id, tenant_id, hunt_id, platform, query_used, hit_count,
+            result_sample, duration_ms, error
+        )
+        VALUES (
+            :id, :tenant_id, :hunt_id, :platform, :query, :hits,
+            CAST(:sample AS JSONB), :dur, :err
+        ) RETURNING *
     """).bindparams(
         id=run_id,
+        tenant_id=user.tenant_id,
         hunt_id=hunt_id,
         platform=body.platform,
         query=query,
@@ -403,8 +435,22 @@ async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user
 
 @router.get("/{hunt_id}/runs", response_model=list[HuntRunResponse], summary="List hunt runs")
 async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[HuntRunResponse]:
+    # Authorize: ensure the parent hunt belongs to the caller's tenant before
+    # listing runs (covers historical runs whose own tenant_id might be NULL).
+    parent = (
+        await db.execute(
+            text("SELECT 1 FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Hunt not found.")
+
     rows = (
-        await db.execute(text("SELECT * FROM aisoc_hunt_runs WHERE hunt_id = :id ORDER BY run_at DESC LIMIT 100").bindparams(id=hunt_id))
+        await db.execute(
+            text("SELECT * FROM aisoc_hunt_runs WHERE hunt_id = :id AND tenant_id = :tenant_id ORDER BY run_at DESC LIMIT 100").bindparams(
+                id=hunt_id, tenant_id=user.tenant_id
+            )
+        )
     ).fetchall()
     return [
         HuntRunResponse(
@@ -424,13 +470,20 @@ async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[H
 
 @router.post("/{hunt_id}/findings", response_model=HuntResponse, summary="Append findings")
 async def add_findings(hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSession, user: AuthUser) -> HuntResponse:
-    existing = (await db.execute(text("SELECT findings FROM aisoc_hunts WHERE id = :id").bindparams(id=hunt_id))).fetchone()
+    existing = (
+        await db.execute(
+            text("SELECT findings FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=hunt_id, tenant_id=user.tenant_id
+            )
+        )
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Hunt not found.")
 
     merged = list(existing.findings or []) + body.findings
     params: dict[str, Any] = {
         "id": hunt_id,
+        "tenant_id": user.tenant_id,
         "findings": json.dumps(merged),
         "now": datetime.now(UTC),
     }
@@ -439,13 +492,18 @@ async def add_findings(hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSessi
         extra_set = ", false_positive_rate = :fpr"
         params["fpr"] = body.false_positive_rate
 
-    q = text(f"UPDATE aisoc_hunts SET findings = :findings::jsonb, updated_at = :now{extra_set} WHERE id = :id RETURNING *").bindparams(
-        **params
-    )
+    q = text(
+        f"UPDATE aisoc_hunts SET findings = CAST(:findings AS JSONB), updated_at = :now{extra_set} "
+        "WHERE id = :id AND tenant_id = :tenant_id RETURNING *"
+    ).bindparams(**params)
     try:
         row = (await db.execute(q)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Hunt not found.")
         await db.commit()
         return _row_to_hunt(row)
+    except HTTPException:
+        raise
     except Exception as exc:
         await db.rollback()
         raise HTTPException(status_code=503, detail=f"Database error: {exc}") from exc

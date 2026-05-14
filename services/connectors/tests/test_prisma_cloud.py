@@ -53,7 +53,10 @@ def test_prisma_cloud_compute_url_is_optional():
 # ---------------------------------------------------------------------------
 
 
-def test_normalize_collapses_critical_into_high():
+def test_normalize_critical_preserves_critical():
+    # Prisma Cloud's ``critical`` policy severity must surface as AiSOC
+    # ``critical`` (P1, 15-minute MTTD SLA) — never silently downgrade to
+    # ``high``, since AiSOC now exposes a dedicated 5th tier for P1 work.
     connector = PrismaCloudConnector(_API, _KEY_ID, _SECRET)
     raw = {
         "id": "alert-1",
@@ -72,9 +75,7 @@ def test_normalize_collapses_critical_into_high():
     }
     out = connector.normalize(raw)
     assert out["source"] == "prisma_cloud"
-    assert out["severity"] == "high", (
-        "Prisma Cloud 'critical' must collapse into AiSOC 'high'; AiSOC does not expose a separate critical band"
-    )
+    assert out["severity"] == "critical", "Prisma Cloud 'critical' must map directly to AiSOC 'critical' so P1 SLAs apply"
     assert out["external_id"] == "alert-1"
     assert out["title"] == "Public S3 bucket"
     assert out["cloud_resource"] == "rrn::s3:us-east-1:123:bucket/logs-bucket"

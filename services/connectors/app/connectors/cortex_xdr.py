@@ -18,12 +18,15 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 
 logger = structlog.get_logger()
 
+# Cortex XDR natively ships a ``critical`` tier on incidents. AiSOC's
+# 5-tier ladder preserves it end-to-end so P1 EDR detections keep their
+# original priority.
 _SEVERITY_MAP: dict[str, str] = {
     "informational": "info",
     "low": "low",
     "medium": "medium",
     "high": "high",
-    "critical": "high",
+    "critical": "critical",
 }
 
 

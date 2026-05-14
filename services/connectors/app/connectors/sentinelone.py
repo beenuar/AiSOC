@@ -21,7 +21,10 @@ _SEVERITY_MAP = {
     "Low": "low",
     "Medium": "medium",
     "High": "high",
-    "Critical": "high",
+    # SentinelOne natively ships a ``Critical`` severity. Preserve it on the
+    # AiSOC side so P1 EDR detections stay in the dedicated critical band
+    # rather than getting collapsed into ``high``.
+    "Critical": "critical",
 }
 
 

@@ -36,6 +36,15 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
 
+### Audit log
+
+Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py), [`services/api/app/core/trusted_proxy.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/trusted_proxy.py), [`services/api/app/services/audit_redaction.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_redaction.py). Background: [Security operations → Audit logging](../operations/security#audit-logging).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_TRUSTED_PROXIES` | _empty_ | Comma-separated list of CIDRs (e.g. `10.0.0.0/8,192.168.0.0/16`) for trusted ingress / load balancer hops. When empty, `X-Forwarded-For` is **ignored** and `actor_ip` is the direct TCP peer — set this in production so the audit log records the real client IP without being spoofable from the public side. |
+| `AISOC_AUDIT_MAX_CHANGES_BYTES` | `65536` | Hard cap on the serialized `changes` payload stored per audit row. Over-sized values are replaced with a `{ "_truncated": true, "_size": <bytes> }` marker. Set higher only if you genuinely need richer diffs and have provisioned the storage. |
+
 ### Passkeys (WebAuthn)
 
 | Variable | Default | Description |
@@ -107,11 +116,14 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 |----------|---------|-------------|
 | `REALTIME_BASE_URL` | `http://realtime:8086` | Internal URL the API uses to fan out push events |
 | `REALTIME_INTERNAL_TOKEN` | — | Shared secret with the realtime service for internal RPC |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Comma-separated allow-list |
+| `AISOC_CORS_ORIGINS` | _(uses service default)_ | Canonical, repo-wide, comma-separated CORS allow-list. Applies to every API, agent, ingest, enrichment, realtime, UEBA, honeytoken, purple-team, and connectors process. See [CORS configuration](#cors-configuration) below for the full rules. |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Legacy alias kept for backwards compatibility. `AISOC_CORS_ORIGINS` takes precedence when both are set. |
 | `OTEL_ENDPOINT` | — | OTLP collector endpoint |
 | `MAX_TENANTS` | `1000` | Hard cap for multi-tenant deployments |
 | `DEFAULT_TENANT_PLAN` | `starter` | Default plan for newly provisioned tenants |
 | `AISOC_PLUGINS_DIR` | `/opt/aisoc/plugins` | Filesystem path the plugin loader scans |
+| `PLUGIN_TRUST_MODE` | `warn` | `disabled` skips signature checks, `warn` records `signature_status` but loads anyway, `strict` rejects unsigned/invalid plugins (including OCI installs). See [Operations → Security → OCI install hardening](../operations/security#oci-install-hardening-h-3). |
+| `PLUGIN_TRUSTED_KEYS_DIR` | `/etc/aisoc/plugin-keys` | Directory of Ed25519 public keys (`*.pem`/`*.pub`) that are allowed to sign plugins. |
 | `AISOC_DEMO_MODE` | `false` | When `true`, mutating requests outside the demo tenant return 403 |
 | `AISOC_DEMO_TENANT` | `demo` | Tenant slug allowed to write in demo mode |
 | `AISOC_DEMO_BANNER` | `Demo data resets daily at 00:00 UTC. All write actions are disabled.` | Banner text rendered by the web app |
@@ -141,6 +153,9 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `JAEGER_HOST` / `JAEGER_PORT` | `localhost` / `6831` | Jaeger agent endpoint (used when `OTEL_EXPORTER=jaeger`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP collector endpoint |
 | `OTEL_EXPORTER` | `otlp` | One of `otlp`, `jaeger`, `console` |
+| `AISOC_SSRF_ALLOWED_SCHEMES` | `http,https` | Comma-separated list of URL schemes allowed for outbound `http_request` and `notify` playbook steps. Anything else is rejected. |
+| `AISOC_SSRF_ALLOW_PRIVATE` | `false` | When `true`, lets playbook steps reach loopback / RFC1918 / link-local destinations. Leave off in production; enable only for self-hosted webhooks on a private network. |
+| `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
 
 ---
 
@@ -283,6 +298,45 @@ The Next.js frontend reads only public, build-time variables. Anything sensitive
 
 ---
 
+## CORS configuration
+
+CORS is configured the same way across every AiSOC service — Python (FastAPI), Go (`ingest`, `enrichment`), and TypeScript (`realtime`) — by reading a single environment variable. This is the variable to set when you put AiSOC behind a custom domain or want to restrict cross-origin access in production.
+
+### Variables
+
+| Variable | Priority | Description |
+|----------|----------|-------------|
+| `AISOC_CORS_ORIGINS` | **1 (canonical)** | Comma-separated allow-list. Set this in every environment. |
+| `CORS_ORIGINS` | 2 (legacy alias) | Honoured when `AISOC_CORS_ORIGINS` is unset. Existing Helm charts and dev scripts that already use this keep working. |
+| _(none set)_ | 3 (default) | Each service falls back to `http://localhost:3000`, `http://localhost:3001`, `http://127.0.0.1:3000`, `http://127.0.0.1:3001`, `https://tryaisoc.com`, `https://www.tryaisoc.com`. |
+
+Examples:
+
+```bash
+# Production, single console domain
+AISOC_CORS_ORIGINS=https://soc.example.com
+
+# Multiple consoles (analyst app + responder PWA on a subdomain)
+AISOC_CORS_ORIGINS=https://soc.example.com,https://responder.example.com
+
+# Local dev across the standard ports (matches the default)
+AISOC_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+```
+
+### Production safety guard
+
+The Python helper at [`services/api/app/core/cors.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/cors.py) (vendored byte-identical into every Python service) and the TypeScript guard in [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/index.ts) both **refuse to start** if the allow-list contains `*` while `allow_credentials` is `true` and any of `AISOC_ENV`, `ENVIRONMENT`, or `APP_ENV` equals `production` or `prod`. This catches the canonical CORS misconfiguration (wildcard + cookies / `Authorization` headers) before the deploy goes live.
+
+Outside production the same combination logs a warning and silently disables credentials — local dev stays usable when someone exports `CORS_ORIGINS=*`.
+
+The `honeytokens`, `purple-team`, and `ueba` services run with `allow_credentials=false` by design (no session cookies cross-origin), so wildcard origins are allowed there even in production — useful when honeytoken trip pixels are fetched from arbitrary origins.
+
+### Go services (`ingest`, `enrichment`) and the realtime service (`realtime`)
+
+These services read the same `AISOC_CORS_ORIGINS` / `CORS_ORIGINS` pair and fall back to the same default allow-list. `ingest` and `enrichment` keep `AllowCredentials: false` (they are token-authenticated per request, not cookie-authenticated). The realtime service runs with credentials enabled because the SSE / WebSocket streams carry the console's session cookie; it enforces the same production wildcard guard as the Python helper.
+
+---
+
 ## Example `.env` (full stack)
 
 ```bash
@@ -294,7 +348,8 @@ REDIS_URL=redis://localhost:6379/0
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 OPENSEARCH_URL=http://localhost:9200
 QDRANT_URL=http://localhost:6333
-CORS_ORIGINS=http://localhost:3000
+# Canonical, applies to every service. Legacy CORS_ORIGINS still works.
+AISOC_CORS_ORIGINS=http://localhost:3000
 
 # --- API: SSO (set both blocks if you actually use SSO) ---
 JWT_SECRET=$(openssl rand -hex 32)

@@ -670,7 +670,11 @@ def test_github_normalize_routine_action_is_info():
     assert out["severity"] == "info"
 
 
-def test_github_normalize_code_scanning_critical_collapses_to_high():
+def test_github_normalize_code_scanning_critical_preserves_critical():
+    # GitHub Code Scanning ``critical`` security_severity_level represents
+    # the highest severity findings (e.g. SQL injection, RCE) and maps
+    # directly to AiSOC's ``critical`` (P1, 15-minute MTTD SLA) — never
+    # collapse to ``high`` since AiSOC exposes a dedicated P1 tier.
     connector = GitHubConnector(_ORG, _TOKEN)
     raw = {
         "_aisoc_stream": "code_scanning",
@@ -687,7 +691,7 @@ def test_github_normalize_code_scanning_critical_collapses_to_high():
         "most_recent_instance": {"location": {"path": "src/db.py"}},
     }
     out = connector.normalize(raw)
-    assert out["severity"] == "high"
+    assert out["severity"] == "critical"
     assert out["external_id"] == "code-scanning-42"
     assert out["title"].startswith("Code Scanning:")
     assert out["event_type"] == "github.code_scanning.py/sql-injection"

@@ -65,13 +65,18 @@ def test_wazuh_capabilities_cover_pull_query_search_pivot():
         (8, "medium"),
         (11, "medium"),
         (12, "high"),
-        (15, "high"),
+        (14, "high"),
+        # Wazuh level 15 is the maximum band and represents the most
+        # severe attack signatures — it now maps to AiSOC's ``critical``
+        # (P1, 15-minute MTTD SLA) so it lands in the top lane.
+        (15, "critical"),
         # Out-of-band / weird inputs — must not raise.
         (None, "info"),
         ("not-a-number", "info"),
         ("9", "medium"),
         (-3, "info"),
-        (99, "high"),
+        # Values above 15 are clamped to the top tier (``critical``).
+        (99, "critical"),
     ],
 )
 def test_severity_band_collapse(level, expected):

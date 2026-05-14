@@ -62,7 +62,12 @@ _rng = random.Random(42)
 
 # ─── Reference data ────────────────────────────────────────────────────────────
 
+# Case severities stay on the legacy 4-tier ladder — we don't open cases for
+# pure `info` noise, so leaving `info` off avoids polluting the queue. Alerts
+# use the full 5-tier ladder (`_ALERT_SEVERITIES` below) so the seed exercises
+# every band defined by the v1.5 SOC Console Parity plan (W2).
 _SEVERITIES = ["critical", "high", "medium", "low"]
+_ALERT_SEVERITIES = ["critical", "high", "medium", "low", "info"]
 _STATUSES = ["new", "triaged", "investigating", "resolved", "false_positive"]
 
 _SOURCES = [
@@ -1259,8 +1264,206 @@ def _pick_techniques(k: int = 2) -> list[dict]:
     return [{"tactic": t[1], "tactic_id": t[0], "technique": t[3], "technique_id": t[2]} for t in chosen]
 
 
+# ---------------------------------------------------------------------------
+# Confidence synthesis
+# ---------------------------------------------------------------------------
+#
+# In a real deployment, services/fusion runs ConfidenceScorer over every fused
+# alert and writes `confidence_score` (0.0-1.0), `confidence_label`, and
+# `confidence_rationale` to Kafka, which the API persists onto the Alert row.
+# The demo seeder never goes through that pipeline, so we mirror the exact
+# scoring contract here. The constants below MUST stay aligned with
+# services/fusion/app/services/confidence.py — if the real scorer rebalances
+# weights, this helper should follow.
+
+# Score → label thresholds (mirror services/fusion).
+_CONFIDENCE_HIGH_THRESHOLD = 0.70
+_CONFIDENCE_LOW_THRESHOLD = 0.40
+
+# Factor weights — keep summing to 1.0 if you tweak (mirror services/fusion).
+_WEIGHT_SEVERITY = 0.20
+_WEIGHT_ML_ANOMALY = 0.18
+_WEIGHT_ML_PRIORITY = 0.18
+_WEIGHT_MITRE = 0.14
+_WEIGHT_THREAT_INTEL = 0.16
+_WEIGHT_UPSTREAM = 0.08
+_WEIGHT_IOC_DENSITY = 0.06
+
+_SEVERITY_CONTRIBUTION = {
+    "critical": 1.0,
+    "high": 0.6,
+    "medium": 0.0,
+    "low": -0.5,
+    "info": -1.0,
+}
+
+
+def _confidence_label_from_score(score: float) -> str:
+    if score >= _CONFIDENCE_HIGH_THRESHOLD:
+        return "high"
+    if score < _CONFIDENCE_LOW_THRESHOLD:
+        return "low"
+    return "medium"
+
+
+def _synthesise_confidence(
+    *,
+    severity: str,
+    ai_score: float,
+    n_techniques: int,
+    n_iocs: int,
+    has_threat_intel: bool,
+) -> tuple[int, str, list[dict]]:
+    """Mirror services/fusion ConfidenceScorer for the demo seeder.
+
+    Returns ``(confidence_int_0_100, label, rationale_list)`` so the seeded
+    Alert rows look identical to what a live fusion service would write.
+    The rationale is a list of dicts in ConfidenceFactor shape (factor / label
+    / value / contribution / weight) sorted by impact, so the UI can render
+    "why we believe what we believe" without any code-path divergence.
+
+    Contribution model, factor weights, labels, and value strings are kept in
+    lock-step with ``services/fusion/app/services/confidence.py``. If that
+    scorer is rebalanced, update this helper alongside it.
+    """
+
+    def _ml(value: float) -> float:
+        # ML scores already live in [0, 1]; recentre on 0.5 → [-1, +1].
+        return max(-1.0, min(1.0, (value - 0.5) * 2.0))
+
+    rationale: list[dict] = []
+
+    # 1. Severity
+    sev_c = _SEVERITY_CONTRIBUTION.get(severity, 0.0)
+    rationale.append(
+        {
+            "factor": "severity",
+            "label": "Alert severity",
+            "value": severity,
+            "contribution": sev_c,
+            "weight": _WEIGHT_SEVERITY,
+        }
+    )
+
+    # 2. ML anomaly score (anomaly_score in fusion).
+    anomaly_c = _ml(ai_score)
+    rationale.append(
+        {
+            "factor": "ml_anomaly",
+            "label": "ML anomaly score",
+            "value": f"{ai_score:.2f}",
+            "contribution": anomaly_c,
+            "weight": _WEIGHT_ML_ANOMALY,
+        }
+    )
+
+    # 3. ML priority rank (priority_score in fusion). The seeder only has a
+    # single ``ai_score`` to draw from, so we jitter it slightly to mimic the
+    # second model the real scorer consults — the rank is typically close to,
+    # but not identical to, the anomaly score.
+    priority_proxy = max(0.0, min(1.0, ai_score + _rng.uniform(-0.1, 0.1)))
+    priority_c = _ml(priority_proxy)
+    rationale.append(
+        {
+            "factor": "ml_priority",
+            "label": "ML priority rank",
+            "value": f"{priority_proxy:.2f}",
+            "contribution": priority_c,
+            "weight": _WEIGHT_ML_PRIORITY,
+        }
+    )
+
+    # 4. MITRE coverage — bands match _mitre_contribution() in fusion.
+    if n_techniques == 0:
+        mitre_c = -0.4
+    elif n_techniques == 1:
+        mitre_c = 0.0
+    elif n_techniques == 2:
+        mitre_c = 0.4
+    else:
+        mitre_c = min(1.0, 0.4 + (n_techniques - 2) * 0.2)
+    mitre_value = "1 technique" if n_techniques == 1 else f"{n_techniques} techniques"
+    rationale.append(
+        {
+            "factor": "mitre_coverage",
+            "label": "MITRE technique coverage",
+            "value": mitre_value,
+            "contribution": mitre_c,
+            "weight": _WEIGHT_MITRE,
+        }
+    )
+
+    # 5. Threat-intel — fusion looks at MISP / OTX / TAXII / KEV / VirusTotal
+    # hits. The seeder doesn't run enrichments, so collapse to a binary signal
+    # but keep the contribution and value strings faithful to the single-hit
+    # path of ``_ti_contribution``.
+    if has_threat_intel:
+        ti_c = 0.6
+        ti_value = "MISP"
+    else:
+        ti_c = -0.3
+        ti_value = "no TI match"
+    rationale.append(
+        {
+            "factor": "threat_intel",
+            "label": "Threat-intel match",
+            "value": ti_value,
+            "contribution": ti_c,
+            "weight": _WEIGHT_THREAT_INTEL,
+        }
+    )
+
+    # 6. Upstream vendor risk score. Real fusion uses ``raw_alert.risk_score``;
+    # the seeder doesn't carry one, so we reuse ai_score as a faithful proxy
+    # (same family of [0..1] vendor risk signals).
+    upstream_c = _ml(ai_score)
+    rationale.append(
+        {
+            "factor": "upstream_risk",
+            "label": "Upstream vendor risk score",
+            "value": f"{ai_score:.2f}",
+            "contribution": upstream_c,
+            "weight": _WEIGHT_UPSTREAM,
+        }
+    )
+
+    # 7. IOC density — bands match _ioc_density_contribution() in fusion.
+    if n_iocs == 0:
+        ioc_c = -0.6
+    elif n_iocs <= 2:
+        ioc_c = 0.0
+    elif n_iocs <= 4:
+        ioc_c = 0.5
+    else:
+        ioc_c = 1.0
+    rationale.append(
+        {
+            "factor": "ioc_density",
+            "label": "IOC density",
+            "value": f"{n_iocs} populated fields",
+            "contribution": ioc_c,
+            "weight": _WEIGHT_IOC_DENSITY,
+        }
+    )
+
+    # Combine: score = 0.5 + Σ(w_i * c_i), clamped to [0, 1].
+    delta = sum(f["weight"] * f["contribution"] for f in rationale)
+    score = max(0.0, min(1.0, 0.5 + delta))
+    label = _confidence_label_from_score(score)
+
+    # Sort rationale by absolute impact so the UI shows top drivers first
+    # (matches fusion's ConfidenceScorer.score).
+    rationale.sort(key=lambda f: abs(f["contribution"] * f["weight"]), reverse=True)
+
+    return int(round(score * 100)), label, rationale
+
+
 def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
-    severity = _rng.choices(_SEVERITIES, weights=[15, 30, 35, 20])[0]
+    # Sample severity across all five tiers so the demo exercises every
+    # band defined by v1.5 W2 (critical-severity work). Weights bias toward
+    # medium/high noise, with a long tail of info-grade telemetry that lets
+    # operators rehearse min_confidence and severity filtering in /alerts.
+    severity = _rng.choices(_ALERT_SEVERITIES, weights=[10, 25, 35, 20, 10])[0]
     status = _rng.choices(_STATUSES, weights=[40, 20, 15, 20, 5])[0]
     src_name, src_cat = _rng.choice(_SOURCES)
     host = _rng.choice(_HOSTS)
@@ -1269,8 +1472,21 @@ def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
     title = _rng.choice(_TITLES).format(host=host, user=user, ip=ip)
     techniques = _pick_techniques(_rng.randint(1, 3))
 
-    priority = {"critical": 90, "high": 75, "medium": 50, "low": 25}[severity]
-    priority += _rng.randint(-10, 10)
+    priority_floor = {"critical": 90, "high": 75, "medium": 50, "low": 25, "info": 10}[severity]
+    priority = priority_floor + _rng.randint(-10, 10)
+    ai_score = _rng.uniform(0.3, 0.99)
+
+    # IOC count: 1 IP + 1 host + 1 user = 3 by default. About 1-in-4 alerts
+    # also carry a threat-intel hit, which spikes confidence in the rationale.
+    has_threat_intel = _rng.random() < 0.25
+    n_iocs = 3
+    confidence_int, confidence_label, confidence_rationale = _synthesise_confidence(
+        severity=severity,
+        ai_score=ai_score,
+        n_techniques=len(techniques),
+        n_iocs=n_iocs,
+        has_threat_intel=has_threat_intel,
+    )
 
     return Alert(
         tenant_id=tenant_id,
@@ -1283,7 +1499,7 @@ def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
         mitre_tactics=[{"id": t["tactic_id"], "name": t["tactic"]} for t in techniques],
         mitre_techniques=[{"id": t["technique_id"], "name": t["technique"]} for t in techniques],
         connector_type=src_name.lower().replace(" ", "_"),
-        ai_score=_rng.uniform(0.3, 0.99),
+        ai_score=ai_score,
         ai_summary=(
             f"AI assessed this as a {severity} severity event tied to "
             f"{techniques[0]['technique']} ({techniques[0]['technique_id']}). "
@@ -1309,6 +1525,9 @@ def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
         first_seen=when,
         last_seen=when,
         resolved_at=when + timedelta(hours=4) if status == "resolved" else None,
+        confidence=confidence_int,
+        confidence_label=confidence_label,
+        confidence_rationale=confidence_rationale,
         created_at=when,
         updated_at=when,
     )
@@ -1591,6 +1810,19 @@ def _make_realistic_alert(
         extra=alert_spec.get("extra", {}),
     )
 
+    ai_score = alert_spec.get("ai_score", 0.85)
+    # Hand-crafted realistic incidents always carry MITRE techniques and at
+    # least three IOCs (host + user + src_ip). They're modeled on real BOTS
+    # data and the threat-intel signal is typically present, so we always set
+    # has_threat_intel=True for these — that's what makes them showcase-grade.
+    confidence_int, confidence_label, confidence_rationale = _synthesise_confidence(
+        severity=severity,
+        ai_score=ai_score,
+        n_techniques=len(techniques),
+        n_iocs=3,
+        has_threat_intel=True,
+    )
+
     return Alert(
         tenant_id=tenant_id,
         title=alert_spec["title"],
@@ -1602,7 +1834,7 @@ def _make_realistic_alert(
         mitre_tactics=tactics,
         mitre_techniques=techniques,
         connector_type=alert_spec["source"].lower().replace(" ", "_"),
-        ai_score=alert_spec.get("ai_score", 0.85),
+        ai_score=ai_score,
         ai_summary=(
             f"AI assessed this {severity} alert as part of incident "
             f"{incident['key']} ({incident['title']}). "
@@ -1622,6 +1854,9 @@ def _make_realistic_alert(
         first_seen=when,
         last_seen=when,
         resolved_at=when + timedelta(hours=2) if case_status in ("resolved", "closed") else None,
+        confidence=confidence_int,
+        confidence_label=confidence_label,
+        confidence_rationale=confidence_rationale,
         created_at=when,
         updated_at=when,
     )

@@ -124,8 +124,14 @@ class CortexXSIAMConnector(BaseConnector):
             return []
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        # Cortex XSIAM incidents expose the standard Palo Alto severity
+        # ladder: informational / low / medium / high / critical. Mirror
+        # all five tiers (including ``critical``) into AiSOC's ladder
+        # rather than silently collapsing unknown values to ``info``.
         sev_raw = (raw.get("severity") or "").lower()
-        severity = sev_raw if sev_raw in ("info", "low", "medium", "high") else "info"
+        if sev_raw == "informational":
+            sev_raw = "info"
+        severity = sev_raw if sev_raw in ("info", "low", "medium", "high", "critical") else "info"
         return {
             "source": "cortex_xsiam",
             "category": "edr",

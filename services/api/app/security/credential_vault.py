@@ -43,7 +43,7 @@ from typing import Any, Final
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
-from app.core.config import settings
+from app.core.config import is_dev_env, settings
 
 logger = logging.getLogger("aisoc.credential_vault")
 
@@ -187,10 +187,6 @@ _vault_singleton: CredentialVault | None = None
 _vault_lock = Lock()
 
 
-def _is_dev_env() -> bool:
-    return (settings.ENVIRONMENT or "").strip().lower() in {"development", "dev", "local", "demo", "test"}
-
-
 def get_vault() -> CredentialVault:
     """Return the process-wide :class:`CredentialVault`.
 
@@ -213,7 +209,11 @@ def get_vault() -> CredentialVault:
             return _vault_singleton
         primary = (settings.AISOC_CREDENTIAL_KEY or "").strip().encode("ascii")
         if not primary:
-            if not _is_dev_env():
+            # NB: vault startup is a boot-time decision so we read from the
+            # cached ``settings`` (the same value our env warnings used),
+            # not from the live process env. If an operator monkey-patches
+            # the env post-boot, the vault key check has already happened.
+            if not is_dev_env(settings.ENVIRONMENT):
                 raise CredentialVaultError("AISOC_CREDENTIAL_KEY is required outside development; refusing to start credential vault.")
             primary = Fernet.generate_key()
             logger.warning(

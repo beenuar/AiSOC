@@ -29,8 +29,10 @@ def test_capabilities():
     assert Capability.PULL_ALERTS in caps
 
 
-def test_normalize_severity_collapse_hazardous():
-    """Orca's hazardous tier collapses into AiSOC high."""
+def test_normalize_severity_hazardous_is_critical():
+    """Orca's ``hazardous`` tier (also known as ``imminent_compromise``)
+    represents active exploitation and maps to AiSOC's P1 ``critical`` tier
+    so it lands in the 15-minute MTTD lane."""
     conn = OrcaConnector(api_token="t")
     raw = {
         "alert_id": "alert-1",
@@ -48,17 +50,19 @@ def test_normalize_severity_collapse_hazardous():
     assert norm["source"] == "orca"
     assert norm["category"] == "cloud"
     assert norm["external_id"] == "alert-1"
-    assert norm["severity"] == "high"
+    assert norm["severity"] == "critical"
     assert norm["hostname"] == "my-bucket"
     assert norm["cloud_platform"] == "aws"
     assert norm["cloud_region"] == "us-east-1"
     assert norm["raw_event"] is raw
 
 
-def test_normalize_severity_collapse_critical():
+def test_normalize_severity_critical_preserves_critical():
+    # Orca's ``critical`` tier mirrors directly into AiSOC's ``critical`` —
+    # never silently downgrade a P1 finding.
     conn = OrcaConnector(api_token="t")
     raw = {"alert_id": "c1", "state": {"severity": "critical"}}
-    assert conn.normalize(raw)["severity"] == "high"
+    assert conn.normalize(raw)["severity"] == "critical"
 
 
 def test_normalize_severity_informational():
@@ -156,7 +160,9 @@ async def test_fetch_alerts_data_envelope():
     alerts = await conn.fetch_alerts(since_seconds=300)
     assert len(alerts) == 2
     assert alerts[0]["external_id"] == "a1"
-    assert alerts[0]["severity"] == "high"
+    # Orca's ``critical`` flows straight through to AiSOC's ``critical`` —
+    # no collapse to ``high``.
+    assert alerts[0]["severity"] == "critical"
     assert alerts[1]["severity"] == "medium"
 
 

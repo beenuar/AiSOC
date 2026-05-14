@@ -115,6 +115,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   high:     'bg-orange-900/40 text-orange-300 border-orange-700/60',
   medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-700/60',
   low:      'bg-blue-900/40 text-blue-300 border-blue-700/60',
+  info:     'bg-slate-900/40 text-slate-300 border-slate-700/60',
 };
 
 const TYPE_COLORS: Record<string, string> = {

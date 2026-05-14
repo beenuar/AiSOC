@@ -5,11 +5,19 @@ MIT License
 """
 
 import logging
+import os
 import warnings
 from functools import lru_cache
-from typing import Any
+from typing import Any, Final
 
-from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    PostgresDsn,
+    RedisDsn,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default placeholders shipped in source. Anything matching these in a
@@ -24,6 +32,84 @@ INSECURE_SECRET_KEY_DEFAULTS: frozenset[str] = frozenset(
         "secret",
     }
 )
+
+# ------------------------------------------------------------------
+# Canonical "dev mode" detection (H-8 + P2-A3).
+#
+# Before unification, the codebase had at least four different sets of
+# strings hand-rolled across multiple modules — each with a slightly
+# different list ("dev", "development", "local", "demo", sometimes
+# "test", sometimes none of the above). That meant the same boot could
+# count as "dev" for one check and "prod" for another, silently
+# bypassing safety rails or, worse, gating them on the wrong axis.
+#
+# These two frozensets are now the **only** truth in the codebase.
+#
+# ``DEV_ENVIRONMENTS``      – Used by most subsystems (table autocreate,
+#                             docs URLs, /metrics gate, structured-vs-JSON
+#                             logging, GraphiQL UI, credential-vault
+#                             ephemeral key, insecure-default warnings).
+#                             Includes ``"test"`` because pytest sets
+#                             ``ENV=test`` and we never want to gate
+#                             test-suite behaviour behind production
+#                             rails (e.g. requiring a real Fernet key).
+#
+# ``AUTH_BYPASS_ENVIRONMENTS`` – Used **only** by the request-time
+#                                no-credentials-→-demo-user shim in
+#                                ``app.api.v1.dev_auth``. Deliberately
+#                                excludes ``"test"`` so a test suite
+#                                that forgets to seed an Authorization
+#                                header gets a 401 instead of being
+#                                handed admin-on-the-demo-tenant — that
+#                                used to mask real auth regressions.
+# ------------------------------------------------------------------
+DEV_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"development", "dev", "local", "demo", "test"})
+AUTH_BYPASS_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"development", "dev", "local", "demo"})
+
+
+def _normalize_env(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def is_dev_env(value: str | None) -> bool:
+    """Return True if ``value`` names a development-class environment.
+
+    Accepts any of ``development | dev | local | demo | test`` (case- and
+    whitespace-insensitive). This is the **single authoritative**
+    predicate; every other call site should route through this helper.
+    """
+    return _normalize_env(value) in DEV_ENVIRONMENTS
+
+
+def is_auth_bypass_env(value: str | None) -> bool:
+    """Return True if ``value`` permits the no-credentials demo-user shim.
+
+    Same canonical set as :func:`is_dev_env` minus ``"test"`` — see the
+    module-level rationale.
+    """
+    return _normalize_env(value) in AUTH_BYPASS_ENVIRONMENTS
+
+
+def current_env_from_os() -> str:
+    """Read the current environment from ``os.environ`` at call time.
+
+    This deliberately bypasses the cached :class:`Settings` singleton so
+    tests that ``monkeypatch.setenv("ENV", ...)`` mid-request still see
+    the override. Used by request-time gates only (e.g. dev-auth shim);
+    boot-time / once-per-process decisions should read ``settings.ENV``
+    or ``settings.ENVIRONMENT`` instead.
+    """
+    return _normalize_env(os.getenv("ENV") or os.getenv("ENVIRONMENT"))
+
+
+def is_dev_mode_runtime() -> bool:
+    """True if the live process is in a dev-class environment.
+
+    Combines :func:`current_env_from_os` with :func:`is_dev_env` so
+    monkeypatched env vars (tests) and the cached
+    :class:`Settings` object cannot disagree.
+    """
+    return is_dev_env(current_env_from_os())
 
 
 class Settings(BaseSettings):
@@ -174,7 +260,12 @@ class Settings(BaseSettings):
     HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
 
     # Database
-    DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc"  # type: ignore[assignment]
+    # The default points at the bundled compose Postgres with its dev password.
+    # In docker-compose.yml and .env.example the password is parameterised via
+    # ``POSTGRES_PASSWORD`` so a single env var rotates it across the stack;
+    # this default mirrors the compose default so ``aisoc serve`` works on a
+    # fresh clone with zero configuration.
+    DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc_dev_secret@localhost:5432/aisoc"  # type: ignore[assignment]
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
 
@@ -340,6 +431,23 @@ class Settings(BaseSettings):
     AISOC_DRIFT_SWEEP_INTERVAL_HOURS: int = 168
 
     # ------------------------------------------------------------------
+    # v1.5 SOC Console parity — funnel + pipeline health (PR-3).
+    # ------------------------------------------------------------------
+    # Denominator used by /metrics/funnel mitre_coverage. Defaults to the
+    # current size of the MITRE ATT&CK Enterprise technique catalog so the
+    # ratio stays interpretable as "% of ATT&CK we're watching for". Operators
+    # can pin a smaller universe (e.g. the subset they care about) via the env
+    # var ``AISOC_FUNNEL_MITRE_TOTAL``.
+    AISOC_FUNNEL_MITRE_TOTAL: int = 201
+
+    # /health/pipeline staleness thresholds (seconds). A connector is treated
+    # as "stale" when its ``last_event_at`` is older than the warn threshold
+    # and "down" when it exceeds the down threshold. Defaults match the
+    # 5-minute poll cadence documented in services/connectors.
+    AISOC_PIPELINE_STALE_WARN_SECONDS: int = 600  # 10 minutes
+    AISOC_PIPELINE_STALE_DOWN_SECONDS: int = 1800  # 30 minutes
+
+    # ------------------------------------------------------------------
     # Air-gapped operating mode (Tier 3.1 — air-gapped certification).
     # When AISOC_AIRGAPPED is True the API:
     #   * refuses to make any LLM / threat-intel / model-phone-home
@@ -428,14 +536,70 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",")]
         return v
 
+    @model_validator(mode="after")
+    def _reconcile_env_aliases(self) -> "Settings":
+        """Keep ``ENV`` and ``ENVIRONMENT`` consistent.
+
+        Historically the codebase had two aliases for the same concept,
+        each populated from a different env var, each read from a
+        different module. When operators set only one (the common case),
+        the unset one stayed as the class default ``"development"`` —
+        silently bypassing the production gates that read the unset
+        side. This validator fixes both cases:
+
+        * If exactly one of ``ENV`` / ``ENVIRONMENT`` is set, mirror it
+          to the other.
+        * If both are set but disagree, emit a ``RuntimeWarning`` and
+          prefer ``ENVIRONMENT`` (the newer name) so the more-explicit
+          intent wins. Operators see the warning at boot and can
+          collapse to a single var.
+        """
+        env_raw = (self.ENV or "").strip()
+        environment_raw = (self.ENVIRONMENT or "").strip()
+
+        # ``"development"`` is the class default, which we use as the
+        # signal "this was never set by the operator". That's slightly
+        # lossy (an operator who explicitly types ENV=development looks
+        # the same as not-set), but the resulting behaviour is identical
+        # so the distinction doesn't matter.
+        env_is_default = _normalize_env(env_raw) == "development"
+        environment_is_default = _normalize_env(environment_raw) == "development"
+
+        if env_is_default and not environment_is_default:
+            # Operator set ENVIRONMENT but not ENV — mirror.
+            object.__setattr__(self, "ENV", environment_raw)
+        elif environment_is_default and not env_is_default:
+            # Operator set ENV but not ENVIRONMENT — mirror.
+            object.__setattr__(self, "ENVIRONMENT", env_raw)
+        elif not env_is_default and not environment_is_default and _normalize_env(env_raw) != _normalize_env(environment_raw):
+            # Both set and disagree: prefer ENVIRONMENT, warn loudly so
+            # ops collapses to one canonical name.
+            warnings.warn(
+                f"ENV={env_raw!r} and ENVIRONMENT={environment_raw!r} disagree; "
+                f"using ENVIRONMENT and mirroring to ENV. Set only one of these.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            object.__setattr__(self, "ENV", environment_raw)
+
+        return self
+
+    # Convenience predicates so callers don't need to import the module
+    # level helpers when they already have a ``settings`` reference.
+    @property
+    def is_dev(self) -> bool:
+        """True if this settings object names a dev-class environment."""
+        return is_dev_env(self.ENVIRONMENT)
+
+    @property
+    def is_production(self) -> bool:
+        """True if this is a non-dev (i.e. real) environment."""
+        return not self.is_dev
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
-
-def _is_dev_env(env: str) -> bool:
-    return (env or "").strip().lower() in {"development", "dev", "local", "demo", "test"}
 
 
 def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
@@ -458,17 +622,17 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
         msgs.append("SECRET_KEY is set to a known insecure placeholder; rotate before exposing this instance to the network.")
 
     # /metrics auth: outside dev we expect a non-empty token.
-    if not _is_dev_env(s.ENVIRONMENT) and not s.METRICS_TOKEN:
+    if not is_dev_env(s.ENVIRONMENT) and not s.METRICS_TOKEN:
         msgs.append("METRICS_TOKEN is empty in a non-development environment — /metrics is currently unauthenticated.")
 
     # Plugin trust mode: never silently default to disabled in prod.
-    if not _is_dev_env(s.ENVIRONMENT) and s.PLUGIN_TRUST_MODE.lower() == "disabled":
+    if not is_dev_env(s.ENVIRONMENT) and s.PLUGIN_TRUST_MODE.lower() == "disabled":
         msgs.append("PLUGIN_TRUST_MODE=disabled outside development — plugins will load without signature verification.")
 
     # Connector credential vault: refuse to silently boot without an encryption
     # key outside development. Without this, ``Connector.auth_config`` would
     # round-trip in plaintext.
-    if not _is_dev_env(s.ENVIRONMENT) and not s.AISOC_CREDENTIAL_KEY:
+    if not is_dev_env(s.ENVIRONMENT) and not s.AISOC_CREDENTIAL_KEY:
         msgs.append("AISOC_CREDENTIAL_KEY is empty in a non-development environment — connector credentials cannot be encrypted at rest.")
 
     # Air-gap sanity check: if an operator flipped on AISOC_AIRGAPPED but

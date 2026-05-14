@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.core.cors import build_cors_kwargs
 
 # ---------------------------------------------------------------------------
 # OpenTelemetry setup (best-effort)
@@ -83,9 +84,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **build_cors_kwargs(service_name="purple-team", allow_credentials=False),
 )
 
 app.include_router(router)

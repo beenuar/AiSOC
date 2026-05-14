@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, require_permission
@@ -26,7 +26,10 @@ from app.services import sla as sla_service
 
 router = APIRouter(prefix="/sla", tags=["sla"])
 
-VALID_SEVERITIES = {"critical", "high", "medium", "low"}
+# Five-tier severity ladder (matches `tenant_sla_config.severity` CHECK
+# constraint installed by migration 040 and the AGENTS.md project-wide
+# convention `info | low | medium | high | critical`).
+VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 VALID_EVENT_TYPES = {"detected", "acknowledged", "resolved", "closed"}
 
 
@@ -43,8 +46,7 @@ class SLAConfigOut(BaseModel):
     mttc_target: int
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SLAConfigUpdate(BaseModel):
@@ -69,8 +71,7 @@ class SLAEventOut(BaseModel):
     occurred_at: datetime
     metadata: dict
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class KpiBarTargetsOut(BaseModel):

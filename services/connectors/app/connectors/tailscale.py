@@ -42,6 +42,18 @@ logger = structlog.get_logger()
 
 _BASE = "https://api.tailscale.com/api/v2"
 
+# Critical-severity actions: irreversible / total-takeover events on
+# the tailnet itself. These map to AiSOC's ``critical`` tier so they
+# fire the P1 SLA — losing ownership of a tailnet is functionally
+# equivalent to losing root on the network.
+_CRITICAL_SEVERITY_ACTIONS = frozenset(
+    {
+        "tailnet:transfer_ownership",
+        "tailnet:delete",
+    }
+)
+
+
 # Audit event actions that we treat as HIGH severity.  These are either
 # reversible-but-dangerous changes that could be used for persistence /
 # lateral movement, or irreversible destructive operations.
@@ -76,8 +88,6 @@ _HIGH_SEVERITY_ACTIONS = frozenset(
         # DNS / MagicDNS
         "dns:update",
         # Admin
-        "tailnet:transfer_ownership",
-        "tailnet:delete",
         "settings:update",
         "logging:set_config",
         # Webhooks (could be abused as C2 notification channel)
@@ -293,7 +303,10 @@ class TailscaleConnector(BaseConnector):
         action: str = raw.get("action") or raw.get("type") or ""
         actor: str = raw.get("actor", {}).get("loginName") or raw.get("actor", {}).get("id") or raw.get("user") or "unknown"
 
-        if action in _HIGH_SEVERITY_ACTIONS:
+        if action in _CRITICAL_SEVERITY_ACTIONS:
+            # Irreversible total-takeover of the tailnet itself — P1.
+            severity = "critical"
+        elif action in _HIGH_SEVERITY_ACTIONS:
             severity = "high"
         elif action in _MEDIUM_SEVERITY_ACTIONS:
             severity = "medium"

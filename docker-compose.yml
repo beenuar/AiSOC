@@ -39,7 +39,7 @@ services:
     environment:
       POSTGRES_DB: aisoc
       POSTGRES_USER: aisoc
-      POSTGRES_PASSWORD: aisoc_dev_secret
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aisoc_dev_secret}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -229,7 +229,7 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
@@ -313,7 +313,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/3
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
     networks:
       - aisoc
     restart: unless-stopped
@@ -333,7 +333,7 @@ services:
     ports:
       - "127.0.0.1:8001:8084"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
       CORE_API_URL: http://api:8000
       QDRANT_URL: http://qdrant:6333
@@ -366,7 +366,7 @@ services:
     profiles:
       - osquery
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
       # The ingest service is registered as `ingest-worker` in this compose
       # file; the previous `http://ingest:8080` would not resolve via DNS.
@@ -392,7 +392,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/5
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       CORE_API_URL: http://api:8000
     networks:
       - aisoc
@@ -417,7 +417,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/6
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       CORE_API_URL: http://api:8000
       CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
       CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
@@ -477,7 +477,7 @@ services:
     ports:
       - "127.0.0.1:8007:8004"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/8
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
@@ -504,7 +504,7 @@ services:
     ports:
       - "127.0.0.1:8008:8005"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/9
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CORE_API_URL: http://api:8000
@@ -528,7 +528,7 @@ services:
     ports:
       - "127.0.0.1:8006:8006"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/10
       CORE_API_URL: http://api:8000
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json

@@ -10,14 +10,23 @@ vi.mock('next/navigation', () => ({
 
 import { TopBar } from './TopBar';
 import { ThemeProvider } from '../theme/ThemeProvider';
+import { TimeWindowProvider } from './TimeWindowProvider';
+import { TenantProvider } from './TenantProvider';
 
-// TopBar embeds <ThemeToggle/> (WS-F1), which calls useTheme() and so must
-// always be rendered inside a <ThemeProvider>. Wrap once here so each test
-// reads naturally.
+// TopBar depends on three React contexts:
+//  - <ThemeProvider/>      for the WS-F1 theme toggle (`useTheme`)
+//  - <TimeWindowProvider/> for the v1.5 W4 global time-window selector
+//  - <TenantProvider/>     for the v1.5 W5 tenant switcher + role badge
+// Wrap all three here so each test reads naturally without re-stating the
+// provider scaffolding.
 function renderTopBar() {
   return render(
     <ThemeProvider>
-      <TopBar />
+      <TimeWindowProvider>
+        <TenantProvider>
+          <TopBar />
+        </TenantProvider>
+      </TimeWindowProvider>
     </ThemeProvider>,
   );
 }

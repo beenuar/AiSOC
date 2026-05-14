@@ -122,8 +122,46 @@ class CrowdStrikeConnector(BaseConnector):
         return [self.normalize(d) for d in detections]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
-        severity_map = {1: "low", 2: "medium", 3: "high", 4: "critical"}
-        severity = severity_map.get(raw.get("max_severity", 2), "medium")
+        # CrowdStrike Falcon's `/detects` API exposes severity in three
+        # related forms:
+        #   * ``max_severity`` — integer 0-100 (band-scored).
+        #   * ``max_severity_displayname`` — the band name itself
+        #     ("Informational", "Low", "Medium", "High", "Critical").
+        #   * ``severity`` (per-behavior) — same 0-100 scale.
+        # Earlier versions of this connector treated ``max_severity`` as a
+        # 1-4 scale and collapsed everything else to "medium", which
+        # silently downgraded ``Critical`` detections. We now prefer the
+        # explicit display name when present and otherwise bucket the
+        # numeric score along the bands documented by CrowdStrike.
+        severity_bands_displayname = {
+            "informational": "info",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "critical": "critical",
+        }
+
+        display_name = (raw.get("max_severity_displayname") or "").strip().lower()
+        if display_name in severity_bands_displayname:
+            severity = severity_bands_displayname[display_name]
+        else:
+            score = raw.get("max_severity")
+            try:
+                score_int = int(score) if score is not None else None
+            except (TypeError, ValueError):
+                score_int = None
+            if score_int is None:
+                severity = "medium"
+            elif score_int >= 80:
+                severity = "critical"
+            elif score_int >= 60:
+                severity = "high"
+            elif score_int >= 40:
+                severity = "medium"
+            elif score_int >= 20:
+                severity = "low"
+            else:
+                severity = "info"
 
         behaviors = raw.get("behaviors") or [{}]
         title = behaviors[0].get("display_name", "CrowdStrike Detection")

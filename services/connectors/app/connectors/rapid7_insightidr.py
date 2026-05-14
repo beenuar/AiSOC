@@ -128,8 +128,12 @@ class Rapid7InsightIDRConnector(BaseConnector):
             return []
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        # Rapid7 InsightIDR investigations carry priority
+        # {LOW, MEDIUM, HIGH, CRITICAL, UNSPECIFIED}. Mirror critical
+        # directly into AiSOC's five-tier severity ladder rather than
+        # silently downgrading to ``info``.
         prio = (raw.get("priority") or "").lower()
-        severity = prio if prio in ("info", "low", "medium", "high") else "info"
+        severity = prio if prio in ("info", "low", "medium", "high", "critical") else "info"
         return {
             "source": "rapid7_insightidr",
             "category": "siem",

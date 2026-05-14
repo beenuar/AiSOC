@@ -376,15 +376,22 @@ def test_assemble_event_with_no_paths_has_path_none():
 # ---------------------------------------------------------------------------
 
 
-def test_severity_critical_key_prefix_is_high():
-    assert _severity_from_event({"key": "aisoc_critical_sudoers_write"}) == "high"
-    assert _severity_from_event({"key": "aisoc_critical_ssh_config"}) == "high"
-    assert _severity_from_event({"key": "aisoc_critical_authorized_keys"}) == "high"
+def test_severity_critical_key_prefix_is_critical():
+    # ``aisoc_critical_*`` keys mark the irreversible-or-equivalent
+    # mutations to host trust (sudoers, ssh keys, sshd config). In
+    # the 5-tier ladder these map directly to ``critical`` — the P1
+    # SLA tier — rather than collapsing to ``high``.
+    assert _severity_from_event({"key": "aisoc_critical_sudoers_write"}) == "critical"
+    assert _severity_from_event({"key": "aisoc_critical_ssh_config"}) == "critical"
+    assert _severity_from_event({"key": "aisoc_critical_authorized_keys"}) == "critical"
 
 
-def test_severity_priv_esc_key_prefix_is_medium():
-    assert _severity_from_event({"key": "aisoc_priv_esc_module_load"}) == "medium"
-    assert _severity_from_event({"key": "aisoc_priv_esc_ptrace"}) == "medium"
+def test_severity_priv_esc_key_prefix_is_high():
+    # Priv-esc primitives (module load, ptrace) are loud-but-survivable
+    # — ``high`` rather than ``critical``, which is reserved for
+    # full host-trust compromise.
+    assert _severity_from_event({"key": "aisoc_priv_esc_module_load"}) == "high"
+    assert _severity_from_event({"key": "aisoc_priv_esc_ptrace"}) == "high"
 
 
 def test_severity_persistence_key_prefix_is_medium():
@@ -409,7 +416,7 @@ def test_severity_critical_prefix_wins_over_exec():
     even though both are AiSOC-prefixed. Order in the prefix table
     matters.
     """
-    assert _severity_from_event({"key": "aisoc_critical_sudoers_write"}) == "high"
+    assert _severity_from_event({"key": "aisoc_critical_sudoers_write"}) == "critical"
 
 
 def test_severity_falls_back_to_path_heuristic_when_no_key():
@@ -456,7 +463,7 @@ def test_severity_strips_quotes_around_key():
     strips the quotes, but defensively the severity helper also handles
     a stray quote prefix/suffix.
     """
-    assert _severity_from_event({"key": '"aisoc_critical_sudoers_write"'}) == "high"
+    assert _severity_from_event({"key": '"aisoc_critical_sudoers_write"'}) == "critical"
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +550,9 @@ def test_normalize_emits_canonical_endpoint_fields():
 def test_normalize_severity_uses_key_prefix_mapping():
     conn = _make_connector()
     raw = {"key": "aisoc_critical_sudoers_write"}
-    assert conn.normalize(raw)["severity"] == "high"
+    # The five-tier ladder mirrors aisoc_critical_* → ``critical`` so
+    # genuine P1 host-trust events fire the 15-minute MTTD SLA.
+    assert conn.normalize(raw)["severity"] == "critical"
 
 
 def test_normalize_severity_falls_back_to_path_when_no_key():
@@ -945,11 +954,11 @@ async def test_fetch_alerts_ignores_since_seconds(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_aisoc_critical_event_surfaces_as_high(tmp_path: Path):
+async def test_end_to_end_aisoc_critical_event_surfaces_as_critical(tmp_path: Path):
     """A sudoers-write event using the AiSOC profile key must come
-    out the other side as a high-severity event with auditd_key set,
+    out the other side as a critical-severity event with auditd_key set,
     so the new ``linux-auditd-sudoers-tampering`` detection rule can
-    fire on it.
+    fire on it. In the 5-tier ladder, sudoers tamper is a P1 incident.
     """
     audit_log = tmp_path / "audit.log"
     body = (
@@ -966,7 +975,7 @@ async def test_end_to_end_aisoc_critical_event_surfaces_as_high(tmp_path: Path):
     result = await conn.fetch_alerts()
     assert len(result) == 1
     event = result[0]
-    assert event["severity"] == "high"
+    assert event["severity"] == "critical"
     assert event["auditd_key"] == "aisoc_critical_sudoers_write"
     assert event["path"] == "/etc/sudoers"
     assert event["host"] == "prod-web-01"
@@ -975,10 +984,11 @@ async def test_end_to_end_aisoc_critical_event_surfaces_as_high(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_module_load_event_surfaces_as_medium(tmp_path: Path):
+async def test_end_to_end_module_load_event_surfaces_as_high(tmp_path: Path):
     """Kernel module load via syscall=175 (init_module) tagged with
-    ``aisoc_priv_esc_module_load`` should come out as ``medium`` so
-    the ``linux-auditd-kernel-module-load`` rule catches it.
+    ``aisoc_priv_esc_module_load`` should come out as ``high`` so
+    the ``linux-auditd-kernel-module-load`` rule catches it. Priv-esc
+    primitives are high (analyst-eyes) rather than critical (P1).
     """
     audit_log = tmp_path / "audit.log"
     body = (
@@ -994,7 +1004,7 @@ async def test_end_to_end_module_load_event_surfaces_as_medium(tmp_path: Path):
     result = await conn.fetch_alerts()
     assert len(result) == 1
     event = result[0]
-    assert event["severity"] == "medium"
+    assert event["severity"] == "high"
     assert event["syscall"] == "init_module"
     assert event["auditd_key"] == "aisoc_priv_esc_module_load"
     assert event["exe"] == "/sbin/insmod"

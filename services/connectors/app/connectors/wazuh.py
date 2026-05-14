@@ -23,10 +23,13 @@ Wazuh rules carry a 0-15 ``level``; the official guidance maps roughly to:
 * 0-3   — informational / system noise (login successes, decoder hits)
 * 4-7   — low signal (failed sshd, non-malicious anomalies)
 * 8-11  — suspicious (privilege change, unusual exec, FIM writes)
-* 12-15 — critical / attack (rootkit, exploit, multi-stage attack)
+* 12-14 — high (rootkit, exploit, IOC hit)
+* 15    — critical / attack (multi-stage attack, severe exploit)
 
-We collapse that into AiSOC's four-tier ladder (info | low | medium | high)
-the same way the connector platform spec requires for every vendor.
+We map that to AiSOC's 5-tier ladder (info | low | medium | high | critical)
+so Wazuh's hardest P1 alerts (level 15 — the only level Wazuh explicitly
+documents as "critical") keep their original priority rather than getting
+silently downgraded into ``high``.
 
 API references
 --------------
@@ -60,14 +63,18 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 # Severity mapping
 #
-# Collapse the 0-15 Wazuh ladder into the AiSOC info | low | medium | high
-# tiers exactly as the connector platform spec requires (apps/docs has a
-# matching table in connectors/wazuh.md so operators can predict what they
-# will see). Boundaries are inclusive on the lower end.
+# Map the 0-15 Wazuh ladder into AiSOC's 5-tier
+# ``info | low | medium | high | critical`` ladder. Level 15 is the only
+# tier Wazuh explicitly documents as "critical / attack" so we surface it
+# at the AiSOC ``critical`` band; levels 12-14 stay at ``high``. The
+# matching operator-facing table lives in ``apps/docs/connectors/wazuh.md``
+# so SOC analysts can predict what they will see. Boundaries are inclusive
+# on the lower end.
 # ---------------------------------------------------------------------------
 
 _SEVERITY_BANDS: tuple[tuple[int, str], ...] = (
-    (12, "high"),  # 12-15
+    (15, "critical"),  # 15
+    (12, "high"),  # 12-14
     (8, "medium"),  # 8-11
     (4, "low"),  # 4-7
     (0, "info"),  # 0-3

@@ -183,7 +183,18 @@ class ElasticConnector(BaseConnector):
         return [dict(zip(columns, row, strict=False)) for row in values]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
-        severity_map = {"low": "low", "medium": "medium", "high": "high", "critical": "high"}
+        # Elastic ships a native ``critical`` tier on detection rules; preserve
+        # it end-to-end so the AiSOC 5-tier ladder (info | low | medium | high
+        # | critical) stays faithful to the source-of-truth severity rather
+        # than silently downgrading P1 rules into ``high``.
+        severity_map = {
+            "info": "info",
+            "informational": "info",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "critical": "critical",
+        }
         severity = str(raw.get("kibana.alert.severity") or raw.get("severity") or "medium").lower()
         return {
             "source": self.connector_id,

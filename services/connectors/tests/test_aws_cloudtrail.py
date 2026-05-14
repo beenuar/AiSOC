@@ -4,7 +4,7 @@ Unit tests for ``AWSCloudTrailConnector``.
 Coverage:
   * schema sanity (region defaulted, optional creds, secret marking,
     ``event_names`` field present and optional)
-  * ``_event_severity()`` bucketing (high / medium / low + errorCode bump)
+  * ``_event_severity()`` bucketing (critical / high / medium / low + errorCode bump)
   * ``_parse_event_names()`` tri-state parsing (default / wildcard / list)
   * ``normalize()`` field extraction (CloudTrailEvent JSON unpack,
     src_ip suppression for AWS-internal callers, severity flow)
@@ -96,11 +96,15 @@ def test_parse_event_names_strips_empty_segments():
 @pytest.mark.parametrize(
     "event_name,expected",
     [
-        # Trail/detection tamper → high
-        ("DeleteTrail", "high"),
-        ("StopLogging", "high"),
-        ("DisableSecurityHub", "high"),
-        ("ScheduleKeyDeletion", "high"),
+        # Visibility kill switches / irreversible takeover → critical (P1)
+        ("DeleteTrail", "critical"),
+        ("StopLogging", "critical"),
+        ("DisableSecurityHub", "critical"),
+        ("ScheduleKeyDeletion", "critical"),
+        # Trail/detection tamper, root mail change, org-level changes → high
+        ("UpdateTrail", "high"),
+        ("DeleteFlowLogs", "high"),
+        ("ChangeRootMail", "high"),
         # Mutating but not catastrophic → medium
         ("CreateAccessKey", "medium"),
         ("AttachUserPolicy", "medium"),
@@ -121,8 +125,10 @@ def test_event_severity_bumps_on_error_code():
     # — bump the severity one tier when ``errorCode`` is present.
     assert _event_severity("CreateAccessKey", "AccessDenied") == "high"
     assert _event_severity("ListAccessKeys", "AccessDenied") == "medium"
-    # Already-high stays high — no overflow tier.
-    assert _event_severity("DeleteTrail", "AccessDenied") == "high"
+    # Already-high stays high (no overflow tier on the high baseline).
+    assert _event_severity("UpdateTrail", "AccessDenied") == "high"
+    # Already-critical stays critical — no escalation past P1.
+    assert _event_severity("DeleteTrail", "AccessDenied") == "critical"
 
 
 def test_event_severity_unknown_event_defaults_to_medium():
@@ -246,7 +252,8 @@ def test_normalize_handles_missing_cloudtrail_event_payload():
     out = connector.normalize(raw)
     assert out["external_id"] == "stripped-1"
     assert out["event_name"] == "DeleteTrail"
-    assert out["severity"] == "high"
+    # DeleteTrail silences the audit trail itself — classified as P1 critical.
+    assert out["severity"] == "critical"
     # Fallback region from the connector instance config when the
     # detail payload is absent.
     assert out["aws_region"] == "us-east-1"
@@ -368,7 +375,8 @@ async def test_fetch_alerts_iterates_allow_list_one_call_per_event_name():
     severities = {r["external_id"]: r["severity"] for r in results}
     assert severities["console-1"] == "medium"
     assert severities["key-1"] == "medium"
-    assert severities["trail-1"] == "high"
+    # DeleteTrail is a visibility kill switch — P1 critical.
+    assert severities["trail-1"] == "critical"
 
 
 @pytest.mark.asyncio

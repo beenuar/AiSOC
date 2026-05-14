@@ -12,11 +12,13 @@ Auth model:
     Tokens are minted in the Orca console under
     Settings → Users & Permissions → API Tokens.
 
-Severity collapse:
+Severity mapping:
     Orca uses a 5-tier ladder (``hazardous, critical, high, medium,
-    informational``). AiSOC exposes 4 tiers (``high, medium, low, info``).
-    ``hazardous`` and ``critical`` collapse into ``high``. The original
-    Orca tier is preserved on ``raw_event.state.severity``.
+    informational``). AiSOC also exposes 5 tiers (``critical, high,
+    medium, low, info``). Both ``hazardous`` (Orca's "actively exploited /
+    active threat" band) and ``critical`` map into AiSOC ``critical`` so
+    P1 cloud findings keep their original priority. The original Orca
+    tier is preserved on ``raw_event.state.severity``.
 """
 
 from __future__ import annotations
@@ -33,15 +35,14 @@ logger = structlog.get_logger()
 
 _DEFAULT_API_URL = "https://api.orcasecurity.io"
 
-# Orca's 5-tier ladder collapsed into AiSOC's 4-tier canonical set.
+# Orca's 5-tier ladder mapped into AiSOC's 5-tier canonical set.
 # ``hazardous`` is Orca-internal terminology for "actively exploited /
-# active threat" and is unambiguously high-impact. ``critical`` likewise
-# collapses into ``high`` because AiSOC does not expose a separate
-# critical band.
+# active threat" and is the most severe band — escalate it to AiSOC
+# ``critical`` so the SOC P1 SLA fires. ``critical`` stays ``critical``.
 _SEVERITY_MAP: dict[str, str] = {
-    "hazardous": "high",
-    "imminent_compromise": "high",
-    "critical": "high",
+    "hazardous": "critical",
+    "imminent_compromise": "critical",
+    "critical": "critical",
     "high": "high",
     "medium": "medium",
     "low": "low",

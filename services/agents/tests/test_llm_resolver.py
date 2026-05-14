@@ -459,6 +459,18 @@ def _stub_ledger(monkeypatch: pytest.MonkeyPatch, pool: MagicMock | None) -> Non
     if parent is not None:
         monkeypatch.setattr(parent, "ledger", ledger, raising=False)
 
+    # If another test (e.g. ``test_audit_helpers``) previously loaded the
+    # real ``app.investigator`` package, its ``__init__`` ran
+    # ``from .orchestrator import …``, which transitively executed
+    # ``from . import ledger`` and bound the *real* ledger module as the
+    # ``ledger`` attribute on the package object. Python's
+    # ``from app.investigator import ledger as _ledger`` resolves that
+    # attribute first and only falls back to ``sys.modules`` when the
+    # attribute is missing — so swapping ``sys.modules`` is not enough.
+    # Force the attribute to our stub so the resolver consumes it.
+    pkg_obj = sys.modules[pkg_name]
+    monkeypatch.setattr(pkg_obj, "ledger", ledger, raising=False)
+
 
 class TestResolveWithTenant:
     @pytest.mark.asyncio

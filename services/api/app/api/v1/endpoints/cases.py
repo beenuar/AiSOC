@@ -4,6 +4,20 @@ Implements the full case lifecycle: new → triaged → investigating → contai
 resolved → closed.  Each case aggregates multiple alerts, maintains an observable
 graph, evidence chain, and MITRE ATT&CK coverage map.
 
+Tenant isolation
+----------------
+Every query in this module is scoped by ``tenant_id = user.tenant_id``. The
+``aisoc_cases`` table has carried a ``tenant_id`` column since migration 012
+but the API historically did not filter by it, allowing any authenticated
+caller to read or mutate another tenant's cases just by guessing a UUID (or
+by guessing the short ``INC-001`` form). Companion tables
+(``aisoc_case_comments``, ``aisoc_case_tasks``) gained a ``tenant_id``
+column in migration 044 and are backfilled from their parent case so the
+same RLS predicate applies uniformly.
+
+The ``_resolve_case_id`` helper is also tenant-scoped — looking up
+``INC-001`` for tenant A must never return tenant B's INC-001.
+
 Endpoints
 ---------
 * ``GET  /cases``                  List cases (filterable by status/severity/assignee).
@@ -323,32 +337,47 @@ def _row_to_case(row: Any) -> CaseResponse:
     )
 
 
-async def _resolve_case_id(case_id: str, db: Any) -> uuid.UUID:
-    """Resolve a case identifier (UUID **or** human-readable case_number) to a UUID.
+async def _resolve_case_id(case_id: str, db: Any, tenant_id: uuid.UUID) -> uuid.UUID:
+    """Resolve a case identifier (UUID **or** human-readable case_number) to a UUID
+    scoped to the caller's tenant.
 
     The web console and demo deeplinks use short identifiers like ``INC-001``,
     while the database primary key is a UUID. Accepting both forms here keeps
     the API ergonomic without forcing the front end to do a separate lookup.
 
-    Raises ``404`` if the identifier doesn't match either form.
+    Tenant scoping is enforced in both branches:
+
+    * For the UUID branch we return the parsed UUID without touching the DB;
+      callers must still apply ``WHERE tenant_id = :tenant_id`` in their own
+      query, which they all do. (We don't probe existence here because every
+      caller does its own SELECT and would issue a redundant round-trip.)
+    * For the ``case_number`` branch we look up the row with
+      ``WHERE tenant_id = :tenant_id AND case_number = :case_number`` so an
+      attacker can't enumerate another tenant's INC-NNN identifiers.
+
+    Raises ``404`` if the identifier doesn't match either form within the
+    caller's tenant.
     """
     case_id = (case_id or "").strip()
     if not case_id:
         raise HTTPException(status_code=404, detail="Case not found.")
 
-    # Try UUID first — that's the canonical form.
+    # Try UUID first — that's the canonical form. Tenant scoping is enforced
+    # by the per-endpoint queries that consume the returned UUID, so we
+    # don't need a DB round-trip just to validate the format.
     try:
         return uuid.UUID(case_id)
     except (ValueError, AttributeError):
         pass
 
     # Fall back to case_number lookup. Use a parameterized query — never
-    # interpolate the raw string into SQL.
+    # interpolate the raw string into SQL — and scope by tenant so the
+    # short-id form can't be used as a cross-tenant oracle.
     row = (
         await db.execute(
-            text("SELECT id FROM aisoc_cases WHERE case_number = :case_number ORDER BY created_at DESC LIMIT 1").bindparams(
-                case_number=case_id
-            )
+            text(
+                "SELECT id FROM aisoc_cases WHERE tenant_id = :tenant_id AND case_number = :case_number ORDER BY created_at DESC LIMIT 1"
+            ).bindparams(tenant_id=tenant_id, case_number=case_id)
         )
     ).fetchone()
     if not row:
@@ -371,8 +400,17 @@ async def list_cases(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[CaseResponse]:
-    where_clauses = ["1=1"]
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    # Tenant scoping is non-optional. The aisoc_cases table has carried a
+    # tenant_id column since migration 012; until P2-W1 the API simply
+    # ignored it, exposing every tenant's caseload to every authenticated
+    # caller. Anchor the WHERE clause on tenant_id so the filter is always
+    # present even when the operator passes no other filters.
+    where_clauses = ["tenant_id = :tenant_id"]
+    params: dict[str, Any] = {
+        "limit": limit,
+        "offset": offset,
+        "tenant_id": user.tenant_id,
+    }
     if status_filter:
         where_clauses.append("status = :status")
         params["status"] = status_filter
@@ -402,18 +440,23 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
 
     case_id = uuid.uuid4()
     now = datetime.now(UTC)
+    # Note: PostgreSQL ``::type`` casts inside text() confuse SQLAlchemy's
+    # bind-parameter parser; use ``CAST(:param AS TYPE)`` so the bind survives
+    # the round-trip (see also Batch 2 / hunts.py for the same gotcha).
     q = text("""
         INSERT INTO aisoc_cases (
-            id, title, description, severity, status, assignee,
+            id, tenant_id, title, description, severity, status, assignee,
             mitre_techniques, alert_ids, compliance_frameworks, tags,
             sla_due_at, opened_at, created_at, updated_at, created_by
         ) VALUES (
-            :id, :title, :description, :severity, 'new', :assignee,
-            :mitre::jsonb, :alert_ids::uuid[], :frameworks::text[], :tags::jsonb,
+            :id, :tenant_id, :title, :description, :severity, 'new', :assignee,
+            CAST(:mitre AS JSONB), CAST(:alert_ids AS UUID[]),
+            CAST(:frameworks AS TEXT[]), CAST(:tags AS JSONB),
             :sla, :now, :now, :now, :user
         ) RETURNING *
     """).bindparams(
         id=case_id,
+        tenant_id=user.tenant_id,
         title=body.title,
         description=body.description,
         severity=body.severity,
@@ -424,7 +467,7 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
         tags=_json.dumps(body.tags),
         sla=body.sla_due_at,
         now=now,
-        user=str(user) if user else "system",
+        user=getattr(user, "email", None) or "system",
     )
     try:
         row = (await db.execute(q)).fetchone()
@@ -465,8 +508,12 @@ async def create_case(body: CreateCaseRequest, db: DBSession, user: AuthUser) ->
 
 @router.get("/{case_id}", response_model=CaseResponse, summary="Get case")
 async def get_case(case_id: str, db: DBSession, user: AuthUser) -> CaseResponse:
-    cid = await _resolve_case_id(case_id, db)
-    row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Case not found.")
     return _row_to_case(row)
@@ -476,8 +523,12 @@ async def get_case(case_id: str, db: DBSession, user: AuthUser) -> CaseResponse:
 async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user: AuthUser) -> CaseResponse:
     import json as _json
 
-    cid = await _resolve_case_id(case_id, db)
-    existing = (await db.execute(text("SELECT status FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    existing = (
+        await db.execute(
+            text("SELECT status FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -491,7 +542,11 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
 
     now = datetime.now(UTC)
     sets = ["updated_at = :now"]
-    params: dict[str, Any] = {"id": cid, "now": now}
+    params: dict[str, Any] = {
+        "id": cid,
+        "now": now,
+        "tenant_id": user.tenant_id,
+    }
 
     if body.title is not None:
         sets.append("title = :title")
@@ -509,13 +564,13 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
         sets.append("sla_due_at = :sla")
         params["sla"] = body.sla_due_at
     if body.mitre_techniques is not None:
-        sets.append("mitre_techniques = :mitre::jsonb")
+        sets.append("mitre_techniques = CAST(:mitre AS JSONB)")
         params["mitre"] = _json.dumps(body.mitre_techniques)
     if body.compliance_frameworks is not None:
-        sets.append("compliance_frameworks = :frameworks::text[]")
+        sets.append("compliance_frameworks = CAST(:frameworks AS TEXT[])")
         params["frameworks"] = body.compliance_frameworks
     if body.tags is not None:
-        sets.append("tags = :tags::jsonb")
+        sets.append("tags = CAST(:tags AS JSONB)")
         params["tags"] = _json.dumps(body.tags)
 
     if body.status:
@@ -525,7 +580,7 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
         if ts_col:
             sets.append(f"{ts_col} = :now")
 
-    q = text(f"UPDATE aisoc_cases SET {', '.join(sets)} WHERE id = :id RETURNING *").bindparams(**params)
+    q = text(f"UPDATE aisoc_cases SET {', '.join(sets)} WHERE id = :id AND tenant_id = :tenant_id RETURNING *").bindparams(**params)
     try:
         row = (await db.execute(q)).fetchone()
         if row is None:
@@ -566,7 +621,12 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
         # is a cheap, idempotent breadcrumb rather than a heavy precompute.
         if body.status in {"resolved", "closed"}:
             try:
-                await _emit_summary_breadcrumb(db, case_id=row.id, status=body.status)
+                await _emit_summary_breadcrumb(
+                    db,
+                    case_id=row.id,
+                    tenant_id=user.tenant_id,
+                    status=body.status,
+                )
             except Exception:  # pragma: no cover — defensive: never block status change.
                 logger.exception("cases.update.summary_breadcrumb_failed case=%s", row.id)
                 await db.rollback()
@@ -576,15 +636,15 @@ async def update_case(case_id: str, body: UpdateCaseRequest, db: DBSession, user
 
 @router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")
 async def add_alerts(case_id: str, body: AddAlertsRequest, db: DBSession, user: AuthUser) -> CaseResponse:
-    cid = await _resolve_case_id(case_id, db)
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
     ids_str = [str(a) for a in body.alert_ids]
     q = text("""
         UPDATE aisoc_cases
-        SET alert_ids = array(SELECT DISTINCT unnest(alert_ids || :new_ids::uuid[])),
+        SET alert_ids = array(SELECT DISTINCT unnest(alert_ids || CAST(:new_ids AS UUID[]))),
             updated_at = now()
-        WHERE id = :id
+        WHERE id = :id AND tenant_id = :tenant_id
         RETURNING *
-    """).bindparams(id=cid, new_ids=ids_str)
+    """).bindparams(id=cid, new_ids=ids_str, tenant_id=user.tenant_id)
     try:
         row = (await db.execute(q)).fetchone()
         if not row:
@@ -602,8 +662,14 @@ async def add_alerts(case_id: str, body: AddAlertsRequest, db: DBSession, user: 
 async def update_observables(case_id: str, body: UpdateObservablesRequest, db: DBSession, user: AuthUser) -> CaseResponse:
     import json as _json
 
-    cid = await _resolve_case_id(case_id, db)
-    existing = (await db.execute(text("SELECT observable_graph FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    existing = (
+        await db.execute(
+            text("SELECT observable_graph FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
+        )
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -624,9 +690,10 @@ async def update_observables(case_id: str, body: UpdateObservablesRequest, db: D
             edges.append(e.model_dump())
 
     graph = {"nodes": nodes, "edges": edges}
-    q = text("""
-        UPDATE aisoc_cases SET observable_graph = :g::jsonb, updated_at = now() WHERE id = :id RETURNING *
-    """).bindparams(id=cid, g=_json.dumps(graph))
+    q = text(
+        "UPDATE aisoc_cases SET observable_graph = CAST(:g AS JSONB), updated_at = now() "
+        "WHERE id = :id AND tenant_id = :tenant_id RETURNING *"
+    ).bindparams(id=cid, g=_json.dumps(graph), tenant_id=user.tenant_id)
     try:
         row = (await db.execute(q)).fetchone()
         await db.commit()
@@ -638,17 +705,34 @@ async def update_observables(case_id: str, body: UpdateObservablesRequest, db: D
 
 @router.post("/{case_id}/comments", response_model=CommentResponse, status_code=201, summary="Add comment")
 async def add_comment(case_id: str, body: AddCommentRequest, db: DBSession, user: AuthUser) -> CommentResponse:
-    cid = await _resolve_case_id(case_id, db)
-    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    exists = (
+        await db.execute(
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
     comment_id = uuid.uuid4()
     now = datetime.now(UTC)
+    # Stamp the row with tenant_id so the comment table is independently
+    # tenant-scoped — see migration 044.
     q = text("""
-        INSERT INTO aisoc_case_comments (id, case_id, author, body, is_system, created_at)
-        VALUES (:id, :case_id, :author, :body, :sys, :now) RETURNING *
-    """).bindparams(id=comment_id, case_id=cid, author=str(user) if user else "system", body=body.body, sys=body.is_system, now=now)
+        INSERT INTO aisoc_case_comments
+            (id, case_id, tenant_id, author, body, is_system, created_at)
+        VALUES
+            (:id, :case_id, :tenant_id, :author, :body, :sys, :now)
+        RETURNING *
+    """).bindparams(
+        id=comment_id,
+        case_id=cid,
+        tenant_id=user.tenant_id,
+        author=getattr(user, "email", None) or "system",
+        body=body.body,
+        sys=body.is_system,
+        now=now,
+    )
     try:
         row = (await db.execute(q)).fetchone()
         if row is None:
@@ -669,9 +753,13 @@ async def add_comment(case_id: str, body: AddCommentRequest, db: DBSession, user
 
 @router.get("/{case_id}/comments", response_model=list[CommentResponse], summary="List case comments")
 async def list_comments(case_id: str, db: DBSession, user: AuthUser) -> list[CommentResponse]:
-    cid = await _resolve_case_id(case_id, db)
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
     rows = (
-        await db.execute(text("SELECT * FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at").bindparams(id=cid))
+        await db.execute(
+            text("SELECT * FROM aisoc_case_comments WHERE case_id = :id AND tenant_id = :tenant_id ORDER BY created_at").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
+        )
     ).fetchall()
     return [
         CommentResponse(id=r.id, case_id=r.case_id, author=r.author, body=r.body, is_system=r.is_system, created_at=r.created_at)
@@ -695,8 +783,12 @@ async def add_note(case_id: str, body: AddCommentRequest, db: DBSession, user: A
 
 @router.get("/{case_id}/evidence", response_model=EvidenceReport, summary="Export evidence chain report")
 async def evidence_report(case_id: str, db: DBSession, user: AuthUser) -> EvidenceReport:
-    cid = await _resolve_case_id(case_id, db)
-    row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Case not found.")
     return EvidenceReport(
@@ -724,8 +816,12 @@ async def evidence_report(case_id: str, db: DBSession, user: AuthUser) -> Eviden
 
 @router.get("/{case_id}/timeline", response_model=TimelineResponse, summary="Case activity timeline")
 async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> TimelineResponse:
-    cid = await _resolve_case_id(case_id, db)
-    case_row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    case_row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not case_row:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -761,8 +857,11 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
     comment_rows = (
         await db.execute(
             text(
-                "SELECT id, author, body, is_system, created_at FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at"
-            ).bindparams(id=cid)
+                "SELECT id, author, body, is_system, created_at "
+                "FROM aisoc_case_comments "
+                "WHERE case_id = :id AND tenant_id = :tenant_id "
+                "ORDER BY created_at"
+            ).bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchall()
     for c in comment_rows:
@@ -802,8 +901,11 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
         task_rows = (
             await db.execute(
                 text(
-                    "SELECT id, title, status, assignee, created_at FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
-                ).bindparams(id=cid)
+                    "SELECT id, title, status, assignee, created_at "
+                    "FROM aisoc_case_tasks "
+                    "WHERE case_id = :id AND tenant_id = :tenant_id "
+                    "ORDER BY created_at"
+                ).bindparams(id=cid, tenant_id=user.tenant_id)
             )
         ).fetchall()
         for t in task_rows:
@@ -831,15 +933,22 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
 
 @router.get("/{case_id}/tasks", response_model=list[TaskResponse], summary="List case tasks")
 async def list_tasks(case_id: str, db: DBSession, user: AuthUser) -> list[TaskResponse]:
-    cid = await _resolve_case_id(case_id, db)
-    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    exists = (
+        await db.execute(
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
     rows = (
         await db.execute(
             text(
-                "SELECT id, title, status, assignee, due_at, created_at FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
-            ).bindparams(id=cid)
+                "SELECT id, title, status, assignee, due_at, created_at "
+                "FROM aisoc_case_tasks "
+                "WHERE case_id = :id AND tenant_id = :tenant_id "
+                "ORDER BY created_at"
+            ).bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchall()
     return [_row_to_task(r) for r in rows]
@@ -852,8 +961,12 @@ async def create_task(
     db: DBSession,
     user: AuthUser,
 ) -> TaskResponse:
-    cid = await _resolve_case_id(case_id, db)
-    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    exists = (
+        await db.execute(
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -865,20 +978,21 @@ async def create_task(
                 text(
                     """
                     INSERT INTO aisoc_case_tasks
-                        (id, case_id, title, status, assignee, due_at, created_at, updated_at, created_by)
+                        (id, case_id, tenant_id, title, status, assignee, due_at, created_at, updated_at, created_by)
                     VALUES
-                        (:id, :case_id, :title, :status, :assignee, :due_at, :now, :now, :created_by)
+                        (:id, :case_id, :tenant_id, :title, :status, :assignee, :due_at, :now, :now, :created_by)
                     RETURNING id, title, status, assignee, due_at, created_at
                     """
                 ).bindparams(
                     id=task_id,
                     case_id=cid,
+                    tenant_id=user.tenant_id,
                     title=body.title,
                     status=body.status,
                     assignee=body.assignee,
                     due_at=body.due_at,
                     now=now,
-                    created_by=str(user) if user else None,
+                    created_by=getattr(user, "email", None) or "system",
                 )
             )
         ).fetchone()
@@ -897,9 +1011,14 @@ async def update_task(
     db: DBSession,
     user: AuthUser,
 ) -> TaskResponse:
-    cid = await _resolve_case_id(case_id, db)
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
     sets: list[str] = []
-    params: dict[str, Any] = {"id": task_id, "case_id": cid, "now": datetime.now(UTC)}
+    params: dict[str, Any] = {
+        "id": task_id,
+        "case_id": cid,
+        "tenant_id": user.tenant_id,
+        "now": datetime.now(UTC),
+    }
     if body.title is not None:
         sets.append("title = :title")
         params["title"] = body.title
@@ -923,7 +1042,7 @@ async def update_task(
                     f"""
                     UPDATE aisoc_case_tasks
                     SET {", ".join(sets)}
-                    WHERE id = :id AND case_id = :case_id
+                    WHERE id = :id AND case_id = :case_id AND tenant_id = :tenant_id
                     RETURNING id, title, status, assignee, due_at, created_at
                     """
                 ).bindparams(**params)
@@ -977,8 +1096,12 @@ async def case_investigate(
     db: DBSession,
     user: AuthUser,
 ) -> dict[str, Any]:
-    cid = await _resolve_case_id(case_id, db)
-    exists = (await db.execute(text("SELECT 1 FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    exists = (
+        await db.execute(
+            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -1003,7 +1126,7 @@ async def list_case_investigations(
     The agents service is the source of truth.  When it's unreachable we return
     an empty list rather than 503 so the case detail page still renders.
     """
-    cid = await _resolve_case_id(case_id, db)
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
     try:
         resp = await _agents_proxy("GET", f"/api/v1/cases/{cid}/investigations")
         if resp.status_code == 404:
@@ -1057,7 +1180,13 @@ _SUMMARY_BREADCRUMB_BODY = (
 )
 
 
-async def _emit_summary_breadcrumb(db: Any, *, case_id: uuid.UUID, status: str) -> None:
+async def _emit_summary_breadcrumb(
+    db: Any,
+    *,
+    case_id: uuid.UUID,
+    tenant_id: uuid.UUID | str,
+    status: str,
+) -> None:
     """Drop a system comment pointing to the on-demand summary endpoint.
 
     Idempotent on repeated status changes — we re-emit only when transitioning
@@ -1070,12 +1199,13 @@ async def _emit_summary_breadcrumb(db: Any, *, case_id: uuid.UUID, status: str) 
         text(
             """
             INSERT INTO aisoc_case_comments
-                (id, case_id, author, body, is_system, created_at)
-            VALUES (:id, :case_id, :author, :body, true, :now)
+                (id, case_id, tenant_id, author, body, is_system, created_at)
+            VALUES (:id, :case_id, :tenant_id, :author, :body, true, :now)
             """
         ).bindparams(
             id=uuid.uuid4(),
             case_id=case_id,
+            tenant_id=tenant_id,
             author="aisoc",
             body=body,
             now=datetime.now(UTC),
@@ -1102,7 +1232,7 @@ async def case_auto_summary(
         ),
     ),
 ) -> Any:
-    cid = await _resolve_case_id(case_id, db)
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
     summary = await build_case_summary(db, cid)
     if summary is None:
         raise HTTPException(status_code=404, detail="Case not found.")
@@ -1144,7 +1274,7 @@ async def case_auto_postmortem(
     *what happened, when did we find out, what did we do, and what should we
     change*. Both are deterministic — same case state in, same artefact out.
     """
-    cid = await _resolve_case_id(case_id, db)
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
     postmortem = await build_case_postmortem(db, cid)
     if postmortem is None:
         raise HTTPException(status_code=404, detail="Case not found.")
@@ -1200,8 +1330,14 @@ async def list_related_cases(
     overlap on `alert_ids` or share an observable IP/host.  It's the smallest
     thing the case detail page needs to stop 404'ing.
     """
-    cid = await _resolve_case_id(case_id, db)
-    row = (await db.execute(text("SELECT alert_ids, observable_graph FROM aisoc_cases WHERE id = :id").bindparams(id=cid))).fetchone()
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    row = (
+        await db.execute(
+            text("SELECT alert_ids, observable_graph FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
+        )
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Case not found.")
 
@@ -1216,11 +1352,16 @@ async def list_related_cases(
                     SELECT id, case_number, title, severity, status, created_at
                     FROM aisoc_cases
                     WHERE id <> :id
+                      AND tenant_id = :tenant_id
                       AND alert_ids && CAST(:alerts AS UUID[])
                     ORDER BY created_at DESC
                     LIMIT 20
                     """
-                ).bindparams(id=cid, alerts=[str(a) for a in alert_ids])
+                ).bindparams(
+                    id=cid,
+                    tenant_id=user.tenant_id,
+                    alerts=[str(a) for a in alert_ids],
+                )
             )
         ).fetchall()
         for r in rows:

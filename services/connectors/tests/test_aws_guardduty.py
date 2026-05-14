@@ -52,7 +52,13 @@ def test_guardduty_schema_category_is_cloud():
 @pytest.mark.parametrize(
     "score,expected",
     [
-        (9.5, "high"),  # GuardDuty's "critical" tier collapses to high
+        # GuardDuty's 9.0-10.0 band maps to AiSOC's ``critical`` tier
+        # (P1 SLA) — these are the highest-confidence active-threat
+        # findings and warrant the 15-minute MTTD target.
+        (10.0, "critical"),
+        (9.5, "critical"),
+        (9.0, "critical"),
+        (8.9, "high"),
         (8.0, "high"),
         (7.0, "high"),
         (6.9, "medium"),
