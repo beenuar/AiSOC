@@ -143,10 +143,16 @@ def main(argv: list[str] | None = None) -> int:
     elif args.dry_run:
         print("[wet-eval-check] dry-run — no live API calls will be attempted.")
     else:
+        # We intentionally do NOT include the names of missing secrets in
+        # stdout. The names themselves aren't credentials, but CodeQL's
+        # py/clear-text-logging-sensitive-data taint analysis treats any
+        # variable containing the substring "secret" as sensitive. The full
+        # missing-secret list is still written to ``status.json`` (consumed
+        # by the workflow) — that file is internal and is not echoed to the
+        # public log.
         print(
-            "[wet-eval-check] SKIP — "
-            + reason.split(". ", 1)[0]
-            + ". Workflow will exit cleanly."
+            "[wet-eval-check] SKIP — required secret(s) not configured. "
+            "Workflow will exit cleanly."
         )
 
     # Always exit 0 — missing secrets is *expected* on forks. The workflow

@@ -58,10 +58,11 @@ export default function CustomersIndexPage() {
             <div className="grid gap-4 md:grid-cols-2">
               {studies.map((s) => {
                 const stats = s.frontmatter.result_numbers ?? [];
+                const safeSlug = encodeURIComponent(s.slug);
                 return (
                   <Link
-                    key={s.slug}
-                    href={`/customers/${s.slug}`}
+                    key={safeSlug}
+                    href={`/customers/${safeSlug}`}
                     className="group flex h-full flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition hover:border-white/20 hover:bg-white/[0.04]"
                   >
                     <div className="flex items-center gap-3">

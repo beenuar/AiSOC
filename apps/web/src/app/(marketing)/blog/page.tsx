@@ -58,10 +58,12 @@ export default function BlogIndexPage() {
         <div className="mx-auto max-w-5xl">
           {hasPosts ? (
             <ul className="grid gap-4 md:grid-cols-2">
-              {posts.map((p) => (
-                <li key={p.slug}>
+              {posts.map((p) => {
+                const safeSlug = encodeURIComponent(p.slug);
+                return (
+                <li key={safeSlug}>
                   <Link
-                    href={`/blog/${p.slug}`}
+                    href={`/blog/${safeSlug}`}
                     className="group flex h-full flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition hover:border-white/20 hover:bg-white/[0.04]"
                   >
                     <div className="flex flex-wrap items-center gap-2">
@@ -100,7 +102,8 @@ export default function BlogIndexPage() {
                     </div>
                   </Link>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : (
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
