@@ -76,28 +76,28 @@ Wave-2 commits (most recent first, all SSH-signed, attributed Prince Sinha):
 - [~] T3.8 Design system v2 + Storybook (P1, M) — partial / wip (Storybook scaffold landed with T3.6 commit; full token sweep pending)
 
 ### Track 4 — Connector wave (15 new)
-- [~] T4.1 Cloudflare WAF + Zero Trust (M)
+- [~] T4.1 Cloudflare WAF + Zero Trust (M) — partial / wip — landed in `ee52d642` (Zero Trust audit; WAF rules pending)
 - [x] T4.2 Tines (S)
 - [x] T4.3 Torq (S)
-- [~] T4.4 Sublime Security (M)
-- [~] T4.5 Abnormal Security (M)
+- [~] T4.4 Sublime Security (M) — partial / wip — landed in `ee52d642`
+- [~] T4.5 Abnormal Security (M) — partial / wip — landed in `ee52d642`
 - [~] T4.6 Lacework — policy violations stream (S, extend) — partial / wip — extension landed in `ee52d642` (`_normalize_policy` for policy-violation events)
-- [~] T4.7 Sysdig (M)
+- [~] T4.7 Sysdig (M) — partial / wip — landed in `ee52d642`
 - [x] T4.8 Falco (S)
-- [~] T4.9 HashiCorp Vault audit (M)
+- [~] T4.9 HashiCorp Vault audit (M) — partial / wip — landed in `ee52d642`
 - [x] T4.10 PagerDuty / Opsgenie (S)
 - [x] T4.11 Atlassian Confluence audit (S)
-- [~] T4.12 Box / Dropbox audit (M)
-- [~] T4.13 Datadog logs + APM (M)
-- [~] T4.14 Snowflake audit (M)
-- [~] T4.15 OCI (Oracle Cloud) (M)
+- [~] T4.12 Box / Dropbox audit (M) — partial / wip — landed in `ee52d642`
+- [~] T4.13 Datadog logs + APM (M) — partial / wip — landed in `ee52d642` (logs scaffolded; APM trace correlation pending)
+- [~] T4.14 Snowflake audit (M) — partial / wip — landed in `ee52d642`
+- [~] T4.15 OCI (Oracle Cloud) (M) — partial / wip — landed in `ee52d642`
 
 ### Track 5 — Public benchmark + eval extensions
 - [x] T5.1 Speed + token + USD published (P0, S) → T2.4
 - [x] T5.2 Methodology page (P0, S) → T5.1
-- [~] T5.3 Public-dataset fidelity benchmark (P1, M)
-- [~] T5.4 Public scoreboard page (P1, M) → T5.1
-- [~] T5.5 Wet-eval weekly CI job (P1, S) → T2.4
+- [~] T5.3 Public-dataset fidelity benchmark (P1, M) — partial / wip — `23d92541` (CICIDS-2017 micro fixture + fidelity harness scaffold; CTU-13 dataset + benchmark page sweep pending)
+- [~] T5.4 Public scoreboard page (P1, M) → T5.1 — partial / wip — `6dba7234` (`/benchmark-scoreboard` MDX page + scoreboard.json data file + `/benchmark` page polish; live data feed pending)
+- [~] T5.5 Wet-eval weekly CI job (P1, S) → T2.4 — partial / wip — `700a9452` (`.github/workflows/wet-eval.yml` + secrets doc + `wet_eval_check.py`; OPENAI_API_KEY secret needs setting in repo)
 
 ### Track 6 — Hosted SaaS + GTM surface
 - [ ] T6.1 app.aisoc.dev managed waitlist (P0, L) → T1.1, T2.2, T3.2, T3.3
@@ -108,7 +108,7 @@ Wave-2 commits (most recent first, all SSH-signed, attributed Prince Sinha):
 ### Track 7 — Narrative + IDE-driven SOC
 - [~] T7.1 Cursor extension (P0, M) — scaffold landed at `services/mcp/cursor-extension/`; marketplace publish deferred
 - [x] T7.2 L0–L4 white paper (P1, S)
-- [~] T7.3 Three anchor blog posts (P1, S) → T5.1, T7.1
+- [~] T7.3 Three anchor blog posts (P1, S) → T5.1, T7.1 — partial / wip — `ecf2ffe1` (three drafts: graph-at-ingest, sub-minute latency, L0–L4 maturity; copy edit pass pending)
 
 ---
 
