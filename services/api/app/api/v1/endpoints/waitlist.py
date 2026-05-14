@@ -420,20 +420,29 @@ async def patch_entry(
             detail="Could not update waitlist entry.",
         ) from exc
 
-    # CodeQL py/log-injection: sanitise inline so the taint tracker
-    # sees the .replace() chain directly at the call site. Both values
-    # are also Pydantic-validated against ``ALLOWED_WAITLIST_STATUSES``
-    # so they can only ever be short safe identifiers, but the inline
-    # sanitisation makes the property explicit for static analysis.
+    # CodeQL py/log-injection: sanitise every value inline so the taint
+    # tracker sees the .replace() chain directly at the call site.
+    #
+    # - ``previous`` / ``payload.status`` are Pydantic-validated against
+    #   ``ALLOWED_WAITLIST_STATUSES`` (short identifiers, no CR/LF), and
+    # - ``entry_id`` / ``user.user_id`` are typed as ``uuid.UUID`` so the
+    #   string form is always ``[0-9a-f-]{36}``,
+    #
+    # but CodeQL's taint tracker treats path params and DB-derived
+    # strings as user-controlled regardless. Making the cleansing
+    # explicit at the call site silences the alert without weakening
+    # any existing guarantee.
     safe_previous = (previous or "").replace("\r", "").replace("\n", " ")[:32]
     safe_next = (payload.status or "").replace("\r", "").replace("\n", " ")[:32]
+    safe_entry_id = str(entry_id).replace("\r", "").replace("\n", " ")[:36]
+    safe_actor = str(user.user_id).replace("\r", "").replace("\n", " ")[:36]
     logger.info(
         "waitlist_status_transition",
         extra={
-            "entry_id": str(entry_id),
+            "entry_id": safe_entry_id,
             "previous": safe_previous,
             "next": safe_next,
-            "actor": str(user.user_id),
+            "actor": safe_actor,
         },
     )
     return _to_wire(row)
