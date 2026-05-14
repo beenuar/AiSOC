@@ -17,7 +17,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-DATABASE_URL = os.environ.get(
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get(
     "UEBA_DATABASE_URL",
     "postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc",
 )
