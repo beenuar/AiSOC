@@ -21,6 +21,11 @@ from langchain_openai import ChatOpenAI
 
 from app.core.cost_telemetry import record_llm_call
 
+from .prompt_sanitizer import (
+    sanitize_for_prompt,
+    sanitize_iterable_of_strings,
+    sanitize_text,
+)
 from .state import ForensicFindings, InvestigatorState, StepKind
 from .tools import sha256_of
 
@@ -52,16 +57,24 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0)
 
-    enrichment_snippet = json.dumps(
+    # Defence-in-depth: alert_summary, recon.summary, and the enrichment cache
+    # can all carry attacker-controlled strings (banners, dark-web excerpts,
+    # WHOIS values, etc.). Sanitise them and wrap the enrichment blob in an
+    # explicit <UNTRUSTED_DATA> envelope so the system prompt stays trusted.
+    safe_summary = sanitize_text(state.alert_summary, max_len=2_000)
+    safe_recon = sanitize_text(state.recon.summary, max_len=2_000)
+    safe_mitre = sanitize_iterable_of_strings(state.recon.mitre_techniques, max_item_len=64, max_items=25)
+    enrichment_blob = sanitize_for_prompt(
         dict(list(state.enrichment_cache.items())[:10]),
-        indent=2,
-    )[:3000]
+        label="enrichment_cache",
+        max_blob_len=3_000,
+    )
 
     prompt = (
-        f"Alert summary:\n{state.alert_summary}\n\n"
-        f"Recon findings:\n{state.recon.summary}\n"
-        f"MITRE techniques: {state.recon.mitre_techniques}\n\n"
-        f"Enrichment data (sample):\n{enrichment_snippet}"
+        f"Alert summary:\n{safe_summary}\n\n"
+        f"Recon findings:\n{safe_recon}\n"
+        f"MITRE techniques: {safe_mitre}\n\n"
+        f"Enrichment data (sample):\n{enrichment_blob}"
     )
 
     messages = [

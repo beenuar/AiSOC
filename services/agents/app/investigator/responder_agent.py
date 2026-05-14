@@ -20,6 +20,11 @@ from langchain_openai import ChatOpenAI
 
 from app.core.cost_telemetry import record_llm_call
 
+from .prompt_sanitizer import (
+    sanitize_for_prompt,
+    sanitize_iterable_of_strings,
+    sanitize_text,
+)
 from .state import InvestigatorState, ResponderPlan, StepKind
 from .tools import sha256_of
 
@@ -50,14 +55,30 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0)
 
+    # Defence-in-depth: every field surfaced here originated in attacker-
+    # influenced data (alert payloads, banners, dark-web excerpts, LLM
+    # summaries of the same). Sanitise scalars, cap list lengths, and wrap
+    # the timeline blob in <UNTRUSTED_DATA> so the system prompt stays
+    # authoritative.
+    safe_alert = sanitize_text(state.alert_summary, max_len=2_000)
+    safe_root_cause = sanitize_text(state.forensic.root_cause_hypothesis, max_len=1_000)
+    safe_blast = sanitize_text(state.forensic.blast_radius, max_len=1_000)
+    safe_mitre = sanitize_iterable_of_strings(state.recon.mitre_techniques, max_item_len=64, max_items=25)
+    safe_actors = sanitize_iterable_of_strings(state.recon.threat_actors, max_item_len=128, max_items=25)
+    timeline_blob = sanitize_for_prompt(
+        state.forensic.timeline[-5:],
+        label="timeline_tail",
+        max_blob_len=2_500,
+    )
+
     prompt = (
-        f"Alert: {state.alert_summary}\n\n"
-        f"Root cause: {state.forensic.root_cause_hypothesis}\n"
-        f"Blast radius: {state.forensic.blast_radius}\n"
+        f"Alert: {safe_alert}\n\n"
+        f"Root cause: {safe_root_cause}\n"
+        f"Blast radius: {safe_blast}\n"
         f"Confidence: {state.forensic.confidence:.0%}\n"
-        f"MITRE: {state.recon.mitre_techniques}\n"
-        f"Threat actors: {state.recon.threat_actors}\n\n"
-        f"Timeline (last 5):\n" + json.dumps(state.forensic.timeline[-5:], indent=2)
+        f"MITRE: {safe_mitre}\n"
+        f"Threat actors: {safe_actors}\n\n"
+        f"Timeline (last 5):\n{timeline_blob}"
     )
 
     messages = [

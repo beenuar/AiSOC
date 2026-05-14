@@ -16479,10 +16479,12 @@ components:
             ... --max-regression-pp ...` for the candidate ruleset.
         max_regression_pp:
           type: number
-          maximum: 100.0
+          maximum: 50.0
           minimum: 0.0
           title: Max Regression Pp
-          description: Allowed MITRE accuracy regression vs baseline, in pp.
+          description: Allowed MITRE accuracy regression vs baseline, in pp. Hard-capped
+            at 50 — anything above that is indistinguishable from disabling the regression
+            gate entirely.
           default: 1.0
       type: object
       required:
@@ -21638,18 +21640,21 @@ components:
           default: true
         max_regression_pp:
           type: number
-          maximum: 100.0
+          maximum: 50.0
           minimum: 0.0
           title: Max Regression Pp
           description: Allowed MITRE accuracy regression vs the active baseline, in
-            percentage points. Forwarded to run_evals.py.
+            percentage points. Forwarded to run_evals.py. Hard-capped at 50 to keep
+            the regression gate meaningful.
           default: 1.0
         timeout_seconds:
           type: integer
-          maximum: 900.0
+          maximum: 600.0
           minimum: 10.0
           title: Timeout Seconds
-          description: Hard timeout for the eval subprocess.
+          description: Hard timeout for the eval subprocess. Capped at 10 minutes
+            — the synthetic benchmark completes in under 60s on commodity hardware
+            so anything longer is almost certainly a stuck process.
           default: 180
       type: object
       title: RunEvalRequest

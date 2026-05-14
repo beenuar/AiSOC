@@ -20,6 +20,7 @@ from langchain_openai import ChatOpenAI
 
 from app.core.cost_telemetry import record_llm_call
 
+from .prompt_sanitizer import sanitize_for_prompt, sanitize_text
 from .state import InvestigatorState, ReconFindings, StepKind
 from .tools import enrich_ioc, extract_iocs, map_to_mitre, sha256_of
 
@@ -55,7 +56,19 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0)
 
-    prompt = f"Alert summary:\n{state.alert_summary}\n\nRaw alert data:\n{json.dumps(state.raw_alert, indent=2)[:3000]}"
+    # Defence-in-depth: every field surfaced here can be attacker-influenced
+    # (alert_summary often echoes log lines; raw_alert is verbatim event data).
+    # Sanitise both before they hit the model, and wrap them in an
+    # <UNTRUSTED_DATA> envelope so the system prompt's instructions stay
+    # authoritative even if an attacker plants a "ignore previous instructions"
+    # payload inside a banner or log message.
+    safe_summary = sanitize_text(state.alert_summary, max_len=2_000)
+    raw_alert_blob = sanitize_for_prompt(
+        state.raw_alert,
+        label="raw_alert",
+        max_blob_len=3_000,
+    )
+    prompt = f"Alert summary:\n{safe_summary}\n\nRaw alert data:\n{raw_alert_blob}"
 
     messages = [
         SystemMessage(content=_SYSTEM_PROMPT),

@@ -23,6 +23,7 @@ from typing import Any
 
 import httpx
 
+from .bounds import clamp_timeout
 from .models import Playbook, PlaybookStep, StepCondition, StepType
 from .ssrf_guard import SSRFError, validate_outbound_url
 
@@ -437,7 +438,10 @@ async def _handle_osquery_live_query(step: PlaybookStep, context: dict[str, Any]
     target_hosts: list[str] = step.params.get("target_hosts") or [context.get("host_id") or context.get("host", "")]
     template: str = step.params.get("template", "")
     template_params: dict[str, Any] = step.params.get("template_params") or {}
-    timeout_seconds: int = step.params.get("timeout_seconds", 60)
+    # Runtime clamp — params bypass the Pydantic validator on PlaybookStep, so
+    # a malicious or malformed playbook could otherwise pin the connector
+    # thread for hours. See services/agents/app/playbook/bounds.py.
+    timeout_seconds: int = clamp_timeout(step.params.get("timeout_seconds", 60), default=60)
 
     if not template:
         return {"error": "osquery_live_query: 'template' param is required", "partial": True}

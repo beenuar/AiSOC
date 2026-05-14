@@ -259,6 +259,20 @@ The agent-side writer lives in
 and the UI consumer is
 [`apps/web/src/components/cases/InvestigationLedger.tsx`](https://github.com/beenuar/AiSOC/blob/main/apps/web/src/components/cases/InvestigationLedger.tsx).
 
+### Prompt sanitization layer
+
+Investigator agents (`recon`, `forensic`, `responder`, `report_writer`) consume
+attacker-influenced strings — enrichment payloads, dark-web excerpts, vendor
+descriptions, raw alert fields — and hand them to an LLM. Every one of those
+agents now routes its context through
+[`services/agents/app/investigator/prompt_sanitizer.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/investigator/prompt_sanitizer.py),
+which strips known role / chat delimiters, redacts common jailbreak phrasings,
+caps field length, bounds list size and recursion depth, and wraps the result
+in explicit `<UNTRUSTED_DATA>` tags. The agents still validate the LLM's
+response against a Pydantic schema before persisting it. See the
+[LLM prompt safety section in the security guide](./operations/security#llm-prompt-safety)
+for the threat model and defence-in-depth layers.
+
 ## Investigation Rail and correlation narrative
 
 The alert queue (`/alerts`) pairs the sortable table with an **Investigation Rail**
