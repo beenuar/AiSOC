@@ -1469,6 +1469,58 @@ export const casesApi = {
       error?: string;
     }>(`/api/v1/cases/${caseId}/investigations/${runId}`),
 
+  /**
+   * Attack-chain timeline visualization (T3.3 — v8.0).
+   *
+   * Backed by `/api/v1/cases/{id}/attack-chain` which runs a graph BFS over
+   * the case's seed alert and returns a ranked, time-ordered chain of
+   * related alerts plus a side-by-side entity graph. Severity stays as a
+   * lowercase string (info|low|medium|high|critical) to round-trip the
+   * five-tier ladder cleanly.
+   *
+   * Window defaults to 24h; the backend rejects unknown windows with 400.
+   * Returns `null` when the case has no linked alerts (the seed cannot be
+   * resolved). All other failures throw so SWR can surface them.
+   */
+  getAttackChain: async (
+    caseId: string,
+    options: { window?: AttackChainWindow } = {},
+  ): Promise<AttackChainTimeline | null> => {
+    const params: Record<string, string> = {};
+    if (options.window) params.window = options.window;
+    const raw = await request<BackendAttackChainResponse>(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/attack-chain`,
+      { params },
+    );
+    if (!raw.seed_alert_id) return null;
+    return {
+      caseId: raw.case_id,
+      tenantId: raw.tenant_id,
+      window: raw.window,
+      seedAlertId: raw.seed_alert_id,
+      chainSignature: raw.chain_signature ?? null,
+      confidence: typeof raw.confidence === 'number' ? raw.confidence : 0,
+      generatedAt: raw.generated_at ?? new Date().toISOString(),
+      chain: (raw.chain ?? []).map((link) => ({
+        alertId: link.alert_id,
+        title: link.title,
+        severity: link.severity,
+        eventTime: link.event_time,
+        score: link.score,
+        distance: link.distance,
+        dtSeconds: link.dt_seconds,
+        sharedEntities: link.shared_entities ?? [],
+        mitreTechniques: link.mitre_techniques ?? [],
+        connectorType: link.connector_type ?? null,
+        sourceEventIds: link.source_event_ids ?? [],
+      })),
+      entityGraph: {
+        nodes: raw.entity_graph?.nodes ?? [],
+        edges: raw.entity_graph?.edges ?? [],
+      },
+    };
+  },
+
   /** Trigger a browser download of the PDF report. */
   downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
     const resp = await fetch(`${API_BASE}/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`, {
@@ -3098,6 +3150,110 @@ interface BackendCaseAttackPathResponse {
   edges: CaseAttackPathEdge[];
   node_count: number;
   edge_count: number;
+}
+
+// ─── Attack chain timeline (T3.3 — v8.0) ──────────────────────────────────────
+// The attack-chain endpoint returns a ranked, time-ordered chain of related
+// alerts starting from the seed alert anchored to a case. It's distinct from
+// the case attack-path graph above: this view is *temporal* (a timeline of
+// alerts) while the path view is *topological* (a graph of entities). Both
+// power different tabs in the case workspace.
+
+/** Severity ladder mirrors the backend five-tier scale exactly. */
+export type AttackChainSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
+
+/** Allowed lookback windows. The backend rejects anything else with 400. */
+export type AttackChainWindow = '1h' | '6h' | '24h' | '72h' | '7d' | '30d';
+
+/**
+ * A single link in the chain — one related alert plus the metadata that
+ * makes it readable in a timeline: how far it is from the seed (graph
+ * distance), how it scored relative to other candidates, the entities it
+ * shares with the seed, and which MITRE techniques it tagged.
+ */
+export interface AttackChainLink {
+  alertId: string;
+  title: string;
+  severity: AttackChainSeverity | string;
+  /** ISO-8601. The chain is ordered by this field. */
+  eventTime: string;
+  /** Ranking score the BFS uses to pick the top chain candidates. */
+  score: number;
+  /** Hops from the seed alert in the entity graph. 0 == seed itself. */
+  distance: number;
+  /** Time gap from the previous link, in seconds. Always >= 0. */
+  dtSeconds: number;
+  /** Entities that bridge this link to the rest of the chain. */
+  sharedEntities: Array<{ kind: string; value: string }>;
+  mitreTechniques: string[];
+  connectorType: string | null;
+  sourceEventIds: string[];
+}
+
+/** Entity nodes & edges rendered side-by-side with the timeline.
+ *
+ * Node shape from the backend is `{id, kind, label, ...extras}` where extras
+ * depend on the kind: Alert nodes also carry `severity` and `event_time`.
+ * Edges are `{source, target, kind}` — the relationship label (e.g. TOUCHES).
+ */
+export interface AttackChainEntityNode {
+  id: string;
+  kind: string;
+  label?: string;
+  severity?: string;
+  event_time?: string;
+  [key: string]: unknown;
+}
+export interface AttackChainEntityEdge {
+  source: string;
+  target: string;
+  kind: string;
+}
+
+export interface AttackChainTimeline {
+  caseId: string;
+  tenantId: string;
+  window: string;
+  seedAlertId: string;
+  chainSignature: string | null;
+  /** 0..1 — substrate-level confidence in the chain reconstruction. */
+  confidence: number;
+  generatedAt: string;
+  chain: AttackChainLink[];
+  entityGraph: {
+    nodes: AttackChainEntityNode[];
+    edges: AttackChainEntityEdge[];
+  };
+}
+
+/** Raw shape returned by `/api/v1/cases/{id}/attack-chain`. */
+interface BackendAttackChainResponse {
+  case_id: string;
+  tenant_id: string;
+  window: string;
+  seed_alert_id: string | null;
+  chain_signature: string | null;
+  confidence: number;
+  generated_at: string;
+  chain: Array<{
+    alert_id: string;
+    title: string;
+    severity: string;
+    event_time: string;
+    score: number;
+    distance: number;
+    dt_seconds: number;
+    shared_entities: Array<{ kind: string; value: string }>;
+    mitre_techniques: string[];
+    connector_type: string | null;
+    source_event_ids: string[];
+  }>;
+  entity_graph: {
+    nodes: AttackChainEntityNode[];
+    edges: AttackChainEntityEdge[];
+  };
+  // Empty-chain responses include a `reason` breadcrumb the UI can show.
+  reason?: string;
 }
 
 export const graphApi = {

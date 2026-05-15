@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Attack-chain timeline UI (T3.3, v8.0)
+
+`/cases/{id}` now ships an **Attack Chain** tab that visualises the ranked
+timeline returned by `/v1/cases/{id}/attack-chain` (shipped earlier under
+`8df637b9`). The new `AttackChainPanel` in
+`apps/web/src/components/cases/CaseWorkspace.tsx`:
+
+- Window selector with the same vocabulary as the backend `WindowLiteral`
+  (`1h`, `6h`, `24h`, `72h`, `7d`, `30d`) — selection is deep-linkable via
+  `?window=…` and survives reload.
+- One card per `ChainLink` with the alert title, severity chip (driven by
+  the canonical 5-tier ladder `info | low | medium | high | critical`),
+  confidence percent, MITRE technique IDs, and the deterministic narrative
+  reason emitted by `services/api/app/services/attack_chain.py`.
+- Entity-graph summary panel — node count grouped by `kind` (`user`,
+  `asset`, `process`, `ip`, `domain`, `alert`), top edges, and a per-node
+  severity chip when present in `_entity_graph_payload`.
+- SWR-keyed on `(case_id, window)` with skeleton, error, and empty states
+  that match the rest of the case workspace.
+- New `casesApi.getAttackChain` method + `AttackChainTimeline`,
+  `AttackChainWindow`, `AttackChainLink`, `AttackChainEntityNode`,
+  `AttackChainEntityEdge`, `BackendAttackChainResponse` types in
+  `apps/web/src/lib/api.ts`. The wire format matches the backend `to_dict`
+  shape exactly (node `kind` rather than `type`; optional `severity` and
+  `event_time` from `_entity_graph_payload`).
+- Coverage in `apps/web/src/components/cases/CaseWorkspace.test.tsx`:
+  empty-state, error-state, and three data-rendering assertions
+  (alert titles, confidence percent, MITRE techniques). The SWR mock is now
+  key-aware so attack-chain and attack-path fetches stay isolated, and
+  `useSearchParams` is stateful so window-selection deep-links round-trip
+  cleanly under test.
+
+Closes the UI side of T3.3 in `AISOC_V8_PROGRESS.md`. Pre-existing
+non-blocking lint warnings in `CaseWorkspace.tsx` are unchanged by this
+diff.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
