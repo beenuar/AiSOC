@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### LangGraph parallel topology — HTTP surface (T2.2, v8.0)
+
+`RouterOrchestrator` (the parallel fan-out / Join LangGraph topology landed
+earlier in `services/agents/app/orchestrator/router.py`) is now reachable
+over HTTP. New endpoints in `services/agents/app/api/triage.py`:
+
+- `POST /api/v1/cases/{case_id}/triage` — launches a one-shot triage run on
+  the parallel topology and returns `{run_id, status, topology}`. The
+  request body (`TriageRequest`) accepts an optional `tenant_id`,
+  `incident_id`, `signals[]`, and a per-run `topology` override
+  (`"parallel" | "sequential"`). When `topology` is omitted, the resolved
+  topology follows the `AISOC_AGENT_PARALLEL_TOPOLOGY` env flag (parallel
+  when truthy, sequential otherwise) so existing deployments stay on the
+  safe default. String `tenant_id` / `incident_id` values are coerced to
+  deterministic UUIDs via `uuid.uuid5` against a project-scoped namespace,
+  so the same string always maps to the same `InvestigationState`.
+- `GET /api/v1/triage/{run_id}` — polls the run, returning
+  `{run_id, status, topology, signals, auto_closed, wall_clock_ms,
+  finding_ids, mitre_techniques, error?}`. Errors during the background
+  task are captured on the run record so the polling endpoint never 500s
+  on agent failure.
+
+Run state is kept in an in-process `_triage_runs` dict for now (same
+pattern as the existing `/investigate` endpoint's `_runs`). The legacy
+linear `/investigate` path on `InvestigatorOrchestrator` is **unchanged**
+— this is a new, additive surface that can be flag-flipped per request
+without touching the streaming investigation flow demos depend on.
+
+8 new integration tests (`services/agents/tests/test_triage_endpoint.py`)
+cover env-flag flip, body override, end-to-end fan-out through the
+parallel topology, the auto-close short-circuit when classifier signals
+are empty, 404 on unknown `run_id`, and minimal-body coercion. They shim
+the sub-agent runners + `_emit_event` via `monkeypatch` (same pattern as
+`test_orchestrator_parallel.py`) so the tests are hermetic — no Kafka,
+no LLM, no graph. Existing `test_orchestrator_parallel.py` (17 tests) is
+unchanged and still green.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
