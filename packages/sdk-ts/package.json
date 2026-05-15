@@ -9,9 +9,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "files": ["dist", "src"],
@@ -19,8 +19,7 @@
     "codegen": "openapi-typescript ../../docs/openapi.yaml -o src/openapi.d.ts",
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "lint": "eslint src --ext .ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "openapi-fetch": "^0.17.0"

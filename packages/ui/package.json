@@ -7,16 +7,15 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./styles": "./dist/styles.css"
   },
   "scripts": {
     "build": "tsc && cp src/styles.css dist/styles.css 2>/dev/null || true",
     "dev": "tsc --watch",
-    "lint": "eslint src/**/*.tsx",
     "clean": "rm -rf dist"
   },
   "peerDependencies": {
