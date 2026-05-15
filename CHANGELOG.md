@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Real ES|QL runner for saved-hunt scheduler (T3.4, v8.0)
+
+Replaces the `_execute_hunt` stub in `services/api/app/workers/hunt_scheduler.py`
+with a real Elasticsearch query path. The shared logic now lives in
+`services/api/app/services/esql_runner.py` — a small async module that exposes
+`run_esql_query()`, `resolve_es_credentials()`, and the `ESQLResult` /
+`ESQLExecutionError` / `ESQLNotConfigured` types. Both the request-scoped
+`/nl-query/execute` endpoint and the out-of-band saved-hunt scheduler now
+share one code path for the outbound POST, the SSRF guard (validates the
+target host against the configured `ES_URL`/`ELASTICSEARCH_URL`/`OPENSEARCH_URL`
+and reconstructs the URL from validated components only — no user path/query
+ever reaches the network), and the air-gap policy
+(`enforce_airgap_for_url` is invoked unconditionally so an operator who
+flipped `AISOC_AIRGAPPED=true` can't accidentally leak a saved hunt to a
+public host). The scheduler reads the stored `translated_query["esql"]`
+(no re-translation in the background — that's the endpoint's job),
+appends a `LIMIT` clause when the translator didn't supply one
+(capped by `HUNT_SCHEDULER_MAX_ROWS`, default 500), and returns
+`len(rows)` so `run_once` can decide whether to open a case via the
+existing `_open_case_for_hits` hook. Missing translated ES|QL or missing
+ES credentials are logged at `info` and skip the run with zero hits —
+self-hosted dev installs without ES wired up stay quiet instead of
+spamming `exception`. Real transport / air-gap / SSRF errors propagate
+back to `run_once`, which records them via `logger.exception` and skips
+the `last_run_at` bump so the hunt retries on the next sweep instead of
+being silently marked "ran". `nl_query.py` was refactored at the same
+time to call the shared runner (deleting its private `_validate_es_url`
+copy), so the two execution surfaces can't drift on the security guards.
+Test coverage: 22 unit tests in `tests/test_esql_runner.py` (URL
+validation, credential resolution, air-gap propagation, LIMIT
+enforcement, error wrapping) plus 9 dedicated `_execute_hunt` tests in
+`tests/test_hunt_scheduler_execute.py` (all four skip paths, happy path
+with row count, three error-propagation paths). The existing
+saved-hunts endpoint + tenant isolation suites (47 tests) continue to
+pass unmodified.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
