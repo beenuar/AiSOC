@@ -7,15 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### LLM input contract — CI tests (T2.3, v8.0)
+### LLM input contract — raw-HTTP wrapper + remaining call sites (T2.3, v8.0)
+
+Closes the last LLM-input-contract gap in `services/agents`. Every LangChain
+chat-model path already routed through `safe_ainvoke` / `safe_astream` (or a
+`make_safe_chat_model` wrap), but two call sites talked to OpenAI directly
+over `httpx` and so could ship un-validated prompts on the wire: the Copilot
+endpoint (`app/api/copilot.py::_get_openai_reply`) and the NL→query
+translator's optional LLM enhancement (`app/nl_query/translator.py::enhance_with_llm`).
+Both now go through a new `safe_chat_completions_request()` helper in
+`app/llm/contract.py` that calls `LLMInputContract.validate()` **before** the
+network request — a contract violation never leaves the process. The helper
+exposes the same surface as the existing OpenAI-compatible `POST`
+(`api_key`, `model`, `messages`, plus pass-through `response_format`,
+`temperature`, `max_tokens`, custom `url`, extra headers), surfaces
+`httpx.HTTPStatusError` so callers can fall back to deterministic behaviour,
+and refuses to run with an empty API key.
+
+Embedding calls in `app/tools/mitre_full.py` (`openai.AsyncOpenAI.embeddings`)
+are intentionally unchanged: they embed curated MITRE technique descriptions,
+not user input, so the contract does not apply.
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
-`LLMInputContract.validate` / `validate_messages`: raw OCSF-shaped JSON in a
-user message fails closed when `AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1`
-(default), and prose plus `summarize_structure_for_llm` output passes. Tests
-use `{"role", "content"}` dict messages so they run without importing
-`langchain_core` (the contract already coerces LangChain `BaseMessage` and
-dicts the same way).
+`LLMInputContract.validate` / `validate_messages` (raw OCSF-shaped JSON in a
+user message fails closed when `AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1`,
+default; prose plus `summarize_structure_for_llm` output passes; tests use
+`{"role", "content"}` dict messages so they run without importing
+`langchain_core` — the contract coerces LangChain `BaseMessage` and dicts the
+same way). New `services/agents/tests/test_llm_contract_http.py` covers the
+HTTP wrapper end-to-end: happy path with body/header forwarding, contract
+rejection of OCSF-shaped payloads with **no** network call, empty-API-key
+guard, `HTTPStatusError` propagation on non-2xx, extra-body (`response_format`,
+`temperature`) forwarding, extra-header merging, and custom-URL override.
 
 ### Real-time graph-update WebSocket (T1.4, v8.0)
 

@@ -23,6 +23,7 @@ The companion page [Credentials & secrets](./credentials) covers connector-crede
 | **Audit log** | Immutable append-only log with actor, IP, user-agent, request-ID | All write actions |
 | **Plugin verification** | Ed25519 signature verification on plugin manifests | Marketplace + private plugins |
 | **LLM prompt safety** | Enrichment / alert text sanitised before reaching the model; outputs revalidated against schema | All investigator-agent LLM calls |
+| **LLM input contract** | `safe_ainvoke` / `safe_astream` / `safe_chat_completions_request` enforce minimum-leak policy (no raw OCSF, no raw log lines, no obvious PII shapes) before any model call — including raw-HTTP call sites | Every LLM call in `services/agents` |
 | **Transport** | TLS terminated at the ingress; service-mesh mTLS optional | All traffic |
 | **Browser origin policy** | `AISOC_CORS_ORIGINS` allow-list with production wildcard-plus-credentials guard | Every Python, Go, and TypeScript service |
 
@@ -212,6 +213,33 @@ This is **defence in depth**, not a guarantee — there is no way to make prompt
 
 - Run the agents with the strictest BYOK [air-gap policy](./credentials) that matches your data-residency requirements.
 - Restrict which playbook actions an LLM-summarised case can trigger automatically — destructive actions should still require a human approval step.
+
+### LLM input contract (minimum-leak policy)
+
+Layered on top of the prompt sanitiser, the **LLM input contract** in [`services/agents/app/llm/contract.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/llm/contract.py) enforces a different invariant: **what the prompt is allowed to contain in the first place**. Sanitisation cleans data; the contract refuses to let certain kinds of data reach the model at all.
+
+The contract classifies every outgoing message as one of:
+
+| Classification | Allowed? | Why |
+|---|---|---|
+| Prose / analyst text | yes | The intended payload — natural-language questions, structured summaries, schema-validated context. |
+| Raw OCSF JSON | **no** | OCSF events embed deep nested PII (user names, hostnames, raw URLs, credentials in command lines). The agents are expected to call `summarize_structure_for_llm()` instead. |
+| Raw vendor log lines | **no** | Syslog / EDR / CDN log lines smuggle attacker-controlled strings *and* internal telemetry that has no business reaching a third-party LLM. |
+| Likely-PII payloads | **no** | Heuristic match on email/phone/IP-heavy bodies and obvious secret shapes (AWS keys, JWTs, `password=`, …). |
+
+Enforcement is global, default-on (`AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1`), and applied to **every** LLM call site in `services/agents` via three entry points — there is no other way to talk to a model from this service:
+
+1. **`safe_ainvoke(llm, messages, **kwargs)`** and **`safe_astream(llm, messages, **kwargs)`** — wrap any LangChain-compatible chat model. The contract validates the materialised message list before `ainvoke` / `astream` is called.
+2. **`make_safe_chat_model(llm)`** — adapts an existing model reference so its `.ainvoke` / `.astream` enforce the contract without rewriting call sites (used for LangGraph nodes that close over `llm`).
+3. **`safe_chat_completions_request(api_key=..., model=..., messages=...)`** — the same guarantee for the two raw-HTTP call sites (`app/api/copilot.py::_get_openai_reply` and `app/nl_query/translator.py::enhance_with_llm`) that talk to an OpenAI-compatible `chat/completions` endpoint directly. The contract runs **before** the `httpx.post`, so a violation never leaves the process. The helper surfaces `httpx.HTTPStatusError` so callers can fall back to deterministic behaviour, and refuses to run with an empty API key.
+
+A violation raises `LLMContractViolation` and is logged as `event="llm.contract.violation"`. In `enforced=False` mode (set explicitly per-test or via env var, never by default in production) the violation is logged but the call proceeds — useful for grandfathering a legacy call site while you migrate it, never appropriate for a real deployment.
+
+Two intentional non-targets:
+- The MITRE embedding tool (`app/tools/mitre_full.py`) calls `openai.AsyncOpenAI.embeddings` on curated MITRE technique descriptions, not user input, so the contract does not apply.
+- The contract is about **structural classes of leak** (raw events, raw logs, obvious PII shapes). Semantic privacy review of free-form prose is out of scope — that's what `summarize_structure_for_llm` and BYOK air-gap policies are for.
+
+Test coverage: [`services/agents/tests/test_llm_contract.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_llm_contract.py) for the classifier and `safe_ainvoke` / `safe_astream` paths, [`services/agents/tests/test_llm_contract_http.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_llm_contract_http.py) for the raw-HTTP wrapper (happy path, OCSF rejection with **no** network call, empty-API-key guard, `HTTPStatusError` propagation, extra-body / extra-header forwarding, custom URL).
 
 ### OCI install hardening (H-3)
 
