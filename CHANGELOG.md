@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### LLM input contract — static regression gate (T2.3, v8.0)
+
+Closes T2.3 by adding the missing **bypass-prevention** layer on top of the
+existing fail-closed validator (`services/agents/app/llm/contract.py`). Two
+new test files in `services/agents/tests/`:
+
+- `test_llm_contract_extra.py` (10 cases) — fills the coverage gaps in the
+  shipped contract: `safe_astream` validates messages exactly once and
+  refuses to yield any chunk on violation; `make_safe_chat_model` proxies
+  non-LLM attributes through but routes `ainvoke` / `astream` through
+  validation; `classify_message` rejects `api_key = '...'` assignments and
+  PEM private-key headers; `set_contract_enforcement(False)` lets raw OCSF
+  through in soft mode and re-arms cleanly when flipped back to `True`.
+- `test_llm_contract_no_bypass.py` (3 cases) — **AST-based static gate**
+  that walks every `*.py` file under `services/agents/app/` and fails CI on
+  any direct `.ainvoke(...)` / `.astream(...)` call whose receiver is not on
+  an explicit allowlist (`_graph`, `investigation_graph`, `graph` — all
+  LangGraph control-flow handles, not LLMs) or whose file is not the
+  contract module itself. Ships with self-tests proving (a) a synthetic
+  `llm.ainvoke(...)` bypass trips the detector and (b) allowlisted
+  receivers do not. Adding a new agent that calls a chat model directly
+  now fails the build until it routes through `safe_ainvoke` /
+  `safe_astream` / `make_safe_chat_model`.
+
+The survey behind this gate confirmed every existing direct chat-model call
+under `services/agents/app/` already goes through the safe wrapper — the
+remaining `.ainvoke` / `.astream` call sites are LangGraph control-flow on
+compiled graphs, which is why those receivers are explicitly allowlisted
+rather than silently ignored.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
