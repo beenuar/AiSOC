@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Router orchestrator gains streaming + ledger + report (T2.2, v8.0)
+
+`RouterOrchestrator` (`services/agents/app/orchestrator/router.py`) now matches
+the surface of the legacy `InvestigatorOrchestrator` on three axes — streamed
+progress events, ledger persistence, and a deterministic Markdown / HTML
+report on the `done` event — so the `/investigate` endpoint can be swapped
+over to the router without losing operator-visible behaviour. The existing
+`run()` entry point is unchanged; the new `stream(state, *, topology=...)`
+async generator yields `step` events at each stage boundary (auto-triage,
+signal classification, sub-agent dispatch, per-sub-agent completion in
+`as_completed` order, join, responder summary) and a single terminal `done`
+event carrying the full state plus the report. Step `seq` numbers are
+monotonic across both parallel and sequential topologies. Auto-close paths
+short-circuit after auto-triage with a single step and a `done` event so the
+UI doesn't paint a half-empty timeline.
+
+Ledger writes are best-effort: every `step` becomes a `record_event` row,
+the final state becomes a `record_artifact` (Markdown + HTML), and
+`complete_run` closes the row with verdict / confidence / latency / cost. A
+ledger outage (missing `asyncpg`, dropped connection, write failure)
+downgrades to a `warn`-level structured log and the stream still completes
+end-to-end — the persistence layer is observability, not a hard dependency.
+
+Report synthesis lives in the new `services/agents/app/orchestrator/report.py`
+module. `render_router_report(state)` returns `(report_md, report_html)`
+without any extra LLM call: it walks `InvestigationState` (verdict,
+confidence, sub-agent findings, attack chain, responder recovery steps) and
+renders deterministic templates. HTML conversion falls back to a `<pre>`
+block if the optional `markdown` package isn't installed, so the worker
+image stays slim.
+
+Coverage: `services/agents/tests/test_orchestrator_router_stream.py` (8
+tests) asserts the event contract — step ordering, monotonic `seq`,
+parallel vs sequential paths, auto-close short-circuit, `done` payload
+shape, ledger call ordering, and graceful degradation when ledger writes
+fail. `services/agents/tests/test_router_report.py` covers the
+deterministic renderer. Together with the existing parallel-topology
+suite all 34 router-adjacent tests pass clean.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
