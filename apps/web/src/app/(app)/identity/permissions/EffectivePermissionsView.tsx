@@ -8,6 +8,15 @@
  * and falls back to a deterministic demo dataset so the screenshot tour and
  * the smoke test always render.
  *
+ * Deep-linking
+ * ------------
+ *
+ * The view reads `?provider=…&principal_id=…&deny_only=1` from the URL on
+ * mount and pushes back to the URL (via `history.replaceState`) when the
+ * analyst changes them. That makes every state shareable — the deny-only
+ * view of a specific principal can be pasted into a Slack message and a
+ * teammate sees exactly the same Cytoscape graph.
+ *
  * Performance budget
  * ------------------
  *
@@ -19,11 +28,12 @@
  *   2. For the single-principal payload we render at most
  *      `MAX_RENDERED_DECISIONS` decisions to keep the Cytoscape DOM under
  *      control; the rest are summarised in a "+N more" pill.
- *   3. The "show only changes since last week" filter operates on the
- *      already-fetched payload — no extra round-trip.
+ *   3. The "show only deny paths" filter operates on the already-fetched
+ *      payload — no extra round-trip.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
@@ -79,6 +89,18 @@ type ResolverResult = {
 
 export type ResolverResultPayload = ResolverResult;
 type SupportedProvider = 'aws' | 'azure' | 'gcp' | 'okta' | 'gws';
+
+const SUPPORTED_PROVIDERS: SupportedProvider[] = [
+  'aws',
+  'azure',
+  'gcp',
+  'okta',
+  'gws',
+];
+
+function isSupportedProvider(p: string | null): p is SupportedProvider {
+  return p !== null && (SUPPORTED_PROVIDERS as string[]).includes(p);
+}
 
 const PROVIDER_LABEL: Record<SupportedProvider, string> = {
   aws: 'AWS',
@@ -165,11 +187,29 @@ const DEMO_PROVIDERS: ProviderInfo[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Apply the "show only deny paths" filter to a payload.
+ *
+ * A deny path is any decision that either has `deny_actions` populated *or*
+ * carries at least one `deny` step in its policy chain. The previous version
+ * of this filter checked `result.last_resolved >= recentSinceIso` which is
+ * always true (the API returns "now"), so the filter never actually filtered.
+ */
+export function filterDenyPaths(decisions: Decision[]): Decision[] {
+  return decisions.filter(
+    (d) =>
+      d.deny_actions.length > 0 ||
+      d.policy_chain.some((s) => s.effect === 'deny'),
+  );
+}
+
 export function buildElements(
   result: ResolverResult,
-  showOnlyRecent: boolean,
-  recentSinceIso: string,
+  denyOnly: boolean,
+  // Kept for backwards compat with the smoke test signature; ignored.
+  _recentSinceIso: string = '',
 ): ElementDefinition[] {
+  void _recentSinceIso;
   const elements: ElementDefinition[] = [];
   const seen = new Set<string>();
 
@@ -205,12 +245,8 @@ export function buildElements(
     provider: result.provider,
   });
 
-  const decisions = result.decisions
-    .filter((d) =>
-      showOnlyRecent ? d.policy_chain.some((s) => s.effect === 'deny') ||
-        result.last_resolved >= recentSinceIso : true,
-    )
-    .slice(0, MAX_RENDERED_DECISIONS);
+  const filtered = denyOnly ? filterDenyPaths(result.decisions) : result.decisions;
+  const decisions = filtered.slice(0, MAX_RENDERED_DECISIONS);
 
   for (const decision of decisions) {
     const resourceId = `res:${decision.resource_id}`;
@@ -241,16 +277,59 @@ export function buildElements(
   return elements;
 }
 
+function countDenyActions(decisions: Decision[]): number {
+  return decisions.reduce((sum, d) => sum + d.deny_actions.length, 0);
+}
+
+function isScaffold501(error: unknown): boolean {
+  // safeFetcher throws `HTTP 501 …` strings on coverage=scaffold providers.
+  return error instanceof Error && error.message.startsWith('HTTP 501');
+}
+
+function syncUrl(provider: SupportedProvider, principalId: string, denyOnly: boolean) {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  params.set('provider', provider);
+  if (principalId) {
+    params.set('principal_id', principalId);
+  } else {
+    params.delete('principal_id');
+  }
+  if (denyOnly) {
+    params.set('deny_only', '1');
+  } else {
+    params.delete('deny_only');
+  }
+  const next = `${window.location.pathname}?${params.toString()}`;
+  window.history.replaceState(null, '', next);
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function EffectivePermissionsView() {
-  const [provider, setProvider] = useState<SupportedProvider>('aws');
-  const [principalId, setPrincipalId] = useState<string>(
-    DEMO_RESULT.principal_id,
+  const searchParams = useSearchParams();
+  const initialProvider = useMemo<SupportedProvider>(() => {
+    const p = searchParams?.get('provider') ?? null;
+    return isSupportedProvider(p) ? p : 'aws';
+  }, [searchParams]);
+  const initialPrincipal = useMemo(
+    () => searchParams?.get('principal_id') ?? DEMO_RESULT.principal_id,
+    [searchParams],
   );
-  const [showOnlyRecent, setShowOnlyRecent] = useState(false);
+  const initialDenyOnly = useMemo(
+    () => searchParams?.get('deny_only') === '1',
+    [searchParams],
+  );
+
+  const [provider, setProvider] = useState<SupportedProvider>(initialProvider);
+  const [principalId, setPrincipalId] = useState<string>(initialPrincipal);
+  const [denyOnly, setDenyOnly] = useState<boolean>(initialDenyOnly);
+
+  useEffect(() => {
+    syncUrl(provider, principalId, denyOnly);
+  }, [provider, principalId, denyOnly]);
 
   const { data: providerInfo } = useSWR<{ providers: ProviderInfo[] }>(
     '/api/v1/identity/effective-permissions/providers',
@@ -258,33 +337,52 @@ export function EffectivePermissionsView() {
     { fallbackData: { providers: DEMO_PROVIDERS } },
   );
   const providers = providerInfo?.providers ?? DEMO_PROVIDERS;
+  const selectedProviderInfo = providers.find((p) => p.name === provider);
+  const isScaffoldProvider = selectedProviderInfo?.coverage === 'scaffold';
 
-  const apiUrl = principalId
-    ? `/api/v1/identity/${encodeURIComponent(principalId)}/effective-permissions?provider=${provider}`
-    : null;
+  const apiUrl =
+    principalId && !isScaffoldProvider
+      ? `/api/v1/identity/${encodeURIComponent(principalId)}/effective-permissions?provider=${provider}`
+      : null;
   const { data, error, isLoading } = useSWR<ResolverResult>(
     apiUrl,
     safeFetcher,
-    { fallbackData: provider === 'aws' ? DEMO_RESULT : undefined },
+    {
+      fallbackData: provider === 'aws' && !isScaffoldProvider ? DEMO_RESULT : undefined,
+      shouldRetryOnError: false,
+    },
   );
 
   const result = data;
-  const recentSinceIso = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString();
-  }, []);
+  const denyCount = useMemo(
+    () => (result ? countDenyActions(result.decisions) : 0),
+    [result],
+  );
+  const visibleDecisionCount = useMemo(() => {
+    if (!result) return 0;
+    return denyOnly ? filterDenyPaths(result.decisions).length : result.decisions.length;
+  }, [result, denyOnly]);
 
   const elements = useMemo(() => {
     if (!result) return [] as ElementDefinition[];
-    return buildElements(result, showOnlyRecent, recentSinceIso);
-  }, [result, showOnlyRecent, recentSinceIso]);
+    return buildElements(result, denyOnly);
+  }, [result, denyOnly]);
+
+  const showGraph = !!result && visibleDecisionCount > 0 && !isScaffoldProvider;
+  const showEmptyState =
+    !!result && visibleDecisionCount === 0 && !isLoading && !isScaffoldProvider;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !showGraph) {
+      if (cyRef.current) {
+        cyRef.current.destroy();
+        cyRef.current = null;
+      }
+      return;
+    }
     if (cyRef.current) {
       cyRef.current.destroy();
     }
@@ -361,7 +459,7 @@ export function EffectivePermissionsView() {
       cyRef.current?.destroy();
       cyRef.current = null;
     };
-  }, [elements]);
+  }, [elements, showGraph]);
 
   return (
     <div className="flex h-screen flex-col bg-gray-950 text-gray-200">
@@ -374,17 +472,11 @@ export function EffectivePermissionsView() {
           <select
             id="provider"
             value={provider}
-            onChange={(e) =>
-              setProvider(e.target.value as SupportedProvider)
-            }
+            onChange={(e) => setProvider(e.target.value as SupportedProvider)}
             className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm"
           >
             {providers.map((p) => (
-              <option
-                key={p.name}
-                value={p.name}
-                disabled={p.coverage === 'scaffold'}
-              >
+              <option key={p.name} value={p.name}>
                 {PROVIDER_LABEL[p.name as SupportedProvider] ?? p.name}
                 {p.coverage === 'scaffold' ? ' (scaffold)' : ''}
               </option>
@@ -406,18 +498,73 @@ export function EffectivePermissionsView() {
         <label className="ml-auto flex items-center gap-2 text-sm text-gray-400">
           <input
             type="checkbox"
-            checked={showOnlyRecent}
-            onChange={(e) => setShowOnlyRecent(e.target.checked)}
+            checked={denyOnly}
+            onChange={(e) => setDenyOnly(e.target.checked)}
           />
-          Show only changes since last week
+          Show only deny paths
         </label>
       </header>
+
+      {/* Deny banner: prominent surface for explicit denies in the policy chain. */}
+      {denyCount > 0 && (
+        <div
+          role="alert"
+          className="border-b border-red-800 bg-red-950/60 px-6 py-2 text-sm text-red-200"
+        >
+          <span className="font-semibold">{denyCount}</span> action
+          {denyCount === 1 ? ' is' : 's are'} explicitly denied for this principal.
+          {!denyOnly && (
+            <button
+              type="button"
+              onClick={() => setDenyOnly(true)}
+              className="ml-3 underline underline-offset-2 hover:text-red-100"
+            >
+              Show only deny paths
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid flex-1 grid-cols-[1fr_320px]">
-        <div ref={containerRef} className="h-full w-full bg-gray-950" />
+        {/* Graph pane: Cytoscape canvas, empty state, or scaffold placeholder. */}
+        <div className="relative h-full w-full bg-gray-950">
+          {isScaffoldProvider ? (
+            <div className="flex h-full flex-col items-center justify-center px-8 text-center text-gray-400">
+              <p className="text-base font-semibold text-gray-200">
+                {PROVIDER_LABEL[provider]} resolver is scaffolded
+              </p>
+              <p className="mt-2 max-w-md text-sm">
+                The backend resolver for {PROVIDER_LABEL[provider]} is registered but
+                not yet wired up to the live snapshot store. Switch to AWS to see a
+                fully resolved Cytoscape graph, or watch{' '}
+                <span className="font-mono text-xs">AISOC_V8_PROGRESS.md</span>{' '}
+                for the next provider rollout.
+              </p>
+            </div>
+          ) : showEmptyState ? (
+            <div className="flex h-full flex-col items-center justify-center px-8 text-center text-gray-400">
+              <p className="text-base font-semibold text-gray-200">
+                No {denyOnly ? 'deny paths' : 'decisions'} for this principal
+              </p>
+              <p className="mt-2 max-w-md text-sm">
+                {denyOnly
+                  ? 'Untick "Show only deny paths" to see every effective permission, or pick a different principal.'
+                  : 'The resolver returned zero decisions. Double-check the principal id and the provider snapshot.'}
+              </p>
+            </div>
+          ) : (
+            <div ref={containerRef} className="h-full w-full" />
+          )}
+        </div>
+
         <aside className="border-l border-gray-800 bg-gray-900 p-4 text-sm">
           <h2 className="mb-2 font-semibold">Resolver envelope</h2>
           {isLoading ? (
             <p className="text-gray-500">Resolving…</p>
+          ) : isScaffold501(error) ? (
+            <p className="text-amber-300">
+              {PROVIDER_LABEL[provider]} resolver is scaffolded — no live data yet.
+            </p>
           ) : error ? (
             <p className="text-red-400">
               Failed to resolve — falling back to demo data.
@@ -449,17 +596,28 @@ export function EffectivePermissionsView() {
               </div>
               <div>
                 <dt className="inline text-gray-500">Decisions:</dt>{' '}
-                <dd className="inline">{result.decisions.length}</dd>
+                <dd className="inline">
+                  {visibleDecisionCount}
+                  {denyOnly && visibleDecisionCount !== result.decisions.length && (
+                    <span className="text-gray-500">
+                      {' '}
+                      / {result.decisions.length} total
+                    </span>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="inline text-gray-500">Total actions:</dt>{' '}
                 <dd className="inline">
-                  {result.decisions.reduce(
-                    (n, d) => n + d.actions.length,
-                    0,
-                  )}
+                  {result.decisions.reduce((n, d) => n + d.actions.length, 0)}
                 </dd>
               </div>
+              {denyCount > 0 && (
+                <div>
+                  <dt className="inline text-gray-500">Deny actions:</dt>{' '}
+                  <dd className="inline text-red-400">{denyCount}</dd>
+                </div>
+              )}
               {result.notes.length > 0 && (
                 <div className="mt-2 rounded border border-amber-700 bg-amber-950/40 p-2 text-xs text-amber-300">
                   {result.notes.map((note) => (

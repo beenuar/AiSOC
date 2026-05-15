@@ -1,25 +1,25 @@
 /**
- * Effective-permissions UI smoke test (T3.2).
+ * Effective-permissions UI smoke + behaviour tests (T3.2).
  *
- * Two assertions, both intentionally hermetic:
+ * Two layers of assertion, both intentionally hermetic:
  *
- * 1. The synchronous payload-to-Cytoscape-elements transform handles a
- *    1k-principal-tenant-shaped payload (1000 decisions, ~3000 actions,
- *    ~2000 chain steps) within a generous wall-clock budget. The
+ * 1. Performance smoke — the synchronous payload→Cytoscape-elements
+ *    transform handles a 1k-decision payload within a generous wall-clock
+ *    budget, with and without the "deny only" filter applied. The
  *    Cytoscape DOM is capped at `MAX_RENDERED_DECISIONS` so the result is
  *    bounded regardless of input size.
- * 2. Switching the "show only changes since last week" filter is O(n)
- *    over the input — re-running the transform with the toggle on must
- *    complete in roughly the same budget.
+ * 2. Filter behaviour — `filterDenyPaths` actually filters by deny
+ *    semantics rather than the old broken `last_resolved` clock check.
  *
- * The smoke test uses a deterministic synthesised payload — no external
- * data, no real Cytoscape canvas — so it stays fast and CI-friendly.
+ * The tests use a deterministic synthesised payload — no external data,
+ * no real Cytoscape canvas — so they stay fast and CI-friendly.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import {
   buildElements,
+  filterDenyPaths,
   type ResolverResultPayload,
 } from './EffectivePermissionsView';
 
@@ -61,25 +61,63 @@ function syntheticPayload(decisions: number): ResolverResultPayload {
 describe('EffectivePermissionsView (smoke)', () => {
   it('builds elements for 1000 decisions in < 3s', () => {
     const payload = syntheticPayload(1000);
-    const since = new Date('2026-05-06T12:00:00Z').toISOString();
 
     const start = performance.now();
-    const elements = buildElements(payload, false, since);
+    const elements = buildElements(payload, false);
     const elapsed = performance.now() - start;
 
     expect(elapsed).toBeLessThan(3000);
     expect(elements.length).toBeGreaterThan(0);
   });
 
-  it('applies the "changes since last week" filter without slowing down', () => {
+  it('applies the "deny only" filter without slowing down', () => {
     const payload = syntheticPayload(1000);
-    const since = new Date('2026-05-06T12:00:00Z').toISOString();
 
     const start = performance.now();
-    const elements = buildElements(payload, true, since);
+    const elements = buildElements(payload, true);
     const elapsed = performance.now() - start;
 
     expect(elapsed).toBeLessThan(3000);
     expect(elements.length).toBeGreaterThan(0);
+  });
+});
+
+describe('filterDenyPaths', () => {
+  it('keeps only decisions with deny actions or deny chain steps', () => {
+    const payload = syntheticPayload(1000);
+    // synthetic payload puts deny_actions on every 50th decision → 20 of 1000.
+    const denyOnly = filterDenyPaths(payload.decisions);
+    expect(denyOnly.length).toBe(20);
+    for (const decision of denyOnly) {
+      const hasDenyAction = decision.deny_actions.length > 0;
+      const hasDenyStep = decision.policy_chain.some((s) => s.effect === 'deny');
+      expect(hasDenyAction || hasDenyStep).toBe(true);
+    }
+  });
+
+  it('returns an empty list when no decisions deny anything', () => {
+    const payload = syntheticPayload(10);
+    // Strip the every-50th deny seed (10 < 50 so it's already empty, but be explicit).
+    const cleaned = payload.decisions.map((d) => ({ ...d, deny_actions: [] }));
+    expect(filterDenyPaths(cleaned)).toEqual([]);
+  });
+
+  it('keeps decisions whose policy chain carries a deny step', () => {
+    const base = syntheticPayload(1).decisions[0];
+    const denied = {
+      ...base,
+      deny_actions: [],
+      policy_chain: [
+        ...base.policy_chain,
+        {
+          kind: 'scp' as const,
+          id: 'scp-deny',
+          name: 'SCPDenyExfiltration',
+          effect: 'deny' as const,
+          via: null,
+        },
+      ],
+    };
+    expect(filterDenyPaths([denied])).toEqual([denied]);
   });
 });
