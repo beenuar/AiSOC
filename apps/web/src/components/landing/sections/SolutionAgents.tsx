@@ -201,22 +201,28 @@ export function SolutionAgents() {
           </p>
         </div>
 
-        <div
-          ref={containerRef}
-          className="relative mt-12 grid gap-4 sm:gap-6 lg:mt-16 lg:grid-cols-4"
-        >
-          {AGENTS.map((agent, i) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              index={i}
-              innerRef={cardRefs[i]}
-            />
-          ))}
+        <div ref={containerRef} className="relative mt-12 lg:mt-16">
+          {/* Cards live in their own z-10 wrapper; the AnimatedBeam SVG
+              siblings below sit at z-0 so the velvet-surface-raised cards
+              (which the framer-motion `transform` promotes to their own
+              stacking contexts, e.g. via `hover:-translate-y-1`) cleanly
+              occlude the beam. Without the explicit split, both cards and
+              beams resolved at z-auto and DOM order put the beams on top. */}
+          <div className="relative z-10 grid gap-4 sm:gap-6 lg:grid-cols-4">
+            {AGENTS.map((agent, i) => (
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                index={i}
+                innerRef={cardRefs[i]}
+              />
+            ))}
+          </div>
 
           {isHorizontal && !prefersReducedMotion && (
             <>
               <AnimatedBeam
+                className="z-0"
                 containerRef={containerRef}
                 fromRef={detectRef}
                 toRef={triageRef}
@@ -225,6 +231,7 @@ export function SolutionAgents() {
                 curvature={0}
               />
               <AnimatedBeam
+                className="z-0"
                 containerRef={containerRef}
                 fromRef={triageRef}
                 toRef={huntRef}
@@ -237,6 +244,7 @@ export function SolutionAgents() {
                 gradientStop="#34D399"
               />
               <AnimatedBeam
+                className="z-0"
                 containerRef={containerRef}
                 fromRef={huntRef}
                 toRef={respondRef}
