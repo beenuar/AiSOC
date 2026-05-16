@@ -8,7 +8,8 @@
  *
  *   1. Managed (waitlist) — host on app.aisoc.dev.
  *   2. Self-host (recommended) — Render / Docker / Fly.io / Helm /
- *      AWS Terraform. The middle card is highlighted via `ShineBorder`.
+ *      AWS Terraform. The middle card is highlighted via a thicker
+ *      emerald border + the existing emerald shadow-glow.
  *   3. Sovereign / air-gap — `AISOC_AIRGAPPED=true`, Ollama sidecar.
  *
  * Each card exposes the same four-line stat strip (Time to live / LLM /
@@ -20,7 +21,6 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Cloud, Lock, Server } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
-import { ShineBorder } from '@/components/magicui/ShineBorder';
 import { cn } from '@/lib/utils';
 
 interface DeployOption {
@@ -95,10 +95,9 @@ function OptionCard({
       className={cn(
         'relative flex flex-col gap-4 rounded-2xl border border-velvet-border bg-velvet-surface-raised/70 p-6 backdrop-blur-sm',
         option.recommended &&
-          'motion-safe:shadow-glow-emerald-lg',
+          'border-2 border-velvet-emerald/60 motion-safe:shadow-glow-emerald-lg',
       )}
     >
-      {option.recommended && <ShineBorder duration={14} borderWidth={1} />}
       <div className="relative flex items-center justify-between gap-3">
         <span
           aria-hidden="true"

@@ -5,16 +5,15 @@
  * section from §6.13 of the brief.
  *
  * Three-column tier teaser (mobile: stacked). "Team" is the middle
- * card and carries the recommended treatment — `ShineBorder` plus the
- * brighter "Contact us — waitlist" CTA. The page links out to the full
- * pricing page for the bottom of the funnel; this section is the
- * scan-and-skim teaser.
+ * card and carries the recommended treatment — a thicker emerald
+ * border plus the brighter "Contact us — waitlist" CTA. The page
+ * links out to the full pricing page for the bottom of the funnel;
+ * this section is the scan-and-skim teaser.
  */
 
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
-import { ShineBorder } from '@/components/magicui/ShineBorder';
 import { cn } from '@/lib/utils';
 
 interface Tier {
@@ -95,10 +94,9 @@ function TierCard({
       className={cn(
         'relative flex flex-col gap-6 rounded-md border border-velvet-border bg-velvet-surface-raised p-6 backdrop-blur-sm sm:p-8',
         tier.recommended &&
-          'border-velvet-emerald/60 sm:p-8 motion-safe:shadow-glow-emerald-md',
+          'border-2 border-velvet-emerald/60 sm:p-8 motion-safe:shadow-glow-emerald-md',
       )}
     >
-      {tier.recommended && <ShineBorder duration={14} borderWidth={1} />}
       <div className="relative">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-velvet-display font-normal text-lg text-velvet-content-primary">{tier.name}</h3>
