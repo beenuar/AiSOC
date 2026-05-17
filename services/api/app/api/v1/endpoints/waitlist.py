@@ -106,6 +106,28 @@ _STATUS_LOG_TOKENS: dict[str, str] = {
     WAITLIST_STATUS_DECLINED: "declined",
 }
 
+
+def _safe_log_value(value: object) -> str:
+    """Sanitize a value before it lands in a log record.
+
+    The values we route through this helper (``uuid.UUID`` instances from
+    request path params and the authenticated user) are structurally
+    incapable of containing CR/LF or other control characters — UUIDs are
+    hex + hyphens by spec. CodeQL's ``py/log-injection`` taint tracker
+    doesn't model that invariant, however, and still sees the value as
+    user-influenced. Explicitly stripping CR/LF (the exact pattern the
+    rule documentation lists as a sanitizer) is what breaks the taint
+    flow. We also strip the rest of the ASCII control-character range to
+    be defensive against future callers passing in strings that *can*
+    carry such bytes.
+    """
+    text = str(value).replace("\r\n", "").replace("\r", "").replace("\n", "")
+    # Strip any remaining ASCII control characters (0x00-0x1F, 0x7F) so
+    # tab/escape characters can't smuggle log-line manipulation past the
+    # CR/LF strip above.
+    return "".join(ch for ch in text if ch.isprintable())
+
+
 # RFC 5322 is famously permissive; we use a forgiving "addr@domain.tld"
 # regex that catches obvious typos without rejecting legitimate edge
 # cases (plus-addressing, hyphenated subdomains, etc.).
@@ -448,26 +470,23 @@ async def patch_entry(
             detail="Could not update waitlist entry.",
         ) from exc
 
-    # Both ``previous`` (DB enum) and ``payload.status`` (Pydantic-validated
+    # ``previous`` (DB enum) and ``payload.status`` (Pydantic-validated
     # against ``ALLOWED_WAITLIST_STATUSES``) are constrained to a known
-    # allowlist before we ever reach this point. We still look the values
-    # up via ``_STATUS_LOG_TOKENS`` so what lands in the log record is a
-    # hardcoded string literal (never the raw input). Any value outside
-    # the allowlist becomes ``"<invalid>"``. This breaks CodeQL's taint
-    # flow for ``py/log-injection``: the conditional ``x if x in
-    # ALLOWED... else "<invalid>"`` form was not enough because CodeQL
-    # still saw the True branch as carrying the original tainted value
-    # through to the logger. The dict-lookup form returns a value that
-    # is provably independent of the input string.
+    # allowlist; the dict-lookup form returns a value provably independent
+    # of the input. ``entry_id`` and ``user.user_id`` are ``uuid.UUID``
+    # objects that structurally cannot carry control characters, but
+    # CodeQL's taint model still flags them — route them through
+    # ``_safe_log_value`` so the CR/LF strip the rule explicitly
+    # recognises as a sanitizer is applied.
     safe_previous = _STATUS_LOG_TOKENS.get(previous, "<invalid>")
     safe_next = _STATUS_LOG_TOKENS.get(payload.status, "<invalid>")
     logger.info(
         "waitlist_status_transition",
         extra={
-            "entry_id": str(entry_id),
+            "entry_id": _safe_log_value(entry_id),
             "previous": safe_previous,
             "next": safe_next,
-            "actor": str(user.user_id),
+            "actor": _safe_log_value(user.user_id),
         },
     )
     return _to_wire(row)
