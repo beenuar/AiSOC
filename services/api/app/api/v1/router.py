@@ -61,6 +61,7 @@ from app.api.v1.endpoints import (
     rbac,
     remediation,
     reports,
+    rule_tuning,
     saved_hunts,
     saved_views,
     shifts,
