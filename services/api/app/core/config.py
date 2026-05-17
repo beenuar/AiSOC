@@ -10,7 +10,7 @@ import warnings
 from functools import lru_cache
 from typing import Any, Final
 
-from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default placeholders shipped in source. Anything matching these in a
