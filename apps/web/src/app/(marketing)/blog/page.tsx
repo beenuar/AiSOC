@@ -61,7 +61,7 @@ export default function BlogIndexPage() {
               {posts.map((p) => (
                 <li key={p.slug}>
                   <Link
-                    href={`/blog/${p.slug}`}
+                    href={`/blog/${encodeURIComponent(p.slug)}`}
                     className="group flex h-full flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition hover:border-white/20 hover:bg-white/[0.04]"
                   >
                     <div className="flex flex-wrap items-center gap-2">

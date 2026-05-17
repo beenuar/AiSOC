@@ -64,8 +64,28 @@ function estimateReadingMinutes(body: string): number {
   return Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 }
 
+/**
+ * Strict allow-list for slugs: lowercase ASCII letters, digits, and hyphens.
+ * Filenames that fail this check throw at load time so that the slug value can
+ * never reach a URL, JSX attribute, or downstream render context with anything
+ * outside the allow-list. This eliminates the stored-XSS taint flow that
+ * CodeQL flags on `<Link href={`/blog/${slug}`} />` etc.
+ */
+const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u;
+
+function assertSafeSlug(slug: string, filename: string): string {
+  if (!SLUG_PATTERN.test(slug)) {
+    throw new Error(
+      `Unsafe blog slug derived from filename "${filename}": ${JSON.stringify(slug)}. ` +
+        `Slugs must match ${SLUG_PATTERN.source} (lowercase ASCII letters, digits, and hyphens).`,
+    );
+  }
+  return slug;
+}
+
 function parseFile(filename: string): BlogPost {
-  const slug = filename.replace(/\.(mdx|md)$/u, '');
+  const rawSlug = filename.replace(/\.(mdx|md)$/u, '');
+  const slug = assertSafeSlug(rawSlug, filename);
   const raw = fs.readFileSync(path.join(CONTENT_DIR, filename), 'utf8');
   const { data, content } = matter(raw);
   const fm = data as BlogFrontmatter;

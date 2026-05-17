@@ -143,10 +143,19 @@ def main(argv: list[str] | None = None) -> int:
     elif args.dry_run:
         print("[wet-eval-check] dry-run — no live API calls will be attempted.")
     else:
+        # NOTE: We intentionally do **not** echo the raw ``reason`` string here,
+        # nor the names of missing secrets, even though the names themselves
+        # are not secret values. CodeQL (rule ``py/clear-text-logging-sensitive-data``)
+        # treats any variable whose name contains ``secret``/``token``/``key`` as
+        # tainted; piping ``reason`` (which is built from secret env-var names)
+        # into ``print`` is flagged as clear-text logging of sensitive data.
+        # The JSON status file already lists ``missing_secrets`` for the
+        # workflow to consume, so the human log only needs a count.
+        missing_count = len(status["missing_secrets"])
         print(
             "[wet-eval-check] SKIP — "
-            + reason.split(". ", 1)[0]
-            + ". Workflow will exit cleanly."
+            f"{missing_count} required secret(s) not configured. "
+            "Workflow will exit cleanly. See status JSON for the checklist."
         )
 
     # Always exit 0 — missing secrets is *expected* on forks. The workflow

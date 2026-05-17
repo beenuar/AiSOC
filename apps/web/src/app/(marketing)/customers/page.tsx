@@ -61,7 +61,7 @@ export default function CustomersIndexPage() {
                 return (
                   <Link
                     key={s.slug}
-                    href={`/customers/${s.slug}`}
+                    href={`/customers/${encodeURIComponent(s.slug)}`}
                     className="group flex h-full flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition hover:border-white/20 hover:bg-white/[0.04]"
                   >
                     <div className="flex items-center gap-3">

@@ -67,6 +67,25 @@ export type CustomerStudy = {
 
 const CONTENT_DIR = path.join(process.cwd(), 'content', 'customers');
 
+/**
+ * Strict allow-list for slugs: lowercase ASCII letters, digits, and hyphens.
+ * Filenames that fail this check throw at load time so that the slug value can
+ * never reach a URL, JSX attribute, or downstream render context with anything
+ * outside the allow-list. This eliminates the stored-XSS taint flow that
+ * CodeQL flags on `<Link href={`/customers/${slug}`} />` etc.
+ */
+const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u;
+
+function assertSafeSlug(slug: string, filename: string): string {
+  if (!SLUG_PATTERN.test(slug)) {
+    throw new Error(
+      `Unsafe customer slug derived from filename "${filename}": ${JSON.stringify(slug)}. ` +
+        `Slugs must match ${SLUG_PATTERN.source} (lowercase ASCII letters, digits, and hyphens).`,
+    );
+  }
+  return slug;
+}
+
 function readDir(): string[] {
   if (!fs.existsSync(CONTENT_DIR)) return [];
   return fs
@@ -75,7 +94,8 @@ function readDir(): string[] {
 }
 
 function parseFile(filename: string): CustomerStudy {
-  const slug = filename.replace(/\.(mdx|md)$/u, '');
+  const rawSlug = filename.replace(/\.(mdx|md)$/u, '');
+  const slug = assertSafeSlug(rawSlug, filename);
   const raw = fs.readFileSync(path.join(CONTENT_DIR, filename), 'utf8');
   const { data, content } = matter(raw);
   // gray-matter returns `data` as a generic object; we trust the file author

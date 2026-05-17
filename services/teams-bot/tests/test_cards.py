@@ -33,7 +33,12 @@ def test_case_context_card_has_required_envelope():
         {"id": "case-1", "case_number": "CASE-0001", "title": "EDR detection"},
         web_base="https://app.aisoc.test",
     )
-    assert card["$schema"].startswith("http://adaptivecards.io")
+    # Exact-match the schema URL rather than a ``startswith`` substring check.
+    # CodeQL (``py/incomplete-url-substring-sanitization``) flags unanchored
+    # host-prefix checks because they can match malicious lookalike URLs
+    # (e.g. ``http://adaptivecards.io.attacker.example/``). The Adaptive Card
+    # spec only defines one schema URL, so we assert it verbatim.
+    assert card["$schema"] == "http://adaptivecards.io/schemas/adaptive-card.json"
     assert card["type"] == "AdaptiveCard"
     assert card["version"] == "1.5"
     assert isinstance(card["body"], list) and len(card["body"]) >= 2
