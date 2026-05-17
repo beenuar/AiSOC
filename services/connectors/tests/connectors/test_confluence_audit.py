@@ -9,6 +9,7 @@ import httpx
 import pytest
 import respx
 from app.connectors import CONNECTOR_REGISTRY
+from app.connectors import confluence_audit as confluence_audit_module
 from app.connectors.base import Capability
 from app.connectors.confluence_audit import ConfluenceAuditConnector
 
@@ -94,14 +95,12 @@ async def test_fetch_alerts_uses_pagination(fixture):
 
     connector = ConfluenceAuditConnector(_SITE, _EMAIL, _TOKEN)
     # Lower the page size to match the fixture.
-    import app.connectors.confluence_audit as mod
-
-    monkey_orig = mod._PAGE_SIZE  # noqa: SLF001
+    monkey_orig = confluence_audit_module._PAGE_SIZE  # noqa: SLF001
     try:
-        mod._PAGE_SIZE = 4  # type: ignore[assignment]
+        confluence_audit_module._PAGE_SIZE = 4  # type: ignore[assignment]
         events = await connector.fetch_alerts(since_seconds=10**9)
     finally:
-        mod._PAGE_SIZE = monkey_orig  # type: ignore[assignment]
+        confluence_audit_module._PAGE_SIZE = monkey_orig  # type: ignore[assignment]
 
     # First page returned 4 items, second page returned []; pagination
     # terminated cleanly.

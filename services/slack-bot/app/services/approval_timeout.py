@@ -180,5 +180,11 @@ class ApprovalTimeoutScheduler:
             # here — that's the whole point of the shutdown path — so
             # suppress it explicitly alongside any tear-down errors.
             with contextlib.suppress(asyncio.CancelledError, Exception):
-                await task
+                # Assign to ``_`` so CodeQL ``py/ineffectual-statement``
+                # doesn't flag this awaited coroutine as a discarded
+                # expression. We genuinely don't care about the return
+                # value — we only ``await`` so the task either finishes
+                # or raises ``CancelledError`` before we drop the
+                # reference.
+                _ = await task
         self._timers.clear()

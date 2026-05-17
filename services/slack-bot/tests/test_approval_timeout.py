@@ -57,7 +57,7 @@ async def test_timer_fires_safe_default_reject_and_writes_audit():
         case_id="case-1",
         channel="C7",
     )
-    await task
+    _ = await task
 
     assert client.reject_calls == ["action-1"]
     assert client.approve_calls == []
@@ -83,7 +83,7 @@ async def test_timer_safe_default_approve_invokes_approve():
     task = scheduler.schedule(
         "action-2", timeout_seconds=0.01, safe_default="approved", case_id="case-2"
     )
-    await task
+    _ = await task
 
     assert client.approve_calls == ["action-2"]
     assert audit.events[0].metadata == {"safe_default": "approved"}
@@ -106,7 +106,7 @@ async def test_cancel_before_fire_suppresses_fallback():
     # Let the cancellation propagate.
     await asyncio.sleep(0)
     with pytest.raises(asyncio.CancelledError):
-        await task
+        _ = await task
 
     assert client.reject_calls == []
     assert audit.events == []
@@ -128,7 +128,7 @@ async def test_reschedule_replaces_existing_timer():
     )
     assert first.cancelled() or first is not second
 
-    await second
+    _ = await second
     # Only the second timer's firing should produce a fallback call.
     assert client.reject_calls == ["action-4"]
     assert len(audit.events) == 1
@@ -145,7 +145,7 @@ async def test_fallback_call_failure_still_audits_with_error():
     task = scheduler.schedule(
         "action-5", timeout_seconds=0.01, safe_default="rejected", case_id="case-5"
     )
-    await task
+    _ = await task
 
     assert client.reject_calls == []
     assert len(audit.events) == 1

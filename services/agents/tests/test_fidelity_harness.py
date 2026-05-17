@@ -71,8 +71,14 @@ def _load_expected() -> dict[str, object]:
 
 def test_cicids_micro_fixture_present() -> None:
     assert MICRO_FIXTURE.exists(), MICRO_FIXTURE
-    # 100 flows + 1 header row.
-    assert sum(1 for _ in MICRO_FIXTURE.open("r", encoding="utf-8")) == 101
+    # 100 flows + 1 header row. Compute the line count outside the
+    # ``assert`` expression so CodeQL ``py/side-effect-in-assert``
+    # doesn't trip on the file-open + iteration happening inside the
+    # asserted expression (``assert`` is a no-op under ``python -O``
+    # and we never want the I/O to disappear with it).
+    with MICRO_FIXTURE.open("r", encoding="utf-8") as fh:
+        line_count = sum(1 for _ in fh)
+    assert line_count == 101
 
 
 def test_cicids_loader_normalises_features() -> None:

@@ -238,7 +238,9 @@ class ThreatIntelMatch(BaseModel):
 # Allowed top-level keys in ``summary_for_llm`` — kept here (not in
 # ``app/llm/contract.py``) so the model is the source of truth and the
 # contract validator can import this whitelist.
-_LLM_SAFE_KEYS = (
+# Imported by tests (e.g. ``test_context_bundle.py``) and by contract
+# validators; CodeQL flags it as module-local-unused, suppress that.
+_LLM_SAFE_KEYS = (  # lgtm[py/unused-global-variable]
     "incident_id",
     "alert_summary",
     "entity_count",

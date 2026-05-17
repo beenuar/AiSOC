@@ -260,9 +260,11 @@ def _render_wet_eval_real(wet: dict[str, Any]) -> str:
         "# Wet eval — latency / tokens / USD",
         "",
         ":::tip Wet eval (live agent, real LLM)",
-        "Numbers below are from a real `services/agents` LangGraph run with"
-        " live LLM calls. See the [methodology page](../../../apps/docs/docs/benchmark-methodology.md)"
-        " for the substrate-vs-wet distinction.",
+        (
+            "Numbers below are from a real `services/agents` LangGraph run with"
+            " live LLM calls. See the [methodology page](../../../apps/docs/docs/benchmark-methodology.md)"
+            " for the substrate-vs-wet distinction."
+        ),
         ":::",
         "",
     ]

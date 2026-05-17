@@ -32,7 +32,6 @@ from app.api.v1.endpoints import (
     fusion,
     graph,
     graph_ws,
-    health,
     hunts,
     identity_graph,
     identity_timeline,

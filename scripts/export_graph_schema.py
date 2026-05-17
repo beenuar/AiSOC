@@ -223,6 +223,11 @@ def parse_live_neo4j() -> tuple[set[str], set[str]] | None:
         try:
             driver.close()
         except Exception:
+            # Closing the driver is strictly best-effort cleanup —
+            # we're already on the error path. If the underlying
+            # connection is already torn down (or never opened),
+            # surfacing that here would just shadow the real failure
+            # from the calling block above.
             pass
 
     return labels, rels

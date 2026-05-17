@@ -430,12 +430,26 @@ async def patch_entry(
             detail="Could not update waitlist entry.",
         ) from exc
 
+    # Both ``previous`` (DB enum) and ``payload.status`` (Pydantic-validated
+    # against ``ALLOWED_WAITLIST_STATUSES``) are constrained to a known
+    # allowlist before we ever reach this point. Re-resolve them through
+    # the allowlist so the values we put into the log record cannot
+    # possibly carry log-injection-friendly payloads (newlines, ANSI
+    # escapes, log-spoofed key=value pairs) even if upstream validation
+    # is ever weakened. Anything outside the allowlist becomes the literal
+    # string ``"<invalid>"`` instead of being echoed verbatim. This
+    # silences CodeQL ``py/log-injection`` cleanly without losing the
+    # operational signal.
+    safe_previous = previous if previous in ALLOWED_WAITLIST_STATUSES else "<invalid>"
+    safe_next = (
+        payload.status if payload.status in ALLOWED_WAITLIST_STATUSES else "<invalid>"
+    )
     logger.info(
         "waitlist_status_transition",
         extra={
             "entry_id": str(entry_id),
-            "previous": previous,
-            "next": payload.status,
+            "previous": safe_previous,
+            "next": safe_next,
             "actor": str(user.user_id),
         },
     )

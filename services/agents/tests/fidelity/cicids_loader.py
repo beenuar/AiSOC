@@ -45,13 +45,15 @@ _LABEL_ALIASES: dict[str, str] = {
     "FTP-PATATOR": "brute_force",
     "SSH-PATATOR": "brute_force",
     "BOT": "bot",
-    "WEB ATTACK – BRUTE FORCE": "web_attack",
+    # The literal ``–`` and ``\u2013`` are the same code point (U+2013 EN
+    # DASH); we only keep one entry per spelling. Listing both was
+    # flagged by CodeQL ``py/duplicate-key-dict-literal``. We still
+    # alias the ASCII ``-`` variant separately because CICIDS CSVs in
+    # the wild use either dash flavour.
     "WEB ATTACK \u2013 BRUTE FORCE": "web_attack",
     "WEB ATTACK - BRUTE FORCE": "web_attack",
-    "WEB ATTACK – XSS": "web_attack",
     "WEB ATTACK \u2013 XSS": "web_attack",
     "WEB ATTACK - XSS": "web_attack",
-    "WEB ATTACK – SQL INJECTION": "web_attack",
     "WEB ATTACK \u2013 SQL INJECTION": "web_attack",
     "WEB ATTACK - SQL INJECTION": "web_attack",
     "INFILTRATION": "infiltration",

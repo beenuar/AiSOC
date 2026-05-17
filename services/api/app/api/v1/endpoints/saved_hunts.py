@@ -58,7 +58,6 @@ from app.models.saved_hunt import SavedHunt
 # vendored-tree resolution dance at import time and we want the same module
 # instance so a future LLM enhancement applies uniformly.
 from app.api.v1.endpoints.nl_query import (  # noqa: E402
-    NLQuery,
     deterministic_translate,
 )
 

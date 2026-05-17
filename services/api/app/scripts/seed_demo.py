@@ -2410,12 +2410,6 @@ _DEMO_QUICK_DEFAULT_CLOCK_ISO = "2026-05-13T19:00:00+00:00"
 # The constant has no security meaning — it's just a fixed seed.
 _DEMO_QUICK_UUID_NS = uuid.UUID("a15a1c00-0000-4d04-8000-000000000064")
 
-# Per-invocation deterministic jitter source. Used sparingly — alert
-# offsets and tiny `ai_score` perturbations only — so re-runs stay
-# byte-identical even when the underlying random sequence is touched.
-_quick_rng = random.Random(20260513)
-
-
 def _parse_clock(value: str | None) -> datetime:
     """Parse the `--clock` argument (ISO-8601) into a UTC-aware datetime.
 

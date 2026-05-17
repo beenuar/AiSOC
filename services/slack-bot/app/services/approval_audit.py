@@ -58,7 +58,7 @@ class ApprovalAuditEvent:
     actor_ip: str | None = None
     source: str = "slack"  # "slack" | "teams" | "email" | "scheduler"
     error: str | None = None
-    timestamp: float = field(default_factory=lambda: time.time())
+    timestamp: float = field(default_factory=time.time)
     metadata: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -84,7 +84,9 @@ class ApprovalAuditSink(Protocol):
     """Anything that can swallow an :class:`ApprovalAuditEvent`."""
 
     async def record(self, event: ApprovalAuditEvent) -> None:  # pragma: no cover - protocol
-        ...
+        # Protocol stub body: ``pass`` rather than ``...`` to silence
+        # CodeQL ``py/ineffectual-statement``.
+        pass
 
 
 class NullAuditSink:

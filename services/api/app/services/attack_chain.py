@@ -225,7 +225,12 @@ class AttackChainLoader(Protocol):
 
     async def load_seed(
         self, alert_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> CandidateAlert | None: ...
+    ) -> CandidateAlert | None:
+        # Protocol method body: ``pass`` rather than ``...`` so CodeQL
+        # ``py/ineffectual-statement`` doesn't flag the ellipsis as a
+        # discarded expression. Semantically identical for a Protocol
+        # stub (both leave the implementation contract empty).
+        pass
 
     async def load_candidates_for_entities(
         self,
@@ -234,7 +239,10 @@ class AttackChainLoader(Protocol):
         start: datetime,
         end: datetime,
         exclude_ids: set[uuid.UUID],
-    ) -> list[CandidateAlert]: ...
+    ) -> list[CandidateAlert]:
+        # See ``load_seed`` — Protocol stubs use ``pass`` to silence
+        # ``py/ineffectual-statement`` without changing semantics.
+        pass
 
 
 # ---------------------------------------------------------------------------

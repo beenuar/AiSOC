@@ -43,7 +43,6 @@ _REGION_HOSTS: dict[str, str] = {
 }
 
 _LOGS_PER_PAGE = 100
-_EVENTS_PER_PAGE = 500
 _MAX_PAGES = 25
 
 

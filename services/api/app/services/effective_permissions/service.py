@@ -63,9 +63,18 @@ def _default_snapshot_loader(provider: str) -> dict[str, Any]:
     surfaces a 412 Precondition Failed ("no policy snapshot ingested yet").
     """
 
+    # ``provider`` is user-supplied (it arrives via the API endpoint's path
+    # / query parameters). Even though the calling resolver only dispatches
+    # on values in ``SUPPORTED_PROVIDERS``, the loader stub is reachable
+    # before that dispatch, so we constrain what we put into the log
+    # record. Anything outside the known allowlist is logged as the
+    # literal ``"<unsupported>"`` so an attacker cannot smuggle control
+    # characters or fake log lines through this code path. Resolves
+    # CodeQL ``py/log-injection`` without losing the operational signal.
+    safe_provider = provider if provider in SUPPORTED_PROVIDERS else "<unsupported>"
     logger.warning(
         "no production snapshot loader wired for provider=%s — returning {}",
-        provider,
+        safe_provider,
     )
     return {}
 

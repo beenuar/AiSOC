@@ -25,13 +25,24 @@ log = structlog.get_logger(__name__)
 
 
 class _ActionsClient(Protocol):
-    async def approve_action(self, action_id: str) -> dict[str, Any]: ...
-    async def reject_action(self, action_id: str) -> dict[str, Any]: ...
-    async def aclose(self) -> None: ...
+    # Protocol method bodies use ``pass`` rather than ``...`` to silence
+    # CodeQL ``py/ineffectual-statement``. Semantically identical for an
+    # unimplemented Protocol contract.
+    async def approve_action(self, action_id: str) -> dict[str, Any]:
+        pass
+
+    async def reject_action(self, action_id: str) -> dict[str, Any]:
+        pass
+
+    async def aclose(self) -> None:
+        pass
 
 
 class _AuditSink(Protocol):
-    async def record(self, event: Any) -> None: ...
+    # See ``_ActionsClient`` — ``pass`` instead of ``...`` for Protocol
+    # stubs to avoid CodeQL ``py/ineffectual-statement``.
+    async def record(self, event: Any) -> None:
+        pass
 
 
 class _FallbackActionsClient:

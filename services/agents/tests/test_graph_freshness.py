@@ -68,6 +68,7 @@ def _import_or_skip(mod_name: str, hint: str) -> Any:
         pytest.skip(
             f"{mod_name} not installed locally — install {hint} to run this integration test"
         )
+        return None  # unreachable; pytest.skip raises, but keeps return paths consistent
 
 
 def _build_event(idx: int) -> dict:
@@ -123,6 +124,7 @@ def _ingest_event(httpx: Any, event: dict, tenant: str) -> None:
         )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"ingest service unreachable at {INGEST_BASE_URL}: {exc}")
+        return  # CodeQL doesn't model ``pytest.skip`` as terminating
     if resp.status_code >= 500:
         pytest.skip(f"ingest service unhealthy: {resp.status_code} {resp.text}")
     assert resp.status_code < 400, resp.text
@@ -211,6 +213,7 @@ def test_graph_writer_does_not_block_fusion_on_failure() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"ingest service unreachable at {INGEST_BASE_URL}: {exc}")
+        return  # CodeQL doesn't model ``pytest.skip`` as terminating
 
     assert resp.status_code < 400, (
         f"ingest returned {resp.status_code} — fusion should never block on graph: {resp.text}"

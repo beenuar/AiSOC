@@ -53,7 +53,7 @@ import logging
 import re
 import secrets
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
@@ -275,7 +275,7 @@ def _build_admin_invite(
 
 # Type alias for the seed-demo callback so tests can pass in a stub
 # that doesn't need a real database session.
-DemoSeederCallable = Callable[[AsyncSession, Tenant], "Any"]
+DemoSeederCallable = Callable[[AsyncSession, Tenant], Any]
 
 
 async def provision_from_waitlist(

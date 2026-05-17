@@ -222,7 +222,10 @@ class MailDeliveryClient(Protocol):
         text: str,
         from_addr: str | None = None,
     ) -> dict[str, Any]:
-        ...
+        # Protocol stub body uses ``pass`` rather than ``...`` to silence
+        # CodeQL ``py/ineffectual-statement``. Semantically identical for
+        # an unimplemented Protocol method.
+        pass
 
 
 class MailgunClient:

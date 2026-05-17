@@ -35,8 +35,15 @@ log = structlog.get_logger(__name__)
 
 
 class _ActionsClient(Protocol):
-    async def approve_action(self, action_id: str) -> dict[str, Any]: ...
-    async def reject_action(self, action_id: str) -> dict[str, Any]: ...
+    # Protocol method bodies use ``pass`` rather than ``...`` to silence
+    # CodeQL ``py/ineffectual-statement`` (it flags ellipsis as a
+    # discarded expression statement). Semantically identical for an
+    # unimplemented Protocol contract.
+    async def approve_action(self, action_id: str) -> dict[str, Any]:
+        pass
+
+    async def reject_action(self, action_id: str) -> dict[str, Any]:
+        pass
 
 
 @dataclass(slots=True, frozen=True)
@@ -52,7 +59,10 @@ class _AuditEvent:
 
 
 class _AuditSink(Protocol):
-    async def record(self, event: _AuditEvent) -> None: ...
+    # See ``_ActionsClient`` — ``pass`` instead of ``...`` to keep
+    # CodeQL ``py/ineffectual-statement`` quiet on Protocol stubs.
+    async def record(self, event: _AuditEvent) -> None:
+        pass
 
 
 class CallbackResult(dict):

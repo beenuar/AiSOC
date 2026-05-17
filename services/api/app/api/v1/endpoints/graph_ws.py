@@ -221,6 +221,10 @@ async def graph_updates_stream(
         try:
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="upstream error")
         except RuntimeError:
+            # The socket was already closed by the client or the ASGI
+            # server (Starlette raises ``RuntimeError`` on double close).
+            # Nothing useful we can do at this point, and re-raising
+            # would mask the original ``exc`` above.
             pass
 
 
@@ -287,6 +291,13 @@ async def _relay(websocket: WebSocket, upstream_url: str) -> None:
                         try:
                             await t
                         except (asyncio.CancelledError, Exception):
+                            # We're tearing down the relay; either the
+                            # task acknowledged cancellation
+                            # (``CancelledError``) or it died with its
+                            # own exception that was already handled
+                            # inside the task body. Either way we
+                            # intentionally swallow here so cleanup
+                            # always finishes for every task.
                             pass
     except httpx.HTTPError as exc:
         logger.warning("graph_ws: upstream dial failed url=%s err=%s", _redact_url(upstream_url), exc)
@@ -296,6 +307,9 @@ async def _relay(websocket: WebSocket, upstream_url: str) -> None:
         try:
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="upstream error")
         except RuntimeError:
+            # Socket already closed (Starlette raises ``RuntimeError`` on
+            # double close). Best-effort teardown only; the original
+            # ``exc`` is the meaningful failure signal here.
             pass
 
 
