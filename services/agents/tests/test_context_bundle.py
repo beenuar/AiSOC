@@ -44,7 +44,7 @@ from app.context import (  # noqa: E402
     EntityRef,
     extract_entities,
 )
-from app.context.bundle import _LLM_SAFE_KEYS  # noqa: E402
+from app.context.bundle import LLM_SAFE_KEYS  # noqa: E402
 from app.models.state import InvestigationState  # noqa: E402
 
 _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
@@ -202,7 +202,7 @@ class ContextBundleSummaryTests(unittest.TestCase):
         )
         summary = bundle.summary_for_llm()
         for key in summary:
-            self.assertIn(key, _LLM_SAFE_KEYS, f"unexpected key in summary_for_llm: {key}")
+            self.assertIn(key, LLM_SAFE_KEYS, f"unexpected key in summary_for_llm: {key}")
 
     def test_prompt_context_lines_empty_when_bundle_empty(self) -> None:
         bundle = ContextBundle(incident_id=uuid4())

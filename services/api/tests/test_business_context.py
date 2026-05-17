@@ -75,7 +75,6 @@ from app.services.business_context.models import (
     ALLOWED_OPS,
     ALLOWED_ROUTES,
     ALLOWED_SEVERITIES,
-    BusinessContextRule,
     RuleAction,
     RuleCondition,
 )

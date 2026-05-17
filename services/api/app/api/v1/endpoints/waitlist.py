@@ -61,6 +61,7 @@ from app.db.database import get_db
 from app.models.waitlist import (
     ALLOWED_WAITLIST_STATUSES,
     WAITLIST_STATUS_CONTACTED,
+    WAITLIST_STATUS_DECLINED,
     WAITLIST_STATUS_NEW,
     WAITLIST_STATUS_ONBOARDED,
     WaitlistEntry,
@@ -87,6 +88,23 @@ _MAX_FIELD_LEN_MEDIUM: int = 255
 _MAX_MOTIVATION_LEN: int = 4000
 _MAX_SOC_STACK_ENTRIES: int = 20
 _MAX_LIST_LIMIT: int = 500
+
+
+# Maps a user-supplied / DB-stored status value to the *hardcoded literal*
+# that is safe to put into a log record. Looking up the value (rather than
+# echoing the raw status through ``status if status in ALLOWED... else
+# "<invalid>"``) breaks CodeQL's taint flow because the value side of the
+# mapping is never derived from the input — it is a compile-time string
+# literal. This satisfies ``py/log-injection`` without losing the
+# operational signal. The keys mirror ``ALLOWED_WAITLIST_STATUSES``; any
+# value outside that allowlist falls back to ``"<invalid>"`` at the call
+# site.
+_STATUS_LOG_TOKENS: dict[str, str] = {
+    WAITLIST_STATUS_NEW: "new",
+    WAITLIST_STATUS_CONTACTED: "contacted",
+    WAITLIST_STATUS_ONBOARDED: "onboarded",
+    WAITLIST_STATUS_DECLINED: "declined",
+}
 
 # RFC 5322 is famously permissive; we use a forgiving "addr@domain.tld"
 # regex that catches obvious typos without rejecting legitimate edge
@@ -432,18 +450,17 @@ async def patch_entry(
 
     # Both ``previous`` (DB enum) and ``payload.status`` (Pydantic-validated
     # against ``ALLOWED_WAITLIST_STATUSES``) are constrained to a known
-    # allowlist before we ever reach this point. Re-resolve them through
-    # the allowlist so the values we put into the log record cannot
-    # possibly carry log-injection-friendly payloads (newlines, ANSI
-    # escapes, log-spoofed key=value pairs) even if upstream validation
-    # is ever weakened. Anything outside the allowlist becomes the literal
-    # string ``"<invalid>"`` instead of being echoed verbatim. This
-    # silences CodeQL ``py/log-injection`` cleanly without losing the
-    # operational signal.
-    safe_previous = previous if previous in ALLOWED_WAITLIST_STATUSES else "<invalid>"
-    safe_next = (
-        payload.status if payload.status in ALLOWED_WAITLIST_STATUSES else "<invalid>"
-    )
+    # allowlist before we ever reach this point. We still look the values
+    # up via ``_STATUS_LOG_TOKENS`` so what lands in the log record is a
+    # hardcoded string literal (never the raw input). Any value outside
+    # the allowlist becomes ``"<invalid>"``. This breaks CodeQL's taint
+    # flow for ``py/log-injection``: the conditional ``x if x in
+    # ALLOWED... else "<invalid>"`` form was not enough because CodeQL
+    # still saw the True branch as carrying the original tainted value
+    # through to the logger. The dict-lookup form returns a value that
+    # is provably independent of the input string.
+    safe_previous = _STATUS_LOG_TOKENS.get(previous, "<invalid>")
+    safe_next = _STATUS_LOG_TOKENS.get(payload.status, "<invalid>")
     logger.info(
         "waitlist_status_transition",
         extra={

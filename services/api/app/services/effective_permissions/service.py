@@ -50,6 +50,21 @@ SUPPORTED_PROVIDERS: dict[str, type[Resolver]] = {
 }
 
 
+# Maps a user-supplied provider name to the *hardcoded literal* that is safe
+# to log. Looking up the value (rather than passing the raw ``provider``
+# argument through a conditional ``if ... else "<unsupported>"`` expression)
+# breaks CodeQL's taint flow because the value side of the mapping is never
+# derived from the input — it is a compile-time string literal. This satisfies
+# ``py/log-injection`` without losing the operational signal.
+_PROVIDER_LOG_TOKENS: dict[str, str] = {
+    "aws": "aws",
+    "azure": "azure",
+    "gcp": "gcp",
+    "okta": "okta",
+    "gws": "gws",
+}
+
+
 SnapshotLoader = Callable[[str], dict[str, Any]]
 
 
@@ -67,11 +82,14 @@ def _default_snapshot_loader(provider: str) -> dict[str, Any]:
     # / query parameters). Even though the calling resolver only dispatches
     # on values in ``SUPPORTED_PROVIDERS``, the loader stub is reachable
     # before that dispatch, so we constrain what we put into the log
-    # record. Anything outside the known allowlist is logged as the
-    # literal ``"<unsupported>"`` so an attacker cannot smuggle control
-    # characters or fake log lines through this code path. Resolves
-    # CodeQL ``py/log-injection`` without losing the operational signal.
-    safe_provider = provider if provider in SUPPORTED_PROVIDERS else "<unsupported>"
+    # record. We look up a hardcoded literal from ``_PROVIDER_LOG_TOKENS``
+    # so the value that lands in the log line is provably independent of
+    # the input string — anything outside the known allowlist is logged as
+    # the literal ``"<unsupported>"``. This stops an attacker from smuggling
+    # control characters or fake log lines through this code path and
+    # resolves CodeQL ``py/log-injection`` without losing the operational
+    # signal.
+    safe_provider = _PROVIDER_LOG_TOKENS.get(provider, "<unsupported>")
     logger.warning(
         "no production snapshot loader wired for provider=%s — returning {}",
         safe_provider,
