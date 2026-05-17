@@ -172,6 +172,20 @@ jobs:
           cache: pip
       - name: Install API dependencies
         run: pip install --quiet ${{ env.API_DEPS }}
+      # Boot-test: verify the FastAPI app can actually import without
+      # NameError / ImportError before spending time on the full pytest
+      # suite.  PR #152 fixed two import-time NameErrors (model_validator,
+      # rule_tuning) that CI never caught because pytest mocks imports and
+      # never loads the real entrypoint.  This step prevents that class of
+      # regression from reaching main again.
+      - name: Boot-test API service (catch import-time errors)
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: |
+          python -c "from app.main import app; print('api boot-test ok')"
       - name: Run API tests (unit + GraphQL schema)
         working-directory: services/api
         env:
