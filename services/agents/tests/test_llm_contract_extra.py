@@ -20,7 +20,6 @@ import json
 from typing import Any
 
 import pytest
-
 from app.llm.contract import (
     LLMContractViolation,
     classify_message,
@@ -138,6 +137,34 @@ async def test_make_safe_chat_model_blocks_raw_ocsf(contract_enforced) -> None:
         await guarded.ainvoke([{"role": "user", "content": raw}])
 
     assert inner.invocations == [], "blocked prompt must never reach the chat model"
+
+
+async def test_make_safe_chat_model_astream_blocks_raw_ocsf(contract_enforced) -> None:
+    """Regression for PR #140 review: the wrapper's ``astream`` path must
+    enforce the contract just like ``ainvoke``. The standalone
+    :func:`safe_astream` is exercised in another test, but the proxy
+    path through :func:`make_safe_chat_model` was previously unguarded
+    against a partial-stream leak — a violation here would silently
+    forward chunks before the consumer noticed.
+
+    Invariants:
+    1. The wrapper's ``astream`` raises :class:`LLMContractViolation`
+       (or, depending on enforcement, an empty stream).
+    2. ``inner.invocations`` stays empty: the inner model is never
+       reached, so no partial chunk can leak.
+    """
+    inner = _FakeChatModel()
+    guarded = make_safe_chat_model(inner)
+
+    raw = json.dumps({"class_uid": 1001, "activity_id": 2, "metadata": {"product": "Sentinel"}})
+
+    chunks: list[Any] = []
+    with pytest.raises(LLMContractViolation):
+        async for chunk in guarded.astream([{"role": "user", "content": raw}]):
+            chunks.append(chunk)
+
+    assert chunks == [], "blocked stream must not yield any chunk to the consumer"
+    assert inner.invocations == [], "blocked stream must never reach the chat model"
 
 
 def test_make_safe_chat_model_passes_through_non_llm_attributes() -> None:

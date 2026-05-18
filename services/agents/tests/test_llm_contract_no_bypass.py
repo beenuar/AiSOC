@@ -21,8 +21,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 _AGENTS_APP = Path(__file__).resolve().parent.parent / "app"
 
 # Receivers that are NOT chat models. Each entry MUST be explained.
@@ -67,8 +65,49 @@ def _receiver_name(node: ast.Attribute) -> str:
     return f"<{type(value).__name__}>"
 
 
+def _getattr_bypass_method(node: ast.Call) -> str | None:
+    """Detect ``getattr(x, "ainvoke")(...)`` and ``getattr(x, "astream")(...)``.
+
+    This is the canonical evasion of attribute-name-based AST gates: a
+    future author could route around ``.ainvoke``/``.astream`` checks by
+    writing ``getattr(llm, "ainvoke")(messages)`` and the bare-attribute
+    walker would never see it. We flag the *outer* call here (the call
+    that actually invokes the LLM) and report it as if it had been
+    ``receiver.method(...)``.
+
+    Returns the method name (``"ainvoke"`` / ``"astream"``) if this
+    Call is a ``getattr``-mediated bypass, else ``None``.
+    """
+    inner = node.func
+    if not isinstance(inner, ast.Call):
+        return None
+    if not isinstance(inner.func, ast.Name) or inner.func.id != "getattr":
+        return None
+    # getattr(obj, "name"[, default]) — name must be a literal string for
+    # the bypass to be useful at the call site.
+    if len(inner.args) < 2:
+        return None
+    name_arg = inner.args[1]
+    if not isinstance(name_arg, ast.Constant) or not isinstance(name_arg.value, str):
+        return None
+    if name_arg.value not in _METHODS:
+        return None
+    return name_arg.value
+
+
 def _find_bypasses(path: Path) -> list[tuple[int, str, str]]:
-    """Return (lineno, receiver, method) tuples for forbidden calls in ``path``."""
+    """Return (lineno, receiver, method) tuples for forbidden calls in ``path``.
+
+    Detects three call shapes:
+
+    1. ``obj.ainvoke(...)`` / ``obj.astream(...)`` — direct attribute call.
+    2. ``self.obj.ainvoke(...)`` — chained attribute call (receiver is
+       the inner attr, e.g. ``_graph``).
+    3. ``getattr(obj, "ainvoke")(...)`` — name-indirection bypass; the
+       outer ``Call`` is flagged with receiver ``<getattr>`` because the
+       allowlist is by static name and the dynamic lookup deliberately
+       defeats that — reviewers must justify and refactor, not allowlist.
+    """
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     findings: list[tuple[int, str, str]] = []
@@ -76,6 +115,14 @@ def _find_bypasses(path: Path) -> list[tuple[int, str, str]]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
+
+        # Shape 3: getattr(x, "ainvoke")(...) — flagged unconditionally.
+        method = _getattr_bypass_method(node)
+        if method is not None:
+            findings.append((node.lineno, "<getattr>", method))
+            continue
+
+        # Shapes 1 + 2: x.ainvoke(...) / self.x.ainvoke(...).
         func = node.func
         if not isinstance(func, ast.Attribute):
             continue
@@ -89,11 +136,7 @@ def _find_bypasses(path: Path) -> list[tuple[int, str, str]]:
 
 
 def _python_sources() -> list[Path]:
-    return [
-        p
-        for p in _AGENTS_APP.rglob("*.py")
-        if "__pycache__" not in p.parts and p not in _ALLOWED_FILES
-    ]
+    return [p for p in _AGENTS_APP.rglob("*.py") if "__pycache__" not in p.parts and p not in _ALLOWED_FILES]
 
 
 def test_no_direct_ainvoke_or_astream_bypass() -> None:
@@ -109,8 +152,7 @@ def test_no_direct_ainvoke_or_astream_bypass() -> None:
         "app.llm.contract.safe_ainvoke / safe_astream / make_safe_chat_model. "
         "If the receiver is genuinely not an LLM (e.g. a LangGraph compiled "
         "graph), add its name to _ALLOWED_RECEIVERS in this test with a "
-        "justification comment.\n  "
-        + "\n  ".join(violations)
+        "justification comment.\n  " + "\n  ".join(violations)
     )
 
 
@@ -118,9 +160,7 @@ def test_gate_detects_synthetic_bypass(tmp_path: Path) -> None:
     """Sanity-check the AST walker: a fake bypass file must trip the detector."""
     fake = tmp_path / "fake_agent.py"
     fake.write_text(
-        "class Foo:\n"
-        "    async def run(self, llm):\n"
-        "        return await llm.ainvoke([{'role': 'user', 'content': 'hi'}])\n",
+        "class Foo:\n    async def run(self, llm):\n        return await llm.ainvoke([{'role': 'user', 'content': 'hi'}])\n",
         encoding="utf-8",
     )
     findings = _find_bypasses(fake)
@@ -142,3 +182,36 @@ def test_gate_respects_receiver_allowlist(tmp_path: Path) -> None:
     )
     findings = _find_bypasses(fake)
     assert findings == [], f"allowlisted receiver should not trip the gate; got {findings}"
+
+
+def test_gate_detects_getattr_indirection_bypass(tmp_path: Path) -> None:
+    """The classic AST-gate evasion is ``getattr(llm, "ainvoke")(...)``.
+
+    A bare-attribute walker (only inspecting ``Attribute`` nodes) would
+    happily walk past this — the outer ``Call.func`` is a ``Call`` to
+    the ``getattr`` builtin, not an ``Attribute`` at all. We flag it
+    with a synthetic ``<getattr>`` receiver, which is intentionally
+    NOT in the allowlist so a future author can't just append to the
+    allowlist to whitelist away the protection.
+    """
+    fake = tmp_path / "fake_getattr.py"
+    fake.write_text(
+        "async def sneaky(llm, msgs):\n"
+        "    # Future author tries to dodge the .ainvoke attribute scan.\n"
+        "    fn = getattr(llm, 'ainvoke')\n"
+        "    return await fn(msgs)\n"
+        "async def stream_sneaky(llm, msgs):\n"
+        "    return getattr(llm, 'astream')(msgs)\n",
+        encoding="utf-8",
+    )
+    findings = _find_bypasses(fake)
+    # Note: the first form (`fn = getattr(...)`; `fn(...)`) splits the
+    # getattr Call from the invocation Call, so the AST scanner sees a
+    # bare `fn(...)` with no method-name signal. That's a known limit
+    # of static name analysis. The second form (`getattr(llm, 'astream')(msgs)`)
+    # invokes inline and MUST be flagged.
+    flagged_methods = sorted({m for _, _, m in findings})
+    assert "astream" in flagged_methods, f"getattr(llm, 'astream')(msgs) inline-invocation must be flagged; got {findings}"
+    for _lineno, receiver, method in findings:
+        if method == "astream":
+            assert receiver == "<getattr>", f"getattr-indirection bypass must report '<getattr>' receiver; got {receiver}"
