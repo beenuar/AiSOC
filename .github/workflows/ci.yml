@@ -120,7 +120,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install Ruff & Mypy
-        run: pip install ruff mypy
+        # Pin to versions compatible with the constraints declared in each
+        # service's ``pyproject.toml`` (``ruff = "^0.4.4"``, ``mypy = "^1.10.0"``).
+        # The CI gate previously left these unpinned, so every new ruff release
+        # (e.g. 0.15.x adding ``UP037`` enforcement) silently broke main without
+        # any dependency-file change. Dependabot bumps to the pyproject
+        # constraints (PRs #186, #187) update these pins in the same diff.
+        run: pip install 'ruff>=0.4.4,<0.5' 'mypy>=1.10,<2'
       # All services share the repo-root `ruff.toml`. Linting and formatting
       # cover every Python service, not just the original four — the gate
       # used to soft-fail with `|| true`; that's gone, so this is the real
