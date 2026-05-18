@@ -6,6 +6,10 @@ on:
     paths:
       - "services/api/**"
       - "packages/types/**"
+      - "marketplace/**"
+      - "plugins/**"
+      - "scripts/build_marketplace.py"
+      - "infra/fly/api/**"
       - ".github/workflows/deploy-api.yml"
   workflow_dispatch:
 
@@ -30,10 +34,32 @@ jobs:
       - name: Install flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy to Fly
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Mirror infra/fly/fly-demo-deploy.sh::stage_marketplace_index. The api
+      # Dockerfile does `COPY . .` against services/api/, so anything outside
+      # that dir is invisible to the image. /api/v1/marketplace returns 503
+      # without index.json present at /app/marketplace/index.json in the image.
+      - name: Stage marketplace/index.json into services/api
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/build_marketplace.py
+          mkdir -p services/api/marketplace
+          cp marketplace/index.json services/api/marketplace/index.json
+          ls -la services/api/marketplace/
+
+      # The api Dockerfile was written assuming build context = services/api/
+      # (it does `COPY pyproject.toml ./` and `COPY . .`). flyctl deploy uses
+      # its cwd as the build context, so we cd into services/api/ and pass an
+      # absolute path to the fly.toml so flyctl still finds it. This mirrors
+      # the deploy_app() helper in infra/fly/fly-demo-deploy.sh.
+      - name: Deploy to Fly (context=services/api)
+        working-directory: services/api
         run: |
           flyctl deploy \
             --remote-only \
-            --dockerfile services/api/Dockerfile \
-            --config infra/fly/api/fly.toml \
-            .
+            --config "${GITHUB_WORKSPACE}/infra/fly/api/fly.toml" \
+            --app aisoc-demo-api
