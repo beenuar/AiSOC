@@ -385,8 +385,33 @@ export function DashboardView() {
     }
   );
 
-  const isValidMetrics = rawMetrics && typeof rawMetrics.alerts?.total === "number" && Array.isArray(rawMetrics.alertsTrend);
-  const metrics = isValidMetrics ? rawMetrics : MOCK_METRICS;
+  // Hybrid: prefer real API fields when present, fall back to mock for missing
+  // sections (e.g. /metrics/dashboard currently returns alertsTrend: [] and no
+  // threatsBySource yet, so the charts would render empty without this merge).
+  const apiData = rawMetrics as Partial<DashboardMetrics> | undefined;
+  const hasRealAlerts = !!apiData && typeof apiData.alerts?.total === 'number';
+  const metrics: DashboardMetrics = hasRealAlerts
+    ? {
+        alerts: apiData!.alerts as DashboardMetrics['alerts'],
+        cases: apiData!.cases ?? MOCK_METRICS.cases,
+        sources:
+          Array.isArray(apiData!.sources) && apiData!.sources!.length
+            ? apiData!.sources!
+            : MOCK_METRICS.sources,
+        topMitre:
+          Array.isArray(apiData!.topMitre) && apiData!.topMitre!.length
+            ? apiData!.topMitre!
+            : MOCK_METRICS.topMitre,
+        alertsTrend:
+          Array.isArray(apiData!.alertsTrend) && apiData!.alertsTrend!.length
+            ? apiData!.alertsTrend!
+            : MOCK_METRICS.alertsTrend,
+        threatsBySource:
+          Array.isArray(apiData!.threatsBySource) && apiData!.threatsBySource!.length
+            ? apiData!.threatsBySource!
+            : MOCK_METRICS.threatsBySource,
+      }
+    : MOCK_METRICS;
 
   const trendData = metrics.alertsTrend.map((d) => ({
     time: format(new Date(d.timestamp), 'HH:mm'),
@@ -426,9 +451,10 @@ export function DashboardView() {
         {/* Section header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-xl font-semibold text-gray-100">Security Operations Center</h1>
+            <h2 className="text-xl font-semibold text-gray-100">Security Operations Center</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              Entity-risk alerting, confidence-scored triage, and 26 connected sources
+              Entity-risk alerting, confidence-scored triage, and{' '}
+              {metrics.sources.filter((s) => s.status === 'active').length} connected sources
             </p>
           </div>
         </div>

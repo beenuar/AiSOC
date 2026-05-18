@@ -143,6 +143,17 @@ export function FunnelKpiBar({
     },
   );
 
+  // Error takes priority over loading. SWR with shouldRetryOnError: false leaves
+  // `data` undefined on failure, so without this ordering the loading branch wins
+  // forever and the user stares at skeleton tiles.
+  if (error) {
+    return (
+      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 text-sm text-gray-400">
+        Funnel metrics unavailable.
+      </div>
+    );
+  }
+
   if (isLoading || !data) {
     return (
       <div>
@@ -155,14 +166,6 @@ export function FunnelKpiBar({
             <LoadingTile key={l} label={l} />
           ))}
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 text-sm text-gray-400">
-        Funnel metrics unavailable.
       </div>
     );
   }
