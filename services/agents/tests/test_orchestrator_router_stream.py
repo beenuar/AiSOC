@@ -337,14 +337,14 @@ async def test_stream_ledger_calls_in_order(monkeypatch: pytest.MonkeyPatch) -> 
     assert recorded_seqs == list(range(1, len(recorded_seqs) + 1))
 
     # Artifact is the Markdown report.
-    (_, artifact_kwargs), = [c for c in spy.calls if c[0] == "record_artifact"]
+    ((_, artifact_kwargs),) = [c for c in spy.calls if c[0] == "record_artifact"]
     assert artifact_kwargs["kind"] == "report_md"
     assert artifact_kwargs["tenant_id"] == tenant_id
     assert artifact_kwargs["content"]  # non-empty
     assert str(state.incident_id) in artifact_kwargs["content"]
 
     # complete_run carries the terminal status.
-    (_, complete_kwargs), = [c for c in spy.calls if c[0] == "complete_run"]
+    ((_, complete_kwargs),) = [c for c in spy.calls if c[0] == "complete_run"]
     assert complete_kwargs["status"] == "completed"
     assert complete_kwargs["tenant_id"] == tenant_id
 
@@ -380,6 +380,7 @@ async def test_stream_survives_ledger_record_event_failure(monkeypatch: pytest.M
         raise RuntimeError("ledger offline")
 
     import app.investigator.ledger as ledger_module
+
     monkeypatch.setattr(ledger_module, "record_event", boom, raising=True)
 
     state = _multi_signal_incident()

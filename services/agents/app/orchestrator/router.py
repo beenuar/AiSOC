@@ -821,8 +821,11 @@ class RouterOrchestrator:
             yield await _yield_step(
                 agent="auto_triage",
                 summary=_summarise_diff(
-                    "auto_triage", pre, post,
-                    verdict=state.verdict, confidence=state.confidence,
+                    "auto_triage",
+                    pre,
+                    post,
+                    verdict=state.verdict,
+                    confidence=state.confidence,
                 ),
                 pre=pre,
                 post=post,
@@ -926,8 +929,7 @@ class RouterOrchestrator:
                     return idx, signal, result, (time.perf_counter() - bt0) * 1000.0
 
                 tasks = [
-                    asyncio.create_task(_wrap(i, s, r, b))
-                    for i, (s, r, b) in enumerate(zip(signals, runners, branch_inputs, strict=False))
+                    asyncio.create_task(_wrap(i, s, r, b)) for i, (s, r, b) in enumerate(zip(signals, runners, branch_inputs, strict=False))
                 ]
                 results_by_idx: dict[int, InvestigationState] = {}
                 for coro in asyncio.as_completed(tasks):
@@ -937,8 +939,11 @@ class RouterOrchestrator:
                     yield await _yield_step(
                         agent=signal,
                         summary=_summarise_diff(
-                            signal, pre_state, branch_post,
-                            verdict=result.verdict, confidence=result.confidence,
+                            signal,
+                            pre_state,
+                            branch_post,
+                            verdict=result.verdict,
+                            confidence=result.confidence,
                         ),
                         pre=pre_state,
                         post=branch_post,
@@ -972,8 +977,11 @@ class RouterOrchestrator:
                     yield await _yield_step(
                         agent=signal,
                         summary=_summarise_diff(
-                            signal, pre_branch, branch_post,
-                            verdict=result.verdict, confidence=result.confidence,
+                            signal,
+                            pre_branch,
+                            branch_post,
+                            verdict=result.verdict,
+                            confidence=result.confidence,
                         ),
                         pre=pre_branch,
                         post=branch_post,
@@ -996,8 +1004,11 @@ class RouterOrchestrator:
                 yield await _yield_step(
                     agent="join",
                     summary=_summarise_diff(
-                        "join", pre, post,
-                        verdict=state.verdict, confidence=state.confidence,
+                        "join",
+                        pre,
+                        post,
+                        verdict=state.verdict,
+                        confidence=state.confidence,
                     ),
                     pre=pre,
                     post=post,
@@ -1021,8 +1032,11 @@ class RouterOrchestrator:
             yield await _yield_step(
                 agent="responder",
                 summary=_summarise_diff(
-                    "responder", pre, post,
-                    verdict=state.verdict, confidence=state.confidence,
+                    "responder",
+                    pre,
+                    post,
+                    verdict=state.verdict,
+                    confidence=state.confidence,
                 ),
                 pre=pre,
                 post=post,

@@ -22,10 +22,29 @@ both branches.
 
 from __future__ import annotations
 
+import html
 from datetime import datetime
 from typing import Any
 
 from app.models.state import AgentStatus, InvestigationState, ProposedAction
+
+
+def _md_escape(value: Any) -> str:
+    """HTML-escape a value before it is embedded in the Markdown body.
+
+    The rendered Markdown is later piped through ``markdown.markdown``,
+    which preserves raw HTML by default. Any of ``state.findings``,
+    ``state.error``, ``state.confidence_basis``, ``proposed_actions``
+    fields, etc. can carry adversary-influenced strings sourced from the
+    underlying alert. Escaping ``<``, ``>``, ``&``, ``"``, ``'`` upstream
+    means a finding like ``<script>alert(1)</script>`` reaches the
+    rendered HTML as literal text rather than executable script.
+
+    Returns the empty string for ``None`` so callers can blindly substitute.
+    """
+    if value is None:
+        return ""
+    return html.escape(str(value), quote=True)
 
 
 def _fmt_confidence(value: float) -> str:
@@ -47,16 +66,27 @@ def _proposed_actions_table(actions: list[ProposedAction]) -> list[str]:
     if not actions:
         return []
 
+    def _cell(raw: Any) -> str:
+        """Escape a cell value: HTML-escape, then escape Markdown table delimiters.
+
+        Per security review, every table cell — not just ``rationale`` —
+        needs ``|`` + newline escaping so an adversary-controlled
+        ``target`` or ``action_type`` can't break the table layout.
+        """
+        cleaned = _md_escape(raw).replace("|", "\\|").replace("\n", " ").strip()
+        return cleaned or "—"
+
     lines: list[str] = []
     lines.append("| # | Action | Target | Risk | Approval | Rationale |")
     lines.append("|---|--------|--------|------|----------|-----------|")
     for idx, action in enumerate(actions, start=1):
-        action_type = getattr(action, "action_type", "") or "—"
-        target = getattr(action, "target", "") or "—"
+        action_type = _cell(getattr(action, "action_type", ""))
+        target = _cell(getattr(action, "target", ""))
         risk_level = getattr(action, "risk_level", None)
-        risk = getattr(risk_level, "value", risk_level) or "—"
+        risk_raw = getattr(risk_level, "value", risk_level)
+        risk = _cell(risk_raw)
         approval = "yes" if getattr(action, "requires_approval", False) else "no"
-        rationale = (getattr(action, "rationale", "") or "").replace("|", "\\|").replace("\n", " ").strip() or "—"
+        rationale = _cell(getattr(action, "rationale", ""))
         lines.append(f"| {idx} | {action_type} | {target} | {risk} | {approval} | {rationale} |")
     return lines
 
@@ -66,10 +96,11 @@ def _bullets(items: list[str]) -> list[str]:
 
     Newlines inside any item are flattened into spaces so the bullet stays
     on one logical line, which keeps the Markdown→HTML conversion stable.
+    Each item is HTML-escaped before emission — see ``_md_escape``.
     """
     out: list[str] = []
     for item in items:
-        cleaned = " ".join(str(item).splitlines()).strip()
+        cleaned = " ".join(_md_escape(item).splitlines()).strip()
         if cleaned:
             out.append(f"- {cleaned}")
     return out
@@ -114,16 +145,16 @@ def render_router_report_md(
     lines.append("## Summary")
     lines.append("")
     summary_rows: list[tuple[str, str]] = [
-        ("Verdict", state.verdict or "uncertain"),
+        ("Verdict", _md_escape(state.verdict or "uncertain")),
         ("Confidence", _fmt_confidence(state.confidence)),
-        ("Status", state.status.value if isinstance(state.status, AgentStatus) else str(state.status)),
+        ("Status", _md_escape(state.status.value if isinstance(state.status, AgentStatus) else str(state.status))),
     ]
     topology = info.get("topology")
     if topology:
-        summary_rows.append(("Topology", str(topology)))
+        summary_rows.append(("Topology", _md_escape(topology)))
     signals = info.get("signals") or []
     if signals:
-        summary_rows.append(("Signals", ", ".join(str(s) for s in signals)))
+        summary_rows.append(("Signals", _md_escape(", ".join(str(s) for s in signals))))
     wall_clock = info.get("wall_clock_ms")
     if wall_clock is not None:
         summary_rows.append(("Wall-clock (ms)", f"{float(wall_clock):.1f}"))
@@ -155,7 +186,7 @@ def render_router_report_md(
         lines.append("## MITRE ATT&CK Mappings")
         lines.append("")
         for technique in state.mitre_mappings:
-            cleaned = str(technique).strip()
+            cleaned = _md_escape(technique).strip()
             if cleaned:
                 lines.append(f"- `{cleaned}`")
         lines.append("")
@@ -172,7 +203,7 @@ def render_router_report_md(
     if state.error:
         lines.append("## Errors")
         lines.append("")
-        lines.append(f"```\n{state.error}\n```")
+        lines.append(f"```\n{_md_escape(state.error)}\n```")
         lines.append("")
 
     # 8. Footer ------------------------------------------------------------
@@ -189,6 +220,14 @@ def render_router_report_html(report_md: str, *, case_id: str) -> str:
     extensions enabled) when available; falls back to wrapping the source
     in ``<pre>`` so the artifact still ships even if the dependency is
     missing in a minimal substrate runtime.
+
+    The Markdown input is produced by :func:`render_router_report_md`,
+    which HTML-escapes every value sourced from state before
+    interpolation, so adversary-controlled finding / action / error
+    text reaches the renderer as literal characters rather than tags.
+    The ``<pre>``-fallback branch escapes the body for the same reason.
+    The page title and case identifier are also escaped here so an
+    operator-supplied case ID can never break out of the ``<title>``.
     """
     try:
         import markdown
@@ -196,16 +235,20 @@ def render_router_report_html(report_md: str, *, case_id: str) -> str:
         body = markdown.markdown(report_md, extensions=["tables", "fenced_code"])
     except ImportError:
         # Fallback: keep the report ship-able even when ``markdown`` is
-        # unavailable. The unit tests exercise both branches.
-        body = f"<pre>{report_md}</pre>"
+        # unavailable. The unit tests exercise both branches. We escape
+        # the source here because the upstream Markdown writer escapes
+        # for the ``markdown.markdown`` path but a raw ``<pre>`` wrap
+        # would leak HTML through unchanged.
+        body = f"<pre>{html.escape(report_md)}</pre>"
 
+    safe_case_id = html.escape(str(case_id), quote=True)
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     return (
         "<!DOCTYPE html>\n"
-        "<html lang=\"en\">\n"
+        '<html lang="en">\n'
         "<head>\n"
-        "<meta charset=\"utf-8\"/>\n"
-        f"<title>AiSOC Incident Report \u2014 {case_id}</title>\n"
+        '<meta charset="utf-8"/>\n'
+        f"<title>AiSOC Incident Report \u2014 {safe_case_id}</title>\n"
         "<style>\n"
         "  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 960px; margin: 40px auto; color: #1a1a1a; }\n"
         "  h1 { color: #c0392b; }\n"
@@ -220,7 +263,7 @@ def render_router_report_html(report_md: str, *, case_id: str) -> str:
         "</head>\n"
         "<body>\n"
         f"{body}\n"
-        f"<div class=\"footer\">Generated by AiSOC on {timestamp}</div>\n"
+        f'<div class="footer">Generated by AiSOC on {timestamp}</div>\n'
         "</body>\n"
         "</html>\n"
     )

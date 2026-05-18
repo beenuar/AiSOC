@@ -10,10 +10,9 @@ Covers the deterministic Markdown + HTML render path that the
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
-
 from app.models.state import (
     ActionRisk,
     AgentStatus,
@@ -243,3 +242,114 @@ def test_render_router_report_returns_md_and_html() -> None:
     assert str(state.incident_id) in html
     # Sequential topology surfaces in the summary table
     assert "| Topology | sequential |" in md
+
+
+# ---------------------------------------------------------------------------
+# XSS / injection regression tests (review feedback on PR #141)
+# ---------------------------------------------------------------------------
+
+
+def test_findings_with_html_tags_are_escaped() -> None:
+    """A finding containing raw HTML never reaches the rendered HTML as a tag.
+
+    State fields like ``findings`` flow from sub-agent outputs that can in
+    turn carry adversary-influenced strings from the raw alert. The report
+    pipeline (``render_router_report_md`` → ``markdown.markdown``) must
+    escape these so a payload like ``<script>alert(1)</script>`` ships as
+    literal text rather than an executable script tag.
+    """
+    payload = "<script>alert('xss')</script>"
+    state = _build_state(findings=[payload])
+
+    md, html_out = render_router_report(state)
+
+    # Markdown body keeps the escaped form, not the raw tag
+    assert "<script>" not in md
+    assert "&lt;script&gt;" in md
+    # Rendered HTML must not contain an executable script tag derived
+    # from the finding
+    assert "<script>alert" not in html_out
+    assert "&lt;script&gt;" in html_out
+
+
+def test_error_field_with_html_is_escaped() -> None:
+    """``state.error`` is HTML-escaped before going into the fenced code block."""
+    state = _build_state(error="<img src=x onerror=alert(1)>")
+
+    md, html_out = render_router_report(state)
+
+    assert "<img src=x" not in md
+    assert "&lt;img src=x onerror=alert(1)&gt;" in md
+    assert "<img src=x onerror=" not in html_out
+
+
+def test_proposed_action_target_with_html_is_escaped() -> None:
+    """Every action-table cell — not just ``rationale`` — gets escaped."""
+    bad_action = ProposedAction(
+        action_type="isolate_host",
+        description="isolate host",
+        target="<svg onload=alert(1)>",
+        risk_level=ActionRisk.HIGH,
+        requires_approval=True,
+        rationale="standard",
+    )
+    state = _build_state(proposed_actions=[bad_action])
+
+    md, html_out = render_router_report(state)
+
+    assert "<svg onload" not in md
+    assert "&lt;svg onload=alert(1)&gt;" in md
+    assert "<svg onload" not in html_out
+
+
+def test_proposed_action_target_with_pipe_does_not_break_table() -> None:
+    """A ``|`` in any cell — not just ``rationale`` — gets escaped."""
+    bad_action = ProposedAction(
+        action_type="disable_user|forever",
+        description="disable user account",
+        target="alice|bob",
+        risk_level=ActionRisk.MEDIUM,
+        requires_approval=False,
+        rationale="cleanup",
+    )
+    state = _build_state(proposed_actions=[bad_action])
+
+    md = render_router_report_md(state)
+
+    assert "disable_user\\|forever" in md
+    assert "alice\\|bob" in md
+
+
+def test_html_fallback_branch_escapes_body(monkeypatch) -> None:
+    """The ``ImportError`` fallback branch must still escape adversary HTML.
+
+    The previous implementation wrapped raw Markdown in ``<pre>`` with no
+    escaping; a finding containing ``<script>`` would have reached the
+    browser intact when ``markdown`` was unavailable in the runtime.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "markdown":
+            raise ImportError("simulated missing dep")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    md = "# Hello\n\n<script>alert(1)</script>"
+    html_out = render_router_report_html(md, case_id="case-1")
+
+    assert "<script>alert(1)</script>" not in html_out
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html_out
+
+
+def test_case_id_with_html_is_escaped_in_title() -> None:
+    """An adversary-controlled case ID can't break out of the ``<title>``."""
+    md = "# Incident"
+    html_out = render_router_report_html(md, case_id="</title><script>alert(1)</script>")
+
+    assert "</title><script>alert(1)</script>" not in html_out
+    # Closing tag of title is the one the renderer itself emits
+    assert "&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;" in html_out
