@@ -32,6 +32,7 @@ from app.api.v1.endpoints import (
     fusion,
     graph,
     graph_ws,
+    health,
     hunts,
     identity_graph,
     identity_timeline,
@@ -115,6 +116,12 @@ api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(compliance.router)
 api_router.include_router(metrics.router)
+# Pipeline health snapshot — v1.5 SOC Console parity.
+# /health/pipeline returns the 5-stage ingest→normalize→fuse→correlate→alert
+# strip with {backlog, p95_latency_ms, error_rate, status} per row, sharing
+# the PipelineHealth schema declared in endpoints/metrics.py so the funnel
+# and pipeline-health widgets on /dashboard speak the same language.
+api_router.include_router(health.router)
 # SOC Insights aggregator (T3.1 — v8.0 parallel team plan).
 # Backs apps/web/src/app/(app)/dashboards/soc-insights/page.tsx with a
 # single deterministic payload (7 tiles + sparklines + delta vs the
