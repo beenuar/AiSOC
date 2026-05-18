@@ -199,14 +199,9 @@ async def _run_router_and_store(
                 "confidence_basis": list(final_state.confidence_basis),
                 "findings": list(final_state.findings),
                 "mitre_mappings": list(final_state.mitre_mappings),
-                "proposed_actions": [
-                    a.model_dump() if hasattr(a, "model_dump") else a
-                    for a in final_state.proposed_actions
-                ],
+                "proposed_actions": [a.model_dump() if hasattr(a, "model_dump") else a for a in final_state.proposed_actions],
                 "iteration_count": final_state.iteration_count,
-                "state_status": final_state.status.value
-                if hasattr(final_state.status, "value")
-                else str(final_state.status),
+                "state_status": final_state.status.value if hasattr(final_state.status, "value") else str(final_state.status),
                 "error": None,
             }
         )
@@ -321,9 +316,23 @@ async def launch_triage(
 
 
 @router.get("/triage/{run_id}")
-async def get_triage(run_id: str) -> dict[str, Any]:
-    """Return the current state of a router triage run."""
+async def get_triage(
+    run_id: str,
+    tenant_id: str = "default",
+) -> dict[str, Any]:
+    """Return the current state of a router triage run.
+
+    Tenant isolation is enforced at the query layer (project convention,
+    see PRs #116–#128): the caller MUST pass the same ``tenant_id`` the
+    run was launched with. Mismatched (or absent) tenant returns 404
+    rather than 403 to avoid leaking the existence of run IDs across
+    tenant boundaries.
+    """
     run = _triage_runs.get(run_id)
     if not run:
+        raise HTTPException(status_code=404, detail="Triage run not found")
+    if str(run.get("tenant_id")) != tenant_id:
+        # Same response shape as the not-found branch so a probing
+        # caller can't distinguish "wrong tenant" from "no such run".
         raise HTTPException(status_code=404, detail="Triage run not found")
     return run

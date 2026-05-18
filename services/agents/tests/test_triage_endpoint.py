@@ -157,12 +157,23 @@ def _silence_realtime(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(triage_module, "_emit_event", _noop)
 
 
-def _poll_until_done(client: TestClient, run_id: str, *, timeout_s: float = 2.0) -> dict[str, Any]:
-    """Poll GET /triage/{run_id} until ``status != "running"`` or timeout."""
+def _poll_until_done(
+    client: TestClient,
+    run_id: str,
+    *,
+    timeout_s: float = 2.0,
+    tenant_id: str = "acme",
+) -> dict[str, Any]:
+    """Poll GET /triage/{run_id} until ``status != "running"`` or timeout.
+
+    Defaults to ``tenant_id="acme"`` because that's what
+    :func:`_multi_signal_payload` posts; pass an override for tests that
+    launch from a different tenant.
+    """
     deadline = time.perf_counter() + timeout_s
     last: dict[str, Any] = {}
     while time.perf_counter() < deadline:
-        resp = client.get(f"/api/v1/triage/{run_id}")
+        resp = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": tenant_id})
         assert resp.status_code == 200, resp.text
         last = resp.json()
         if last.get("status") != "running":
@@ -323,3 +334,47 @@ def test_post_accepts_minimal_body_with_only_case_path(
     body = resp.json()
     assert body["topology"] == "parallel"
     assert body["case_id"] == "CASE-007"
+
+
+# ---------------------------------------------------------------------------
+# Tenant isolation on GET — regression for PR review item
+# (https://github.com/beenuar/AiSOC/pull/139)
+# ---------------------------------------------------------------------------
+
+
+def test_get_with_mismatched_tenant_returns_404(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A caller from tenant B must not see runs launched by tenant A.
+
+    The handler returns 404 (not 403) on mismatch so a probing caller
+    can't distinguish "wrong tenant" from "no such run" — same shape as
+    the unknown-run-id branch above.
+    """
+    monkeypatch.delenv(PARALLEL_TOPOLOGY_FLAG, raising=False)
+    _silence_realtime(monkeypatch)
+    _patch_runners(monkeypatch)
+    client = TestClient(_build_app())
+
+    # Launch a run as tenant "acme".
+    resp = client.post(
+        "/api/v1/cases/CASE-TENANT-A/triage",
+        json={**_multi_signal_payload(), "tenant_id": "acme"},
+    )
+    assert resp.status_code == 200, resp.text
+    run_id = resp.json()["run_id"]
+
+    # Owning tenant gets 200.
+    own = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": "acme"})
+    assert own.status_code == 200, own.text
+    assert own.json()["tenant_id"] == "acme"
+
+    # Different tenant gets 404, NOT 200 with the other tenant's findings.
+    other = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": "evilcorp"})
+    assert other.status_code == 404
+    assert other.json()["detail"] == "Triage run not found"
+
+    # Absent tenant_id falls back to "default" and still 404s — fail closed.
+    no_tenant = client.get(f"/api/v1/triage/{run_id}")
+    assert no_tenant.status_code == 404
+    assert no_tenant.json()["detail"] == "Triage run not found"
