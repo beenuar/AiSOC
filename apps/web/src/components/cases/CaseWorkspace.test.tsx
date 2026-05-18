@@ -253,5 +253,47 @@ describe('CaseWorkspace', () => {
       expect(screen.getByText('T1059.001')).toBeInTheDocument();
       expect(screen.getByText('T1021.002')).toBeInTheDocument();
     });
+
+    it('honors the ?window=… deep link on first render', () => {
+      // Regression for PR #145 review: the changelog claims the window
+      // selection survives reload via ?window=…. Mount with both the
+      // tab AND window params set, and assert the WindowSelector is
+      // showing the linked value rather than the default `24h`.
+      searchParamsState.params = new URLSearchParams('tab=attack-chain&window=72h');
+      swrState.attackChainData = null;
+
+      render(<CaseWorkspace caseId="INC-001" />);
+
+      // The window selector must show 72h as the active choice. Since
+      // `WindowSelector value={windowParam}` is bound directly to the
+      // panel state, the selector reading 72h proves the URL value
+      // flowed through `initialWindow` into the state — which in turn
+      // is what SWR keys the fetch on.
+      const selector = screen.getByLabelText(/attack chain time window/i) as HTMLSelectElement;
+      expect(selector.value).toBe('72h');
+    });
+
+    it('falls back to the 24h default when ?window=… is missing or unknown', () => {
+      // Just the tab, no window param → default `24h` (NOT the previous
+      // `1h` default the PR shipped with; switched to 24h per review
+      // because 1h showed an empty state for most realistic cases).
+      searchParamsState.params = new URLSearchParams('tab=attack-chain');
+      swrState.attackChainData = null;
+
+      const { unmount } = render(<CaseWorkspace caseId="INC-001" />);
+      let selector = screen.getByLabelText(/attack chain time window/i) as HTMLSelectElement;
+      expect(selector.value).toBe('24h');
+      unmount();
+
+      // An obviously-invalid value must also fall back to the default
+      // (defence-in-depth: the type guard refuses anything outside the
+      // closed `AttackChainWindow` set), not crash the panel.
+      searchParamsState.params = new URLSearchParams('tab=attack-chain&window=900years');
+      swrState.attackChainData = null;
+
+      render(<CaseWorkspace caseId="INC-001" />);
+      selector = screen.getByLabelText(/attack chain time window/i) as HTMLSelectElement;
+      expect(selector.value).toBe('24h');
+    });
   });
 });

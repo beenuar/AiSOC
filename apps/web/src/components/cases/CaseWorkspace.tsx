@@ -1387,12 +1387,54 @@ const CHAIN_WINDOWS: ReadonlyArray<{ value: AttackChainWindow; label: string }> 
   { value: '30d', label: '30 d' },
 ];
 
+const CHAIN_WINDOW_VALUES: ReadonlySet<AttackChainWindow> = new Set(
+  CHAIN_WINDOWS.map((w) => w.value),
+);
+
+function isAttackChainWindow(value: string | null | undefined): value is AttackChainWindow {
+  return typeof value === 'string' && CHAIN_WINDOW_VALUES.has(value as AttackChainWindow);
+}
+
+// Default lookback for first-time loads. Picked to be wide enough that a
+// case with linked alerts from a typical investigation horizon (the day
+// before, an active shift) renders chain links instead of the empty state
+// on first paint; analysts who want a tighter view narrow with the
+// selector, and the choice is persisted on the URL via `?window=…`.
+const DEFAULT_CHAIN_WINDOW: AttackChainWindow = '24h';
+
 function AttackChainPanel({ caseId }: { caseId: string }) {
   // Mirror AttackPathPanel's guard: caseId can be empty during the brief window
   // between route hydration and the case fetch resolving. Calling the API with
   // `undefined` returns a 5xx and confuses analysts during the demo flow.
   const hasCaseId = Boolean(caseId);
-  const [windowParam, setWindowParam] = useState<AttackChainWindow>('1h');
+
+  // Honor `?window=…` so a deep-link like
+  // `/cases/INC-001?tab=attack-chain&window=24h` lands the analyst on
+  // the same lookback the linker chose. Only the initial value is read
+  // from search params; subsequent user selections write back through
+  // `history.replaceState` (see `handleWindowChange`) so the choice
+  // survives reload without coupling this panel to the next/navigation
+  // router instance (which can be undefined in unit tests).
+  const searchParams = useSearchParams();
+  const initialWindow: AttackChainWindow = useMemo(() => {
+    const raw = searchParams?.get('window') ?? null;
+    return isAttackChainWindow(raw) ? raw : DEFAULT_CHAIN_WINDOW;
+  }, [searchParams]);
+  const [windowParam, setWindowParam] = useState<AttackChainWindow>(initialWindow);
+
+  const handleWindowChange = useCallback((next: AttackChainWindow) => {
+    setWindowParam(next);
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('window', next);
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Best-effort URL sync; a malformed location shouldn't break the
+      // panel. The state update above is the source of truth either way.
+    }
+  }, []);
+
   const { data, error, isLoading } = useSWR<AttackChainTimeline | null>(
     hasCaseId ? ['case:attack-chain', caseId, windowParam] : null,
     () => casesApi.getAttackChain(caseId, { window: windowParam }),
@@ -1436,7 +1478,7 @@ function AttackChainPanel({ caseId }: { caseId: string }) {
   if (!data || data.chain.length === 0) {
     return (
       <div className="space-y-3">
-        <WindowSelector value={windowParam} onChange={setWindowParam} />
+        <WindowSelector value={windowParam} onChange={handleWindowChange} />
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/30">
             <svg className="h-5 w-5 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1498,7 +1540,7 @@ function AttackChainPanel({ caseId }: { caseId: string }) {
           >
             confidence {confidencePct}%
           </span>
-          <WindowSelector value={windowParam} onChange={setWindowParam} />
+          <WindowSelector value={windowParam} onChange={handleWindowChange} />
         </div>
       </div>
 
