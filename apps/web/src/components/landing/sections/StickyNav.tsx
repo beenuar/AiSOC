@@ -27,7 +27,7 @@ const NAV_LINKS: ReadonlyArray<{ label: string; href: string }> = [
   { label: 'Connectors', href: '#connectors' },
   { label: 'Benchmark', href: '#benchmark' },
   { label: 'Pricing', href: '#pricing' },
-  { label: 'Docs', href: 'https://docs.tryaisoc.com' },
+  { label: 'Docs', href: 'https://github.com/beenuar/AiSOC#readme' },
 ];
 
 export function StickyNav() {

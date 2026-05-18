@@ -41,8 +41,8 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
   {
     heading: 'Resources',
     links: [
-      { label: 'Docs', href: 'https://docs.tryaisoc.com' },
-      { label: 'Architecture', href: 'https://docs.tryaisoc.com/architecture' },
+      { label: 'Docs', href: 'https://github.com/beenuar/AiSOC#readme' },
+      { label: 'Architecture', href: 'https://github.com/beenuar/AiSOC#readme' },
       { label: 'Benchmark', href: '/benchmark' },
       { label: 'Blog', href: '/blog' },
       { label: 'Changelog', href: '/changelog' },

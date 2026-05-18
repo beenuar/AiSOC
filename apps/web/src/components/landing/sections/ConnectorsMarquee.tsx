@@ -203,7 +203,7 @@ export function ConnectorsMarquee() {
                 TypeScript, and Go.
               </p>
               <Link
-                href="https://docs.tryaisoc.com/connectors/sdk"
+                href="https://github.com/beenuar/AiSOC#readme"
                 className="group mt-5 inline-flex items-center gap-1 text-sm font-semibold text-velvet-emerald-mint transition-colors duration-200 hover:text-velvet-emerald-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
               >
                 Read the connector SDK

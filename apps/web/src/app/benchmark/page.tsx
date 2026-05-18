@@ -169,7 +169,7 @@ export default async function BenchmarkPage() {
             append-only weekly history (substrate and wet-eval rows side-by-side
             with a MITRE-accuracy trend chart), see the{' '}
             <a
-              href="https://docs.tryaisoc.com/docs/benchmark-scoreboard"
+              href="https://github.com/beenuar/AiSOC#readme"
               target="_blank"
               rel="noreferrer"
               className="underline decoration-dotted hover:text-gray-300"

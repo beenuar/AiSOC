@@ -288,7 +288,7 @@ export function DemoEmbed() {
             />
           </Link>
           <Link
-            href="https://docs.tryaisoc.com/architecture"
+            href="https://github.com/beenuar/AiSOC#readme"
             className="inline-flex items-center gap-1 text-sm font-medium text-velvet-content-tertiary transition-colors duration-200 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             Read the architecture
