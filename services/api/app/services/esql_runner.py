@@ -50,6 +50,7 @@ test that wires ``_execute_hunt`` through this helper.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -59,6 +60,32 @@ import httpx
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
+
+# `| LIMIT N` detection for the row-cap appender, robust against the
+# quoted-string bypass. ES|QL string literals can embed `|` and the
+# `LIMIT` keyword freely, so a naive substring check could be fooled by
+# a hostile-but-syntactically-valid hunt like::
+#
+#   FROM logs-* | WHERE message == "this includes | LIMIT 5"
+#
+# We strip quoted strings first, then look for `| LIMIT` (case-insensitive)
+# in what's left — which is the actual pipeline outside of any literal.
+# Removal is conservative: both `'...'` and `"..."`, no backslash-escape
+# unescaping needed because we only care that the contents are gone.
+_STRING_LITERAL_RE = re.compile(r"'[^']*'|\"[^\"]*\"")
+_PIPE_LIMIT_RE = re.compile(r"\|\s*limit\b", re.IGNORECASE)
+
+
+def _has_toplevel_limit(esql: str) -> bool:
+    """True iff ``esql`` already contains a real ``| LIMIT`` clause.
+
+    See module-level note: strips string literals before scanning so a
+    quoted ``| LIMIT 5`` inside a WHERE clause doesn't suppress the
+    runner's max_rows cap.
+    """
+    stripped = _STRING_LITERAL_RE.sub("", esql)
+    return bool(_PIPE_LIMIT_RE.search(stripped))
+
 
 __all__ = [
     "ESQLExecutionError",
@@ -131,9 +158,7 @@ def _validate_es_url(url: str) -> str:
     if candidate.scheme not in ("http", "https"):
         raise ValueError(f"Unsupported URL scheme: {candidate.scheme!r}")
     if candidate.netloc != allowed.netloc:
-        raise ValueError(
-            f"ES URL host {candidate.netloc!r} is not the configured host {allowed.netloc!r}"
-        )
+        raise ValueError(f"ES URL host {candidate.netloc!r} is not the configured host {allowed.netloc!r}")
     return f"{candidate.scheme}://{candidate.netloc}"
 
 
@@ -149,17 +174,10 @@ def resolve_es_credentials(
     Raises :class:`ESQLNotConfigured` when neither side supplies both
     pieces — letting the caller pick its own "skip" vs "error" policy.
     """
-    resolved_url = (
-        es_url
-        or getattr(settings, "ES_URL", None)
-        or getattr(settings, "ELASTICSEARCH_URL", None)
-    )
+    resolved_url = es_url or getattr(settings, "ES_URL", None) or getattr(settings, "ELASTICSEARCH_URL", None)
     resolved_key = es_api_key or getattr(settings, "ES_API_KEY", None)
     if not resolved_url or not resolved_key:
-        raise ESQLNotConfigured(
-            "ES_URL or ES_API_KEY not configured. Set them in environment "
-            "variables or pass them explicitly."
-        )
+        raise ESQLNotConfigured("ES_URL or ES_API_KEY not configured. Set them in environment variables or pass them explicitly.")
     return resolved_url, resolved_key
 
 
@@ -212,10 +230,21 @@ async def run_esql_query(
     # so this is safe to call unconditionally.
     enforce_airgap_for_url(es_query_url)
 
-    # Append a LIMIT if the translator didn't already supply one. We
-    # match case-insensitively because the deterministic translator
-    # emits "LIMIT" but a future LLM enhancement might lower-case it.
-    query = esql if "| LIMIT" in esql.upper() else f"{esql}\n| LIMIT {max_rows}"
+    # Append a LIMIT if the translator didn't already supply one.
+    #
+    # Detection is intentionally line-anchored on a top-level pipe, NOT
+    # a naive substring scan, because ES|QL string literals embed the
+    # `|` and `LIMIT` keyword freely — e.g.
+    #
+    #   FROM logs | WHERE message == "this includes | LIMIT 5"
+    #
+    # would have fooled the previous `"| LIMIT" in esql.upper()` check
+    # into thinking the query already had a row cap, letting a tenant
+    # admin who can save hunts bypass the runner's max_rows ceiling
+    # entirely. The regex requires the pipe + LIMIT pair to be the
+    # leading non-whitespace token of a line, which is how ES|QL pipes
+    # are actually parsed.
+    query = esql if _has_toplevel_limit(esql) else f"{esql}\n| LIMIT {max_rows}"
 
     t0 = time.monotonic()
     try:

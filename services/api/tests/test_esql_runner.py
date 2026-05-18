@@ -48,7 +48,6 @@ from app.services.esql_runner import (
     run_esql_query,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -110,11 +109,7 @@ def _mock_httpx_client(
     response.status_code = status_code
     response.json = MagicMock(return_value=json_payload or {"columns": [], "values": []})
     if status_code >= 400:
-        response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "boom", request=MagicMock(), response=response
-            )
-        )
+        response.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError("boom", request=MagicMock(), response=response))
     else:
         response.raise_for_status = MagicMock()
 
@@ -250,9 +245,7 @@ class TestResolveEsCredentials:
 class TestRunEsqlQueryHappyPath:
     """The 200-response shape pins the contract for both callers."""
 
-    def test_returns_columns_rows_and_took_ms(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_columns_rows_and_took_ms(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         client_factory, _post_mock = _mock_httpx_client(
             json_payload={
                 "columns": [{"name": "@timestamp", "type": "date"}, {"name": "host.name", "type": "keyword"}],
@@ -280,9 +273,7 @@ class TestRunEsqlQueryHappyPath:
         ]
         assert result.took_ms >= 0
 
-    def test_post_target_url_is_validated_and_rebuilt(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_post_target_url_is_validated_and_rebuilt(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """Even if the caller passes a URL with a path, the runner
         reconstructs the target as ``<scheme>://<netloc>/_query``."""
         client_factory, post_mock = _mock_httpx_client()
@@ -302,9 +293,7 @@ class TestRunEsqlQueryHappyPath:
         called_url = args[0] if args else kwargs.get("url")
         assert called_url == "http://es.local:9200/_query"
 
-    def test_appends_limit_when_caller_did_not(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_appends_limit_when_caller_did_not(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         client_factory, post_mock = _mock_httpx_client()
         monkeypatch.setattr(esql_runner.httpx, "AsyncClient", client_factory)
 
@@ -321,9 +310,7 @@ class TestRunEsqlQueryHappyPath:
         query_sent = kwargs["json"]["query"]
         assert "| LIMIT 42" in query_sent
 
-    def test_preserves_caller_supplied_limit(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_preserves_caller_supplied_limit(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """If the translator already emitted ``| LIMIT 10``, the runner
         must not append a second LIMIT — Elasticsearch rejects two
         LIMITs in a single query."""
@@ -346,9 +333,7 @@ class TestRunEsqlQueryHappyPath:
         assert query_sent.upper().count("| LIMIT") == 1
         assert "| LIMIT 10" in query_sent
 
-    def test_limit_detection_is_case_insensitive(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_limit_detection_is_case_insensitive(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLM-enhanced queries may lower-case ``LIMIT``. The detector
         must still notice it and not double-append."""
         client_factory, post_mock = _mock_httpx_client()
@@ -367,9 +352,41 @@ class TestRunEsqlQueryHappyPath:
         query_sent = kwargs["json"]["query"]
         assert query_sent.upper().count("| LIMIT") == 1
 
-    def test_authorization_header_is_api_key(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_limit_inside_quoted_literal_does_not_skip_cap(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Regression for PR #144 review item: a tenant admin who can
+        save hunts could bypass ``max_rows`` by embedding the literal
+        ``| LIMIT`` token inside a quoted string in their ES|QL.
+
+        Before the line-anchored regex detector, this query::
+
+            FROM logs-* | WHERE message == "this includes | LIMIT 5"
+
+        passed the naive ``"| LIMIT" in esql.upper()`` substring check,
+        so the runner shipped it unmodified — letting the caller pull
+        unlimited rows back through the API. The detector now anchors
+        on a top-level pipe at the start of a line, which is how ES|QL
+        actually parses its pipes.
+        """
+        client_factory, post_mock = _mock_httpx_client()
+        monkeypatch.setattr(esql_runner.httpx, "AsyncClient", client_factory)
+
+        evil = 'FROM logs-* | WHERE message == "this includes | LIMIT 5"'
+        asyncio.run(
+            run_esql_query(
+                esql=evil,
+                es_url="http://es.local:9200",
+                es_api_key="test-api-key",
+                max_rows=42,
+            )
+        )
+
+        _, kwargs = post_mock.call_args
+        query_sent = kwargs["json"]["query"]
+        # The runner MUST have appended its own cap — the quoted-string
+        # `| LIMIT 5` is just text in the WHERE clause, not a real pipe.
+        assert "\n| LIMIT 42" in query_sent, f"runner failed to append max_rows cap on quoted-LIMIT bypass; sent: {query_sent!r}"
+
+    def test_authorization_header_is_api_key(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """ES expects ``Authorization: ApiKey <key>``, not Bearer."""
         client_factory, post_mock = _mock_httpx_client()
         monkeypatch.setattr(esql_runner.httpx, "AsyncClient", client_factory)
@@ -397,9 +414,7 @@ class TestRunEsqlQueryErrors:
     """Each failure mode maps to a distinct exception so callers can
     surface a precise error to the analyst (rather than a generic 500)."""
 
-    def test_mismatched_host_raises_value_error_before_post(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_mismatched_host_raises_value_error_before_post(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """SSRF guard fires *before* we open the httpx client, so a
         hostile URL never hits the network."""
         client_factory, post_mock = _mock_httpx_client()
@@ -416,9 +431,7 @@ class TestRunEsqlQueryErrors:
 
         post_mock.assert_not_awaited()
 
-    def test_http_status_error_wraps_into_esql_execution_error(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_http_status_error_wraps_into_esql_execution_error(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         client_factory, _post_mock = _mock_httpx_client(status_code=500)
         monkeypatch.setattr(esql_runner.httpx, "AsyncClient", client_factory)
 
@@ -431,15 +444,11 @@ class TestRunEsqlQueryErrors:
                 )
             )
 
-    def test_transport_error_wraps_into_esql_execution_error(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_transport_error_wraps_into_esql_execution_error(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """A network-level httpx error (timeout, conn refused, etc.) is
         wrapped into ``ESQLExecutionError`` so callers don't need an
         httpx import in their except clauses."""
-        client_factory, _post_mock = _mock_httpx_client(
-            raise_on_post=httpx.ConnectError("connection refused")
-        )
+        client_factory, _post_mock = _mock_httpx_client(raise_on_post=httpx.ConnectError("connection refused"))
         monkeypatch.setattr(esql_runner.httpx, "AsyncClient", client_factory)
 
         with pytest.raises(ESQLExecutionError, match="ES|QL execution failed"):
@@ -451,12 +460,11 @@ class TestRunEsqlQueryErrors:
                 )
             )
 
-    def test_airgap_violation_propagates_unchanged(
-        self, pin_es_settings, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_airgap_violation_propagates_unchanged(self, pin_es_settings, monkeypatch: pytest.MonkeyPatch) -> None:
         """Air-gap is special: the endpoint surfaces it as a dedicated
         503, so the runner must propagate the original exception type
         rather than wrap it in ``ESQLExecutionError``."""
+
         # Pretend the air-gap guard fires for this URL.
         def _explode(_url: str) -> None:
             raise AirgapViolation("blocked by air-gap policy")
