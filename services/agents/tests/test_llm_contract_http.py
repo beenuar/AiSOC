@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
 from app.llm.contract import (
     DEFAULT_OPENAI_CHAT_COMPLETIONS_URL,
     LLMContractViolation,
@@ -42,11 +41,7 @@ def _mock_async_client(response_json: dict[str, Any], status: int = 200):
     response.status_code = status
     response.json = MagicMock(return_value=response_json)
     if status >= 400:
-        response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                f"status {status}", request=MagicMock(), response=response
-            )
-        )
+        response.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError(f"status {status}", request=MagicMock(), response=response))
     else:
         response.raise_for_status = MagicMock(return_value=None)
 
