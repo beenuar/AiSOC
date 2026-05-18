@@ -226,6 +226,25 @@ _TELEMETRY_PATH = (
     _AGENTS_ROOT / "tests" / "eval_data" / "synthetic_telemetry.jsonl"
 )
 
+# Canonical suite name list. Kept in lock-step with the keys of
+# ``summary["suites"]`` built in ``main()`` and the per-suite ``_run_*``
+# helpers above. ``--suite all`` is the default; passing one of these names
+# runs that suite in isolation (used by the per-axis CI matrix and by
+# operators bisecting a regression to a single gate).
+_SUITE_NAMES: tuple[str, ...] = (
+    "mitre_accuracy",
+    "alert_reduction",
+    "investigation_completeness",
+    "response_quality",
+    "hunt_corpus",
+    "adversary_eval",
+    "confidence_calibration",
+    "memory_recall",
+    "override_accuracy",
+    "playbook_completion_rate",
+    "detection_fp_rate",
+)
+
 
 def _run_mitre() -> dict:
     t0 = time.perf_counter()
