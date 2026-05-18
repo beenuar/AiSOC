@@ -5899,6 +5899,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/metrics/funnel:
+    get:
+      tags:
+      - metrics
+      summary: Get Funnel Metrics
+      description: 'Return the live tenant funnel for the SOC Console (v1.5).
+
+
+        Funnel: events_of_interest → correlation_instances → alerts_generated →
+
+        analyst_queue_depth, plus efficiency ratios and MITRE coverage.
+
+
+        ``deltas`` compares the current window to the immediately preceding window
+
+        of the same length (e.g. for ``period=24h`` we compare to the 24h ending
+
+        24h ago). Values are percentage changes rounded to two decimals; a delta
+
+        of ``0.0`` means "no meaningful baseline" (the previous window was empty).'
+      operationId: get_funnel_metrics_api_v1_metrics_funnel_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(1h|24h|7d|30d)$
+          default: 24h
+          title: Period
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelMetrics'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/health/pipeline:
+    get:
+      tags:
+      - health
+      summary: Get Pipeline Health
+      description: 'Return a 5-stage health snapshot of the SOC pipeline for the tenant.
+
+
+        Stages: ``ingest → normalize → fuse → correlate → alert``. See the
+
+        module docstring for what each cell measures and why some columns
+
+        are intentionally ``0`` until deeper instrumentation lands.
+
+
+        The window for latency / backlog computations is the last hour.
+
+        The ``status`` ladder is ``unknown | green | yellow | red`` and
+
+        follows the same convention as
+
+        ``app.services.connector_freshness``.'
+      operationId: get_pipeline_health_api_v1_health_pipeline_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineHealth'
+      security:
+      - HTTPBearer: []
   /api/v1/insights/soc:
     get:
       tags:
@@ -12402,6 +12479,190 @@ paths:
                 $ref: '#/components/schemas/LakeSchemaResponse'
       security:
       - HTTPBearer: []
+  /api/v1/waitlist/signup:
+    post:
+      tags:
+      - waitlist
+      summary: Public waitlist signup (rate-limited per IP).
+      description: Persist a new signup, fire a Slack ping, return the entry id.
+      operationId: signup_api_v1_waitlist_signup_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaitlistSignupRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistSignupResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/waitlist/entries:
+    get:
+      tags:
+      - waitlist
+      summary: List waitlist entries (admin only).
+      operationId: list_entries_api_v1_waitlist_entries_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: status_filter
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status Filter
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistEntriesResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/waitlist/entries/{entry_id}:
+    patch:
+      tags:
+      - waitlist
+      summary: Update a waitlist entry's status (admin only).
+      operationId: patch_entry_api_v1_waitlist_entries__entry_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: entry_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Entry Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WaitlistPatchRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistEntryWire'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/admin/tenants/provision:
+    post:
+      tags:
+      - admin
+      - tenants
+      summary: Promote a waitlist entry into a live managed tenant.
+      description: 'Provision a new tenant from a waitlist entry.
+
+
+        Idempotent on the waitlist entry id: a repeat call for an
+
+        already-provisioned entry returns the existing tenant + a fresh
+
+        invite link (the demo seed is *not* re-run). This keeps the
+
+        support team from creating duplicate tenants if they click the
+
+        button twice on a flaky network.'
+      operationId: provision_tenant_api_v1_admin_tenants_provision_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantProvisionRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantProvisionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/admin/tenants:
+    get:
+      tags:
+      - admin
+      - tenants
+      summary: List tenants for the support team.
+      description: Read-only tenant list, sorted by creation time descending.
+      operationId: list_tenants_api_v1_admin_tenants_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
+      - name: managed_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Managed Only
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 200
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /auth/saml/login:
     get:
       tags:
@@ -12757,6 +13018,23 @@ components:
       required:
       - findings
       title: AddFindingsRequest
+    AdminInviteWire:
+      properties:
+        token:
+          type: string
+          title: Token
+        expires_at:
+          type: string
+          title: Expires At
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - token
+      - expires_at
+      - url
+      title: AdminInviteWire
     AgentToolDescriptor:
       properties:
         name:
@@ -18854,6 +19132,23 @@ components:
       - inbox_url
       title: IngestTokenResponse
       description: Push-token response. ``inbox_url`` is the absolute endpoint.
+    InitialAdminUserWire:
+      properties:
+        id:
+          type: string
+          title: Id
+        email:
+          type: string
+          title: Email
+        role:
+          type: string
+          title: Role
+      type: object
+      required:
+      - id
+      - email
+      - role
+      title: InitialAdminUserWire
     InsightSparkline:
       properties:
         points:
@@ -23841,6 +24136,66 @@ components:
         badge (Workstream 5). Intentionally excludes `plan`, `settings`, and
 
         `limits` so it does not leak privileged config to viewer/analyst roles.'
+    TenantListEntry:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        slug:
+          type: string
+          title: Slug
+        plan:
+          type: string
+          title: Plan
+        is_active:
+          type: boolean
+          title: Is Active
+        is_managed:
+          type: boolean
+          title: Is Managed
+        provisioned_from_waitlist_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provisioned From Waitlist Id
+        provisioned_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provisioned At
+        created_at:
+          type: string
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - slug
+      - plan
+      - is_active
+      - is_managed
+      - provisioned_from_waitlist_id
+      - provisioned_at
+      - created_at
+      title: TenantListEntry
+    TenantListResponse:
+      properties:
+        tenants:
+          items:
+            $ref: '#/components/schemas/TenantListEntry'
+          type: array
+          title: Tenants
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - tenants
+      - total
+      title: TenantListResponse
     TenantNoteCreate:
       properties:
         child_id:
@@ -23890,6 +24245,79 @@ components:
       - author_id
       - created_at
       title: TenantNoteOut
+    TenantProvisionRequest:
+      properties:
+        waitlist_entry_id:
+          type: string
+          format: uuid
+          title: Waitlist Entry Id
+        seed_demo:
+          type: boolean
+          title: Seed Demo
+          default: true
+        invite_base_url:
+          anyOf:
+          - type: string
+            maxLength: 512
+          - type: 'null'
+          title: Invite Base Url
+      type: object
+      required:
+      - waitlist_entry_id
+      title: TenantProvisionRequest
+      description: 'Body of the provision POST.
+
+
+        ``waitlist_entry_id`` is the only required field. The optional
+
+        ``seed_demo`` flag lets the operator turn off the starter dataset
+
+        for tenants where the customer wants a clean slate.'
+    TenantProvisionResponse:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        tenant_slug:
+          type: string
+          title: Tenant Slug
+        tenant_name:
+          type: string
+          title: Tenant Name
+        waitlist_entry_id:
+          type: string
+          title: Waitlist Entry Id
+        admin_user:
+          $ref: '#/components/schemas/InitialAdminUserWire'
+        admin_invite:
+          $ref: '#/components/schemas/AdminInviteWire'
+        demo_seeded:
+          type: boolean
+          title: Demo Seeded
+        aisoc_credential_key_fingerprint:
+          type: string
+          title: Aisoc Credential Key Fingerprint
+      type: object
+      required:
+      - tenant_id
+      - tenant_slug
+      - tenant_name
+      - waitlist_entry_id
+      - admin_user
+      - admin_invite
+      - demo_seeded
+      - aisoc_credential_key_fingerprint
+      title: TenantProvisionResponse
+      description: 'JSON projection of :class:`ProvisionResult`.
+
+
+        ``aisoc_credential_key_fingerprint`` is surfaced so the support
+
+        UI can confirm at a glance which key the tenant is on. The
+
+        *plaintext* key is never returned; it''s only readable from the
+
+        process environment where it was minted.'
     TenantResponse:
       properties:
         id:
@@ -25419,6 +25847,11 @@ components:
         type:
           type: string
           title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
       type: object
       required:
       - loc
@@ -25573,6 +26006,148 @@ components:
       - last_found
       - remediated_at
       title: VulnerabilityOut
+    WaitlistEntriesResponse:
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/WaitlistEntryWire'
+          type: array
+          title: Entries
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - entries
+      - total
+      title: WaitlistEntriesResponse
+    WaitlistEntryWire:
+      properties:
+        id:
+          type: string
+          title: Id
+        email:
+          type: string
+          title: Email
+        company:
+          type: string
+          title: Company
+        role:
+          type: string
+          title: Role
+        soc_stack:
+          items:
+            type: string
+          type: array
+          title: Soc Stack
+        motivation:
+          type: string
+          title: Motivation
+        status:
+          type: string
+          title: Status
+        provisioned_tenant_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provisioned Tenant Id
+        created_at:
+          type: string
+          title: Created At
+        contacted_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contacted At
+        onboarded_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Onboarded At
+      type: object
+      required:
+      - id
+      - email
+      - company
+      - role
+      - soc_stack
+      - motivation
+      - status
+      - provisioned_tenant_id
+      - created_at
+      - contacted_at
+      - onboarded_at
+      title: WaitlistEntryWire
+      description: Admin-list / admin-patch response shape.
+    WaitlistPatchRequest:
+      properties:
+        status:
+          type: string
+          maxLength: 32
+          minLength: 1
+          title: Status
+      type: object
+      required:
+      - status
+      title: WaitlistPatchRequest
+    WaitlistSignupRequest:
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          minLength: 3
+          title: Email
+        company:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Company
+        role:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Role
+        soc_stack:
+          items:
+            type: string
+          type: array
+          title: Soc Stack
+        motivation:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Motivation
+      type: object
+      required:
+      - email
+      - company
+      - role
+      - motivation
+      title: WaitlistSignupRequest
+      description: The exact payload the marketing form posts.
+    WaitlistSignupResponse:
+      properties:
+        ok:
+          type: boolean
+          title: Ok
+          default: true
+        message:
+          type: string
+          title: Message
+          default: We'll be in touch within 5 business days.
+        entry_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Entry Id
+      type: object
+      title: WaitlistSignupResponse
+      description: 'The reply to a successful (or idempotent-no-op) signup.
+
+
+        Same shape whether the email was net-new or already on the list —
+
+        the prospect should not be able to enumerate existing signups.'
     WatchlistUpdate:
       properties:
         is_watchlisted:
