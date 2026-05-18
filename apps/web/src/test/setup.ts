@@ -7,6 +7,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { mutate } from 'swr';
 // NOTE: vitest-axe@0.1.0 ships a broken `vitest-axe/matchers.d.ts` that wraps
 // its re-exports in `export type *`, so TS thinks `toHaveNoViolations` is a
 // type even though the JS file exports a function. The deep path resolves to
@@ -21,6 +22,15 @@ expect.extend({ toHaveNoViolations });
 
 afterEach(() => {
   cleanup();
+  // SWR keeps a *module-scoped* cache that survives across tests in the
+  // same file. A test that mocks a fetcher to return an unresolved
+  // ``new Promise(() => {})`` (the loading-state smoke test) leaves that
+  // promise pinned to the cache key, so the next test's
+  // ``mockResolvedValue`` is silently ignored and the loading state
+  // bleeds through. Clear every key after each test so SWR refetches
+  // from the freshly-installed mock. See SOCInsightsView.test.tsx for
+  // the failure mode this avoids.
+  void mutate(() => true, undefined, { revalidate: false });
 });
 
 // matchMedia is touched by some recharts/framer-motion code paths.
