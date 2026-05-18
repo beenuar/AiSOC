@@ -22,11 +22,15 @@ kill_timeout   = "5s"
 # deploy script cd's into services/api/ before invoking `flyctl deploy`, so
 # the right Dockerfile gets picked up automatically.
 
-# Run alembic migrations and re-seed the demo dataset on every deploy.
+# Run SQL migrations and re-seed the demo dataset on every deploy.
 # The release_command runs in a temporary VM with all production env vars
 # (Postgres URL, Redis URL, secrets) before any app machine accepts traffic,
 # which is exactly what we want for demo-tenant data lifecycle:
-#   1. `alembic upgrade head` keeps the schema in step with the image.
+#   1. `python -m app.scripts.run_migrations` applies the raw-SQL files under
+#      services/api/migrations/ and tracks them in aisoc_schema_migrations, so
+#      the schema stays in step with the image. (This service does not use
+#      Alembic — no alembic.ini / env.py exist here; the package is listed in
+#      pyproject only for integration tests.)
 #   2. `python -m app.scripts.seed_demo` is idempotent — it short-circuits
 #      when the canonical INC-RT-* case_numbers already exist, so it's safe
 #      to run on every deploy. First-run boot creates all 15 incidents
@@ -36,7 +40,7 @@ kill_timeout   = "5s"
 # users on an empty dashboard and breaks the < 5 min clone-to-investigation
 # acceptance criterion in the v1.0 plan.
 [deploy]
-  release_command = "/bin/sh -c 'alembic upgrade head && python -m app.scripts.seed_demo'"
+  release_command = "/bin/sh -c 'python -m app.scripts.run_migrations && python -m app.scripts.seed_demo'"
 
 [env]
   ENVIRONMENT      = "demo"
