@@ -289,6 +289,23 @@ function isScaffold501(error: unknown): boolean {
 function syncUrl(provider: SupportedProvider, principalId: string, denyOnly: boolean) {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(window.location.search);
+
+  // Diff-then-write: the mount effect always fires once with the values
+  // that came *from* the URL. If we wrote unconditionally we would
+  // canonicalise the param order (and drop any non-tracked params like
+  // `?from=case-INC-001` that a deep link tacked on) on every page load.
+  // Compare to the current URL first and only `replaceState` when at
+  // least one tracked param actually changed.
+  const currentProvider = params.get('provider');
+  const currentPrincipal = params.get('principal_id');
+  const currentDenyOnly = params.get('deny_only');
+  const desiredPrincipal = principalId || null;
+  const desiredDenyOnly = denyOnly ? '1' : null;
+  const sameProvider = currentProvider === provider;
+  const samePrincipal = currentPrincipal === desiredPrincipal;
+  const sameDenyOnly = currentDenyOnly === desiredDenyOnly;
+  if (sameProvider && samePrincipal && sameDenyOnly) return;
+
   params.set('provider', provider);
   if (principalId) {
     params.set('principal_id', principalId);

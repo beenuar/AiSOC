@@ -59,6 +59,12 @@ function syntheticPayload(decisions: number): ResolverResultPayload {
 }
 
 describe('EffectivePermissionsView (smoke)', () => {
+  // NOTE: the 3s budget below covers the synchronous payload→Cytoscape
+  // element transform *only*. Real first-paint also pays for the
+  // `fcose` layout that runs inside the component's `useEffect`, which
+  // is dominated by graph topology and Cytoscape internals. If
+  // analysts report slow first-paint on real tenants, profile the
+  // layout phase in the browser; tightening this transform won't help.
   it('builds elements for 1000 decisions in < 3s', () => {
     const payload = syntheticPayload(1000);
 
