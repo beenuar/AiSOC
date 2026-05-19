@@ -38,9 +38,9 @@ def test_every_connector_returns_a_schema(registry):
     for connector_id, cls in registry.items():
         schema = cls.schema()
         assert isinstance(schema, ConnectorSchema), f"{cls.__name__}.schema() must return ConnectorSchema, got {type(schema).__name__}"
-        assert schema.connector_id == connector_id, (
-            f"{cls.__name__}.schema().connector_id ({schema.connector_id!r}) does not match registry key ({connector_id!r})"
-        )
+        assert (
+            schema.connector_id == connector_id
+        ), f"{cls.__name__}.schema().connector_id ({schema.connector_id!r}) does not match registry key ({connector_id!r})"
 
 
 def test_schema_metadata_is_well_formed(registry):
@@ -93,6 +93,6 @@ def test_secret_fields_are_marked_secret(registry):
     for cls in registry.values():
         for field in cls.schema().fields:
             if any(s in field.name.lower() for s in suspicious):
-                assert field.type == "secret", (
-                    f"{cls.__name__}.{field.name}: looks like a credential but type is {field.type!r}, expected 'secret'"
-                )
+                assert (
+                    field.type == "secret"
+                ), f"{cls.__name__}.{field.name}: looks like a credential but type is {field.type!r}, expected 'secret'"

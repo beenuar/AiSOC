@@ -168,10 +168,7 @@ class SublimeSecurityConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": raw.get("id") or raw.get("message_id") or "",
             "title": raw.get("subject") or rule_name or "Sublime Security message",
-            "description": (
-                f"verdict={verdict}; rule={rule_name}; "
-                f"from={sender.get('email')}; to={recipient}"
-            ),
+            "description": (f"verdict={verdict}; rule={rule_name}; " f"from={sender.get('email')}; to={recipient}"),
             "severity": severity,
             "actor": sender.get("email"),
             "actor_email": sender.get("email"),

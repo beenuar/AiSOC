@@ -32,8 +32,7 @@ from app.callbacks import callback_max_age_seconds, handle_card_action
 app = FastAPI(
     title="AiSOC Teams Bot",
     description=(
-        "ChatOps adapter for Microsoft Teams. Renders Adaptive Card "
-        "approval prompts and verifies the signed callback payload."
+        "ChatOps adapter for Microsoft Teams. Renders Adaptive Card " "approval prompts and verifies the signed callback payload."
     ),
     version="0.1.0",
 )
@@ -53,11 +52,7 @@ def _resolve_approver(activity: dict[str, Any]) -> str:
     identifier (guest users, anon links).
     """
     sender = activity.get("from") or {}
-    return (
-        str(sender.get("aadObjectId") or "").strip()
-        or str(sender.get("id") or "").strip()
-        or "unknown"
-    )
+    return str(sender.get("aadObjectId") or "").strip() or str(sender.get("id") or "").strip() or "unknown"
 
 
 @app.post("/teams/messages")

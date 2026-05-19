@@ -43,9 +43,9 @@ def test_azure_entra_schema_has_required_fields():
 def test_azure_activity_schema_includes_subscription_field():
     schema = AzureActivityConnector.schema()
     field_names = {f.name for f in schema.fields}
-    assert "subscription_id" in field_names, (
-        "azure_activity must collect a subscription_id; without it the polling loop has no scope to query"
-    )
+    assert (
+        "subscription_id" in field_names
+    ), "azure_activity must collect a subscription_id; without it the polling loop has no scope to query"
     assert {"tenant_id", "client_id", "client_secret"} <= field_names
     assert schema.category == "cloud"
 
@@ -393,9 +393,7 @@ async def test_azure_defender_get_resource_config_non_200_returns_empty():
     respx.post(f"https://login.microsoftonline.com/{_TENANT}/oauth2/v2.0/token").mock(
         return_value=httpx.Response(200, json={"access_token": "abc", "expires_in": 3600})
     )
-    respx.get("https://graph.microsoft.com/v1.0/security/alerts_v2/missing").mock(
-        return_value=httpx.Response(404, text="not found")
-    )
+    respx.get("https://graph.microsoft.com/v1.0/security/alerts_v2/missing").mock(return_value=httpx.Response(404, text="not found"))
 
     connector = AzureDefenderConnector(_TENANT, _CLIENT, _SECRET)
     assert await connector.get_resource_config("missing") == {}

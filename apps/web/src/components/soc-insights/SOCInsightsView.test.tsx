@@ -12,6 +12,8 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { SWRConfig } from 'swr';
+import type { ReactElement } from 'react';
 
 vi.mock('@/lib/api', () => ({
   insightsApi: {
@@ -32,6 +34,23 @@ vi.mock('@/lib/realtime', () => ({
 import { insightsApi, type SOCInsightsResponse } from '@/lib/api';
 import { SOCInsightsView } from './SOCInsightsView';
 import { pointsToPath } from './Sparkline';
+
+/**
+ * SWR keeps a process-global cache by default. When one test parks a never-
+ * resolving promise on the key (skeleton case), the next test inherits that
+ * pending state and the new `mockResolvedValue` is ignored — the cache says
+ * "we're already loading, don't re-fetch". Wrapping each render in a fresh
+ * `SWRConfig` provider gives every test its own Map, so the cache cannot
+ * leak across `describe` siblings. This is the standard pattern from the
+ * SWR docs (https://swr.vercel.app/docs/advanced/cache).
+ */
+function renderIsolated(node: ReactElement) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      {node}
+    </SWRConfig>,
+  );
+}
 
 const sampleResponse: SOCInsightsResponse = {
   window: '24h',
@@ -116,7 +135,7 @@ describe('SOCInsightsView', () => {
       new Promise(() => {}),
     );
 
-    render(<SOCInsightsView />);
+    renderIsolated(<SOCInsightsView />);
 
     expect(screen.getByLabelText(/loading soc insights/i)).toBeInTheDocument();
   });
@@ -126,7 +145,7 @@ describe('SOCInsightsView', () => {
       sampleResponse,
     );
 
-    render(<SOCInsightsView />);
+    renderIsolated(<SOCInsightsView />);
 
     // Wait for at least one tile to land — proves the SWR cycle
     // completed without re-rendering into the error/loading branch.
@@ -150,7 +169,7 @@ describe('SOCInsightsView', () => {
       new Error('500 boom'),
     );
 
-    render(<SOCInsightsView />);
+    renderIsolated(<SOCInsightsView />);
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toBeInTheDocument(),

@@ -373,17 +373,26 @@ function useDashboardLayout() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { data: rawMetrics } = useSWR(
+  const { data: rawMetrics, error: metricsError } = useSWR(
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
     {
       fallbackData: MOCK_METRICS,
       refreshInterval: 60000,
-      shouldRetryOnError: false,
-      errorRetryCount: 0,
+      revalidateOnMount: true,
       revalidateOnFocus: false,
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      errorRetryInterval: 4000,
     }
   );
+
+  const metricsErrorMessage =
+    metricsError instanceof Error
+      ? metricsError.message
+      : metricsError
+        ? String(metricsError)
+        : null;
 
   // Hybrid: prefer real API fields when present, fall back to mock for missing
   // sections (e.g. /metrics/dashboard currently returns alertsTrend: [] and no
@@ -577,6 +586,18 @@ export function DashboardView() {
   return (
     <DashboardErrorBoundary>
       <div className="space-y-5">
+        {metricsErrorMessage && (
+          <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            <p className="font-semibold">Dashboard metrics unavailable</p>
+            <p className="mt-1 text-xs text-red-300/80">
+              {metricsErrorMessage}
+            </p>
+            <p className="mt-1 text-xs text-red-300/60">
+              Showing baseline mock data while SWR retries every 4s. Refresh the
+              page if it persists.
+            </p>
+          </div>
+        )}
         {order.map((id) => (
           <DraggableWidget
             key={id}

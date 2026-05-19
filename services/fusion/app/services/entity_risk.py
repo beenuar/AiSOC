@@ -164,7 +164,7 @@ class EntityRiskEngine:
         raw = await self._redis.zrevrange(key, 0, max(0, limit - 1), withscores=True)
         records: list[EntityRiskRecord] = []
         for member, _zscore in raw:
-            entity = member.decode() if isinstance(member, (bytes, bytearray)) else member
+            entity = member.decode() if isinstance(member, bytes | bytearray) else member
             entity_type, _, entity_value = entity.partition("::")
             rec = await self._load(str(tenant_id), entity_type, entity_value)
             if rec is None:
@@ -335,7 +335,7 @@ class EntityRiskEngine:
         if not data:
             return None
         decoded = {
-            (k.decode() if isinstance(k, (bytes, bytearray)) else k): (v.decode() if isinstance(v, (bytes, bytearray)) else v)
+            (k.decode() if isinstance(k, bytes | bytearray) else k): (v.decode() if isinstance(v, bytes | bytearray) else v)
             for k, v in data.items()
         }
         promoted_at = None
