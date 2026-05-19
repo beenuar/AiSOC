@@ -81,7 +81,7 @@ class Indicator:
         if self.operator not in _VALID_OPERATORS:
             raise QueryError(f"indicator.operator '{self.operator}' is not one of {sorted(_VALID_OPERATORS)}")
         if self.operator == "in":
-            if not isinstance(self.value, (list, tuple)) or not self.value:
+            if not isinstance(self.value, list | tuple) or not self.value:
                 raise QueryError("indicator with operator='in' requires a non-empty list value")
         elif self.value is None:
             raise QueryError(f"indicator.value must not be None for operator '{self.operator}'")

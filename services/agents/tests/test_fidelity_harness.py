@@ -36,12 +36,8 @@ import pytest
 from tests.fidelity import cicids_loader, ctu13_loader, runner
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-MICRO_FIXTURE = (
-    REPO_ROOT / "services/agents/tests/eval_data/cicids_micro.csv"
-)
-EXPECTED_RESULTS = (
-    REPO_ROOT / "services/agents/tests/fidelity/expected_results.yaml"
-)
+MICRO_FIXTURE = REPO_ROOT / "services/agents/tests/eval_data/cicids_micro.csv"
+EXPECTED_RESULTS = REPO_ROOT / "services/agents/tests/fidelity/expected_results.yaml"
 
 
 def _load_expected() -> dict[str, object]:
@@ -256,9 +252,7 @@ def test_wet_mode_falls_back_to_benign_on_http_failure(
     # is defensive on transport errors.
     assert result.rows_scored == 2
     benign_predicted = sum(
-        cell.get("benign", 0)
-        for actual, cell in result.confusion_matrix["matrix"].items()
-        if actual in result.confusion_matrix["labels"]
+        cell.get("benign", 0) for actual, cell in result.confusion_matrix["matrix"].items() if actual in result.confusion_matrix["labels"]
     )
     assert benign_predicted == 2
 

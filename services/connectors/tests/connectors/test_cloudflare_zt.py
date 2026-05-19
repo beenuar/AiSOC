@@ -108,12 +108,8 @@ async def test_fetch_alerts_uses_pagination(fixture):
 @respx.mock
 async def test_test_connection_success():
     c = CloudflareZTConnector(mode="access", account_id="a", api_token="t")
-    respx.get("https://api.cloudflare.com/client/v4/user/tokens/verify").respond(
-        200, json={"result": {"status": "active"}}
-    )
-    respx.get(
-        "https://api.cloudflare.com/client/v4/accounts/a/access/logs/access_requests"
-    ).respond(200, json={"result": []})
+    respx.get("https://api.cloudflare.com/client/v4/user/tokens/verify").respond(200, json={"result": {"status": "active"}})
+    respx.get("https://api.cloudflare.com/client/v4/accounts/a/access/logs/access_requests").respond(200, json={"result": []})
     res = await c.test_connection()
     assert res["success"] is True
     assert res["mode"] == "access"
@@ -123,9 +119,7 @@ async def test_test_connection_success():
 @respx.mock
 async def test_test_connection_token_inactive():
     c = CloudflareZTConnector(mode="access", account_id="a", api_token="t")
-    respx.get("https://api.cloudflare.com/client/v4/user/tokens/verify").respond(
-        200, json={"result": {"status": "disabled"}}
-    )
+    respx.get("https://api.cloudflare.com/client/v4/user/tokens/verify").respond(200, json={"result": {"status": "disabled"}})
     res = await c.test_connection()
     assert res["success"] is False
     assert "disabled" in res["error"]
