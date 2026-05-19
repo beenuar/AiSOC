@@ -223,9 +223,7 @@ class AttackChainLoader(Protocol):
     set passed in.
     """
 
-    async def load_seed(
-        self, alert_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> CandidateAlert | None:
+    async def load_seed(self, alert_id: uuid.UUID, tenant_id: uuid.UUID) -> CandidateAlert | None:
         # Protocol method body: ``pass`` rather than ``...`` so CodeQL
         # ``py/ineffectual-statement`` doesn't flag the ellipsis as a
         # discarded expression. Semantically identical for a Protocol
@@ -250,9 +248,7 @@ class AttackChainLoader(Protocol):
 # ---------------------------------------------------------------------------
 
 
-def _temporal_score(
-    seed_time: datetime, candidate_time: datetime, window: timedelta
-) -> tuple[float, float]:
+def _temporal_score(seed_time: datetime, candidate_time: datetime, window: timedelta) -> tuple[float, float]:
     """Return (score, |Δt| in seconds). Score is in [0, 1] — closer in
     time → higher score. ``|Δt|`` is exposed in the response so the UI
     can render the absolute time delta beside the chain link."""
@@ -379,9 +375,7 @@ def _entity_graph_payload(
     _add_alert_node(seed)
     for kind, value in sorted(seed.entities()):
         _add_entity_node(kind, value)
-        edges.append(
-            {"source": f"alert:{seed.id}", "target": f"{kind.lower()}:{value}", "kind": "TOUCHES"}
-        )
+        edges.append({"source": f"alert:{seed.id}", "target": f"{kind.lower()}:{value}", "kind": "TOUCHES"})
 
     for link in chain:
         cand = candidate_index.get(link.alert_id)
@@ -527,15 +521,12 @@ class PostgresAttackChainLoader:
     def __init__(self, db: Any) -> None:
         self._db = db
 
-    async def load_seed(
-        self, alert_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> CandidateAlert | None:
+    async def load_seed(self, alert_id: uuid.UUID, tenant_id: uuid.UUID) -> CandidateAlert | None:
         from sqlalchemy import select  # local import keeps the module
+
         from app.models.alert import Alert  #     test-importable w/o DB
 
-        result = await self._db.execute(
-            select(Alert).where(Alert.id == alert_id, Alert.tenant_id == tenant_id)
-        )
+        result = await self._db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == tenant_id))
         row = result.scalar_one_or_none()
         if row is None:
             return None
@@ -550,6 +541,7 @@ class PostgresAttackChainLoader:
         exclude_ids: set[uuid.UUID],
     ) -> list[CandidateAlert]:
         from sqlalchemy import and_, or_, select, text
+
         from app.models.alert import Alert
 
         users: list[str] = []

@@ -46,9 +46,7 @@ class _RecordingClient:
 async def test_timer_fires_safe_default_reject_and_writes_audit():
     client = _RecordingClient()
     audit = InMemoryAuditSink()
-    scheduler = ApprovalTimeoutScheduler(
-        approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit
-    )
+    scheduler = ApprovalTimeoutScheduler(approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit)
 
     task = scheduler.schedule(
         "action-1",
@@ -76,13 +74,9 @@ async def test_timer_fires_safe_default_reject_and_writes_audit():
 async def test_timer_safe_default_approve_invokes_approve():
     client = _RecordingClient()
     audit = InMemoryAuditSink()
-    scheduler = ApprovalTimeoutScheduler(
-        approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit
-    )
+    scheduler = ApprovalTimeoutScheduler(approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit)
 
-    task = scheduler.schedule(
-        "action-2", timeout_seconds=0.01, safe_default="approved", case_id="case-2"
-    )
+    task = scheduler.schedule("action-2", timeout_seconds=0.01, safe_default="approved", case_id="case-2")
     _ = await task
 
     assert client.approve_calls == ["action-2"]
@@ -93,13 +87,9 @@ async def test_timer_safe_default_approve_invokes_approve():
 async def test_cancel_before_fire_suppresses_fallback():
     client = _RecordingClient()
     audit = InMemoryAuditSink()
-    scheduler = ApprovalTimeoutScheduler(
-        approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit
-    )
+    scheduler = ApprovalTimeoutScheduler(approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit)
 
-    task = scheduler.schedule(
-        "action-3", timeout_seconds=5.0, safe_default="rejected", case_id="case-3"
-    )
+    task = scheduler.schedule("action-3", timeout_seconds=5.0, safe_default="rejected", case_id="case-3")
     assert scheduler.cancel("action-3") is True
     # Subsequent cancel is a no-op.
     assert scheduler.cancel("action-3") is False
@@ -116,16 +106,10 @@ async def test_cancel_before_fire_suppresses_fallback():
 async def test_reschedule_replaces_existing_timer():
     client = _RecordingClient()
     audit = InMemoryAuditSink()
-    scheduler = ApprovalTimeoutScheduler(
-        approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit
-    )
+    scheduler = ApprovalTimeoutScheduler(approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit)
 
-    first = scheduler.schedule(
-        "action-4", timeout_seconds=5.0, safe_default="rejected", case_id="case-4"
-    )
-    second = scheduler.schedule(
-        "action-4", timeout_seconds=0.01, safe_default="rejected", case_id="case-4"
-    )
+    first = scheduler.schedule("action-4", timeout_seconds=5.0, safe_default="rejected", case_id="case-4")
+    second = scheduler.schedule("action-4", timeout_seconds=0.01, safe_default="rejected", case_id="case-4")
     assert first.cancelled() or first is not second
 
     _ = await second
@@ -138,13 +122,9 @@ async def test_reschedule_replaces_existing_timer():
 async def test_fallback_call_failure_still_audits_with_error():
     client = _RecordingClient(fail=True)
     audit = InMemoryAuditSink()
-    scheduler = ApprovalTimeoutScheduler(
-        approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit
-    )
+    scheduler = ApprovalTimeoutScheduler(approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit)
 
-    task = scheduler.schedule(
-        "action-5", timeout_seconds=0.01, safe_default="rejected", case_id="case-5"
-    )
+    task = scheduler.schedule("action-5", timeout_seconds=0.01, safe_default="rejected", case_id="case-5")
     _ = await task
 
     assert client.reject_calls == []
@@ -158,9 +138,7 @@ async def test_fallback_call_failure_still_audits_with_error():
 async def test_aclose_cancels_all_pending_timers():
     client = _RecordingClient()
     audit = InMemoryAuditSink()
-    scheduler = ApprovalTimeoutScheduler(
-        approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit
-    )
+    scheduler = ApprovalTimeoutScheduler(approve_fn=client.approve, reject_fn=client.reject, audit_sink=audit)
 
     scheduler.schedule("a-1", timeout_seconds=5.0, safe_default="rejected")
     scheduler.schedule("a-2", timeout_seconds=5.0, safe_default="rejected")

@@ -33,7 +33,7 @@ os.environ.pop("OPENAI_API_KEY", None)
 os.environ["AISOC_AIRGAPPED"] = "true"
 
 from app.api.explain import ExplainRequest, _stream_explanation  # noqa: E402
-from app.security.llm_resolver import LlmConfig
+from app.security.llm_resolver import LlmConfig  # noqa: E402
 
 SAMPLE_ALERT: dict[str, Any] = {
     "id": "ALERT-SMOKE-0001",

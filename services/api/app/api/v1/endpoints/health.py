@@ -185,7 +185,7 @@ async def _ingest_stage(db, tenant_id, *, now: datetime) -> PipelineStage:
         override: int | None = None
         if isinstance(r.connector_config, dict):
             raw_override = r.connector_config.get("expected_cadence_seconds")
-            if isinstance(raw_override, (int, float)) and raw_override > 0:
+            if isinstance(raw_override, int | float) and raw_override > 0:
                 override = int(raw_override)
         verdict = compute_freshness(
             category=r.category,

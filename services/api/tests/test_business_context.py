@@ -80,7 +80,6 @@ from app.services.business_context.models import (
 )
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -153,7 +152,8 @@ class TestParser:
         assert load_rules_from_yaml("   \n  ") == []
 
     def test_single_rule_shorthand(self) -> None:
-        rules = load_rules_from_yaml(_yaml("""
+        rules = load_rules_from_yaml(
+            _yaml("""
             id: prod-iam-critical
             description: Critical for prod IAM
             when:
@@ -162,7 +162,8 @@ class TestParser:
               value: prod
             then:
               set_severity: critical
-            """))
+            """)
+        )
         assert len(rules) == 1
         rule = rules[0]
         assert rule.id == "prod-iam-critical"
@@ -172,7 +173,8 @@ class TestParser:
         assert rule.when.value == "prod"
 
     def test_rules_list_form(self) -> None:
-        rules = load_rules_from_yaml(_yaml("""
+        rules = load_rules_from_yaml(
+            _yaml("""
             rules:
               - id: rule-a
                 when: { field: alert.severity, op: eq, value: high }
@@ -180,12 +182,14 @@ class TestParser:
               - id: rule-b
                 when: { field: alert.source, op: eq, value: aws }
                 then: { route_to: cloud }
-            """))
+            """)
+        )
         assert [r.id for r in rules] == ["rule-a", "rule-b"]
         assert rules[1].then.route_to == "cloud"
 
     def test_aggregator_all_any_not(self) -> None:
-        rules = load_rules_from_yaml(_yaml("""
+        rules = load_rules_from_yaml(
+            _yaml("""
             id: nested
             when:
               all:
@@ -198,7 +202,8 @@ class TestParser:
                     value: dev
             then:
               tag: cloud-prod
-            """))
+            """)
+        )
         when = rules[0].when
         assert when.logical == "all"
         assert when.children[0].logical == "any"
@@ -208,11 +213,13 @@ class TestParser:
         assert when.fields_referenced() == {"alert.source", "alert.target.tag"}
 
     def test_in_op_coerces_single_string_to_list(self) -> None:
-        rules = load_rules_from_yaml(_yaml("""
+        rules = load_rules_from_yaml(
+            _yaml("""
             id: route-aws
             when: { field: alert.source, op: in, value: aws }
             then: { route_to: cloud }
-            """))
+            """)
+        )
         assert rules[0].when.value == ["aws"]
 
     @pytest.mark.parametrize(
@@ -220,25 +227,22 @@ class TestParser:
         [
             ("id: BAD\nwhen: { field: x, op: eq, value: y }\nthen: { tag: t }", "kebab-case"),
             ("id: ok-id\nthen: { set_severity: high }", "'when' clause is required"),
-            ("id: ok-id\nwhen: { field: x, op: eq, value: y }\nthen: { set_severity: nope }",
-             "set_severity"),
+            ("id: ok-id\nwhen: { field: x, op: eq, value: y }\nthen: { set_severity: nope }", "set_severity"),
             ("id: ok-id\nwhen: { field: x, op: like, value: y }\nthen: { tag: t }", "is not one of"),
             ("id: ok-id\nwhen: { field: x, op: eq, value: y }\nthen: {}", "must set at least one"),
             ("id: ok-id\nwhen: { field: x, op: in }\nthen: { tag: t }", "required for op="),
-            ("id: ok-id\nwhen: { field: x, op: eq, value: y }\nthen: { route_to: nope }",
-             "route_to"),
+            ("id: ok-id\nwhen: { field: x, op: eq, value: y }\nthen: { route_to: nope }", "route_to"),
         ],
     )
-    def test_invalid_inputs_raise_with_actionable_messages(
-        self, yaml_text: str, marker: str
-    ) -> None:
+    def test_invalid_inputs_raise_with_actionable_messages(self, yaml_text: str, marker: str) -> None:
         with pytest.raises(RuleParseError) as exc_info:
             load_rules_from_yaml(yaml_text)
         assert marker in str(exc_info.value)
 
     def test_duplicate_ids_rejected(self) -> None:
         with pytest.raises(RuleParseError, match="duplicate rule id"):
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 rules:
                   - id: dup-rule
                     when: { field: a, op: eq, value: 1 }
@@ -246,7 +250,8 @@ class TestParser:
                   - id: dup-rule
                     when: { field: b, op: eq, value: 2 }
                     then: { set_severity: high }
-                """))
+                """)
+            )
 
     def test_constants_are_locked_down(self) -> None:
         # Catches accidental edits that broaden the action vocabulary —
@@ -267,11 +272,13 @@ class TestEvaluation:
         tenant = uuid.uuid4()
         engine.replace(
             tenant,
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 id: prod-critical
                 when: { field: alert.target.tag, op: eq, value: prod }
                 then: { set_severity: critical }
-                """)),
+                """)
+            ),
         )
         result = engine.evaluate(tenant, _alert(severity="medium", target_tag="prod"))
         assert result.before["severity"] == "medium"
@@ -284,11 +291,13 @@ class TestEvaluation:
         tenant = uuid.uuid4()
         engine.replace(
             tenant,
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 id: prod-only
                 when: { field: alert.target.tag, op: eq, value: prod }
                 then: { set_severity: critical }
-                """)),
+                """)
+            ),
         )
         result = engine.evaluate(tenant, _alert(target_tag="dev", severity="medium"))
         assert result.before == result.after
@@ -300,7 +309,8 @@ class TestEvaluation:
         tenant = uuid.uuid4()
         engine.replace(
             tenant,
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 rules:
                   - id: maintenance-window
                     priority: 1
@@ -310,7 +320,8 @@ class TestEvaluation:
                     priority: 50
                     when: { field: alert.target.tag, op: eq, value: prod }
                     then: { set_severity: critical }
-                """)),
+                """)
+            ),
         )
         result = engine.evaluate(tenant, _alert(target_tag="prod", severity="medium"))
         assert result.suppressed is True
@@ -323,7 +334,8 @@ class TestEvaluation:
         tenant = uuid.uuid4()
         engine.replace(
             tenant,
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 rules:
                   - id: aws-baseline
                     priority: 10
@@ -333,7 +345,8 @@ class TestEvaluation:
                     priority: 50
                     when: { field: alert.target.tag, op: eq, value: prod }
                     then: { set_severity: critical, tag: prod }
-                """)),
+                """)
+            ),
         )
         result = engine.evaluate(tenant, _alert(source="aws", target_tag="prod"))
         assert result.matched_rule_ids == ["aws-baseline", "prod-bump"]
@@ -382,7 +395,8 @@ class TestSnapshots:
         tenant = uuid.uuid4()
         snap = engine.replace(
             tenant,
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 rules:
                   - id: zzz
                     priority: 5
@@ -396,7 +410,8 @@ class TestSnapshots:
                     priority: 5
                     when: { field: z, op: eq, value: 1 }
                     then: { tag: mmm }
-                """)),
+                """)
+            ),
         )
         assert [r.id for r in snap.rules] == ["mmm", "zzz", "aaa"]
         # Field reverse-index records all leaf paths.
@@ -414,11 +429,13 @@ class TestSnapshots:
         a, b = uuid.uuid4(), uuid.uuid4()
         engine.replace(
             a,
-            load_rules_from_yaml(_yaml("""
+            load_rules_from_yaml(
+                _yaml("""
                 id: only-a
                 when: { field: x, op: eq, value: 1 }
                 then: { tag: a }
-                """)),
+                """)
+            ),
         )
         engine.replace(b, [])
         assert engine.snapshot_for(a).rules[0].id == "only-a"
@@ -442,11 +459,13 @@ class TestPreview:
         # Register an empty rule set.
         engine.replace(tenant, [])
         # Preview a rule that would, if registered, mutate severity.
-        candidate = load_rules_from_yaml(_yaml("""
+        candidate = load_rules_from_yaml(
+            _yaml("""
             id: would-bump
             when: { field: alert.target.tag, op: eq, value: prod }
             then: { set_severity: critical }
-            """))
+            """)
+        )
         results = engine.preview_against(
             tenant,
             [_alert(target_tag="prod", severity="medium")],
@@ -459,11 +478,13 @@ class TestPreview:
     def test_preview_returns_one_row_per_alert(self) -> None:
         engine = BusinessContextEngine()
         tenant = uuid.uuid4()
-        rules = load_rules_from_yaml(_yaml("""
+        rules = load_rules_from_yaml(
+            _yaml("""
             id: prod-critical
             when: { field: alert.target.tag, op: eq, value: prod }
             then: { set_severity: critical }
-            """))
+            """)
+        )
         alerts = [
             _alert("a", target_tag="prod"),
             _alert("b", target_tag="dev"),
@@ -563,11 +584,7 @@ class TestEndpoints:
             endpoint.update_rule(
                 "rule-a",
                 endpoint.UpdateRuleRequest(
-                    yaml=(
-                        "id: rule-a\n"
-                        "when: { field: alert.severity, op: eq, value: high }\n"
-                        "then: { route_to: tier3 }\n"
-                    )
+                    yaml=("id: rule-a\n" "when: { field: alert.severity, op: eq, value: high }\n" "then: { route_to: tier3 }\n")
                 ),
                 user,
                 MagicMock(),
@@ -585,13 +602,7 @@ class TestEndpoints:
             _run(
                 endpoint.update_rule(
                     "rule-a",
-                    endpoint.UpdateRuleRequest(
-                        yaml=(
-                            "id: rule-other\n"
-                            "when: { field: x, op: eq, value: 1 }\n"
-                            "then: { tag: t }\n"
-                        )
-                    ),
+                    endpoint.UpdateRuleRequest(yaml=("id: rule-other\n" "when: { field: x, op: eq, value: 1 }\n" "then: { tag: t }\n")),
                     user,
                     MagicMock(),
                 )
@@ -631,11 +642,7 @@ class TestEndpoints:
     def test_preview_against_supplied_alerts(self) -> None:
         user = _user()
         req = endpoint.PreviewRequest(
-            yaml=(
-                "id: prod-critical\n"
-                "when: { field: alert.target.tag, op: eq, value: prod }\n"
-                "then: { set_severity: critical }\n"
-            ),
+            yaml=("id: prod-critical\n" "when: { field: alert.target.tag, op: eq, value: prod }\n" "then: { set_severity: critical }\n"),
             alerts=[
                 _alert("a", target_tag="prod", severity="medium"),
                 _alert("b", target_tag="dev", severity="medium"),
@@ -673,11 +680,7 @@ class TestEndpoints:
         db = MagicMock()
         db.execute = AsyncMock(side_effect=RuntimeError("no schema"))
         req = endpoint.PreviewRequest(
-            yaml=(
-                "id: noop-tag\n"
-                "when: { field: alert.target.tag, op: eq, value: prod }\n"
-                "then: { tag: noop }\n"
-            ),
+            yaml=("id: noop-tag\n" "when: { field: alert.target.tag, op: eq, value: prod }\n" "then: { tag: noop }\n"),
             alerts=[],
         )
         resp = _run(endpoint.preview_rules(req, user, db))
@@ -704,11 +707,7 @@ class TestEndpoints:
             when: { field: alert.source, op: eq, value: aws }
             then: { route_to: cloud, tag: aws }
         """)
-        alerts = [
-            _alert(f"alert-{i}", target_tag="prod" if i % 2 else "dev",
-                   source="aws" if i % 3 == 0 else "okta")
-            for i in range(100)
-        ]
+        alerts = [_alert(f"alert-{i}", target_tag="prod" if i % 2 else "dev", source="aws" if i % 3 == 0 else "okta") for i in range(100)]
 
         start = time.perf_counter()
         _run(
@@ -723,8 +722,7 @@ class TestEndpoints:
         elapsed = time.perf_counter() - start
 
         assert elapsed < 1.0, (
-            f"save → evaluate round-trip took {elapsed:.3f}s, exceeds 1s budget "
-            f"(eval slice = {elapsed_eval:.3f}s for 100 alerts)"
+            f"save → evaluate round-trip took {elapsed:.3f}s, exceeds 1s budget " f"(eval slice = {elapsed_eval:.3f}s for 100 alerts)"
         )
 
         # Sanity check: at least the prod alerts got bumped.

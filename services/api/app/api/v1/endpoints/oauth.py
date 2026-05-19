@@ -994,7 +994,7 @@ async def oauth_callback(
     # Compute an absolute expires_at so the auto-refresh worker
     # (Workstream 5) doesn't have to track when we received the token.
     expires_in = token_payload.get("expires_in")
-    if isinstance(expires_in, (int, float)) and expires_in > 0:
+    if isinstance(expires_in, int | float) and expires_in > 0:
         auth_payload["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(expires_in))).isoformat()
 
     try:

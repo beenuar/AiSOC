@@ -141,9 +141,10 @@ class SnowflakeConnector(BaseConnector):
         run without a real key."""
         try:
             from cryptography.hazmat.primitives.serialization import (
+                Encoding,
+                PublicFormat,
                 load_pem_private_key,
             )
-            from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
             priv = load_pem_private_key(self._private_key_pem.encode(), password=None)
             der = priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
@@ -169,9 +170,7 @@ class SnowflakeConnector(BaseConnector):
             "exp": now + 3600,
         }
         signing_input = (
-            _b64url(json.dumps(header, separators=(",", ":")).encode())
-            + "."
-            + _b64url(json.dumps(payload, separators=(",", ":")).encode())
+            _b64url(json.dumps(header, separators=(",", ":")).encode()) + "." + _b64url(json.dumps(payload, separators=(",", ":")).encode())
         ).encode()
         priv = serialization.load_pem_private_key(self._private_key_pem.encode(), password=None)
         signature = priv.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
@@ -203,7 +202,7 @@ class SnowflakeConnector(BaseConnector):
             payload = resp.json() or {}
             cols = [c.get("name") for c in payload.get("resultSetMetaData", {}).get("rowType") or []]
             rows = payload.get("data") or []
-            return [dict(zip(cols, row)) for row in rows]
+            return [dict(zip(cols, row, strict=False)) for row in rows]
 
     async def test_connection(self) -> dict[str, Any]:
         try:
@@ -307,10 +306,7 @@ class SnowflakeConnector(BaseConnector):
             "source": self.connector_id,
             "stream": "login_history",
             "external_id": raw.get("EVENT_ID") or "",
-            "title": (
-                f"Snowflake login {'success' if is_success else 'failure'} "
-                f"({raw.get('USER_NAME')})"
-            ),
+            "title": (f"Snowflake login {'success' if is_success else 'failure'} " f"({raw.get('USER_NAME')})"),
             "description": raw.get("ERROR_MESSAGE") or raw.get("REPORTED_CLIENT_TYPE"),
             "severity": severity,
             "actor": raw.get("USER_NAME"),
