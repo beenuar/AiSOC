@@ -224,10 +224,7 @@ class FidelityResult:
             "rows_skipped": self.rows_skipped,
             "accuracy": round(self.accuracy, 4),
             "macro_f1": round(self.macro_f1, 4),
-            "per_family": {
-                family: {k: round(v, 4) for k, v in metrics.items()}
-                for family, metrics in self.per_family.items()
-            },
+            "per_family": {family: {k: round(v, 4) for k, v in metrics.items()} for family, metrics in self.per_family.items()},
             "confusion_matrix": self.confusion_matrix,
         }
 
@@ -243,23 +240,11 @@ def _per_family_metrics(cm: ConfusionMatrix) -> dict[str, dict[str, float]]:
     out: dict[str, dict[str, float]] = {}
     for label in cm.labels:
         tp = cm.matrix.get(label, {}).get(label, 0)
-        fp = sum(
-            cm.matrix.get(other, {}).get(label, 0)
-            for other in cm.labels
-            if other != label
-        )
-        fn = sum(
-            cm.matrix.get(label, {}).get(other, 0)
-            for other in cm.labels
-            if other != label
-        )
+        fp = sum(cm.matrix.get(other, {}).get(label, 0) for other in cm.labels if other != label)
+        fn = sum(cm.matrix.get(label, {}).get(other, 0) for other in cm.labels if other != label)
         precision = tp / (tp + fp) if (tp + fp) else 0.0
         recall = tp / (tp + fn) if (tp + fn) else 0.0
-        f1 = (
-            2 * precision * recall / (precision + recall)
-            if (precision + recall)
-            else 0.0
-        )
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
         support = tp + fn
         out[label] = {
             "precision": precision,
@@ -352,9 +337,7 @@ def evaluate(
         ocsf_event = _to_ocsf(dataset, row)
         if mode == "wet":
             if not endpoint:
-                raise RuntimeError(
-                    "wet mode requires --wet-endpoint or AISOC_WET_EVAL_ENDPOINT"
-                )
+                raise RuntimeError("wet mode requires --wet-endpoint or AISOC_WET_EVAL_ENDPOINT")
             predicted = _classify_wet(ocsf_event, endpoint)
         else:
             predicted = classifier(row)

@@ -90,8 +90,7 @@ _INJECTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         # phrases such as "the database is unrestricted" or
         # "you are running an unrestricted query" do not false-trip.
         re.compile(
-            r"\byou are\s+(?:now\s+)?(?:in\s+)?(?:a\s+|an\s+|the\s+)?"
-            r"(?:dan|developer\s+mode|jailbroken|unrestricted|no-?op)\b",
+            r"\byou are\s+(?:now\s+)?(?:in\s+)?(?:a\s+|an\s+|the\s+)?" r"(?:dan|developer\s+mode|jailbroken|unrestricted|no-?op)\b",
             re.IGNORECASE,
         ),
         "[REDACTED:INJECTION]",
@@ -177,11 +176,11 @@ def sanitize_value(
     if _depth > 6:
         return "[REDACTED:DEPTH]"
 
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, str):
         return sanitize_text(value, max_len=max_field_len)
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         items = list(value)
         truncated = max(0, len(items) - max_list_items) if max_list_items > 0 else 0
         items = items[:max_list_items] if max_list_items > 0 else items

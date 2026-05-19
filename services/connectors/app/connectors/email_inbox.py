@@ -262,7 +262,7 @@ class EmailInboxConnector(BaseConnector):
                     if typ != "OK" or not fetched or not fetched[0]:
                         continue
                     raw_bytes = fetched[0][1]
-                    if not isinstance(raw_bytes, (bytes, bytearray)):
+                    if not isinstance(raw_bytes, bytes | bytearray):
                         continue
                     msg = email.message_from_bytes(raw_bytes)
                     out.append(self._to_event(msg))

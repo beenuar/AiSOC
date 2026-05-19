@@ -25,7 +25,7 @@ from app.federated.query import Indicator, QueryError, UnifiedQuery
 def _kql_quote(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     text = str(value)
     escaped = text.replace("\\", "\\\\").replace('"', '\\"')
