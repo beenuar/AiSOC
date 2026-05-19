@@ -128,9 +128,7 @@ class SlackNotifier:
             return False
         webhook = self._resolve_webhook()
         if not webhook:
-            logger.info(
-                "waitlist slack notification skipped: %s not configured", _WEBHOOK_ENV_VAR
-            )
+            logger.info("waitlist slack notification skipped: %s not configured", _WEBHOOK_ENV_VAR)
             return False
         try:
             body = json.dumps(payload).encode("utf-8")
@@ -143,9 +141,7 @@ class SlackNotifier:
             with urllib_request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310
                 if 200 <= resp.status < 300:
                     return True
-                logger.warning(
-                    "waitlist slack webhook returned non-2xx: %s", resp.status
-                )
+                logger.warning("waitlist slack webhook returned non-2xx: %s", resp.status)
                 return False
         except urllib_error.URLError as exc:
             logger.warning("waitlist slack webhook URLError: %s", exc)

@@ -198,11 +198,12 @@ class VaultConnector(BaseConnector):
             if isinstance(ts, str):
                 try:
                     from datetime import datetime
+
                     parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     ts_epoch = parsed.timestamp()
                 except Exception:
                     ts_epoch = cutoff
-            elif isinstance(ts, (int, float)):
+            elif isinstance(ts, int | float):
                 ts_epoch = float(ts)
             else:
                 ts_epoch = cutoff

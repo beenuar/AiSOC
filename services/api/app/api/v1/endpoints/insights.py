@@ -117,10 +117,7 @@ class InsightTile(BaseModel):
         )
     )
     previous_value: float = Field(
-        description=(
-            "Value of the same metric over the immediately preceding "
-            "window of equal length. Used to compute the delta."
-        )
+        description=("Value of the same metric over the immediately preceding " "window of equal length. Used to compute the delta.")
     )
     delta_pct: float | None = Field(
         default=None,
@@ -188,9 +185,7 @@ async def _mean_hours(
         end_col.isnot(None),
     ]
     filters.extend(extra_filters)
-    result = await db.scalar(
-        select(func.avg(func.extract("epoch", end_col - start_col) / 3600)).where(and_(*filters))
-    )
+    result = await db.scalar(select(func.avg(func.extract("epoch", end_col - start_col) / 3600)).where(and_(*filters)))
     return round(float(result or 0.0), 2)
 
 
@@ -320,11 +315,15 @@ async def _llm_cost_aggregate(
     )
     try:
         row = (
-            await db.execute(
-                sql,
-                {"tenant_id": str(tenant_id), "start_at": start, "end_at": end},
+            (
+                await db.execute(
+                    sql,
+                    {"tenant_id": str(tenant_id), "start_at": start, "end_at": end},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if not row:
             return 0.0, 0
         return float(row["cost"] or 0.0), int(row["runs"] or 0)

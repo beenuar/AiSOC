@@ -53,9 +53,10 @@ import logging
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from cryptography.fernet import Fernet
 from sqlalchemy import select, text
@@ -216,10 +217,7 @@ async def _allocate_slug(
         if await _slug_is_available(db, candidate):
             return candidate
 
-    raise SlugCollisionError(
-        f"could not allocate a unique slug for '{company_name}' after "
-        f"{_SLUG_RETRY_LIMIT} attempts"
-    )
+    raise SlugCollisionError(f"could not allocate a unique slug for '{company_name}' after " f"{_SLUG_RETRY_LIMIT} attempts")
 
 
 def generate_credential_key() -> tuple[str, str]:
@@ -330,15 +328,11 @@ async def provision_from_waitlist(
         )
 
     if entry.status == "declined":
-        raise WaitlistEntryNotPromotableError(
-            f"waitlist entry {entry.id} is declined; refusing to promote"
-        )
+        raise WaitlistEntryNotPromotableError(f"waitlist entry {entry.id} is declined; refusing to promote")
 
     bundle = templates or get_default_template_bundle()
 
-    slug = await _allocate_slug(
-        db, company_name=entry.company, shard_factory=shard_factory
-    )
+    slug = await _allocate_slug(db, company_name=entry.company, shard_factory=shard_factory)
     credential_key, key_fingerprint = generate_credential_key()
 
     provisioned_at = datetime.now(UTC)
@@ -430,9 +424,7 @@ async def provision_from_waitlist(
                 exc,
             )
 
-    invite = _build_admin_invite(
-        tenant_slug=tenant.slug, invite_base_url=invite_base_url
-    )
+    invite = _build_admin_invite(tenant_slug=tenant.slug, invite_base_url=invite_base_url)
 
     # Patch the waitlist row last so the entry's stamped timestamps
     # only flip after every dependent write has succeeded.
@@ -460,9 +452,7 @@ async def provision_from_waitlist(
         tenant_name=tenant.name,
         waitlist_entry_id=entry.id,
         admin_invite=invite,
-        admin_user=InitialAdminUser(
-            id=admin_user.id, email=admin_user.email, role=admin_user.role
-        ),
+        admin_user=InitialAdminUser(id=admin_user.id, email=admin_user.email, role=admin_user.role),
         demo_seeded=demo_seeded,
         aisoc_credential_key_fingerprint=key_fingerprint,
     )
@@ -491,12 +481,7 @@ async def _persist_provisioning_columns(
     """
     try:
         await db.execute(
-            text(
-                "UPDATE tenants "
-                "SET provisioned_from_waitlist_id = :wl_id, "
-                "    provisioned_at = :pa "
-                "WHERE id = :tid"
-            ),
+            text("UPDATE tenants " "SET provisioned_from_waitlist_id = :wl_id, " "    provisioned_at = :pa " "WHERE id = :tid"),
             {
                 "wl_id": waitlist_entry_id,
                 "pa": provisioned_at,
@@ -514,16 +499,10 @@ async def _persist_provisioning_columns(
         )
 
 
-async def _load_waitlist_entry(
-    db: AsyncSession, entry_id: uuid.UUID
-) -> WaitlistEntry:
-    row = (
-        await db.execute(select(WaitlistEntry).where(WaitlistEntry.id == entry_id))
-    ).scalar_one_or_none()
+async def _load_waitlist_entry(db: AsyncSession, entry_id: uuid.UUID) -> WaitlistEntry:
+    row = (await db.execute(select(WaitlistEntry).where(WaitlistEntry.id == entry_id))).scalar_one_or_none()
     if row is None:
-        raise WaitlistEntryNotFoundError(
-            f"waitlist entry {entry_id} not found"
-        )
+        raise WaitlistEntryNotFoundError(f"waitlist entry {entry_id} not found")
     return row
 
 
@@ -539,42 +518,30 @@ async def _result_for_existing(
     entry; instead the API surfaces the existing tenant id + a fresh
     invite link the operator can email out if the first one was lost.
     """
-    tenant = (
-        await db.execute(
-            select(Tenant).where(Tenant.id == entry.provisioned_tenant_id)
-        )
-    ).scalar_one_or_none()
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == entry.provisioned_tenant_id))).scalar_one_or_none()
     if tenant is None:
         # The waitlist row claims it's provisioned but the tenant is
         # gone. Treat as if it was never provisioned so the operator
         # can recover.
         entry.provisioned_tenant_id = None
-        raise WaitlistEntryNotPromotableError(
-            f"waitlist entry {entry.id} pointed at a deleted tenant; cleared the pointer"
-        )
+        raise WaitlistEntryNotPromotableError(f"waitlist entry {entry.id} pointed at a deleted tenant; cleared the pointer")
 
     admin_row = (
-        await db.execute(
-            select(User)
-            .where(User.tenant_id == tenant.id, User.email == entry.email)
-            .order_by(User.created_at.asc())
-        )
-    ).scalars().first()
+        (await db.execute(select(User).where(User.tenant_id == tenant.id, User.email == entry.email).order_by(User.created_at.asc())))
+        .scalars()
+        .first()
+    )
     admin_email = admin_row.email if admin_row else entry.email
     admin_role = admin_row.role if admin_row else "tenant_admin"
     admin_id = admin_row.id if admin_row else uuid.uuid4()
-    fingerprint = (
-        (tenant.settings or {}).get("aisoc_credential_key_fingerprint", "") or ""
-    )
+    fingerprint = (tenant.settings or {}).get("aisoc_credential_key_fingerprint", "") or ""
 
     return ProvisionResult(
         tenant_id=tenant.id,
         tenant_slug=tenant.slug,
         tenant_name=tenant.name,
         waitlist_entry_id=entry.id,
-        admin_invite=_build_admin_invite(
-            tenant_slug=tenant.slug, invite_base_url=invite_base_url
-        ),
+        admin_invite=_build_admin_invite(tenant_slug=tenant.slug, invite_base_url=invite_base_url),
         admin_user=InitialAdminUser(id=admin_id, email=admin_email, role=admin_role),
         demo_seeded=False,
         aisoc_credential_key_fingerprint=fingerprint,

@@ -76,10 +76,7 @@ class SysdigConnector(BaseConnector):
                     "api_token",
                     "secret",
                     "API Token",
-                    help_text=(
-                        "Sysdig Secure API token. Settings → API → Tokens. "
-                        "Needs read access to Secure Events."
-                    ),
+                    help_text=("Sysdig Secure API token. Settings → API → Tokens. " "Needs read access to Secure Events."),
                 ),
             ],
         )
@@ -214,12 +211,7 @@ class SysdigConnector(BaseConnector):
         # canonical Falco "you do not want to see this in prod" signals and
         # are never benign once they fire.
         rule_lower = rule.lower()
-        if (
-            "drift" in rule_lower
-            or "tampering" in rule_lower
-            or "terminal shell" in rule_lower
-            or "shell in container" in rule_lower
-        ):
+        if "drift" in rule_lower or "tampering" in rule_lower or "terminal shell" in rule_lower or "shell in container" in rule_lower:
             sev = "high"
         host = labels.get("host.hostname") or labels.get("kubernetes.node.name") or raw.get("hostname")
         ns = labels.get("kubernetes.namespace.name")

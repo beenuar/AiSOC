@@ -376,7 +376,7 @@ async def _refresh_one(
         auth_payload["token_type"] = token_payload["token_type"]
 
     expires_in = token_payload.get("expires_in")
-    if isinstance(expires_in, (int, float)) and expires_in > 0:
+    if isinstance(expires_in, int | float) and expires_in > 0:
         auth_payload["expires_at"] = (datetime.now(UTC) + timedelta(seconds=int(expires_in))).isoformat()
     else:
         # Provider didn't tell us — drop the stale value so we refresh
