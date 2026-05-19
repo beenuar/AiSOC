@@ -67,7 +67,7 @@ def _get_field(event: dict[str, Any], dotted: str) -> Any:
 def _coerce_number(value: Any) -> float | None:
     if isinstance(value, bool):  # bool is a subclass of int — exclude on purpose
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:
@@ -108,7 +108,7 @@ def _indicator_matches(event: dict[str, Any], ind: HuntIndicator) -> bool:
         return num is not None and num <= ind.lte
 
     if ind.contains_any is not None:
-        if isinstance(val, (list, tuple, set)):
+        if isinstance(val, list | tuple | set):
             haystack = list(val)
         else:
             haystack = [val]
