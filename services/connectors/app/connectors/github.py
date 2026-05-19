@@ -380,9 +380,7 @@ class GitHubConnector(BaseConnector):
 
         async with httpx.AsyncClient(timeout=15.0) as client:
             try:
-                repo_resp = await client.get(
-                    f"{_BASE}/repos/{owner_repo}", headers=self._headers()
-                )
+                repo_resp = await client.get(f"{_BASE}/repos/{owner_repo}", headers=self._headers())
             except Exception as exc:  # noqa: BLE001
                 return {"error": str(exc), "snapshot_freshness": "unavailable"}
             if repo_resp.status_code != 200:

@@ -446,9 +446,7 @@ async def test_scc_get_resource_config_non_200_returns_empty(fake_sa_json):
         return_value=httpx.Response(200, json={"access_token": "tok-abc", "expires_in": 3600})
     )
     finding_name = f"organizations/{_ORG}/sources/888/findings/gone"
-    respx.get(f"https://securitycenter.googleapis.com/v1/{finding_name}").mock(
-        return_value=httpx.Response(404, text="not found")
-    )
+    respx.get(f"https://securitycenter.googleapis.com/v1/{finding_name}").mock(return_value=httpx.Response(404, text="not found"))
 
     connector = GCPSCCConnector(_ORG, fake_sa_json)
     assert await connector.get_resource_config(finding_name) == {}

@@ -26,8 +26,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
-
 from app.api.v1.endpoints import tenant_provision as endpoint
 from app.models.tenant import Tenant, User
 from app.models.waitlist import (
@@ -57,7 +55,7 @@ from app.services.tenant_provision.templates import (
     TenantTemplateBundle,
     get_default_template_bundle,
 )
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -196,7 +194,7 @@ class _MockExecuteResult:
     def scalar_one_or_none(self) -> Any:
         return self._rows[0] if self._rows else None
 
-    def scalars(self) -> "_MockExecuteResult":
+    def scalars(self) -> _MockExecuteResult:
         return self
 
     def all(self) -> list[Any]:
@@ -326,9 +324,7 @@ class TestAdminInviteBuilder:
 
     def test_zero_ttl_rejected(self) -> None:
         with pytest.raises(ValueError):
-            _build_admin_invite(
-                tenant_slug="x", invite_base_url="x", ttl_hours=0
-            )
+            _build_admin_invite(tenant_slug="x", invite_base_url="x", ttl_hours=0)
 
 
 # ---------------------------------------------------------------------------
@@ -385,9 +381,7 @@ class TestProvisionFromWaitlist:
         )
 
         tenant = session.tenants[result.tenant_id]
-        assert tenant.settings["aisoc_credential_key_fingerprint"] == (
-            result.aisoc_credential_key_fingerprint
-        )
+        assert tenant.settings["aisoc_credential_key_fingerprint"] == (result.aisoc_credential_key_fingerprint)
         # The plaintext key must NEVER land in the settings blob.
         for value in tenant.settings.values():
             if isinstance(value, str):
@@ -591,9 +585,7 @@ class TestProvisionEndpoint:
 
         response = _run(
             endpoint.provision_tenant(
-                endpoint.TenantProvisionRequest(
-                    waitlist_entry_id=entry.id, seed_demo=False
-                ),
+                endpoint.TenantProvisionRequest(waitlist_entry_id=entry.id, seed_demo=False),
                 session,  # type: ignore[arg-type]
                 user,
             )
@@ -613,9 +605,7 @@ class TestProvisionEndpoint:
         with pytest.raises(HTTPException) as exc_info:
             _run(
                 endpoint.provision_tenant(
-                    endpoint.TenantProvisionRequest(
-                        waitlist_entry_id=entry.id, seed_demo=False
-                    ),
+                    endpoint.TenantProvisionRequest(waitlist_entry_id=entry.id, seed_demo=False),
                     session,  # type: ignore[arg-type]
                     user,
                 )
@@ -628,9 +618,7 @@ class TestProvisionEndpoint:
         with pytest.raises(HTTPException) as exc_info:
             _run(
                 endpoint.provision_tenant(
-                    endpoint.TenantProvisionRequest(
-                        waitlist_entry_id=uuid.uuid4(), seed_demo=False
-                    ),
+                    endpoint.TenantProvisionRequest(waitlist_entry_id=uuid.uuid4(), seed_demo=False),
                     session,  # type: ignore[arg-type]
                     user,
                 )
@@ -646,9 +634,7 @@ class TestProvisionEndpoint:
         with pytest.raises(HTTPException) as exc_info:
             _run(
                 endpoint.provision_tenant(
-                    endpoint.TenantProvisionRequest(
-                        waitlist_entry_id=entry.id, seed_demo=False
-                    ),
+                    endpoint.TenantProvisionRequest(waitlist_entry_id=entry.id, seed_demo=False),
                     session,  # type: ignore[arg-type]
                     user,
                 )
@@ -672,9 +658,7 @@ class TestProvisionEndpoint:
                 user,
             )
         )
-        assert response.admin_invite.url.startswith(
-            "https://staging.tryaisoc.com/invite/"
-        )
+        assert response.admin_invite.url.startswith("https://staging.tryaisoc.com/invite/")
 
 
 class TestListTenantsEndpoint:

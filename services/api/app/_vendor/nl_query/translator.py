@@ -267,23 +267,19 @@ _TIME_REGEX_SINGULAR = re.compile(
 # boundary so we don't drag the rest of the question into the field name.
 _NUMERIC_AGG_PATTERNS: list[tuple[str, str]] = [
     (
-        r"\b(?:average|avg|mean)\s+([a-z][a-z _\.]+?)"
-        r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
+        r"\b(?:average|avg|mean)\s+([a-z][a-z _\.]+?)" r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
         "AVG",
     ),
     (
-        r"\b(?:sum(?:\s+of)?|total(?:\s+of)?)\s+([a-z][a-z _\.]+?)"
-        r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
+        r"\b(?:sum(?:\s+of)?|total(?:\s+of)?)\s+([a-z][a-z _\.]+?)" r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
         "SUM",
     ),
     (
-        r"\b(?:max|maximum|largest|highest)\s+([a-z][a-z _\.]+?)"
-        r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
+        r"\b(?:max|maximum|largest|highest)\s+([a-z][a-z _\.]+?)" r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
         "MAX",
     ),
     (
-        r"\b(?:min|minimum|lowest|smallest)\s+([a-z][a-z _\.]+?)"
-        r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
+        r"\b(?:min|minimum|lowest|smallest)\s+([a-z][a-z _\.]+?)" r"(?=\b(?:by|per|in|over|with|where|and|having|,|$))",
         "MIN",
     ),
 ]
@@ -598,8 +594,7 @@ def _extract_aggregations(question: str, intents: QueryIntents) -> None:
     # next clause boundary (``with``, ``having``, ``in the last 24h`` etc.)
     # without dragging the whole tail of the question into the field name.
     for m in re.finditer(
-        r"\b(?:unique|distinct)\s+([a-z _]+?)"
-        r"(?=\b(?:by|per|in|over|with|where|having|from|and|,|$))",
+        r"\b(?:unique|distinct)\s+([a-z _]+?)" r"(?=\b(?:by|per|in|over|with|where|having|from|and|,|$))",
         text + " ,",
     ):
         candidate = m.group(1).strip().rstrip(",")

@@ -37,7 +37,6 @@ import uuid
 from typing import Any
 
 import pytest
-
 from app.scripts.seed_demo import (
     _DEMO_QUICK_DEFAULT_CLOCK_ISO,
     _DEMO_QUICK_INCIDENTS,
@@ -105,10 +104,7 @@ def test_demo_quick_connector_sources_match_contract() -> None:
         key = incident["key"]
         actual = set(incident["connector_sources"])
         expected = EXPECTED_CONNECTOR_SOURCES[key]
-        assert actual == expected, (
-            f"{key}: connector_sources drifted. "
-            f"expected {sorted(expected)}, got {sorted(actual)}"
-        )
+        assert actual == expected, f"{key}: connector_sources drifted. " f"expected {sorted(expected)}, got {sorted(actual)}"
 
 
 def test_demo_quick_alerts_reference_declared_connectors() -> None:
@@ -192,11 +188,10 @@ def test_demo_quick_seed_persists_four_cases() -> None:
     # Local import so the heavy SQLAlchemy + asyncpg dependency chain
     # doesn't load when the integration test is skipped (which is the
     # common case on a developer laptop).
-    from sqlalchemy import select
-
     from app.db.database import AsyncSessionLocal
     from app.models.case import Case
     from app.scripts.seed_demo import _parse_clock, _run_quick_seed
+    from sqlalchemy import select
 
     async def _run_and_count() -> list[Case]:
         await _run_quick_seed(clock=_parse_clock(None))
@@ -208,8 +203,7 @@ def test_demo_quick_seed_persists_four_cases() -> None:
     cases = asyncio.run(_run_and_count())
     by_key: dict[str, Case] = {c.key: c for c in cases}
     assert set(by_key.keys()) == set(EXPECTED_DEMO_KEYS), (
-        f"Quick seed did not produce exactly the four DEMO-* cases. "
-        f"Got keys: {sorted(by_key.keys())}"
+        f"Quick seed did not produce exactly the four DEMO-* cases. " f"Got keys: {sorted(by_key.keys())}"
     )
 
     # Walk the persisted metadata to confirm connector_sources made it
@@ -220,6 +214,5 @@ def test_demo_quick_seed_persists_four_cases() -> None:
         meta: dict[str, Any] = case.case_metadata or {}
         sources = set(meta.get("connector_sources") or [])
         assert sources == EXPECTED_CONNECTOR_SOURCES[key], (
-            f"{key}: persisted connector_sources={sorted(sources)} "
-            f"does not match contract={sorted(EXPECTED_CONNECTOR_SOURCES[key])}"
+            f"{key}: persisted connector_sources={sorted(sources)} " f"does not match contract={sorted(EXPECTED_CONNECTOR_SOURCES[key])}"
         )
