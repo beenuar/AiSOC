@@ -167,10 +167,10 @@ class TriageCapability:
         self.name = name
         self._runner = runner
 
-    async def __call__(self, state: "InvestigationState") -> "InvestigationState":
+    async def __call__(self, state: InvestigationState) -> InvestigationState:
         return await self._runner(state)
 
-    async def run(self, state: "InvestigationState") -> "InvestigationState":
+    async def run(self, state: InvestigationState) -> InvestigationState:
         return await self._runner(state)
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
@@ -214,7 +214,7 @@ class TriageAgent:
     }
 
     @staticmethod
-    async def auto_triage(state: "InvestigationState") -> "InvestigationState":
+    async def auto_triage(state: InvestigationState) -> InvestigationState:
         """LLM-based auto-triage entry point.
 
         Delegates to :func:`app.agents.auto_triage_agent.run_auto_triage`.
@@ -222,7 +222,7 @@ class TriageAgent:
         return await _run_auto_triage(state)
 
     @staticmethod
-    async def heuristic_triage(state: "InvestigationState") -> "InvestigationState":
+    async def heuristic_triage(state: InvestigationState) -> InvestigationState:
         """Deterministic heuristic triage (severity scoring + IOC extraction).
 
         Delegates to :func:`app.agents.triage_agent.run_triage`. Used by the
@@ -234,10 +234,10 @@ class TriageAgent:
     @classmethod
     async def analyse(
         cls,
-        state: "InvestigationState",
+        state: InvestigationState,
         *,
         capability: str,
-    ) -> "InvestigationState":
+    ) -> InvestigationState:
         """Dispatch to a named sub-agent capability.
 
         Args:
@@ -253,7 +253,7 @@ class TriageAgent:
 
     # Convenience callable so ``await TriageAgent()(state)`` and
     # ``await TriageAgent.auto_triage(state)`` both work.
-    async def __call__(self, state: "InvestigationState") -> "InvestigationState":
+    async def __call__(self, state: InvestigationState) -> InvestigationState:
         return await _run_auto_triage(state)
 
     @classmethod
@@ -450,10 +450,10 @@ class _CapabilityShim:
         cls.capability = capability
 
     @classmethod
-    async def run(cls, state: "InvestigationState") -> "InvestigationState":
+    async def run(cls, state: InvestigationState) -> InvestigationState:
         return await cls.capability(state)
 
-    async def __call__(self, state: "InvestigationState") -> "InvestigationState":
+    async def __call__(self, state: InvestigationState) -> InvestigationState:
         return await type(self).capability(state)
 
 
