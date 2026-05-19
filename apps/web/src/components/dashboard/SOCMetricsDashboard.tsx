@@ -3,68 +3,14 @@
 import { useCallback } from "react";
 import useSWR from "swr";
 
-interface SOCKpis {
-  mttd_hours: number;
-  mttr_hours: number;
-  mttc_hours: number;
-  false_positive_rate: number;
-  escalation_rate: number;
-  alert_volume_7d: number;
-  cases_opened_7d: number;
-  cases_closed_7d: number;
-  analyst_overrides_7d: number;
-}
-
-interface AttackHeatmapCell {
-  tactic: string;
-  technique: string;
-  count: number;
-}
-
-interface CalibrationBucket {
-  predicted_lower: number;
-  predicted_upper: number;
-  sample_count: number;
-  actual_tp_rate: number;
-}
-
-interface SOCMetrics {
-  kpis: SOCKpis;
-  attack_heatmap: AttackHeatmapCell[];
-  calibration_curve: CalibrationBucket[];
-}
-
-interface CostAggregateRow {
-  model: string;
-  runs: number;
-  calls: number;
-  total_prompt_tokens: number;
-  total_completion_tokens: number;
-  total_cost_usd: number;
-  total_latency_ms: number;
-  avg_cost_per_run: number;
-  avg_latency_per_call_ms: number;
-}
-
-interface CostAggregate {
-  window_days: number;
-  by_model: CostAggregateRow[];
-  totals: CostAggregateRow | null;
-}
-
-async function safeFetcher<T = unknown>(url: string): Promise<T> {
-  const r = await fetch(url, { credentials: "include" });
-  if (!r.ok) {
-    const body = await r.text().catch(() => "");
-    throw new Error(`${r.status} ${r.statusText} — ${body.slice(0, 120)}`);
-  }
-  const text = await r.text();
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new Error(`Invalid JSON from ${url}: ${text.slice(0, 80)}`);
-  }
-}
+import {
+  metricsApi,
+  investigationsApi,
+  type SOCMetrics,
+  type AttackHeatmapCell,
+  type CalibrationBucket,
+  type CostAggregate,
+} from "@/lib/api";
 
 const MOCK_SOC_METRICS: SOCMetrics = {
   kpis: {
@@ -208,25 +154,43 @@ function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
 }
 
 export function SOCMetricsDashboard() {
-  const { data, mutate } = useSWR<SOCMetrics>(
-    "/api/v1/metrics/soc",
-    safeFetcher<SOCMetrics>,
+  const { data, error, isLoading, mutate } = useSWR<SOCMetrics>(
+    // Opaque cache key — `metricsApi.getSOC()` routes through the
+    // tenant- and auth-aware `request()` helper, which attaches
+    // `X-Tenant-Id` and `Authorization` headers and is bound to the
+    // same-origin proxy in `next.config.*` rewrites.
+    "soc-metrics",
+    () => metricsApi.getSOC(),
     {
       refreshInterval: 60_000,
       fallbackData: MOCK_SOC_METRICS,
-      shouldRetryOnError: false,
-      errorRetryCount: 0,
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      errorRetryInterval: 4000,
+      revalidateOnMount: true,
       revalidateOnFocus: false,
     }
   );
 
   const refresh = useCallback(() => mutate(), [mutate]);
 
-  const isValidSOC = data && typeof data.kpis?.mttd_hours === "number" && Array.isArray(data.attack_heatmap);
+  const isValidSOC =
+    !!data &&
+    typeof data.kpis?.mttd_hours === "number" &&
+    Array.isArray(data.attack_heatmap);
   const resolved = isValidSOC ? data : MOCK_SOC_METRICS;
   const kpis = resolved.kpis;
   const heatmap = resolved.attack_heatmap ?? [];
   const calibration = resolved.calibration_curve ?? [];
+  // We surface the error inline rather than swapping the whole panel out for
+  // a blocking error state — the mock fallback keeps the page legible while
+  // the user retries.
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : error
+        ? String(error)
+        : null;
 
   return (
     <div className="space-y-6">
@@ -240,6 +204,14 @@ export function SOCMetricsDashboard() {
           Refresh
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+          <span className="font-semibold">SOC metrics unavailable:</span>{" "}
+          {errorMessage}. Showing last known mock baseline; the live numbers
+          will refresh automatically once the API recovers.
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -354,23 +326,34 @@ export function SOCMetricsDashboard() {
 }
 
 function CostTelemetryPanel() {
-  const { data, isLoading } = useSWR<CostAggregate>(
-    "/api/v1/investigations/costs/aggregate?window_days=30",
-    safeFetcher<CostAggregate>,
+  const { data, error, isLoading } = useSWR<CostAggregate>(
+    "cost-aggregate:30",
+    () => investigationsApi.getCostAggregate(30),
     {
       refreshInterval: 60_000,
       fallbackData: MOCK_COST_AGGREGATE,
-      shouldRetryOnError: false,
-      errorRetryCount: 0,
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      errorRetryInterval: 4000,
+      revalidateOnMount: true,
       revalidateOnFocus: false,
     },
   );
 
-  const isValidCost = data && Array.isArray(data.by_model) && typeof data.window_days === "number";
+  const isValidCost =
+    !!data &&
+    Array.isArray(data.by_model) &&
+    typeof data.window_days === "number";
   const resolved = isValidCost ? data : MOCK_COST_AGGREGATE;
   const totals = resolved.totals;
   const byModel = resolved.by_model ?? [];
   const maxModelCost = Math.max(...byModel.map((m) => m.total_cost_usd), 0.0001);
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : error
+        ? String(error)
+        : null;
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
@@ -386,6 +369,13 @@ function CostTelemetryPanel() {
         Source of truth for TCO transparency. Per-run breakdowns are available on
         each investigation detail view.
       </p>
+
+      {errorMessage && (
+        <div className="mb-3 rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+          <span className="font-semibold">Cost telemetry unavailable:</span>{" "}
+          {errorMessage}. Showing baseline projections until the API recovers.
+        </div>
+      )}
 
       {isLoading && !resolved ? (
         <div className="h-32 animate-pulse bg-gray-800 rounded" />

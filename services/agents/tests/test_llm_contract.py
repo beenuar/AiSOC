@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.llm.contract import (
     LLMContractViolation,
     LLMInputContract,
@@ -48,9 +47,7 @@ def test_validate_messages_accepts_summarized_structure(contract_enforced) -> No
         "display_name": "Alice",
         "risk": {"score": 42},
     }
-    body = summarize_structure_for_llm(
-        entity, label="entity_snapshot", max_lines=80, max_depth=3
-    )
+    body = summarize_structure_for_llm(entity, label="entity_snapshot", max_lines=80, max_depth=3)
     msgs = [
         {"role": "system", "content": "You are a security analyst."},
         {"role": "user", "content": body},

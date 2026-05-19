@@ -19,7 +19,8 @@ language the editor speaks.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Any, Literal
 
 import yaml
@@ -151,12 +152,7 @@ class RuleAction:
     suppress: bool = False  # if true, alert is dropped before triage
 
     def is_noop(self) -> bool:
-        return (
-            self.set_severity is None
-            and self.route_to is None
-            and self.tag is None
-            and not self.suppress
-        )
+        return self.set_severity is None and self.route_to is None and self.tag is None and not self.suppress
 
 
 # ---------------------------------------------------------------------------
@@ -206,34 +202,23 @@ def _parse_condition(raw: Any, *, path: str) -> RuleCondition:
             children_raw = raw[key]
             if key == "not":
                 if not isinstance(children_raw, dict):
-                    raise RuleParseError(
-                        f"{path}.not: expected a mapping for the negated condition"
-                    )
+                    raise RuleParseError(f"{path}.not: expected a mapping for the negated condition")
                 child = _parse_condition(children_raw, path=f"{path}.not")
                 return RuleCondition(logical="not", children=(child,))
             if not isinstance(children_raw, list) or not children_raw:
-                raise RuleParseError(
-                    f"{path}.{key}: must be a non-empty list of conditions"
-                )
-            children = tuple(
-                _parse_condition(c, path=f"{path}.{key}[{i}]")
-                for i, c in enumerate(children_raw)
-            )
+                raise RuleParseError(f"{path}.{key}: must be a non-empty list of conditions")
+            children = tuple(_parse_condition(c, path=f"{path}.{key}[{i}]") for i, c in enumerate(children_raw))
             return RuleCondition(logical=key, children=children)
 
     # Leaf form
     field_name = raw.get("field")
     op = raw.get("op")
     if field_name is None or op is None:
-        raise RuleParseError(
-            f"{path}: leaf condition must include 'field' and 'op' (got {sorted(raw.keys())})"
-        )
+        raise RuleParseError(f"{path}: leaf condition must include 'field' and 'op' (got {sorted(raw.keys())})")
     if not isinstance(field_name, str) or not field_name:
         raise RuleParseError(f"{path}.field: must be a non-empty string")
     if op not in ALLOWED_OPS:
-        raise RuleParseError(
-            f"{path}.op: {op!r} is not one of {sorted(ALLOWED_OPS)}"
-        )
+        raise RuleParseError(f"{path}.op: {op!r} is not one of {sorted(ALLOWED_OPS)}")
 
     # ``exists`` / ``not_exists`` are unary — value is ignored if present.
     if op in {"exists", "not_exists"}:
@@ -245,48 +230,36 @@ def _parse_condition(raw: Any, *, path: str) -> RuleCondition:
     # ``in`` / ``not_in`` require a sequence; coerce single string to a
     # one-element list to be analyst-friendly.
     if op in {"in", "not_in"}:
-        if isinstance(value, (str, bytes)):
+        if isinstance(value, str | bytes):
             value = [value]
-        if not isinstance(value, (list, tuple)) or not value:
-            raise RuleParseError(
-                f"{path}.value: op={op!r} requires a non-empty list"
-            )
+        if not isinstance(value, list | tuple) or not value:
+            raise RuleParseError(f"{path}.value: op={op!r} requires a non-empty list")
         value = list(value)
     return RuleCondition(field=field_name, op=op, value=value)
 
 
 def _parse_action(raw: Any, *, rule_id: str) -> RuleAction:
     if not isinstance(raw, dict):
-        raise RuleParseError(
-            f"rule {rule_id!r}: 'then' must be a mapping (got {type(raw).__name__})"
-        )
+        raise RuleParseError(f"rule {rule_id!r}: 'then' must be a mapping (got {type(raw).__name__})")
 
     sev = raw.get("set_severity")
     if sev is not None:
         if not isinstance(sev, str) or sev not in ALLOWED_SEVERITIES:
-            raise RuleParseError(
-                f"rule {rule_id!r}: 'set_severity' must be one of {ALLOWED_SEVERITIES}"
-            )
+            raise RuleParseError(f"rule {rule_id!r}: 'set_severity' must be one of {ALLOWED_SEVERITIES}")
 
     route = raw.get("route_to")
     if route is not None:
         if not isinstance(route, str) or route not in ALLOWED_ROUTES:
-            raise RuleParseError(
-                f"rule {rule_id!r}: 'route_to' must be one of {sorted(ALLOWED_ROUTES)}"
-            )
+            raise RuleParseError(f"rule {rule_id!r}: 'route_to' must be one of {sorted(ALLOWED_ROUTES)}")
 
     tag = raw.get("tag")
     if tag is not None:
         if not isinstance(tag, str) or not _TAG_RE.match(tag):
-            raise RuleParseError(
-                f"rule {rule_id!r}: 'tag' must be a kebab-case slug (got {tag!r})"
-            )
+            raise RuleParseError(f"rule {rule_id!r}: 'tag' must be a kebab-case slug (got {tag!r})")
 
     suppress = raw.get("suppress", False)
     if not isinstance(suppress, bool):
-        raise RuleParseError(
-            f"rule {rule_id!r}: 'suppress' must be a boolean (got {type(suppress).__name__})"
-        )
+        raise RuleParseError(f"rule {rule_id!r}: 'suppress' must be a boolean (got {type(suppress).__name__})")
 
     return RuleAction(
         set_severity=sev,
@@ -298,15 +271,11 @@ def _parse_action(raw: Any, *, rule_id: str) -> RuleAction:
 
 def _parse_one_rule(raw: Any, *, source_yaml: str) -> BusinessContextRule:
     if not isinstance(raw, dict):
-        raise RuleParseError(
-            f"top-level rule must be a mapping, got {type(raw).__name__}"
-        )
+        raise RuleParseError(f"top-level rule must be a mapping, got {type(raw).__name__}")
 
     rid = raw.get("id")
     if not isinstance(rid, str) or not _RULE_ID_RE.match(rid):
-        raise RuleParseError(
-            "rule.id must be a kebab-case slug 3-63 chars (e.g. 'prod-iam-critical')"
-        )
+        raise RuleParseError("rule.id must be a kebab-case slug 3-63 chars (e.g. 'prod-iam-critical')")
 
     description = raw.get("description", "") or ""
     if not isinstance(description, str):
@@ -322,10 +291,7 @@ def _parse_one_rule(raw: Any, *, source_yaml: str) -> BusinessContextRule:
         raise RuleParseError(f"rule {rid!r}: 'then' clause is required")
     then = _parse_action(then_raw, rule_id=rid)
     if then.is_noop():
-        raise RuleParseError(
-            f"rule {rid!r}: 'then' clause must set at least one of "
-            "set_severity / route_to / tag / suppress"
-        )
+        raise RuleParseError(f"rule {rid!r}: 'then' clause must set at least one of " "set_severity / route_to / tag / suppress")
 
     enabled = raw.get("enabled", True)
     if not isinstance(enabled, bool):
@@ -333,9 +299,7 @@ def _parse_one_rule(raw: Any, *, source_yaml: str) -> BusinessContextRule:
 
     priority = raw.get("priority", 100)
     if not isinstance(priority, int) or not 0 <= priority <= 1000:
-        raise RuleParseError(
-            f"rule {rid!r}: 'priority' must be an int in [0, 1000]"
-        )
+        raise RuleParseError(f"rule {rid!r}: 'priority' must be an int in [0, 1000]")
 
     return BusinessContextRule(
         id=rid,
@@ -392,18 +356,14 @@ def load_rules_from_yaml(source: str) -> list[BusinessContextRule]:
         # Single-rule shorthand.
         rules_raw = [data]
     else:
-        raise RuleParseError(
-            f"top-level YAML must be a list or mapping, got {type(data).__name__}"
-        )
+        raise RuleParseError(f"top-level YAML must be a list or mapping, got {type(data).__name__}")
 
     parsed: list[BusinessContextRule] = []
     seen_ids: set[str] = set()
     for raw in rules_raw:
         rule = _parse_one_rule(raw, source_yaml=text)
         if rule.id in seen_ids:
-            raise RuleParseError(
-                f"duplicate rule id {rule.id!r} (rule ids must be unique)"
-            )
+            raise RuleParseError(f"duplicate rule id {rule.id!r} (rule ids must be unique)")
         seen_ids.add(rule.id)
         parsed.append(rule)
 

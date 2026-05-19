@@ -119,7 +119,7 @@ def _resolve_field(context: dict[str, Any], field: str) -> Any:
     for part in field.split("."):
         if isinstance(cur, dict):
             cur = cur.get(part)
-        elif isinstance(cur, (list, tuple)):
+        elif isinstance(cur, list | tuple):
             # Numeric indices may be specified as bare ints in a dot-path.
             try:
                 idx = int(part)
@@ -145,7 +145,7 @@ def _to_float(value: Any) -> float | None:
         return 0.0
     if isinstance(value, bool):  # bool is a subclass of int; treat explicitly
         return 1.0 if value else 0.0
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     try:
         return float(value)
@@ -194,7 +194,7 @@ def _evaluate_condition(condition: StepCondition, context: dict[str, Any]) -> bo
         # pattern of testing field membership in an allowed set.
         if value is None:
             return False
-        if isinstance(expected, (list, tuple, set)):
+        if isinstance(expected, list | tuple | set):
             return value in expected
         return str(expected) in str(value)
     if op in ("gt", "lt"):
@@ -308,13 +308,13 @@ def _evaluate_expression(expression: str, context: dict[str, Any]) -> bool:
             if op == "in_":
                 if rhs is None:
                     return False
-                if isinstance(rhs, (list, tuple, set)):
+                if isinstance(rhs, list | tuple | set):
                     return lhs in rhs
                 return str(lhs) in str(rhs)
             if op == "not_in":
                 if rhs is None:
                     return True
-                if isinstance(rhs, (list, tuple, set)):
+                if isinstance(rhs, list | tuple | set):
                     return lhs not in rhs
                 return str(lhs) not in str(rhs)
         except TypeError:

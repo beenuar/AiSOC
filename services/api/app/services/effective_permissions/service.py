@@ -119,10 +119,7 @@ def resolve_effective_permissions(
 
     resolver_cls = SUPPORTED_PROVIDERS.get(provider)
     if resolver_cls is None:
-        raise ValueError(
-            f"unknown provider {provider!r}; supported: "
-            f"{sorted(SUPPORTED_PROVIDERS)}"
-        )
+        raise ValueError(f"unknown provider {provider!r}; supported: " f"{sorted(SUPPORTED_PROVIDERS)}")
 
     resolver = resolver_cls()
     if snapshot is None:
