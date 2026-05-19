@@ -340,7 +340,7 @@ class FleetDMConnector(BaseConnector):
 def _parse_iso(value: Any) -> float | None:
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:

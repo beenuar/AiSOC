@@ -123,9 +123,9 @@ def _eval_op(op: str, lhs: Any, rhs: Any) -> bool:
     if op == "endswith":
         return isinstance(lhs, str) and isinstance(rhs, str) and lhs.endswith(rhs)
     if op == "in":
-        return lhs in rhs if isinstance(rhs, (list, tuple, set)) else False
+        return lhs in rhs if isinstance(rhs, list | tuple | set) else False
     if op == "not_in":
-        return lhs not in rhs if isinstance(rhs, (list, tuple, set)) else False
+        return lhs not in rhs if isinstance(rhs, list | tuple | set) else False
     return False
 
 
@@ -217,12 +217,8 @@ class EngineSnapshot:
         return tuple(r for r in self.rules if r.enabled)
 
 
-def _compile_snapshot(
-    tenant_id: UUID, version: int, rules: Iterable[BusinessContextRule]
-) -> EngineSnapshot:
-    sorted_rules = tuple(
-        sorted(rules, key=lambda r: (r.priority, r.id))
-    )
+def _compile_snapshot(tenant_id: UUID, version: int, rules: Iterable[BusinessContextRule]) -> EngineSnapshot:
+    sorted_rules = tuple(sorted(rules, key=lambda r: (r.priority, r.id)))
     idx: dict[str, list[str]] = {}
     for r in sorted_rules:
         for f in r.when.fields_referenced():
