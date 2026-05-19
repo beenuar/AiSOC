@@ -68,11 +68,7 @@ async def get_attack_chain(
         # but a future schema change could relax that — fail closed.
         raise HTTPException(status_code=400, detail=f"unknown window: {window}")
 
-    case_row = (
-        await db.execute(
-            select(Case).where(Case.id == case_id, Case.tenant_id == user.tenant_id)
-        )
-    ).scalar_one_or_none()
+    case_row = (await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == user.tenant_id))).scalar_one_or_none()
     if case_row is None:
         raise HTTPException(status_code=404, detail="case_not_found")
 
@@ -82,10 +78,7 @@ async def get_attack_chain(
     # case still resolves.
     seed_alert_id: uuid.UUID | None = None
     if case_row.alert_ids:
-        candidate_ids = [
-            uuid.UUID(str(a)) if not isinstance(a, uuid.UUID) else a
-            for a in case_row.alert_ids
-        ]
+        candidate_ids = [uuid.UUID(str(a)) if not isinstance(a, uuid.UUID) else a for a in case_row.alert_ids]
         seed_row = (
             await db.execute(
                 select(Alert)
