@@ -87,8 +87,7 @@ async def get_effective_permissions(
     snapshot_b64: str | None = Query(
         None,
         description=(
-            "Optional base64-encoded JSON snapshot for dry-run resolution. "
-            "Only honoured when AISOC_ALLOW_INLINE_SNAPSHOT=1 is set."
+            "Optional base64-encoded JSON snapshot for dry-run resolution. " "Only honoured when AISOC_ALLOW_INLINE_SNAPSHOT=1 is set."
         ),
     ),
     _user: User = Depends(get_current_user),
@@ -102,10 +101,7 @@ async def get_effective_permissions(
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"unknown provider {provider!r}; "
-                f"supported: {sorted(SUPPORTED_PROVIDERS)}"
-            ),
+            detail=(f"unknown provider {provider!r}; " f"supported: {sorted(SUPPORTED_PROVIDERS)}"),
         )
 
     snapshot: dict[str, Any] | None = None
@@ -113,8 +109,7 @@ async def get_effective_permissions(
         if os.getenv(_INLINE_SNAPSHOT_FLAG, "0") != "1":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="inline snapshots are disabled; set "
-                f"{_INLINE_SNAPSHOT_FLAG}=1 to dry-run.",
+                detail="inline snapshots are disabled; set " f"{_INLINE_SNAPSHOT_FLAG}=1 to dry-run.",
             )
         try:
             snapshot = json.loads(base64.b64decode(snapshot_b64).decode("utf-8"))

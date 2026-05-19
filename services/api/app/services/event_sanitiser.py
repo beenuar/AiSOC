@@ -229,7 +229,7 @@ def _redact_value(value: Any, *, depth: int, counters: dict[str, int]) -> Any:
                 out[k] = _redact_value(v, depth=depth + 1, counters=counters)
         return out
 
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         # Always emit a list — JSONB doesn't preserve tuple-ness anyway and
         # the alerts schema is typed ``JSONB``. Preserve order.
         return [_redact_value(v, depth=depth + 1, counters=counters) for v in value]
