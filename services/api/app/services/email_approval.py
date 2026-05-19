@@ -324,7 +324,7 @@ def render_approval_email(
         f"<tr><td><strong>Rationale</strong></td><td>{rationale}</td></tr>"
         f"</table>"
         f"<p style='margin-top:16px'>"
-        f"<a href='{approve_url}' style='background:#16a34a;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;margin-right:8px'>Approve</a>"
+        f"<a href='{approve_url}' style='background:#16a34a;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;margin-right:8px'>Approve</a>"  # noqa: E501
         f"<a href='{reject_url}' style='background:#dc2626;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none'>Deny</a>"
         f"</p>"
         f"<p style='color:#6b7280;font-size:12px'>This link expires in 60 minutes.</p>"
@@ -384,9 +384,7 @@ async def send_approval_email(
         reject_url=reject,
         web_base_url=web_base_url,
     )
-    response = await mailer.send(
-        to=recipients, subject=subject, html=html_body, text=text_body
-    )
+    response = await mailer.send(to=recipients, subject=subject, html=html_body, text=text_body)
     log.info(
         "email_approval.sent",
         action_id=action_id,

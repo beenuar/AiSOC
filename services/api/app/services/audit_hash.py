@@ -49,7 +49,7 @@ from typing import Any
 
 def _canonicalise(value: Any) -> Any:
     """Map non-JSON-native types into something ``json.dumps`` can encode deterministically."""
-    if value is None or isinstance(value, (bool, int, float, str)):
+    if value is None or isinstance(value, bool | int | float | str):
         return value
     if isinstance(value, uuid.UUID):
         return str(value)
@@ -60,7 +60,7 @@ def _canonicalise(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, dict):
         return {str(k): _canonicalise(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_canonicalise(v) for v in value]
     # Fallback: stringify. Audit metadata occasionally contains exotic
     # values (e.g. enum instances); we never want the hash to crash.

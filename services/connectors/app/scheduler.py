@@ -754,7 +754,7 @@ def _extract_last_event_at(events: list[dict[str, Any]]) -> datetime | None:
                 parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             except ValueError:
                 parsed = None
-        elif isinstance(raw, (int, float)):
+        elif isinstance(raw, int | float):
             try:
                 parsed = datetime.fromtimestamp(float(raw), tz=UTC)
             except (OverflowError, OSError, ValueError):

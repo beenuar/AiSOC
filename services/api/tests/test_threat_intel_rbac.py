@@ -87,9 +87,9 @@ def test_all_known_roles_can_read_threat_intel(role: str) -> None:
     inline. If we ever drop :read from a role we should know about it
     here, not from a 403 in the browser.
     """
-    assert has_permission(role, "threat_intel:read"), (
-        f"Role {role!r} lost threat_intel:read — this would break the alerts UI (IOC enrichment renders inline)."
-    )
+    assert has_permission(
+        role, "threat_intel:read"
+    ), f"Role {role!r} lost threat_intel:read — this would break the alerts UI (IOC enrichment renders inline)."
 
 
 def test_role_permissions_map_covers_every_role_under_test() -> None:
@@ -102,9 +102,9 @@ def test_role_permissions_map_covers_every_role_under_test() -> None:
     real_roles = set(ROLE_PERMISSIONS) - {"admin", "platform_admin"}
     audited_roles = set(WRITE_ROLES + READ_ONLY_ROLES) - {"admin", "platform_admin"}
     missing = real_roles - audited_roles
-    assert not missing, (
-        f"New role(s) {missing} added to ROLE_PERMISSIONS without RBAC test coverage. Add them to WRITE_ROLES or READ_ONLY_ROLES."
-    )
+    assert (
+        not missing
+    ), f"New role(s) {missing} added to ROLE_PERMISSIONS without RBAC test coverage. Add them to WRITE_ROLES or READ_ONLY_ROLES."
 
 
 # ─── CurrentUser.require_permission integration ──────────────────────────
@@ -202,9 +202,9 @@ def test_threat_intel_endpoint_module_uses_require_permission() -> None:
     from app.api.v1.endpoints import threat_intel
 
     src = inspect.getsource(threat_intel)
-    assert "require_permission" in src, (
-        "threat_intel.py no longer references require_permission — the MSSP RBAC gate has been removed. See Issue #13."
-    )
+    assert (
+        "require_permission" in src
+    ), "threat_intel.py no longer references require_permission — the MSSP RBAC gate has been removed. See Issue #13."
     assert 'require_permission("threat_intel:write")' in src, (
         "threat_intel.py no longer gates on threat_intel:write. "
         "Write endpoints (POST/DELETE on /iocs, /actors, /feeds) must "

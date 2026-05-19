@@ -41,8 +41,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import AuthUser, DBSession
 from app.models.tenant import Tenant
 from app.services.tenant_provision import (
-    ProvisionResult,
     ProvisioningError,
+    ProvisionResult,
     SlugCollisionError,
     WaitlistEntryNotFoundError,
     WaitlistEntryNotPromotableError,
@@ -185,9 +185,7 @@ def _tenant_to_wire(row: Tenant) -> TenantListEntry:
         plan=row.plan or "starter",
         is_active=bool(row.is_active),
         is_managed=bool(settings_blob.get("managed", False)),
-        provisioned_from_waitlist_id=settings_blob.get(
-            "provisioned_from_waitlist_id"
-        ),
+        provisioned_from_waitlist_id=settings_blob.get("provisioned_from_waitlist_id"),
         provisioned_at=settings_blob.get("provisioned_at"),
         created_at=row.created_at.isoformat() if row.created_at else "",
     )
