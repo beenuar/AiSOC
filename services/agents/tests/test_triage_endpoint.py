@@ -282,7 +282,7 @@ def test_run_completes_and_exposes_router_telemetry(
     # All four sub-agents fanned out → their techniques are present.
     assert {"T1566.001", "T1078", "T1078.004", "T1567.002"}.issubset(set(final["mitre_mappings"]))
     # Telemetry: wall-clock recorded as a non-negative number.
-    assert isinstance(final.get("wall_clock_ms"), (int, float))
+    assert isinstance(final.get("wall_clock_ms"), int | float)
     assert final["wall_clock_ms"] >= 0
 
 
