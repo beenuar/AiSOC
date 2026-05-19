@@ -146,9 +146,12 @@ export function FunnelKpiBar({
     },
   );
 
-  // Error takes priority over loading. Without this ordering the loading branch
-  // wins after a failure and the user stares at skeleton tiles forever.
-  if (error && !data) {
+  // Error takes priority over loading and stale data. Without this ordering
+  // the loading branch wins after a failure and the user stares at skeleton
+  // tiles forever; if we let stale data through silently, the analyst sees
+  // confidently-rendered numbers that may be hours old. Bias toward making
+  // the failure visible — SWR will keep retrying every 4s underneath.
+  if (error) {
     const errorMessage =
       error instanceof Error ? error.message : String(error);
     return (
