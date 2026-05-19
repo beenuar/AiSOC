@@ -32,7 +32,6 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta
 
 import pytest
-
 from app.services.attack_chain import (
     DEFAULT_WINDOW,
     CandidateAlert,
@@ -43,7 +42,6 @@ from app.services.attack_chain import (
     compute_attack_chain,
     score_candidate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixture: the 5-alert LockBit chain

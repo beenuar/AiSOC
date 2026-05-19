@@ -17,7 +17,7 @@ def _format_primitive(v: Any) -> str:
         return "(null)"
     if isinstance(v, bool):
         return "true" if v else "false"
-    if isinstance(v, (int, float)):
+    if isinstance(v, int | float):
         return str(v)
     s = str(v).replace("\r", " ").replace("\n", " ")
     if len(s) > 400:
@@ -49,7 +49,7 @@ def format_extra_fields_for_llm(
             lines.append(
                 f"{k}:\n{summarize_structure_for_llm(v, label=str(k), max_lines=10, max_depth=max_depth)}"
             )
-        elif isinstance(v, (list, tuple)):
+        elif isinstance(v, list | tuple):
             lines.append(
                 f"{k}:\n{summarize_structure_for_llm(list(v), label=str(k), max_lines=10, max_depth=max_depth)}"
             )
@@ -95,7 +95,7 @@ def summarize_structure_for_llm(
                     add(f"{sub}: dict({nk} keys)")
                     if depth < max_depth and nk <= 12:
                         visit(v, sub, depth + 1)
-                elif isinstance(v, (list, tuple)):
+                elif isinstance(v, list | tuple):
                     add(f"{sub}: list[{len(v)} items]")
                     if depth < max_depth:
                         cap = min(5, len(v))
@@ -105,7 +105,7 @@ def summarize_structure_for_llm(
                             add(f"{sub}: … {len(v) - cap} more items omitted")
                 else:
                     add(f"{sub}: {_format_primitive(v)}")
-        elif isinstance(node, (list, tuple)):
+        elif isinstance(node, list | tuple):
             add(f"{path}: list[{len(node)}]")
             if depth < max_depth:
                 for i, it in enumerate(node[:6]):

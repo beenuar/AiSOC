@@ -257,8 +257,9 @@ class AWSSecurityHubConnector(BaseConnector):
         # and let it parse. If Config isn't recording the resource we get
         # an empty configurationItems list and surface that cleanly.
         try:
-            import boto3
             from datetime import datetime as _dt
+
+            import boto3
 
             kwargs: dict[str, Any] = {"region_name": self._region}
             if self._access_key and self._secret_key:

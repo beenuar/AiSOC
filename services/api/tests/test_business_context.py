@@ -80,7 +80,6 @@ from app.services.business_context.models import (
 )
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

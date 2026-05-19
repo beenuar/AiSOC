@@ -123,9 +123,9 @@ def _eval_op(op: str, lhs: Any, rhs: Any) -> bool:
     if op == "endswith":
         return isinstance(lhs, str) and isinstance(rhs, str) and lhs.endswith(rhs)
     if op == "in":
-        return lhs in rhs if isinstance(rhs, (list, tuple, set)) else False
+        return lhs in rhs if isinstance(rhs, list | tuple | set) else False
     if op == "not_in":
-        return lhs not in rhs if isinstance(rhs, (list, tuple, set)) else False
+        return lhs not in rhs if isinstance(rhs, list | tuple | set) else False
     return False
 
 

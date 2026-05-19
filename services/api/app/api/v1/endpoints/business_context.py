@@ -97,7 +97,7 @@ class RuleConditionWire(BaseModel):
     op: str | None = None
     value: Any = None
     logical: str | None = None
-    children: list["RuleConditionWire"] = Field(default_factory=list)
+    children: list[RuleConditionWire] = Field(default_factory=list)
 
 
 class RuleActionWire(BaseModel):

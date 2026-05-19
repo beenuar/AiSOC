@@ -107,7 +107,7 @@ def _string_field(raw: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
         val = raw.get(key)
         if isinstance(val, str) and val.strip():
             out.append(val.strip())
-        elif isinstance(val, (list, tuple)):
+        elif isinstance(val, list | tuple):
             for v in val:
                 if isinstance(v, str) and v.strip():
                     out.append(v.strip())
@@ -440,7 +440,7 @@ def _ti_sources(payload: dict[str, Any]) -> list[str]:
     if isinstance(sources, list):
         return [str(s) for s in sources][:10]
     if isinstance(sources, dict):
-        return list(sorted(sources.keys()))[:10]
+        return sorted(sources.keys())[:10]
     return []
 
 
@@ -759,7 +759,7 @@ class ContextBundleBuilder:
         """Run ``coro`` with a per-source timeout; record errors instead of raising."""
         try:
             return await asyncio.wait_for(coro, timeout=self.per_source_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             bundle.errors.append(f"{name}:timeout")
             return None
         except Exception as exc:  # noqa: BLE001

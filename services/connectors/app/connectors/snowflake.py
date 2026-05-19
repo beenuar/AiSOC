@@ -141,9 +141,10 @@ class SnowflakeConnector(BaseConnector):
         run without a real key."""
         try:
             from cryptography.hazmat.primitives.serialization import (
+                Encoding,
+                PublicFormat,
                 load_pem_private_key,
             )
-            from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
             priv = load_pem_private_key(self._private_key_pem.encode(), password=None)
             der = priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
@@ -203,7 +204,7 @@ class SnowflakeConnector(BaseConnector):
             payload = resp.json() or {}
             cols = [c.get("name") for c in payload.get("resultSetMetaData", {}).get("rowType") or []]
             rows = payload.get("data") or []
-            return [dict(zip(cols, row)) for row in rows]
+            return [dict(zip(cols, row, strict=False)) for row in rows]
 
     async def test_connection(self) -> dict[str, Any]:
         try:

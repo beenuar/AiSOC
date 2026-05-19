@@ -19,7 +19,8 @@ language the editor speaks.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Any, Literal
 
 import yaml
@@ -245,9 +246,9 @@ def _parse_condition(raw: Any, *, path: str) -> RuleCondition:
     # ``in`` / ``not_in`` require a sequence; coerce single string to a
     # one-element list to be analyst-friendly.
     if op in {"in", "not_in"}:
-        if isinstance(value, (str, bytes)):
+        if isinstance(value, str | bytes):
             value = [value]
-        if not isinstance(value, (list, tuple)) or not value:
+        if not isinstance(value, list | tuple) or not value:
             raise RuleParseError(
                 f"{path}.value: op={op!r} requires a non-empty list"
             )

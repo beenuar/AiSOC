@@ -531,6 +531,7 @@ class PostgresAttackChainLoader:
         self, alert_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> CandidateAlert | None:
         from sqlalchemy import select  # local import keeps the module
+
         from app.models.alert import Alert  #     test-importable w/o DB
 
         result = await self._db.execute(
@@ -550,6 +551,7 @@ class PostgresAttackChainLoader:
         exclude_ids: set[uuid.UUID],
     ) -> list[CandidateAlert]:
         from sqlalchemy import and_, or_, select, text
+
         from app.models.alert import Alert
 
         users: list[str] = []

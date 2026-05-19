@@ -149,7 +149,7 @@ class _FakeUEBAClient:
         self._args = args
         self._kwargs = kwargs
 
-    async def __aenter__(self) -> "_FakeUEBAClient":
+    async def __aenter__(self) -> _FakeUEBAClient:
         return self
 
     async def __aexit__(self, *args: Any) -> None:

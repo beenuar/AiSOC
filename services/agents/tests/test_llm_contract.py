@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.llm.contract import (
     LLMContractViolation,
     LLMInputContract,

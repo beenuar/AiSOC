@@ -56,7 +56,6 @@ from app.api.v1.endpoints.saved_hunts import (
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

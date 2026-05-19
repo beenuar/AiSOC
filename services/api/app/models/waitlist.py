@@ -39,7 +39,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
-
 # Status ladder. Kept in sync with the CHECK constraint in
 # ``migrations/042_waitlist.sql`` — adding a new state requires both an
 # entry here AND a migration to widen the constraint.

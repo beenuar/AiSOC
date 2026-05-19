@@ -48,7 +48,6 @@ from app.agents import (  # noqa: E402
 )
 from app.models.state import AgentStatus, InvestigationState  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

@@ -113,7 +113,7 @@ class CredentialVault:
         if isinstance(payload, Mapping):
             out: dict[str, Any] = {}
             for k, v in payload.items():
-                if secret_keys is not None and k not in secret_keys and not isinstance(v, (Mapping, list)):
+                if secret_keys is not None and k not in secret_keys and not isinstance(v, Mapping | list):
                     out[k] = v
                 else:
                     out[k] = self._walk(v, encrypt=encrypt, secret_keys=secret_keys, _key=k)

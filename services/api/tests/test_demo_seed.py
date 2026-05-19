@@ -37,7 +37,6 @@ import uuid
 from typing import Any
 
 import pytest
-
 from app.scripts.seed_demo import (
     _DEMO_QUICK_DEFAULT_CLOCK_ISO,
     _DEMO_QUICK_INCIDENTS,
@@ -192,11 +191,10 @@ def test_demo_quick_seed_persists_four_cases() -> None:
     # Local import so the heavy SQLAlchemy + asyncpg dependency chain
     # doesn't load when the integration test is skipped (which is the
     # common case on a developer laptop).
-    from sqlalchemy import select
-
     from app.db.database import AsyncSessionLocal
     from app.models.case import Case
     from app.scripts.seed_demo import _parse_clock, _run_quick_seed
+    from sqlalchemy import select
 
     async def _run_and_count() -> list[Case]:
         await _run_quick_seed(clock=_parse_clock(None))

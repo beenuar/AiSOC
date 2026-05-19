@@ -41,8 +41,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import AuthUser, DBSession
 from app.models.tenant import Tenant
 from app.services.tenant_provision import (
-    ProvisionResult,
     ProvisioningError,
+    ProvisionResult,
     SlugCollisionError,
     WaitlistEntryNotFoundError,
     WaitlistEntryNotPromotableError,

@@ -241,15 +241,15 @@ def _resolve_runner(name: str) -> _SubAgentRunner:
 
     agents_pkg = importlib.import_module("app.agents")
     if name == "auto_triage":
-        return getattr(agents_pkg, "run_auto_triage")
+        return agents_pkg.run_auto_triage
     if name == "phishing":
-        return getattr(agents_pkg, "run_phishing")
+        return agents_pkg.run_phishing
     if name == "identity":
-        return getattr(agents_pkg, "run_identity")
+        return agents_pkg.run_identity
     if name == "cloud":
-        return getattr(agents_pkg, "run_cloud")
+        return agents_pkg.run_cloud
     if name == "insider":
-        return getattr(agents_pkg, "run_insider_threat")
+        return agents_pkg.run_insider_threat
     raise KeyError(f"Unknown sub-agent capability: {name}")
 
 

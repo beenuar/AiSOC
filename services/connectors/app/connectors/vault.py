@@ -202,7 +202,7 @@ class VaultConnector(BaseConnector):
                     ts_epoch = parsed.timestamp()
                 except Exception:
                     ts_epoch = cutoff
-            elif isinstance(ts, (int, float)):
+            elif isinstance(ts, int | float):
                 ts_epoch = float(ts)
             else:
                 ts_epoch = cutoff

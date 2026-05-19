@@ -333,7 +333,7 @@ class TinesConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": f"tines-case-{raw.get('id', '')}",
             "title": f"Tines case: {case_name}",
-            "description": (f"status={status}; record_severity={record_sev}; story_id={raw.get('story_id', '')}; assignee={assignee or 'unassigned'}"),
+            "description": (f"status={status}; record_severity={record_sev}; story_id={raw.get('story_id', '')}; assignee={assignee or 'unassigned'}"),  # noqa: E501
             "severity": severity,
             "actor": assignee or "unassigned",
             "actor_email": assignee,

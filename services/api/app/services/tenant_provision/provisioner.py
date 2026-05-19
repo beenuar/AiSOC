@@ -53,9 +53,10 @@ import logging
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from cryptography.fernet import Fernet
 from sqlalchemy import select, text
