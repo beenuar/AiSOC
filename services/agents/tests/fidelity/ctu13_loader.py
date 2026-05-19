@@ -24,7 +24,7 @@ import csv
 import ipaddress
 import logging
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -102,7 +102,7 @@ def _coerce_ip(value: str) -> str:
 def _parse_timestamp(value: str) -> str:
     text = (value or "").strip()
     if not text:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     for fmt in (
         "%Y/%m/%d %H:%M:%S.%f",
         "%Y-%m-%d %H:%M:%S.%f",
@@ -113,7 +113,7 @@ def _parse_timestamp(value: str) -> str:
             parsed = datetime.strptime(text, fmt)
         except ValueError:
             continue
-        return parsed.replace(tzinfo=timezone.utc).isoformat()
+        return parsed.replace(tzinfo=UTC).isoformat()
     return text
 
 

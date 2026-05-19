@@ -120,7 +120,7 @@ def _redact_node(value: Any, depth: int, counter: list[int]) -> Any:
             else:
                 out[key] = _redact_node(v, depth + 1, counter)
         return out
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_redact_node(item, depth + 1, counter) for item in value]
     # Primitives pass through unchanged. We deliberately do NOT inspect
     # the value side for "looks like a token" heuristics — that creates

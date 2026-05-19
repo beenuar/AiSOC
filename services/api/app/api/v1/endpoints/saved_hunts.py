@@ -51,8 +51,6 @@ from sqlalchemy import and_, delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser
-from app.db.rls import TenantDBSession
-from app.models.saved_hunt import SavedHunt
 
 # Defer import of the NL translator helpers — `nl_query.py` already does the
 # vendored-tree resolution dance at import time and we want the same module
@@ -60,6 +58,8 @@ from app.models.saved_hunt import SavedHunt
 from app.api.v1.endpoints.nl_query import (  # noqa: E402
     deterministic_translate,
 )
+from app.db.rls import TenantDBSession
+from app.models.saved_hunt import SavedHunt
 
 logger = structlog.get_logger()
 
@@ -270,13 +270,7 @@ async def list_saved_hunts(
     first; the UI renders this list as the "Saved hunts" sidebar.
     """
     rows = (
-        (
-            await db.execute(
-                select(SavedHunt)
-                .where(SavedHunt.tenant_id == user.tenant_id)
-                .order_by(SavedHunt.updated_at.desc())
-            )
-        )
+        (await db.execute(select(SavedHunt).where(SavedHunt.tenant_id == user.tenant_id).order_by(SavedHunt.updated_at.desc())))
         .scalars()
         .all()
     )

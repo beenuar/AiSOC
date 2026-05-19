@@ -34,7 +34,7 @@ def _load_dataset() -> dict:
 
 
 def _normalise_filters(items) -> set[tuple[str, str, str]]:
-    return {(f, op, v) for f, op, v in items}
+    return set(items)
 
 
 def _semantic_score(expected: dict, actual: QueryIntents) -> tuple[float, list[str]]:

@@ -229,9 +229,7 @@ class WaitlistPatchRequest(BaseModel):
     def _validate_status(cls, value: str) -> str:
         v = value.strip().lower()
         if v not in ALLOWED_WAITLIST_STATUSES:
-            raise ValueError(
-                f"status must be one of: {sorted(ALLOWED_WAITLIST_STATUSES)}"
-            )
+            raise ValueError(f"status must be one of: {sorted(ALLOWED_WAITLIST_STATUSES)}")
         return v
 
 
@@ -269,9 +267,7 @@ def _to_wire(row: WaitlistEntry) -> WaitlistEntryWire:
         soc_stack=list(row.soc_stack or []),
         motivation=row.motivation,
         status=row.status,
-        provisioned_tenant_id=(
-            str(row.provisioned_tenant_id) if row.provisioned_tenant_id else None
-        ),
+        provisioned_tenant_id=(str(row.provisioned_tenant_id) if row.provisioned_tenant_id else None),
         created_at=row.created_at.isoformat(),
         contacted_at=row.contacted_at.isoformat() if row.contacted_at else None,
         onboarded_at=row.onboarded_at.isoformat() if row.onboarded_at else None,
@@ -333,9 +329,7 @@ async def signup(
     # path — only the admin PATCH endpoint moves an entry off ``new``.
     entry: WaitlistEntry | None = None
     try:
-        existing = (
-            await db.execute(select(WaitlistEntry).where(WaitlistEntry.email == payload.email))
-        ).scalar_one_or_none()
+        existing = (await db.execute(select(WaitlistEntry).where(WaitlistEntry.email == payload.email))).scalar_one_or_none()
         if existing is not None:
             return WaitlistSignupResponse(entry_id=str(existing.id))
 
@@ -354,9 +348,7 @@ async def signup(
         # Race: another request inserted between SELECT and commit.
         # Treat as idempotent success and look the row back up.
         await db.rollback()
-        existing = (
-            await db.execute(select(WaitlistEntry).where(WaitlistEntry.email == payload.email))
-        ).scalar_one_or_none()
+        existing = (await db.execute(select(WaitlistEntry).where(WaitlistEntry.email == payload.email))).scalar_one_or_none()
         if existing is not None:
             return WaitlistSignupResponse(entry_id=str(existing.id))
         # If we still can't find it, fall through to a generic success
@@ -437,13 +429,9 @@ async def patch_entry(
     user: AuthUser,
 ) -> WaitlistEntryWire:
     await _require_admin(user, db)
-    row = (
-        await db.execute(select(WaitlistEntry).where(WaitlistEntry.id == entry_id))
-    ).scalar_one_or_none()
+    row = (await db.execute(select(WaitlistEntry).where(WaitlistEntry.id == entry_id))).scalar_one_or_none()
     if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="waitlist_entry_not_found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="waitlist_entry_not_found")
 
     now = datetime.now(UTC)
     previous = row.status
