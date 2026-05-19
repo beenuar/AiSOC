@@ -107,7 +107,7 @@ def _string_field(raw: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
         val = raw.get(key)
         if isinstance(val, str) and val.strip():
             out.append(val.strip())
-        elif isinstance(val, (list, tuple)):
+        elif isinstance(val, list | tuple):
             for v in val:
                 if isinstance(v, str) and v.strip():
                     out.append(v.strip())
@@ -300,12 +300,7 @@ class ContextBundle(BaseModel):
         Used by sub-agents to decide whether to short-circuit to the
         bundle-aware prompt or fall back to bare-alert reasoning.
         """
-        return bool(
-            self.entity_neighborhoods
-            or self.peer_baselines
-            or self.threat_intel
-            or self.historical_similar_cases
-        )
+        return bool(self.entity_neighborhoods or self.peer_baselines or self.threat_intel or self.historical_similar_cases)
 
     def prompt_context_lines(self) -> list[str]:
         """Render the bundle's safe summary fields as prompt-ready lines.
@@ -321,10 +316,7 @@ class ContextBundle(BaseModel):
         s = self.summary_for_llm()
         parts: list[str] = ["", "Pre-fetched investigation context (ContextBundle):"]
         if s.get("entity_count"):
-            parts.append(
-                f"- Entities resolved: {s['entity_count']} "
-                f"({', '.join(s.get('entity_types') or []) or 'unknown'})"
-            )
+            parts.append(f"- Entities resolved: {s['entity_count']} " f"({', '.join(s.get('entity_types') or []) or 'unknown'})")
         if s.get("neighborhood_summaries"):
             parts.append("- Graph neighbourhood:")
             for line in s["neighborhood_summaries"]:
@@ -336,10 +328,7 @@ class ContextBundle(BaseModel):
                 (h["similarity"] for h in s.get("historical_verdicts") or []),
                 default=0.0,
             )
-            parts.append(
-                f"- Similar historical cases: {s['historical_similar_count']} "
-                f"(top similarity={top:.2f})"
-            )
+            parts.append(f"- Similar historical cases: {s['historical_similar_count']} " f"(top similarity={top:.2f})")
             for h in (s.get("historical_verdicts") or [])[:3]:
                 parts.append(f"    * {h['key']} → {h['verdict']} (sim={h['similarity']:.2f})")
         if s.get("ueba_entities_with_baseline"):
@@ -367,15 +356,9 @@ class ContextBundle(BaseModel):
             + (f", blast_radius={nbr.blast_radius_score:.2f}" if nbr.blast_radius_score is not None else "")
             for key, nbr in sorted(self.entity_neighborhoods.items())
         ]
-        blast_scores = [
-            n.blast_radius_score
-            for n in self.entity_neighborhoods.values()
-            if n.blast_radius_score is not None
-        ]
+        blast_scores = [n.blast_radius_score for n in self.entity_neighborhoods.values() if n.blast_radius_score is not None]
         ueba_devs = [b.deviation_score for b in self.peer_baselines.values()]
-        high_risk = sorted(
-            ti.ioc for ti in self.threat_intel.values() if ti.risk == "high"
-        )
+        high_risk = sorted(ti.ioc for ti in self.threat_intel.values() if ti.risk == "high")
         ti_sources: set[str] = set()
         for ti in self.threat_intel.values():
             ti_sources.update(ti.sources)
@@ -440,7 +423,7 @@ def _ti_sources(payload: dict[str, Any]) -> list[str]:
     if isinstance(sources, list):
         return [str(s) for s in sources][:10]
     if isinstance(sources, dict):
-        return list(sorted(sources.keys()))[:10]
+        return sorted(sources.keys())[:10]
     return []
 
 
@@ -464,9 +447,7 @@ class ContextBundleBuilder:
         per_source_timeout: float = 3.5,
         api_token: str | None = None,
     ) -> None:
-        self.depth = depth if depth is not None else int(
-            os.getenv("AISOC_CONTEXT_BUNDLE_DEPTH", str(self.DEFAULT_DEPTH))
-        )
+        self.depth = depth if depth is not None else int(os.getenv("AISOC_CONTEXT_BUNDLE_DEPTH", str(self.DEFAULT_DEPTH)))
         self.max_neighborhood_nodes = max_neighborhood_nodes
         self.history_limit = history_limit
         self.ti_concurrency = ti_concurrency
@@ -543,9 +524,7 @@ class ContextBundleBuilder:
     # Source fetchers — each returns its own slice of the bundle
     # ------------------------------------------------------------------
 
-    async def _fetch_neighborhoods(
-        self, entities: list[EntityRef]
-    ) -> dict[str, EntityNeighborhood]:
+    async def _fetch_neighborhoods(self, entities: list[EntityRef]) -> dict[str, EntityNeighborhood]:
         """Walk the graph for each principal entity, depth-N."""
         # Lazy import so ``services/agents`` modules without the API tool
         # installed (e.g. eval harness) can still import this builder.
@@ -571,10 +550,7 @@ class ContextBundleBuilder:
             blast = None
             if isinstance(blast_payload, dict):
                 blast = blast_payload.get("blast_radius_score")
-            summary = (
-                f"{len(nodes)} neighbors at depth {self.depth}"
-                + (f", blast_radius={float(blast):.2f}" if blast is not None else "")
-            )
+            summary = f"{len(nodes)} neighbors at depth {self.depth}" + (f", blast_radius={float(blast):.2f}" if blast is not None else "")
             return entity.key, EntityNeighborhood(
                 entity=entity,
                 depth=self.depth,
@@ -625,11 +601,7 @@ class ContextBundleBuilder:
             if not isinstance(value, dict):
                 value = {}
             row_tags = {str(t).lower() for t in (row.get("tags") or [])}
-            jaccard = (
-                len(own_set & row_tags) / max(1, len(own_set | row_tags))
-                if own_set or row_tags
-                else 0.0
-            )
+            jaccard = len(own_set & row_tags) / max(1, len(own_set | row_tags)) if own_set or row_tags else 0.0
             out.append(
                 HistoricalCase(
                     key=str(row.get("key", "")),
@@ -659,9 +631,7 @@ class ContextBundleBuilder:
             raise RuntimeError(f"httpx unavailable: {exc}") from exc
 
         ueba_url = os.getenv("AISOC_UEBA_URL", "http://ueba:8086")
-        principals = [
-            e for e in entities if e.type in ("user", "email", "host", "ip")
-        ]
+        principals = [e for e in entities if e.type in ("user", "email", "host", "ip")]
         if not principals:
             self._record_source("ueba")
             return {}
@@ -669,6 +639,7 @@ class ContextBundleBuilder:
         out: dict[str, UEBABaseline] = {}
 
         async with httpx.AsyncClient(timeout=self.per_source_timeout) as client:
+
             async def _one(entity: EntityRef) -> tuple[str, UEBABaseline] | None:
                 # The UEBA list endpoint takes tenant + entity_type, then we
                 # filter client-side. We accept that this is over-fetching
@@ -709,18 +680,14 @@ class ContextBundleBuilder:
         self._record_source("ueba")
         return out
 
-    async def _fetch_threat_intel(
-        self, entities: list[EntityRef]
-    ) -> dict[str, ThreatIntelMatch]:
+    async def _fetch_threat_intel(self, entities: list[EntityRef]) -> dict[str, ThreatIntelMatch]:
         """Bulk-enrich every IOC-shaped entity in the alert."""
         try:
             from app.tools.enrichment import bulk_enrich_iocs
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"enrichment tool unavailable: {exc}") from exc
 
-        ioc_entities = [
-            e for e in entities if e.type in ("ip", "domain", "hash", "url")
-        ]
+        ioc_entities = [e for e in entities if e.type in ("ip", "domain", "hash", "url")]
         if not ioc_entities:
             self._record_source("threat_intel")
             return {}
@@ -759,7 +726,7 @@ class ContextBundleBuilder:
         """Run ``coro`` with a per-source timeout; record errors instead of raising."""
         try:
             return await asyncio.wait_for(coro, timeout=self.per_source_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             bundle.errors.append(f"{name}:timeout")
             return None
         except Exception as exc:  # noqa: BLE001

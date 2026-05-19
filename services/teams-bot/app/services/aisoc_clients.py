@@ -77,13 +77,7 @@ class _FallbackActionsClient:
 
 def _try_import_slack_bot_client():
     """Best-effort import of the Slack bot's actions client."""
-    candidate = (
-        Path(__file__).resolve().parents[3]
-        / "slack-bot"
-        / "app"
-        / "services"
-        / "aisoc_clients.py"
-    )
+    candidate = Path(__file__).resolve().parents[3] / "slack-bot" / "app" / "services" / "aisoc_clients.py"
     if not candidate.exists():
         return None
     spec = importlib.util.spec_from_file_location("_aisoc_slack_bot_clients", candidate)
@@ -116,13 +110,7 @@ class _NullAuditSink:
 
 def build_audit_sink() -> _AuditSink:
     """Construct the shared audit sink if available; null sink otherwise."""
-    candidate = (
-        Path(__file__).resolve().parents[3]
-        / "slack-bot"
-        / "app"
-        / "services"
-        / "approval_audit.py"
-    )
+    candidate = Path(__file__).resolve().parents[3] / "slack-bot" / "app" / "services" / "approval_audit.py"
     if not candidate.exists():
         return _NullAuditSink()
     spec = importlib.util.spec_from_file_location("_aisoc_audit", candidate)

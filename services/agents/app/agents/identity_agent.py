@@ -19,8 +19,8 @@ from langchain_openai import ChatOpenAI
 
 from app.context import ContextBundle
 from app.llm import safe_ainvoke
-from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 from app.models.state import AgentStatus, InvestigationState
+from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
 logger = structlog.get_logger()
 
@@ -85,10 +85,7 @@ def _build_identity_context(state: InvestigationState) -> str:
 
     if raw.get("login_attempts"):
         parts.append(
-            "Login attempts:\n"
-            + summarize_structure_for_llm(
-                raw["login_attempts"], label="login_attempts", max_lines=24, max_depth=2
-            )
+            "Login attempts:\n" + summarize_structure_for_llm(raw["login_attempts"], label="login_attempts", max_lines=24, max_depth=2)
         )
     if raw.get("failed_count"):
         parts.append(f"Failed attempt count: {raw['failed_count']}")
@@ -96,10 +93,7 @@ def _build_identity_context(state: InvestigationState) -> str:
     geo_fields = ["login_locations", "geo_locations"]
     for gf in geo_fields:
         if raw.get(gf):
-            parts.append(
-                f"Geo locations ({gf}):\n"
-                + summarize_structure_for_llm(raw[gf], label=gf, max_lines=20, max_depth=2)
-            )
+            parts.append(f"Geo locations ({gf}):\n" + summarize_structure_for_llm(raw[gf], label=gf, max_lines=20, max_depth=2))
 
     priv_fields = ["role_change", "group_added", "permissions_changed", "privilege_level"]
     priv_parts = []
@@ -113,10 +107,7 @@ def _build_identity_context(state: InvestigationState) -> str:
         parts.append(f"Event time: {raw['timestamp']}")
     if raw.get("previous_login"):
         parts.append(
-            "Previous login:\n"
-            + summarize_structure_for_llm(
-                raw["previous_login"], label="previous_login", max_lines=16, max_depth=2
-            )
+            "Previous login:\n" + summarize_structure_for_llm(raw["previous_login"], label="previous_login", max_lines=16, max_depth=2)
         )
 
     extra_keys = {
