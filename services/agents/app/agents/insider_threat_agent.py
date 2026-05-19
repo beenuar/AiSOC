@@ -115,19 +115,11 @@ def _build_insider_context(state: InvestigationState) -> str:
         parts.append(f"Destination domain: {raw['destination_domain']}")
 
     if raw.get("usb_events"):
-        parts.append(
-            "USB events:\n"
-            + summarize_structure_for_llm(
-                raw["usb_events"], label="usb_events", max_lines=24, max_depth=2
-            )
-        )
+        parts.append("USB events:\n" + summarize_structure_for_llm(raw["usb_events"], label="usb_events", max_lines=24, max_depth=2))
 
     if raw.get("recent_activity"):
         parts.append(
-            "Recent activity:\n"
-            + summarize_structure_for_llm(
-                raw["recent_activity"], label="recent_activity", max_lines=24, max_depth=2
-            )
+            "Recent activity:\n" + summarize_structure_for_llm(raw["recent_activity"], label="recent_activity", max_lines=24, max_depth=2)
         )
 
     if raw.get("baseline_deviation"):

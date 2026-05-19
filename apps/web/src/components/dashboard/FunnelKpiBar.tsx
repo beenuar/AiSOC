@@ -139,17 +139,41 @@ export function FunnelKpiBar({
     {
       refreshInterval: 60_000,
       revalidateOnFocus: false,
-      shouldRetryOnError: false,
+      revalidateOnMount: true,
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      errorRetryInterval: 4000,
     },
   );
 
-  // Error takes priority over loading. SWR with shouldRetryOnError: false leaves
-  // `data` undefined on failure, so without this ordering the loading branch wins
-  // forever and the user stares at skeleton tiles.
+  // Error takes priority over loading and stale data. Without this ordering
+  // the loading branch wins after a failure and the user stares at skeleton
+  // tiles forever; if we let stale data through silently, the analyst sees
+  // confidently-rendered numbers that may be hours old. Bias toward making
+  // the failure visible — SWR will keep retrying every 4s underneath.
   if (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
     return (
-      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 text-sm text-gray-400">
-        Funnel metrics unavailable.
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-100">
+              Operations Funnel
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Live tenant pipeline: events → correlations → alerts
+            </p>
+          </div>
+          <span className="text-xs text-gray-500">Last {period}</span>
+        </div>
+        <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          <p className="font-semibold">Funnel metrics unavailable</p>
+          <p className="mt-1 text-xs text-red-300/80">{errorMessage}</p>
+          <p className="mt-1 text-xs text-red-300/60">
+            SWR will keep retrying every 4s; refresh the page if it persists.
+          </p>
+        </div>
       </div>
     );
   }

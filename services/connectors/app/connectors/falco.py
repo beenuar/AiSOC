@@ -94,7 +94,9 @@ class FalcoConnector(BaseConnector):
                         {"value": "ALERT", "label": "ALERT"},
                         {"value": "EMERGENCY", "label": "EMERGENCY"},
                     ],
-                    help_text=("Drop events whose Falco priority is below this threshold. Defaults to DEBUG so nothing is filtered server-side."),
+                    help_text=(
+                        "Drop events whose Falco priority is below this threshold. Defaults to DEBUG so nothing is filtered server-side."
+                    ),  # noqa: E501
                 ),
             ],
             oauth=OAuthHints(supported_in_hosted=False),

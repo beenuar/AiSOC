@@ -179,9 +179,5 @@ async def test_parallel_topology_latency_substrate(monkeypatch: pytest.MonkeyPat
         f"\n    budget: p50 < {P50_BUDGET_SECONDS*1000:.0f} ms, p95 < {P95_BUDGET_SECONDS*1000:.0f} ms (substrate)"
     )
 
-    assert p50_ms < P50_BUDGET_SECONDS * 1000.0, (
-        f"p50 substrate latency over budget: {p50_ms:.2f} ms >= {P50_BUDGET_SECONDS*1000:.0f} ms"
-    )
-    assert p95_ms < P95_BUDGET_SECONDS * 1000.0, (
-        f"p95 substrate latency over budget: {p95_ms:.2f} ms >= {P95_BUDGET_SECONDS*1000:.0f} ms"
-    )
+    assert p50_ms < P50_BUDGET_SECONDS * 1000.0, f"p50 substrate latency over budget: {p50_ms:.2f} ms >= {P50_BUDGET_SECONDS*1000:.0f} ms"
+    assert p95_ms < P95_BUDGET_SECONDS * 1000.0, f"p95 substrate latency over budget: {p95_ms:.2f} ms >= {P95_BUDGET_SECONDS*1000:.0f} ms"

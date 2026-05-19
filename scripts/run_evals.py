@@ -63,10 +63,10 @@ _AGENTS_ROOT = _REPO_ROOT / "services" / "agents"
 # Order matters: scripts/ also contains a tests/ package (scripts/tests/) for
 # the CLI smoke test, and would shadow services/agents/tests/ if it landed at
 # position 0 of sys.path. Insert scripts/ first, then agents/ on top, so that
-# `from tests.test_adversary_eval import ...` resolves to the substrate tests.
+# `from tests.test_adversary_eval import ...` resolves to the substrate tests
+# under services/agents/tests/.
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 sys.path.insert(0, str(_AGENTS_ROOT))
-sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
 # The per-investigation token/USD/latency telemetry block (T2.4) is stdlib-only
 # and lives in ``scripts/eval_telemetry.py`` so it can run on hosts that
@@ -224,6 +224,25 @@ _TEMPLATE_TARGETS = {
 
 _TELEMETRY_PATH = (
     _AGENTS_ROOT / "tests" / "eval_data" / "synthetic_telemetry.jsonl"
+)
+
+# Canonical suite name list. Kept in lock-step with the keys of
+# ``summary["suites"]`` built in ``main()`` and the per-suite ``_run_*``
+# helpers above. ``--suite all`` is the default; passing one of these names
+# runs that suite in isolation (used by the per-axis CI matrix and by
+# operators bisecting a regression to a single gate).
+_SUITE_NAMES: tuple[str, ...] = (
+    "mitre_accuracy",
+    "alert_reduction",
+    "investigation_completeness",
+    "response_quality",
+    "hunt_corpus",
+    "adversary_eval",
+    "confidence_calibration",
+    "memory_recall",
+    "override_accuracy",
+    "playbook_completion_rate",
+    "detection_fp_rate",
 )
 
 
