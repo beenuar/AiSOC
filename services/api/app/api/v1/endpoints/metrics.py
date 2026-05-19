@@ -286,20 +286,31 @@ async def get_dashboard_metrics(
         )
 
     # ── Top MITRE tactics ─────────────────────────────────────────────────────
-    mitre_rows = (
+    # Python-side aggregation: avoids set-returning-function-in-SELECT pitfalls
+    # across Postgres versions and gives identical results for our scale
+    # (typically <10k alerts/tenant). Driver tests proved a SQL-level
+    # jsonb_array_elements_text + GROUP BY in the same SELECT 500s on some
+    # Postgres builds.
+    tactic_rows = (
         await db.execute(
-            select(
-                func.jsonb_array_elements_text(Alert.mitre_tactics).label("tactic"),
-                func.count().label("cnt"),
+            select(Alert.mitre_tactics).where(
+                and_(Alert.tenant_id == tenant_id, Alert.mitre_tactics.isnot(None))
             )
-            .where(Alert.tenant_id == tenant_id)
-            .group_by("tactic")
-            .order_by(func.count().desc())
-            .limit(10)
         )
     ).all()
 
-    top_mitre = [MitreTactic(tactic=r.tactic, count=r.cnt) for r in mitre_rows]
+    tactic_counts: dict[str, int] = {}
+    for (tactics,) in tactic_rows:
+        if not tactics:
+            continue
+        for t in tactics:
+            if isinstance(t, str) and t:
+                tactic_counts[t] = tactic_counts.get(t, 0) + 1
+
+    top_mitre = [
+        MitreTactic(tactic=tactic, count=count)
+        for tactic, count in sorted(tactic_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    ]
 
     # ── 24-hour trend (hourly buckets) ────────────────────────────────────────
     trend_start = now - timedelta(hours=24)
@@ -539,21 +550,42 @@ async def get_soc_metrics(
     )
 
     # ── ATT&CK heatmap ────────────────────────────────────────────────────────
-    heatmap_rows = (
+    # Python-side aggregation. Combining two set-returning functions with
+    # GROUP BY + aggregate in the same SELECT raises on modern Postgres
+    # ("set-returning functions are not allowed in GROUP BY") and was the
+    # root cause of /metrics/soc returning 500. For each alert we pair every
+    # (tactic, technique) Cartesian-style, then aggregate in Python.
+    heatmap_src_rows = (
         await db.execute(
-            select(
-                func.jsonb_array_elements_text(Alert.mitre_tactics).label("tactic"),
-                func.jsonb_array_elements_text(Alert.mitre_techniques).label("technique"),
-                func.count().label("cnt"),
+            select(Alert.mitre_tactics, Alert.mitre_techniques).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.mitre_tactics.isnot(None),
+                    Alert.mitre_techniques.isnot(None),
+                )
             )
-            .where(Alert.tenant_id == tenant_id)
-            .group_by("tactic", "technique")
-            .order_by(func.count().desc())
-            .limit(50)
         )
     ).all()
 
-    heatmap = [AttackHeatmapCell(tactic=r.tactic, technique=r.technique, count=r.cnt) for r in heatmap_rows]
+    pair_counts: dict[tuple[str, str], int] = {}
+    for tactics, techniques in heatmap_src_rows:
+        if not tactics or not techniques:
+            continue
+        for tactic in tactics:
+            if not isinstance(tactic, str) or not tactic:
+                continue
+            for technique in techniques:
+                if not isinstance(technique, str) or not technique:
+                    continue
+                key = (tactic, technique)
+                pair_counts[key] = pair_counts.get(key, 0) + 1
+
+    heatmap = [
+        AttackHeatmapCell(tactic=tactic, technique=technique, count=count)
+        for (tactic, technique), count in sorted(
+            pair_counts.items(), key=lambda x: x[1], reverse=True
+        )[:50]
+    ]
 
     # ── Confidence calibration curve ──────────────────────────────────────────
     # 5 buckets across [0, 1]. For each bucket, count alerts with ai_score in

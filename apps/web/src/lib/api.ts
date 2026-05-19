@@ -1759,6 +1759,68 @@ export interface PipelineHealth {
   generated_at: string;
 }
 
+/**
+ * SOC Performance metrics (PR-3 / W2).
+ *
+ * Mirrors ``SOCMetrics`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/metrics.py``. Drives the SOC
+ * Performance panel + ATT&CK heatmap on /dashboard.
+ */
+export interface SOCKpis {
+  mttd_hours: number;
+  mttr_hours: number;
+  mttc_hours: number;
+  false_positive_rate: number;
+  escalation_rate: number;
+  alert_volume_7d: number;
+  cases_opened_7d: number;
+  cases_closed_7d: number;
+  analyst_overrides_7d: number;
+}
+
+export interface AttackHeatmapCell {
+  tactic: string;
+  technique: string;
+  count: number;
+}
+
+export interface CalibrationBucket {
+  predicted_lower: number;
+  predicted_upper: number;
+  sample_count: number;
+  actual_tp_rate: number;
+}
+
+export interface SOCMetrics {
+  kpis: SOCKpis;
+  attack_heatmap: AttackHeatmapCell[];
+  calibration_curve: CalibrationBucket[];
+}
+
+/**
+ * Investigation cost telemetry (PR-3 / cost panel).
+ *
+ * Mirrors ``CostAggregate`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/investigations.py``.
+ */
+export interface CostAggregateRow {
+  model: string;
+  runs: number;
+  calls: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_cost_usd: number;
+  total_latency_ms: number;
+  avg_cost_per_run: number;
+  avg_latency_per_call_ms: number;
+}
+
+export interface CostAggregate {
+  window_days: number;
+  by_model: CostAggregateRow[];
+  totals: CostAggregateRow | null;
+}
+
 export const metricsApi = {
   getDashboard: () =>
     request<DashboardMetrics>('/api/v1/metrics/dashboard'),
@@ -1778,6 +1840,27 @@ export const metricsApi = {
   /** Per-stage pipeline health (ingest → normalize → fuse → correlate → alert). */
   getPipelineHealth: () =>
     request<PipelineHealth>('/api/v1/health/pipeline'),
+
+  /**
+   * SOC Performance KPIs + ATT&CK heatmap + calibration curve.
+   *
+   * Tenant-scoped server-side; the client just needs the bearer token
+   * and X-Tenant-Id header that `request()` already attaches.
+   */
+  getSOC: () => request<SOCMetrics>('/api/v1/metrics/soc'),
+};
+
+// ─── Investigations ─────────────────────────────────────────────────────────
+
+export const investigationsApi = {
+  /**
+   * Investigation cost telemetry aggregated over the last `windowDays`.
+   * Backs the Cost Telemetry panel on /dashboard.
+   */
+  getCostAggregate: (windowDays: number = 30) =>
+    request<CostAggregate>('/api/v1/investigations/costs/aggregate', {
+      params: { window_days: windowDays },
+    }),
 };
 
 // ─── SOC Insights (T3.1) ─────────────────────────────────────────────────────
