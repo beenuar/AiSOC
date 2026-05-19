@@ -39,7 +39,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
-
 # Status ladder. Kept in sync with the CHECK constraint in
 # ``migrations/042_waitlist.sql`` — adding a new state requires both an
 # entry here AND a migration to widen the constraint.
@@ -73,11 +72,7 @@ class WaitlistEntry(Base):
     # ForeignKey here so the import graph stays free of circular deps
     # with the tenant model; the migration adds the actual FK at the
     # database layer.
-    provisioned_tenant_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True, index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
-    )
+    provisioned_tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     contacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

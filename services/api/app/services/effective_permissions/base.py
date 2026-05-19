@@ -111,9 +111,7 @@ class ResolverResult:
     provider: str
     principal_id: str
     coverage: Coverage
-    last_resolved: datetime = field(
-        default_factory=lambda: datetime.now(tz=UTC)
-    )
+    last_resolved: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
     decisions: list[ResolvedPermission] = field(default_factory=list)
     resolver_version: str = RESOLVER_VERSION
     notes: list[str] = field(default_factory=list)

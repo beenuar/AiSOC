@@ -97,7 +97,7 @@ class RuleConditionWire(BaseModel):
     op: str | None = None
     value: Any = None
     logical: str | None = None
-    children: list["RuleConditionWire"] = Field(default_factory=list)
+    children: list[RuleConditionWire] = Field(default_factory=list)
 
 
 class RuleActionWire(BaseModel):
@@ -455,10 +455,7 @@ async def update_rule(
     if new_rule.id != rule_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"rule id in URL ({rule_id!r}) must match rule id in body "
-                f"({new_rule.id!r})"
-            ),
+            detail=(f"rule id in URL ({rule_id!r}) must match rule id in body " f"({new_rule.id!r})"),
         )
 
     existing_yaml = _load_for(user.tenant_id)["yaml"]
@@ -553,9 +550,7 @@ async def preview_rules(
         alerts = alerts[:_MAX_PREVIEW_ALERTS]
 
     start = time.perf_counter()
-    evaluations = _engine().preview_against(
-        user.tenant_id, alerts, rules=rules
-    )
+    evaluations = _engine().preview_against(user.tenant_id, alerts, rules=rules)
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     rows = [

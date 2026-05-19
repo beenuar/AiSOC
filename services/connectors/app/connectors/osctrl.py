@@ -305,7 +305,7 @@ def _parse_epoch(value: Any) -> float | None:
     """Best-effort conversion of osctrl's `created_at` to epoch seconds."""
     if value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:
