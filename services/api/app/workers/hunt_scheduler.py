@@ -165,8 +165,7 @@ async def _open_case_for_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int)
         case_number=f"HUNT-{hunt.id.hex[:8].upper()}-{int(datetime.now(UTC).timestamp())}",
         title=f"Scheduled hunt fired: {hunt.name}",
         description=(
-            f"Saved hunt {hunt.name!r} returned {hit_count} hit(s) on its "
-            f"scheduled run.\n\nOriginal NL question: {hunt.nl_query}"
+            f"Saved hunt {hunt.name!r} returned {hit_count} hit(s) on its " f"scheduled run.\n\nOriginal NL question: {hunt.nl_query}"
         ),
         case_type="hunt_finding",
         priority="medium",
@@ -244,11 +243,7 @@ async def run_once(
         # tenant before each per-hunt write to keep RLS enforcement intact
         # for the case insert.
         await db.execute(text("SET LOCAL row_security = off"))
-        rows = (
-            (await db.execute(select(SavedHunt).where(SavedHunt.schedule.is_not(None))))
-            .scalars()
-            .all()
-        )
+        rows = (await db.execute(select(SavedHunt).where(SavedHunt.schedule.is_not(None)))).scalars().all()
         for hunt in rows:
             if not _is_due(hunt, now):
                 continue
@@ -263,11 +258,7 @@ async def run_once(
                 hits = await runner(db, hunt)
                 await callback(db, hunt, hits)
                 # Stamp last_run_at so we don't re-fire on the next tick.
-                await db.execute(
-                    update(SavedHunt)
-                    .where(SavedHunt.id == hunt.id)
-                    .values(last_run_at=now, updated_at=now)
-                )
+                await db.execute(update(SavedHunt).where(SavedHunt.id == hunt.id).values(last_run_at=now, updated_at=now))
                 fired += 1
             except Exception as exc:  # pragma: no cover - defensive
                 logger.exception(

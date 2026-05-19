@@ -46,13 +46,9 @@ def format_extra_fields_for_llm(
             continue
         v = extra[k]
         if isinstance(v, dict):
-            lines.append(
-                f"{k}:\n{summarize_structure_for_llm(v, label=str(k), max_lines=10, max_depth=max_depth)}"
-            )
+            lines.append(f"{k}:\n{summarize_structure_for_llm(v, label=str(k), max_lines=10, max_depth=max_depth)}")
         elif isinstance(v, list | tuple):
-            lines.append(
-                f"{k}:\n{summarize_structure_for_llm(list(v), label=str(k), max_lines=10, max_depth=max_depth)}"
-            )
+            lines.append(f"{k}:\n{summarize_structure_for_llm(list(v), label=str(k), max_lines=10, max_depth=max_depth)}")
         else:
             lines.append(f"{k}: {_format_primitive(v)}")
     if omitted > 0:

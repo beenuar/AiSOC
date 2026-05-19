@@ -90,8 +90,7 @@ _INJECTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         # phrases such as "the database is unrestricted" or
         # "you are running an unrestricted query" do not false-trip.
         re.compile(
-            r"\byou are\s+(?:now\s+)?(?:in\s+)?(?:a\s+|an\s+|the\s+)?"
-            r"(?:dan|developer\s+mode|jailbroken|unrestricted|no-?op)\b",
+            r"\byou are\s+(?:now\s+)?(?:in\s+)?(?:a\s+|an\s+|the\s+)?" r"(?:dan|developer\s+mode|jailbroken|unrestricted|no-?op)\b",
             re.IGNORECASE,
         ),
         "[REDACTED:INJECTION]",

@@ -226,9 +226,7 @@ def to_ocsf(row: dict[str, Any]) -> dict[str, Any]:
     """
 
     bytes_in = int(max(row.get("flow_bytes_per_sec", 0.0), 0.0))
-    packets_total = int(row.get("total_fwd_packets", 0)) + int(
-        row.get("total_bwd_packets", 0)
-    )
+    packets_total = int(row.get("total_fwd_packets", 0)) + int(row.get("total_bwd_packets", 0))
 
     return {
         "category_uid": 4,

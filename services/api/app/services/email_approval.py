@@ -384,9 +384,7 @@ async def send_approval_email(
         reject_url=reject,
         web_base_url=web_base_url,
     )
-    response = await mailer.send(
-        to=recipients, subject=subject, html=html_body, text=text_body
-    )
+    response = await mailer.send(to=recipients, subject=subject, html=html_body, text=text_body)
     log.info(
         "email_approval.sent",
         action_id=action_id,

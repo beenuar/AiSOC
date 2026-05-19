@@ -270,13 +270,7 @@ async def list_saved_hunts(
     first; the UI renders this list as the "Saved hunts" sidebar.
     """
     rows = (
-        (
-            await db.execute(
-                select(SavedHunt)
-                .where(SavedHunt.tenant_id == user.tenant_id)
-                .order_by(SavedHunt.updated_at.desc())
-            )
-        )
+        (await db.execute(select(SavedHunt).where(SavedHunt.tenant_id == user.tenant_id).order_by(SavedHunt.updated_at.desc())))
         .scalars()
         .all()
     )

@@ -198,6 +198,7 @@ class VaultConnector(BaseConnector):
             if isinstance(ts, str):
                 try:
                     from datetime import datetime
+
                     parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     ts_epoch = parsed.timestamp()
                 except Exception:

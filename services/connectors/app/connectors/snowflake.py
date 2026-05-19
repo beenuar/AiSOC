@@ -170,9 +170,7 @@ class SnowflakeConnector(BaseConnector):
             "exp": now + 3600,
         }
         signing_input = (
-            _b64url(json.dumps(header, separators=(",", ":")).encode())
-            + "."
-            + _b64url(json.dumps(payload, separators=(",", ":")).encode())
+            _b64url(json.dumps(header, separators=(",", ":")).encode()) + "." + _b64url(json.dumps(payload, separators=(",", ":")).encode())
         ).encode()
         priv = serialization.load_pem_private_key(self._private_key_pem.encode(), password=None)
         signature = priv.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
@@ -308,10 +306,7 @@ class SnowflakeConnector(BaseConnector):
             "source": self.connector_id,
             "stream": "login_history",
             "external_id": raw.get("EVENT_ID") or "",
-            "title": (
-                f"Snowflake login {'success' if is_success else 'failure'} "
-                f"({raw.get('USER_NAME')})"
-            ),
+            "title": (f"Snowflake login {'success' if is_success else 'failure'} " f"({raw.get('USER_NAME')})"),
             "description": raw.get("ERROR_MESSAGE") or raw.get("REPORTED_CLIENT_TYPE"),
             "severity": severity,
             "actor": raw.get("USER_NAME"),
