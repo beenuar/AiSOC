@@ -30,7 +30,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.core.airgap import AirgapViolation
 from app.services.esql_runner import ESQLExecutionError, ESQLNotConfigured, ESQLResult
 from app.workers import hunt_scheduler
@@ -66,9 +65,7 @@ class TestExecuteHuntSkipPaths:
       want the scheduler to keep running quietly, not spam ``exception``.
     """
 
-    async def test_skips_when_no_translated_query(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_skips_when_no_translated_query(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         hunt = _make_hunt(translated=None)
         # If we reach the runner we've failed — pin a tripwire.
         called = AsyncMock(side_effect=AssertionError("runner should not be called"))
@@ -79,9 +76,7 @@ class TestExecuteHuntSkipPaths:
         assert hits == 0
         called.assert_not_called()
 
-    async def test_skips_when_translated_query_missing_esql_key(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_skips_when_translated_query_missing_esql_key(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         """``translated_query`` may exist but carry only KQL/SPL — that's a skip."""
         hunt = _make_hunt(translated={"kql": "event.code:4625", "spl": "index=foo"})
         called = AsyncMock(side_effect=AssertionError("runner should not be called"))
@@ -92,9 +87,7 @@ class TestExecuteHuntSkipPaths:
         assert hits == 0
         called.assert_not_called()
 
-    async def test_skips_when_translated_query_is_not_a_dict(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_skips_when_translated_query_is_not_a_dict(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         """Defensive: a malformed row shouldn't crash the sweep."""
         hunt = _make_hunt(translated="just a string somehow")  # type: ignore[arg-type]
         called = AsyncMock(side_effect=AssertionError("runner should not be called"))
@@ -105,9 +98,7 @@ class TestExecuteHuntSkipPaths:
         assert hits == 0
         called.assert_not_called()
 
-    async def test_skips_when_es_credentials_not_configured(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_skips_when_es_credentials_not_configured(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         hunt = _make_hunt(translated={"esql": "FROM logs"})
         monkeypatch.setattr(
             hunt_scheduler,
@@ -126,9 +117,7 @@ class TestExecuteHuntSkipPaths:
 class TestExecuteHuntHappyPath:
     """When everything is wired up, return the row count the runner produced."""
 
-    async def test_returns_row_count_from_runner(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_returns_row_count_from_runner(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         hunt = _make_hunt(translated={"esql": "FROM logs | WHERE event.code == 4625"})
         monkeypatch.setattr(
             hunt_scheduler,
@@ -158,18 +147,14 @@ class TestExecuteHuntHappyPath:
         assert call_kwargs["es_url"] == "http://es.local:9200"
         assert call_kwargs["es_api_key"] == "test-key"
 
-    async def test_returns_zero_when_runner_returns_empty(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_returns_zero_when_runner_returns_empty(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         hunt = _make_hunt(translated={"esql": "FROM logs"})
         monkeypatch.setattr(
             hunt_scheduler,
             "resolve_es_credentials",
             MagicMock(return_value=("http://es.local:9200", "test-key")),
         )
-        runner = AsyncMock(
-            return_value=ESQLResult(columns=[], rows=[], took_ms=5)
-        )
+        runner = AsyncMock(return_value=ESQLResult(columns=[], rows=[], took_ms=5))
         monkeypatch.setattr(hunt_scheduler, "run_esql_query", runner)
 
         hits = await hunt_scheduler._execute_hunt(fake_db, hunt)
@@ -186,9 +171,7 @@ class TestExecuteHuntErrorPropagation:
     they would never retry.
     """
 
-    async def test_airgap_violation_propagates(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_airgap_violation_propagates(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         hunt = _make_hunt(translated={"esql": "FROM logs"})
         monkeypatch.setattr(
             hunt_scheduler,
@@ -204,9 +187,7 @@ class TestExecuteHuntErrorPropagation:
         with pytest.raises(AirgapViolation):
             await hunt_scheduler._execute_hunt(fake_db, hunt)
 
-    async def test_value_error_propagates(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_value_error_propagates(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         """SSRF guard mismatch surfaces as ``ValueError`` — must bubble up."""
         hunt = _make_hunt(translated={"esql": "FROM logs"})
         monkeypatch.setattr(
@@ -223,9 +204,7 @@ class TestExecuteHuntErrorPropagation:
         with pytest.raises(ValueError, match="host mismatch"):
             await hunt_scheduler._execute_hunt(fake_db, hunt)
 
-    async def test_esql_execution_error_propagates(
-        self, fake_db: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_esql_execution_error_propagates(self, fake_db: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         hunt = _make_hunt(translated={"esql": "FROM logs"})
         monkeypatch.setattr(
             hunt_scheduler,

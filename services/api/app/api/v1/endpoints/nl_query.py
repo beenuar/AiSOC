@@ -347,9 +347,7 @@ async def execute_query(
     try:
         es_url, es_api_key = resolve_es_credentials()
     except ESQLNotConfigured:
-        base.execution_error = (
-            "ES_URL or ES_API_KEY not configured. Set them in environment variables."
-        )
+        base.execution_error = "ES_URL or ES_API_KEY not configured. Set them in environment variables."
         return base
 
     try:
