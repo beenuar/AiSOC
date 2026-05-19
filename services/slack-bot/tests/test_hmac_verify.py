@@ -18,7 +18,6 @@ import time
 import pytest
 from app.services.hmac_verify import HmacVerificationError, sign, verify
 
-
 SECRET = "test-secret-not-real"
 
 

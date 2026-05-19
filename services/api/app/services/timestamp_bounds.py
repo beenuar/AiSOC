@@ -133,7 +133,7 @@ def _parse_one(value: Any) -> datetime | None:
         return None
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=UTC)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         try:
             if value > 1e12:  # almost certainly milliseconds
                 value = value / 1000.0

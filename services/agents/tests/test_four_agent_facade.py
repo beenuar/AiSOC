@@ -48,7 +48,6 @@ from app.agents import (  # noqa: E402
 )
 from app.models.state import AgentStatus, InvestigationState  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -119,9 +118,7 @@ def test_triage_capabilities_are_not_top_level_agents() -> None:
 
     # And the package's "branded" set must only contain the four names.
     branded_in_pkg = {
-        name
-        for name in agents_pkg.__all__
-        if name.endswith("Agent") and name not in {"AutoTriageAgent", "ResponderAgent"} | forbidden
+        name for name in agents_pkg.__all__ if name.endswith("Agent") and name not in {"AutoTriageAgent", "ResponderAgent"} | forbidden
     }
     assert branded_in_pkg == branded
 

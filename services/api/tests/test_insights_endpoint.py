@@ -37,7 +37,6 @@ from app.api.v1.endpoints.insights import (
 )
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
@@ -186,7 +185,7 @@ async def test_get_soc_insights_returns_seven_tiles_with_expected_keys() -> None
         # ``Number(...)`` so an int would also pass, but locking the
         # type prevents accidental Decimal leakage.
         for point in tile.sparkline.points:
-            assert isinstance(point, (int, float))
+            assert isinstance(point, int | float)
 
 
 @pytest.mark.asyncio

@@ -71,10 +71,7 @@ class CloudflareZTConnector(BaseConnector):
                         {"value": "waf", "label": "WAF / firewall events"},
                         {"value": "access", "label": "Zero Trust Access audit"},
                     ],
-                    help_text=(
-                        "Pick which stream this instance pulls. Run two "
-                        "instances side-by-side for full coverage."
-                    ),
+                    help_text=("Pick which stream this instance pulls. Run two " "instances side-by-side for full coverage."),
                 ),
                 Field(
                     "account_id",
@@ -96,9 +93,7 @@ class CloudflareZTConnector(BaseConnector):
                     "secret",
                     "API Token",
                     help_text=(
-                        "Account-scoped token with Zone:Firewall "
-                        "Services:Read (WAF) AND Account:Access "
-                        "Audit Logs:Read (Zero Trust)."
+                        "Account-scoped token with Zone:Firewall " "Services:Read (WAF) AND Account:Access " "Audit Logs:Read (Zero Trust)."
                     ),
                 ),
             ],
@@ -169,10 +164,7 @@ class CloudflareZTConnector(BaseConnector):
                     return {
                         "success": False,
                         "connector": self.connector_id,
-                        "error": (
-                            f"token verified but {self._mode} probe HTTP "
-                            f"{probe.status_code}: {probe.text[:200]}"
-                        ),
+                        "error": (f"token verified but {self._mode} probe HTTP " f"{probe.status_code}: {probe.text[:200]}"),
                     }
             return {
                 "success": True,

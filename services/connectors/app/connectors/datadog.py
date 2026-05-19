@@ -95,10 +95,7 @@ class DatadogConnector(BaseConnector):
                     "Filter query",
                     required=False,
                     default="status:error OR status:critical",
-                    help_text=(
-                        "Logs Search query (logs mode) or tag filter "
-                        "(events mode, e.g. 'priority:all')."
-                    ),
+                    help_text=("Logs Search query (logs mode) or tag filter " "(events mode, e.g. 'priority:all')."),
                 ),
                 Field("api_key", "secret", "API Key"),
                 Field("application_key", "secret", "Application Key"),
