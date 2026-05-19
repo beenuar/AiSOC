@@ -246,9 +246,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     HUNT_SCHEDULER_ENABLED: bool = Field(
         default=False,
-        validation_alias=AliasChoices(
-            "HUNT_SCHEDULER_ENABLED", "AISOC_HUNT_SCHEDULER_ENABLED"
-        ),
+        validation_alias=AliasChoices("HUNT_SCHEDULER_ENABLED", "AISOC_HUNT_SCHEDULER_ENABLED"),
     )
     HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
 

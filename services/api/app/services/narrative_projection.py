@@ -154,7 +154,7 @@ def _rba_promotion(enrichment: Any) -> tuple[str | None, float | None]:
     score = rba.get("score")
     if not isinstance(entity, str) or not entity.strip():
         entity = None
-    if isinstance(score, (int, float)):
+    if isinstance(score, int | float):
         score_f: float | None = float(score)
     else:
         score_f = None

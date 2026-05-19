@@ -106,9 +106,7 @@ def _action_match(stmt_actions: Any, action: str) -> bool:
     return False
 
 
-def _gather_identity_policies(
-    principal: dict[str, Any], snap: dict[str, Any]
-) -> list[dict[str, Any]]:
+def _gather_identity_policies(principal: dict[str, Any], snap: dict[str, Any]) -> list[dict[str, Any]]:
     policies_by_id = {p["id"]: p for p in snap["policies"]}
     groups_by_id = {g["id"]: g for g in snap.get("groups", [])}
     refs: list[str] = []
@@ -143,9 +141,7 @@ def reference_is_allowed(
     resource_arn = resource["arn"]
 
     # 1. Explicit deny across identity / resource / SCP wins outright.
-    deny_sources: list[dict[str, Any]] = list(
-        _gather_identity_policies(principal, snapshot)
-    )
+    deny_sources: list[dict[str, Any]] = list(_gather_identity_policies(principal, snapshot))
     rp_id = resource.get("resource_policy_id")
     if rp_id and rp_id in policies_by_id:
         deny_sources.append(policies_by_id[rp_id])
@@ -158,9 +154,7 @@ def reference_is_allowed(
         for stmt in _as_list(policy.get("document", {}).get("Statement")):
             if stmt.get("Effect") != "Deny":
                 continue
-            if is_resource_policy and not _principal_match(
-                stmt.get("Principal"), principal["arn"]
-            ):
+            if is_resource_policy and not _principal_match(stmt.get("Principal"), principal["arn"]):
                 continue
             if not _resource_match(stmt.get("Resource", "*"), resource_arn):
                 continue
@@ -228,11 +222,7 @@ def reference_decision(
 
     resource = next(r for r in snapshot["resources"] if r["id"] == resource_id)
     catalogue = resource.get("service_actions") or []
-    return {
-        action
-        for action in catalogue
-        if reference_is_allowed(snapshot, principal_id, resource_id, action)
-    }
+    return {action for action in catalogue if reference_is_allowed(snapshot, principal_id, resource_id, action)}
 
 
 # ---------------------------------------------------------------------------
@@ -249,11 +239,7 @@ def snapshot() -> dict[str, Any]:
 def _all_pairs(snapshot: dict[str, Any]) -> list[tuple[str, str]]:
     """Generate the cartesian product of principals × resources."""
 
-    return [
-        (p["id"], r["id"])
-        for p in snapshot["principals"]
-        for r in snapshot["resources"]
-    ]
+    return [(p["id"], r["id"]) for p in snapshot["principals"] for r in snapshot["resources"]]
 
 
 # ---------------------------------------------------------------------------
@@ -288,10 +274,7 @@ def reference_pairs(snapshot: dict[str, Any]) -> list[tuple[str, str, set[str]]]
     ]
     pairs = base + extras
     assert len(pairs) >= 50, f"expected ≥50 pairs, got {len(pairs)}"
-    return [
-        (pid, rid, reference_decision(snapshot, pid, rid))
-        for pid, rid in pairs[:50]
-    ]
+    return [(pid, rid, reference_decision(snapshot, pid, rid)) for pid, rid in pairs[:50]]
 
 
 def test_resolver_matches_reference_simulator_on_50_pairs(
@@ -314,15 +297,11 @@ def test_resolver_matches_reference_simulator_on_50_pairs(
         )
         actual = set(match.actions) if match is not None else set()
         if actual != expected:
-            mismatches.append(
-                f"{principal_id} ↔ {resource_id}: "
-                f"resolver={sorted(actual)} simulator={sorted(expected)}"
-            )
+            mismatches.append(f"{principal_id} ↔ {resource_id}: " f"resolver={sorted(actual)} simulator={sorted(expected)}")
 
     assert not mismatches, (
         f"resolver disagreed with the reference simulator on "
-        f"{len(mismatches)} of {len(reference_pairs)} pairs:\n"
-        + "\n".join(mismatches)
+        f"{len(mismatches)} of {len(reference_pairs)} pairs:\n" + "\n".join(mismatches)
     )
 
 
@@ -335,9 +314,7 @@ def test_resolver_carries_policy_chain_for_every_decision(
     for principal in snapshot["principals"]:
         result = resolver.resolve(principal["id"])
         for decision in result.decisions:
-            assert decision.policy_chain, (
-                f"missing chain for {principal['id']} → {decision.resource_id}"
-            )
+            assert decision.policy_chain, f"missing chain for {principal['id']} → {decision.resource_id}"
 
 
 def test_resolver_surfaces_shadowed_denies_on_kms_key(
@@ -350,19 +327,11 @@ def test_resolver_surfaces_shadowed_denies_on_kms_key(
     """
 
     resolver = AwsIamResolver(snapshot=snapshot)
-    alice = next(
-        d
-        for d in resolver.resolve("u-alice").decisions
-        if d.resource_id == "res-key-finance"
-    )
+    alice = next(d for d in resolver.resolve("u-alice").decisions if d.resource_id == "res-key-finance")
     assert "kms:ScheduleKeyDeletion" not in alice.actions
     assert "kms:ScheduleKeyDeletion" not in alice.deny_actions
 
-    dave = next(
-        d
-        for d in resolver.resolve("u-dave").decisions
-        if d.resource_id == "res-key-finance"
-    )
+    dave = next(d for d in resolver.resolve("u-dave").decisions if d.resource_id == "res-key-finance")
     assert "kms:ScheduleKeyDeletion" not in dave.actions
     assert "kms:ScheduleKeyDeletion" in dave.deny_actions
 
@@ -372,11 +341,7 @@ def test_scp_caps_dave_admin_on_iam_writes(snapshot: dict[str, Any]) -> None:
     Role / iam:DeleteRole / iam:AttachRolePolicy must still cap him."""
 
     resolver = AwsIamResolver(snapshot=snapshot)
-    dave_iam = next(
-        d
-        for d in resolver.resolve("u-dave").decisions
-        if d.resource_id == "res-iam-role-readonly"
-    )
+    dave_iam = next(d for d in resolver.resolve("u-dave").decisions if d.resource_id == "res-iam-role-readonly")
     assert "iam:CreateRole" not in dave_iam.actions
     assert "iam:DeleteRole" not in dave_iam.actions
     assert "iam:AttachRolePolicy" not in dave_iam.actions
@@ -390,11 +355,7 @@ def test_resource_policy_unlocks_pipeline_on_artifacts(
     the bucket policy allows ``s3:GetObject`` for ``Principal: *``."""
 
     resolver = AwsIamResolver(snapshot=snapshot)
-    pipeline = next(
-        d
-        for d in resolver.resolve("r-pipeline").decisions
-        if d.resource_id == "res-bucket-artifacts"
-    )
+    pipeline = next(d for d in resolver.resolve("r-pipeline").decisions if d.resource_id == "res-bucket-artifacts")
     assert "s3:GetObject" in pipeline.actions
 
 
@@ -406,11 +367,7 @@ def test_condition_blocks_erin_in_other_region(
     Flipping the context to a different region must drop her access."""
 
     resolver = AwsIamResolver(snapshot=snapshot)
-    erin = next(
-        d
-        for d in resolver.resolve("u-erin").decisions
-        if d.resource_id == "res-bucket-reports"
-    )
+    erin = next(d for d in resolver.resolve("u-erin").decisions if d.resource_id == "res-bucket-reports")
     assert "s3:GetObject" in erin.actions
 
     altered = json.loads(json.dumps(snapshot))

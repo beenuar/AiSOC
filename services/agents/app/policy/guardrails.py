@@ -150,7 +150,7 @@ def _yaml_policy_path() -> Path:
 
 def _coerce_threshold_value(action: str, value: Any) -> ActionThresholds | None:
     """Accept either a scalar (== ``auto`` only) or a ``{auto, review, escalation}`` dict."""
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         try:
             return _make_thresholds(float(value))
         except (TypeError, ValueError):

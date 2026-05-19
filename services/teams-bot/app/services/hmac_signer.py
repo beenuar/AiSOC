@@ -32,9 +32,7 @@ from typing import Any
 # We resolve the module by absolute path so the Teams bot can be unit-
 # tested in isolation (it doesn't share a pyproject with the Slack bot
 # but the two repos co-evolve — see the README).
-_SLACK_BOT_HMAC_PATH = (
-    Path(__file__).resolve().parents[3] / "slack-bot" / "app" / "services" / "hmac_verify.py"
-)
+_SLACK_BOT_HMAC_PATH = Path(__file__).resolve().parents[3] / "slack-bot" / "app" / "services" / "hmac_verify.py"
 
 _module_name = "_aisoc_hmac_verify"
 _spec = importlib.util.spec_from_file_location(_module_name, _SLACK_BOT_HMAC_PATH)
@@ -74,9 +72,7 @@ def sign_card_data(
     Mint the ``data`` payload attached to an Adaptive Card
     ``Action.Submit`` button.
     """
-    payload = canonical_payload(
-        verb=verb, action_id=action_id, case_id=case_id, issued_at=issued_at
-    )
+    payload = canonical_payload(verb=verb, action_id=action_id, case_id=case_id, issued_at=issued_at)
     return {
         "verb": verb,
         "action_id": action_id,
@@ -100,9 +96,7 @@ def verify_card_data(payload: dict[str, Any], *, secret: str, max_age_seconds: i
     signature = str(payload.get("signature") or "")
     if not verb or not action_id or issued_at is None:
         raise HmacVerificationError("Missing required fields on signed payload")
-    canonical = canonical_payload(
-        verb=verb, action_id=action_id, case_id=case_id, issued_at=int(issued_at)
-    )
+    canonical = canonical_payload(verb=verb, action_id=action_id, case_id=case_id, issued_at=int(issued_at))
     verify(
         canonical,
         signature,
