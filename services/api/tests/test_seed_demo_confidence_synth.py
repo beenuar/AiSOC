@@ -63,8 +63,8 @@ def test_each_rationale_entry_carries_confidence_factor_keys() -> None:
     for entry in rationale:
         missing = _REQUIRED_KEYS - entry.keys()
         assert not missing, f"missing keys in rationale: {missing}"
-        assert isinstance(entry["contribution"], (int, float))
-        assert isinstance(entry["weight"], (int, float))
+        assert isinstance(entry["contribution"], int | float)
+        assert isinstance(entry["weight"], int | float)
         # Weights are normalised in [0, 1]; contributions in [-1, +1].
         assert 0 <= entry["weight"] <= 1
         assert -1.0 <= entry["contribution"] <= 1.0

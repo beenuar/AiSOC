@@ -103,9 +103,9 @@ _DATASET_PATH = _TESTS_DIR / "eval_data" / "synthetic_incidents.json"
 with _DATASET_PATH.open() as _f:
     _POSITIVE_INCIDENTS: list[dict[str, Any]] = json.load(_f)
 
-assert len(_POSITIVE_INCIDENTS) >= 100, (
-    f"synthetic_incidents.json must contain at least 100 cases for stable calibration (got {len(_POSITIVE_INCIDENTS)})"
-)
+assert (
+    len(_POSITIVE_INCIDENTS) >= 100
+), f"synthetic_incidents.json must contain at least 100 cases for stable calibration (got {len(_POSITIVE_INCIDENTS)})"
 
 
 # ---------------------------------------------------------------------------

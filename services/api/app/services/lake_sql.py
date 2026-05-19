@@ -189,7 +189,7 @@ def rewrite_for_tenant(
     if isinstance(root, _FORBIDDEN_ROOTS):
         raise LakeSqlForbiddenError(f"only SELECT statements are allowed (got {type(root).__name__.upper()})")
 
-    if not isinstance(root, (exp.Select, exp.Union, exp.With)):
+    if not isinstance(root, exp.Select | exp.Union | exp.With):
         raise LakeSqlSyntaxError(f"expected a SELECT / WITH / UNION statement; got {type(root).__name__}")
 
     # ── Step 3: collect CTE aliases ──────────────────────────────────
@@ -390,7 +390,7 @@ def _is_table_function(table: exp.Table) -> bool:
     untrusted endpoints, or read foreign databases.
     """
     inner = table.this
-    if isinstance(inner, (exp.Anonymous, exp.Func)):
+    if isinstance(inner, exp.Anonymous | exp.Func):
         return True
     # Some dialects parse ``url(…)`` with an empty Table.name and a
     # function-shaped child elsewhere. Catch those by scanning direct
@@ -428,10 +428,10 @@ def _clamp_outer_limit(node: exp.Expression, cap: int) -> None:
     replace it with the cap.
     """
     target: exp.Expression = node
-    if isinstance(node, exp.With) and isinstance(node.this, (exp.Select, exp.Union)):
+    if isinstance(node, exp.With) and isinstance(node.this, exp.Select | exp.Union):
         target = node.this
 
-    if not isinstance(target, (exp.Select, exp.Union)):
+    if not isinstance(target, exp.Select | exp.Union):
         # Defensive: caller already validated the root, but if a future
         # expansion misses a case we'd rather leave the SQL alone than
         # corrupt it.

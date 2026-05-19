@@ -292,11 +292,7 @@ async def get_dashboard_metrics(
     # jsonb_array_elements_text + GROUP BY in the same SELECT 500s on some
     # Postgres builds.
     tactic_rows = (
-        await db.execute(
-            select(Alert.mitre_tactics).where(
-                and_(Alert.tenant_id == tenant_id, Alert.mitre_tactics.isnot(None))
-            )
-        )
+        await db.execute(select(Alert.mitre_tactics).where(and_(Alert.tenant_id == tenant_id, Alert.mitre_tactics.isnot(None))))
     ).all()
 
     tactic_counts: dict[str, int] = {}
@@ -308,8 +304,7 @@ async def get_dashboard_metrics(
                 tactic_counts[t] = tactic_counts.get(t, 0) + 1
 
     top_mitre = [
-        MitreTactic(tactic=tactic, count=count)
-        for tactic, count in sorted(tactic_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        MitreTactic(tactic=tactic, count=count) for tactic, count in sorted(tactic_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     ]
 
     # ── 24-hour trend (hourly buckets) ────────────────────────────────────────
@@ -582,9 +577,7 @@ async def get_soc_metrics(
 
     heatmap = [
         AttackHeatmapCell(tactic=tactic, technique=technique, count=count)
-        for (tactic, technique), count in sorted(
-            pair_counts.items(), key=lambda x: x[1], reverse=True
-        )[:50]
+        for (tactic, technique), count in sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)[:50]
     ]
 
     # ── Confidence calibration curve ──────────────────────────────────────────

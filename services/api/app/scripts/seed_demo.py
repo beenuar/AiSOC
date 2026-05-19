@@ -2410,6 +2410,7 @@ _DEMO_QUICK_DEFAULT_CLOCK_ISO = "2026-05-13T19:00:00+00:00"
 # The constant has no security meaning — it's just a fixed seed.
 _DEMO_QUICK_UUID_NS = uuid.UUID("a15a1c00-0000-4d04-8000-000000000064")
 
+
 def _parse_clock(value: str | None) -> datetime:
     """Parse the `--clock` argument (ISO-8601) into a UTC-aware datetime.
 
@@ -2939,16 +2940,11 @@ async def _seed_demo_quick_connectors(
     created = 0
     for connector_type in sorted(needed):
         existing = await session.execute(
-            select(Connector)
-            .where(Connector.tenant_id == tenant.id)
-            .where(Connector.connector_type == connector_type)
-            .limit(1)
+            select(Connector).where(Connector.tenant_id == tenant.id).where(Connector.connector_type == connector_type).limit(1)
         )
         if existing.scalar_one_or_none() is not None:
             continue
-        display, category = _DEMO_QUICK_CONNECTOR_PROFILES.get(
-            connector_type, (connector_type, "siem")
-        )
+        display, category = _DEMO_QUICK_CONNECTOR_PROFILES.get(connector_type, (connector_type, "siem"))
         session.add(
             Connector(
                 id=_demo_quick_uuid("connector", connector_type),
@@ -2979,19 +2975,13 @@ async def _purge_demo_quick(session, tenant: Tenant) -> tuple[int, int, int]:
     keys = [incident["key"] for incident in _DEMO_QUICK_INCIDENTS]
 
     # Collect existing case IDs first so we can scope the timeline delete.
-    case_rows = await session.execute(
-        select(Case.id)
-        .where(Case.tenant_id == tenant.id)
-        .where(Case.case_number.in_(keys))
-    )
+    case_rows = await session.execute(select(Case.id).where(Case.tenant_id == tenant.id).where(Case.case_number.in_(keys)))
     case_ids = [row[0] for row in case_rows.all()]
 
     deleted_timelines = 0
     if case_ids:
         result = await session.execute(
-            delete(CaseTimeline)
-            .where(CaseTimeline.tenant_id == tenant.id)
-            .where(CaseTimeline.case_id.in_(case_ids))
+            delete(CaseTimeline).where(CaseTimeline.tenant_id == tenant.id).where(CaseTimeline.case_id.in_(case_ids))
         )
         deleted_timelines = result.rowcount or 0
 
@@ -2999,20 +2989,12 @@ async def _purge_demo_quick(session, tenant: Tenant) -> tuple[int, int, int]:
     # tag, but case-scoped deletion is the safer ON DELETE path.
     deleted_alerts = 0
     if case_ids:
-        result = await session.execute(
-            delete(Alert)
-            .where(Alert.tenant_id == tenant.id)
-            .where(Alert.case_id.in_(case_ids))
-        )
+        result = await session.execute(delete(Alert).where(Alert.tenant_id == tenant.id).where(Alert.case_id.in_(case_ids)))
         deleted_alerts = result.rowcount or 0
 
     deleted_cases = 0
     if case_ids:
-        result = await session.execute(
-            delete(Case)
-            .where(Case.tenant_id == tenant.id)
-            .where(Case.id.in_(case_ids))
-        )
+        result = await session.execute(delete(Case).where(Case.tenant_id == tenant.id).where(Case.id.in_(case_ids)))
         deleted_cases = result.rowcount or 0
 
     await session.flush()
@@ -3162,12 +3144,8 @@ async def _run_quick_seed(clock: datetime) -> None:
             tenant = await _ensure_tenant(session)
             user = await _ensure_user(session, tenant)
             connectors = await _seed_demo_quick_connectors(session, tenant, clock=clock)
-            deleted_cases, deleted_alerts, deleted_timelines = await _purge_demo_quick(
-                session, tenant
-            )
-            cases, alerts, timelines = await _seed_demo_quick(
-                session, tenant, clock=clock
-            )
+            deleted_cases, deleted_alerts, deleted_timelines = await _purge_demo_quick(session, tenant)
+            cases, alerts, timelines = await _seed_demo_quick(session, tenant, clock=clock)
             await session.commit()
         except Exception:
             await session.rollback()
@@ -3176,16 +3154,11 @@ async def _run_quick_seed(clock: datetime) -> None:
     print(f"[seed] tenant: {tenant.id} ({tenant.slug})")
     print(f"[seed] user: {user.email} (role={user.role})")
     print(f"[seed] connectors upserted: {connectors}")
-    print(
-        "[seed] purged DEMO-* — cases:%d alerts:%d timelines:%d"
-        % (deleted_cases, deleted_alerts, deleted_timelines)
-    )
+    print("[seed] purged DEMO-* — cases:%d alerts:%d timelines:%d" % (deleted_cases, deleted_alerts, deleted_timelines))
     print(f"[seed] DEMO-* cases seeded: {cases}")
     print(f"[seed] DEMO-* alerts seeded: {alerts}")
     print(f"[seed] DEMO-* timelines seeded: {timelines}")
-    print(
-        "[seed] showcase case: DEMO-004 — http://localhost:3000/cases/DEMO-004?tab=ledger"
-    )
+    print("[seed] showcase case: DEMO-004 — http://localhost:3000/cases/DEMO-004?tab=ledger")
     print("[seed] done — four-case demo set is live")
 
 
