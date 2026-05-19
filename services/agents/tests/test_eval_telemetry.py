@@ -147,9 +147,7 @@ class RateCardTests(unittest.TestCase):
         crash. Keeps wet-eval re-rendering robust if the rate card is
         renamed mid-run."""
         unknown = _eval_telemetry.cost_usd(1_000_000, 0, model="not-a-real-model")
-        gpt4o = _eval_telemetry.cost_usd(
-            1_000_000, 0, model=_eval_telemetry.DEFAULT_MODEL
-        )
+        gpt4o = _eval_telemetry.cost_usd(1_000_000, 0, model=_eval_telemetry.DEFAULT_MODEL)
         self.assertAlmostEqual(unknown, gpt4o, places=6)
 
     def test_cost_usd_accepts_custom_rate_card(self) -> None:
@@ -205,14 +203,18 @@ class ComputePerInvestigationTests(unittest.TestCase):
         wet-eval column (workspace rule: never present substrate as
         agent metrics)."""
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=True,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=True,
         )
         d = rep.to_dict(include_records=True)
         self.assertEqual(d["mode"], "deterministic_substrate")
 
     def test_report_counts_incidents_and_templates(self) -> None:
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=True,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=True,
         )
         self.assertEqual(rep.incidents, 3)
         self.assertEqual(rep.templates, 2)
@@ -220,7 +222,9 @@ class ComputePerInvestigationTests(unittest.TestCase):
 
     def test_report_aggregate_has_required_fields(self) -> None:
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=True,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=True,
         )
         agg = rep.aggregate
         self.assertIn("tokens", agg)
@@ -236,7 +240,9 @@ class ComputePerInvestigationTests(unittest.TestCase):
         percentile helper this catches it before docs ship a chart with
         p99 < median."""
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=True,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=True,
         )
         for kind in ("prompt", "completion", "total"):
             block = rep.aggregate["tokens"][kind]
@@ -254,7 +260,9 @@ class ComputePerInvestigationTests(unittest.TestCase):
         low-severity ones. INC-FIXT-001 (critical) vs INC-FIXT-003 (low)
         in the fixture."""
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=True,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=True,
         )
         by_id = {r["incident_id"]: r for r in rep.incident_records}
         self.assertGreater(
@@ -264,7 +272,9 @@ class ComputePerInvestigationTests(unittest.TestCase):
 
     def test_keep_records_false_drops_per_incident_array(self) -> None:
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=False,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=False,
         )
         self.assertEqual(rep.incident_records, [])
         d = rep.to_dict(include_records=False)
@@ -275,7 +285,9 @@ class ComputePerInvestigationTests(unittest.TestCase):
         incident count. Stops bucketing bugs from quietly dropping
         templates."""
         rep = _eval_telemetry.compute_per_investigation_telemetry(
-            self.incidents_path, model="gpt-4o", keep_records=True,
+            self.incidents_path,
+            model="gpt-4o",
+            keep_records=True,
         )
         total = sum(t["incidents"] for t in rep.per_template)
         self.assertEqual(total, rep.incidents)
@@ -303,18 +315,24 @@ def _build_renderable_report() -> dict[str, Any]:
     usd = block["aggregate"]["usd"]
     latency = block["aggregate"]["latency_ms"]
     block["tokens_per_investigation"] = {
-        "mean": total["mean"], "median": total["median"],
-        "p95": total["p95"], "p99": total["p99"],
+        "mean": total["mean"],
+        "median": total["median"],
+        "p95": total["p95"],
+        "p99": total["p99"],
         "prompt_mean": block["aggregate"]["tokens"]["prompt"]["mean"],
         "completion_mean": block["aggregate"]["tokens"]["completion"]["mean"],
     }
     block["usd_per_investigation"] = {
-        "mean": usd["mean"], "median": usd["median"],
-        "p95": usd["p95"], "p99": usd["p99"],
+        "mean": usd["mean"],
+        "median": usd["median"],
+        "p95": usd["p95"],
+        "p99": usd["p99"],
     }
     block["latency_per_investigation_ms"] = {
-        "p50": latency["p50"], "p95": latency["p95"],
-        "p99": latency["p99"], "mean": latency["mean"],
+        "p50": latency["p50"],
+        "p95": latency["p95"],
+        "p99": latency["p99"],
+        "mean": latency["mean"],
     }
     return {"per_investigation": block}
 

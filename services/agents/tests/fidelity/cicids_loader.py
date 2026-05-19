@@ -25,7 +25,7 @@ import csv
 import ipaddress
 import logging
 from collections.abc import Iterable, Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -175,13 +175,13 @@ def _parse_timestamp(value: str) -> str:
 
     text = (value or "").strip()
     if not text:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S"):
         try:
             parsed = datetime.strptime(text, fmt)
         except ValueError:
             continue
-        return parsed.replace(tzinfo=timezone.utc).isoformat()
+        return parsed.replace(tzinfo=UTC).isoformat()
     return text
 
 
@@ -226,9 +226,7 @@ def to_ocsf(row: dict[str, Any]) -> dict[str, Any]:
     """
 
     bytes_in = int(max(row.get("flow_bytes_per_sec", 0.0), 0.0))
-    packets_total = int(row.get("total_fwd_packets", 0)) + int(
-        row.get("total_bwd_packets", 0)
-    )
+    packets_total = int(row.get("total_fwd_packets", 0)) + int(row.get("total_bwd_packets", 0))
 
     return {
         "category_uid": 4,

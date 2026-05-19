@@ -56,7 +56,6 @@ from app.api.v1.endpoints.saved_hunts import (
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -107,8 +106,7 @@ def _saved_hunt_row(
         created_by=created_by,
         name=name,
         nl_query=nl_query,
-        translated_query=translated
-        or {"esql": "FROM logs-* | LIMIT 10", "kql": "", "spl": "", "explanation": ""},
+        translated_query=translated or {"esql": "FROM logs-* | LIMIT 10", "kql": "", "spl": "", "explanation": ""},
         language=language,
         schedule=schedule,
         last_run_at=last_run_at,
@@ -223,7 +221,9 @@ def test_create_request_rejects_unknown_language() -> None:
     """Language is restricted to ``esql | kql | spl``."""
     with pytest.raises(pydantic.ValidationError):
         CreateSavedHuntRequest(
-            name="x", nl_query="failed logins", language="xquery"  # type: ignore[arg-type]
+            name="x",
+            nl_query="failed logins",
+            language="xquery",  # type: ignore[arg-type]
         )
 
 
@@ -331,14 +331,12 @@ def test_create_saved_hunt_translates_and_persists(monkeypatch: pytest.MonkeyPat
     # Stub the translator so the test doesn't depend on the live grammar
     # (the actual translator is exercised separately in nl_query tests).
     fake_envelope = TranslatedQueryEnvelope(
-        esql="FROM logs-* | WHERE source.geo.country_iso_code == \"IR\" | LIMIT 500",
-        kql="SecurityEvent | where source_geo_country_iso_code == \"IR\" | take 500",
+        esql='FROM logs-* | WHERE source.geo.country_iso_code == "IR" | LIMIT 500',
+        kql='SecurityEvent | where source_geo_country_iso_code == "IR" | take 500',
         spl='index=* source_geo_country_iso_code="IR"',
         explanation="Translates the question by filtering on country code IR.",
     )
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.saved_hunts._translate", lambda _q: fake_envelope
-    )
+    monkeypatch.setattr("app.api.v1.endpoints.saved_hunts._translate", lambda _q: fake_envelope)
 
     captured: dict[str, Any] = {}
 
@@ -424,9 +422,7 @@ def test_create_saved_hunt_with_invalid_schedule_422s_before_db(
 
     monkeypatch.setattr("app.api.v1.endpoints.saved_hunts._translate", _spy)
     db = _mock_scalar_db(None)
-    payload = CreateSavedHuntRequest(
-        name="Iran inbound", nl_query="failed logins", schedule="not a cron"
-    )
+    payload = CreateSavedHuntRequest(name="Iran inbound", nl_query="failed logins", schedule="not a cron")
     with pytest.raises(HTTPException) as exc:
         asyncio.run(create_saved_hunt(payload, user, db))
     assert exc.value.status_code == 422
@@ -508,7 +504,7 @@ def test_run_saved_hunt_re_translates_and_stamps(monkeypatch: pytest.MonkeyPatch
     row = _saved_hunt_row(tenant_id=user.tenant_id)
     db = _mock_scalar_db(row)
     fresh = TranslatedQueryEnvelope(
-        esql="FROM logs-* | WHERE source.geo.country_iso_code == \"IR\" | LIMIT 500",
+        esql='FROM logs-* | WHERE source.geo.country_iso_code == "IR" | LIMIT 500',
     )
     monkeypatch.setattr("app.api.v1.endpoints.saved_hunts._translate", lambda _q: fresh)
 
@@ -556,9 +552,7 @@ def test_scheduler_picks_up_due_hunt_and_fires_callback() -> None:
 
     captured: dict[str, Any] = {"executor": [], "callback": []}
 
-    async def _fake_executor(
-        _db: Any, hunt: Any
-    ) -> int:  # noqa: ANN401
+    async def _fake_executor(_db: Any, hunt: Any) -> int:  # noqa: ANN401
         captured["executor"].append(hunt.id)
         return 7
 

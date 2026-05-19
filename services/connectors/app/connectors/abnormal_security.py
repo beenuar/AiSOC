@@ -134,7 +134,7 @@ class AbnormalSecurityConnector(BaseConnector):
                     next_page = payload.get("nextPageNumber") or payload.get("next")
                     if not next_page or len(items) < _PER_PAGE:
                         break
-                    page_number = int(next_page) if isinstance(next_page, (int, str)) else page_number + 1
+                    page_number = int(next_page) if isinstance(next_page, int | str) else page_number + 1
         return out
 
     _HIGH_THREAT_TYPES = (
