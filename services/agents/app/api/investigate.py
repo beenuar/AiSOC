@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from app.investigator import InvestigatorOrchestrator
+from app.orchestrator.router import RouterOrchestrator
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["investigations"])
@@ -37,10 +38,65 @@ _REALTIME_URL = os.environ.get("REALTIME_URL", "http://realtime:8086")
 _INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "")
 
 # ---------------------------------------------------------------------------
+# Orchestrator selection
+# ---------------------------------------------------------------------------
+# T2.2: route /investigate through the four-agent ``RouterOrchestrator`` when
+# the flag is on; otherwise keep the legacy ``InvestigatorOrchestrator`` path.
+# Read at call time so operators can flip without restarting the service.
+USE_ROUTER_FLAG = "AISOC_INVESTIGATE_USE_ROUTER"
+
+
+def is_router_investigate_enabled() -> bool:
+    """Return True if /investigate should use ``RouterOrchestrator`` (default off).
+
+    Explicit truthy values (``1`` / ``true`` / ``yes`` / ``on`` / ``enabled``,
+    case-insensitive) opt into the router path; everything else, including the
+    unset case, keeps the investigator path. Mirrors the convention used by
+    :func:`app.orchestrator.router.is_parallel_topology_enabled`.
+    """
+    raw = os.environ.get(USE_ROUTER_FLAG)
+    if raw is None:
+        return False
+    return raw.strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
+
+# ---------------------------------------------------------------------------
 # Simple in-memory run store (swap for Redis in production)
 # ---------------------------------------------------------------------------
 _runs: dict[str, dict[str, Any]] = {}
 _orch = InvestigatorOrchestrator()
+_router_orch = RouterOrchestrator()
+
+
+def _investigate_stream(
+    *,
+    case_id: str,
+    alert_summary: str,
+    raw_alert: dict[str, Any],
+    tenant_id: str,
+    run_id: UUID | None = None,
+):
+    """Pick the orchestrator at call time based on ``AISOC_INVESTIGATE_USE_ROUTER``.
+
+    Both orchestrators expose an investigator-compatible ``stream`` /
+    ``stream_kwargs`` surface that yields the same ``step`` / ``done`` /
+    ``error`` event taxonomy, so the consumer below can stay shape-agnostic.
+    """
+    if is_router_investigate_enabled():
+        return _router_orch.stream_kwargs(
+            case_id=case_id,
+            alert_summary=alert_summary,
+            raw_alert=raw_alert,
+            tenant_id=tenant_id,
+            run_id=run_id,
+        )
+    return _orch.stream(
+        case_id=case_id,
+        alert_summary=alert_summary,
+        raw_alert=raw_alert,
+        tenant_id=tenant_id,
+        run_id=run_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -101,8 +157,10 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
     except (ValueError, TypeError):
         run_uuid = uuid4()
     try:
-        # Use the streaming orchestrator so we can emit events progressively
-        async for event in _orch.stream(
+        # Use the streaming orchestrator so we can emit events progressively.
+        # ``_investigate_stream`` picks investigator vs. router at call time
+        # based on ``AISOC_INVESTIGATE_USE_ROUTER``.
+        async for event in _investigate_stream(
             case_id=case_id,
             alert_summary=req.alert_summary,
             raw_alert=req.raw_alert,
@@ -300,8 +358,8 @@ async def stream_investigation(ws: WebSocket, run_id: str):
                     break
                 await asyncio.sleep(0.5)
         else:
-            # Direct streaming for ad-hoc calls
-            async for event in _orch.stream(
+            # Direct streaming for ad-hoc calls; orchestrator selected by flag.
+            async for event in _investigate_stream(
                 case_id=case_id,
                 alert_summary=alert_summary,
                 raw_alert={},

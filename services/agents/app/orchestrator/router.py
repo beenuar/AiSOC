@@ -86,6 +86,36 @@ def is_parallel_topology_enabled() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# String → UUID coercion for the investigator-compatible adapter
+# ---------------------------------------------------------------------------
+
+# Stable namespace for hashing opaque caller-supplied strings (case ids /
+# tenant slugs) into UUIDs. Living under ``tryaisoc.com/router`` keeps the
+# derived ids reproducible across processes — the realtime stream and the
+# ledger row land on the same UUID for the same input string.
+_AISOC_ROUTER_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "tryaisoc.com/router")
+
+
+def _coerce_uuid(value: str | uuid.UUID) -> uuid.UUID:
+    """Return ``value`` as a :class:`uuid.UUID`.
+
+    Accepts a real UUID, a canonical UUID string, or any opaque caller
+    identifier (e.g. ``"case-42"`` or ``"default"``). Opaque strings are
+    deterministically hashed under :data:`_AISOC_ROUTER_NAMESPACE` so the
+    same input always resolves to the same UUID — required so the ledger
+    row id, the realtime stream id, and any cross-process consumers all
+    agree.
+    """
+    if isinstance(value, uuid.UUID):
+        return value
+    text = str(value)
+    try:
+        return uuid.UUID(text)
+    except (ValueError, TypeError):
+        return uuid.uuid5(_AISOC_ROUTER_NAMESPACE, text)
+
+
+# ---------------------------------------------------------------------------
 # Signal classification — picks which sub-agents to fan out to
 # ---------------------------------------------------------------------------
 
@@ -719,7 +749,11 @@ class RouterOrchestrator:
         if mode not in {"parallel", "sequential"}:
             raise ValueError(f"unknown topology: {mode!r}")
 
-        run_id = uuid.uuid4()
+        # Honor the run id already on the state so the API can correlate the
+        # realtime stream with the persisted ledger row. The state model
+        # defaults this to ``uuid.uuid4`` so direct callers still get a fresh
+        # id without ceremony.
+        run_id = state.run_id
         state.status = AgentStatus.RUNNING
         state.iteration_count = max(state.iteration_count, 0)
         state.started_at = state.started_at or datetime.utcnow()
@@ -1090,6 +1124,102 @@ class RouterOrchestrator:
             wall_clock_ms=round(elapsed_ms, 2),
             substrate=True,
         )
+
+    async def stream_kwargs(
+        self,
+        *,
+        case_id: str,
+        alert_summary: str,
+        raw_alert: dict[str, Any] | None = None,
+        tenant_id: str = "default",
+        run_id: uuid.UUID | None = None,
+        topology: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Investigator-compatible streaming adapter for the ``/investigate`` swap.
+
+        Matches :meth:`app.investigator.orchestrator.InvestigatorOrchestrator.stream`
+        signature so the API endpoint can flip between the two orchestrators
+        behind a feature flag without changing its call site. The adapter:
+
+        1. Coerces caller-supplied strings (``case_id``, ``tenant_id``) to
+           :class:`uuid.UUID` via :func:`_coerce_uuid` so the internal
+           :class:`InvestigationState` validates, then surfaces the
+           **original** string identifiers back on every yielded event for the
+           realtime stream consumers.
+        2. Enriches router ``step`` events with the
+           ``kind`` / ``node`` / ``ts`` / ``case_id`` / ``run_id`` fields the
+           investigator envelope carries and the WebSocket bridge expects.
+        3. Synthesises an explicit ``{"type": "error"}`` event when the
+           underlying router reports failure inside its terminal ``done``
+           event (router models failure in-band; the endpoint expects an
+           out-of-band error). The partial ``report_md`` / ``report_html``
+           / ``state`` snapshot the router did assemble before the failure
+           is included on the synthesised error event so the UI can still
+           render the in-progress narrative. The original ``done`` is
+           suppressed on the failure path so consumers don't see both.
+        """
+        # Coerce caller strings to UUIDs for the internal state model.
+        # Original strings are preserved on every yielded event so /investigate
+        # consumers can correlate against ledger rows and WebSocket sessions.
+        incident_uuid = _coerce_uuid(case_id)
+        tenant_uuid = _coerce_uuid(tenant_id)
+        run_uuid = run_id if isinstance(run_id, uuid.UUID) else uuid.uuid4()
+
+        state = InvestigationState(
+            run_id=run_uuid,
+            incident_id=incident_uuid,
+            tenant_id=tenant_uuid,
+            alert_summary=alert_summary,
+            raw_alert=raw_alert or {},
+        )
+        run_id_str = str(run_uuid)
+        failed_status = AgentStatus.FAILED.value
+
+        async for event in self.stream(state, topology=topology):
+            etype = event.get("type")
+
+            if etype == "step":
+                yield {
+                    **event,
+                    "case_id": case_id,
+                    "run_id": run_id_str,
+                    "kind": event.get("kind", "agent_action"),
+                    "node": event.get("node") or event.get("agent"),
+                    "ts": event.get("ts") or datetime.utcnow().isoformat(),
+                }
+                continue
+
+            if etype == "done":
+                event_state = event.get("state") or {}
+                status = event_state.get("status")
+                # Router embeds failure inside `done`; the /investigate
+                # endpoint expects an out-of-band `error` event. Synthesise
+                # it and suppress the original done.
+                if status == failed_status:
+                    yield {
+                        "type": "error",
+                        "error": event_state.get("error") or "router investigation failed",
+                        "case_id": case_id,
+                        "run_id": run_id_str,
+                        "report_md": event.get("report_md"),
+                        "report_html": event.get("report_html"),
+                        "state": event_state,
+                    }
+                    return
+                yield {
+                    **event,
+                    "case_id": case_id,
+                    "run_id": run_id_str,
+                }
+                continue
+
+            # Forwards-compat: any future event type passes through with
+            # caller identifiers attached.
+            yield {
+                **event,
+                "case_id": event.get("case_id", case_id),
+                "run_id": event.get("run_id", run_id_str),
+            }
 
 
 async def run_router_investigation(
