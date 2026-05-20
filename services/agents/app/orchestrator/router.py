@@ -54,7 +54,8 @@ import asyncio
 import os
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -396,6 +397,189 @@ async def _run_parallel(state: InvestigationState, signals: list[str]) -> Invest
 
 
 # ---------------------------------------------------------------------------
+# Streaming helpers — used by ``RouterOrchestrator.stream()``
+# ---------------------------------------------------------------------------
+
+
+def _state_snapshot(state: InvestigationState) -> dict[str, Any]:
+    """Capture the volatile slots of ``state`` for inter-step diffing.
+
+    The router's stream surface emits a ``step`` event after every internal
+    stage (auto-triage, each sub-agent, join, responder). To describe what
+    that stage actually *did* we snapshot before/after and diff the four
+    growable slots (findings, MITRE, actions) plus the verdict/confidence
+    pair. The snapshot stays cheap — counts only — because the full state
+    rides on the ``done`` event at the end of the run anyway.
+    """
+    return {
+        "findings": len(state.findings),
+        "mitre": len(state.mitre_mappings),
+        "actions": len(state.proposed_actions),
+        "verdict": state.verdict,
+        "confidence": state.confidence,
+    }
+
+
+def _summarise_diff(
+    stage: str,
+    pre: dict[str, Any],
+    post: dict[str, Any],
+    *,
+    verdict: str | None,
+    confidence: float,
+) -> str:
+    """Render a one-line, human-readable summary of a stage transition.
+
+    Used as the ``summary`` field on the ``step`` event so a SOC analyst
+    watching the live stream sees which stage produced what (e.g.
+    ``"identity | +2 findings | +1 MITRE | verdict=true_positive | confidence=0.82"``).
+    """
+    fragments: list[str] = [stage]
+    df = post["findings"] - pre["findings"]
+    dm = post["mitre"] - pre["mitre"]
+    da = post["actions"] - pre["actions"]
+    if df:
+        fragments.append(f"+{df} findings" if df > 0 else f"{df} findings")
+    if dm:
+        fragments.append(f"+{dm} MITRE" if dm > 0 else f"{dm} MITRE")
+    if da:
+        fragments.append(f"+{da} actions" if da > 0 else f"{da} actions")
+    fragments.append(f"verdict={verdict or 'uncertain'}")
+    try:
+        fragments.append(f"confidence={float(confidence):.2f}")
+    except (TypeError, ValueError):
+        fragments.append("confidence=0.00")
+    return " | ".join(fragments)
+
+
+def _serialise_action(action: Any) -> dict[str, Any]:
+    """Convert a :class:`ProposedAction` into a JSON-safe dict for ``done``.
+
+    Falls back to a minimal shape if ``model_dump`` is unavailable so a
+    stray non-Pydantic object on ``state.proposed_actions`` doesn't break
+    the terminal event.
+    """
+    if hasattr(action, "model_dump"):
+        try:
+            return action.model_dump(mode="json")
+        except Exception:  # noqa: BLE001
+            pass
+    return {
+        "action_type": getattr(action, "action_type", "unknown"),
+        "target": getattr(action, "target", ""),
+        "rationale": getattr(action, "rationale", ""),
+    }
+
+
+def _build_done_event(
+    state: InvestigationState,
+    *,
+    report_md: str,
+    report_html: str,
+    case_id: str,
+    run_id: uuid.UUID,
+    topology: str,
+    signals: list[str],
+    auto_closed: bool,
+    wall_clock_ms: float,
+) -> dict[str, Any]:
+    """Synthesise the terminal ``done`` event payload.
+
+    The state shape on this event is the router's flat
+    :class:`InvestigationState` (no per-agent ``recon`` / ``forensic`` /
+    ``responder`` blocks — those belong to the investigator pipeline).
+    The future ``/investigate`` swap will adapt this shape on the API
+    boundary; this PR only ships the substrate.
+    """
+    state.completed_at = state.completed_at or datetime.utcnow()
+    status = state.status.value if hasattr(state.status, "value") else str(state.status)
+    return {
+        "type": "done",
+        "case_id": case_id,
+        "run_id": str(run_id),
+        "state": {
+            "status": status,
+            "verdict": state.verdict,
+            "confidence": state.confidence,
+            "confidence_basis": list(state.confidence_basis),
+            "findings": list(state.findings),
+            "mitre_mappings": list(state.mitre_mappings),
+            "proposed_actions": [_serialise_action(a) for a in state.proposed_actions],
+            "report_md": report_md,
+            "report_html": report_html,
+            "started_at": state.started_at.isoformat() if state.started_at else None,
+            "completed_at": state.completed_at.isoformat() if state.completed_at else None,
+            "error": state.error,
+        },
+        "info": {
+            "topology": topology,
+            "signals": list(signals),
+            "auto_closed": auto_closed,
+            "wall_clock_ms": wall_clock_ms,
+        },
+    }
+
+
+async def _persist_report_artifact(
+    ledger_module: Any,
+    *,
+    run_id: uuid.UUID,
+    tenant_id: uuid.UUID | None,
+    report_md: str,
+) -> None:
+    """Best-effort persistence of the Markdown report as a ledger artifact.
+
+    Ledger writes are advisory: a failure here must not block the live
+    stream. The ``report_html`` companion isn't persisted — consumers can
+    re-render it deterministically from ``report_md`` via
+    :func:`app.orchestrator.report.render_router_report_html`.
+    """
+    if tenant_id is None or not report_md:
+        return
+    try:
+        await ledger_module.record_artifact(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            kind="report_md",
+            content=report_md,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "router.stream.ledger_artifact_failed",
+            run_id=str(run_id),
+            error=str(exc),
+        )
+
+
+async def _complete_run_safe(
+    ledger_module: Any,
+    *,
+    run_id: uuid.UUID,
+    tenant_id: uuid.UUID | None,
+    status: str,
+    error: str | None,
+    iterations: int,
+) -> None:
+    """Best-effort finalisation of the ledger row."""
+    if tenant_id is None:
+        return
+    try:
+        await ledger_module.complete_run(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            status=status,
+            error=error,
+            iterations=iterations,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "router.stream.ledger_complete_failed",
+            run_id=str(run_id),
+            error=str(exc),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Public orchestrator
 # ---------------------------------------------------------------------------
 
@@ -502,6 +686,410 @@ class RouterOrchestrator:
             substrate=True,
         )
         return state, info
+
+    async def stream(
+        self,
+        state: InvestigationState,
+        *,
+        topology: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Execute the topology and yield ``step`` / ``done`` events.
+
+        Mirrors
+        :meth:`app.investigator.orchestrator.InvestigatorOrchestrator.stream`'s
+        event surface so the same WebSocket layer can carry router runs once
+        ``/investigate`` is swapped over. The terminal ``done`` event carries
+        a deterministically-rendered Markdown + HTML report and the full
+        :class:`InvestigationState` payload; no extra LLM call is issued
+        beyond the four sub-agents the router already invokes.
+
+        Ledger writes (``start_run`` / ``record_event`` / ``record_artifact``
+        / ``complete_run``) are best-effort: a database outage degrades
+        observability but never blocks the stream.
+        """
+        # Import locally so a missing asyncpg in unit tests doesn't break the
+        # module import path. Matches InvestigatorOrchestrator.stream.
+        from app.investigator import ledger as ledger_module
+        from app.orchestrator.report import render_router_report
+
+        if topology is None:
+            mode = "parallel" if is_parallel_topology_enabled() else "sequential"
+        else:
+            mode = topology
+        if mode not in {"parallel", "sequential"}:
+            raise ValueError(f"unknown topology: {mode!r}")
+
+        run_id = uuid.uuid4()
+        state.status = AgentStatus.RUNNING
+        state.iteration_count = max(state.iteration_count, 0)
+        state.started_at = state.started_at or datetime.utcnow()
+
+        t0 = time.perf_counter()
+        seq = 0
+        tenant_id: uuid.UUID | None = None
+
+        # ------------------------------------------------------------------
+        # Ledger: open the run row (best-effort).
+        # ------------------------------------------------------------------
+        try:
+            tenant_id = await ledger_module.start_run(
+                run_id=run_id,
+                case_id=state.incident_id,
+                tenant_ref=state.tenant_id or "default",
+                alert_summary=state.alert_summary or "",
+                raw_alert=state.raw_alert or {},
+                model_used=f"router:{mode}",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "router.stream.ledger_start_failed",
+                run_id=str(run_id),
+                error=str(exc),
+            )
+            tenant_id = None
+
+        async def _yield_step(
+            *,
+            agent: str,
+            summary: str,
+            pre: dict[str, Any] | None,
+            post: dict[str, Any],
+            payload: dict[str, Any] | None = None,
+            duration_ms: float = 0.0,
+        ) -> dict[str, Any]:
+            """Build, persist, and return a ``step`` event payload.
+
+            The closure captures ``seq``-by-reference via the outer scope
+            via a ``nonlocal``-style list trick to keep the call sites
+            readable.
+            """
+            nonlocal seq
+            seq += 1
+            event = {
+                "type": "step",
+                "seq": seq,
+                "agent": agent,
+                "summary": summary,
+                "delta": (
+                    {
+                        "findings": post["findings"] - (pre["findings"] if pre else 0),
+                        "mitre": post["mitre"] - (pre["mitre"] if pre else 0),
+                        "actions": post["actions"] - (pre["actions"] if pre else 0),
+                    }
+                    if pre is not None
+                    else {
+                        "findings": post["findings"],
+                        "mitre": post["mitre"],
+                        "actions": post["actions"],
+                    }
+                ),
+                "verdict": post["verdict"],
+                "confidence": post["confidence"],
+                "duration_ms": round(duration_ms, 2),
+            }
+            if tenant_id is not None:
+                try:
+                    await ledger_module.record_event(
+                        run_id=run_id,
+                        tenant_id=tenant_id,
+                        seq=seq,
+                        kind="step",
+                        agent=agent,
+                        summary=summary,
+                        payload=payload or {},
+                        duration_ms=int(duration_ms),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "router.stream.ledger_event_failed",
+                        run_id=str(run_id),
+                        seq=seq,
+                        agent=agent,
+                        error=str(exc),
+                    )
+            return event
+
+        # ------------------------------------------------------------------
+        # Stage 1: auto-triage.
+        # ------------------------------------------------------------------
+        try:
+            pre = _state_snapshot(state)
+            stage_t0 = time.perf_counter()
+            state = await _run_auto_triage_step(state)
+            stage_ms = (time.perf_counter() - stage_t0) * 1000.0
+            post = _state_snapshot(state)
+            yield await _yield_step(
+                agent="auto_triage",
+                summary=_summarise_diff(
+                    "auto_triage",
+                    pre,
+                    post,
+                    verdict=state.verdict,
+                    confidence=state.confidence,
+                ),
+                pre=pre,
+                post=post,
+                payload={"verdict": state.verdict, "confidence": state.confidence},
+                duration_ms=stage_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            state.status = AgentStatus.FAILED
+            state.error = f"auto_triage failed: {exc}"
+            logger.exception("router.stream.auto_triage_failed", run_id=str(run_id))
+
+        # ------------------------------------------------------------------
+        # Early exit: auto-triage closed the alert.
+        # ------------------------------------------------------------------
+        if state.status == AgentStatus.COMPLETED:
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            report_md, report_html = render_router_report(state)
+            await _persist_report_artifact(
+                ledger_module,
+                run_id=run_id,
+                tenant_id=tenant_id,
+                report_md=report_md,
+            )
+            await _complete_run_safe(
+                ledger_module,
+                run_id=run_id,
+                tenant_id=tenant_id,
+                status="completed",
+                error=None,
+                iterations=max(state.iteration_count, 1),
+            )
+            yield _build_done_event(
+                state,
+                report_md=report_md,
+                report_html=report_html,
+                case_id=state.incident_id,
+                run_id=run_id,
+                topology=mode,
+                signals=[],
+                auto_closed=True,
+                wall_clock_ms=elapsed_ms,
+            )
+            logger.info(
+                "router.stream.auto_closed",
+                run_id=str(run_id),
+                topology=mode,
+                wall_clock_ms=round(elapsed_ms, 2),
+            )
+            return
+
+        # ------------------------------------------------------------------
+        # Stage 2: signal classification.
+        # ------------------------------------------------------------------
+        try:
+            pre = _state_snapshot(state)
+            stage_t0 = time.perf_counter()
+            signals = classify_signals(state)
+            state.add_finding(f"Router: classified signals={signals}, topology={mode}")
+            stage_ms = (time.perf_counter() - stage_t0) * 1000.0
+            post = _state_snapshot(state)
+            yield await _yield_step(
+                agent="router",
+                summary=f"router | signals={signals} | topology={mode}",
+                pre=pre,
+                post=post,
+                payload={"signals": list(signals), "topology": mode},
+                duration_ms=stage_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            state.status = AgentStatus.FAILED
+            state.error = f"router classification failed: {exc}"
+            signals = []
+            logger.exception("router.stream.classify_failed", run_id=str(run_id))
+
+        # ------------------------------------------------------------------
+        # Stage 3: sub-agent fan-out — emit one step per agent.
+        # ------------------------------------------------------------------
+        branch_states: list[InvestigationState] = []
+        if signals:
+            if mode == "parallel":
+                # Launch all sub-agents concurrently but yield step events
+                # in completion order via ``as_completed``. Each branch sees
+                # a deep copy of the pre-router state — matching the join
+                # contract in ``_run_parallel``.
+                runners = [_resolve_runner(s) for s in signals]
+                branch_inputs = [state.model_copy(deep=True) for _ in runners]
+                pre_state = _state_snapshot(state)
+
+                async def _wrap(idx: int, signal: str, runner: _SubAgentRunner, branch: InvestigationState):
+                    bt0 = time.perf_counter()
+                    try:
+                        result = await runner(branch)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(
+                            "router.stream.subagent_failed",
+                            run_id=str(run_id),
+                            agent=signal,
+                        )
+                        branch.add_finding(f"{signal} agent failed: {exc}")
+                        result = branch
+                    return idx, signal, result, (time.perf_counter() - bt0) * 1000.0
+
+                tasks = [
+                    asyncio.create_task(_wrap(i, s, r, b)) for i, (s, r, b) in enumerate(zip(signals, runners, branch_inputs, strict=False))
+                ]
+                results_by_idx: dict[int, InvestigationState] = {}
+                for coro in asyncio.as_completed(tasks):
+                    idx, signal, result, branch_ms = await coro
+                    results_by_idx[idx] = result
+                    branch_post = _state_snapshot(result)
+                    yield await _yield_step(
+                        agent=signal,
+                        summary=_summarise_diff(
+                            signal,
+                            pre_state,
+                            branch_post,
+                            verdict=result.verdict,
+                            confidence=result.confidence,
+                        ),
+                        pre=pre_state,
+                        post=branch_post,
+                        payload={
+                            "signal": signal,
+                            "verdict": result.verdict,
+                            "confidence": result.confidence,
+                        },
+                        duration_ms=branch_ms,
+                    )
+                # Preserve declared signal order for the join.
+                branch_states = [results_by_idx[i] for i in range(len(signals))]
+            else:
+                for signal in signals:
+                    runner = _resolve_runner(signal)
+                    branch_state = state.model_copy(deep=True)
+                    pre_branch = _state_snapshot(branch_state)
+                    bt0 = time.perf_counter()
+                    try:
+                        result = await runner(branch_state)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(
+                            "router.stream.subagent_failed",
+                            run_id=str(run_id),
+                            agent=signal,
+                        )
+                        branch_state.add_finding(f"{signal} agent failed: {exc}")
+                        result = branch_state
+                    branch_ms = (time.perf_counter() - bt0) * 1000.0
+                    branch_post = _state_snapshot(result)
+                    yield await _yield_step(
+                        agent=signal,
+                        summary=_summarise_diff(
+                            signal,
+                            pre_branch,
+                            branch_post,
+                            verdict=result.verdict,
+                            confidence=result.confidence,
+                        ),
+                        pre=pre_branch,
+                        post=branch_post,
+                        payload={
+                            "signal": signal,
+                            "verdict": result.verdict,
+                            "confidence": result.confidence,
+                        },
+                        duration_ms=branch_ms,
+                    )
+                    branch_states.append(result)
+
+            # Join the branches back into the base state.
+            try:
+                pre = _state_snapshot(state)
+                stage_t0 = time.perf_counter()
+                state = _join_states(state, branch_states)
+                stage_ms = (time.perf_counter() - stage_t0) * 1000.0
+                post = _state_snapshot(state)
+                yield await _yield_step(
+                    agent="join",
+                    summary=_summarise_diff(
+                        "join",
+                        pre,
+                        post,
+                        verdict=state.verdict,
+                        confidence=state.confidence,
+                    ),
+                    pre=pre,
+                    post=post,
+                    payload={"branches": len(branch_states)},
+                    duration_ms=stage_ms,
+                )
+            except Exception as exc:  # noqa: BLE001
+                state.status = AgentStatus.FAILED
+                state.error = f"join failed: {exc}"
+                logger.exception("router.stream.join_failed", run_id=str(run_id))
+
+        # ------------------------------------------------------------------
+        # Stage 4: responder summary (deterministic).
+        # ------------------------------------------------------------------
+        try:
+            pre = _state_snapshot(state)
+            stage_t0 = time.perf_counter()
+            state = _summarise_response(state)
+            stage_ms = (time.perf_counter() - stage_t0) * 1000.0
+            post = _state_snapshot(state)
+            yield await _yield_step(
+                agent="responder",
+                summary=_summarise_diff(
+                    "responder",
+                    pre,
+                    post,
+                    verdict=state.verdict,
+                    confidence=state.confidence,
+                ),
+                pre=pre,
+                post=post,
+                payload={"verdict": state.verdict, "confidence": state.confidence},
+                duration_ms=stage_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            state.status = AgentStatus.FAILED
+            state.error = f"responder failed: {exc}"
+            logger.exception("router.stream.responder_failed", run_id=str(run_id))
+
+        # ------------------------------------------------------------------
+        # Finalise: render report, persist, emit ``done``.
+        # ------------------------------------------------------------------
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        if state.status != AgentStatus.FAILED:
+            state.status = AgentStatus.COMPLETED
+        state.completed_at = datetime.utcnow()
+
+        report_md, report_html = render_router_report(state)
+        await _persist_report_artifact(
+            ledger_module,
+            run_id=run_id,
+            tenant_id=tenant_id,
+            report_md=report_md,
+        )
+        await _complete_run_safe(
+            ledger_module,
+            run_id=run_id,
+            tenant_id=tenant_id,
+            status="completed" if state.status == AgentStatus.COMPLETED else "failed",
+            error=state.error,
+            iterations=max(state.iteration_count, 1),
+        )
+        yield _build_done_event(
+            state,
+            report_md=report_md,
+            report_html=report_html,
+            case_id=state.incident_id,
+            run_id=run_id,
+            topology=mode,
+            signals=signals,
+            auto_closed=False,
+            wall_clock_ms=elapsed_ms,
+        )
+        logger.info(
+            "router.stream.completed",
+            run_id=str(run_id),
+            topology=mode,
+            signals=signals,
+            wall_clock_ms=round(elapsed_ms, 2),
+            substrate=True,
+        )
 
 
 async def run_router_investigation(
