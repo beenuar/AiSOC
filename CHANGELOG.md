@@ -42,6 +42,82 @@ enforcement, error wrapping) plus 9 dedicated `_execute_hunt` tests in
 with row count, three error-propagation paths). The existing
 saved-hunts endpoint + tenant isolation suites (47 tests) continue to
 pass unmodified.
+### Router orchestrator gains streaming + ledger + report (T2.2, v8.0)
+
+`RouterOrchestrator` (`services/agents/app/orchestrator/router.py`) now matches
+the surface of the legacy `InvestigatorOrchestrator` on three axes — streamed
+progress events, ledger persistence, and a deterministic Markdown / HTML
+report on the `done` event — so the `/investigate` endpoint can be swapped
+over to the router without losing operator-visible behaviour. The existing
+`run()` entry point is unchanged; the new `stream(state, *, topology=...)`
+async generator yields `step` events at each stage boundary (auto-triage,
+signal classification, sub-agent dispatch, per-sub-agent completion in
+`as_completed` order, join, responder summary) and a single terminal `done`
+event carrying the full state plus the report. Step `seq` numbers are
+monotonic across both parallel and sequential topologies. Auto-close paths
+short-circuit after auto-triage with a single step and a `done` event so the
+UI doesn't paint a half-empty timeline.
+
+Ledger writes are best-effort: every `step` becomes a `record_event` row,
+the final state becomes a `record_artifact` (Markdown + HTML), and
+`complete_run` closes the row with verdict / confidence / latency / cost. A
+ledger outage (missing `asyncpg`, dropped connection, write failure)
+downgrades to a `warn`-level structured log and the stream still completes
+end-to-end — the persistence layer is observability, not a hard dependency.
+
+Report synthesis lives in the new `services/agents/app/orchestrator/report.py`
+module. `render_router_report(state)` returns `(report_md, report_html)`
+without any extra LLM call: it walks `InvestigationState` (verdict,
+confidence, sub-agent findings, attack chain, responder recovery steps) and
+renders deterministic templates. HTML conversion falls back to a `<pre>`
+block if the optional `markdown` package isn't installed, so the worker
+image stays slim.
+
+Coverage: `services/agents/tests/test_orchestrator_router_stream.py` (8
+tests) asserts the event contract — step ordering, monotonic `seq`,
+parallel vs sequential paths, auto-close short-circuit, `done` payload
+shape, ledger call ordering, and graceful degradation when ledger writes
+fail. `services/agents/tests/test_router_report.py` covers the
+deterministic renderer. Together with the existing parallel-topology
+suite all 34 router-adjacent tests pass clean.
+
+### LangGraph parallel topology — HTTP surface (T2.2, v8.0)
+
+`RouterOrchestrator` (the parallel fan-out / Join LangGraph topology landed
+earlier in `services/agents/app/orchestrator/router.py`) is now reachable
+over HTTP. New endpoints in `services/agents/app/api/triage.py`:
+
+- `POST /api/v1/cases/{case_id}/triage` — launches a one-shot triage run on
+  the parallel topology and returns `{run_id, status, topology}`. The
+  request body (`TriageRequest`) accepts an optional `tenant_id`,
+  `incident_id`, `signals[]`, and a per-run `topology` override
+  (`"parallel" | "sequential"`). When `topology` is omitted, the resolved
+  topology follows the `AISOC_AGENT_PARALLEL_TOPOLOGY` env flag (parallel
+  when truthy, sequential otherwise) so existing deployments stay on the
+  safe default. String `tenant_id` / `incident_id` values are coerced to
+  deterministic UUIDs via `uuid.uuid5` against a project-scoped namespace,
+  so the same string always maps to the same `InvestigationState`.
+- `GET /api/v1/triage/{run_id}` — polls the run, returning
+  `{run_id, status, topology, signals, auto_closed, wall_clock_ms,
+  finding_ids, mitre_techniques, error?}`. Errors during the background
+  task are captured on the run record so the polling endpoint never 500s
+  on agent failure.
+
+Run state is kept in an in-process `_triage_runs` dict for now (same
+pattern as the existing `/investigate` endpoint's `_runs`). The legacy
+linear `/investigate` path on `InvestigatorOrchestrator` is **unchanged**
+— this is a new, additive surface that can be flag-flipped per request
+without touching the streaming investigation flow demos depend on.
+
+8 new integration tests (`services/agents/tests/test_triage_endpoint.py`)
+cover env-flag flip, body override, end-to-end fan-out through the
+parallel topology, the auto-close short-circuit when classifier signals
+are empty, 404 on unknown `run_id`, and minimal-body coercion. They shim
+the sub-agent runners + `_emit_event` via `monkeypatch` (same pattern as
+`test_orchestrator_parallel.py`) so the tests are hermetic — no Kafka,
+no LLM, no graph. Existing `test_orchestrator_parallel.py` (17 tests) is
+unchanged and still green.
+
 ### Attack-chain timeline UI (T3.3, v8.0)
 
 `/cases/{id}` now ships an **Attack Chain** tab that visualises the ranked
