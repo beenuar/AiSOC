@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bump `@vitejs/plugin-react` 4.7.0 → 6.0.2 in `apps/web`
+
+Dev-only dependency upgrade (PR [#178](https://github.com/beenuar/AiSOC/pull/178)).
+`@vitejs/plugin-react@6` is built against vite@8, while vitest@4 (landed in
+PR #179) still ships its own internal vite@7. pnpm resolves both side-by-side
+without conflict: vitest@4 uses vite@7 for the test runtime, and `react()` is
+loaded from the vite@8-flavoured build of the plugin. Vitest is tolerant of
+the plugin API surface across vite 5/6/7/8, so `apps/web/vitest.config.ts`
+needed no further changes after the cast we already removed in #179.
+
+No production code touched. Locally verified: web 349/349 tests pass, lint
+remains at 0 errors / 76 warnings (unchanged baseline), `tsc --noEmit` clean,
+production build succeeds.
+
 ### Bump `vitest` 2.1.9 → 4.1.6 across the workspace
 
 Dev-only dependency upgrade (PR [#179](https://github.com/beenuar/AiSOC/pull/179))
