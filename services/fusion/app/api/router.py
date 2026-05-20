@@ -56,6 +56,33 @@ async def trigger_retrain():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Synchronous fusion entrypoint (Issue #190)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.post("/process", response_model=FusedAlert)
+async def process_alert(alert: RawAlert) -> FusedAlert:
+    """Run a single ``RawAlert`` through the full fusion pipeline.
+
+    The Kafka consumer path (``FusionWorker``) is still the production
+    ingest route; this synchronous HTTP entrypoint exists so other
+    services — notably the agents service's ``DetectAgent`` — can drive
+    the fusion pipeline directly without standing up a Kafka producer,
+    and so the contract is testable from a regular HTTP client.
+
+    Behaviour matches the Kafka path exactly: the same ``FusionEngine``
+    instance is reused (``_worker_ref.engine``), so deduplication,
+    correlation, ML scoring, confidence labelling, RBA rollups, and
+    narrative generation all run with the same state as the live
+    consumer. A duplicate alert returns a ``FusionDecision.DUPLICATE``
+    envelope; a new alert returns a fully scored ``FusedAlert``.
+    """
+    if _worker_ref is None or _worker_ref.engine is None:
+        raise HTTPException(status_code=503, detail="Fusion worker not ready")
+    return await _worker_ref.engine.process(alert)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Risk-Based Alerting (entity rollup)
 # ─────────────────────────────────────────────────────────────────────────────
 
