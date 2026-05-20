@@ -199,12 +199,17 @@ jobs:
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
         run: python -m pytest tests/ -v --tb=short
-      - name: Run agents unit tests (Pillar-1 eval suites + audit helpers)
+      - name: Run agents unit tests (Pillar-1 eval suites + audit helpers + fusion client)
         # `test_audit_helpers.py` imports `app.investigator.state` directly
         # (it stubs out the package __init__ to avoid pulling in LangGraph),
         # so it only needs stdlib + pydantic — already installed via API_DEPS.
+        # `test_fusion_client.py` (Issue #190) exercises the thin httpx
+        # client that wires `DetectAgent.process` to the fusion service's
+        # `POST /process` endpoint; it mocks the network with respx so the
+        # suite stays offline-safe, and it only imports `app.tools.fusion`
+        # (no LangGraph), so no extra runtime deps beyond httpx+respx.
         run: |
-          pip install --quiet pytest pytest-asyncio
+          pip install --quiet pytest pytest-asyncio respx
           cd services/agents
           python3 -m pytest \
             tests/test_mitre_accuracy.py \
@@ -212,16 +217,20 @@ jobs:
             tests/test_investigation_completeness.py \
             tests/test_response_quality.py \
             tests/test_audit_helpers.py \
+            tests/test_fusion_client.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────
   # Python micro-services unit tests
   #   `services/fusion`, `services/honeytokens`, and `services/purple-team`
   #   used to ship with no Python tests gated in CI at all — only ruff +
-  #   format check. These suites cover the *pure* helpers in each service
+  #   format check. These suites cover the pure helpers in each service
   #   (alert fingerprinting/correlation keys, honeytoken generators,
-  #   ATT&CK coverage matrix builder) — they need pydantic/pydantic-settings
-  #   only, no Postgres, Redis, or Kafka. Real signal, fast.
+  #   ATT&CK coverage matrix builder) plus the thin FastAPI router contracts
+  #   that don't need Postgres / Kafka / Redis to exercise (e.g. the
+  #   fusion service's ``POST /process`` endpoint added in Issue #190,
+  #   which uses an injected fake worker via ``set_worker(...)``). Real
+  #   signal, fast — no service boot required.
   # ──────────────────────────────────────────────
   python-services-test:
     name: Python — Service unit tests (fusion, honeytokens, purple-team)
@@ -234,7 +243,13 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Install minimal deps
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis
+        # ``fastapi`` + ``httpx`` are required by the fusion router-contract
+        # tests (Issue #190): they import ``app.api.router`` and drive it
+        # with FastAPI's ``ASGITransport`` + ``httpx.AsyncClient``. We
+        # deliberately do NOT install the full API dep set here — the goal
+        # of this job stays "pure helpers + thin router contracts, no
+        # service boot, no Postgres/Kafka/Redis".
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx
       - name: Run fusion unit tests
         working-directory: services/fusion
         run: python -m pytest tests/ -v --tb=short
