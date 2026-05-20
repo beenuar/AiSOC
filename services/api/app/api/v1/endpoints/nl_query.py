@@ -27,7 +27,6 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, status
@@ -36,6 +35,12 @@ from pydantic import BaseModel, Field
 from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
+from app.services.esql_runner import (
+    ESQLExecutionError,
+    ESQLNotConfigured,
+    resolve_es_credentials,
+    run_esql_query,
+)
 
 if TYPE_CHECKING:
     # Static-only re-export so type checkers can see the dataclass fields and
@@ -142,29 +147,6 @@ if not TYPE_CHECKING:
     deterministic_translate = _nl_query.translate
 
 router = APIRouter(prefix="/nl-query", tags=["nl_query"])
-
-
-def _validate_es_url(url: str) -> str:
-    """Validate *url* against the configured Elasticsearch/OpenSearch host.
-
-    Raises ValueError if the host or scheme does not match, preventing SSRF.
-    Returns a *reconstructed* URL built solely from the validated scheme and
-    netloc — this discards any user-supplied path/query components so that
-    CodeQL's taint tracking does not flag the returned value as tainted.
-    """
-    allowed_raw = (
-        getattr(settings, "ES_URL", None)
-        or getattr(settings, "ELASTICSEARCH_URL", None)
-        or getattr(settings, "OPENSEARCH_URL", "http://localhost:9200")
-    )
-    allowed = urlparse(allowed_raw)
-    candidate = urlparse(url)
-    if candidate.scheme not in ("http", "https"):
-        raise ValueError(f"Unsupported URL scheme: {candidate.scheme!r}")
-    if candidate.netloc != allowed.netloc:
-        raise ValueError(f"ES URL host {candidate.netloc!r} is not the configured host {allowed.netloc!r}")
-    # Reconstruct from validated components only — no user-supplied path/query.
-    return f"{candidate.scheme}://{candidate.netloc}"
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -280,37 +262,30 @@ async def _translate(
 
 
 async def _execute_esql(esql: str, es_url: str, es_api_key: str, max_rows: int) -> QueryResult:
-    """Run an ES|QL query against Elasticsearch and return structured results."""
-    # Validate URL against configured host before making any outbound request.
-    try:
-        safe_url = _validate_es_url(es_url)
-    except ValueError as exc:
-        raise httpx.RequestError(str(exc)) from exc
+    """Run an ES|QL query against Elasticsearch and return structured results.
 
-    es_query_url = f"{safe_url.rstrip('/')}/_query"
-    enforce_airgap_for_url(es_query_url)
-
-    # Ensure LIMIT clause
-    query = esql if "| LIMIT" in esql.upper() else f"{esql}\n| LIMIT {max_rows}"
-    import time
-
-    t0 = time.monotonic()
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(
-            es_query_url,
-            headers={
-                "Authorization": f"ApiKey {es_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"query": query},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-    took_ms = int((time.monotonic() - t0) * 1000)
-    columns = [col["name"] for col in data.get("columns", [])]
-    rows = data.get("values", [])
-    return QueryResult(columns=columns, rows=rows, total_rows=len(rows), took_ms=took_ms)
+    Thin adapter around :func:`app.services.esql_runner.run_esql_query` so the
+    request-scoped endpoint and the background hunt scheduler share one code
+    path for the outbound POST, the SSRF guard, the air-gap enforcement, and
+    the LIMIT-clause normalisation.
+    """
+    result = await run_esql_query(
+        esql=esql,
+        es_url=es_url,
+        es_api_key=es_api_key,
+        max_rows=max_rows,
+    )
+    # ``ESQLResult`` exposes the post-LIMIT row list directly; the public
+    # ``QueryResult`` schema carries an explicit ``total_rows`` for legacy
+    # API consumers, but it's always ``len(rows)`` after the runner has
+    # enforced the cap (Elasticsearch doesn't return a row total for ES|QL,
+    # and we don't run a second count query just to populate the field).
+    return QueryResult(
+        columns=result.columns,
+        rows=result.rows,
+        total_rows=len(result.rows),
+        took_ms=result.took_ms,
+    )
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -354,11 +329,6 @@ async def execute_query(
 ) -> NLQueryExecuteResponse:
     translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
 
-    # Always read the ES URL from server-side settings — never from user-supplied
-    # body fields — to prevent partial-SSRF attacks (CodeQL py/partial-ssrf).
-    es_url = getattr(settings, "ES_URL", None) or getattr(settings, "ELASTICSEARCH_URL", None)
-    es_api_key = body.es_api_key or getattr(settings, "ES_API_KEY", None)
-
     base = NLQueryExecuteResponse(
         request_id=uuid.uuid4(),
         question=body.question,
@@ -371,8 +341,13 @@ async def execute_query(
         grammar_validated=True,
     )
 
-    if not es_url or not es_api_key:
-        base.execution_error = "ES_URL or ES_API_KEY not configured. Set them in environment variables or pass in the request body."
+    # Always resolve the ES URL from server-side settings — never from
+    # user-supplied body fields — to prevent partial-SSRF attacks
+    # (CodeQL py/partial-ssrf).
+    try:
+        es_url, es_api_key = resolve_es_credentials()
+    except ESQLNotConfigured:
+        base.execution_error = "ES_URL or ES_API_KEY not configured. Set them in environment variables."
         return base
 
     try:
@@ -391,6 +366,8 @@ async def execute_query(
         # Should never happen — every translator output is validated — but if a
         # caller somehow passes through a hand-edited query we want a clean error.
         base.execution_error = f"Refusing to execute malformed ES|QL: {exc}"
+    except ESQLExecutionError as exc:
+        base.execution_error = str(exc)
     except httpx.HTTPStatusError as exc:
         base.execution_error = f"ES query failed ({exc.response.status_code}): {exc.response.text[:500]}"
     except Exception as exc:

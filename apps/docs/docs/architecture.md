@@ -48,9 +48,10 @@ step against a case and replayable in the UI), the **Ambient Copilot**
 playbooks), the **Responder PWA** (passkey-only mobile route at
 `/responder/*` with VAPID Web Push), the **public eval harness** (one
 real measurement plus three substrate self-consistency gates, run in CI),
-the **MCP server** (`@aisoc/mcp`, exposes 11 tools to Claude / Cursor /
-Continue / Cody), and the **click-and-connect connector platform** (next
-section).
+the **MCP server** (`@aisoc/mcp`, exposes 13 tools to Claude / Cursor /
+Continue / Cody — including the warm-tier `aisoc_lake_query` /
+`aisoc_lake_schema` pair, gated by the `lake:query` permission), and the
+**click-and-connect connector platform** (next section).
 
 Additional capabilities introduced in 2026 H2:
 
@@ -226,7 +227,7 @@ AiSOC/
 | `purple-team` | 8006 | Python | ART YAML parser, Caldera executor, ATT&CK heatmap, **detection drift snapshots** |
 | `connectors` | — | Python | Connector polling (APScheduler), credential vault (`CredentialVault`), registry-based discovery — **50 vendors shipped** across EDR / SIEM / cloud / IAM / SaaS / network / email |
 | `demo-producer` | — | Python | Synthetic event generator for demos and evaluation |
-| `mcp` | n/a | TypeScript | Model Context Protocol stdio server, 11 tools for IDE-side agents (Claude / Cursor / Continue / Cody) |
+| `mcp` | n/a | TypeScript | Model Context Protocol stdio server, 13 tools for IDE-side agents (Claude / Cursor / Continue / Cody) — discovery, deep-dive, action/replay, and the warm-tier lake query pair |
 | `osquery-tls` | 8443 | Go | TLS server implementing osquery's enrol/config/distributed/log endpoints; ships normalised host events into `ingest` |
 | `osquery-extensions` | — | Go | Out-of-band osquery extensions registering custom virtual tables and decorators consumed by `osquery-tls` |
 | `slack-bot` | — | Python | ChatOps surface: posts approval prompts, exposes `/aisoc` slash command, verifies inbound interactions with HMAC-signed Slack request signatures |

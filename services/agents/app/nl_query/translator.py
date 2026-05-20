@@ -887,7 +887,7 @@ async def enhance_with_llm(
         import json
         import textwrap
 
-        import httpx  # local import — keeps the offline path zero-dependency
+        from app.llm.contract import safe_chat_completions_request
 
         prompt = textwrap.dedent(
             f"""
@@ -900,25 +900,19 @@ async def enhance_with_llm(
             """
         ).strip()
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": model,
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0,
-                    "messages": [
-                        {"role": "system", "content": "You translate security questions into queries."},
-                        {"role": "user", "content": prompt},
-                    ],
-                },
-            )
-        if resp.status_code != 200:
-            logger.info("nl_query LLM call failed: status=%s", resp.status_code)
-            return deterministic
+        messages = [
+            {"role": "system", "content": "You translate security questions into queries."},
+            {"role": "user", "content": prompt},
+        ]
 
-        payload = resp.json()
+        payload = await safe_chat_completions_request(
+            api_key=api_key,
+            model=model,
+            messages=messages,
+            timeout=timeout,
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
         content = payload["choices"][0]["message"]["content"]
         parsed = json.loads(content)
         esql = str(parsed.get("esql", "")).strip()

@@ -76,7 +76,7 @@ Print these as JSON any time with `npx @aisoc/mcp install --list-paths`.
 
 ## Tools exposed
 
-The server advertises **11 tools**. Discovery tools list things, deep-dive tools fetch one thing, and the action / replay tools are what make AiSOC interesting:
+The server advertises **13 tools**. Discovery tools list things, deep-dive tools fetch one thing, the lake-query pair lets agents run governed SELECTs over the warm tier, and the action / replay tools are what make AiSOC interesting:
 
 | Tool | Purpose |
 |---|---|
@@ -88,6 +88,8 @@ The server advertises **11 tools**. Discovery tools list things, deep-dive tools
 | `aisoc_get_detection_rule` | Inspect a single rule (logic, fixtures, FP notes). |
 | `aisoc_list_investigations` | Page through agent investigation runs. |
 | `aisoc_get_investigation` | Run summary (status, duration, agents involved, cost). |
+| `aisoc_lake_schema` | Discover allowlisted tables and column names in the warm tier — call this *before* `aisoc_lake_query` so the agent doesn't guess column names. |
+| `aisoc_lake_query` | Run a read-only SELECT against the warm tier (lake). Per-tenant RLS, row caps, and the `lake:query` permission are enforced server-side. |
 | **`aisoc_run_investigation`** | Kick off the agent on a case and stream events back. |
 | **`aisoc_replay_decision`** | Walk the agent ledger step-by-step (recon, forensic, responder, reporter). |
 | **`aisoc_explain_step`** | Why-did-the-agent-do-this for a single step: prompt, response, tool I/O. |
