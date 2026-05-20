@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { AttackChainTimeline, Case } from '@/lib/api';
 
 // We mock SWR rather than the real network layer so the test stays
@@ -254,6 +254,18 @@ describe('CaseWorkspace', () => {
       expect(screen.getByText('T1021.002')).toBeInTheDocument();
     });
 
+    // Helper: read the active window from the WindowSelector. The UI is a
+    // segmented button group (role=group, buttons with aria-pressed) rather
+    // than a <select>, so we resolve the active choice by looking inside the
+    // labelled group for the lone button with aria-pressed="true".
+    const readActiveWindow = (): string | null => {
+      const group = screen.getByLabelText(/attack chain time window/i);
+      const pressed = within(group).getAllByRole('button', { pressed: true });
+      // The component invariant is exactly one option pressed at a time.
+      expect(pressed).toHaveLength(1);
+      return pressed[0]?.textContent?.replace(/\s+/g, '') ?? null;
+    };
+
     it('honors the ?window=… deep link on first render', () => {
       // Regression for PR #145 review: the changelog claims the window
       // selection survives reload via ?window=…. Mount with both the
@@ -269,8 +281,7 @@ describe('CaseWorkspace', () => {
       // panel state, the selector reading 72h proves the URL value
       // flowed through `initialWindow` into the state — which in turn
       // is what SWR keys the fetch on.
-      const selector = screen.getByLabelText(/attack chain time window/i) as HTMLSelectElement;
-      expect(selector.value).toBe('72h');
+      expect(readActiveWindow()).toBe('72h');
     });
 
     it('falls back to the 24h default when ?window=… is missing or unknown', () => {
@@ -281,8 +292,7 @@ describe('CaseWorkspace', () => {
       swrState.attackChainData = null;
 
       const { unmount } = render(<CaseWorkspace caseId="INC-001" />);
-      let selector = screen.getByLabelText(/attack chain time window/i) as HTMLSelectElement;
-      expect(selector.value).toBe('24h');
+      expect(readActiveWindow()).toBe('24h');
       unmount();
 
       // An obviously-invalid value must also fall back to the default
@@ -292,8 +302,7 @@ describe('CaseWorkspace', () => {
       swrState.attackChainData = null;
 
       render(<CaseWorkspace caseId="INC-001" />);
-      selector = screen.getByLabelText(/attack chain time window/i) as HTMLSelectElement;
-      expect(selector.value).toBe('24h');
+      expect(readActiveWindow()).toBe('24h');
     });
   });
 });
