@@ -115,9 +115,7 @@ async def test_process_alert_posts_to_root_process_endpoint(
     assert route.called
     # The request body is exactly the raw alert we passed in — the client
     # is a thin pass-through, not a transformer.
-    assert route.calls.last.request.read() == httpx.Request(
-        "POST", f"{fusion_url}/process", json=raw_alert
-    ).read()
+    assert route.calls.last.request.read() == httpx.Request("POST", f"{fusion_url}/process", json=raw_alert).read()
 
 
 async def test_process_alert_forwards_bearer_token(
@@ -162,9 +160,7 @@ async def test_process_alert_no_token_omits_authorization_header(
 
         await process_alert(raw_alert)
 
-    assert "authorization" not in {
-        k.lower() for k in route.calls.last.request.headers
-    }
+    assert "authorization" not in {k.lower() for k in route.calls.last.request.headers}
 
 
 # ---------------------------------------------------------------------------
