@@ -7,6 +7,187 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bump `vitest` 2.1.9 → 4.1.6 across the workspace
+
+Dev-only dependency upgrade (PR [#179](https://github.com/beenuar/AiSOC/pull/179))
+across `apps/web`, `packages/sdk-ts`, and `services/mcp`. Vitest v3 and v4
+introduced two breaking changes that surfaced in our suite:
+
+* **`vitest/config` no longer exports `UserConfig`.** `apps/web/vitest.config.ts`
+  used `import('vitest/config').UserConfig['plugins']` to bridge the vitest@2
+  (vite@5 types) ↔ `@vitejs/plugin-react@4` (vite@7 types) version mismatch. In
+  vitest@4 both packages target vite@7, so the bridging cast is gone and
+  `react()` is consumed directly.
+* **`global` is no longer in the default DOM lib in `@vitest/runner`'s typing.**
+  `packages/sdk-ts/src/client.test.ts` referenced the Node global namespace via
+  `(global.fetch as ...)`; it now uses `globalThis.fetch`, which is the
+  cross-runtime idiom and was already what every other test in the SDK suite
+  used. No runtime behaviour change — `global === globalThis` in Node.
+
+Verified locally: SDK 9/9 tests pass, web 349/349 tests pass, web lint stays at
+0 errors (warning count unchanged from PR #193's baseline). No production code
+touched, no behavioural change to the published `@aisoc/sdk` package or to the
+shipped web bundle.
+
+### Wire `DetectAgent.process` to `FusionEngine` via cross-service HTTP (Issue #190)
+
+Closes [#190](https://github.com/beenuar/AiSOC/issues/190).
+
+Closes the missing edge in the four-agent façade: `DetectAgent` previously
+self-described as the public detection surface but had no synchronous entry
+point into the fusion pipeline — callers either had to enqueue onto Kafka and
+wait, or reach into `services/fusion` internals directly. This change adds the
+last mile so a raw alert from any caller (LLM tool calls, ad-hoc CLI, the API
+gateway) runs through the same `FusionEngine` instance that backs the Kafka
+consumer path — dedup, correlation, ML scoring, confidence labelling, and RBA
+all apply identically regardless of how the alert arrived.
+
+Three additive pieces, no behavioural changes to existing paths:
+
+* **`POST /process` on the fusion service**
+  (`services/fusion/app/api/router.py`). Accepts a `RawAlert`, returns a
+  `FusedAlert`, and is wired to the already-running `FusionWorker`'s engine
+  instance via the module-level `_worker_ref` the worker registers on startup.
+  Returns `503` when the worker hasn't finished booting (Kafka consumer not
+  yet attached) so callers fail loudly instead of getting a half-initialised
+  pipeline. Lives at the root path — the router is mounted with no prefix in
+  `services/fusion/app/main.py`.
+* **`services/agents/app/tools/fusion.py`** — thin async HTTP client used by
+  the agents service. Posts to `{FUSION_SERVICE_URL}/process` (defaults to
+  `http://fusion:8003/process` inside the docker-compose network), forwards
+  an optional bearer token, and **raises** on any non-2xx or transport error.
+  This is a deliberate contrast with `app.tools.graph`, which degrades
+  gracefully for investigation queries: fusion is the primary detection
+  plane, so a silent fallback here would lose alerts.
+* **`DetectAgent.process(raw_alert, *, api_token=None)`**
+  (`services/agents/app/agents/__init__.py`). Classmethod delegate over the
+  HTTP client — keeps `DetectAgent` import-light (no engine instantiation in
+  the agents process) and preserves the existing back-compat aliases.
+
+Tests lock the contract on both sides. `services/fusion/tests/test_process_endpoint.py`
+exercises the endpoint against an `ASGITransport` + `AsyncClient`: novel
+alerts return a `NEW_INCIDENT` envelope, replays return `DUPLICATE`, an
+unwired worker yields `503`, a worker without an engine yields `503`,
+malformed and bad-severity payloads return `422`, and a regression guard
+asserts the endpoint and worker share the same `FusionEngine` instance.
+`services/agents/tests/test_fusion_client.py` uses `respx` to lock the
+client wiring: it must post to `/process` (not `/api/fusion/process` — that
+mismatch was caught and fixed during initial wiring), the Authorization
+header is set if and only if a token is supplied, `httpx.HTTPStatusError`
+propagates on 503/422, and `httpx.HTTPError` propagates on transport
+failures. A final trio of tests pins `DetectAgent.process` as a faithful
+delegate to the client (args pass through unchanged, errors propagate, no
+swallowed exceptions).
+
+No feature flag and no env gate: the wiring is purely additive — no existing
+caller of the fusion service or the agents service changes shape, and the new
+endpoint/method only fire when something explicitly invokes them.
+
+### Cross-tenant RBAC regression suite (F013, security)
+
+Closes [#159](https://github.com/beenuar/AiSOC/issues/159).
+
+Pure-unit isolation suites that exercise the tenant boundary at the
+endpoint-function level (no live DB, no FastAPI request cycle) so the
+contract is testable in milliseconds and survives ORM churn:
+
+- `services/api/tests/test_threat_intel_tenant_isolation.py` — IOC,
+  actor, and feed list/get/create/delete are scoped by `tenant_id`,
+  cross-tenant lookups resolve to 404, and writes attach
+  `current_user.tenant_id` even when the payload smuggles a different
+  one.
+- `services/api/tests/test_alerts_tenant_isolation.py` — every
+  read/write/queue/claim path on `/alerts` binds `tenant_id` into the
+  compiled SQL or forwards it to the service layer
+  (`build_queue` / `claim_alert`).
+- `services/api/tests/test_llm_credentials_tenant_isolation.py` —
+  BYOK credential GET/PUT/DELETE scope by `tenant_id`, new rows bind
+  the caller's tenant, and `emit_audit` is invoked with the caller's
+  tenant + actor (`CredentialVault` is stubbed so the assertions are
+  on the persistence boundary, not crypto).
+
+Assertions read the *compiled* SQL bind parameters rather than the
+shape of any single query so they don't break on benign rewrites. All
+three suites were mutation-tested by temporarily dropping the
+`tenant_id` predicate in the corresponding endpoint — every dropped
+predicate produced at least one failing test, confirming the suites
+are wired to the right surface.
+
+`.github/workflows/cross-tenant-rbac.yml` runs the three suites
+nightly on `main` (06:30 UTC, ahead of `compose-smoke-nightly` so a
+tenant boundary regression shows up as the first nightly signal) and
+on-demand via `workflow_dispatch`. On failure it uploads a JUnit
+report and opens a `security`-labelled tracking issue.
+
+### Attack-chain timeline UI (T3.3, v8.0)
+
+`/cases/{id}` now ships an **Attack Chain** tab that visualises the ranked
+timeline returned by `/v1/cases/{id}/attack-chain` (shipped earlier under
+`8df637b9`). The new `AttackChainPanel` in
+`apps/web/src/components/cases/CaseWorkspace.tsx`:
+
+- Window selector with the same vocabulary as the backend `WindowLiteral`
+  (`1h`, `6h`, `24h`, `72h`, `7d`, `30d`) — selection is deep-linkable via
+  `?window=…` and survives reload.
+- One card per `ChainLink` with the alert title, severity chip (driven by
+  the canonical 5-tier ladder `info | low | medium | high | critical`),
+  confidence percent, MITRE technique IDs, and the deterministic narrative
+  reason emitted by `services/api/app/services/attack_chain.py`.
+- Entity-graph summary panel — node count grouped by `kind` (`user`,
+  `asset`, `process`, `ip`, `domain`, `alert`), top edges, and a per-node
+  severity chip when present in `_entity_graph_payload`.
+- SWR-keyed on `(case_id, window)` with skeleton, error, and empty states
+  that match the rest of the case workspace.
+- New `casesApi.getAttackChain` method + `AttackChainTimeline`,
+  `AttackChainWindow`, `AttackChainLink`, `AttackChainEntityNode`,
+  `AttackChainEntityEdge`, `BackendAttackChainResponse` types in
+  `apps/web/src/lib/api.ts`. The wire format matches the backend `to_dict`
+  shape exactly (node `kind` rather than `type`; optional `severity` and
+  `event_time` from `_entity_graph_payload`).
+- Coverage in `apps/web/src/components/cases/CaseWorkspace.test.tsx`:
+  empty-state, error-state, and three data-rendering assertions
+  (alert titles, confidence percent, MITRE techniques). The SWR mock is now
+  key-aware so attack-chain and attack-path fetches stay isolated, and
+  `useSearchParams` is stateful so window-selection deep-links round-trip
+  cleanly under test. The `WindowSelector` is a labelled
+  `role="group"` of buttons with `aria-pressed`, so deep-link assertions
+  resolve the active option via the single pressed button inside the
+  group rather than a non-existent `<select>` value.
+
+Closes the UI side of T3.3 in `AISOC_V8_PROGRESS.md`. Pre-existing
+non-blocking lint warnings in `CaseWorkspace.tsx` are unchanged by this
+diff.
+
+### LLM input contract — static regression gate (T2.3, v8.0)
+
+Closes T2.3 by adding the missing **bypass-prevention** layer on top of the
+existing fail-closed validator (`services/agents/app/llm/contract.py`). Two
+new test files in `services/agents/tests/`:
+
+- `test_llm_contract_extra.py` (10 cases) — fills the coverage gaps in the
+  shipped contract: `safe_astream` validates messages exactly once and
+  refuses to yield any chunk on violation; `make_safe_chat_model` proxies
+  non-LLM attributes through but routes `ainvoke` / `astream` through
+  validation; `classify_message` rejects `api_key = '...'` assignments and
+  PEM private-key headers; `set_contract_enforcement(False)` lets raw OCSF
+  through in soft mode and re-arms cleanly when flipped back to `True`.
+- `test_llm_contract_no_bypass.py` (3 cases) — **AST-based static gate**
+  that walks every `*.py` file under `services/agents/app/` and fails CI on
+  any direct `.ainvoke(...)` / `.astream(...)` call whose receiver is not on
+  an explicit allowlist (`_graph`, `investigation_graph`, `graph` — all
+  LangGraph control-flow handles, not LLMs) or whose file is not the
+  contract module itself. Ships with self-tests proving (a) a synthetic
+  `llm.ainvoke(...)` bypass trips the detector and (b) allowlisted
+receivers do not. Adding a new agent that calls a chat model directly
+now fails the build until it routes through `safe_ainvoke` /
+`safe_astream` / `make_safe_chat_model`.
+
+The survey behind this gate confirmed every existing direct chat-model call
+under `services/agents/app/` already goes through the safe wrapper — the
+remaining `.ainvoke` / `.astream` call sites are LangGraph control-flow on
+compiled graphs, which is why those receivers are explicitly allowlisted
+rather than silently ignored.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /

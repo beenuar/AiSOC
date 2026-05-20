@@ -340,3 +340,62 @@ def make_safe_chat_model(llm: Any) -> Any:
             return safe_astream(self._inner, messages, **kwargs)
 
     return _ContractGuardedChatModel(llm)
+
+
+# ---------------------------------------------------------------------------
+# Raw OpenAI-compatible chat-completions HTTP wrapper
+# ---------------------------------------------------------------------------
+
+DEFAULT_OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
+
+
+async def safe_chat_completions_request(
+    *,
+    api_key: str,
+    model: str,
+    messages: Iterable[Any],
+    url: str = DEFAULT_OPENAI_CHAT_COMPLETIONS_URL,
+    timeout: float = 30.0,
+    extra_headers: dict[str, str] | None = None,
+    **extra_body: Any,
+) -> dict[str, Any]:
+    """Validate ``messages`` against the contract, then issue a chat-completions POST.
+
+    Use this for call sites in ``services/agents`` that talk to an
+    OpenAI-compatible chat-completions endpoint over raw HTTP (e.g.
+    ``api/copilot.py``, ``nl_query/translator.py``) instead of LangChain.
+    The contract is enforced **before** the network request, so a
+    violation never leaks log data on the wire.
+
+    Returns the parsed JSON response. Raises:
+
+    * :class:`LLMContractViolation` if any message fails the contract.
+    * ``ValueError`` if ``api_key`` is empty.
+    * ``httpx.HTTPError`` for transport / non-2xx responses (callers
+      decide whether to fall back).
+    """
+    if not api_key:
+        raise ValueError("api_key is required for safe_chat_completions_request")
+
+    materialised = list(messages)
+    LLMInputContract.validate(materialised)
+
+    try:
+        import httpx
+    except ImportError as exc:  # pragma: no cover - httpx is a hard dep
+        raise RuntimeError("httpx is required for safe_chat_completions_request") from exc
+
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+
+    body: dict[str, Any] = {"model": model, "messages": materialised}
+    body.update(extra_body)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(url, headers=headers, json=body)
+        resp.raise_for_status()
+        return resp.json()

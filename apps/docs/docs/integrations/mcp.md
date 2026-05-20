@@ -61,7 +61,7 @@ If the assistant asks for permission to call `aisoc_*` tools, that's expected â€
 
 ## Tools exposed
 
-The server advertises **11 tools** to your assistant. Discovery tools list things, deep-dive tools fetch one thing, and the action / replay tools are what make AiSOC interesting:
+The server advertises **13 tools** to your assistant. Discovery tools list things, deep-dive tools fetch one thing, the lake-query pair lets agents run governed SELECTs over the warm tier, and the action / replay tools are what make AiSOC interesting:
 
 ```mermaid
 graph LR
@@ -70,6 +70,7 @@ graph LR
     A2[aisoc_list_cases]
     A3[aisoc_query_detections]
     A4[aisoc_list_investigations]
+    A5[aisoc_lake_schema]
   end
   subgraph Deep-dive
     B1[aisoc_get_alert]
@@ -77,12 +78,16 @@ graph LR
     B3[aisoc_get_detection_rule]
     B4[aisoc_get_investigation]
   end
+  subgraph Lake query
+    D1[aisoc_lake_query]
+  end
   subgraph Action / replay
     C1[aisoc_run_investigation]
     C2[aisoc_replay_decision]
     C3[aisoc_explain_step]
   end
   A2 --> B2 --> C1 --> C2 --> C3
+  A5 --> D1
 ```
 
 | Tool | What it does |
@@ -95,6 +100,8 @@ graph LR
 | `aisoc_get_detection_rule` | Inspect a single rule (logic, fixtures, FP notes). |
 | `aisoc_list_investigations` | Page through agent investigation runs. |
 | `aisoc_get_investigation` | Run summary (status, duration, agents involved, cost). |
+| `aisoc_lake_schema` | Discover allowlisted tables and column names in the warm tier â€” call this *before* `aisoc_lake_query` so the agent doesn't guess column names. |
+| `aisoc_lake_query` | Run a read-only SELECT against the warm tier (lake). Per-tenant RLS, row caps, and the `lake:query` permission are enforced server-side. |
 | **`aisoc_run_investigation`** | Kick off the agent on a case and stream events back. |
 | **`aisoc_replay_decision`** | Walk the agent ledger step-by-step (recon, forensic, responder, reporter). |
 | **`aisoc_explain_step`** | Why-did-the-agent-do-this for a single step: prompt, response, tool I/O. |

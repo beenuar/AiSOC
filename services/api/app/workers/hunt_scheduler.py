@@ -45,15 +45,21 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.airgap import AirgapViolation
 from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.models.case import Case
 from app.models.saved_hunt import SavedHunt
+from app.services.esql_runner import (
+    ESQLExecutionError,
+    ESQLNotConfigured,
+    resolve_es_credentials,
+    run_esql_query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +171,7 @@ async def _open_case_for_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int)
         case_number=f"HUNT-{hunt.id.hex[:8].upper()}-{int(datetime.now(UTC).timestamp())}",
         title=f"Scheduled hunt fired: {hunt.name}",
         description=(
-            f"Saved hunt {hunt.name!r} returned {hit_count} hit(s) on its " f"scheduled run.\n\nOriginal NL question: {hunt.nl_query}"
+            f"Saved hunt {hunt.name!r} returned {hit_count} hit(s) on its scheduled run.\n\nOriginal NL question: {hunt.nl_query}"
         ),
         case_type="hunt_finding",
         priority="medium",
@@ -190,23 +196,61 @@ async def _open_case_for_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int)
 async def _execute_hunt(db: AsyncSession, hunt: SavedHunt) -> int:
     """Run the hunt's translated query and return the hit count.
 
-    The current build does not embed a synchronous Elasticsearch client in
-    the hunt scheduler — query execution lives in
-    ``services.api.app.api.v1.endpoints.nl_query.execute_query`` and
-    requires the request-scope settings + circuit breaker that the worker
-    cannot easily reuse.
+    Uses the shared :mod:`app.services.esql_runner` so the scheduler
+    and the request-scoped ``/nl-query/execute`` endpoint share one
+    code path for the outbound POST, the SSRF guard, and the air-gap
+    enforcement.
 
-    For T3.4 the worker therefore returns ``0`` (no hits) — the schedule
-    sweep, ``last_run_at`` bookkeeping, and case-open hook are all wired
-    and exercised by tests, but no cases are opened in production until
-    the follow-up swap-in below.
+    Falls back to ``0`` hits (and logs at ``info``) when:
 
-    # TODO(T3.4-followup): once the nl_query executor grows a
-    # background-friendly entry point (no FastAPI deps), call it here
-    # and return the row count. Until then a zero-result run is the
-    # safest default — it won't paper over a real "no events" outcome.
+    * The saved hunt has no translated ES|QL stored. A NL question
+      that never produced a deterministic translation can still be
+      saved as a draft; on schedule we just skip it rather than
+      re-running the translator (LLM enhancement, network, retries —
+      not the worker's job).
+    * Elasticsearch credentials aren't configured. The worker stays
+      quiet in self-hosted dev where ES isn't wired up, and only
+      logs once per missing-credentials run.
+
+    Raises Elasticsearch transport / air-gap errors back to the caller,
+    where ``run_once`` records them via ``logger.exception`` and skips
+    the ``last_run_at`` bump so the hunt retries on the next tick.
     """
-    return 0
+    _ = db  # unused — kept in the signature for future hunt-specific reads
+    esql = (hunt.translated_query or {}).get("esql") if isinstance(hunt.translated_query, dict) else None
+    if not esql:
+        logger.info(
+            "hunt_scheduler.execute_skip hunt_id=%s reason=no_translated_esql",
+            hunt.id,
+        )
+        return 0
+
+    try:
+        es_url, es_api_key = resolve_es_credentials()
+    except ESQLNotConfigured:
+        logger.info(
+            "hunt_scheduler.execute_skip hunt_id=%s reason=es_not_configured",
+            hunt.id,
+        )
+        return 0
+
+    try:
+        result = await run_esql_query(
+            esql=esql,
+            es_url=es_url,
+            es_api_key=es_api_key,
+            max_rows=int(getattr(settings, "HUNT_SCHEDULER_MAX_ROWS", 500)),
+        )
+    except (AirgapViolation, ValueError, ESQLExecutionError) as exc:
+        # Let ``run_once`` mark this tick as failed and retry next sweep.
+        logger.warning(
+            "hunt_scheduler.execute_failed hunt_id=%s err=%s",
+            hunt.id,
+            type(exc).__name__,
+        )
+        raise
+
+    return len(result.rows)
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +358,3 @@ __all__ = [
     "_interval_seconds_for",
     "_open_case_for_hits",
 ]
-
-
-def _settings_unused() -> Any:  # pragma: no cover - guard for unused-import
-    return settings

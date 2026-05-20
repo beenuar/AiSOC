@@ -121,9 +121,9 @@ async def _get_openai_reply(
         return _synthetic_reply(user_message)
 
     try:
-        import httpx
+        from app.llm.contract import safe_chat_completions_request
 
-        messages = [
+        messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": (
@@ -138,14 +138,13 @@ async def _get_openai_reply(
             messages.append({"role": m["role"], "content": m["content"]})
         messages.append({"role": "user", "content": user_message})
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"model": "gpt-4o-mini", "messages": messages, "max_tokens": 512},
-            )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=512,
+        )
+        return body["choices"][0]["message"]["content"]
     except Exception as exc:
         logger.warning("copilot.openai_error", error=str(exc))
         return _synthetic_reply(user_message)

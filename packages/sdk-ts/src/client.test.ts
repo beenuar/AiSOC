@@ -60,7 +60,7 @@ describe("alerts", () => {
     mockFetch({ items: [], total: 0, page: 1, pageSize: 20 });
     const client = makeClient();
     await client.alerts.list({ severity: "critical", status: "open", page: 2 });
-    const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
     expect(url).toContain("severity=critical");
     expect(url).toContain("status=open");
     expect(url).toContain("page=2");
