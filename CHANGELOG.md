@@ -42,6 +42,52 @@ enforcement, error wrapping) plus 9 dedicated `_execute_hunt` tests in
 with row count, three error-propagation paths). The existing
 saved-hunts endpoint + tenant isolation suites (47 tests) continue to
 pass unmodified.
+### `/investigate` endpoint swap behind feature flag (T2.2, v8.0)
+
+`services/agents/app/api/investigate.py` now picks an orchestrator per call
+based on the `AISOC_INVESTIGATE_USE_ROUTER` environment flag (default off).
+When unset, the endpoint behaves exactly as before and routes through
+`InvestigatorOrchestrator.stream()`. When set to a truthy value
+(`1` / `true` / `yes` / `on` / `enabled`, case-insensitive, whitespace
+tolerated), the same case streams through the four-agent
+`RouterOrchestrator` via the new `stream_kwargs()` adapter. The flag is
+read at call time, not import time, so operators can cut traffic over
+gradually — or roll back — without bouncing the agents service. Both the
+HTTP POST path (`_run_and_store`) and the WebSocket path
+(`stream_investigation`) share the same dispatcher, so case storage and
+live streaming stay in lockstep.
+
+`RouterOrchestrator` grew an investigator-compatible adapter:
+`stream_kwargs(case_id, alert_summary, raw_alert, tenant_id, run_id=None)`.
+It coerces string case / tenant / run IDs into UUIDs deterministically
+(`uuid5` against a fixed namespace, so the same `case_id` always maps to
+the same UUID across processes), constructs an `InvestigationState`, and
+proxies to `stream()`. The adapter normalises three event-shape gaps so
+the existing consumer code in `app.api.investigate` doesn't have to
+branch on orchestrator type: `step` events are enriched with the
+case / run IDs, `kind`, `node`, and `ts` fields the investigator path
+emits; a `done` event whose `state.status == FAILED` is rewritten as an
+explicit `{"type": "error"}` event (and the original `done` is
+suppressed) so endpoint error handling fires identically to the
+investigator path; and a stray `alert_text=` typo in the original draft
+was caught and fixed — the internal state is now populated via
+`alert_summary=`, matching the field actually defined on
+`InvestigationState`.
+
+Coverage: `services/agents/tests/test_investigate_router_flag.py` (27
+tests) pins the dispatcher — flag parsing including case/whitespace
+edge cases, orchestrator selection per call, parameter pass-through,
+flag-read-at-call-time semantics (so flipping the env var mid-process
+takes effect on the next call), module-singleton stability, and
+defensive guards around `run_id` being `None` vs. `UUID`.
+`services/agents/tests/test_orchestrator_router_stream_kwargs.py`
+covers the adapter end-to-end: event-shape parity with the
+investigator (`step` enrichment with `case_id` / `run_id` / `kind` /
+`node` / `ts`), error synthesis from failed `done` events, ID
+coercion determinism, and that `alert_summary` actually lands on
+the inner state. Combined with the existing router and report
+suites, all 55 router-adjacent tests stay green.
+
 ### Router orchestrator gains streaming + ledger + report (T2.2, v8.0)
 
 `RouterOrchestrator` (`services/agents/app/orchestrator/router.py`) now matches
