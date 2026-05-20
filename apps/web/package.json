@@ -8,7 +8,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -49,7 +49,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "axe-core": "^4.11.4",
-    "eslint": "^10.4.0",
+    "eslint": "^9.39.0",
     "eslint-config-next": "16.2.6",
     "jsdom": "^24.0.0",
     "postcss": "^8.5.15",
