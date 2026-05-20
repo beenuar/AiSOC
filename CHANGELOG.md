@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Cross-tenant RBAC regression suite (F013, security)
+
+Closes [#159](https://github.com/beenuar/AiSOC/issues/159).
+
+Pure-unit isolation suites that exercise the tenant boundary at the
+endpoint-function level (no live DB, no FastAPI request cycle) so the
+contract is testable in milliseconds and survives ORM churn:
+
+- `services/api/tests/test_threat_intel_tenant_isolation.py` — IOC,
+  actor, and feed list/get/create/delete are scoped by `tenant_id`,
+  cross-tenant lookups resolve to 404, and writes attach
+  `current_user.tenant_id` even when the payload smuggles a different
+  one.
+- `services/api/tests/test_alerts_tenant_isolation.py` — every
+  read/write/queue/claim path on `/alerts` binds `tenant_id` into the
+  compiled SQL or forwards it to the service layer
+  (`build_queue` / `claim_alert`).
+- `services/api/tests/test_llm_credentials_tenant_isolation.py` — BYOK
+  credential GET/PUT/DELETE scope by `tenant_id`, new rows bind the
+  caller's tenant, and `emit_audit` is invoked with the caller's
+  tenant + actor (`CredentialVault` is stubbed so the assertions are
+  on the persistence boundary, not crypto).
+
+Assertions read the *compiled* SQL bind parameters rather than the
+shape of any single query so they don't break on benign rewrites. All
+three suites were mutation-tested by temporarily dropping the
+`tenant_id` predicate in the corresponding endpoint — every dropped
+predicate produced at least one failing test, confirming the suites
+are wired to the right surface.
+
+`.github/workflows/cross-tenant-rbac.yml` runs the three suites
+nightly on `main` (06:30 UTC, ahead of `compose-smoke-nightly` so a
+tenant boundary regression shows up as the first nightly signal) and
+on-demand via `workflow_dispatch`. On failure it uploads a JUnit
+report and opens a `security`-labelled tracking issue.
+
 ### Real ES|QL runner for saved-hunt scheduler (T3.4, v8.0)
 
 Replaces the `_execute_hunt` stub in `services/api/app/workers/hunt_scheduler.py`

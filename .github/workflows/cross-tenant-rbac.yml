@@ -1,0 +1,188 @@
+name: Cross-tenant RBAC regression (nightly)
+
+# Nightly, isolation-only regression suite for tenant boundary enforcement.
+#
+# Why a dedicated workflow and not just ci.yml?
+#
+#   * Tenant isolation bugs are silently catastrophic — one missing
+#     ``.where(Model.tenant_id == current_user.tenant_id)`` clause leaks
+#     every other tenant's rows under exactly the SQL that "looks normal"
+#     to a reviewer. We want a focused, named gate that we can point at
+#     when triaging a regression instead of fishing through the 400-line
+#     general-purpose Python test job.
+#   * The suites are pinned to the endpoint functions directly (no
+#     FastAPI request cycle, no live DB) so they're deterministic and
+#     cheap. They are safe to re-run on a tight cron without burning
+#     significant runner minutes.
+#   * `workflow_dispatch` is exposed so a reviewer can trigger the gate
+#     before merging a security-sensitive change to RBAC, audit, or any
+#     ``app/api/v1/endpoints/*.py`` module.
+#
+# What it gates
+#
+#   The three isolation suites verify that, for every read/write/delete
+#   endpoint they cover:
+#
+#     1. The SQL issued against the tenant-scoped table includes a
+#        ``WHERE tenant_id = :tenant_id`` clause bound to the caller's
+#        tenant id (catches "I forgot the .where()" regressions).
+#     2. Writes attach the caller's tenant_id to new rows and ignore any
+#        ``tenant_id`` smuggled in via the request payload (catches
+#        "trust the JSON" regressions).
+#     3. Cross-tenant reads of a known-other-tenant id resolve to 404,
+#        not 200 with another tenant's row (catches forgotten predicate
+#        regressions even when the row physically exists in shared
+#        storage).
+#
+#   The suites are intentionally light on the wire (mocked AsyncSession)
+#   so they hold up against ORM churn — the contract is "every endpoint
+#   that touches tenant-scoped state must bind tenant_id", and the
+#   assertions read the *compiled* SQL bind parameters rather than the
+#   shape of any single query.
+
+on:
+  schedule:
+    # 06:30 UTC — runs before compose-smoke-nightly (09:00 UTC) so any
+    # tenant boundary failure shows up as the *first* nightly signal,
+    # not buried under a downstream compose-smoke failure.
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+    inputs:
+      open_issue_on_failure:
+        description: 'Open a tracking issue if the regression suite fails'
+        type: boolean
+        default: true
+
+concurrency:
+  # One nightly run at a time. If a manual dispatch lands on top of a
+  # scheduled one, queue rather than cancel — a security gate failing
+  # silently because it was cancelled is worse than running twice.
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cross-tenant-isolation:
+    name: pytest — tenant isolation suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      # Read source. Write issues so we can open a tracking issue on
+      # failure. No package or deployment scopes — this gate must not
+      # be able to write any artifact that ships.
+      contents: read
+      issues: write
+
+    env:
+      # Mirror the dependency set used by `python-test` in ci.yml so the
+      # suites can import the real endpoint modules (which transitively
+      # pull in pydantic, sqlalchemy, structlog, jose, …) without us
+      # having to maintain a parallel pin list here.
+      API_DEPS: >-
+        fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+        structlog "python-jose[cryptography]" "passlib[bcrypt]" tenacity pyyaml
+        prometheus-client "opentelemetry-sdk" "opentelemetry-api"
+        "opentelemetry-exporter-otlp-proto-grpc"
+        "opentelemetry-instrumentation-fastapi"
+        "strawberry-graphql[fastapi]"
+        neo4j redis celery httpx aiofiles email-validator PyJWT
+        "sqlglot>=23,<27" aiosqlite
+        pytest pytest-asyncio
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install API dependencies
+        run: pip install --quiet ${{ env.API_DEPS }}
+
+      # Mirror the ci.yml env contract: the FastAPI app reads SECRET_KEY
+      # at import time, and the isolation suites import endpoint modules
+      # transitively. These dummy values keep import-time validators
+      # happy on a fresh runner.
+      - name: Run cross-tenant isolation suites
+        id: pytest
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: |
+          python -m pytest \
+            tests/test_threat_intel_tenant_isolation.py \
+            tests/test_alerts_tenant_isolation.py \
+            tests/test_llm_credentials_tenant_isolation.py \
+            -v --tb=short --maxfail=1 \
+            --junitxml=tenant-isolation.junit.xml
+
+      - name: Upload junit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tenant-isolation-junit-${{ github.run_id }}
+          path: services/api/tenant-isolation.junit.xml
+          retention-days: 30
+          # Don't fail the workflow if pytest failed before the file was
+          # written — the test-run step is the gate, not the artifact.
+          if-no-files-found: ignore
+
+      - name: Record success summary
+        if: success()
+        run: |
+          {
+            echo "## Cross-tenant RBAC regression — green"
+            echo ""
+            echo "All three tenant-isolation suites passed against \`${{ github.sha }}\`."
+            echo ""
+            echo "| suite | role |"
+            echo "|-------|------|"
+            echo "| tests/test_threat_intel_tenant_isolation.py | IOC / actor / feed scoping + write tenant binding |"
+            echo "| tests/test_alerts_tenant_isolation.py | alert list/stats/get/update/escalate/snooze/queue/claim scoping |"
+            echo "| tests/test_llm_credentials_tenant_isolation.py | BYOK credential get/put/delete scoping + audit propagation |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open tracking issue on failure
+        if: failure() && (github.event_name == 'schedule' || github.event.inputs.open_issue_on_failure == 'true')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Cross-tenant RBAC regression (nightly) failed ($(date -u +%Y-%m-%d))"
+          body=$(cat <<EOF
+          The nightly cross-tenant RBAC regression suite failed on \`main\`.
+
+          **Run:** ${RUN_URL}
+          **Commit:** \`${{ github.sha }}\`
+
+          This gate covers tenant-id binding on every read/write/delete
+          endpoint that touches tenant-scoped state in the API service.
+          A failure here means one of the following — in *descending*
+          order of severity — has regressed:
+
+            * A SELECT lost its \`WHERE tenant_id = :tenant_id\` clause.
+            * A write endpoint started honouring \`tenant_id\` from a
+              client-supplied payload instead of \`current_user.tenant_id\`.
+            * A cross-tenant lookup resolved a row instead of returning 404.
+
+          **Triage:**
+            1. Open the run, expand the failing test name.
+            2. Read the assertion message — every isolation assertion
+               quotes the compiled SQL and bound parameters.
+            3. The endpoint module to inspect is named in the test file
+               (\`app/api/v1/endpoints/{threat_intel,alerts,llm_credentials}.py\`).
+
+          Artifact: \`tenant-isolation-junit-${{ github.run_id }}\` (under
+          the run's Artifacts tab) has the machine-readable JUnit report.
+          EOF
+          )
+          gh issue create \
+            --title "${title}" \
+            --body "${body}" \
+            --label "security" \
+            --label "ci" \
+            || echo "::warning::Failed to open tracking issue"
