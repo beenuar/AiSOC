@@ -101,9 +101,7 @@ def patched_orchestrators(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dic
         calls["router"].append(kwargs)
         return _empty()
 
-    monkeypatch.setattr(
-        investigate_mod._orch, "stream", _fake_investigator_stream, raising=True
-    )
+    monkeypatch.setattr(investigate_mod._orch, "stream", _fake_investigator_stream, raising=True)
     monkeypatch.setattr(
         investigate_mod._router_orch,
         "stream_kwargs",

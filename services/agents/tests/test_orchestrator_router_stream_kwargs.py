@@ -57,9 +57,7 @@ SUBAGENT_SLEEP_MS = 5
 # ---------------------------------------------------------------------------
 
 
-def _patch_runners(
-    monkeypatch: pytest.MonkeyPatch, *, auto_close: bool = False
-) -> dict[str, list[str]]:
+def _patch_runners(monkeypatch: pytest.MonkeyPatch, *, auto_close: bool = False) -> dict[str, list[str]]:
     call_log: dict[str, list[str]] = {
         "auto_triage": [],
         "phishing": [],
@@ -169,15 +167,11 @@ def test_stream_kwargs_signature_matches_investigator() -> None:
     """
     inv_params = set(inspect.signature(InvestigatorOrchestrator.stream).parameters)
     inv_params.discard("self")
-    router_params = set(
-        inspect.signature(RouterOrchestrator.stream_kwargs).parameters
-    )
+    router_params = set(inspect.signature(RouterOrchestrator.stream_kwargs).parameters)
     router_params.discard("self")
 
     # Adapter must cover every investigator param. Extras (``topology``) are fine.
-    assert inv_params.issubset(router_params), (
-        f"missing params: {inv_params - router_params}"
-    )
+    assert inv_params.issubset(router_params), f"missing params: {inv_params - router_params}"
 
 
 def test_coerce_uuid_is_deterministic_across_calls() -> None:
@@ -492,9 +486,7 @@ async def test_alert_summary_lands_on_internal_state(
         state.add_finding("auto-closed")
         return state
 
-    monkeypatch.setattr(
-        "app.agents.run_auto_triage", fake_auto_triage, raising=False
-    )
+    monkeypatch.setattr("app.agents.run_auto_triage", fake_auto_triage, raising=False)
     monkeypatch.setattr(
         "app.agents.auto_triage_agent.run_auto_triage",
         fake_auto_triage,
