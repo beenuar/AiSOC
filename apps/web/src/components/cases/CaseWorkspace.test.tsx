@@ -1,22 +1,59 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import type { Case } from '@/lib/api';
+import { render, screen, within } from '@testing-library/react';
+import type { AttackChainTimeline, Case } from '@/lib/api';
 
 // We mock SWR rather than the real network layer so the test stays
 // hermetic and so we can exercise both the loaded and fallback paths.
+// The mock is key-aware so different panels in the workspace (the case
+// header vs the attack-chain panel) can return different shapes.
 const swrState = vi.hoisted(() => ({
-  data: undefined as Case | undefined,
-  error: undefined as Error | undefined,
+  caseData: undefined as Case | undefined,
+  caseError: undefined as Error | undefined,
+  attackChainData: undefined as AttackChainTimeline | null | undefined,
+  attackChainError: undefined as Error | undefined,
+  attackChainLoading: false,
 }));
+
+function isAttackChainKey(key: unknown): boolean {
+  if (Array.isArray(key)) return key[0] === 'case:attack-chain';
+  return false;
+}
+
+function isAttackPathKey(key: unknown): boolean {
+  return typeof key === 'string' && key.startsWith('case:') && key.endsWith(':attack-path');
+}
 
 vi.mock('swr', () => ({
   __esModule: true,
-  default: () => ({
-    data: swrState.data,
-    error: swrState.error,
-    isLoading: !swrState.data && !swrState.error,
-    mutate: vi.fn(async () => undefined),
-  }),
+  default: (key: unknown) => {
+    if (isAttackChainKey(key)) {
+      return {
+        data: swrState.attackChainData,
+        error: swrState.attackChainError,
+        isLoading:
+          swrState.attackChainLoading ||
+          (swrState.attackChainData === undefined && !swrState.attackChainError),
+        mutate: vi.fn(async () => undefined),
+      };
+    }
+    if (isAttackPathKey(key)) {
+      // We don't exercise the attack-path tab in these tests; return an
+      // empty resolved state so it doesn't show a phantom loading skeleton.
+      return {
+        data: null,
+        error: undefined,
+        isLoading: false,
+        mutate: vi.fn(async () => undefined),
+      };
+    }
+    // Default: case workspace fetch.
+    return {
+      data: swrState.caseData,
+      error: swrState.caseError,
+      isLoading: !swrState.caseData && !swrState.caseError,
+      mutate: vi.fn(async () => undefined),
+    };
+  },
 }));
 
 vi.mock('next/link', () => ({
@@ -28,8 +65,10 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const searchParamsState = vi.hoisted(() => ({ params: new URLSearchParams() }));
+
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParamsState.params,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/cases/INC-001',
 }));
@@ -85,8 +124,12 @@ const fakeCase: Case = {
 
 describe('CaseWorkspace', () => {
   beforeEach(() => {
-    swrState.data = fakeCase;
-    swrState.error = undefined;
+    swrState.caseData = fakeCase;
+    swrState.caseError = undefined;
+    swrState.attackChainData = undefined;
+    swrState.attackChainError = undefined;
+    swrState.attackChainLoading = false;
+    searchParamsState.params = new URLSearchParams();
   });
 
   afterEach(() => {
@@ -111,8 +154,8 @@ describe('CaseWorkspace', () => {
   });
 
   it('shows the demo banner when the backend errors out', () => {
-    swrState.data = undefined;
-    swrState.error = new Error('fetch failed');
+    swrState.caseData = undefined;
+    swrState.caseError = new Error('fetch failed');
 
     render(<CaseWorkspace caseId="INC-001" />);
 
@@ -123,5 +166,143 @@ describe('CaseWorkspace', () => {
 
     // …and the demo-mode banner is visible so the analyst knows it's not live data.
     expect(screen.getByText(/demo data — writes disabled/i)).toBeInTheDocument();
+  });
+
+  describe('attack-chain panel', () => {
+    beforeEach(() => {
+      // Force the attack-chain tab to render by setting ?tab=attack-chain.
+      searchParamsState.params = new URLSearchParams('tab=attack-chain');
+    });
+
+    it('renders an empty state when the backend returns no chain', () => {
+      swrState.attackChainData = null;
+
+      render(<CaseWorkspace caseId="INC-001" />);
+
+      expect(screen.getByText(/no attack chain yet/i)).toBeInTheDocument();
+    });
+
+    it('renders an error state when the chain request fails', () => {
+      swrState.attackChainData = undefined;
+      swrState.attackChainError = new Error('boom');
+
+      render(<CaseWorkspace caseId="INC-001" />);
+
+      expect(screen.getByText(/failed to load attack chain/i)).toBeInTheDocument();
+    });
+
+    it('renders chain links, confidence, and entity summary when data is loaded', () => {
+      const now = new Date('2026-05-15T00:00:00Z').toISOString();
+      const timeline: AttackChainTimeline = {
+        caseId: 'INC-001',
+        tenantId: 'tenant-1',
+        window: '24h',
+        seedAlertId: 'alert-seed',
+        chainSignature: 'sig-xyz',
+        confidence: 0.82,
+        generatedAt: now,
+        chain: [
+          {
+            alertId: 'alert-seed',
+            title: 'Seed — Suspicious PowerShell on FIN-WS-01',
+            severity: 'critical',
+            eventTime: now,
+            score: 1.0,
+            distance: 0,
+            dtSeconds: 0,
+            sharedEntities: [],
+            mitreTechniques: ['T1059.001'],
+            connectorType: 'edr',
+            sourceEventIds: ['evt-1'],
+          },
+          {
+            alertId: 'alert-2',
+            title: 'Lateral SMB session to FIN-DB-02',
+            severity: 'high',
+            eventTime: new Date('2026-05-15T00:05:00Z').toISOString(),
+            score: 0.74,
+            distance: 1,
+            dtSeconds: 300,
+            sharedEntities: [{ kind: 'user', value: 'svc-finance' }],
+            mitreTechniques: ['T1021.002'],
+            connectorType: 'edr',
+            sourceEventIds: ['evt-2'],
+          },
+        ],
+        entityGraph: {
+          nodes: [
+            { id: 'alert-seed', kind: 'alert', severity: 'critical', event_time: now },
+            { id: 'alert-2', kind: 'alert', severity: 'high' },
+            { id: 'user:svc-finance', kind: 'user', label: 'svc-finance' },
+          ],
+          edges: [{ source: 'alert-seed', target: 'alert-2', kind: 'shares_entity' }],
+        },
+      };
+      swrState.attackChainData = timeline;
+
+      render(<CaseWorkspace caseId="INC-001" />);
+
+      // Both chain links should render.
+      expect(screen.getByText(/Seed — Suspicious PowerShell on FIN-WS-01/i)).toBeInTheDocument();
+      expect(screen.getByText(/Lateral SMB session to FIN-DB-02/i)).toBeInTheDocument();
+
+      // Confidence is surfaced as a percentage to the analyst.
+      expect(screen.getByText(/82%/)).toBeInTheDocument();
+
+      // MITRE techniques from the chain should be visible.
+      expect(screen.getByText('T1059.001')).toBeInTheDocument();
+      expect(screen.getByText('T1021.002')).toBeInTheDocument();
+    });
+
+    // Helper: read the active window from the WindowSelector. The UI is a
+    // segmented button group (role=group, buttons with aria-pressed) rather
+    // than a <select>, so we resolve the active choice by looking inside the
+    // labelled group for the lone button with aria-pressed="true".
+    const readActiveWindow = (): string | null => {
+      const group = screen.getByLabelText(/attack chain time window/i);
+      const pressed = within(group).getAllByRole('button', { pressed: true });
+      // The component invariant is exactly one option pressed at a time.
+      expect(pressed).toHaveLength(1);
+      return pressed[0]?.textContent?.replace(/\s+/g, '') ?? null;
+    };
+
+    it('honors the ?window=… deep link on first render', () => {
+      // Regression for PR #145 review: the changelog claims the window
+      // selection survives reload via ?window=…. Mount with both the
+      // tab AND window params set, and assert the WindowSelector is
+      // showing the linked value rather than the default `24h`.
+      searchParamsState.params = new URLSearchParams('tab=attack-chain&window=72h');
+      swrState.attackChainData = null;
+
+      render(<CaseWorkspace caseId="INC-001" />);
+
+      // The window selector must show 72h as the active choice. Since
+      // `WindowSelector value={windowParam}` is bound directly to the
+      // panel state, the selector reading 72h proves the URL value
+      // flowed through `initialWindow` into the state — which in turn
+      // is what SWR keys the fetch on.
+      expect(readActiveWindow()).toBe('72h');
+    });
+
+    it('falls back to the 24h default when ?window=… is missing or unknown', () => {
+      // Just the tab, no window param → default `24h` (NOT the previous
+      // `1h` default the PR shipped with; switched to 24h per review
+      // because 1h showed an empty state for most realistic cases).
+      searchParamsState.params = new URLSearchParams('tab=attack-chain');
+      swrState.attackChainData = null;
+
+      const { unmount } = render(<CaseWorkspace caseId="INC-001" />);
+      expect(readActiveWindow()).toBe('24h');
+      unmount();
+
+      // An obviously-invalid value must also fall back to the default
+      // (defence-in-depth: the type guard refuses anything outside the
+      // closed `AttackChainWindow` set), not crash the panel.
+      searchParamsState.params = new URLSearchParams('tab=attack-chain&window=900years');
+      swrState.attackChainData = null;
+
+      render(<CaseWorkspace caseId="INC-001" />);
+      expect(readActiveWindow()).toBe('24h');
+    });
   });
 });
