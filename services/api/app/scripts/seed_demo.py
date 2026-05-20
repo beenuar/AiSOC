@@ -3154,7 +3154,7 @@ async def _run_quick_seed(clock: datetime) -> None:
     print(f"[seed] tenant: {tenant.id} ({tenant.slug})")
     print(f"[seed] user: {user.email} (role={user.role})")
     print(f"[seed] connectors upserted: {connectors}")
-    print("[seed] purged DEMO-* — cases:%d alerts:%d timelines:%d" % (deleted_cases, deleted_alerts, deleted_timelines))
+    print(f"[seed] purged DEMO-* — cases:{deleted_cases} alerts:{deleted_alerts} timelines:{deleted_timelines}")
     print(f"[seed] DEMO-* cases seeded: {cases}")
     print(f"[seed] DEMO-* alerts seeded: {alerts}")
     print(f"[seed] DEMO-* timelines seeded: {timelines}")

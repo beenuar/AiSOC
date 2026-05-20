@@ -14,6 +14,7 @@ from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
 from app.api.playbooks import router as playbook_router
 from app.api.router import router
+from app.api.triage import router as triage_router
 from app.core.telemetry import instrument_app
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
@@ -118,6 +119,7 @@ instrument_app(app)
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
+app.include_router(triage_router)  # prefix: /api/v1  (POST /cases/{id}/triage — router topology, T2.2)
 app.include_router(playbook_router)  # prefix: /api/v1/playbooks
 app.include_router(contextual_router)  # prefix: /api/v1/contextual
 app.include_router(hunts_router)  # prefix: /api/v1/hunts

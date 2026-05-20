@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from ..tools.fusion import process_alert as _fusion_process_alert
 from .auto_triage_agent import run_auto_triage as _run_auto_triage
 from .cloud_agent import run_cloud as _run_cloud
 from .enrichment_agent import run_enrichment as _run_enrichment
@@ -107,18 +108,14 @@ class DetectAgent:
     * ``detections/`` + ``services/api/app/services/detection_*`` — the
       native rule corpus (Sigma / KQL / EQL / SPL / DAC).
 
-    A live ``DetectAgent.process(...)`` method that drives the fusion
-    pipeline from inside the agents service is **in flight**: cross-service
-    wiring would require a stable client into ``services/fusion``.  Until
-    that lands, this class exists as the public branding anchor — the four
-    branded names are exactly four — and exposes ``capabilities()`` for
-    introspection so the docs site, onboarding tour, and tests can rely on
-    a consistent description.
-
-    TODO(v8.0/T2.5): wire ``DetectAgent.process`` to the
-    ``services.fusion.app.services.fusion_engine.FusionEngine`` once a thin
-    cross-service client is added (tracked separately so this façade can
-    ship independently).
+    ``DetectAgent.process(raw_alert)`` drives the full fusion pipeline
+    (dedup, correlation, ML scoring, confidence labelling, RBA) via the
+    fusion service's ``POST /process`` endpoint
+    (``http://fusion:8003/process`` in the docker-compose network). The
+    HTTP client lives at :mod:`app.tools.fusion`. The same
+    ``FusionEngine`` instance backs both this synchronous path and the
+    Kafka consumer path, so behaviour is identical regardless of how
+    alerts arrive.
     """
 
     name: ClassVar[str] = "Detect"
@@ -131,6 +128,47 @@ class DetectAgent:
     @classmethod
     def capabilities(cls) -> tuple[str, ...]:
         return ("fusion", "entity_risk", "native_detections")
+
+    @classmethod
+    async def process(
+        cls,
+        raw_alert: dict[str, Any],
+        *,
+        api_token: str | None = None,
+    ) -> dict[str, Any]:
+        """Run a raw alert through the full detection / fusion pipeline.
+
+        This is the public synchronous detection entrypoint for callers
+        outside the fusion service. It delegates to the fusion service
+        over HTTP (see :mod:`app.tools.fusion`), so the same engine that
+        services the Kafka consumer path also services this call —
+        dedup, correlation, ML scoring, confidence labelling, RBA, and
+        narrative generation all run with shared state.
+
+        The input is intentionally typed as a plain dict rather than a
+        Pydantic ``RawAlert``: this keeps the agents service decoupled
+        from the fusion service's schema module, and the fusion service
+        validates the payload on its boundary regardless. The dict must
+        match the shape of ``services.fusion.app.models.alert.RawAlert``.
+
+        Args:
+            raw_alert: ``RawAlert``-shaped dict.
+            api_token: Optional bearer token forwarded to the fusion service.
+
+        Returns:
+            ``FusedAlert``-shaped dict including ``fusion_decision``,
+            ``incident_id``, ``priority_score``, ``confidence_label``,
+            and the original alert envelope.
+
+        Raises:
+            httpx.HTTPStatusError: Fusion service returned non-2xx
+                (e.g. 503 if the fusion worker is not yet ready, 422 on a
+                malformed payload).
+            httpx.HTTPError: Transport-level failure (timeout, connect
+                error, etc.). Failures propagate intentionally: silent
+                failure on the detection plane would lose alerts.
+        """
+        return await _fusion_process_alert(raw_alert, api_token=api_token)
 
     @classmethod
     def describe(cls) -> dict[str, Any]:

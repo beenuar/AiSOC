@@ -19,7 +19,7 @@
     "@monaco-editor/react": "^4.6.0",
     "@xyflow/react": "^12.10.2",
     "clsx": "^2.1.0",
-    "cmdk": "^0.2.1",
+    "cmdk": "^1.1.1",
     "cytoscape": "^3.28.1",
     "cytoscape-fcose": "^2.2.0",
     "date-fns": "^4.1.0",

@@ -7,15 +7,388 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Cross-tenant RBAC regression suite (F013, security)
+
+Closes [#159](https://github.com/beenuar/AiSOC/issues/159).
+
+Pure-unit isolation suites that exercise the tenant boundary at the
+endpoint-function level (no live DB, no FastAPI request cycle) so the
+contract is testable in milliseconds and survives ORM churn:
+
+- `services/api/tests/test_threat_intel_tenant_isolation.py` — IOC,
+  actor, and feed list/get/create/delete are scoped by `tenant_id`,
+  cross-tenant lookups resolve to 404, and writes attach
+  `current_user.tenant_id` even when the payload smuggles a different
+  one.
+- `services/api/tests/test_alerts_tenant_isolation.py` — every
+  read/write/queue/claim path on `/alerts` binds `tenant_id` into the
+  compiled SQL or forwards it to the service layer
+  (`build_queue` / `claim_alert`).
+- `services/api/tests/test_llm_credentials_tenant_isolation.py` — BYOK
+  credential GET/PUT/DELETE scope by `tenant_id`, new rows bind the
+  caller's tenant, and `emit_audit` is invoked with the caller's
+  tenant + actor (`CredentialVault` is stubbed so the assertions are
+  on the persistence boundary, not crypto).
+
+Assertions read the *compiled* SQL bind parameters rather than the
+shape of any single query so they don't break on benign rewrites. All
+three suites were mutation-tested by temporarily dropping the
+`tenant_id` predicate in the corresponding endpoint — every dropped
+predicate produced at least one failing test, confirming the suites
+are wired to the right surface.
+
+`.github/workflows/cross-tenant-rbac.yml` runs the three suites
+nightly on `main` (06:30 UTC, ahead of `compose-smoke-nightly` so a
+tenant boundary regression shows up as the first nightly signal) and
+on-demand via `workflow_dispatch`. On failure it uploads a JUnit
+report and opens a `security`-labelled tracking issue.
+
+### Fix MCP tool count in docs and landing copy (Issue #36)
+
+Closes the documentation-vs-reality drift on the MCP server's tool surface.
+`services/mcp/src/tools/index.ts` registers **13** tools — five discovery
+(`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`,
+`aisoc_list_investigations`, `aisoc_lake_schema`), four deep-dive
+(`aisoc_get_alert`, `aisoc_get_case`, `aisoc_get_detection_rule`,
+`aisoc_get_investigation`), one warm-tier lake query
+(`aisoc_lake_query`, gated server-side by the `lake:query` permission),
+and three action/replay (`aisoc_run_investigation`, `aisoc_replay_decision`,
+`aisoc_explain_step`) — but eight public-facing surfaces still claimed
+"11 tools" and most tables omitted both lake tools entirely.
+
+Fixed in this PR:
+
+* `README.md` — both the MCP section copy and the services table now say
+  13 tools and call out the lake query pair.
+* `services/mcp/README.md` — count corrected; `aisoc_lake_schema` and
+  `aisoc_lake_query` added to the tool table with the same wording the
+  registry uses (discovery-before-query ordering).
+* `apps/docs/docs/integrations/mcp.md` — count corrected; the Mermaid
+  graph gained a `Lake query` subgraph wired `aisoc_lake_schema →
+  aisoc_lake_query` so the recommended call order is visible at a glance.
+* `apps/docs/docs/intro.md`, `apps/docs/docs/architecture.md` (two
+  references), `docs/architecture/SYSTEM_DESIGN.md`,
+  `docs/design/landing-page-brief.md` — all updated.
+* `apps/web/src/components/landing/sections/FeatureGrid.tsx` — the
+  marketing card "Use AiSOC from Claude, Cursor, Continue, Cody — 11
+  tools." now reads "13 tools." This is the landing-page surface most
+  visitors actually see.
+
+No tool implementation changed — the count and tables in
+`services/mcp/src/tools/index.ts` were already correct. This is a
+documentation-only fix so analysts and self-hosters don't see a smaller
+surface area than the server actually exposes, and so the lake query
+governance story is discoverable from every doc that lists tools.
+
+### Wire `DetectAgent.process` to `FusionEngine` via cross-service HTTP (Issue #190)
+
+Closes [#190](https://github.com/beenuar/AiSOC/issues/190).
+
+Closes the missing edge in the four-agent façade: `DetectAgent` previously
+self-described as the public detection surface but had no synchronous entry
+point into the fusion pipeline. Existing callers had to push to Kafka and wait
+for the consumer path to run dedup → correlation → ML scoring → confidence
+labelling → RBA, which is fine for the streaming case but unusable for
+interactive use (e.g. an investigation that needs to fuse one ad-hoc alert).
+
+Three changes, all purely additive:
+
+* `services/fusion/app/api/router.py` exposes `POST /process`, which accepts a
+  `RawAlert`, runs it through the live `FusionEngine` instance owned by the
+  fusion worker, and returns the `FusedAlert` envelope. Returns `503` if the
+  worker has not finished bootstrapping its engine — better to fail loudly than
+  to invent a synthetic verdict. Schema validation is delegated to FastAPI /
+  Pydantic, so a malformed payload still fails with `422`.
+* `services/agents/app/tools/fusion.py` is a thin async `httpx` client that
+  posts to `{FUSION_SERVICE_URL}/process` (default
+  `http://fusion:8003/process` inside the docker-compose network — fusion
+  mounts its router at the root path, *not* under `/api/fusion`). The client
+  forwards an optional bearer token and **raises** on any non-2xx or transport
+  failure. The module docstring contrasts this with `app.tools.graph`, which
+  intentionally degrades gracefully: fusion is the primary detection path, and
+  swallowing its errors would make alerts disappear silently.
+* `DetectAgent.process(raw_alert, api_token=None)` now delegates to the client
+  with no transformation. The class docstring is updated to point at the
+  correct endpoint. The same `FusionEngine` instance services both the Kafka
+  consumer and the new HTTP path, so behaviour is identical regardless of how
+  an alert arrives.
+
+Tests (`services/fusion/tests/test_process_endpoint.py`,
+`services/agents/tests/test_fusion_client.py`) cover the happy path
+(new-incident envelope), the duplicate path, both 503 modes (no worker,
+no engine), 422 on malformed and on invalid severity, and that the endpoint
+uses the same engine instance as the worker (no fresh `FusionEngine()` per
+request). Client-side tests pin the URL to `/process` (regression guard
+against the `/api/fusion/process` path mismatch we caught during initial
+wiring), assert bearer-token forwarding, confirm `httpx.HTTPStatusError`
+propagates on 503/422, and `httpx.HTTPError` propagates on transport
+failures. A final trio of tests pins `DetectAgent.process` as a faithful
+delegate to the client (args pass through unchanged, errors propagate, no
+swallowed exceptions).
+
+No feature flag and no env gate: the wiring is purely additive — no existing
+caller of the fusion service or the agents service changes shape, and the new
+endpoint/method only fire when something explicitly invokes them.
+
+### Real ES|QL runner for saved-hunt scheduler (T3.4, v8.0)
+
+Replaces the `_execute_hunt` stub in `services/api/app/workers/hunt_scheduler.py`
+with a real Elasticsearch query path. The shared logic now lives in
+`services/api/app/services/esql_runner.py` — a small async module that exposes
+`run_esql_query()`, `resolve_es_credentials()`, and the `ESQLResult` /
+`ESQLExecutionError` / `ESQLNotConfigured` types. Both the request-scoped
+`/nl-query/execute` endpoint and the out-of-band saved-hunt scheduler now
+share one code path for the outbound POST, the SSRF guard (validates the
+target host against the configured `ES_URL`/`ELASTICSEARCH_URL`/`OPENSEARCH_URL`
+and reconstructs the URL from validated components only — no user path/query
+ever reaches the network), and the air-gap policy
+(`enforce_airgap_for_url` is invoked unconditionally so an operator who
+flipped `AISOC_AIRGAPPED=true` can't accidentally leak a saved hunt to a
+public host). The scheduler reads the stored `translated_query["esql"]`
+(no re-translation in the background — that's the endpoint's job),
+appends a `LIMIT` clause when the translator didn't supply one
+(capped by `HUNT_SCHEDULER_MAX_ROWS`, default 500), and returns
+`len(rows)` so `run_once` can decide whether to open a case via the
+existing `_open_case_for_hits` hook. Missing translated ES|QL or missing
+ES credentials are logged at `info` and skip the run with zero hits —
+self-hosted dev installs without ES wired up stay quiet instead of
+spamming `exception`. Real transport / air-gap / SSRF errors propagate
+back to `run_once`, which records them via `logger.exception` and skips
+the `last_run_at` bump so the hunt retries on the next sweep instead of
+being silently marked "ran". `nl_query.py` was refactored at the same
+time to call the shared runner (deleting its private `_validate_es_url`
+copy), so the two execution surfaces can't drift on the security guards.
+Test coverage: 22 unit tests in `tests/test_esql_runner.py` (URL
+validation, credential resolution, air-gap propagation, LIMIT
+enforcement, error wrapping) plus 9 dedicated `_execute_hunt` tests in
+`tests/test_hunt_scheduler_execute.py` (all four skip paths, happy path
+with row count, three error-propagation paths). The existing
+saved-hunts endpoint + tenant isolation suites (47 tests) continue to
+pass unmodified.
+### LLM input contract — raw-HTTP wrapper + remaining call sites (T2.3, v8.0)
+
+Closes the last LLM-input-contract gap in `services/agents`. Every LangChain
+chat-model path already routed through `safe_ainvoke` / `safe_astream` (or a
+`make_safe_chat_model` wrap), but two call sites talked to OpenAI directly
+over `httpx` and so could ship un-validated prompts on the wire: the Copilot
+endpoint (`app/api/copilot.py::_get_openai_reply`) and the NL→query
+translator's optional LLM enhancement (`app/nl_query/translator.py::enhance_with_llm`).
+Both now go through a new `safe_chat_completions_request()` helper in
+`app/llm/contract.py` that calls `LLMInputContract.validate()` **before** the
+network request — a contract violation never leaves the process. The helper
+exposes the same surface as the existing OpenAI-compatible `POST`
+(`api_key`, `model`, `messages`, plus pass-through `response_format`,
+`temperature`, `max_tokens`, custom `url`, extra headers), surfaces
+`httpx.HTTPStatusError` so callers can fall back to deterministic behaviour,
+and refuses to run with an empty API key.
+
+Embedding calls in `app/tools/mitre_full.py` (`openai.AsyncOpenAI.embeddings`)
+are intentionally unchanged: they embed curated MITRE technique descriptions,
+not user input, so the contract does not apply.
+### `/investigate` endpoint swap behind feature flag (T2.2, v8.0)
+
+`services/agents/app/api/investigate.py` now picks an orchestrator per call
+based on the `AISOC_INVESTIGATE_USE_ROUTER` environment flag (default off).
+When unset, the endpoint behaves exactly as before and routes through
+`InvestigatorOrchestrator.stream()`. When set to a truthy value
+(`1` / `true` / `yes` / `on` / `enabled`, case-insensitive, whitespace
+tolerated), the same case streams through the four-agent
+`RouterOrchestrator` via the new `stream_kwargs()` adapter. The flag is
+read at call time, not import time, so operators can cut traffic over
+gradually — or roll back — without bouncing the agents service. Both the
+HTTP POST path (`_run_and_store`) and the WebSocket path
+(`stream_investigation`) share the same dispatcher, so case storage and
+live streaming stay in lockstep.
+
+`RouterOrchestrator` grew an investigator-compatible adapter:
+`stream_kwargs(case_id, alert_summary, raw_alert, tenant_id, run_id=None)`.
+It coerces string case / tenant / run IDs into UUIDs deterministically
+(`uuid5` against a fixed namespace, so the same `case_id` always maps to
+the same UUID across processes), constructs an `InvestigationState`, and
+proxies to `stream()`. The adapter normalises three event-shape gaps so
+the existing consumer code in `app.api.investigate` doesn't have to
+branch on orchestrator type: `step` events are enriched with the
+case / run IDs, `kind`, `node`, and `ts` fields the investigator path
+emits; a `done` event whose `state.status == FAILED` is rewritten as an
+explicit `{"type": "error"}` event (and the original `done` is
+suppressed) so endpoint error handling fires identically to the
+investigator path; and a stray `alert_text=` typo in the original draft
+was caught and fixed — the internal state is now populated via
+`alert_summary=`, matching the field actually defined on
+`InvestigationState`.
+
+Coverage: `services/agents/tests/test_investigate_router_flag.py` (27
+tests) pins the dispatcher — flag parsing including case/whitespace
+edge cases, orchestrator selection per call, parameter pass-through,
+flag-read-at-call-time semantics (so flipping the env var mid-process
+takes effect on the next call), module-singleton stability, and
+defensive guards around `run_id` being `None` vs. `UUID`.
+`services/agents/tests/test_orchestrator_router_stream_kwargs.py`
+covers the adapter end-to-end: event-shape parity with the
+investigator (`step` enrichment with `case_id` / `run_id` / `kind` /
+`node` / `ts`), error synthesis from failed `done` events, ID
+coercion determinism, and that `alert_summary` actually lands on
+the inner state. Combined with the existing router and report
+suites, all 55 router-adjacent tests stay green.
+
+### Router orchestrator gains streaming + ledger + report (T2.2, v8.0)
+
+`RouterOrchestrator` (`services/agents/app/orchestrator/router.py`) now matches
+the surface of the legacy `InvestigatorOrchestrator` on three axes — streamed
+progress events, ledger persistence, and a deterministic Markdown / HTML
+report on the `done` event — so the `/investigate` endpoint can be swapped
+over to the router without losing operator-visible behaviour. The existing
+`run()` entry point is unchanged; the new `stream(state, *, topology=...)`
+async generator yields `step` events at each stage boundary (auto-triage,
+signal classification, sub-agent dispatch, per-sub-agent completion in
+`as_completed` order, join, responder summary) and a single terminal `done`
+event carrying the full state plus the report. Step `seq` numbers are
+monotonic across both parallel and sequential topologies. Auto-close paths
+short-circuit after auto-triage with a single step and a `done` event so the
+UI doesn't paint a half-empty timeline.
+
+Ledger writes are best-effort: every `step` becomes a `record_event` row,
+the final state becomes a `record_artifact` (Markdown + HTML), and
+`complete_run` closes the row with verdict / confidence / latency / cost. A
+ledger outage (missing `asyncpg`, dropped connection, write failure)
+downgrades to a `warn`-level structured log and the stream still completes
+end-to-end — the persistence layer is observability, not a hard dependency.
+
+Report synthesis lives in the new `services/agents/app/orchestrator/report.py`
+module. `render_router_report(state)` returns `(report_md, report_html)`
+without any extra LLM call: it walks `InvestigationState` (verdict,
+confidence, sub-agent findings, attack chain, responder recovery steps) and
+renders deterministic templates. HTML conversion falls back to a `<pre>`
+block if the optional `markdown` package isn't installed, so the worker
+image stays slim.
+
+Coverage: `services/agents/tests/test_orchestrator_router_stream.py` (8
+tests) asserts the event contract — step ordering, monotonic `seq`,
+parallel vs sequential paths, auto-close short-circuit, `done` payload
+shape, ledger call ordering, and graceful degradation when ledger writes
+fail. `services/agents/tests/test_router_report.py` covers the
+deterministic renderer. Together with the existing parallel-topology
+suite all 34 router-adjacent tests pass clean.
+
+### LangGraph parallel topology — HTTP surface (T2.2, v8.0)
+
+`RouterOrchestrator` (the parallel fan-out / Join LangGraph topology landed
+earlier in `services/agents/app/orchestrator/router.py`) is now reachable
+over HTTP. New endpoints in `services/agents/app/api/triage.py`:
+
+- `POST /api/v1/cases/{case_id}/triage` — launches a one-shot triage run on
+  the parallel topology and returns `{run_id, status, topology}`. The
+  request body (`TriageRequest`) accepts an optional `tenant_id`,
+  `incident_id`, `signals[]`, and a per-run `topology` override
+  (`"parallel" | "sequential"`). When `topology` is omitted, the resolved
+  topology follows the `AISOC_AGENT_PARALLEL_TOPOLOGY` env flag (parallel
+  when truthy, sequential otherwise) so existing deployments stay on the
+  safe default. String `tenant_id` / `incident_id` values are coerced to
+  deterministic UUIDs via `uuid.uuid5` against a project-scoped namespace,
+  so the same string always maps to the same `InvestigationState`.
+- `GET /api/v1/triage/{run_id}` — polls the run, returning
+  `{run_id, status, topology, signals, auto_closed, wall_clock_ms,
+  finding_ids, mitre_techniques, error?}`. Errors during the background
+  task are captured on the run record so the polling endpoint never 500s
+  on agent failure.
+
+Run state is kept in an in-process `_triage_runs` dict for now (same
+pattern as the existing `/investigate` endpoint's `_runs`). The legacy
+linear `/investigate` path on `InvestigatorOrchestrator` is **unchanged**
+— this is a new, additive surface that can be flag-flipped per request
+without touching the streaming investigation flow demos depend on.
+
+8 new integration tests (`services/agents/tests/test_triage_endpoint.py`)
+cover env-flag flip, body override, end-to-end fan-out through the
+parallel topology, the auto-close short-circuit when classifier signals
+are empty, 404 on unknown `run_id`, and minimal-body coercion. They shim
+the sub-agent runners + `_emit_event` via `monkeypatch` (same pattern as
+`test_orchestrator_parallel.py`) so the tests are hermetic — no Kafka,
+no LLM, no graph. Existing `test_orchestrator_parallel.py` (17 tests) is
+unchanged and still green.
+
+### Attack-chain timeline UI (T3.3, v8.0)
+
+`/cases/{id}` now ships an **Attack Chain** tab that visualises the ranked
+timeline returned by `/v1/cases/{id}/attack-chain` (shipped earlier under
+`8df637b9`). The new `AttackChainPanel` in
+`apps/web/src/components/cases/CaseWorkspace.tsx`:
+
+- Window selector with the same vocabulary as the backend `WindowLiteral`
+  (`1h`, `6h`, `24h`, `72h`, `7d`, `30d`) — selection is deep-linkable via
+  `?window=…` and survives reload.
+- One card per `ChainLink` with the alert title, severity chip (driven by
+  the canonical 5-tier ladder `info | low | medium | high | critical`),
+  confidence percent, MITRE technique IDs, and the deterministic narrative
+  reason emitted by `services/api/app/services/attack_chain.py`.
+- Entity-graph summary panel — node count grouped by `kind` (`user`,
+  `asset`, `process`, `ip`, `domain`, `alert`), top edges, and a per-node
+  severity chip when present in `_entity_graph_payload`.
+- SWR-keyed on `(case_id, window)` with skeleton, error, and empty states
+  that match the rest of the case workspace.
+- New `casesApi.getAttackChain` method + `AttackChainTimeline`,
+  `AttackChainWindow`, `AttackChainLink`, `AttackChainEntityNode`,
+  `AttackChainEntityEdge`, `BackendAttackChainResponse` types in
+  `apps/web/src/lib/api.ts`. The wire format matches the backend `to_dict`
+  shape exactly (node `kind` rather than `type`; optional `severity` and
+  `event_time` from `_entity_graph_payload`).
+- Coverage in `apps/web/src/components/cases/CaseWorkspace.test.tsx`:
+  empty-state, error-state, and three data-rendering assertions
+  (alert titles, confidence percent, MITRE techniques). The SWR mock is now
+  key-aware so attack-chain and attack-path fetches stay isolated, and
+  `useSearchParams` is stateful so window-selection deep-links round-trip
+  cleanly under test. The `WindowSelector` is a labelled
+  `role="group"` of buttons with `aria-pressed`, so deep-link assertions
+  resolve the active option via the single pressed button inside the
+  group rather than a non-existent `<select>` value.
+
+Closes the UI side of T3.3 in `AISOC_V8_PROGRESS.md`. Pre-existing
+non-blocking lint warnings in `CaseWorkspace.tsx` are unchanged by this
+diff.
+
+### LLM input contract — static regression gate (T2.3, v8.0)
+
+Closes T2.3 by adding the missing **bypass-prevention** layer on top of the
+existing fail-closed validator (`services/agents/app/llm/contract.py`). Two
+new test files in `services/agents/tests/`:
+
+- `test_llm_contract_extra.py` (10 cases) — fills the coverage gaps in the
+  shipped contract: `safe_astream` validates messages exactly once and
+  refuses to yield any chunk on violation; `make_safe_chat_model` proxies
+  non-LLM attributes through but routes `ainvoke` / `astream` through
+  validation; `classify_message` rejects `api_key = '...'` assignments and
+  PEM private-key headers; `set_contract_enforcement(False)` lets raw OCSF
+  through in soft mode and re-arms cleanly when flipped back to `True`.
+- `test_llm_contract_no_bypass.py` (3 cases) — **AST-based static gate**
+  that walks every `*.py` file under `services/agents/app/` and fails CI on
+  any direct `.ainvoke(...)` / `.astream(...)` call whose receiver is not on
+  an explicit allowlist (`_graph`, `investigation_graph`, `graph` — all
+  LangGraph control-flow handles, not LLMs) or whose file is not the
+  contract module itself. Ships with self-tests proving (a) a synthetic
+  `llm.ainvoke(...)` bypass trips the detector and (b) allowlisted
+receivers do not. Adding a new agent that calls a chat model directly
+now fails the build until it routes through `safe_ainvoke` /
+`safe_astream` / `make_safe_chat_model`.
+
+The survey behind this gate confirmed every existing direct chat-model call
+under `services/agents/app/` already goes through the safe wrapper — the
+remaining `.ainvoke` / `.astream` call sites are LangGraph control-flow on
+compiled graphs, which is why those receivers are explicitly allowlisted
+rather than silently ignored.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
-`LLMInputContract.validate` / `validate_messages`: raw OCSF-shaped JSON in a
-user message fails closed when `AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1`
-(default), and prose plus `summarize_structure_for_llm` output passes. Tests
-use `{"role", "content"}` dict messages so they run without importing
-`langchain_core` (the contract already coerces LangChain `BaseMessage` and
-dicts the same way).
+`LLMInputContract.validate` / `validate_messages` (raw OCSF-shaped JSON in a
+user message fails closed when `AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1`,
+default; prose plus `summarize_structure_for_llm` output passes; tests use
+`{"role", "content"}` dict messages so they run without importing
+`langchain_core` — the contract coerces LangChain `BaseMessage` and dicts the
+same way). New `services/agents/tests/test_llm_contract_http.py` covers the
+HTTP wrapper end-to-end: happy path with body/header forwarding, contract
+rejection of OCSF-shaped payloads with **no** network call, empty-API-key
+guard, `HTTPStatusError` propagation on non-2xx, extra-body (`response_format`,
+`temperature`) forwarding, extra-header merging, and custom-URL override.
 
 ### Real-time graph-update WebSocket (T1.4, v8.0)
 

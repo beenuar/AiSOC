@@ -25,6 +25,8 @@ import toast from 'react-hot-toast';
 import {
   casesApi,
   graphApi,
+  type AttackChainTimeline,
+  type AttackChainWindow,
   type Case,
   type CaseAttackPath,
   type CaseSeverity,
@@ -42,6 +44,7 @@ type WorkspaceTab =
   | 'overview'
   | 'investigation'
   | 'attack-path'
+  | 'attack-chain'
   | 'ledger'
   | 'report';
 
@@ -49,6 +52,7 @@ const VALID_TABS: readonly WorkspaceTab[] = [
   'overview',
   'investigation',
   'attack-path',
+  'attack-chain',
   'ledger',
   'report',
 ];
@@ -796,6 +800,16 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                   graph
                 </span>
               </span>
+            ) : tab === 'attack-chain' ? (
+              <span className="inline-flex items-center gap-1">
+                Attack chain
+                <span
+                  className="rounded bg-rose-500/15 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider text-rose-300 ring-1 ring-rose-500/30"
+                  title="Ranked temporal timeline of related alerts that form the attack chain"
+                >
+                  timeline
+                </span>
+              </span>
             ) : (
               tab
             )}
@@ -822,6 +836,11 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
           is the canonical identifier here. */}
       {activeTab === 'attack-path' && (
         <AttackPathPanel caseId={caseRecord.id || caseId} />
+      )}
+
+      {/* Attack-chain tab — ranked temporal timeline of related alerts */}
+      {activeTab === 'attack-chain' && (
+        <AttackChainPanel caseId={caseRecord.id || caseId} />
       )}
 
       {/* Ledger tab — persistent, replayable agent decision log */}
@@ -1331,6 +1350,398 @@ function AttackPathPanel({ caseId }: { caseId: string }) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Attack chain panel ───────────────────────────────────────────────────────
+//
+// Renders the ranked temporal timeline of related alerts (the "attack chain")
+// computed by services/api/app/services/attack_chain.py. The backend's BFS
+// expands from the seed alert through the case's linked alerts, ranks each
+// link by recency + shared-entity overlap + MITRE tactic co-occurrence, and
+// hands us back a deterministic timeline plus the entity graph that connects
+// the alerts. We render this as a vertical timeline (most-recent first by
+// distance) with severity bands, score, and the entities each step shares
+// with its predecessor — that's the part an analyst actually reads to decide
+// "yes, this is one campaign, not three independent things."
+
+const CHAIN_SEVERITY_STYLES: Record<string, string> = {
+  critical: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+  high: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
+  medium: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  low: 'bg-sky-500/15 text-sky-300 ring-sky-500/30',
+  info: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
+};
+
+function severityChipClass(severity: string): string {
+  return CHAIN_SEVERITY_STYLES[severity?.toLowerCase()] ?? CHAIN_SEVERITY_STYLES.info;
+}
+
+const CHAIN_WINDOWS: ReadonlyArray<{ value: AttackChainWindow; label: string }> = [
+  { value: '1h', label: '1 h' },
+  { value: '6h', label: '6 h' },
+  { value: '24h', label: '24 h' },
+  { value: '72h', label: '72 h' },
+  { value: '7d', label: '7 d' },
+  { value: '30d', label: '30 d' },
+];
+
+const CHAIN_WINDOW_VALUES: ReadonlySet<AttackChainWindow> = new Set(
+  CHAIN_WINDOWS.map((w) => w.value),
+);
+
+function isAttackChainWindow(value: string | null | undefined): value is AttackChainWindow {
+  return typeof value === 'string' && CHAIN_WINDOW_VALUES.has(value as AttackChainWindow);
+}
+
+// Default lookback for first-time loads. Picked to be wide enough that a
+// case with linked alerts from a typical investigation horizon (the day
+// before, an active shift) renders chain links instead of the empty state
+// on first paint; analysts who want a tighter view narrow with the
+// selector, and the choice is persisted on the URL via `?window=…`.
+const DEFAULT_CHAIN_WINDOW: AttackChainWindow = '24h';
+
+function AttackChainPanel({ caseId }: { caseId: string }) {
+  // Mirror AttackPathPanel's guard: caseId can be empty during the brief window
+  // between route hydration and the case fetch resolving. Calling the API with
+  // `undefined` returns a 5xx and confuses analysts during the demo flow.
+  const hasCaseId = Boolean(caseId);
+
+  // Honor `?window=…` so a deep-link like
+  // `/cases/INC-001?tab=attack-chain&window=24h` lands the analyst on
+  // the same lookback the linker chose. Only the initial value is read
+  // from search params; subsequent user selections write back through
+  // `history.replaceState` (see `handleWindowChange`) so the choice
+  // survives reload without coupling this panel to the next/navigation
+  // router instance (which can be undefined in unit tests).
+  const searchParams = useSearchParams();
+  const initialWindow: AttackChainWindow = useMemo(() => {
+    const raw = searchParams?.get('window') ?? null;
+    return isAttackChainWindow(raw) ? raw : DEFAULT_CHAIN_WINDOW;
+  }, [searchParams]);
+  const [windowParam, setWindowParam] = useState<AttackChainWindow>(initialWindow);
+
+  const handleWindowChange = useCallback((next: AttackChainWindow) => {
+    setWindowParam(next);
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('window', next);
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Best-effort URL sync; a malformed location shouldn't break the
+      // panel. The state update above is the source of truth either way.
+    }
+  }, []);
+
+  const { data, error, isLoading } = useSWR<AttackChainTimeline | null>(
+    hasCaseId ? ['case:attack-chain', caseId, windowParam] : null,
+    () => casesApi.getAttackChain(caseId, { window: windowParam }),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
+  if (!hasCaseId) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+        <p className="text-sm font-medium text-slate-300">Loading case context…</p>
+        <p className="mt-1 max-w-md text-xs text-slate-500">
+          The attack-chain timeline appears once the case is loaded.
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <ErrorState
+        title="Failed to load attack chain"
+        description={error instanceof Error ? error.message : 'Unknown error'}
+      />
+    );
+  }
+
+  // The backend returns a structurally-valid object with `seed_alert_id: null`
+  // and an empty chain when the case has no linked alerts yet. casesApi
+  // collapses that to `null` so the empty state here is unambiguous.
+  if (!data || data.chain.length === 0) {
+    return (
+      <div className="space-y-3">
+        <WindowSelector value={windowParam} onChange={handleWindowChange} />
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/30 py-16 text-center">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-500/30">
+            <svg className="h-5 w-5 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-slate-300">No attack chain yet</p>
+          <p className="mt-1 max-w-md text-xs text-slate-500">
+            An attack chain forms once two or more alerts in the {windowParam} window share
+            entities or MITRE techniques. Link more alerts to the case or widen the window.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Pre-compute confidence band so we can present "high" vs "exploratory"
+  // distinctly — analysts treat a 0.4 chain very differently from a 0.85 chain.
+  const confidencePct = Math.round(data.confidence * 100);
+  const confidenceBand =
+    data.confidence >= 0.75 ? 'high' : data.confidence >= 0.5 ? 'medium' : 'low';
+  const confidenceClass =
+    confidenceBand === 'high'
+      ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'
+      : confidenceBand === 'medium'
+        ? 'bg-amber-500/15 text-amber-300 ring-amber-500/30'
+        : 'bg-slate-500/15 text-slate-300 ring-slate-500/30';
+
+  const nodeCount = data.entityGraph.nodes.length;
+  const edgeCount = data.entityGraph.edges.length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium text-slate-200">Reconstructed attack chain</h3>
+          <p className="text-xs text-slate-500">
+            {data.chain.length} link{data.chain.length === 1 ? '' : 's'} · {nodeCount} entit
+            {nodeCount === 1 ? 'y' : 'ies'} · {edgeCount} edge{edgeCount === 1 ? '' : 's'} · window {data.window}
+          </p>
+          {data.chainSignature && (
+            <p className="mt-0.5 font-mono text-[10px] text-slate-600 truncate">
+              signature: {data.chainSignature}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={clsx(
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1',
+              confidenceClass,
+            )}
+            title="Confidence is derived from average link score and chain length"
+          >
+            confidence {confidencePct}%
+          </span>
+          <WindowSelector value={windowParam} onChange={handleWindowChange} />
+        </div>
+      </div>
+
+      {/* Vertical timeline. Steps are already sorted by event_time on the
+          backend (oldest → newest); we render in that order so the analyst
+          reads the chain the same way the campaign actually unfolded. */}
+      <ol className="relative space-y-3 border-l border-slate-800/60 pl-5">
+        {data.chain.map((link, index) => {
+          const sevClass = severityChipClass(link.severity);
+          const isFirst = index === 0;
+          const dtMinutes = Math.round(link.dtSeconds / 60);
+          const dtLabel =
+            isFirst
+              ? 'seed'
+              : dtMinutes <= 0
+                ? `+${Math.max(1, Math.round(link.dtSeconds))}s`
+                : dtMinutes < 60
+                  ? `+${dtMinutes}m`
+                  : `+${(dtMinutes / 60).toFixed(1)}h`;
+          return (
+            <li key={link.alertId} className="relative">
+              {/* Dot anchored to the spine */}
+              <span
+                className={clsx(
+                  'absolute -left-[26px] top-2 inline-block h-2.5 w-2.5 rounded-full ring-2 ring-slate-950',
+                  isFirst ? 'bg-rose-400' : 'bg-slate-500',
+                )}
+              />
+              <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={clsx(
+                          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1',
+                          sevClass,
+                        )}
+                      >
+                        {link.severity}
+                      </span>
+                      {isFirst && (
+                        <span className="inline-flex items-center rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-300 ring-1 ring-rose-500/30">
+                          seed
+                        </span>
+                      )}
+                      {link.connectorType && (
+                        <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400 ring-1 ring-slate-700/60">
+                          {link.connectorType}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono text-slate-500" title="time since previous link">
+                        Δt {dtLabel}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-sm font-medium text-slate-200 truncate" title={link.title}>
+                      {link.title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      {(() => {
+                        try {
+                          return `${format(new Date(link.eventTime), 'MMM d, HH:mm:ss')} · ${formatDistanceToNow(new Date(link.eventTime), { addSuffix: true })}`;
+                        } catch {
+                          return link.eventTime;
+                        }
+                      })()}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="rounded-md bg-slate-800/60 px-2 py-0.5 text-[10px] font-mono text-slate-300 ring-1 ring-slate-700/60">
+                      score {link.score.toFixed(2)}
+                    </span>
+                    <span className="text-[10px] text-slate-600">distance {link.distance}</span>
+                  </div>
+                </div>
+
+                {/* Shared entities — the "why is this link in the chain"
+                    explanation. Empty for the seed because there's no
+                    predecessor to share with. */}
+                {link.sharedEntities.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {link.sharedEntities.slice(0, 6).map((entity, i) => (
+                      <span
+                        key={`${entity.kind ?? 'entity'}-${entity.value ?? i}`}
+                        className="inline-flex items-center gap-1 rounded bg-slate-800/70 px-1.5 py-0.5 text-[10px] font-mono text-slate-300 ring-1 ring-slate-700/60"
+                        title={`Shared with previous link: ${entity.kind ?? ''}`}
+                      >
+                        <span className="text-slate-500">{entity.kind}</span>
+                        <span>{entity.value}</span>
+                      </span>
+                    ))}
+                    {link.sharedEntities.length > 6 && (
+                      <span className="text-[10px] italic text-slate-500">
+                        +{link.sharedEntities.length - 6} more
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* MITRE techniques — gives the chain ATT&CK colour even when
+                    titles are vague. Surface up to 4 to keep cards compact. */}
+                {link.mitreTechniques.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {link.mitreTechniques.slice(0, 4).map((tech) => (
+                      <span
+                        key={tech}
+                        className="inline-flex items-center rounded bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-mono text-purple-300 ring-1 ring-purple-500/30"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                    {link.mitreTechniques.length > 4 && (
+                      <span className="text-[10px] italic text-slate-500">
+                        +{link.mitreTechniques.length - 4} more
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Entity graph summary. The case's attack-path tab renders the full
+          graph; here we just call out the entities that actually appear in
+          the chain itself so the analyst can scan them at a glance. */}
+      {data.entityGraph.nodes.length > 0 && (
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Entities in chain ({data.entityGraph.nodes.length})
+            </h4>
+            <span className="text-[10px] text-slate-500">
+              {data.entityGraph.edges.length} connection{data.entityGraph.edges.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {data.entityGraph.nodes.slice(0, 24).map((node) => (
+              <li
+                key={node.id}
+                className="inline-flex items-center gap-1 rounded bg-slate-800/70 px-1.5 py-0.5 text-[10px] font-mono text-slate-300 ring-1 ring-slate-700/60"
+                title={node.label ?? node.id}
+              >
+                <span className="text-slate-500">{node.kind}</span>
+                <span className="truncate max-w-[160px]">{node.label ?? node.id}</span>
+              </li>
+            ))}
+            {data.entityGraph.nodes.length > 24 && (
+              <li className="text-[10px] italic text-slate-500 self-center">
+                +{data.entityGraph.nodes.length - 24} more
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[10px] text-slate-600">
+        Chain computed at{' '}
+        {(() => {
+          try {
+            return format(new Date(data.generatedAt), 'MMM d, HH:mm:ss');
+          } catch {
+            return data.generatedAt;
+          }
+        })()}{' '}
+        · seed alert{' '}
+        <span className="font-mono">{data.seedAlertId}</span>
+      </p>
+    </div>
+  );
+}
+
+function WindowSelector({
+  value,
+  onChange,
+}: {
+  value: AttackChainWindow;
+  onChange: (next: AttackChainWindow) => void;
+}) {
+  return (
+    <div
+      className="inline-flex items-center rounded-md border border-slate-800/80 bg-slate-900/40 p-0.5"
+      role="group"
+      aria-label="Attack chain time window"
+    >
+      {CHAIN_WINDOWS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={clsx(
+            'rounded px-2 py-1 text-[11px] font-medium transition',
+            value === opt.value
+              ? 'bg-slate-800 text-slate-100 ring-1 ring-slate-700/60'
+              : 'text-slate-400 hover:text-slate-200',
+          )}
+          aria-pressed={value === opt.value}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }
