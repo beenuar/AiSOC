@@ -186,7 +186,7 @@ npx -y @aisoc/mcp install --host claude \
   --api-key  aisoc_pat_xxxxxxxxxxxx
 ```
 
-The server exposes 11 tools — discovery (`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`), deep-dive (`aisoc_get_case`, `aisoc_get_investigation`), and the action/replay set (`aisoc_run_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`) for walking the agent decision ledger step-by-step.
+The server exposes 13 tools — discovery (`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`, `aisoc_list_investigations`, `aisoc_lake_schema`), deep-dive (`aisoc_get_alert`, `aisoc_get_case`, `aisoc_get_detection_rule`, `aisoc_get_investigation`), lake query (`aisoc_lake_query` — warm-tier SELECT, gated by `lake:query` server-side), and the action/replay set (`aisoc_run_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`) for walking the agent decision ledger step-by-step.
 
 Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source: [`services/mcp/`](services/mcp/). npm: `@aisoc/mcp`.
 
@@ -428,7 +428,7 @@ flowchart LR
 | `osquery-tls` | Python | 8091 | Native osquery TLS server — enroll nodes, distribute packs, stream FIM/process/network telemetry |
 | `osquery-extensions` | Python | — | Custom osquery extensions (AI-powered threat intel table, ML anomaly score table) |
 | `slack-bot` | Python | 8009 | ChatOps surface — interactive approvals for high-blast-radius actions, `/aisoc` slash command, HMAC-signed Slack signature verification |
-| `mcp` | TypeScript | — (stdio) | Model Context Protocol server exposing 11 read-only AiSOC tools (case search, alert detail, IOC pivot, ledger query, DAC lookup, …) to IDE-side AI agents (Claude Code, Cursor, Continue, Cody) |
+| `mcp` | TypeScript | — (stdio) | Model Context Protocol server exposing 13 AiSOC tools — discovery, deep-dive, action/replay, and warm-tier lake query (`aisoc_lake_query`, gated by `lake:query` server-side) — to IDE-side AI agents (Claude Code, Cursor, Continue, Cody) |
 | `ingest` | Go | 8081 | OCSF normalization + Shodan/CVE |
 | `enrichment` | Go | 8080 | IOC enrichment (VT, AbuseIPDB, GreyNoise) |
 

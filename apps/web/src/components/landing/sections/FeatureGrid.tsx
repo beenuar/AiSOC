@@ -148,7 +148,7 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
       {
         icon: DollarSign,
         title: 'MCP server.',
-        body: 'Use AiSOC from Claude, Cursor, Continue, Cody — 11 tools.',
+        body: 'Use AiSOC from Claude, Cursor, Continue, Cody — 13 tools.',
       },
       {
         icon: TerminalSquare,
